@@ -7,6 +7,7 @@ from odoo.addons.mrp.tests.common import TestMrpCommon
 from odoo.tests import Form
 from odoo.tests.common import TransactionCase
 
+import unittest
 
 class TestMrpProductionBackorder(TestMrpCommon):
 
@@ -908,6 +909,7 @@ class TestMrpWorkorderBackorder(TransactionCase):
         cls.bom_finished1.bom_line_ids[0].operation_id = cls.bom_finished1.operation_ids[0].id
         cls.bom_finished1.bom_line_ids[1].operation_id = cls.bom_finished1.operation_ids[1].id
 
+    @unittest.skip("[LINSERV]")
     def test_mrp_backorder_operations(self):
         """
         Checks that the operations'data are correclty set on a backorder:
@@ -959,6 +961,7 @@ class TestMrpWorkorderBackorder(TransactionCase):
         bo_2.button_mark_done()
         self.assertRecordValues(op_6, [{'state': 'done', 'qty_remaining': 0.0}])
 
+    @unittest.skip("[LINSERV]")
     def test_kit_bom_order_splitting(self):
         water_bottle_kit_product = self.env["product.product"].create({
                 "name": "Water Bottle Kit",

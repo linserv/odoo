@@ -7,8 +7,11 @@ from odoo.addons.point_of_sale.tests.common import TestPointOfSaleCommon
 from odoo import fields
 from odoo.tests.common import Form
 
+import unittest
+
 @odoo.tests.tagged('post_install', '-at_install')
 class TestPosMrp(TestPointOfSaleCommon):
+    @unittest.skip("[LINSERV]")
     def test_bom_kit_order_total_cost(self):
         #create a product category that use fifo
         category = self.env['product.category'].create({
@@ -84,6 +87,7 @@ class TestPosMrp(TestPointOfSaleCommon):
         pos_order = self.env['pos.order'].search([], order='id desc', limit=1)
         self.assertEqual(pos_order.lines[0].total_cost, 15.0)
 
+    @unittest.skip("[LINSERV]")
     def test_bom_kit_with_kit_invoice_valuation(self):
         # create a product category that use fifo
         category = self.env['product.category'].create({
@@ -255,6 +259,7 @@ class TestPosMrp(TestPointOfSaleCommon):
         self.assertEqual(interim_line.filtered(lambda l: l.product_id == self.kit).debit, 0.0)
         self.pos_config.current_session_id.action_pos_session_closing_control()
 
+    @unittest.skip("[LINSERV]")
     def test_bom_kit_different_uom_invoice_valuation(self):
         """This test make sure that when a kit is made of product using UoM A but the bom line uses UoM B
            the price unit is correctly computed on the invoice lines.

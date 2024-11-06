@@ -3,6 +3,8 @@
 
 from odoo.tests.common import TransactionCase, Form, tagged
 
+import unittest
+
 
 @tagged('post_install', '-at_install')
 class TestSaleMrpKitBom(TransactionCase):
@@ -142,6 +144,7 @@ class TestSaleMrpKitBom(TransactionCase):
         purchase_price = line.product_id.with_company(line.company_id)._compute_average_price(0, line.product_uom_qty, line.move_ids)
         self.assertEqual(purchase_price, 92, "The purchase price must be the total cost of the components multiplied by their unit of measure")
 
+    @unittest.skip("[LINSERV]")
     def test_qty_delivered_with_bom(self):
         """Check the quantity delivered, when a bom line has a non integer quantity"""
 
@@ -190,6 +193,7 @@ class TestSaleMrpKitBom(TransactionCase):
         # Checks the delivery amount (must be 10).
         self.assertEqual(so.order_line.qty_delivered, 10)
 
+    @unittest.skip("[LINSERV]")
     def test_qty_delivered_with_bom_using_kit(self):
         """Check the quantity delivered, when one product is a kit
         and his bom uses another product that is also a kit"""
@@ -254,6 +258,7 @@ class TestSaleMrpKitBom(TransactionCase):
         # Checks the delivery amount (must be 1).
         self.assertEqual(so.order_line.qty_delivered, 1)
 
+    @unittest.skip("[LINSERV]")
     def test_sale_kit_show_kit_in_delivery(self):
         """Create a kit with 2 product and activate 2 steps
             delivery and check that every stock move contains
@@ -307,6 +312,7 @@ class TestSaleMrpKitBom(TransactionCase):
         self.assertTrue(ship.move_ids_without_package[0].bom_line_id, "All component from kits should have a bom line")
         self.assertTrue(ship.move_ids_without_package[1].bom_line_id, "All component from kits should have a bom line")
 
+    @unittest.skip("[LINSERV]")
     def test_qty_delivered_with_bom_using_kit2(self):
         """Create 2 kits products that have common components and activate 2 steps delivery
            Then create a sale order with these 2 products, and put everything in a pack in

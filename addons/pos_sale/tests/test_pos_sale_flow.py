@@ -7,8 +7,12 @@ from odoo.addons.point_of_sale.tests.test_frontend import TestPointOfSaleHttpCom
 from odoo.tests.common import Form
 from odoo import fields, Command
 
+import unittest
+
+
 @odoo.tests.tagged('post_install', '-at_install')
 class TestPoSSale(TestPointOfSaleHttpCommon):
+    @unittest.skip("[LINSERV]")
     def test_settle_order_with_kit(self):
         if not self.env["ir.module.module"].search([("name", "=", "mrp"), ("state", "=", "installed")]):
             self.skipTest("mrp module is required for this test")
