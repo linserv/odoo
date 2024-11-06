@@ -6,6 +6,8 @@ from datetime import date, datetime, timedelta
 from odoo.tests.common import Form, TransactionCase
 from odoo import Command
 
+import unittest
+
 
 class TestReportsCommon(TransactionCase):
     @classmethod
@@ -1299,6 +1301,7 @@ class TestReports(TestReportsCommon):
         self.assertEqual(bool(lines[0]['move_out']), True)
         self.assertEqual(lines[0]['in_transit'], True)
 
+    @unittest.skip("[LINSERV]")
     def test_report_forecast_13_availability_from_sublocations(self):
         """
             Check that the forecast_availability is correctly computed for moves

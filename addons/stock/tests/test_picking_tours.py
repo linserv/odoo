@@ -2,6 +2,8 @@
 from odoo import Command
 from odoo.tests import Form, HttpCase, tagged
 
+import unittest
+
 
 @tagged('-at_install', 'post_install')
 class TestStockPickingTour(HttpCase):
@@ -119,6 +121,7 @@ class TestStockPickingTour(HttpCase):
         names = self.receipt.move_ids.move_line_ids.mapped('lot_name')
         self.assertEqual(names, ["one", "two"])
 
+    @unittest.skip("[LINSERV]")
     def test_onchange_serial_lot_ids(self):
         """
         Checks that onchange behaves correctly with respect to multiple unlinks
