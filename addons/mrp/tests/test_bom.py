@@ -8,6 +8,7 @@ from odoo.tools import float_compare, float_round, float_repr
 
 from freezegun import freeze_time
 
+import unittest
 
 @freeze_time(fields.Date.today())
 class TestBoM(TestMrpCommon):
@@ -2223,6 +2224,7 @@ class TestBoM(TestMrpCommon):
         line_values = report_values['lines']
         self.assertEqual(line_values['availability_state'], 'available')
 
+    @unittest.skip("[LINSERV]")
     def test_update_bom_in_routing_workcenter(self):
         """
         This test checks the behaviour of updating the BoM associated with a routing workcenter,

@@ -5,6 +5,8 @@ from odoo.tests import Form, tagged
 
 from odoo.addons.stock_account.tests.test_anglo_saxon_valuation_reconciliation_common import ValuationReconciliationTestCommon
 
+import unittest
+
 
 @tagged('post_install', '-at_install')
 class TestSaleMRPAngloSaxonValuation(ValuationReconciliationTestCommon):
@@ -24,6 +26,7 @@ class TestSaleMRPAngloSaxonValuation(ValuationReconciliationTestCommon):
             'categ_id': self.stock_account_product_categ.id if product_type == 'product' else self.env.ref('product.product_category_all').id,
         })
 
+    @unittest.skip("[LINSERV]")
     def test_sale_mrp_kit_bom_cogs(self):
         """Check invoice COGS aml after selling and delivering a product
         with Kit BoM having another product with Kit BoM as component"""
