@@ -1,5 +1,8 @@
 pipeline {
     agent any
+    options {
+	timeout(time: 60, unit: 'MINUTES') // Set the timeout to 30 minutes
+    }
     environment {
         ODOO_VERSION = "${env.BRANCH_NAME}" // Dynamically set from the branch name
         SWIFT_CONTAINER = 'odoo'
