@@ -9,6 +9,20 @@ pipeline {
         ENTERPRISE_SWIFT_CONTAINER = 'enterprise'
     }
     stages {
+        stage('Checkout Full Repository') {
+            steps {
+                script {
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "${env.BRANCH_NAME}"]],
+                        userRemoteConfigs: [[url: 'https://github.com/linserv/odoo.git']],
+                        extensions: [
+                            [$class: 'CloneOption', shallow: false, timeout: 30]
+                        ]
+                    ])
+                }
+            }
+        }
         stage('Setup Environment') {
             steps {
                 script {
