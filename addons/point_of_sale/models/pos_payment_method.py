@@ -3,6 +3,7 @@ from odoo.exceptions import UserError, ValidationError
 
 
 class PosPaymentMethod(models.Model):
+    _name = 'pos.payment.method'
     _description = "Point of Sale Payment Methods"
     _order = "sequence, id"
     _inherit = ['pos.load.mixin']
@@ -45,6 +46,7 @@ class PosPaymentMethod(models.Model):
     open_session_ids = fields.Many2many('pos.session', string='Pos Sessions', compute='_compute_open_session_ids', help='Open PoS sessions that are using this payment method.')
     config_ids = fields.Many2many('pos.config', string='Point of Sale')
     company_id = fields.Many2one('res.company', string='Company', default=lambda self: self.env.company)
+    default_pos_receivable_account_name = fields.Char(related="company_id.account_default_pos_receivable_account_id.display_name", string="Default Receivable Account Name")
     use_payment_terminal = fields.Selection(selection=lambda self: self._get_payment_terminal_selection(), string='Use a Payment Terminal', help='Record payments with a terminal on this journal.')
     # used to hide use_payment_terminal when no payment interfaces are installed
     hide_use_payment_terminal = fields.Boolean(compute='_compute_hide_use_payment_terminal')
@@ -172,10 +174,13 @@ class PosPaymentMethod(models.Model):
 
     def copy_data(self, default=None):
         default = dict(default or {}, config_ids=[(5, 0, 0)])
-        if self.journal_id and self.journal_id.type == 'cash':
-            if ('journal_id' in default and default['journal_id'] == self.journal_id.id) or ('journal_id' not in default):
-                default.update({'journal_id': False})
-        return super().copy_data(default=default)
+        vals_list = super().copy_data(default=default)
+
+        for pm, vals in zip(self, vals_list):
+            if pm.journal_id and pm.journal_id.type == 'cash':
+                if ('journal_id' in default and default['journal_id'] == pm.journal_id.id) or ('journal_id' not in default):
+                    vals['journal_id'] = False
+        return vals_list
 
     @api.constrains('payment_method_type', 'journal_id', 'qr_code_method')
     def _check_payment_method(self):

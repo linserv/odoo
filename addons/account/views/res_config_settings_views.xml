@@ -47,11 +47,11 @@
                                 <div class="content-group">
                                     <div class="row mt16">
                                         <label string="Sales Tax" for="sale_tax_id" class="col-lg-3 o_light_label"/>
-                                        <field name="sale_tax_id" domain="[('type_tax_use', 'in', ('sale', 'all'))]"/>
+                                        <field name="sale_tax_id" widget="many2one_tax_tags" domain="[('type_tax_use', 'in', ('sale', 'all'))]"/>
                                     </div>
                                     <div class="row">
                                         <label string="Purchase Tax" for="purchase_tax_id" class="col-lg-3 o_light_label"/>
-                                        <field name="purchase_tax_id" domain="[('type_tax_use', 'in', ('purchase', 'all'))]"/>
+                                        <field name="purchase_tax_id" widget="many2one_tax_tags" domain="[('type_tax_use', 'in', ('purchase', 'all'))]"/>
                                     </div>
                                     <div class="row">
                                         <div class="col-lg-3">
@@ -168,10 +168,10 @@
                                     </div>
                                 </div>
                             </setting>
-                            <setting id="total_amount_words" help="Display the total amount of an invoice in letters">
+                            <setting id="total_amount_words" company_dependent="1" help="Display the total amount of an invoice in letters">
                                 <field name="display_invoice_amount_total_words"/>
                             </setting>
-                            <setting id="display_invoice_tax_company_currency" help="Taxes are also displayed in local currency on invoices">
+                            <setting id="display_invoice_tax_company_currency" company_dependent="1" help="Taxes are also displayed in local currency on invoices">
                                 <field name="display_invoice_tax_company_currency"/>
                             </setting>
                         </block>

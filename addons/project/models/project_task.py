@@ -80,6 +80,7 @@ CLOSED_STATES = {
 
 
 class ProjectTask(models.Model):
+    _name = 'project.task'
     _description = "Task"
     _date_name = "date_assign"
     _inherit = [
@@ -215,8 +216,13 @@ class ProjectTask(models.Model):
     company_id = fields.Many2one('res.company', string='Company', compute='_compute_company_id', store=True, readonly=False, recursive=True, copy=True, default=_default_company_id)
     color = fields.Integer(string='Color Index', export_string_translation=False)
     rating_active = fields.Boolean(string='Project Rating Status', related="project_id.rating_active")
-    attachment_ids = fields.One2many('ir.attachment', compute='_compute_attachment_ids', string="Attachments that don't come from a message",
-        export_string_translation=False)
+    attachment_ids = fields.One2many(
+        'ir.attachment',
+        compute='_compute_attachment_ids',
+        string="Attachments",
+        export_string_translation=False,
+        help="Attachments that don't come from a message",
+    )
     # In the domain of displayed_image_id, we couln't use attachment_ids because a one2many is represented as a list of commands so we used res_model & res_id
     displayed_image_id = fields.Many2one('ir.attachment', domain="[('res_model', '=', 'project.task'), ('res_id', '=', id), ('mimetype', 'ilike', 'image')]", string='Cover Image')
 
@@ -287,9 +293,7 @@ class ProjectTask(models.Model):
 
     # Quick creation shortcuts
     display_name = fields.Char(
-        compute='_compute_display_name',
         inverse='_inverse_display_name',
-        search='_search_display_name',
         help="""Use these keywords in the title to set new tasks:\n
             #tags Set tags on the task
             @user Assign the task to a user
@@ -298,10 +302,14 @@ class ProjectTask(models.Model):
     )
     link_preview_name = fields.Char(compute='_compute_link_preview_name', export_string_translation=False)
 
-    _sql_constraints = [
-        ('recurring_task_has_no_parent', 'CHECK (NOT (recurring_task IS TRUE AND parent_id IS NOT NULL))', "A subtask cannot be recurrent."),
-        ('private_task_has_no_parent', 'CHECK (NOT (project_id IS NULL AND parent_id IS NOT NULL))', "A private task cannot have a parent."),
-    ]
+    _recurring_task_has_no_parent = models.Constraint(
+        'CHECK (NOT (recurring_task IS TRUE AND parent_id IS NOT NULL))',
+        'A subtask cannot be recurrent.',
+    )
+    _private_task_has_no_parent = models.Constraint(
+        'CHECK (NOT (project_id IS NULL AND parent_id IS NOT NULL))',
+        'A private task cannot have a parent.',
+    )
 
     @api.constrains('company_id', 'partner_id')
     def _ensure_company_consistency_with_partner(self):
@@ -991,6 +999,17 @@ class ProjectTask(models.Model):
                     error_message = _('You cannot write on the following fields on tasks: %(field_list)s', field_list=unauthorized_field_list)
                 raise AccessError(error_message)
 
+    def _has_field_access(self, field, operation):
+        if not super()._has_field_access(field, operation):
+            return False
+        if not self.env.su and self.env.user._is_portal():
+            # additional checks for portal users
+            if operation == 'read':
+                return field.name in self.SELF_READABLE_FIELDS
+            if operation == 'write':
+                return field.name in self.SELF_WRITABLE_FIELDS
+        return True
+
     def _determine_fields_to_fetch(self, field_names, ignore_when_in_cache=False):
         if not self.env.su and self.env.user._is_portal():
             valid_names = self.SELF_READABLE_FIELDS
@@ -1023,18 +1042,6 @@ class ProjectTask(models.Model):
             or not key.startswith('default_')
             or key[8:] in (field for field in self.SELF_WRITABLE_FIELDS if self._fields[field].type not in ('one2many', 'many2many'))
         }
-
-    @api.model
-    def check_field_access_rights(self, operation, field_names):
-        if field_names and operation in ('read', 'write'):
-            self._ensure_fields_are_accessible(field_names, operation)
-        elif not field_names and not self.env.su and self.env.user._is_portal():
-            valid_names = self.SELF_READABLE_FIELDS
-            return [
-                fname for fname in super().check_field_access_rights(operation, field_names)
-                if fname in valid_names
-            ]
-        return super().check_field_access_rights(operation, field_names)
 
     def _set_stage_on_project_from_task(self):
         stage_ids_per_project = defaultdict(list)

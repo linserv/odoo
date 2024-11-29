@@ -1,5 +1,4 @@
 import { registry } from "@web/core/registry";
-import { stepUtils } from '@web_tour/tour_service/tour_utils';
 
 registry.category("web_tour.tours").add('test_manufacturing_and_byproduct_sm_to_sml_synchronization', {
     steps: () => [
@@ -69,7 +68,7 @@ registry.category("web_tour.tours").add('test_manufacturing_and_byproduct_sm_to_
             run: "click",
         },
         {
-            trigger: ".o_data_row > td:contains('7')",
+            trigger: ".modal .o_data_row > td:contains('7')",
             run: "click",
         },
         {
@@ -156,6 +155,10 @@ registry.category("web_tour.tours").add('test_manufacturing_and_byproduct_sm_to_
             trigger: ".modal .modal-footer .o_form_button_save",
             run: "click",
         },
-        ...stepUtils.saveForm(),
+        {
+            isActive: ["auto"],
+            content: "wait for save completion",
+            trigger: ".o_form_readonly, .o_form_saved",
+        },
     ]
 });

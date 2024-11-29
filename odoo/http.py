@@ -215,7 +215,7 @@ _logger = logging.getLogger(__name__)
 CORS_MAX_AGE = 60 * 60 * 24
 
 # The HTTP methods that do not require a CSRF validation.
-CSRF_FREE_METHODS = ('GET', 'HEAD', 'OPTIONS', 'TRACE')
+SAFE_HTTP_METHODS = ('GET', 'HEAD', 'OPTIONS', 'TRACE')
 
 # The default csrf token lifetime, a salt against BREACH, one year
 CSRF_TOKEN_SALT = 60 * 60 * 24 * 365
@@ -368,8 +368,7 @@ def db_filter(dbs, host=None):
     if config['db_name']:
         # In case --db-filter is not provided and --database is passed, Odoo will
         # use the value of --database as a comma separated list of exposed databases.
-        exposed_dbs = {db.strip() for db in config['db_name'].split(',')}
-        return sorted(exposed_dbs.intersection(dbs))
+        return sorted(set(config['db_name']).intersection(dbs))
 
     return list(dbs)
 
@@ -708,6 +707,9 @@ def route(route=None, **routing):
     :param Callable[[Exception], Response] handle_params_access_error:
         Implement a custom behavior if an error occurred when retrieving the record
         from the URL parameters (access error or missing error).
+    :param str captcha: The action name of the captcha. When set the request will be
+        validated against a captcha implementation. Upon failing these requests will
+        return a UserError.
     """
     def decorator(endpoint):
         fname = f"<function {endpoint.__module__}.{endpoint.__name__}>"
@@ -984,9 +986,6 @@ class Session(collections.abc.MutableMapping):
         self.should_rotate = False
         self.sid = sid
 
-    #
-    # MutableMapping implementation with DocDict-like extension
-    #
     def __getitem__(self, item):
         return self.__data[item]
 
@@ -1006,23 +1005,65 @@ class Session(collections.abc.MutableMapping):
     def __iter__(self):
         return iter(self.__data)
 
-    def __getattr__(self, attr):
-        return self.get(attr, None)
-
-    def __setattr__(self, key, val):
-        if key in self.__slots__:
-            super().__setattr__(key, val)
-        else:
-            self[key] = val
-
     def clear(self):
         self.__data.clear()
         self.is_dirty = True
 
     #
+    # Session properties
+    #
+    @property
+    def uid(self):
+        return self.get('uid')
+
+    @uid.setter
+    def uid(self, uid):
+        self['uid'] = uid
+
+    @property
+    def db(self):
+        return self.get('db')
+
+    @db.setter
+    def db(self, db):
+        self['db'] = db
+
+    @property
+    def login(self):
+        return self.get('login')
+
+    @login.setter
+    def login(self, login):
+        self['login'] = login
+
+    @property
+    def context(self):
+        return self.get('context')
+
+    @context.setter
+    def context(self, context):
+        self['context'] = context
+
+    @property
+    def debug(self):
+        return self.get('debug')
+
+    @debug.setter
+    def debug(self, debug):
+        self['debug'] = debug
+
+    @property
+    def session_token(self):
+        return self.get('session_token')
+
+    @session_token.setter
+    def session_token(self, session_token):
+        self['session_token'] = session_token
+
+    #
     # Session methods
     #
-    def authenticate(self, dbname, credential):
+    def authenticate(self, env, credential):
         """
         Authenticate the current user with the given db, login and
         credential. If successful, store the authentication parameters in
@@ -1042,28 +1083,24 @@ class Session(collections.abc.MutableMapping):
             'HTTP_HOST': request.httprequest.environ['HTTP_HOST'],
             'REMOTE_ADDR': request.httprequest.environ['REMOTE_ADDR'],
         }
-
-        registry = Registry(dbname)
-        auth_info = registry['res.users'].authenticate(dbname, credential, wsgienv)
+        env = env(user=None, su=False)
+        auth_info = env['res.users'].authenticate(credential, wsgienv)
         pre_uid = auth_info['uid']
 
         self.uid = None
-        self.pre_login = credential['login']
-        self.pre_uid = pre_uid
+        self['pre_login'] = credential['login']
+        self['pre_uid'] = pre_uid
 
-        with registry.cursor() as cr:
-            env = odoo.api.Environment(cr, pre_uid, {})
+        env = env(user=pre_uid)
 
-            # if 2FA is disabled we finalize immediately
-            user = env['res.users'].browse(pre_uid)
-            if auth_info.get('mfa') == 'skip' or not user._mfa_url():
-                self.finalize(env)
+        # if 2FA is disabled we finalize immediately
+        user = env['res.users'].browse(pre_uid)
+        if auth_info.get('mfa') == 'skip' or not user._mfa_url():
+            self.finalize(env)
 
-        if request and request.session is self and request.db == dbname:
-            request.env = odoo.api.Environment(request.env.cr, self.uid, self.context)
+        if request and request.session is self:
+            request.env = env(user=self.uid, context=self.context)
             request.update_context(lang=get_lang(request.env(user=pre_uid)).code)
-            # request env needs to be able to access the latest changes from the auth layers
-            request.env.cr.commit()
 
         return auth_info
 
@@ -1105,7 +1142,7 @@ class Session(collections.abc.MutableMapping):
         """
             :return: dict if a device log has to be inserted, ``None`` otherwise
         """
-        if self._trace_disable:
+        if self.get('_trace_disable'):
             # To avoid generating useless logs, e.g. for automated technical sessions,
             # a session can be flagged with `_trace_disable`. This should never be done
             # without a proper assessment of the consequences for auditability.
@@ -1120,7 +1157,7 @@ class Session(collections.abc.MutableMapping):
         browser = user_agent.browser
         ip_address = request.httprequest.remote_addr
         now = int(datetime.now().timestamp())
-        for trace in self._trace:
+        for trace in self['_trace']:
             if trace['platform'] == platform and trace['browser'] == browser and trace['ip_address'] == ip_address:
                 # If the device logs are not up to date (i.e. not updated for one hour or more)
                 if bool(now - trace['last_activity'] >= 3600):
@@ -1135,7 +1172,7 @@ class Session(collections.abc.MutableMapping):
             'first_activity': now,
             'last_activity': now
         }
-        self._trace.append(new_trace)
+        self['_trace'].append(new_trace)
         self.is_dirty = True
         return new_trace
 
@@ -1506,6 +1543,7 @@ class Request:
         """
         cr = None  # None is a sentinel, it keeps the same cursor
         self.env = self.env(cr, user, context, su)
+        self.env.transaction.default_env = self.env
         threading.current_thread().uid = self.env.uid
 
     def update_context(self, **overrides):
@@ -1656,10 +1694,10 @@ class Request:
         URL is profile-safe. Otherwise, get a context-manager that does
         nothing.
         """
-        if self.session.profile_session and self.db:
-            if self.session.profile_expiration < str(datetime.now()):
+        if self.session.get('profile_session') and self.db:
+            if self.session['profile_expiration'] < str(datetime.now()):
                 # avoid having session profiling for too long if user forgets to disable profiling
-                self.session.profile_session = None
+                self.session['profile_session'] = None
                 _logger.warning("Profiling expiration reached, disabling profiling")
             elif 'set_profiling' in self.httprequest.path:
                 _logger.debug("Profiling disabled on set_profiling route")
@@ -1673,13 +1711,13 @@ class Request:
                     return profiler.Profiler(
                         db=self.db,
                         description=self.httprequest.full_path,
-                        profile_session=self.session.profile_session,
-                        collectors=self.session.profile_collectors,
-                        params=self.session.profile_params,
+                        profile_session=self.session['profile_session'],
+                        collectors=self.session['profile_collectors'],
+                        params=self.session['profile_params'],
                     )
                 except Exception:
                     _logger.exception("Failure during Profiler creation")
-                    self.session.profile_session = None
+                    self.session['profile_session'] = None
 
         return contextlib.nullcontext()
 
@@ -2072,7 +2110,7 @@ class HttpDispatcher(Dispatcher):
         self.request.params = dict(self.request.get_http_params(), **args)
 
         # Check for CSRF token for relevant requests
-        if self.request.httprequest.method not in CSRF_FREE_METHODS and endpoint.routing.get('csrf', True):
+        if self.request.httprequest.method not in SAFE_HTTP_METHODS and endpoint.routing.get('csrf', True):
             if not self.request.db:
                 return self.request.redirect('/web/database/selector')
 
@@ -2269,7 +2307,7 @@ class Application:
     @lazy_property
     def nodb_routing_map(self):
         nodb_routing_map = werkzeug.routing.Map(strict_slashes=False, converters=None)
-        for url, endpoint in _generate_routing_rules([''] + odoo.conf.server_wide_modules, nodb_only=True):
+        for url, endpoint in _generate_routing_rules([''] + config['server_wide_modules'], nodb_only=True):
             routing = submap(endpoint.routing, ROUTING_KEYS)
             if routing['methods'] is not None and 'OPTIONS' not in routing['methods']:
                 routing['methods'] = routing['methods'] + ['OPTIONS']

@@ -4,15 +4,13 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('dz')
     def _get_dz_template_data(self):
         return {
             'property_account_receivable_id': 'l10n_dz_413',
             'property_account_payable_id': 'l10n_dz_401',
-            'property_account_expense_categ_id': 'l10n_dz_600',
-            'property_account_income_categ_id': 'l10n_dz_700',
             'code_digits': 6,
             'display_invoice_amount_total_words': True,
         }
@@ -34,5 +32,7 @@ class AccountChartTemplate(models.AbstractModel):
                 'default_cash_difference_expense_account_id': 'l10n_dz_657',
                 'account_sale_tax_id': 'l10n_dz_vat_sale_19_prod',
                 'account_purchase_tax_id': 'l10n_dz_vat_purchase_19',
+                'expense_account_id': 'l10n_dz_600',
+                'income_account_id': 'l10n_dz_700',
             },
         }

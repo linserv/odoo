@@ -6,6 +6,7 @@ from odoo import api, fields, models
 
 
 class MailMessageTranslation(models.Model):
+    _name = 'mail.message.translation'
     _description = "Message Translation"
 
     message_id = fields.Many2one("mail.message", "Message", required=True, ondelete="cascade")
@@ -20,10 +21,7 @@ class MailMessageTranslation(models.Model):
     )
     create_date = fields.Datetime(index=True)
 
-    def init(self):
-        self.env.cr.execute(
-            f"CREATE UNIQUE INDEX IF NOT EXISTS mail_message_translation_unique ON {self._table} (message_id, target_lang)"
-        )
+    _unique = models.UniqueIndex("(message_id, target_lang)")
 
     @api.autovacuum
     def _gc_translations(self):

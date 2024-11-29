@@ -8,6 +8,7 @@ from functools import lru_cache
 
 
 class AccountInvoiceReport(models.Model):
+    _name = 'account.invoice.report'
     _description = "Invoices Statistics"
     _auto = False
     _rec_name = 'invoice_date'
@@ -111,7 +112,8 @@ class AccountInvoiceReport(models.Model):
                    * (NULLIF(COALESCE(uom_line.factor, 1), 0.0) / NULLIF(COALESCE(uom_template.factor, 1), 0.0)),
                    0.0) * account_currency_table.rate                               AS price_average,
                 CASE
-                    WHEN move.move_type NOT IN ('out_invoice', 'out_receipt') THEN 0.0
+                    WHEN move.move_type NOT IN ('out_invoice', 'out_receipt', 'out_refund') THEN 0.0
+                    WHEN move.move_type = 'out_refund' THEN -line.balance * account_currency_table.rate + (line.quantity / NULLIF(COALESCE(uom_line.factor, 1) / COALESCE(uom_template.factor, 1), 0.0)) * COALESCE(product.standard_price -> line.company_id::text, to_jsonb(0.0))::float
                     ELSE -line.balance * account_currency_table.rate - (line.quantity / NULLIF(COALESCE(uom_line.factor, 1) / COALESCE(uom_template.factor, 1), 0.0)) * COALESCE(product.standard_price -> line.company_id::text, to_jsonb(0.0))::float
                 END
                                                                             AS price_margin,
@@ -152,6 +154,7 @@ class AccountInvoiceReport(models.Model):
 
 
 class ReportAccountReport_Invoice(models.AbstractModel):
+    _name = 'report.account.report_invoice'
     _description = 'Account report without payment lines'
 
     @api.model
@@ -174,6 +177,7 @@ class ReportAccountReport_Invoice(models.AbstractModel):
 
 
 class ReportAccountReport_Invoice_With_Payments(models.AbstractModel):
+    _name = 'report.account.report_invoice_with_payments'
     _description = 'Account report with payment lines'
     _inherit = ['report.account.report_invoice']
 

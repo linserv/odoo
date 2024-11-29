@@ -17,6 +17,7 @@ _logger = logging.getLogger('odoo.addons.base.partner.merge')
 
 
 class BasePartnerMergeLine(models.TransientModel):
+    _name = 'base.partner.merge.line'
 
     _description = 'Merge Partner Line'
     _order = 'min_id asc'
@@ -232,6 +233,28 @@ class BasePartnerMergeAutomaticWizard(models.TransientModel):
                 src_record_ids=tuple(src_records.ids),
                 dest_record_id=dst_record.id,
             ))
+
+        # merge the fallback values for company dependent many2one fields
+        self.env.cr.execute(SQL(
+            """
+            UPDATE ir_default
+            SET json_value =
+                CASE
+                    WHEN json_value::int IN %(src_record_ids)s
+                    THEN %(dest_record_id)s
+                    ELSE json_value
+                END
+            FROM ir_model_fields f
+            WHERE f.id = ir_default.field_id
+            AND f.company_dependent
+            AND f.relation = %(model_name)s
+            AND f.ttype = 'many2one'
+            AND json_value ~ '^[0-9]+$';
+            """,
+            src_record_ids=tuple(src_records.ids),
+            dest_record_id=str(dst_record.id),
+            model_name=dst_record._name,
+        ))
 
         self.env.flush_all()
 

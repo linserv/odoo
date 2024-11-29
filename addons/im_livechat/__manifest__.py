@@ -98,7 +98,6 @@ Help your customers with this chat, and analyse their feedback.
             'im_livechat/static/src/embed/common/**/*',
         ],
         'im_livechat.assets_embed_external': [
-            'im_livechat/static/src/embed/common/scss/bootstrap_overridden.scss',
             ('include', 'web._assets_helpers'),
             ('include', 'web._assets_backend_helpers'),
             'web/static/src/scss/pre_variables.scss',
@@ -112,7 +111,6 @@ Help your customers with this chat, and analyse their feedback.
             'web/static/lib/odoo_ui_icons/style.css',
             'web/static/src/webclient/webclient.scss',
             ('include', 'web._assets_core'),
-            'web/static/src/libs/pdfjs.js',
             'web/static/src/views/fields/formatters.js',
             'web/static/src/views/fields/file_handler.*',
             'web/static/src/scss/mimetypes.scss',
@@ -120,6 +118,7 @@ Help your customers with this chat, and analyse their feedback.
             'bus/static/src/services/**/*.js',
             'bus/static/src/workers/websocket_worker.js',
             'bus/static/src/workers/websocket_worker_utils.js',
+            ('remove', 'bus/static/src/outdated_page_watcher_service.js'),
             ('remove', 'bus/static/src/services/assets_watchdog_service.js'),
             ('remove', 'bus/static/src/simple_notification_service.js'),
             ('include', 'im_livechat.assets_embed_core'),

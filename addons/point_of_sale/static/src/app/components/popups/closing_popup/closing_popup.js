@@ -1,5 +1,5 @@
 import { Dialog } from "@web/core/dialog/dialog";
-import { SaleDetailsButton } from "@point_of_sale/app/navbar/sale_details_button/sale_details_button";
+import { SaleDetailsButton } from "@point_of_sale/app/components/navbar/sale_details_button/sale_details_button";
 import { ConfirmationDialog, AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { MoneyDetailsPopup } from "@point_of_sale/app/components/popups/money_details_popup/money_details_popup";
 import { useService } from "@web/core/utils/hooks";
@@ -8,9 +8,9 @@ import { ConnectionLostError } from "@web/core/network/rpc";
 import { _t } from "@web/core/l10n/translation";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { parseFloat } from "@web/views/fields/parsers";
-import { Input } from "@point_of_sale/app/generic_components/inputs/input/input";
+import { Input } from "@point_of_sale/app/components/inputs/input/input";
 import { useAsyncLockedMethod } from "@point_of_sale/app/hooks/hooks";
-import { ask } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { ask } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { deduceUrl } from "@point_of_sale/utils";
 import { FormViewDialog } from "@web/views/view_dialogs/form_view_dialog";
 import { PaymentMethodBreakdown } from "@point_of_sale/app/components/payment_method_breakdown/payment_method_breakdown";
@@ -39,7 +39,8 @@ export class ClosePosPopup extends Component {
     }
     autoFillCashCount() {
         const count = this.props.default_cash_details.amount;
-        this.state.payments[this.props.default_cash_details.id].counted = count.toString();
+        this.state.payments[this.props.default_cash_details.id].counted =
+            this.env.utils.formatCurrency(count, false);
         this.setManualCashInput(count);
     }
     get cashMoveData() {
@@ -188,7 +189,7 @@ export class ClosePosPopup extends Component {
             });
         }
         // If there are orders in the db left unsynced, we try to sync.
-        const syncSuccess = await this.pos.push_orders_with_closing_popup();
+        const syncSuccess = await this.pos.pushOrdersWithClosingPopup();
         if (!syncSuccess) {
             return;
         }
@@ -234,6 +235,7 @@ export class ClosePosPopup extends Component {
             if (!response.successful) {
                 return this.handleClosingError(response);
             }
+            this.pos.session.state = "closed";
             location.reload();
         } catch (error) {
             if (error instanceof ConnectionLostError) {
@@ -244,34 +246,39 @@ export class ClosePosPopup extends Component {
         }
     }
     async handleClosingControlError() {
-        this.dialog.add(AlertDialog, {
-            title: _t("Closing session error"),
-            body: _t(
-                "An error has occurred when trying to close the session.\n" +
-                    "You will be redirected to the back-end to manually close the session."
-            ),
-            onClose: () => {
-                this.dialog.add(
-                    FormViewDialog,
-                    {
-                        resModel: "pos.session",
-                        resId: this.pos.session.id,
-                    },
-                    {
-                        onClose: async () => {
-                            const session = await this.pos.data.read("pos.session", [
-                                this.pos.session.id,
-                            ]);
-                            if (session[0] && session[0].state === "closed") {
-                                location.reload();
-                            } else {
-                                this.pos.redirectToBackend();
-                            }
-                        },
-                    }
-                );
+        this.dialog.add(
+            AlertDialog,
+            {
+                title: _t("Closing session error"),
+                body: _t(
+                    "An error has occurred when trying to close the session.\n" +
+                        "You will be redirected to the back-end to manually close the session."
+                ),
             },
-        });
+            {
+                onClose: () => {
+                    this.dialog.add(
+                        FormViewDialog,
+                        {
+                            resModel: "pos.session",
+                            resId: this.pos.session.id,
+                        },
+                        {
+                            onClose: async () => {
+                                const session = await this.pos.data.read("pos.session", [
+                                    this.pos.session.id,
+                                ]);
+                                if (session[0] && session[0].state === "closed") {
+                                    location.reload();
+                                } else {
+                                    this.pos.redirectToBackend();
+                                }
+                            },
+                        }
+                    );
+                },
+            }
+        );
     }
     async handleClosingError(response) {
         this.dialog.add(ConfirmationDialog, {

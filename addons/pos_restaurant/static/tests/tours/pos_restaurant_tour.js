@@ -1,18 +1,19 @@
 import * as BillScreen from "@pos_restaurant/../tests/tours/utils/bill_screen_util";
-import * as PaymentScreen from "@point_of_sale/../tests/tours/utils/payment_screen_util";
-import * as Dialog from "@point_of_sale/../tests/tours/utils/dialog_util";
-import * as ReceiptScreen from "@point_of_sale/../tests/tours/utils/receipt_screen_util";
-import * as ChromePos from "@point_of_sale/../tests/tours/utils/chrome_util";
+import * as PaymentScreen from "@point_of_sale/../tests/pos/tours/utils/payment_screen_util";
+import * as Dialog from "@point_of_sale/../tests/generic_helpers/dialog_util";
+import * as ReceiptScreen from "@point_of_sale/../tests/pos/tours/utils/receipt_screen_util";
+import * as ChromePos from "@point_of_sale/../tests/pos/tours/utils/chrome_util";
 import * as ChromeRestaurant from "@pos_restaurant/../tests/tours/utils/chrome";
 const Chrome = { ...ChromePos, ...ChromeRestaurant };
 import * as FloorScreen from "@pos_restaurant/../tests/tours/utils/floor_screen_util";
-import * as ProductScreenPos from "@point_of_sale/../tests/tours/utils/product_screen_util";
+import * as ProductScreenPos from "@point_of_sale/../tests/pos/tours/utils/product_screen_util";
 import * as ProductScreenResto from "@pos_restaurant/../tests/tours/utils/product_screen_util";
-import * as Order from "@point_of_sale/../tests/tours/utils/generic_components/order_widget_util";
-import * as TicketScreen from "@point_of_sale/../tests/tours/utils/ticket_screen_util";
-import { inLeftSide, negateStep } from "@point_of_sale/../tests/tours/utils/common";
+import * as Order from "@point_of_sale/../tests/generic_helpers/order_widget_util";
+import * as TicketScreen from "@point_of_sale/../tests/pos/tours/utils/ticket_screen_util";
+import { inLeftSide } from "@point_of_sale/../tests/pos/tours/utils/common";
+import { negateStep } from "@point_of_sale/../tests/generic_helpers/utils";
 import { registry } from "@web/core/registry";
-import * as Numpad from "@point_of_sale/../tests/tours/utils/numpad_util";
+import * as Numpad from "@point_of_sale/../tests/generic_helpers/numpad_util";
 
 const ProductScreen = { ...ProductScreenPos, ...ProductScreenResto };
 
@@ -293,5 +294,40 @@ registry.category("web_tour.tours").add("CategLabelCheck", {
             FloorScreen.clickTable("5"),
             ProductScreen.clickDisplayedProduct("Test Multi Category Product"),
             ProductScreen.OrderButtonNotContain("Drinks"),
+        ].flat(),
+});
+registry.category("web_tour.tours").add("OrderChange", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola", true, "1.0"),
+            ProductScreen.clickOrderButton(),
+            {
+                ...Dialog.confirm(),
+                content:
+                    "acknowledge printing error ( because we don't have printer in the test. )",
+            },
+            ProductScreen.orderlinesHaveNoChange(),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.clickPaymentMethod("Cash"),
+            PaymentScreen.clickNumpad("+10"),
+            PaymentScreen.clickValidate(),
+            ReceiptScreen.isShown(),
+            TicketScreen.receiptChangeIs("10"),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("CrmTeamTour", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            Chrome.clickPlanButton(),
+            FloorScreen.clickTable("5"),
+            Chrome.clickPlanButton(),
         ].flat(),
 });

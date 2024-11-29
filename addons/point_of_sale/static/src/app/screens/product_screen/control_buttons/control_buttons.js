@@ -5,7 +5,7 @@ import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_p
 import { NoteButton } from "@point_of_sale/app/screens/product_screen/control_buttons/note_button/note_button";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { _t } from "@web/core/l10n/translation";
-import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { SelectPartnerButton } from "@point_of_sale/app/screens/product_screen/control_buttons/select_partner_button/select_partner_button";
 
 export class ControlButtons extends Component {
@@ -26,10 +26,10 @@ export class ControlButtons extends Component {
         this.notification = useService("notification");
     }
     get partner() {
-        return this.pos.get_order()?.get_partner();
+        return this.pos.getOrder()?.getPartner();
     }
     get currentOrder() {
-        return this.pos.get_order();
+        return this.pos.getOrder();
     }
     async clickFiscalPosition() {
         const currentFiscalPosition = this.currentOrder.fiscal_position_id;
@@ -103,8 +103,8 @@ export class ControlButtons extends Component {
     }
 
     clickRefund() {
-        const order = this.pos.get_order();
-        const partner = order.get_partner();
+        const order = this.pos.getOrder();
+        const partner = order.getPartner();
         const searchDetails = partner ? { fieldName: "PARTNER", searchTerm: partner.name } : {};
         this.pos.showScreen("TicketScreen", {
             stateOverride: {

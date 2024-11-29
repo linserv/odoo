@@ -145,7 +145,7 @@ export class SuggestionService {
             // would be notified to the mentioned partner, so this prevents
             // from inadvertently leaking the private message to the
             // mentioned partner.
-            partners = thread.channelMembers
+            partners = thread.channel_member_ids
                 .map((member) => member.persona)
                 .filter((persona) => persona.type === "partner");
         } else {
@@ -200,9 +200,9 @@ export class SuggestionService {
     sortPartnerSuggestions(partners, searchTerm = "", thread = undefined) {
         const cleanedSearchTerm = cleanTerm(searchTerm);
         const compareFunctions = partnerCompareRegistry.getAll();
-        const context = { recentChatPartnerIds: this.store.getRecentChatPartnerIds() };
+        const context = this.sortPartnerSuggestionsContext();
         const memberPartnerIds = new Set(
-            thread?.channelMembers
+            thread?.channel_member_ids
                 .filter((member) => member.persona.type === "partner")
                 .map((member) => member.persona.id)
         );
@@ -225,6 +225,10 @@ export class SuggestionService {
                 }
             }
         });
+    }
+
+    sortPartnerSuggestionsContext() {
+        return {};
     }
 
     searchChannelSuggestions(cleanedSearchTerm, sort) {

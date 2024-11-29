@@ -20,6 +20,7 @@ AVAILABLE_PRIORITIES = [
 
 
 class HrApplicant(models.Model):
+    _name = 'hr.applicant'
     _description = "Applicant"
     _order = "priority desc, id desc"
     _inherit = ['mail.thread.cc',
@@ -112,13 +113,7 @@ class HrApplicant(models.Model):
     applicant_notes = fields.Html()
     refuse_date = fields.Datetime('Refuse Date')
 
-    def init(self):
-        super().init()
-        self.env.cr.execute("""
-            CREATE INDEX IF NOT EXISTS hr_applicant_job_id_stage_id_idx
-            ON hr_applicant(job_id, stage_id)
-            WHERE active IS TRUE
-        """)
+    _job_id_stage_id_idx = models.Index("(job_id, stage_id) WHERE active IS TRUE")
 
     @api.depends("candidate_id.partner_name")
     def _compute_partner_name(self):
@@ -308,7 +303,7 @@ class HrApplicant(models.Model):
     def _compute_date_closed(self):
         for applicant in self:
             if applicant.stage_id and applicant.stage_id.hired_stage and not applicant.date_closed:
-                applicant.date_closed = fields.datetime.now()
+                applicant.date_closed = fields.Datetime.now()
             if not applicant.stage_id.hired_stage:
                 applicant.date_closed = False
 
@@ -366,9 +361,14 @@ class HrApplicant(models.Model):
                 vals['kanban_state'] = 'normal'
             for applicant in self:
                 vals['last_stage_id'] = applicant.stage_id.id
-                res = super().write(vals)
-        else:
-            res = super().write(vals)
+                new_stage = self.env['hr.recruitment.stage'].browse(vals['stage_id'])
+                if new_stage.hired_stage and not applicant.stage_id.hired_stage:
+                    if applicant.job_id.no_of_recruitment > 0:
+                        applicant.job_id.no_of_recruitment -= 1
+                elif not new_stage.hired_stage and applicant.stage_id.hired_stage:
+                    applicant.job_id.no_of_recruitment += 1
+        res = super().write(vals)
+
         if 'interviewer_ids' in vals:
             interviewers_to_clean = old_interviewers - self.interviewer_ids
             interviewers_to_clean._remove_recruitment_interviewers()

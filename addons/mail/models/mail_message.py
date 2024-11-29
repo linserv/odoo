@@ -189,6 +189,9 @@ class MailMessage(models.Model):
     # Besides for new messages, and messages never sending emails, there was no mail, and it was searching for nothing.
     mail_ids = fields.One2many('mail.mail', 'mail_message_id', string='Mails', groups="base.group_system")
 
+    _model_res_id_idx = models.Index("(model, res_id)")
+    _model_res_id_id_idx = models.Index("(model, res_id, id)")
+
     @api.depends('body')
     def _compute_preview(self):
         """ Returns an un-formatted version of the message body. Output is capped
@@ -256,12 +259,6 @@ class MailMessage(models.Model):
     # ------------------------------------------------------
     # CRUD / ORM
     # ------------------------------------------------------
-
-    def init(self):
-        self._cr.execute("""SELECT indexname FROM pg_indexes WHERE indexname = 'mail_message_model_res_id_idx'""")
-        if not self._cr.fetchone():
-            self._cr.execute("""CREATE INDEX mail_message_model_res_id_idx ON mail_message (model, res_id)""")
-        self._cr.execute("""CREATE INDEX IF NOT EXISTS mail_message_model_res_id_id_idx ON mail_message (model, res_id, id)""")
 
     @api.model
     def _search(self, domain, offset=0, limit=None, order=None):
@@ -339,6 +336,9 @@ class MailMessage(models.Model):
         allowed_ids.update(self._find_allowed_doc_ids(model_ids))
         allowed = self.browse(id_ for id_ in ids if id_ in allowed_ids)
         return allowed._as_query(order)
+
+    def _get_search_domain_share(self):
+        return ['&', '&', ('is_internal', '=', False), ('subtype_id', '!=', False), ('subtype_id.internal', '=', False)]
 
     @api.model
     def _find_allowed_model_wise(self, doc_model, doc_dict):
@@ -472,7 +472,7 @@ class MailMessage(models.Model):
                     messages_to_check.pop(mid)
         elif operation == 'create':
             for mid, message in list(messages_to_check.items()):
-                if not self.is_thread_message(message):
+                if not self._is_thread_message_visible(vals=message):
                     messages_to_check.pop(mid)
 
         if not messages_to_check:
@@ -559,7 +559,7 @@ class MailMessage(models.Model):
             "Records: %(records)s, User: %(user)s",
             type=self._description,
             operation=operation,
-            records=self.ids[:6],
+            records=format_list(self.env, list(map(str, self.ids[:6]))),
             user=self.env.uid,
         ))
 
@@ -682,7 +682,7 @@ class MailMessage(models.Model):
                 if other_cmd:
                     message.sudo().write({'tracking_value_ids': tracking_values_cmd})
 
-            if message.is_thread_message(values):
+            if message._is_thread_message_visible(vals=values):
                 message._invalidate_documents(values.get('model'), values.get('res_id'))
 
         return messages
@@ -730,7 +730,9 @@ class MailMessage(models.Model):
         messages_by_partner = defaultdict(lambda: self.env['mail.message'])
         partners_with_user = self.partner_ids.filtered('user_ids')
         for elem in self:
-            for partner in elem.partner_ids & partners_with_user:
+            for partner in (
+                elem.partner_ids & partners_with_user | elem.notification_ids.author_id
+            ):
                 messages_by_partner[partner] |= elem
         # Notify front-end of messages deletion for partners having a user
         for partner, messages in messages_by_partner.items():
@@ -832,6 +834,34 @@ class MailMessage(models.Model):
             "mail.message/toggle_star", {"message_ids": [self.id], "starred": starred}
         )
 
+    @api.model
+    def _message_fetch(self, domain, search_term=None, before=None, after=None, around=None, limit=30):
+        res = {}
+        if search_term:
+            # we replace every space by a % to avoid hard spacing matching
+            search_term = search_term.replace(" ", "%")
+            domain = expression.AND([domain, expression.OR([
+                # sudo: access to attachment is allowed if you have access to the parent model
+                [("attachment_ids", "in", self.env["ir.attachment"].sudo()._search([("name", "ilike", search_term)]))],
+                [("body", "ilike", search_term)],
+                [("subject", "ilike", search_term)],
+                [("subtype_id.description", "ilike", search_term)],
+            ])])
+            domain = expression.AND([domain, [("message_type", "not in", ["user_notification", "notification"])]])
+            res["count"] = self.search_count(domain)
+        if around is not None:
+            messages_before = self.search(domain=[*domain, ('id', '<=', around)], limit=limit // 2, order="id DESC")
+            messages_after = self.search(domain=[*domain, ('id', '>', around)], limit=limit // 2, order='id ASC')
+            return {**res, "messages": (messages_after + messages_before).sorted('id', reverse=True)}
+        if before:
+            domain = expression.AND([domain, [('id', '<', before)]])
+        if after:
+            domain = expression.AND([domain, [('id', '>', after)]])
+        res["messages"] = self.search(domain, limit=limit, order='id ASC' if after else 'id DESC')
+        if after:
+            res["messages"] = res["messages"].sorted('id', reverse=True)
+        return res
+
     def _message_reaction(self, content, action, partner, guest, store: Store = None):
         self.ensure_one()
         # search for existing reaction
@@ -875,29 +905,8 @@ class MailMessage(models.Model):
         store.add(self, {"reactions": reaction_group})
 
     # ------------------------------------------------------
-    # MESSAGE READ / FETCH / FAILURE API
+    # STORE / NOTIFICATIONS
     # ------------------------------------------------------
-
-    def _records_by_model_name(self):
-        ids_by_model = defaultdict(OrderedSet)
-        prefetch_ids_by_model = defaultdict(OrderedSet)
-        prefetch_messages = self | self.browse(self._prefetch_ids)
-        for message in prefetch_messages.filtered(lambda m: m.model and m.res_id):
-            target = ids_by_model if message in self else prefetch_ids_by_model
-            target[message.model].add(message.res_id)
-        return {
-            model_name: self.env[model_name].browse(ids)
-            .with_prefetch(tuple(ids_by_model[model_name] | prefetch_ids_by_model[model_name]))
-            for model_name, ids in ids_by_model.items()
-        }
-
-    def _record_by_message(self):
-        records_by_model_name = self._records_by_model_name()
-        return {
-            message: self.env[message.model].browse(message.res_id)
-            .with_prefetch(records_by_model_name[message.model]._prefetch_ids)
-            for message in self.filtered(lambda m: m.model and m.res_id)
-        }
 
     def _to_store(self, store, /, *, fields=None, format_reply=True, msg_vals=None,
                   for_current_user=False, add_followers=False, followers=None):
@@ -1019,7 +1028,7 @@ class MailMessage(models.Model):
                 "thread": Store.one(record, as_thread=True, only_id=True),
             }
             if self.env.user._is_internal():
-                vals["notifications"] = Store.many(message.notification_ids._filtered_for_web_client())
+                vals["notification_ids"] = Store.many(message.notification_ids._filtered_for_web_client())
             if for_current_user:
                 # sudo: mail.message - filtering allowed tracking values
                 displayed_tracking_ids = message.sudo().tracking_value_ids._filter_has_field_access(
@@ -1067,34 +1076,6 @@ class MailMessage(models.Model):
     def _extras_to_store(self, store: Store, format_reply):
         pass
 
-    @api.model
-    def _message_fetch(self, domain, search_term=None, before=None, after=None, around=None, limit=30):
-        res = {}
-        if search_term:
-            # we replace every space by a % to avoid hard spacing matching
-            search_term = search_term.replace(" ", "%")
-            domain = expression.AND([domain, expression.OR([
-                # sudo: access to attachment is allowed if you have access to the parent model
-                [("attachment_ids", "in", self.env["ir.attachment"].sudo()._search([("name", "ilike", search_term)]))],
-                [("body", "ilike", search_term)],
-                [("subject", "ilike", search_term)],
-                [("subtype_id.description", "ilike", search_term)],
-            ])])
-            domain = expression.AND([domain, [("message_type", "not in", ["user_notification", "notification"])]])
-            res["count"] = self.search_count(domain)
-        if around is not None:
-            messages_before = self.search(domain=[*domain, ('id', '<=', around)], limit=limit // 2, order="id DESC")
-            messages_after = self.search(domain=[*domain, ('id', '>', around)], limit=limit // 2, order='id ASC')
-            return {**res, "messages": (messages_after + messages_before).sorted('id', reverse=True)}
-        if before:
-            domain = expression.AND([domain, [('id', '<', before)]])
-        if after:
-            domain = expression.AND([domain, [('id', '>', after)]])
-        res["messages"] = self.search(domain, limit=limit, order='id ASC' if after else 'id DESC')
-        if after:
-            res["messages"] = res["messages"].sorted('id', reverse=True)
-        return res
-
     def _message_notifications_to_store(self, store: Store):
         """Returns the current messages and their corresponding notifications in
         the format expected by the web client.
@@ -1108,7 +1089,7 @@ class MailMessage(models.Model):
                 "date": message.date,
                 "message_type": message.message_type,
                 "body": message.body,
-                "notifications": Store.many(message.notification_ids._filtered_for_web_client()),
+                "notification_ids": Store.many(message.notification_ids._filtered_for_web_client()),
                 "thread": (
                     Store.one(
                         self.env[message.model].browse(message.res_id) if message.model else False,
@@ -1209,7 +1190,7 @@ class MailMessage(models.Model):
         email_from = values.get('email_from')
         message_type = values.get('message_type')
         records = None
-        if self.is_thread_message({'model': model, 'res_id': res_id, 'message_type': message_type}):
+        if self._is_thread_message(vals={'model': model, 'res_id': res_id, 'message_type': message_type}):
             records = self.env[model].browse([res_id])
         else:
             records = self.env[model] if model else self.env['mail.thread']
@@ -1219,23 +1200,28 @@ class MailMessage(models.Model):
     def _get_message_id(self, values):
         if values.get('reply_to_force_new', False) is True:
             message_id = tools.mail.generate_tracking_message_id('reply_to')
-        elif self.is_thread_message(values):
+        elif self._is_thread_message(vals=values):
             message_id = tools.mail.generate_tracking_message_id('%(res_id)s-%(model)s' % values)
         else:
             message_id = tools.mail.generate_tracking_message_id('private')
         return message_id
 
-    def is_thread_message(self, vals=None):
-        if vals:
-            res_id = vals.get('res_id')
-            model = vals.get('model')
-            message_type = vals.get('message_type')
-        else:
-            self.ensure_one()
-            res_id = self.res_id
-            model = self.model
-            message_type = self.message_type
-        return res_id and model and message_type != 'user_notification'
+    def _is_thread_message(self, vals=None, thread=None):
+        """ Tool method to compute thread validity in notification methods. """
+        if vals is None:
+            vals = {}
+        res_model = vals['model'] if 'model' in vals else thread._name if thread else self.model
+        res_id = vals['res_id'] if 'res_id' in vals else thread.ids[0] if thread and thread.ids else self.res_id
+        return bool(res_id) if (res_model and res_model != 'mail.thread') else False
+
+    def _is_thread_message_visible(self, vals=None, thread=None):
+        """ In addition to being a thread message, it should not be a user specific
+        notification that is recipient-specific. Used mainly for ACL purpose. """
+        is_thread = self._is_thread_message(vals=vals, thread=thread)
+        if is_thread:
+            message_type = (vals or {}).get('message_type') or self.message_type
+            return is_thread and message_type != 'user_notification'
+        return is_thread
 
     def _invalidate_documents(self, model=None, res_id=None):
         """ Invalidate the cache of the documents followed by ``self``. """
@@ -1247,5 +1233,23 @@ class MailMessage(models.Model):
             if model in self.pool and issubclass(self.pool[model], self.pool['mail.thread']):
                 self.env[model].browse(res_id).invalidate_recordset(fnames)
 
-    def _get_search_domain_share(self):
-        return ['&', '&', ('is_internal', '=', False), ('subtype_id', '!=', False), ('subtype_id.internal', '=', False)]
+    def _records_by_model_name(self):
+        ids_by_model = defaultdict(OrderedSet)
+        prefetch_ids_by_model = defaultdict(OrderedSet)
+        prefetch_messages = self | self.browse(self._prefetch_ids)
+        for message in prefetch_messages.filtered(lambda m: m.model and m.res_id):
+            target = ids_by_model if message in self else prefetch_ids_by_model
+            target[message.model].add(message.res_id)
+        return {
+            model_name: self.env[model_name].browse(ids)
+            .with_prefetch(tuple(ids_by_model[model_name] | prefetch_ids_by_model[model_name]))
+            for model_name, ids in ids_by_model.items()
+        }
+
+    def _record_by_message(self):
+        records_by_model_name = self._records_by_model_name()
+        return {
+            message: self.env[message.model].browse(message.res_id)
+            .with_prefetch(records_by_model_name[message.model]._prefetch_ids)
+            for message in self.filtered(lambda m: m.model and m.res_id)
+        }

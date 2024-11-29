@@ -91,6 +91,7 @@ DEFAULT_BLOCKED_THIRD_PARTY_DOMAINS = '\n'.join([  # noqa: FLY002
 
 
 class Website(models.Model):
+    _name = 'website'
 
     _description = "Website"
     _order = "sequence, id"
@@ -200,9 +201,10 @@ class Website(models.Model):
         ('b2c', 'Free sign up'),
     ], string='Customer Account', default='b2b')
 
-    _sql_constraints = [
-        ('domain_unique', 'unique(domain)', 'Website Domain should be unique.'),
-    ]
+    _domain_unique = models.Constraint(
+        'unique(domain)',
+        'Website Domain should be unique.',
+    )
 
     @api.onchange('language_ids')
     def _onchange_language_ids(self):
@@ -423,7 +425,7 @@ class Website(models.Model):
         :param url: the url to check
         :return: True if the url has to be indexed, False otherwise
         """
-        return get_base_domain(url, True) == get_base_domain(self.domain, True)
+        return get_base_domain(url.lower(), True) == get_base_domain(self.domain.lower(), True)
 
     # ----------------------------------------------------------
     # Configurator
@@ -1025,7 +1027,7 @@ class Website(models.Model):
             fallback_create_missing_industry_image('s_carousel_intro_default_image_1', 's_cover_default_image')
             fallback_create_missing_industry_image('s_carousel_intro_default_image_2', 's_image_text_default_image')
             fallback_create_missing_industry_image('s_carousel_intro_default_image_3', 's_text_image_default_image')
-
+            fallback_create_missing_industry_image('s_website_form_overlay_default_image', 's_cover_default_image')
             fallback_create_missing_industry_image('s_framed_intro_default_image', 's_cover_default_image')
             fallback_create_missing_industry_image('s_wavy_grid_default_image_1', 's_cover_default_image')
             fallback_create_missing_industry_image('s_wavy_grid_default_image_2', 's_image_text_default_image')
@@ -1710,6 +1712,20 @@ class Website(models.Model):
     @tools.ormcache('self.id')
     def _get_cached_values(self):
         self.ensure_one()
+        # ir.http:_match is called by ir.http:_serve_db at a time when the
+        # environment hasn't been completely initialized (i.e. before the method
+        # ir.http:_authenticate is called by ir.http:_serve_ir_http), and its
+        # context language hasn't been checked against activated languages yet.
+
+        # Inside ir.http:_match, the http_routing module is trying to retrieve
+        # the default language via _get_default_lang, which is overridden by the
+        # website module and calls website._get_cached('default_lang_id'), which
+        # eventually calls this method.
+
+        # Here, we manually prefetch the needed fields only to avoid prefetching
+        # any translatable field, such as contact_us_button_url by website_sale,
+        # as translating to an invalid language would result in an error.
+        self.fetch(['user_id', 'company_id', 'default_lang_id', 'homepage_url'])
         return {
             'user_id': self.user_id.id,
             'company_id': self.company_id.id,
@@ -1744,7 +1760,7 @@ class Website(models.Model):
             try:
                 model = self.env[model_name]
                 field = model._fields[field_name]
-                if model._abstract or model._table_query is not None or not field.store:
+                if model._abstract or model._table_query or not field.store:
                     continue
             except KeyError:
                 continue

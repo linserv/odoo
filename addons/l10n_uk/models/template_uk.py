@@ -4,15 +4,13 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('uk')
     def _get_uk_template_data(self):
         return {
             'property_account_receivable_id': '1100',
             'property_account_payable_id': '2100',
-            'property_account_expense_categ_id': '5000',
-            'property_account_income_categ_id': '4000',
             'code_digits': '6',
         }
 
@@ -30,6 +28,10 @@ class AccountChartTemplate(models.AbstractModel):
                 'expense_currency_exchange_account_id': '7700',
                 'account_sale_tax_id': 'ST11',
                 'account_purchase_tax_id': 'PT_20_G',
+                'expense_account_id': '5000',
+                'income_account_id': '4000',
+                'deferred_expense_account_id': '1103',
+                'deferred_revenue_account_id': '2109',
             },
         }
 

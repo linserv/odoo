@@ -1,15 +1,9 @@
-# Part of Odoo. See LICENSE file for full copyright and licensing details.
-
-import odoo
-from odoo.addons.mail.tests.test_thread_controller import (
-    MessagePostSubTestData,
-    TestThreadControllerCommon,
-)
-from odoo.addons.portal.tests.test_portal_controller_common import TestPortalControllerCommon
+from odoo.addons.mail.tests.common_controllers import MailControllerThreadCommon, MessagePostSubTestData
+from odoo.tests import tagged
 
 
-@odoo.tests.tagged("-at_install", "post_install")
-class TestProjectThreadController(TestThreadControllerCommon, TestPortalControllerCommon):
+@tagged("-at_install", "post_install", "mail_controller")
+class TestProjectThreadController(MailControllerThreadCommon):
     def test_message_post_partner_ids_project(self):
         """Test partner_ids of message_post for task.
         Followers of task and followers of related project are allowed to be
@@ -21,11 +15,11 @@ class TestProjectThreadController(TestThreadControllerCommon, TestPortalControll
         )
         token, bad_token, sign, bad_sign, partner = self._get_sign_token_params(task)
         all_partners = (
-            self.user_portal + self.user_employee + self.user_demo + self.user_admin
+            self.user_portal + self.user_employee + self.user_employee_nopartner + self.user_admin
         ).partner_id
         project.message_subscribe(partner_ids=self.user_employee.partner_id.ids)
-        task.message_subscribe(partner_ids=self.user_demo.partner_id.ids)
-        followers = (self.user_employee + self.user_demo).partner_id
+        task.message_subscribe(partner_ids=self.user_employee_nopartner.partner_id.ids)
+        followers = (self.user_employee + self.user_employee_nopartner).partner_id
 
         def test_partners(user, allowed, exp_partners, route_kw=None, exp_author=None):
             return MessagePostSubTestData(
@@ -60,11 +54,11 @@ class TestProjectThreadController(TestThreadControllerCommon, TestPortalControll
                 test_partners(self.user_employee, True, all_partners, route_kw=bad_sign),
                 test_partners(self.user_employee, True, all_partners, route_kw=token),
                 test_partners(self.user_employee, True, all_partners, route_kw=sign),
-                test_partners(self.user_demo, True, all_partners),
-                test_partners(self.user_demo, True, all_partners, route_kw=bad_token),
-                test_partners(self.user_demo, True, all_partners, route_kw=bad_sign),
-                test_partners(self.user_demo, True, all_partners, route_kw=token),
-                test_partners(self.user_demo, True, all_partners, route_kw=sign),
+                test_partners(self.user_employee_nopartner, True, all_partners),
+                test_partners(self.user_employee_nopartner, True, all_partners, route_kw=bad_token),
+                test_partners(self.user_employee_nopartner, True, all_partners, route_kw=bad_sign),
+                test_partners(self.user_employee_nopartner, True, all_partners, route_kw=token),
+                test_partners(self.user_employee_nopartner, True, all_partners, route_kw=sign),
                 test_partners(self.user_admin, True, all_partners),
                 test_partners(self.user_admin, True, all_partners, route_kw=bad_token),
                 test_partners(self.user_admin, True, all_partners, route_kw=bad_sign),

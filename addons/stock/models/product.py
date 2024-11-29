@@ -24,7 +24,7 @@ OPERATORS = {
 
 
 class ProductProduct(models.Model):
-    _inherit = ["product.product"]
+    _inherit = "product.product"
 
     stock_quant_ids = fields.One2many('stock.quant', 'product_id') # used to compute quantities
     stock_move_ids = fields.One2many('stock.move', 'product_id') # used to compute quantities
@@ -316,7 +316,7 @@ class ProductProduct(models.Model):
         if self.env.context.get('strict'):
             loc_domain = [('location_id', 'in', locations.ids)]
             dest_loc_domain = [('location_dest_id', 'in', locations.ids)]
-        else:
+        elif locations:
             paths_domain = expression.OR([[('parent_path', '=like', loc.parent_path + '%')] for loc in locations])
             loc_domain = [('location_id', 'any', paths_domain)]
             dest_loc_domain = [
@@ -658,9 +658,20 @@ class ProductProduct(models.Model):
         or_domains = expression.OR(or_domains)
         return expression.AND([base_domain, or_domains])
 
+    def filter_has_routes(self):
+        """ Return products with route_ids
+            or whose categ_id has total_route_ids.
+        """
+        products_with_routes = self.env['product.product']
+        # retrieve products with route_ids
+        products_with_routes += self.search([('id', 'in', self.ids), ('route_ids', '!=', False)])
+        # retrive products with categ_ids having routes
+        products_with_routes += self.search([('id', 'in', (self - products_with_routes).ids), ('categ_id.total_route_ids', '!=', False)])
+        return products_with_routes
+
 
 class ProductTemplate(models.Model):
-    _inherit = ['product.template']
+    _inherit = 'product.template'
     _check_company_auto = True
 
     is_storable = fields.Boolean(
@@ -1024,7 +1035,7 @@ class ProductTemplate(models.Model):
 
 
 class ProductCategory(models.Model):
-    _inherit = ['product.category']
+    _inherit = 'product.category'
 
     route_ids = fields.Many2many(
         'stock.route', 'stock_route_categ', 'categ_id', 'route_id', 'Routes',
@@ -1043,7 +1054,7 @@ class ProductCategory(models.Model):
     parent_route_ids = fields.Many2many(
         'stock.route', string='Parent Routes', compute='_compute_parent_route_ids')
     total_route_ids = fields.Many2many(
-        'stock.route', string='Total routes', compute='_compute_total_route_ids',
+        'stock.route', string='Total routes', compute='_compute_total_route_ids', search='_search_total_route_ids',
         readonly=True)
     putaway_rule_ids = fields.One2many('stock.putaway.rule', 'category_id', 'Putaway Rules')
     packaging_reserve_method = fields.Selection([
@@ -1062,6 +1073,10 @@ class ProductCategory(models.Model):
                 base_cat = base_cat.parent_id
                 routes |= base_cat.route_ids
             category.parent_route_ids = routes - category.route_ids
+
+    def _search_total_route_ids(self, operator, value):
+        categ_ids = self.filtered_domain([('total_route_ids', operator, value)]).ids
+        return [('id', 'in', categ_ids)]
 
     @api.depends('route_ids', 'parent_route_ids')
     def _compute_total_route_ids(self):
@@ -1082,7 +1097,7 @@ class ProductCategory(models.Model):
 
 
 class ProductPackaging(models.Model):
-    _inherit = ["product.packaging"]
+    _inherit = "product.packaging"
 
     package_type_id = fields.Many2one('stock.package.type', 'Package Type')
     route_ids = fields.Many2many(
@@ -1092,7 +1107,7 @@ class ProductPackaging(models.Model):
 
 
 class UomUom(models.Model):
-    _inherit = ['uom.uom']
+    _inherit = 'uom.uom'
 
     def write(self, values):
         # Users can not update the factor if open stock moves are based on it

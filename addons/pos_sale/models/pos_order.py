@@ -6,7 +6,7 @@ from odoo.tools import float_compare, float_is_zero, format_date
 
 
 class PosOrder(models.Model):
-    _inherit = ['pos.order']
+    _inherit = 'pos.order'
 
     currency_rate = fields.Float(compute='_compute_currency_rate', store=True, digits=0, readonly=True)
     crm_team_id = fields.Many2one('crm.team', string="Sales Team", ondelete="set null")
@@ -70,7 +70,7 @@ class PosOrder(models.Model):
                     'product_id': line.product_id.id,
                     'price_unit': line.price_unit,
                     'product_uom_qty': 0,
-                    'tax_id': [(6, 0, line.tax_ids.ids)],
+                    'tax_ids': [(6, 0, line.tax_ids.ids)],
                     'is_downpayment': True,
                     'discount': line.discount,
                     'sequence': sale_lines and sale_lines[-1].sequence + 2 or 10,
@@ -170,7 +170,7 @@ class PosOrder(models.Model):
 
 
 class PosOrderLine(models.Model):
-    _inherit = ['pos.order.line']
+    _inherit = 'pos.order.line'
 
     sale_order_origin_id = fields.Many2one('sale.order', string="Linked Sale Order")
     sale_order_line_id = fields.Many2one('sale.order.line', string="Source Sale Order Line")
@@ -205,6 +205,5 @@ class PosOrderLine(models.Model):
     def _launch_stock_rule_from_pos_order_lines(self):
         orders = self.mapped('order_id')
         for order in orders:
-            for line in order.lines:
-                line.sale_order_line_id.move_ids.mapped("move_line_ids").unlink()
+            self.env['stock.move'].browse(order.lines.sale_order_line_id.move_ids._rollup_move_origs()).filtered(lambda ml: ml.state not in ['cancel', 'done'])._action_cancel()
         return super()._launch_stock_rule_from_pos_order_lines()

@@ -5,7 +5,7 @@ from odoo.osv.expression import AND
 
 
 class ProjectProject(models.Model):
-    _inherit = ['project.project']
+    _inherit = 'project.project'
 
     def action_open_deliveries(self):
         self.ensure_one()
@@ -31,7 +31,12 @@ class ProjectProject(models.Model):
             'name': action_name,
             'type': 'ir.actions.act_window',
             'res_model': 'stock.picking',
-            'views': [[False, 'list'], [False, 'form'], [False, 'kanban']],
+            'view_mode': f"list,kanban,form,calendar,{'map' if picking_type == 'outgoing' else 'activity'}",
             'domain': domain,
             'context': context,
+            'help': self.env['ir.ui.view']._render_template(
+                'stock.help_message_template', {
+                    'picking_type_code': picking_type,
+                }
+            ),
         }

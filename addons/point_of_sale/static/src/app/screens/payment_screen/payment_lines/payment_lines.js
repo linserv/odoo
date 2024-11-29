@@ -4,7 +4,7 @@ import { useService } from "@web/core/utils/hooks";
 import { Component, useState } from "@odoo/owl";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { parseFloat } from "@web/views/fields/parsers";
-import { enhancedButtons } from "@point_of_sale/app/generic_components/numpad/numpad";
+import { enhancedButtons } from "@point_of_sale/app/components/numpad/numpad";
 
 export class PaymentScreenPaymentLines extends Component {
     static template = "point_of_sale.PaymentScreenPaymentLines";
@@ -26,7 +26,7 @@ export class PaymentScreenPaymentLines extends Component {
     }
 
     selectedLineClass(line) {
-        return { "payment-terminal": line.get_payment_status() };
+        return { "payment-terminal": line.getPaymentStatus() };
     }
     unselectedLineClass(line) {
         return {};
@@ -37,7 +37,7 @@ export class PaymentScreenPaymentLines extends Component {
             this.dialog.add(NumberPopup, {
                 title: _t("New amount"),
                 buttons: enhancedButtons(),
-                startingValue: this.env.utils.formatCurrency(paymentline.get_amount(), false),
+                startingValue: this.env.utils.formatCurrency(paymentline.getAmount(), false),
                 getPayload: (num) => {
                     this.props.updateSelectedPaymentline(parseFloat(num));
                 },

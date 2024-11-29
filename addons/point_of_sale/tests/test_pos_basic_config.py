@@ -1089,7 +1089,7 @@ class TestPoSBasicConfig(TestPoSCommon):
 
         # Make the service products that are available in the pos inactive.
         # We don't need them to test the loading of 'consu' products.
-        self.env['product.template'].search([('available_in_pos', '=', True), ('type', '=', 'service')]).write({'active': False})
+        self.env['product.template'].search([('available_in_pos', '=', True), ('type', '=', 'service')]).write({'available_in_pos': False})
 
         session = self.open_new_session(0)
         self.product1.write({'company_id': False})
@@ -1099,7 +1099,7 @@ class TestPoSBasicConfig(TestPoSCommon):
         def get_top_product_ids(count):
             data = session.load_data([])
             special_product = session.config_id._get_special_products().ids
-            available_top_product = [product for product in data['product.template']['data'] if product['product_variant_ids'][0] not in special_product]
+            available_top_product = [product for product in data['product.template'] if product['product_variant_ids'][0] not in special_product]
             return [p['product_variant_ids'][0] for p in available_top_product[:count]]
 
         self.patch(self.env.cr, 'now', lambda: datetime.now() + timedelta(days=1))
@@ -1193,3 +1193,19 @@ class TestPoSBasicConfig(TestPoSCommon):
         for i in session_account_move.line_ids:
             if i.product_id and expected_product_quantity.get(i.product_id):
                 self.assertEqual(i.quantity, expected_product_quantity.get(i.product_id), f"Unexpected quantity for {i.product_id.name}")
+
+    def test_pos_payment_method_copy(self):
+        """
+        Test POS payment method copy:
+            - Create two payment methods in which one of the payment method's journal type be cash
+            - Copy multiple payment methods
+            - Check the duplicated cash payment method journal should be empty
+        """
+        pm_1 = self.cash_pm1
+        pm_2 = self.bank_pm1
+        pm_3, pm_4 = (pm_1 + pm_2).copy()
+
+        self.assertTrue(pm_3)
+        self.assertFalse(pm_3.journal_id)
+        self.assertTrue(pm_4)
+        self.assertEqual(pm_4.journal_id.type, "bank")

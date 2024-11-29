@@ -33,7 +33,7 @@ class TestCreatePicking(common.TestProductCommon):
                     'name': cls.product_id_1.name,
                     'product_id': cls.product_id_1.id,
                     'product_qty': 5.0,
-                    'product_uom': cls.product_id_1.uom_po_id.id,
+                    'product_uom_id': cls.product_id_1.uom_po_id.id,
                     'price_unit': 500.0,
                 })],
         }
@@ -65,7 +65,7 @@ class TestCreatePicking(common.TestProductCommon):
                 'name': self.product_id_2.name,
                 'product_id': self.product_id_2.id,
                 'product_qty': 5.0,
-                'product_uom': self.product_id_2.uom_po_id.id,
+                'product_uom_id': self.product_id_2.uom_po_id.id,
                 'price_unit': 250.0,
                 })]})
         self.assertEqual(self.po.incoming_picking_count, 2, 'New picking should be created')
@@ -119,7 +119,6 @@ class TestCreatePicking(common.TestProductCommon):
             'is_storable': True,
             'route_ids': [(4, self.ref('stock.route_warehouse0_mto')), (4, self.ref('purchase_stock.route_warehouse0_buy'))],
             'seller_ids': [(6, 0, [seller.id])],
-            'categ_id': self.env.ref('product.product_category_all').id,
             'supplier_taxes_id': [(6, 0, [])],
         })
 
@@ -157,7 +156,7 @@ class TestCreatePicking(common.TestProductCommon):
                     'name': product.name,
                     'product_id': product.id,
                     'product_qty': 100.0,
-                    'product_uom': product.uom_po_id.id,
+                    'product_uom_id': product.uom_po_id.id,
                     'price_unit': 11.0,
                 })],
         })
@@ -193,7 +192,7 @@ class TestCreatePicking(common.TestProductCommon):
         po = self.env['purchase.order'].create(self.po_vals)
 
         po.order_line.product_qty = 1
-        po.order_line.product_uom = uom_dozen.id
+        po.order_line.product_uom_id = uom_dozen.id
         po.button_confirm()
 
         # the move should be 12 units
@@ -256,7 +255,6 @@ class TestCreatePicking(common.TestProductCommon):
             'is_storable': True,
             'route_ids': [(4, self.ref('stock.route_warehouse0_mto')), (4, self.ref('purchase_stock.route_warehouse0_buy'))],
             'seller_ids': [(6, 0, [seller.id])],
-            'categ_id': self.env.ref('product.product_category_all').id,
         })
 
         # A picking is require since only moves inside the same picking are merged.
@@ -367,7 +365,7 @@ class TestCreatePicking(common.TestProductCommon):
         po = self.env['purchase.order'].create(self.po_vals)
 
         po.order_line.product_qty = 1.3
-        po.order_line.product_uom = uom_dozen.id
+        po.order_line.product_uom_id = uom_dozen.id
         po.button_confirm()
 
         # the move should be 16.0 units
@@ -559,7 +557,6 @@ class TestCreatePicking(common.TestProductCommon):
             'is_storable': True,
             'route_ids': [(4, self.ref('stock.route_warehouse0_mto')), (4, self.ref('purchase_stock.route_warehouse0_buy'))],
             'seller_ids': [(6, 0, [seller.id])],
-            'categ_id': self.env.ref('product.product_category_all').id,
             'supplier_taxes_id': [(6, 0, [])],
         })
 

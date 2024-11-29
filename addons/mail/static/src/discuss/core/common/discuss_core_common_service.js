@@ -112,7 +112,7 @@ export class DiscussCoreCommon {
     }
 
     async _handleNotificationNewMessage(payload, { id: notifId }) {
-        const { data, id: channelId, temporary_id } = payload;
+        const { data, id: channelId, silent, temporary_id } = payload;
         const channel = await this.store.Thread.getOrFetch({
             model: "discuss.channel",
             id: channelId,
@@ -129,8 +129,8 @@ export class DiscussCoreCommon {
             } else if (channel.status === "loading") {
                 channel.pendingNewMessages.push(message);
             }
-            if (message.isSelfAuthored && channel.selfMember) {
-                channel.selfMember.seen_message_id = message;
+            if (message.isSelfAuthored) {
+                channel.onNewSelfMessage(message);
             } else {
                 if (!channel.isDisplayed && channel.selfMember) {
                     channel.selfMember.syncUnread = true;
@@ -142,9 +142,9 @@ export class DiscussCoreCommon {
             }
         }
         if (
-            !channel.isCorrespondentOdooBot &&
             channel.channel_type !== "channel" &&
-            this.store.self.type === "partner"
+            this.store.self.type === "partner" &&
+            channel.selfMember
         ) {
             // disabled on non-channel threads and
             // on "channel" channels for performance reasons
@@ -157,10 +157,10 @@ export class DiscussCoreCommon {
             this.store.self.type === "partner" &&
             channel.newestPersistentMessage?.eq(channel.newestMessage)
         ) {
-            channel.markAsRead();
+            channel.markAsRead({ sync: false });
         }
-        this.env.bus.trigger("discuss.channel/new_message", { channel, message });
-        const authorMember = channel.channelMembers.find(({ persona }) =>
+        this.env.bus.trigger("discuss.channel/new_message", { channel, message, silent });
+        const authorMember = channel.channel_member_ids.find(({ persona }) =>
             persona?.eq(message.author)
         );
         if (authorMember) {

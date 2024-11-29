@@ -90,38 +90,48 @@ class TestWebPushNotification(SMSCommon):
                     (4, self.user_inbox.partner_id.id),
                 ],
                 'channel_type': channel_type,
-                'name': f'{channel_type} Message',
+                'name': f'{channel_type} Message' if channel_type != 'group' else '',
             } for channel_type in ['chat', 'channel', 'group']
         ])
+        group_channel.add_members(guest_ids=[self.guest.id])
 
-        for channel, has_notification in zip(
-            (chat_channel + channel_channel + group_channel),
-            (True, False, True)
+        for channel, sender, notification_count in zip(
+            (chat_channel + channel_channel + group_channel + group_channel),
+            (self.user_email, self.user_email, self.user_email, self.guest),
+            (1, 0, 1, 2),
         ):
             with self.subTest(channel_type=channel.channel_type):
-                # Test Direct Message
-                channel.with_user(self.user_email).message_post(
-                    body='Test Push',
-                    message_type='comment',
-                    subtype_xmlid='mail.mt_comment',
-                )
-                if has_notification:
-                    push_to_end_point.assert_called_once()
+                if sender == self.guest:
+                    channel_as_sender = channel.with_user(self.env.ref('base.public_user')).with_context(guest=sender)
+                else:
+                    channel_as_sender = channel.with_user(self.user_email)
+                channel_as_sender.message_post(
+                        body='Test Push',
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_comment',
+                    )
+                self.assertEqual(push_to_end_point.call_count, notification_count)
+                if notification_count > 0:
                     payload_value = json.loads(push_to_end_point.call_args.kwargs['payload'])
                     if channel.channel_type == 'chat':
                         self.assertEqual(payload_value['title'], f'{self.user_email.name}')
+                    elif channel.channel_type == 'group':
+                        self.assertIn(self.user_email.name, payload_value['title'])
+                        self.assertIn(self.user_inbox.name, payload_value['title'])
+                        self.assertIn(self.guest.name, payload_value['title'])
+                        self.assertNotIn("False", payload_value['title'])
                     else:
                         self.assertEqual(payload_value['title'], f'#{channel.name}')
-                    self.assertEqual(
-                        payload_value['options']['icon'],
-                        f'/web/image/res.partner/{self.user_email.partner_id.id}/avatar_128'
+                    icon = (
+                        '/web/static/img/odoo-icon-192x192.png'
+                        if sender == self.guest
+                        else f'/web/image/res.partner/{self.user_email.partner_id.id}/avatar_128'
                     )
+                    self.assertEqual(payload_value['options']['icon'], icon)
                     self.assertEqual(payload_value['options']['body'], 'Test Push')
                     self.assertEqual(payload_value['options']['data']['res_id'], channel.id)
                     self.assertEqual(payload_value['options']['data']['model'], channel._name)
                     self.assertEqual(push_to_end_point.call_args.kwargs['device']['endpoint'], 'https://test.odoo.com/webpush/user2')
-                else:
-                    push_to_end_point.assert_not_called()
                 push_to_end_point.reset_mock()
 
         # Test Direct Message with channel muted -> should skip push notif
@@ -337,6 +347,49 @@ class TestWebPushNotification(SMSCommon):
                 else:
                     push_to_end_point.assert_not_called()
                 push_to_end_point.reset_mock()
+
+    @patch.object(odoo.addons.mail.models.mail_thread, 'push_to_end_point')
+    @mute_logger('odoo.tests')
+    def test_notify_call_invitation(self, push_to_end_point):
+        inviting_user = self.env['res.users'].sudo().create({'name': "Test User", 'login': 'test'})
+        channel = self.env['discuss.channel'].with_user(inviting_user).channel_get(
+            partners_to=[self.user_email.partner_id.id])
+        inviting_channel_member = channel.sudo().channel_member_ids.filtered(
+            lambda channel_member: channel_member.partner_id == inviting_user.partner_id)
+
+        inviting_channel_member._rtc_join_call()
+        push_to_end_point.assert_called_once()
+        payload_value = json.loads(push_to_end_point.call_args.kwargs['payload'])
+        self.assertEqual(
+            payload_value['title'],
+            "Incoming call",
+        )
+        options = payload_value['options']
+        self.assertTrue(options['requireInteraction'])
+        self.assertEqual(options['body'], f"Conference: {channel.name}")
+        self.assertEqual(options['actions'], [
+            {
+                "action": "DECLINE",
+                "type": "button",
+                "title": "Decline",
+            },
+            {
+                "action": "ACCEPT",
+                "type": "button",
+                "title": "Accept",
+            },
+        ])
+        data = options['data']
+        self.assertEqual(data['type'], "CALL")
+        self.assertEqual(data['res_id'], channel.id)
+        self.assertEqual(data['model'], "discuss.channel")
+        push_to_end_point.reset_mock()
+
+        inviting_channel_member._rtc_leave_call()
+        push_to_end_point.assert_called_once()
+        payload_value = json.loads(push_to_end_point.call_args.kwargs['payload'])
+        self.assertEqual(payload_value['options']['data']['type'], "CANCEL")
+        push_to_end_point.reset_mock()
 
     @patch.object(odoo.addons.mail.models.mail_thread, 'push_to_end_point')
     def test_notify_by_push_tracking(self, push_to_end_point):

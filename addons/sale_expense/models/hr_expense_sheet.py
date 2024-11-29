@@ -5,7 +5,7 @@ from odoo import fields, models, _
 
 
 class HrExpenseSheet(models.Model):
-    _inherit = ["hr.expense.sheet"]
+    _inherit = "hr.expense.sheet"
 
     sale_order_count = fields.Integer(compute='_compute_sale_order_count')
 
@@ -79,8 +79,7 @@ class HrExpenseSheet(models.Model):
 
     def action_reset_expense_sheets(self):
         super().action_reset_expense_sheets()
-        self._sale_expense_reset_sol_quantities()
-        return True
+        self.sudo()._sale_expense_reset_sol_quantities()
 
     def action_open_sale_orders(self):
         self.ensure_one()

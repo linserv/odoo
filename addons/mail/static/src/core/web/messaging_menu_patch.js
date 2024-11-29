@@ -6,7 +6,6 @@ import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { patch } from "@web/core/utils/patch";
 import { MessagingMenuQuickSearch } from "@mail/core/web/messaging_menu_quick_search";
-import { isIOS } from "@web/core/browser/feature_detection";
 
 Object.assign(MessagingMenu.components, { MessagingMenuQuickSearch });
 
@@ -109,9 +108,11 @@ patch(MessagingMenu.prototype, {
     },
     /** @param {import("models").Failure} failure */
     onClickFailure(failure) {
-        const threadIds = new Set(failure.notifications.map(({ message }) => message.thread.id));
+        const threadIds = new Set(
+            failure.notifications.map(({ mail_message_id: message }) => message.thread.id)
+        );
         if (threadIds.size === 1) {
-            const message = failure.notifications[0].message;
+            const message = failure.notifications[0].mail_message_id;
             this.openThread(message.thread);
         } else {
             this.openFailureView(failure);
@@ -175,6 +176,6 @@ patch(MessagingMenu.prototype, {
         return value;
     },
     get shouldAskPushPermission() {
-        return this.notification.permission === "prompt" && !isIOS();
+        return this.notification.permission === "prompt";
     },
 });

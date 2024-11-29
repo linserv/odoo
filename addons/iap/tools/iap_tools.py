@@ -110,7 +110,7 @@ def iap_jsonrpc(url, method='call', params=None, timeout=15):
     returns JSON-RPC errors as exceptions.
     """
     if hasattr(threading.current_thread(), 'testing') and threading.current_thread().testing:
-        raise exceptions.AccessError("Unavailable during tests.")
+        raise exceptions.AccessError("Unavailable during tests.")  # pylint: disable=missing-gettext
 
     payload = {
         'jsonrpc': '2.0',
@@ -140,7 +140,8 @@ def iap_jsonrpc(url, method='call', params=None, timeout=15):
             e.data = response['error']['data']
             raise e
         return response.get('result')
-    except (ValueError, requests.exceptions.ConnectionError, requests.exceptions.MissingSchema, requests.exceptions.Timeout, requests.exceptions.HTTPError) as e:
+    except (ValueError, requests.exceptions.ConnectionError, requests.exceptions.MissingSchema, requests.exceptions.Timeout, requests.exceptions.HTTPError):
+        _logger.exception("iap jsonrpc %s failed", url)
         raise exceptions.AccessError(
             _("An error occurred while reaching %s. Please contact Odoo support if this error persists.", url)
         )

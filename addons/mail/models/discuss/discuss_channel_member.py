@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from odoo import api, fields, models, _
 from odoo.addons.mail.tools.discuss import Store
+from odoo.addons.mail.tools.web_push import PUSH_NOTIFICATION_ACTION, PUSH_NOTIFICATION_TYPE
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.osv import expression
 from ...tools import jwt, discuss
@@ -17,6 +18,7 @@ SFU_MODE_THRESHOLD = 3
 
 
 class DiscussChannelMember(models.Model):
+    _name = 'discuss.channel.member'
     _inherit = ["bus.listener.mixin"]
     _description = "Channel Member"
     _rec_names_search = ["channel_id", "partner_id", "guest_id"]
@@ -48,6 +50,8 @@ class DiscussChannelMember(models.Model):
     # RTC
     rtc_session_ids = fields.One2many(string="RTC Sessions", comodel_name='discuss.channel.rtc.session', inverse_name='channel_member_id')
     rtc_inviting_session_id = fields.Many2one('discuss.channel.rtc.session', string='Ringing session')
+
+    _seen_message_id_idx = models.Index("(channel_id, partner_id, seen_message_id)")
 
     @api.autovacuum
     def _gc_unpin_outdated_sub_channels(self):
@@ -165,13 +169,12 @@ class DiscussChannelMember(models.Model):
                 )
             )
 
-    def init(self):
-        self.env.cr.execute("CREATE UNIQUE INDEX IF NOT EXISTS discuss_channel_member_partner_unique ON %s (channel_id, partner_id) WHERE partner_id IS NOT NULL" % self._table)
-        self.env.cr.execute("CREATE UNIQUE INDEX IF NOT EXISTS discuss_channel_member_guest_unique ON %s (channel_id, guest_id) WHERE guest_id IS NOT NULL" % self._table)
-
-    _sql_constraints = [
-        ("partner_or_guest_exists", "CHECK((partner_id IS NOT NULL AND guest_id IS NULL) OR (partner_id IS NULL AND guest_id IS NOT NULL))", "A channel member must be a partner or a guest."),
-    ]
+    _partner_unique = models.UniqueIndex("(channel_id, partner_id) WHERE partner_id IS NOT NULL")
+    _guest_unique = models.UniqueIndex("(channel_id, guest_id) WHERE guest_id IS NOT NULL")
+    _partner_or_guest_exists = models.Constraint(
+        'CHECK((partner_id IS NOT NULL AND guest_id IS NULL) OR (partner_id IS NULL AND guest_id IS NOT NULL))',
+        'A channel member must be a partner or a guest.',
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -272,11 +275,7 @@ class DiscussChannelMember(models.Model):
             bus_last_id = self.env["bus.bus"].sudo()._bus_last_id()
         for member in self:
             data = member._read_format(
-                [
-                    field
-                    for field in fields
-                    if field not in ["channel", "fetched_message_id", "seen_message_id", "persona"]
-                ],
+                [field for field in fields if field not in ["channel", "persona"]],
                 load=False,
             )[0]
             if "channel" in fields:
@@ -291,10 +290,6 @@ class DiscussChannelMember(models.Model):
                 if member.guest_id:
                     # sudo: mail.guest - reading guest related to a member is considered acceptable
                     data["persona"] = Store.one(member.guest_id.sudo(), fields=fields["persona"])
-            if "fetched_message_id" in fields:
-                data["fetched_message_id"] = Store.one(member.fetched_message_id, only_id=True)
-            if "seen_message_id" in fields:
-                data["seen_message_id"] = Store.one(member.seen_message_id, only_id=True)
             if "message_unread_counter" in fields:
                 data["message_unread_counter_bus_id"] = bus_last_id
             store.add(member, data)
@@ -459,6 +454,47 @@ class DiscussChannelMember(models.Model):
                     ),
                 },
             )
+            devices, private_key, public_key = self.channel_id._get_web_push_parameters(members.partner_id.ids)
+            if devices:
+                if self.channel_id.channel_type != 'chat':
+                    icon = f"/web/image/discuss.channel/{self.channel_id.id}/avatar_128"
+                elif guest := self.env["mail.guest"]._get_guest_from_context():
+                    icon = f"/web/image/mail.guest/{guest.id}/avatar_128"
+                elif partner := self.env.user.partner_id:
+                    icon = f"/web/image/res.partner/{partner.id}/avatar_128"
+                languages = [partner.lang for partner in devices.partner_id]
+                payload_by_lang = {}
+                for lang in languages:
+                    env_lang = self.with_context(lang=lang).env
+                    payload_by_lang[lang] = {
+                        "title": env_lang._("Incoming call"),
+                        "options": {
+                            "body": env_lang._("Conference: %s", self.channel_id.display_name),
+                            "icon": icon,
+                            "vibrate": [100, 50, 100],
+                            "requireInteraction": True,
+                            "tag": self.channel_id._get_call_notification_tag(),
+                            "data": {
+                                "type": PUSH_NOTIFICATION_TYPE.CALL,
+                                "model": "discuss.channel",
+                                "action": "mail.action_discuss",
+                                "res_id": self.channel_id.id,
+                            },
+                            "actions": [
+                                {
+                                    "action": PUSH_NOTIFICATION_ACTION.DECLINE,
+                                    "type": "button",
+                                    "title": env_lang._("Decline"),
+                                },
+                                {
+                                    "action": PUSH_NOTIFICATION_ACTION.ACCEPT,
+                                    "type": "button",
+                                    "title": env_lang._("Accept"),
+                                },
+                            ]
+                        }
+                    }
+                self.channel_id._push_web_notification(devices, private_key, public_key, payload_by_lang=payload_by_lang)
         return members
 
     def _mark_as_read(self, last_message_id, sync=False):

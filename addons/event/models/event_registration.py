@@ -11,6 +11,7 @@ _logger = logging.getLogger(__name__)
 
 
 class EventRegistration(models.Model):
+    _name = 'event.registration'
     _description = 'Event Registration'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'id desc'
@@ -31,9 +32,9 @@ class EventRegistration(models.Model):
 
     # event
     event_id = fields.Many2one(
-        'event.event', string='Event', required=True)
+        'event.event', string='Event', required=True, tracking=True)
     event_ticket_id = fields.Many2one(
-        'event.event.ticket', string='Ticket Type', ondelete='restrict')
+        'event.event.ticket', string='Ticket Type', ondelete='restrict', tracking=True)
     active = fields.Boolean(default=True)
     barcode = fields.Char(string='Barcode', default=lambda self: self._get_random_barcode(), readonly=True, copy=False)
     # utm informations
@@ -84,9 +85,10 @@ class EventRegistration(models.Model):
     registration_properties = fields.Properties(
         'Properties', definition='event_id.registration_properties_definition', copy=True)
 
-    _sql_constraints = [
-        ('barcode_event_uniq', 'unique(barcode)', "Barcode should be unique")
-    ]
+    _barcode_event_uniq = models.Constraint(
+        'unique(barcode)',
+        'Barcode should be unique',
+    )
 
     @api.constrains('state', 'event_id', 'event_ticket_id')
     def _check_seats_availability(self):
@@ -441,7 +443,6 @@ class EventRegistration(models.Model):
             'name': self.name,
             'ticket_name': self.event_ticket_id.name if self.event_ticket_id else None,
             'ticket_color': self.event_ticket_id.color if self.event_ticket_id else None,
-            'ticket_text_color': self.event_ticket_id._get_ticket_printing_color() if self.event_ticket_id else None,
             'registration_answers': self.registration_answer_choice_ids.mapped('display_name'),
             'company_name': self.company_name
         }

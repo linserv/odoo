@@ -8,8 +8,8 @@ registry.category("web_tour.tours").add('burndown_chart_tour', {
     run: "click",
 }, {
     content: 'Open "Burndown Chart Test" project menu',
-    trigger: '.o_kanban_record:contains("Burndown Chart Test") .o_dropdown_kanban .dropdown-toggle',
-    run: "click",
+            trigger: ".o_kanban_record:contains(Burndown Chart Test)",
+    run: `hover && click .o_kanban_record:contains(Burndown Chart Test) .o_dropdown_kanban .dropdown-toggle`,
 }, {
     content: `Open "Burndown Chart Test" project's "Burndown Chart" view`,
     trigger: '.o_kanban_manage_reporting div[role="menuitem"] a:contains("Burndown Chart")',
@@ -24,8 +24,8 @@ registry.category("web_tour.tours").add('burndown_chart_tour', {
     run: "click",
 }, {
     content: 'Remove the project search "Burndown Chart Test"',
-    trigger: '.o_searchview_facet:contains("Burndown Chart Test") .o_facet_remove',
-    run: "click",
+    trigger: ".o_searchview_facet:contains(Burndown Chart Test)",
+    run: "hover && click .o_facet_remove",
 }, {
     content: 'Search Burndown Chart',
     trigger: 'input.o_searchview_input',
@@ -82,7 +82,4 @@ registry.category("web_tour.tours").add('burndown_chart_tour', {
     content: 'Open the search panel menu',
     trigger: '.o_control_panel .o_searchview_dropdown_toggler',
     run: "click",
-}, {
-    content: 'The comparison menu is not rendered',
-    trigger: ':not(:has(.o_comparison_menu))',
 }]});

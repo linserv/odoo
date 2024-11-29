@@ -5,6 +5,7 @@ from odoo.exceptions import UserError
 
 
 class LoyaltyProgram(models.Model):
+    _name = 'loyalty.program'
     _inherit = ['loyalty.program', 'pos.load.mixin']
 
     # NOTE: `pos_config_ids` satisfies an excpeptional use case: when no PoS is specified, the loyalty program is
@@ -17,7 +18,7 @@ class LoyaltyProgram(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        config_id = self.env['pos.config'].browse(data['pos.config']['data'][0]['id'])
+        config_id = self.env['pos.config'].browse(data['pos.config'][0]['id'])
         return [('id', 'in', config_id._get_program_ids().ids)]
 
     @api.model

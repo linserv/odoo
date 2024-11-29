@@ -11,6 +11,7 @@ from odoo.tools.translate import html_translate
 
 
 class EventSponsor(models.Model):
+    _name = 'event.sponsor'
     _description = 'Event Sponsor'
     _order = "sequence, sponsor_type_id"
     # _order = 'sponsor_type_id, sequence' TDE FIXME
@@ -19,6 +20,7 @@ class EventSponsor(models.Model):
         'mail.thread',
         'mail.activity.mixin',
         'website.published.mixin',
+        'website.searchable.mixin',
         'chat.room.mixin'
     ]
 
@@ -191,6 +193,24 @@ class EventSponsor(models.Model):
             if sponsor.id:  # avoid to perform a slug on a not yet saved record in case of an onchange.
                 base_url = sponsor.event_id.get_base_url()
                 sponsor.website_url = '%s/event/%s/exhibitor/%s' % (base_url, self.env["ir.http"]._slug(sponsor.event_id), self.env["ir.http"]._slug(sponsor))
+
+    @api.model
+    def _search_get_detail(self, website, order, options):
+        event_id = self.env['ir.http']._unslug(options['event'])[1]
+        mapping = {
+            'name': {'name': 'name', 'type': 'text', 'match': True},
+            'website_url': {'name': 'website_url', 'type': 'text', 'truncate': False},
+            'description': {'name': 'website_description', 'type': 'text', 'truncate': True, 'html': True},
+        }
+        return {
+            'model': 'event.sponsor',
+            'base_domain': [[('event_id', '=', event_id), ('exhibitor_type', '!=', 'sponsor')]],
+            'search_fields': ['name', 'website_description'],
+            'fetch_fields': ['name', 'website_url', 'website_description'],
+            'mapping': mapping,
+            'icon': 'fa-black-tie',
+            'order': order,
+        }
 
     # ------------------------------------------------------------
     # CRUD

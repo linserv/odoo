@@ -92,7 +92,7 @@ export class ProductTemplate extends Base {
     // product.pricelist.item records are loaded with a search_read
     // and were automatically sorted based on their _order by the
     // ORM. After that they are added in this order to the pricelists.
-    get_price(pricelist, quantity, price_extra = 0, recurring = false, variant = false) {
+    getPrice(pricelist, quantity, price_extra = 0, recurring = false, variant = false) {
         // In case of nested pricelists, it is necessary that all pricelists are made available in
         // the POS. Display a basic alert to the user in the case where there is a pricelist item
         // but we can't load the base pricelist to get the price when calling this method again.
@@ -148,7 +148,7 @@ export class ProductTemplate extends Base {
         }
         if (rule.base === "pricelist") {
             if (rule.base_pricelist_id) {
-                price = this.get_price(rule.base_pricelist_id, quantity, 0, true, variant);
+                price = this.getPrice(rule.base_pricelist_id, quantity, 0, true, variant);
             }
         } else if (rule.base === "standard_price") {
             price = standardPrice;
@@ -207,15 +207,32 @@ export class ProductTemplate extends Base {
         if (!this._archived_combinations) {
             return false;
         }
+        const excludedPTAV = new Set();
+        let isCombinationArchived = false;
         for (const archivedCombination of this._archived_combinations) {
             const ptavCommon = archivedCombination.filter((ptav) =>
                 attributeValueIds.includes(ptav)
             );
             if (ptavCommon.length === attributeValueIds.length) {
-                return true;
+                // all attributes must be disabled from each other
+                archivedCombination.forEach((ptav) => excludedPTAV.add(ptav));
+            } else if (ptavCommon.length === attributeValueIds.length - 1) {
+                // In this case we only need to disable the remaining ptav
+                const disablePTAV = archivedCombination.find(
+                    (ptav) => !attributeValueIds.includes(ptav)
+                );
+                excludedPTAV.add(disablePTAV);
+            }
+            if (ptavCommon.length === attributeValueIds.length) {
+                isCombinationArchived = true;
             }
         }
-        return false;
+        this.attribute_line_ids.forEach((attribute_line) => {
+            attribute_line.product_template_value_ids.forEach((ptav) => {
+                ptav["excluded"] = excludedPTAV.has(ptav.id);
+            });
+        });
+        return isCombinationArchived;
     }
 }
 registry.category("pos_available_models").add(ProductTemplate.pythonModel, ProductTemplate);

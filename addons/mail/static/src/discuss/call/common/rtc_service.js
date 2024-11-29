@@ -4,7 +4,7 @@ import { monitorAudio } from "@mail/utils/common/media_monitoring";
 import { rpc } from "@web/core/network/rpc";
 import { closeStream, onChange } from "@mail/utils/common/misc";
 
-import { reactive } from "@odoo/owl";
+import { reactive, toRaw } from "@odoo/owl";
 
 import { browser } from "@web/core/browser/browser";
 import { _t } from "@web/core/l10n/translation";
@@ -334,7 +334,7 @@ export class Rtc extends Record {
         this.state.pttReleaseTimeout = browser.setTimeout(() => {
             this.setTalking(false);
             if (!this.selfSession?.isMute) {
-                this.soundEffectsService.play("push-to-talk-off", { volume: 0.3 });
+                this.soundEffectsService.play("ptt-release", { volume: 0.3 });
             }
         }, Math.max(this.store.settings.voice_active_duration || 0, duration));
     }
@@ -349,7 +349,7 @@ export class Rtc extends Record {
         }
         browser.clearTimeout(this.state.pttReleaseTimeout);
         if (!this.selfSession.isTalking && !this.selfSession.isMute) {
-            this.soundEffectsService.play("push-to-talk-on", { volume: 0.3 });
+            this.soundEffectsService.play("ptt-press", { volume: 0.3 });
         }
         this.setTalking(true);
     }
@@ -403,13 +403,13 @@ export class Rtc extends Record {
             this.pttExtService.unsubscribe();
             this.network?.disconnect();
             this.clear();
-            this.soundEffectsService.play("channel-leave");
+            this.soundEffectsService.play("call-leave");
         }
     }
 
     async deafen() {
         await this.setDeaf(true);
-        this.soundEffectsService.play("deafen");
+        this.soundEffectsService.play("earphone-off");
     }
 
     /**
@@ -436,7 +436,7 @@ export class Rtc extends Record {
 
     async mute() {
         await this.setMute(true);
-        this.soundEffectsService.play("mute");
+        this.soundEffectsService.play("mic-off");
     }
 
     /**
@@ -468,7 +468,7 @@ export class Rtc extends Record {
 
     async undeafen() {
         await this.setDeaf(false);
-        this.soundEffectsService.play("undeafen");
+        this.soundEffectsService.play("earphone-on");
     }
 
     async unmute() {
@@ -477,7 +477,7 @@ export class Rtc extends Record {
         } else {
             await this.resetAudioTrack({ force: true });
         }
-        this.soundEffectsService.play("unmute");
+        this.soundEffectsService.play("mic-on");
     }
 
     //----------------------------------------------------------------------
@@ -521,6 +521,7 @@ export class Rtc extends Record {
             try {
                 await this._loadSfu();
                 this.state.connectionType = CONNECTION_TYPES.SERVER;
+                this.selfSession.connectionState = null;
                 this.network.addSfu(this.sfuClient);
             } catch (e) {
                 this.notification.add(
@@ -550,11 +551,18 @@ export class Rtc extends Record {
      * @param {String} [param2.step] current step of the flow
      * @param {String} [param2.state] current state of the connection
      */
-    log(session, entry, { error, step, state, ...data } = {}) {
+    log(session, entry, param2 = {}) {
+        const { error, step, state, ...data } = param2;
         session.logStep = entry;
         if (!this.store.settings.logRtc) {
             return;
         }
+        console.debug(
+            `%c${new Date().toLocaleString()} - [${entry}]`,
+            "color: #e36f17; font-weight: bold;",
+            toRaw(session)._raw,
+            param2
+        );
         if (!this.state.logs.has(session.id)) {
             this.state.logs.set(session.id, { step: "", state: "", logs: [] });
         }
@@ -653,6 +661,7 @@ export class Rtc extends Record {
     }
 
     async _handleSfuClientStateChange({ detail: { state, cause } }) {
+        this.log(this.selfSession, "SFU connection state changed", { state, cause });
         this.state.serverState = state;
         switch (state) {
             case this.SFU_CLIENT_STATE.AUTHENTICATED:
@@ -803,7 +812,7 @@ export class Rtc extends Record {
         if (!this.state.channel?.id) {
             return;
         }
-        this.soundEffectsService.play("channel-join");
+        this.soundEffectsService.play("call-join");
         this.state.hasPendingRequest = false;
         await this.resetAudioTrack({ force: audio });
         if (!this.state.channel?.id) {

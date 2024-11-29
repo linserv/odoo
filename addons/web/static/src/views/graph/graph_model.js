@@ -4,7 +4,7 @@ import { KeepLast, Race } from "@web/core/utils/concurrency";
 import { rankInterval } from "@web/search/utils/dates";
 import { getGroupBy } from "@web/search/utils/group_by";
 import { GROUPABLE_TYPES } from "@web/search/utils/misc";
-import { Model } from "@web/model/model";
+import { addPropertyFieldDefs, Model } from "@web/model/model";
 import { computeReportMeasures, processMeasure } from "@web/views/utils";
 import { Domain } from "@web/core/domain";
 
@@ -15,72 +15,6 @@ export const SEQUENTIAL_TYPES = ["date", "datetime"];
 /**
  * @typedef {import("@web/search/search_model").SearchParams} SearchParams
  */
-
-class DateClasses {
-    // We view the param "array" as a matrix of values and undefined.
-    // An equivalence class is formed of defined values of a column.
-    // So nothing has to do with dates but we only use Dateclasses to manage
-    // identification of dates.
-    /**
-     * @param {(any[])[]} array
-     */
-    constructor(array) {
-        this.__referenceIndex = null;
-        this.__array = array;
-        for (let i = 0; i < this.__array.length; i++) {
-            const arr = this.__array[i];
-            if (arr.length && this.__referenceIndex === null) {
-                this.__referenceIndex = i;
-            }
-        }
-    }
-
-    /**
-     * @param {number} index
-     * @param {any} o
-     * @returns {string}
-     */
-    classLabel(index, o) {
-        return `${this.__array[index].indexOf(o)}`;
-    }
-
-    /**
-     * @param {string} classLabel
-     * @returns {any[]}
-     */
-    classMembers(classLabel) {
-        const classNumber = Number(classLabel);
-        const classMembers = new Set();
-        for (const arr of this.__array) {
-            if (arr[classNumber] !== undefined) {
-                classMembers.add(arr[classNumber]);
-            }
-        }
-        return [...classMembers];
-    }
-
-    /**
-     * @param {string} classLabel
-     * @param {number} [index]
-     * @returns {any}
-     */
-    representative(classLabel, index) {
-        const classNumber = Number(classLabel);
-        const i = index === undefined ? this.__referenceIndex : index;
-        if (i === null) {
-            return null;
-        }
-        return this.__array[i][classNumber];
-    }
-
-    /**
-     * @param {number} index
-     * @returns {number}
-     */
-    arrayLength(index) {
-        return this.__array[index].length;
-    }
-}
 
 export class GraphModel extends Model {
     /**
@@ -117,6 +51,13 @@ export class GraphModel extends Model {
             this.initialGroupBy = searchParams.context.graph_groupbys || this.metaData.groupBy; // = arch groupBy --> change that
         }
         const metaData = this._buildMetaData();
+        await addPropertyFieldDefs(
+            this.orm,
+            metaData.resModel,
+            searchParams.context,
+            metaData.fields,
+            metaData.groupBy.map((gb) => gb.fieldName)
+        );
         await this._fetchDataPoints(metaData);
     }
 
@@ -155,23 +96,16 @@ export class GraphModel extends Model {
      * @returns {Object}
      */
     _buildMetaData(params) {
-        const { comparison, domain, context, groupBy } = this.searchParams;
+        const { domain, context, groupBy } = this.searchParams;
 
         const metaData = Object.assign({}, this.metaData, { context });
-        if (comparison) {
-            metaData.domains = comparison.domains;
-            metaData.comparisonField = comparison.fieldName;
-        } else {
-            metaData.domains = [{ arrayRepr: domain, description: null }];
-        }
+        metaData.domains = [{ arrayRepr: domain, description: null }];
         metaData.measure = context.graph_measure || metaData.measure;
         metaData.mode = context.graph_mode || metaData.mode;
         metaData.groupBy = groupBy.length ? groupBy : this.initialGroupBy;
         if (metaData.mode !== "pie") {
             metaData.order = "graph_order" in context ? context.graph_order : metaData.order;
-            if (comparison) {
-                metaData.stacked = false;
-            } else if ("graph_stacked" in context) {
+            if ("graph_stacked" in context) {
                 metaData.stacked = context.graph_stacked;
             }
             if (metaData.mode === "line") {
@@ -211,13 +145,7 @@ export class GraphModel extends Model {
      * @returns {Object}
      */
     _getData(dataPoints) {
-        const { comparisonField, groupBy, mode } = this.metaData;
-
-        let identify = false;
-        if (comparisonField && groupBy.length && groupBy[0].fieldName === comparisonField) {
-            identify = true;
-        }
-        const dateClasses = identify ? this._getDateClasses(dataPoints) : null;
+        const { mode } = this.metaData;
 
         // dataPoints --> labels
         let labels = [];
@@ -225,19 +153,9 @@ export class GraphModel extends Model {
         for (const dataPt of dataPoints) {
             const x = dataPt.labels.slice(0, mode === "pie" ? undefined : 1);
             const trueLabel = x.length ? x.join(SEP) : _t("Total");
-            if (dateClasses) {
-                x[0] = dateClasses.classLabel(dataPt.originIndex, x[0]);
-            }
             const key = JSON.stringify(x);
             if (labelMap[key] === undefined) {
                 labelMap[key] = labels.length;
-                if (dateClasses) {
-                    if (mode === "pie") {
-                        x[0] = dateClasses.classMembers(x[0]).join(", ");
-                    } else {
-                        x[0] = dateClasses.representative(x[0]);
-                    }
-                }
                 const label = x.length ? x.join(SEP) : _t("Total");
                 labels.push(label);
             }
@@ -259,14 +177,11 @@ export class GraphModel extends Model {
             } = dataPt;
             const datasetLabel = this._getDatasetLabel(dataPt);
             if (!(datasetLabel in datasetsTmp)) {
-                let dataLength = labels.length;
-                if (mode !== "pie" && dateClasses) {
-                    dataLength = dateClasses.arrayLength(originIndex);
-                }
+                const dataLength = labels.length;
                 datasetsTmp[datasetLabel] = {
                     data: new Array(dataLength).fill(0),
                     cumulatedStart,
-                    trueLabels: labels.slice(0, dataLength), // should be good // check this in case identify = true
+                    trueLabels: labels.slice(0, dataLength),
                     domains: new Array(dataLength).fill([]),
                     label: datasetLabel,
                     originIndex: originIndex,
@@ -358,22 +273,6 @@ export class GraphModel extends Model {
         }
         datasetLabel = datasetLabel || measures[measure].string;
         return datasetLabel;
-    }
-
-    /**
-     * @protected
-     * @param {Object[]} dataPoints
-     * @returns {DateClasses}
-     */
-    _getDateClasses(dataPoints) {
-        const { domains } = this.metaData;
-        const dateSets = domains.map(() => new Set());
-        for (const { labels, originIndex } of dataPoints) {
-            const date = labels[0];
-            dateSets[originIndex].add(date);
-        }
-        const arrays = dateSets.map((dateSet) => [...dateSet]);
-        return new DateClasses(arrays);
     }
 
     /**
@@ -586,14 +485,16 @@ export class GraphModel extends Model {
         const processedGroupBy = [];
         for (const gb of groupBy) {
             const { fieldName, interval } = gb;
-            const { groupable, type } = fields[fieldName];
-            if (
-                // cf. _description_groupable in odoo/fields.py
-                !groupable ||
-                ["id", "__count"].includes(fieldName) ||
-                !GROUPABLE_TYPES.includes(type)
-            ) {
-                continue;
+            if (!fieldName.includes(".")) {
+                const { groupable, type } = fields[fieldName];
+                if (
+                    // cf. _description_groupable in odoo/fields.py
+                    !groupable ||
+                    ["id", "__count"].includes(fieldName) ||
+                    !GROUPABLE_TYPES.includes(type)
+                ) {
+                    continue;
+                }
             }
             const index = processedGroupBy.findIndex((gb) => gb.fieldName === fieldName);
             if (index === -1) {

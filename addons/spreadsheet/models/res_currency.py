@@ -2,8 +2,9 @@ from odoo import api, models
 
 
 class ResCurrency(models.Model):
-    _inherit = ["res.currency"]
+    _inherit = "res.currency"
 
+    @api.readonly
     @api.model
     def get_company_currency_for_spreadsheet(self, company_id=None):
         """

@@ -15,6 +15,7 @@ from odoo.addons.spreadsheet.utils.validate_data import fields_in_spreadsheet, m
 
 
 class SpreadsheetMixin(models.AbstractModel):
+    _name = 'spreadsheet.mixin'
     _description = "Spreadsheet mixin"
     _auto = False
 
@@ -99,6 +100,7 @@ class SpreadsheetMixin(models.AbstractModel):
     def _onchange_data_(self):
         self._check_spreadsheet_data()
 
+    @api.readonly
     @api.model
     def get_display_names_for_spreadsheet(self, args):
         ids_per_model = defaultdict(list)

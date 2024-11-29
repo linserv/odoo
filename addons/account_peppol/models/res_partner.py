@@ -15,7 +15,7 @@ TIMEOUT = 10
 
 
 class ResPartner(models.Model):
-    _inherit = ['res.partner']
+    _inherit = 'res.partner'
 
     invoice_sending_method = fields.Selection(
         selection_add=[('peppol', 'by Peppol')],
@@ -171,6 +171,7 @@ class ResPartner(models.Model):
         self._update_peppol_state_per_company(vals=vals)
         return res
 
+    @api.model_create_multi
     def create(self, vals_list):
         res = super().create(vals_list)
         if res:

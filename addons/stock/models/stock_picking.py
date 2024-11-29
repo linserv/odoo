@@ -17,6 +17,7 @@ from odoo.tools.float_utils import float_compare, float_is_zero
 
 
 class StockPickingType(models.Model):
+    _name = 'stock.picking.type'
     _description = "Picking Type"
     _order = 'is_favorite desc, sequence, id'
     _rec_names_search = ['name', 'warehouse_id.name']
@@ -32,11 +33,11 @@ class StockPickingType(models.Model):
     default_location_src_id = fields.Many2one(
         'stock.location', 'Source Location', compute='_compute_default_location_src_id',
         check_company=True, store=True, readonly=False, precompute=True, required=True,
-        help="This is the default source location when you create a picking manually with this operation type. It is possible however to change it or that the routes put another location.")
+        help="This is the default source location when this operation is manually created. However, it is possible to change it afterwards or that the routes use another one by default.")
     default_location_dest_id = fields.Many2one(
         'stock.location', 'Destination Location', compute='_compute_default_location_dest_id',
         check_company=True, store=True, readonly=False, precompute=True, required=True,
-        help="This is the default destination location when you create a picking manually with this operation type. It is possible however to change it or that the routes put another location.")
+        help="This is the default destination location when this operation is manually created. However, it is possible to change it afterwards or that the routes use another one by default.")
     code = fields.Selection([('incoming', 'Receipt'), ('outgoing', 'Delivery'), ('internal', 'Internal Transfer')], 'Type of Operation', default='incoming', required=True)
     return_picking_type_id = fields.Many2one(
         'stock.picking.type', 'Operation Type for Returns',
@@ -525,6 +526,7 @@ class StockPickingType(models.Model):
 
 
 class StockPicking(models.Model):
+    _name = 'stock.picking'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = "Transfer"
     _order = "priority desc, scheduled_date asc, id desc"
@@ -655,7 +657,7 @@ class StockPicking(models.Model):
     printed = fields.Boolean('Printed', copy=False)
     signature = fields.Image('Signature', help='Signature', copy=False, attachment=True)
     is_signed = fields.Boolean('Is Signed', compute="_compute_is_signed")
-    is_locked = fields.Boolean(default=True, help='When the picking is not done this allows changing the '
+    is_locked = fields.Boolean(default=True, copy=False, help='When the picking is not done this allows changing the '
                                'initial demand. When the picking is done this allows '
                                'changing the done quantities.')
 
@@ -702,9 +704,10 @@ class StockPicking(models.Model):
         search='_search_date_category', readonly=True
     )
 
-    _sql_constraints = [
-        ('name_uniq', 'unique(name, company_id)', 'Reference must be unique per company!'),
-    ]
+    _name_uniq = models.Constraint(
+        'unique(name, company_id)',
+        'Reference must be unique per company!',
+    )
 
     def _compute_has_tracking(self):
         for picking in self:
@@ -922,7 +925,7 @@ class StockPicking(models.Model):
             if picking.state not in ('confirmed', 'waiting', 'assigned'):
                 picking.show_check_availability = False
                 continue
-            if all(m.picked for m in picking.move_ids):
+            if all(m.picked or m.product_uom_qty == m.quantity for m in picking.move_ids):
                 picking.show_check_availability = False
                 continue
             picking.show_check_availability = any(
@@ -1729,97 +1732,10 @@ class StockPicking(models.Model):
 
         return _explore(self.env['stock.picking'], self.env['stock.move'], moves)
 
-    def _pre_put_in_pack_hook(self, move_line_ids):
-        return self._check_destinations(move_line_ids)
-
-    def _check_destinations(self, move_line_ids):
-        if len(move_line_ids.mapped('location_dest_id')) > 1:
-            view_id = self.env.ref('stock.stock_package_destination_form_view').id
-            wiz = self.env['stock.package.destination'].create({
-                'picking_id': self.id,
-                'location_dest_id': move_line_ids[0].location_dest_id.id,
-            })
-            return {
-                'name': _('Choose destination location'),
-                'view_mode': 'form',
-                'res_model': 'stock.package.destination',
-                'view_id': view_id,
-                'views': [(view_id, 'form')],
-                'type': 'ir.actions.act_window',
-                'res_id': wiz.id,
-                'target': 'new',
-                'context': {
-                    'move_lines_to_pack_ids': move_line_ids.ids,
-                }
-            }
-        else:
-            return {}
-
-    def _put_in_pack(self, move_line_ids):
-        package = self.env['stock.quant.package'].create({})
-        package_type = move_line_ids.move_id.product_packaging_id.package_type_id
-        if len(package_type) == 1:
-            package.package_type_id = package_type
-        if len(move_line_ids) == 1:
-            default_dest_location = move_line_ids._get_default_dest_location()
-            move_line_ids.location_dest_id = default_dest_location._get_putaway_strategy(
-                product=move_line_ids.product_id,
-                quantity=move_line_ids.quantity,
-                package=package)
-        move_line_ids.write({
-            'result_package_id': package.id,
-        })
-        if len(self) == 1:
-            self.env['stock.package_level'].create({
-                'package_id': package.id,
-                'picking_id': self.id,
-                'location_id': False,
-                'location_dest_id': move_line_ids.location_dest_id.id,
-                'move_line_ids': [(6, 0, move_line_ids.ids)],
-                'company_id': self.company_id.id,
-            })
-        return package
-
-    def _post_put_in_pack_hook(self, package_id):
-        if package_id and self.picking_type_id.auto_print_package_label:
-            if self.picking_type_id.package_label_to_print == 'pdf':
-                action = self.env.ref("stock.action_report_quant_package_barcode_small").report_action(package_id.id, config=False)
-            elif self.picking_type_id.package_label_to_print == 'zpl':
-                action = self.env.ref("stock.label_package_template").report_action(package_id.id, config=False)
-            if action:
-                action.update({'close_on_report_download': True})
-                clean_action(action, self.env)
-                return action
-        return package_id
-
-    def _package_move_lines(self, batch_pack=False, move_lines_to_pack=False):
-        # in theory, the picking_type should always be the same (i.e. for batch transfers),
-        # but customizations may bypass it and cause unexpected behavior so we avoid allowing those situations
-        if len(self.picking_type_id) > 1:
-            raise UserError(_("You cannot pack products into the same package when they are from different transfers with different operation types."))
-        quantity_move_line_ids = self.move_line_ids.filtered(
-            lambda ml:
-                float_compare(ml.quantity, 0.0, precision_rounding=ml.product_uom_id.rounding) > 0 and
-                not ml.result_package_id
-        )
-        move_line_ids = quantity_move_line_ids.filtered(lambda ml: ml.picked)
-        if not move_line_ids:
-            move_line_ids = quantity_move_line_ids
-        if move_lines_to_pack:
-            move_line_ids = move_line_ids & move_lines_to_pack
-        return move_line_ids
-
-    def action_put_in_pack(self, move_lines_to_pack=False):
+    def action_put_in_pack(self):
         self.ensure_one()
         if self.state not in ('done', 'cancel'):
-            move_line_ids = self._package_move_lines(move_lines_to_pack=move_lines_to_pack)
-            if move_line_ids:
-                res = self._pre_put_in_pack_hook(move_line_ids)
-                if not res:
-                    package = self._put_in_pack(move_line_ids)
-                    return self._post_put_in_pack_hook(package)
-                return res
-            raise UserError(_("There is nothing eligible to put in a pack. Either there are no quantities to put in a pack or all products are already in a pack."))
+            return self.move_line_ids.action_put_in_pack()
 
     @api.model
     def get_action_click_graph(self):

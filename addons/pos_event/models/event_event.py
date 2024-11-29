@@ -2,13 +2,14 @@ from odoo import api, fields, models
 
 
 class EventEvent(models.Model):
+    _name = 'event.event'
     _inherit = ['event.event', 'pos.load.mixin']
 
     image_1024 = fields.Image("PoS Image", max_width=1024, max_height=1024)
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('event_ticket_ids', 'in', [ticket['id'] for ticket in data['event.event.ticket']['data']])]
+        return [('event_ticket_ids', 'in', [ticket['id'] for ticket in data['event.event.ticket']])]
 
     @api.model
     def _load_pos_data_fields(self, config_id):

@@ -1,48 +1,43 @@
-# Part of Odoo. See LICENSE file for full copyright and licensing details.
+import argparse
 import contextlib
 import logging
 import sys
+from inspect import cleandoc
 from pathlib import Path
 
-import odoo.cli
+import odoo
 from odoo.modules import get_module_path, get_modules, initialize_sys_path
 
 commands = {}
 """All loaded commands"""
 
+PROG_NAME = Path(sys.argv[0]).name
+
 
 class Command:
     name = None
+    description = None
+    epilog = None
+    _parser = None
 
     def __init_subclass__(cls):
         cls.name = cls.name or cls.__name__.lower()
         commands[cls.name] = cls
 
+    @property
+    def prog(self):
+        return f"{PROG_NAME} [--addons-path=PATH,...] {self.name}"
 
-ODOO_HELP = """\
-Odoo CLI, use '{odoo_bin} --help' for regular server options.
-
-Available commands:
-    {command_list}
-
-Use '{odoo_bin} <command> --help' for individual command help."""
-
-
-class Help(Command):
-    """ Display the list of available commands """
-    def run(self, args):
-        load_internal_commands()
-        load_addons_commands()
-        padding = max(len(cmd) for cmd in commands) + 2
-        command_list = "\n    ".join([
-            "    {}{}".format(name.ljust(padding), (command.__doc__ or "").strip())
-            for name in sorted(commands)
-            if (command := find_command(name))
-        ])
-        print(ODOO_HELP.format(  # pylint: disable=bad-builtin  # noqa: T201
-            odoo_bin=Path(sys.argv[0]).name,
-            command_list=command_list
-        ))
+    @property
+    def parser(self):
+        if not self._parser:
+            self._parser = argparse.ArgumentParser(
+                formatter_class=argparse.RawDescriptionHelpFormatter,
+                prog=self.prog,
+                description=cleandoc(self.description or self.__doc__ or ""),
+                epilog=cleandoc(self.epilog or ""),
+            )
+        return self._parser
 
 
 def load_internal_commands():
@@ -94,16 +89,20 @@ def main():
         odoo.tools.config._parse_config([args[0]])
         args = args[1:]
 
-    # Default legacy command
-    command_name = 'server'
-
-    # Subcommand discovery
     if len(args) and not args[0].startswith('-'):
+        # Command specified, search for it
         command_name = args[0]
         args = args[1:]
+    elif '-h' in args or '--help' in args:
+        # No command specified, but help is requested
+        command_name = 'help'
+        args = [x for x in args if x not in ('-h', '--help')]
+    else:
+        # No command specified, default command used
+        command_name = 'server'
 
     if command := find_command(command_name):
         o = command()
         o.run(args)
     else:
-        sys.exit('Unknown command %r' % (command,))
+        sys.exit(f"Unknown command {command_name!r}")

@@ -1,4 +1,3 @@
-import { queryOne } from "@odoo/hoot-dom";
 import {
     changeOption,
     clickOnEditAndWaitEditMode,
@@ -64,10 +63,7 @@ const selectButtonByData = function (data) {
     return [{
         content: "Open the select",
         trigger: `we-select:has(we-button[${data}]) we-toggler`,
-        run() {
-            // TODO: use run: "click", instead
-            this.anchor.click();
-        }
+        run: "click",
     }, {
         content: "Click on the option",
         trigger: `we-select we-button[${data}]`,
@@ -313,7 +309,25 @@ registerWebsitePreviewTour("website_form_editor_tour", {
                     ":has(.checkbox:has(label:contains('Xperia')):has(input[type='checkbox'][required]))" +
                     ":has(.checkbox:has(label:contains('Wiko Stairway')):has(input[type='checkbox'][required]))",
     },
-
+    // Check conditional visibility for the relational fields
+    ...selectButtonByData("data-set-visibility='conditional'"),
+    ...selectButtonByData("data-set-visibility-dependency='recipient_ids'"),
+    ...selectButtonByText("Is not equal to"),
+    ...selectButtonByText("Mitchell Admin"),
+    ...clickOnSave(),
+    {
+        content: "Check 'products' field is visible.",
+        trigger: `iframe .s_website_form:has(${triggerFieldByLabel("Products")}:visible)`,
+        isCheck: true,
+    }, {
+        content: "choose the option 'Mitchell Admin' of partner.",
+        trigger: "iframe .checkbox:has(label:contains('Mitchell Admin')) input[type='checkbox']",
+    }, {
+        content: "Check 'products' field is not visible.",
+        trigger: "iframe .s_website_form" +`:has(${triggerFieldByLabel("Products")}:not(:visible))`,
+        isCheck: true,
+    },
+    ...clickOnEditAndWaitEditMode(),
     ...addCustomField('selection', 'radio', 'Service', true),
     {
         content: "Change Option 1 label",
@@ -472,14 +486,22 @@ registerWebsitePreviewTour("website_form_editor_tour", {
     }, {
         content: "Change button's style",
         trigger: '.dropdown:has([name="link_style_color"]) > button',
-        run: () => {
-            queryOne('.dropdown:has([name="link_style_color"]) > button').click();
-            queryOne('[data-value="secondary"]').click();
-            queryOne('.dropdown:has([name="link_style_shape"]) > button').click();
-            queryOne('[data-value="rounded-circle"]').click();
-            queryOne('.dropdown:has([name="link_style_size"]) > button').click();
-            queryOne('[data-value="sm"]').click();
-        },
+        run: "click",
+    }, {
+        trigger: "[data-value=secondary]",
+        run: "click",
+    }, {
+        trigger: ".dropdown:has([name=link_style_shape]) > button",
+        run: "click",
+    }, {
+        trigger: "[data-value=rounded-circle]",
+        run: "click",
+    }, {
+        trigger: ".dropdown:has([name=link_style_size]) > button",
+        run: "click",
+    }, {
+        trigger: "[data-value=sm]",
+        run: "click",
     }, {
         content: "Check the resulting button",
         trigger: ':iframe .s_website_form_send.btn.btn-sm.btn-secondary.rounded-circle',
@@ -957,8 +979,9 @@ registerWebsitePreviewTour("website_form_editable_content", {
         content: "Check that the new text value was correctly set",
         trigger: ":iframe section.s_website_form h5:contains(/^ABC$/)",
     },
-    {   content: "Remove the dropped column",
-        trigger: ":iframe .oe_overlay.oe_active .oe_snippet_remove",
+    {
+        content: "Remove the dropped column",
+        trigger: ":iframe .oe_overlay.oe_active .oe_snippet_remove:not(:visible)",
         run: "click",
     },
     ...clickOnSave(),

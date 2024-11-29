@@ -17,6 +17,7 @@ PROCUREMENT_PRIORITIES = [('0', 'Normal'), ('1', 'Urgent')]
 
 
 class StockMove(models.Model):
+    _name = 'stock.move'
     _description = "Stock Move"
     _order = 'sequence, id'
 
@@ -197,6 +198,8 @@ class StockMove(models.Model):
     show_lots_m2o = fields.Boolean("Show lot_id", compute="_compute_show_info")
     show_lots_text = fields.Boolean("Show lot_name", compute="_compute_show_info")
 
+    _product_location_index = models.Index("(product_id, location_id, location_dest_id, company_id, state)")
+
     @api.depends('product_id')
     def _compute_product_uom(self):
         for move in self:
@@ -283,11 +286,16 @@ class StockMove(models.Model):
         show_details_visible = multi_locations_enabled or has_package or consignment_enabled
 
         for move in self:
-            if not move.product_id:
-                move.show_details_visible = False
-            elif not move.picking_type_id.use_create_lots and not move.picking_type_id.use_existing_lots\
-                and not self.env.user.has_group('stock.group_stock_tracking_lot')\
-                and not self.env.user.has_group('stock.group_stock_multi_locations'):
+            if (
+                not move.product_id
+                or move.state == "draft"
+                or (
+                    not move.picking_type_id.use_create_lots
+                    and not move.picking_type_id.use_existing_lots
+                    and not self.env.user.has_group("stock.group_stock_tracking_lot")
+                    and not self.env.user.has_group("stock.group_stock_multi_locations")
+                )
+            ):
                 move.show_details_visible = False
             elif len(move.move_line_ids) > 1:
                 move.show_details_visible = True
@@ -635,11 +643,6 @@ Please change the quantity done or the rounding precision of your unit of measur
                 _('Blocking: %s', ' ,'.join(moves_error.mapped('name')))
             ]
             raise UserError('\n\n'.join(user_warnings))
-
-    def init(self):
-        self._cr.execute('SELECT indexname FROM pg_indexes WHERE indexname = %s', ('stock_move_product_location_index',))
-        if not self._cr.fetchone():
-            self._cr.execute('CREATE INDEX stock_move_product_location_index ON stock_move (product_id, location_id, location_dest_id, company_id, state)')
 
     @api.model
     def default_get(self, fields_list):
@@ -2196,9 +2199,12 @@ Please change the quantity done or the rounding precision of your unit of measur
         # These new SMLs need to be redirected thanks to putaway rules
         (self.move_line_ids - existing_smls)._apply_putaway_strategy()
 
-    def _adjust_procure_method(self):
+    def _adjust_procure_method(self, picking_type_code=False):
         """ This method will try to apply the procure method MTO on some moves if
         a compatible MTO route is found. Else the procure method will be set to MTS
+        picking_type_code (str, optional): Adjusts the procurement method based on
+            the specified picking type code. The code to specify the picking type for
+            the procurement group. Defaults to False.
         """
         # Prepare the MTSO variables. They are needed since MTSO moves are handled separately.
         # We need 2 dicts:
@@ -2212,6 +2218,8 @@ Please change the quantity done or the rounding precision of your unit of measur
                 ('location_dest_id', '=', move.location_dest_id.id),
                 ('action', '!=', 'push')
             ]
+            if picking_type_code:
+                domain.append(('picking_type_id.code', '=', picking_type_code))
             rule = self.env['procurement.group']._search_rule(False, move.product_packaging_id, product_id, move.warehouse_id, domain)
             if not rule:
                 move.procure_method = 'make_to_stock'

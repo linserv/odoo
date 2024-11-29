@@ -13,6 +13,7 @@ from odoo.tools.misc import unique
 
 
 class ProductProduct(models.Model):
+    _name = 'product.product'
     _description = "Product Variant"
     _inherits = {'product.template': 'product_tmpl_id'}
     _inherit = ['mail.thread', 'mail.activity.mixin']
@@ -103,6 +104,10 @@ class ProductProduct(models.Model):
     can_image_1024_be_zoomed = fields.Boolean("Can Image 1024 be zoomed", compute='_compute_can_image_1024_be_zoomed')
     write_date = fields.Datetime(compute='_compute_write_date', store=True)
 
+    # Ensure there is at most one active variant for each combination.
+    # There could be no variant for a combination if using dynamic attributes.
+    _combination_unique = models.UniqueIndex("(product_tmpl_id, combination_indices) WHERE active IS TRUE")
+
     @api.depends('image_variant_1920', 'image_variant_1024')
     def _compute_can_image_variant_1024_be_zoomed(self):
         for record in self:
@@ -189,14 +194,6 @@ class ProductProduct(models.Model):
         if field in image_fields:
             return 'product/static/img/placeholder_thumbnail.png'
         return super()._get_placeholder_filename(field)
-
-    def init(self):
-        """Ensure there is at most one active variant for each combination.
-
-        There could be no variant for a combination if using dynamic attributes.
-        """
-        self.env.cr.execute("CREATE UNIQUE INDEX IF NOT EXISTS product_product_combination_unique ON %s (product_tmpl_id, combination_indices) WHERE active is true"
-            % self._table)
 
     def _get_barcodes_by_company(self):
         return [
@@ -688,8 +685,8 @@ class ProductProduct(models.Model):
         for seller in sellers_filtered:
             # Set quantity in UoM of seller
             quantity_uom_seller = quantity
-            if quantity_uom_seller and uom_id and uom_id != seller.product_uom:
-                quantity_uom_seller = uom_id._compute_quantity(quantity_uom_seller, seller.product_uom)
+            if quantity_uom_seller and uom_id and uom_id != seller.product_uom_id:
+                quantity_uom_seller = uom_id._compute_quantity(quantity_uom_seller, seller.product_uom_id)
 
             if seller.date_start and seller.date_start > date:
                 continue

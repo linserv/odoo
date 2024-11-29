@@ -14,7 +14,7 @@ import werkzeug
 
 from collections import defaultdict
 
-from odoo import api, fields, models, SUPERUSER_ID, tools, _
+from odoo import api, fields, models, SUPERUSER_ID, _
 from odoo.exceptions import AccessError, ValidationError, UserError
 from odoo.http import Stream, root, request
 from odoo.tools import config, human_size, image, str2bool, consteq
@@ -421,11 +421,7 @@ class IrAttachment(models.Model):
     mimetype = fields.Char('Mime Type', readonly=True)
     index_content = fields.Text('Indexed Content', readonly=True, prefetch=False)
 
-    def _auto_init(self):
-        res = super(IrAttachment, self)._auto_init()
-        tools.create_index(self._cr, 'ir_attachment_res_idx',
-                           self._table, ['res_model', 'res_id'])
-        return res
+    _res_idx = models.Index("(res_model, res_id)")
 
     @api.model
     def check(self, mode, values=None):
@@ -449,7 +445,7 @@ class IrAttachment(models.Model):
                         raise AccessError(_("Sorry, you are not allowed to access this document."))
                     if res_field:
                         field = self.env[res_model]._fields[res_field]
-                        if not field.is_accessible(self.env):
+                        if not self._has_field_access(field, 'read'):
                             raise AccessError(_("Sorry, you are not allowed to access this document."))
                 if not (res_model and res_id):
                     continue
@@ -646,6 +642,7 @@ class IrAttachment(models.Model):
         return super().create(vals_list)
 
     def _post_add_create(self, **kwargs):
+        # TODO master: rename to _post_upload, better indicating its usage
         pass
 
     def generate_access_token(self):
@@ -686,28 +683,6 @@ class IrAttachment(models.Model):
 
     def _generate_access_token(self):
         return str(uuid.uuid4())
-
-    def validate_access(self, access_token):
-        self.ensure_one()
-        record_sudo = self.sudo()
-
-        if access_token:
-            tok = record_sudo.with_context(prefetch_fields=False).access_token
-            valid_token = consteq(tok or '', access_token)
-            if not valid_token:
-                raise AccessError("Invalid access token")
-            return record_sudo
-
-        if record_sudo.with_context(prefetch_fields=False).public:
-            return record_sudo
-
-        if self.env.user._is_portal():
-            # Check the read access on the record linked to the attachment
-            # eg: Allow to download an attachment on a task from /my/tasks/task_id
-            self.check('read')
-            return record_sudo
-
-        return self
 
     @api.model
     def action_get(self):
@@ -814,3 +789,18 @@ class IrAttachment(models.Model):
             stream.size = 0
 
         return stream
+
+    def _can_return_content(self, field_name=None, access_token=None):
+        attachment_sudo = self.sudo().with_context(prefetch_fields=False)
+        if access_token:
+            if not consteq(attachment_sudo.access_token or "", access_token):
+                raise AccessError("Invalid access token")  # pylint: disable=missing-gettext
+            return True
+        if attachment_sudo.public:
+            return True
+        if self.env.user._is_portal():
+            # Check the read access on the record linked to the attachment
+            # eg: Allow to download an attachment on a task from /my/tasks/task_id
+            self.check("read")
+            return True
+        return super()._can_return_content(field_name, access_token)

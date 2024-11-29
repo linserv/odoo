@@ -154,7 +154,7 @@ test("building a domain with a datetime", async () => {
         domain: `[("datetime", "=", "2017-03-27 15:42:00")]`,
         isDebugMode: true,
         update(domain) {
-            expect(domain).toBe(`[("datetime", "=", "2017-02-26 15:42:00")]`);
+            expect(domain).toBe(`[("datetime", "=", "2017-03-26 15:42:00")]`);
         },
     });
 
@@ -166,11 +166,11 @@ test("building a domain with a datetime", async () => {
 
     // Change the date in the datepicker
     await contains(".o_datetime_input").click();
-    await contains(getPickerCell("26").at(0)).click();
+    await contains(getPickerCell("26")).click();
     await contains(getPickerApplyButton()).click();
 
     // The input field should display the date and time in the user's timezone
-    expect(".o_datetime_input").toHaveValue("02/26/2017 16:42:00");
+    expect(".o_datetime_input").toHaveValue("03/26/2017 16:42:00");
 });
 
 test("building a domain with an invalid path", async () => {
@@ -2305,4 +2305,15 @@ test(`within operator (edit) for datetime with invalid period`, async () => {
     expect.verifySteps([
         `["&", ("datetime", ">=", datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S")), ("datetime", "<=", datetime.datetime.combine(context_today() + relativedelta(days = 1), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S"))]`,
     ]);
+});
+
+test("shorten descriptions of long lists", async (assert) => {
+    const values = new Array(500).fill(42525245);
+    await makeDomainSelector({
+        domain: `[("id", "in", [${values}])]`,
+        readonly: true,
+    });
+    expect(".o_tree_editor_condition").toHaveText(
+        `Id\nis in\n(\n${values.slice(0, 20).join("\n,\n")}\n,\n...\n)`
+    );
 });

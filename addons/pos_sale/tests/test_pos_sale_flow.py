@@ -51,7 +51,6 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'product_id': self.kit.id,
                 'name': self.kit.name,
                 'product_uom_qty': 10,
-                'product_uom': self.kit.uom_id.id,
                 'price_unit': self.kit.lst_price,
             })],
         })
@@ -139,13 +138,11 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'product_id': product_a.id,
                 'name': product_a.name,
                 'product_uom_qty': 1,
-                'product_uom': product_a.uom_id.id,
                 'price_unit': product_a.lst_price,
             }), (0, 0, {
                 'product_id': product_b.id,
                 'name': product_b.name,
                 'product_uom_qty': 1,
-                'product_uom': product_b.uom_id.id,
                 'price_unit': product_b.lst_price,
             }), (0, 0, {
                 # Add this line to test that it should not cause any issue when settling this order.
@@ -180,7 +177,6 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'name': self.product_a.name,
                 'product_uom_qty': 1,
                 'price_unit': 100,
-                'product_uom': self.product_a.uom_id.id
             })],
         })
         sale_order.action_confirm()
@@ -292,7 +288,6 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'product_id': product_a.id,
                 'name': product_a.name,
                 'product_uom_qty': 1,
-                'product_uom': product_a.uom_id.id,
                 'price_unit': product_a.lst_price,
             })],
         })
@@ -333,11 +328,11 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'product_id': product_a.id,
                 'name': product_a.name,
                 'product_uom_qty': 3.5,
-                'product_uom': product_a.uom_id.id,
                 'price_unit': 8,  # manually set a different price than the lst_price
+                'discount': 10,
             })],
         })
-        self.assertEqual(sale_order.amount_total, 32.2)  # 3.5 * 8 * 1.15
+        self.assertEqual(sale_order.amount_total, 28.98)  # 3.5 * 8 * 1.15 * 90%
         self.main_pos_config.open_ui()
         self.start_pos_tour('PosSettleOrderNotGroupable', login="accountman")
 
@@ -354,7 +349,6 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'product_id': self.whiteboard_pen.product_variant_id.id,
                 'name': self.whiteboard_pen.name,
                 'product_uom_qty': 1,
-                'product_uom': self.whiteboard_pen.uom_id.id,
                 'price_unit': self.whiteboard_pen.product_variant_id.lst_price,
             }), (0, 0, {
                 'name': 'Customer note 2',
@@ -432,13 +426,11 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'product_id': product_a.id,
                 'name': product_a.name,
                 'product_uom_qty': 1,
-                'product_uom': product_a.uom_id.id,
                 'price_unit': product_a.lst_price,
             }), (0, 0, {
                 'product_id': product_b.id,
                 'name': product_b.name,
                 'product_uom_qty': 1,
-                'product_uom': product_b.uom_id.id,
                 'price_unit': product_b.lst_price,
             })],
         })
@@ -492,7 +484,6 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'name': self.whiteboard_pen.name,
                 'product_uom_qty': 1,
                 'price_unit': 100,
-                'product_uom': self.whiteboard_pen.uom_id.id
             })],
         })
 
@@ -524,7 +515,6 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'product_id': product_a.id,
                 'name': product_a.name,
                 'product_uom_qty': 1,
-                'product_uom': product_a.uom_id.id,
                 'price_unit': product_a.lst_price,
             })],
         })
@@ -567,9 +557,8 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                     'name': self.product_a.name,
                     'product_id': self.product_a.id,
                     'product_uom_qty': 10.0,
-                    'product_uom': self.product_a.uom_id.id,
                     'price_unit': 100,
-                    'tax_id': False,
+                    'tax_ids': False,
                 })],
         })
         so.action_confirm()
@@ -628,19 +617,16 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'product_id': product_a.id,
                 'name': product_a.name,
                 'product_uom_qty': 1,
-                'product_uom': product_a.uom_id.id,
                 'price_unit': product_a.lst_price,
             }), (0, 0, {
                 'product_id': product_b.id,
                 'name': product_b.name,
                 'product_uom_qty': 1,
-                'product_uom': product_b.uom_id.id,
                 'price_unit': product_b.lst_price,
             }), (0, 0, {
                 'product_id': product_c.id,
                 'name': product_c.name,
                 'product_uom_qty': 1,
-                'product_uom': product_c.uom_id.id,
                 'price_unit': product_c.lst_price,
             })],
         })
@@ -676,9 +662,8 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                     'name': self.product_a.name,
                     'product_id': self.product_a.id,
                     'product_uom_qty': 1.0,
-                    'product_uom': self.product_a.uom_id.id,
                     'price_unit': 100,
-                    'tax_id': False,
+                    'tax_ids': False,
                 })],
         })
         so.action_confirm()
@@ -777,7 +762,6 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
                 'product_id': product_a.id,
                 'name': product_a.name,
                 'product_uom_qty': 1,
-                'product_uom': product_a.uom_id.id,
                 'price_unit': product_a.lst_price,
             })],
         })
@@ -786,3 +770,88 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
         self.main_pos_config.open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PoSDownPaymentAmount', login="accountman")
         self.assertEqual(sale_order.amount_to_invoice, 80.0, "Downpayment amount not considered!")
+
+        self.assertEqual(sale_order.order_line[2].price_unit, 20)
+
+        # Update delivered quantity of SO line
+        sale_order.order_line[0].write({'qty_delivered': 1.0})
+        context = {
+            'active_model': 'sale.order',
+            'active_ids': [sale_order.id],
+            'active_id': sale_order.id,
+            'default_journal_id': self.company_data['default_journal_sale'].id,
+        }
+
+        # Let's do the invoice for the remaining amount
+        payment = self.env['sale.advance.payment.inv'].with_context(context).create({})
+        payment.create_invoices()
+
+        # Confirm all invoices
+        sale_order.invoice_ids.action_post()
+        self.assertEqual(sale_order.order_line[2].price_unit, 20)
+
+    def test_settle_order_with_multistep_delivery_receipt(self):
+        """This test create an order and settle it in the PoS. It also uses multistep delivery
+            and we need to make sure that all the picking are cancelled if the order is fully delivered.
+        """
+        if not self.env["ir.module.module"].search([("name", "=", "purchase"), ("state", "=", "installed")]):
+            self.skipTest("purchase module is required for this test")
+
+        warehouse = self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)], limit=1)
+        warehouse.delivery_steps = 'pick_pack_ship'
+        warehouse.reception_steps = 'three_steps'
+        self.env.ref('stock.route_warehouse0_mto').active = True
+        route_buy = self.env.ref('purchase_stock.route_warehouse0_buy')
+        route_mto = self.env.ref('stock.route_warehouse0_mto')
+        route_mto.rule_ids.procure_method = 'mts_else_mto'
+        self.partner_test = self.env['res.partner'].create({
+            'name': 'Partner Test A',
+            'is_company': True,
+            'street': '77 Santa Barbara Rd',
+            'city': 'Pleasant Hill',
+            'country_id': self.env.ref('base.nl').id,
+            'zip': '1105AA',
+            'state_id': False,
+            'email': 'deco.addict82@example.com',
+            'phone': '(603)-996-3829',
+        })
+
+        product_a = self.env['product.product'].create({
+            'name': 'Product A',
+            'available_in_pos': True,
+            'is_storable': True,
+            'lst_price': 10.0,
+            'seller_ids': [(0, 0, {
+                'partner_id': self.partner_test.id,
+                'min_qty': 1.0,
+                'price': 1.0,
+            })],
+            'route_ids': [(6, 0, [route_buy.id, route_mto.id])],
+        })
+
+        sale_order = self.env['sale.order'].create({
+            'partner_id': self.partner_test.id,
+            'order_line': [(0, 0, {
+                'product_id': product_a.id,
+                'name': product_a.name,
+                'product_uom_qty': 1,
+                'price_unit': product_a.lst_price,
+            })],
+        })
+        sale_order.action_confirm()
+
+        # We validate the purchase and receipt steps
+        po = sale_order._get_purchase_orders()
+        po.button_confirm()
+        picking = po.picking_ids[0]
+        picking.button_validate()
+        self.env['stock.picking'].search([('group_id', '=', po.group_id.id)]).filtered(lambda p: p.state == 'assigned').button_validate()
+        self.env['stock.picking'].search([('group_id', '=', po.group_id.id)]).filtered(lambda p: p.state == 'assigned').button_validate()
+
+        self.main_pos_config.ship_later = True
+        self.main_pos_config.open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PosSettleOrder4', login="accountman")
+
+        self.assertEqual(sale_order.picking_ids.state, 'cancel')
+        self.assertEqual(sale_order.pos_order_line_ids.order_id.picking_ids.state, 'assigned')
+        self.assertEqual(self.env['purchase.order.line'].search_count([('product_id', '=', product_a.id)]), 1)

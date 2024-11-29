@@ -4,7 +4,7 @@ from odoo.tools.misc import format_date
 
 
 class AccountPayment(models.Model):
-    _inherit = ['account.payment']
+    _inherit = 'account.payment'
 
     l10n_latam_new_check_ids = fields.One2many('l10n_latam.check', 'payment_id', string='Checks')
     l10n_latam_move_check_ids = fields.Many2many(
@@ -57,7 +57,8 @@ class AccountPayment(models.Model):
                 payment.l10n_latam_move_check_ids = False
         msgs = self._get_blocking_l10n_latam_warning_msg()
         if msgs:
-            raise ValidationError('* %s' % '\n* '.join(msgs))
+            error_msg = "\n".join(f"* {msg}" for msg in msgs)
+            raise ValidationError(error_msg)
         super().action_post()
         self._l10n_latam_check_split_move()
 

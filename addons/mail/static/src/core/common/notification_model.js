@@ -22,7 +22,11 @@ export class Notification extends Record {
 
     /** @type {number} */
     id;
-    message = Record.one("mail.message");
+    mail_message_id = Record.one("mail.message", {
+        onDelete() {
+            this.delete();
+        },
+    });
     /** @type {string} */
     notification_status;
     /** @type {string} */
@@ -31,8 +35,8 @@ export class Notification extends Record {
         inverse: "notifications",
         /** @this {import("models").Notification} */
         compute() {
-            const thread = this.message?.thread;
-            if (!this.message?.isSelfAuthored) {
+            const thread = this.mail_message_id?.thread;
+            if (!this.mail_message_id?.isSelfAuthored) {
                 return;
             }
             const failure = Object.values(this.store.Failure.records).find((f) => {

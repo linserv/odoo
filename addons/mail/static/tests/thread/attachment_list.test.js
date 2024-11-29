@@ -1,5 +1,4 @@
 import {
-    assertSteps,
     click,
     contains,
     defineMailModels,
@@ -7,9 +6,9 @@ import {
     openDiscuss,
     start,
     startServer,
-    step,
 } from "@mail/../tests/mail_test_helpers";
 import { describe, expect, test } from "@odoo/hoot";
+import { asyncStep, waitForSteps } from "@web/../tests/web_test_helpers";
 
 import { getOrigin } from "@web/core/utils/urls";
 
@@ -36,10 +35,10 @@ test("simplest layout", async () => {
     await start();
     await openDiscuss(channelId);
     await contains(".o-mail-Message .o-mail-AttachmentList");
-    expect($(".o-mail-AttachmentCard")[0]).toHaveAttribute("title", "test.txt");
+    expect(".o-mail-AttachmentCard:first").toHaveAttribute("title", "test.txt");
     await contains(".o-mail-AttachmentCard-image");
-    expect($(".o-mail-AttachmentCard-image")[0]).toHaveClass("o_image"); // required for mimetype.scss style
-    expect($(".o-mail-AttachmentCard-image")[0]).toHaveAttribute("data-mimetype", "text/plain"); // required for mimetype.scss style
+    expect(".o-mail-AttachmentCard-image:first").toHaveClass("o_image"); // required for mimetype.scss style
+    expect(".o-mail-AttachmentCard-image:first").toHaveAttribute("data-mimetype", "text/plain"); // required for mimetype.scss style
     await contains(".o-mail-AttachmentCard-aside button", { count: 2 });
     await contains(".o-mail-AttachmentCard-unlink");
     await contains(".o-mail-AttachmentCard-aside button[title='Download']");
@@ -128,7 +127,7 @@ test("clicking on the delete attachment button multiple times should do the rpc 
         res_id: channelId,
         message_type: "comment",
     });
-    onRpcBefore("/mail/attachment/delete", () => step("attachment_unlink"));
+    onRpcBefore("/mail/attachment/delete", () => asyncStep("attachment_unlink"));
     await start();
     await openDiscuss(channelId);
     await click(".o-mail-AttachmentCard-unlink");
@@ -136,7 +135,7 @@ test("clicking on the delete attachment button multiple times should do the rpc 
     await click(".modal-footer .btn-primary");
     await click(".modal-footer .btn-primary");
     await contains(".o-mail-AttachmentCard-unlink", { count: 0 });
-    await assertSteps(["attachment_unlink"]); // The unlink method must be called once
+    await waitForSteps(["attachment_unlink"]); // The unlink method must be called once
 });
 
 test("view attachment", async () => {

@@ -291,7 +291,7 @@ test("user context is combined with pivot context to fetch data", async function
             {
                 id: "sheet1",
                 cells: {
-                    A1: { content: `=PIVOT.VALUE(1, "probability")` },
+                    A1: '=PIVOT.VALUE(1, "probability")',
                 },
             },
         ],
@@ -348,7 +348,7 @@ test("Context is purged from PivotView related keys", async function (assert) {
             {
                 id: "sheet1",
                 cells: {
-                    A1: { content: `=ODOO.PIVOT(1, "probability")` },
+                    A1: '=ODOO.PIVOT(1, "probability")',
                 },
             },
         ],
@@ -395,8 +395,8 @@ test("fetch metadata only once per model", async function () {
             {
                 id: "sheet1",
                 cells: {
-                    A1: { content: `=PIVOT.VALUE(1, "probability")` },
-                    A2: { content: `=PIVOT.VALUE(2, "probability")` },
+                    A1: '=PIVOT.VALUE(1, "probability")',
+                    A2: '=PIVOT.VALUE(2, "probability")',
                 },
             },
         ],
@@ -435,6 +435,28 @@ test("fetch metadata only once per model", async function () {
     expect.verifySteps(["partner/fields_get"]);
 });
 
+test("An error is displayed if the pivot has invalid model", async function () {
+    const { model, env, pivotId } = await createSpreadsheetWithPivot({
+        mockRPC: async function (route, { model, method, kwargs }) {
+            if (model === "unknown" && method === "fields_get") {
+                throw makeServerError({ code: 404 });
+            }
+        },
+    });
+    const pivot = model.getters.getPivotCoreDefinition(pivotId);
+    env.model.dispatch("UPDATE_PIVOT", {
+        pivotId,
+        pivot: {
+            ...pivot,
+            model: "unknown",
+        },
+    });
+    setCellContent(model, "A1", `=PIVOT.VALUE("1", "probability:avg")`);
+    await animationFrame();
+    expect(getCellValue(model, "A1")).toBe("#ERROR");
+    expect(getEvaluatedCell(model, "A1").message).toBe(`The model "unknown" does not exist.`);
+});
+
 test("don't fetch pivot data if no formula use it", async function () {
     const spreadsheetData = {
         pivots: {
@@ -469,6 +491,22 @@ test("don't fetch pivot data if no formula use it", async function () {
         "partner/read_group",
     ]);
     expect(getCellValue(model, "A1")).toBe(131);
+});
+
+test("An error is displayed if the pivot has invalid field", async function () {
+    const { model, pivotId } = await createSpreadsheetWithPivot();
+    const pivot = model.getters.getPivotCoreDefinition(pivotId);
+    model.dispatch("UPDATE_PIVOT", {
+        pivotId,
+        pivot: {
+            ...pivot,
+            columns: [{ fieldName: "unknown" }],
+        },
+    });
+    setCellContent(model, "A1", `=PIVOT.VALUE("1", "probability:avg")`);
+    await animationFrame();
+    expect(getCellValue(model, "A1")).toBe("#ERROR");
+    expect(getEvaluatedCell(model, "A1").message).toBe(`Field unknown does not exist`);
 });
 
 test("evaluates only once when two pivots are loading", async function () {
@@ -544,9 +582,9 @@ test("display loading while data is not fully available", async function () {
             {
                 id: "sheet1",
                 cells: {
-                    A1: { content: `=PIVOT.HEADER(1, "measure", "probability:sum")` },
-                    A2: { content: `=PIVOT.HEADER(1, "product_id", 37)` },
-                    A3: { content: `=PIVOT.VALUE(1, "probability:sum")` },
+                    A1: '=PIVOT.HEADER(1, "measure", "probability:sum")',
+                    A2: '=PIVOT.HEADER(1, "product_id", 37)',
+                    A3: '=PIVOT.VALUE(1, "probability:sum")',
                 },
             },
         ],
@@ -1476,8 +1514,8 @@ test("can import a pivot with a calculated field", async function () {
             {
                 id: "sheet1",
                 cells: {
-                    A1: { content: '=PIVOT.VALUE(1,"probability")' },
-                    A2: { content: '=PIVOT.VALUE(1,"probability*2")' },
+                    A1: '=PIVOT.VALUE(1,"probability")',
+                    A2: '=PIVOT.VALUE(1,"probability*2")',
                 },
             },
         ],

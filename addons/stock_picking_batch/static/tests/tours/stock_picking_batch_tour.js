@@ -1,5 +1,4 @@
 import { registry } from "@web/core/registry";
-import { stepUtils } from '@web_tour/tour_service/tour_utils';
 
 registry.category("web_tour.tours").add('test_stock_picking_batch_sm_to_sml_synchronization', {
     steps: () => [
@@ -28,7 +27,7 @@ registry.category("web_tour.tours").add('test_stock_picking_batch_sm_to_sml_sync
             run: "click",
         },
         {
-            trigger: "h4:contains('Stock move')",
+            trigger: "h4:contains('Detailed Operations')",
             run: "click",
         },
         {
@@ -36,8 +35,15 @@ registry.category("web_tour.tours").add('test_stock_picking_batch_sm_to_sml_sync
             run: "click",
         },
         {
+            trigger: ".modal:not(.o_inactive_modal) .o_list_number[name=quantity] input",
+            run: 'edit 2',
+        },
+        {
             trigger: ".o_list_footer .o_list_number > span:contains('7')",
             run: "click",
+        },
+        {
+            trigger: ".o_list_footer .o_list_number > span:contains('8')",
         },
         {
             content: "Click Save",
@@ -49,7 +55,7 @@ registry.category("web_tour.tours").add('test_stock_picking_batch_sm_to_sml_sync
             run: "click",
         },
         {
-            trigger: ".o_list_number[name=quantity] input",
+            trigger: ".modal .o_list_number[name=quantity] input",
             run: 'edit 21',
         },
         {
@@ -57,7 +63,7 @@ registry.category("web_tour.tours").add('test_stock_picking_batch_sm_to_sml_sync
             run: "click",
         },
         {
-            trigger: "h4:contains('Stock move')",
+            trigger: "h4:contains('Detailed Operations')",
             run: "click",
         },
         {
@@ -74,7 +80,7 @@ registry.category("web_tour.tours").add('test_stock_picking_batch_sm_to_sml_sync
             run: "click",
         },
         {
-            trigger: ".o_data_row > td:contains('47')",
+            trigger: ".o_data_row > td:contains('46')",
             run: "click",
         },
         {
@@ -86,8 +92,7 @@ registry.category("web_tour.tours").add('test_stock_picking_batch_sm_to_sml_sync
             run: "click",
         },
         {
-            trigger: ".o_data_row > td:contains('7')",
-            run: "click",
+            trigger: ".o_list_footer .o_list_number > span:contains('7')",
         },
         {
             content: "Click Save",
@@ -98,6 +103,9 @@ registry.category("web_tour.tours").add('test_stock_picking_batch_sm_to_sml_sync
             trigger: ".modal .o_form_button_save",
             run: "click",
         },
-        ...stepUtils.saveForm(),
+        {
+            content: "wait for save completion",
+            trigger: ".o_form_readonly, .o_form_saved",
+        },
     ]
 });

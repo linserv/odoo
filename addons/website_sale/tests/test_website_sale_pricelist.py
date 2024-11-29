@@ -237,9 +237,8 @@ class TestWebsitePriceList(WebsiteSaleCommon):
                 'name': product.name,
                 'product_id': product.id,
                 'product_uom_qty': 1,
-                'product_uom': product.uom_id.id,
                 'price_unit': product.list_price,
-                'tax_id': False,
+                'tax_ids': False,
             })],
         })
         sol = so.order_line
@@ -276,9 +275,8 @@ class TestWebsitePriceList(WebsiteSaleCommon):
                 'name': product.name,
                 'product_id': product.id,
                 'product_uom_qty': 5,
-                'product_uom': product.uom_id.id,
                 'price_unit': product.list_price,
-                'tax_id': False,
+                'tax_ids': False,
             })]
         })
         sol = so.order_line
@@ -362,8 +360,8 @@ class TestWebsitePriceList(WebsiteSaleCommon):
         })
         self.pricelist.write({
             'item_ids': [Command.create({
-                'price_discount': 20,
-                'compute_price': 'formula',
+                'percent_price': 20,
+                'compute_price': 'percentage',
                 'product_tmpl_id': product_tmpl.id,
             })],
         })
@@ -723,21 +721,18 @@ class TestWebsiteSaleSession(HttpCaseWithUserPortal):
             'login': 'toto',
             'password': 'long_enough_password',
         })
-        user_pricelist, _ = self.env['product.pricelist'].create([
-            {
-                'name': 'User Pricelist',
-                'website_id': website.id,
-                'code': 'User_pricelist',
-                'selectable': True,
-                'sequence': 40, # Be sure not to use it by default
-            },
-            {
-                'name': 'Other Pricelist',
-                'website_id': website.id,
-                'code': 'Other_pricelist',
-                'selectable': True,
-                'sequence': 30,
-            }
-        ])
+        # We need at least two selectable pricelists to display the dropdown
+        self.env['product.pricelist'].create([{
+            'name': 'Public Pricelist 1',
+            'selectable': True
+        }, {
+            'name': 'Public Pricelist 2',
+            'selectable': True
+        }])
+        user_pricelist = self.env['product.pricelist'].create({
+            'name': 'User Pricelist',
+            'website_id': website.id,
+            'code': 'User_pricelist',
+        })
         test_user.partner_id.property_product_pricelist = user_pricelist
         self.start_tour("/shop", 'website_sale.website_sale_shop_pricelist_tour', login="")

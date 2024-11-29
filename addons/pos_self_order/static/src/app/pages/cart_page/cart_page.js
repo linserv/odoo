@@ -1,6 +1,6 @@
 import { Component, useState } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
-import { useSelfOrder } from "@pos_self_order/app/self_order_service";
+import { useSelfOrder } from "@pos_self_order/app/services/self_order_service";
 import { PopupTable } from "@pos_self_order/app/components/popup_table/popup_table";
 import { _t } from "@web/core/l10n/translation";
 import { OrderWidget } from "@pos_self_order/app/components/order_widget/order_widget";
@@ -84,11 +84,11 @@ export class CartPage extends Component {
     getPrice(line) {
         const childLines = line.combo_line_ids;
         if (childLines.length == 0) {
-            return line.get_display_price();
+            return line.getDisplayPrice();
         } else {
             let price = 0;
             for (const child of childLines) {
-                price += child.get_display_price();
+                price += child.getDisplayPrice();
             }
             return price;
         }
@@ -136,7 +136,7 @@ export class CartPage extends Component {
         }
         increase ? line.qty++ : line.qty--;
         for (const cline of this.selfOrder.currentOrder.lines) {
-            if (cline.combo_parent_uuid === line.uuid) {
+            if (cline.combo_parent_id?.uuid === line.uuid) {
                 this._changeQuantity(cline, increase);
                 cline.setDirty();
             }

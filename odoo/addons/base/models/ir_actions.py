@@ -50,12 +50,16 @@ class LoggerProxy:
 
 
 class IrActionsActions(models.Model):
+    _name = 'ir.actions.actions'
     _description = 'Actions'
     _table = 'ir_actions'
     _order = 'name'
     _allow_sudo_commands = False
 
-    _sql_constraints = [('path_unique', 'unique(path)', "Path to show in the URL must be unique! Please choose another one.")]
+    _path_unique = models.Constraint(
+        'unique(path)',
+        "Path to show in the URL must be unique! Please choose another one.",
+    )
 
     name = fields.Char(string='Action Name', required=True, translate=True)
     type = fields.Char(string='Action Type', required=True)
@@ -252,6 +256,7 @@ class IrActionsActions(models.Model):
 
 
 class IrActionsAct_Window(models.Model):
+    _name = 'ir.actions.act_window'
     _description = 'Action Window'
     _table = 'ir_act_window'
     _inherit = ['ir.actions.actions']
@@ -373,9 +378,6 @@ class IrActionsAct_Window(models.Model):
         return super()._get_readable_fields() | {
             "context", "mobile_view_mode", "domain", "filter", "groups_id", "limit",
             "res_id", "res_model", "search_view_id", "target", "view_id", "view_mode", "views", "embedded_action_ids",
-            # `flags` is not a real field of ir.actions.act_window but is used
-            # to give the parameters to generate the action
-            "flags",
             # this is used by frontend, with the document layout wizard before send and print
             "close_on_report_download",
         }
@@ -404,11 +406,14 @@ VIEW_TYPES = [
 
 
 class IrActionsAct_WindowView(models.Model):
+    _name = 'ir.actions.act_window.view'
     _description = 'Action Window View'
     _table = 'ir_act_window_view'
     _rec_name = 'view_id'
     _order = 'sequence,id'
     _allow_sudo_commands = False
+
+    _unique_mode_per_action = models.UniqueIndex('(act_window_id, view_mode)')
 
     sequence = fields.Integer()
     view_id = fields.Many2one('ir.ui.view', string='View')
@@ -416,14 +421,9 @@ class IrActionsAct_WindowView(models.Model):
     act_window_id = fields.Many2one('ir.actions.act_window', string='Action', ondelete='cascade')
     multi = fields.Boolean(string='On Multiple Doc.', help="If set to true, the action will not be displayed on the right toolbar of a form view.")
 
-    def _auto_init(self):
-        res = super()._auto_init()
-        tools.create_unique_index(self._cr, 'act_window_view_unique_mode_per_action',
-                                  self._table, ['act_window_id', 'view_mode'])
-        return res
-
 
 class IrActionsAct_Window_Close(models.Model):
+    _name = 'ir.actions.act_window_close'
     _description = 'Action Window Close'
     _inherit = ['ir.actions.actions']
     _table = 'ir_actions'
@@ -440,6 +440,7 @@ class IrActionsAct_Window_Close(models.Model):
 
 
 class IrActionsAct_Url(models.Model):
+    _name = 'ir.actions.act_url'
     _description = 'Action URL'
     _table = 'ir_act_url'
     _inherit = ['ir.actions.actions']
@@ -967,7 +968,7 @@ class IrActionsServer(models.Model):
             eval_context = self._get_eval_context(action)
             records = eval_context.get('record') or eval_context['model']
             records |= eval_context.get('records') or eval_context['model']
-            if records.ids:
+            if not action_groups and records.ids:
                 # check access rules on real records only; base automations of
                 # type 'onchange' can run server actions on new records
                 try:
@@ -1148,6 +1149,7 @@ class IrActionsTodo(models.Model):
 
 
 class IrActionsClient(models.Model):
+    _name = 'ir.actions.client'
     _description = 'Client Action'
     _inherit = ['ir.actions.actions']
     _table = 'ir_act_client'

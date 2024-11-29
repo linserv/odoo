@@ -97,7 +97,6 @@
         ],
         'web.qunit_suite_tests': [
             'project/static/src/project_sharing/components/portal_file_input/portal_file_input.js',
-            'project/static/tests/legacy/**/*.js',
             'project/static/tests/tours/**/*',
         ],
         'web.assets_tests': [
@@ -120,7 +119,6 @@
             'web/static/src/core/color_picker/color_picker.scss',
             'web/static/src/scss/mimetypes.scss',
             'web/static/src/scss/ui.scss',
-            'web/static/src/legacy/scss/ui.scss',
             'web/static/src/views/fields/translation_dialog.scss',
             'web/static/src/scss/fontawesome_overridden.scss',
 
@@ -160,7 +158,6 @@
             'web/static/lib/bootstrap/js/dist/toast.js',
             'web/static/lib/dompurify/DOMpurify.js',
             'web/static/src/libs/bootstrap.js',
-            'web/static/src/libs/pdfjs.js',
             'web/static/src/legacy/js/libs/jquery.js',
 
             'base/static/src/css/modules.css',
@@ -192,8 +189,6 @@
             'web/static/src/webclient/actions/reports/*.xml',
 
             'web/static/src/env.js',
-
-            'web/static/src/legacy/scss/fields.scss',
 
             'base/static/src/scss/res_partner.scss',
 

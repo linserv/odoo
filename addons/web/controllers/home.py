@@ -61,6 +61,8 @@ class Home(http.Controller):
         # Restore the user on the environment, it was lost due to auth="none"
         request.update_env(user=request.session.uid)
         try:
+            if request.env.user:
+                request.env.user._on_webclient_bootstrap()
             context = request.env['ir.http'].webclient_rendering_context()
             response = request.render('web.webclient_bootstrap', qcontext=context)
             response.headers['X-Frame-Options'] = 'DENY'
@@ -92,7 +94,7 @@ class Home(http.Controller):
     def _login_redirect(self, uid, redirect=None):
         return _get_login_redirect_url(uid, redirect)
 
-    @http.route('/web/login', type='http', auth='none', readonly=False)
+    @http.route('/web/login', type='http', auth='none', readonly=False, captcha='login')
     def web_login(self, redirect=None, **kw):
         ensure_db()
         request.params['login_success'] = False
@@ -119,7 +121,7 @@ class Home(http.Controller):
             try:
                 credential = {key: value for key, value in request.params.items() if key in CREDENTIAL_PARAMS and value}
                 credential.setdefault('type', 'password')
-                auth_info = request.session.authenticate(request.db, credential)
+                auth_info = request.session.authenticate(request.env, credential)
                 request.params['login_success'] = True
                 return request.redirect(self._login_redirect(auth_info['uid'], redirect=redirect))
             except odoo.exceptions.AccessDenied as e:

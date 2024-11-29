@@ -403,6 +403,13 @@ class MailThread(models.AbstractModel):
 
         return super().get_empty_list_help(help_message)
 
+    @api.model
+    def get_views(self, views, options=None):
+        res = super().get_views(views, options)
+        if "form" in res["views"] and isinstance(self.env[self._name], self.env.registry['mail.activity.mixin']):
+            res["models"][self._name]["has_activities"] = True
+        return res
+
     def _condition_to_sql(self, alias: str, fname: str, operator: str, value, query: Query) -> SQL:
         if self.env.su or self.env.user._is_internal():
             return super()._condition_to_sql(alias, fname, operator, value, query)
@@ -412,7 +419,7 @@ class MailThread(models.AbstractModel):
         allow_partner_ids = set((user_partner | user_partner.commercial_partner_id).ids)
         operand = value if isinstance(value, (list, tuple)) else [value]
         if not allow_partner_ids.issuperset(operand):
-            raise AccessError("Portal users can only filter threads by themselves as followers.")
+            raise AccessError(self.env._("Portal users can only filter threads by themselves as followers."))
         return super(MailThread, self.sudo())._condition_to_sql(alias, fname, operator, value, query)
 
     # ------------------------------------------------------
@@ -2064,9 +2071,6 @@ class MailThread(models.AbstractModel):
     # MESSAGE POST MAIN
     # ------------------------------------------------------------
 
-    def _get_allowed_message_post_params(self):
-        return {"attachment_ids", "body", "message_type", "partner_ids", "subtype_xmlid"}
-
     @api.returns('mail.message', lambda value: value.id)
     def message_post(self, *,
                      body='', subject=None, message_type='notification',
@@ -2357,11 +2361,11 @@ class MailThread(models.AbstractModel):
                 attachement_values_list.append(attachement_values)
 
                 # keep cid, name list and token synced with attachement_values_list length to match ids latter
-                attachement_extra_list.append((cid, name, token))
+                attachement_extra_list.append((cid, name, token, info))
 
-            new_attachments = self.env['ir.attachment'].sudo().create(attachement_values_list)
+            new_attachments = self._create_attachments_for_post(attachement_values_list, attachement_extra_list)
             attach_cid_mapping, attach_name_mapping = {}, {}
-            for attachment, (cid, name, token) in zip(new_attachments, attachement_extra_list):
+            for attachment, (cid, name, token, _info) in zip(new_attachments, attachement_extra_list):
                 if cid:
                     attach_cid_mapping[cid] = (attachment.id, token)
                 if name:
@@ -2387,6 +2391,12 @@ class MailThread(models.AbstractModel):
                     return_values['body'] = Markup(lxml.html.tostring(root, pretty_print=False, encoding='unicode'))
         return_values['attachment_ids'] = m2m_attachment_ids
         return return_values
+
+    def _create_attachments_for_post(self, values_list, extra_list):
+        """ Ease tweaking attachment creation when processing them in posting
+        process. Mainly meant for stable version, to be cleaned when reaching
+        master. """
+        return self.env['ir.attachment'].sudo().create(values_list)
 
     def _process_attachments_for_template_post(self, mail_template):
         """ Model specific management of attachments used with template attachments
@@ -3193,7 +3203,7 @@ class MailThread(models.AbstractModel):
             )
             for user in users:
                 user._bus_send_store(
-                    message.with_user(user),
+                    message.with_user(user).with_context(allowed_company_ids=[]),
                     msg_vals=msg_vals,
                     for_current_user=True,
                     add_followers=True,
@@ -3648,25 +3658,33 @@ class MailThread(models.AbstractModel):
         """
         msg_vals = dict(msg_vals or {})
         partner_ids = self._extract_partner_ids_for_notifications(message, msg_vals, recipients_data)
-        if not partner_ids:
-            return
-
-        partner_devices_sudo = self.env['mail.push.device'].sudo()
-        devices = partner_devices_sudo.search([
-            ('partner_id', 'in', partner_ids)
-        ])
+        devices, private_key, public_key = self._get_web_push_parameters(partner_ids)
         if not devices:
             return
+        payload = self._truncate_payload(self._notify_by_web_push_prepare_payload(message, msg_vals=msg_vals))
+        self._push_web_notification(devices, private_key, public_key, payload=payload)
 
-        ir_parameter_sudo = self.env['ir.config_parameter'].sudo()
-        vapid_private_key = ir_parameter_sudo.get_param('mail.web_push_vapid_private_key')
-        vapid_public_key = ir_parameter_sudo.get_param('mail.web_push_vapid_public_key')
+    def _get_web_push_parameters(self, partner_ids):
+        """
+        :param partner_ids: IDs of the res.partners
+        :returns: the `mail.push.device` records, the vapid private key and the vapid public key
+        """
+        if not partner_ids:
+            return self.env["mail.push.device"].sudo(), None, None
+        ir_parameter_sudo = self.env["ir.config_parameter"].sudo()
+        vapid_private_key = ir_parameter_sudo.get_param("mail.web_push_vapid_private_key")
+        vapid_public_key = ir_parameter_sudo.get_param("mail.web_push_vapid_public_key")
         if not vapid_private_key or not vapid_public_key:
-            _logger.warning("Missing web push vapid keys !")
-            return
+            return self.env["mail.push.device"].sudo(), None, None
+        partner_devices_sudo = self.env["mail.push.device"].sudo()
+        devices = partner_devices_sudo.search([("partner_id", "in", partner_ids)])
+        return devices, vapid_private_key, vapid_public_key
 
-        payload = self._notify_by_web_push_prepare_payload(message, msg_vals=msg_vals)
-        payload = self._truncate_payload(payload)
+    def _push_web_notification(self, devices, private_key, public_key, payload_by_lang=None, payload=None):
+        """
+        :param payload: JSON serializable dict following the notification api specs https://notifications.spec.whatwg.org/#api
+        :param payload_by_lang a dict mapping payload by lang, either this or payload must be provided
+        """
         if len(devices) < MAX_DIRECT_PUSH:
             session = Session()
             devices_to_unlink = set()
@@ -3679,9 +3697,9 @@ class MailThread(models.AbstractModel):
                             'endpoint': device.endpoint,
                             'keys': device.keys
                         },
-                        payload=json.dumps(payload),
-                        vapid_private_key=vapid_private_key,
-                        vapid_public_key=vapid_public_key,
+                        payload=json.dumps(payload_by_lang and payload_by_lang[device.partner_id.lang] or payload),
+                        vapid_private_key=private_key,
+                        vapid_public_key=public_key,
                         session=session,
                     )
                 except DeviceUnreachableError:
@@ -3698,7 +3716,7 @@ class MailThread(models.AbstractModel):
         else:
             self.env['mail.push'].sudo().create([{
                 'mail_push_device_id': device.id,
-                'payload': json.dumps(payload),
+                'payload': json.dumps(payload_by_lang and payload_by_lang[device.partner_id.lang] or payload),
             } for device in devices])
             self.env.ref('mail.ir_cron_web_push_notification')._trigger()
 
@@ -3778,7 +3796,8 @@ class MailThread(models.AbstractModel):
             'is_follower': follows the message related document;
             'lang': partner lang;
             'groups': res.group IDs if linked to a user;
-            'notif': 'inbox', 'email', 'sms' (SMS App);
+            'notif': notification type, one of 'inbox', 'email', 'sms' (SMS App),
+                'whatsapp (WhatsAapp);
             'share': is partner a customer (partner.partner_share);
             'type': partner usage ('customer', 'portal', 'user');
             'uid': user ID (in case of multiple users, internal then first found
@@ -3886,7 +3905,7 @@ class MailThread(models.AbstractModel):
                 lambda pdata: pdata['type'] == 'user',
                 {
                     'active': True,
-                    'has_button_access': self._is_thread_message(msg_vals=msg_vals),
+                    'has_button_access': self.env['mail.message']._is_thread_message(vals=msg_vals, thread=self),
                 }
             ], [
                 'portal',
@@ -3932,7 +3951,7 @@ class MailThread(models.AbstractModel):
         else:
             view_title = _('View')
 
-        is_thread_message = self._is_thread_message(msg_vals=msg_vals)
+        is_thread_message = self.env['mail.message']._is_thread_message(vals=msg_vals, thread=self)
 
         # fill group_data with default_values if they are not complete
         for group_name, _group_func, group_data in groups:
@@ -4125,17 +4144,6 @@ class MailThread(models.AbstractModel):
         if not 'lang' in self.env.context:
             raise ValueError(_('At this point lang should be correctly set'))
         return self.env['ir.model']._get(model_name).display_name  # one query for display name
-
-    def _is_thread_message(self, msg_vals=None):
-        """ Tool method to compute thread validity in notification methods.
-        msg_vals is used as a replacement for self, allowing to force model
-        and res_id independently of current recordset. Void values in dict
-        are kept e.g. model=False is valid. """
-        if msg_vals is None:
-            msg_vals = {}
-        res_model = msg_vals['model'] if 'model' in msg_vals else self._name
-        res_id = msg_vals['res_id'] if 'res_id' in msg_vals else (self.ids[0] if self.ids else False)
-        return bool(res_id) if (res_model and res_model != 'mail.thread') else False
 
     def _truncate_payload(self, payload):
         """
@@ -4372,9 +4380,7 @@ class MailThread(models.AbstractModel):
         self._message_followers_to_store(store, after, limit, filter_recipients)
         return store.get_result()
 
-    def _message_followers_to_store(
-        self, store: Store, after=None, limit=100, filter_recipients=False, reset=False
-    ):
+    def _message_followers_to_store(self, store: Store, after=None, limit=100, filter_recipients=False, reset=False):
         self.ensure_one()
         domain = [
             ("res_id", "=", self.id),
@@ -4527,20 +4533,8 @@ class MailThread(models.AbstractModel):
         message._bus_send_store(message, res)
 
     # ------------------------------------------------------
-    # CONTROLLERS
+    # STORE
     # ------------------------------------------------------
-
-    def _get_mail_thread_data_attachments(self):
-        self.ensure_one()
-        res = self.env['ir.attachment'].search([('res_id', '=', self.id), ('res_model', '=', self._name)], order='id desc')
-        if 'original_id' in self.env['ir.attachment']._fields:
-            # If the image is SVG: We take the png version if exist otherwise we take the svg
-            # If the image is not SVG: We take the original one if exist otherwise we take it
-            svg_ids = res.filtered(lambda attachment: attachment.mimetype == 'image/svg+xml')
-            non_svg_ids = res - svg_ids
-            original_ids = res.mapped('original_id')
-            res = res.filtered(lambda attachment: (attachment in svg_ids and attachment not in original_ids) or (attachment in non_svg_ids and attachment.original_id not in non_svg_ids))
-        return res
 
     def _thread_to_store(self, store: Store, /, *, fields=None, request_list=None):
         if fields is None:
@@ -4606,12 +4600,24 @@ class MailThread(models.AbstractModel):
                 res["suggestedRecipients"] = thread._message_get_suggested_recipients()
             store.add(thread, res, as_thread=True)
 
-    @api.model
-    def get_views(self, views, options=None):
-        res = super().get_views(views, options)
-        if "form" in res["views"] and isinstance(self.env[self._name], self.env.registry['mail.activity.mixin']):
-            res["models"][self._name]["has_activities"] = True
+    def _get_mail_thread_data_attachments(self):
+        self.ensure_one()
+        res = self.env['ir.attachment'].search([('res_id', '=', self.id), ('res_model', '=', self._name)], order='id desc')
+        if 'original_id' in self.env['ir.attachment']._fields:
+            # If the image is SVG: We take the png version if exist otherwise we take the svg
+            # If the image is not SVG: We take the original one if exist otherwise we take it
+            svg_ids = res.filtered(lambda attachment: attachment.mimetype == 'image/svg+xml')
+            non_svg_ids = res - svg_ids
+            original_ids = res.mapped('original_id')
+            res = res.filtered(lambda attachment: (attachment in svg_ids and attachment not in original_ids) or (attachment in non_svg_ids and attachment.original_id not in non_svg_ids))
         return res
+
+    # ------------------------------------------------------
+    # CONTROLLERS SECURITY HELPERS
+    # ------------------------------------------------------
+
+    def _get_allowed_message_post_params(self):
+        return {"attachment_ids", "body", "message_type", "partner_ids", "subtype_xmlid"}
 
     @api.model
     def _get_thread_with_access(self, thread_id, mode="read", **kwargs):

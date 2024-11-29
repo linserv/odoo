@@ -4,15 +4,13 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('tr')
     def _get_tr_template_data(self):
         return {
             'property_account_receivable_id': 'tr120',
             'property_account_payable_id': 'tr320',
-            'property_account_expense_categ_id': 'tr150',
-            'property_account_income_categ_id': 'tr600',
             'code_digits': '6',
         }
 
@@ -30,5 +28,7 @@ class AccountChartTemplate(models.AbstractModel):
                 'account_journal_suspense_account_id': 'tr102999',
                 'account_sale_tax_id': 'tr_s_20',
                 'account_purchase_tax_id': 'tr_p_20',
+                'expense_account_id': 'tr150',
+                'income_account_id': 'tr600',
             },
         }

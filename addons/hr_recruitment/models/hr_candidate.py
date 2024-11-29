@@ -10,6 +10,7 @@ from odoo.osv import expression
 
 
 class HrCandidate(models.Model):
+    _name = 'hr.candidate'
     _description = "Candidate"
     _inherit = ['mail.thread.cc',
                'mail.thread.main.attachment',
@@ -80,11 +81,7 @@ class HrCandidate(models.Model):
     candidate_properties = fields.Properties('Properties', definition='company_id.candidate_properties_definition', copy=True)
     attachment_ids = fields.One2many('ir.attachment', 'res_id', domain=[('res_model', '=', 'hr.candidate')], string='Attachments')
 
-    def init(self):
-        self.env.cr.execute("""
-            CREATE INDEX IF NOT EXISTS hr_candidate_email_partner_phone_mobile
-            ON hr_candidate(email_normalized, partner_phone_sanitized);
-        """)
+    _email_partner_phone_mobile = models.Index("(email_normalized, partner_phone_sanitized)")
 
     @api.depends('partner_name')
     def _compute_display_name(self):

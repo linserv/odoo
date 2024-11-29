@@ -281,6 +281,13 @@ export class ListRenderer extends Component {
         }
     }
 
+    async addInGroup(group) {
+        const left = await this.props.list.leaveEditMode({ canAbandon: false });
+        if (left) {
+            group.addNewRecord({}, this.props.editable === "top");
+        }
+    }
+
     processAllColumn(allColumns, list) {
         return allColumns.flatMap((column) => {
             if (column.type === "field" && list.fields[column.name].type === "properties") {
@@ -295,13 +302,16 @@ export class ListRenderer extends Component {
         return Object.values(list.fields)
             .filter(
                 (field) =>
+                    list.activeFields[field.name] &&
                     field.relatedPropertyField &&
-                    field.relatedPropertyField.fieldName === column.name &&
+                    field.relatedPropertyField.name === column.name &&
                     field.type !== "separator"
             )
             .map((propertyField) => {
+                const activeField = list.activeFields[propertyField.name];
                 return {
                     ...getPropertyFieldInfo(propertyField),
+                    relatedPropertyField: activeField.relatedPropertyField,
                     id: `${column.id}_${propertyField.name}`,
                     column_invisible: combineModifiers(
                         propertyField.column_invisible,
@@ -447,7 +457,6 @@ export class ListRenderer extends Component {
             res_id: resId,
             type: "ir.actions.act_window",
             views: [[false, "form"]],
-            flags: { mode: "edit" },
         });
     }
 
@@ -931,7 +940,7 @@ export class ListRenderer extends Component {
         return {
             offset: list.offset,
             limit: list.limit,
-            total: list.isGrouped ? list.count : group.count,
+            total: list.count,
             onUpdate: async ({ offset, limit }) => {
                 await list.load({ limit, offset });
                 this.render(true);
@@ -1047,8 +1056,8 @@ export class ListRenderer extends Component {
     async onDeleteRecord(record) {
         const editedRecord = this.props.list.editedRecord;
         if (editedRecord && editedRecord !== record) {
-            const leaved = await this.props.list.leaveEditMode();
-            if (!leaved) {
+            const left = await this.props.list.leaveEditMode();
+            if (!left) {
                 return;
             }
         }
@@ -1641,10 +1650,7 @@ export class ListRenderer extends Component {
     }
 
     showGroupPager(group) {
-        return (
-            !group.isFolded &&
-            group.list.limit < (group.list.isGrouped ? group.list.count : group.count)
-        );
+        return !group.isFolded && group.list.limit < group.list.count;
     }
 
     /**
@@ -1665,6 +1671,13 @@ export class ListRenderer extends Component {
             (hotkey === "tab" && index < focusableEls.length - 1) ||
             (hotkey === "shift+tab" && index > 0)
         );
+    }
+
+    async onGroupHeaderClicked(ev, group) {
+        const left = await this.props.list.leaveEditMode();
+        if (left) {
+            this.toggleGroup(group);
+        }
     }
 
     toggleGroup(group) {

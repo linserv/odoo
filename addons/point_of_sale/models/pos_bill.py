@@ -4,6 +4,7 @@ from odoo.osv.expression import OR
 
 
 class PosBill(models.Model):
+    _name = 'pos.bill'
     _order = "value"
     _description = "Coins/Bills"
     _inherit = ["pos.load.mixin"]
@@ -25,7 +26,7 @@ class PosBill(models.Model):
     @api.model
     def _load_pos_data_domain(self, data):
         return OR([
-            [('id', 'in', data['pos.config']['data'][0]['default_bill_ids']), ('for_all_config', '=', False)],
+            [('id', 'in', data['pos.config'][0]['default_bill_ids']), ('for_all_config', '=', False)],
             [('for_all_config', '=', True)]
         ])
 

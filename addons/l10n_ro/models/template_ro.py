@@ -4,15 +4,13 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('ro')
     def _get_ro_template_data(self):
         return {
             'property_account_receivable_id': 'ro_pcg_recv',
             'property_account_payable_id': 'pcg_4011',
-            'property_account_expense_categ_id': 'ro_pcg_expense',
-            'property_account_income_categ_id': 'ro_pcg_sale',
             'code_digits': '6',
             'use_storno_accounting': True,
         }
@@ -33,6 +31,8 @@ class AccountChartTemplate(models.AbstractModel):
                 'account_journal_early_pay_discount_gain_account_id': 'pcg_709',
                 'account_sale_tax_id': 'tvac_19',
                 'account_purchase_tax_id': 'tvad_19',
+                'expense_account_id': 'ro_pcg_expense',
+                'income_account_id': 'ro_pcg_sale',
             },
         }
 

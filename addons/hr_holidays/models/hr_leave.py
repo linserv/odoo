@@ -10,7 +10,7 @@ from pytz import timezone, UTC
 
 from odoo.addons.base.models.ir_model import MODULE_UNINSTALL_FLAG
 
-from odoo import api, Command, fields, models, tools
+from odoo import api, Command, fields, models
 from odoo.addons.base.models.res_partner import _tz_get
 from odoo.addons.resource.models.utils import float_to_time, HOURS_PER_DAY
 from odoo.exceptions import AccessError, UserError, ValidationError
@@ -138,7 +138,6 @@ class HrLeave(models.Model):
         store=True, string="Time Off Type",
         required=True, readonly=False,
         domain="""[
-            ('company_id', 'in', [employee_company_id, False]),
             '|',
                 ('requires_allocation', '=', 'no'),
                 ('has_valid_allocation', '=', True),
@@ -219,17 +218,19 @@ class HrLeave(models.Model):
     has_mandatory_day = fields.Boolean(compute='_compute_has_mandatory_day')
     leave_type_increases_duration = fields.Boolean(compute='_compute_leave_type_increases_duration')
 
-    _sql_constraints = [
-        ('date_check2', "CHECK ((date_from <= date_to))", "The start date must be before or equal to the end date."),
-        ('date_check3', "CHECK ((request_date_from <= request_date_to))", "The request start date must be before or equal to the request end date."),
-        ('duration_check', "CHECK ( number_of_days >= 0 )", "If you want to change the number of days you should use the 'period' mode"),
-    ]
-
-    def _auto_init(self):
-        res = super()._auto_init()
-        tools.create_index(self._cr, 'hr_leave_date_to_date_from_index',
-                           self._table, ['date_to', 'date_from'])
-        return res
+    _date_check2 = models.Constraint(
+        'CHECK ((date_from <= date_to))',
+        'The start date must be before or equal to the end date.',
+    )
+    _date_check3 = models.Constraint(
+        'CHECK ((request_date_from <= request_date_to))',
+        'The request start date must be before or equal to the request end date.',
+    )
+    _duration_check = models.Constraint(
+        'CHECK ( number_of_days >= 0 )',
+        "If you want to change the number of days you should use the 'period' mode",
+    )
+    _date_to_date_from_index = models.Index("(date_to, date_from)")
 
     @api.onchange('request_hour_from', 'request_hour_to')
     def _onchange_hours(self):
@@ -1241,6 +1242,9 @@ Attempting to double-book your time off won't magically make your vacation 2x be
         return responsible
 
     def activity_update(self):
+        if self.env.context.get('mail_activity_automation_skip'):
+            return False
+
         to_clean, to_do, to_do_confirm_activity = self.env['hr.leave'], self.env['hr.leave'], self.env['hr.leave']
         activity_vals = []
         today = fields.Date.today()

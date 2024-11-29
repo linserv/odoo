@@ -6,6 +6,7 @@ import {
     defineMailModels,
     insertText,
     openDiscuss,
+    scroll,
     start,
     startServer,
     triggerHotkey,
@@ -13,6 +14,7 @@ import {
 import { describe, test } from "@odoo/hoot";
 
 import { EMOJI_PER_ROW } from "@web/core/emoji_picker/emoji_picker";
+import { queryFirst } from "@odoo/hoot-dom";
 
 describe.current.tags("desktop");
 defineMailModels();
@@ -25,7 +27,7 @@ test("emoji picker works well with translation with double quotes", async () => 
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await insertText("input[placeholder='Search for an emoji']", "ici");
     await contains(`.o-Emoji[title='Bouton "ici" japonais']`);
 });
@@ -35,7 +37,7 @@ test("search emoji from keywords", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await insertText("input[placeholder='Search for an emoji']", "mexican");
     await contains(".o-Emoji", { text: "🌮" });
 });
@@ -45,7 +47,7 @@ test("search emoji from keywords should be case insensitive", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await insertText("input[placeholder='Search for an emoji']", "ok");
     await contains(".o-Emoji", { text: "🆗" }); // all search terms are uppercase OK
 });
@@ -55,7 +57,7 @@ test("search emoji from keywords with special regex character", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await insertText("input[placeholder='Search for an emoji']", "(blood");
     await contains(".o-Emoji", { text: "🆎" });
 });
@@ -65,7 +67,7 @@ test("updating search emoji should scroll top", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await contains(".o-EmojiPicker-content", { scroll: 0 });
     await scroll(".o-EmojiPicker-content", 150);
     await insertText("input[placeholder='Search for an emoji']", "m");
@@ -77,7 +79,7 @@ test("Press Escape in emoji picker closes the emoji picker", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     triggerHotkey("Escape");
     await contains(".o-EmojiPicker", { count: 0 });
 });
@@ -87,7 +89,7 @@ test("Basic keyboard navigation", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await contains(".o-EmojiPicker-content .o-Emoji[data-index='0'].o-active");
     triggerHotkey("ArrowRight");
     await contains(".o-EmojiPicker-content .o-Emoji[data-index='1'].o-active");
@@ -97,9 +99,9 @@ test("Basic keyboard navigation", async () => {
     await contains(`.o-EmojiPicker-content .o-Emoji[data-index='${EMOJI_PER_ROW}'].o-active`);
     triggerHotkey("ArrowUp");
     await contains(".o-EmojiPicker-content .o-Emoji[data-index='0'].o-active");
-    const codepoints = $(".o-EmojiPicker-content .o-Emoji[data-index='0'].o-active").data(
-        "codepoints"
-    );
+    const { codepoints } = queryFirst(
+        ".o-EmojiPicker-content .o-Emoji[data-index='0'].o-active"
+    ).dataset;
     triggerHotkey("Enter");
     await contains(".o-EmojiPicker", { count: 0 });
     await contains(".o-mail-Composer-input", { value: codepoints });
@@ -110,10 +112,10 @@ test("recent category (basic)", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await contains(".o-EmojiPicker-navbar [title='Frequently used']", { count: 0 });
     await click(".o-EmojiPicker-content .o-Emoji", { text: "😀" });
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await contains(".o-EmojiPicker-navbar [title='Frequently used']");
     await contains(".o-Emoji", {
         text: "😀",
@@ -127,10 +129,11 @@ test("search emojis prioritize frequently used emojis", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await contains(".o-EmojiPicker-navbar [title='Frequently used']", { count: 0 });
     await click(".o-EmojiPicker-content .o-Emoji", { text: "🤥" });
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
+    await contains(".o-EmojiPicker-navbar [title='Frequently used']");
     await insertText("input[placeholder='Search for an emoji']", "lie");
     await contains(".o-EmojiPicker-sectionIcon", { count: 0 }); // await search performed
     await contains(".o-EmojiPicker-content .o-Emoji:eq(0)", { text: "🤥" });
@@ -141,13 +144,13 @@ test("emoji usage amount orders frequent emojis", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await click(".o-EmojiPicker-content .o-Emoji", { text: "😀" });
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await click(".o-EmojiPicker-content .o-Emoji", { text: "👽" });
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await click(".o-EmojiPicker-content .o-Emoji", { text: "👽" });
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await contains(".o-Emoji", {
         text: "👽",
         after: ["span", { textContent: "Frequently used" }],
@@ -167,7 +170,7 @@ test("first category should be highlighted by default", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await contains(".o-EmojiPicker-navbar :nth-child(1 of .o-Emoji).o-active");
 });
 
@@ -176,7 +179,7 @@ test("selecting an emoji while holding down the Shift key prevents the emoji pic
     const channelId = pyEnv["discuss.channel"].create({ name: "" });
     await start();
     await openDiscuss(channelId);
-    await click("button[aria-label='Emojis']");
+    await click("button[title='Add Emojis']");
     await click(".o-EmojiPicker-content .o-Emoji", { shiftKey: true, text: "👺" });
     await contains(".o-EmojiPicker-navbar [title='Frequently used']");
     await contains(".o-EmojiPicker");

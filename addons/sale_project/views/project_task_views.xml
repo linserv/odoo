@@ -118,7 +118,7 @@
                     </div>
                 </group>
             </xpath>
-            <xpath expr="//page[@name='settings']//field[@name='privacy_visibility']" position="before">
+            <xpath expr="//group[@name='analytic']//div" position="before">
                 <field name="reinvoiced_sale_order_id" invisible="not allow_billable or not partner_id"/>
                 <label for="sale_line_id" invisible="not allow_billable or not partner_id"/>
                 <div 
@@ -187,8 +187,8 @@
                     <field name="sale_line_id"
                         groups="!sales_team.group_sale_salesman"
                         string="Sales Order Item"
-                        options='{"no_open": True, "no_create": True}'
-                        context="{'create': False, 'edit': False, 'delete': False}"
+                        options='{"no_open": True}'
+                        readonly="1"
                         invisible="not sale_line_id"/>
                     <field name="sale_line_id"
                         groups="sales_team.group_sale_salesman"
@@ -303,7 +303,7 @@
                             widget="percentage" decoration-danger="quantity_percentage &lt; 0 or 1 &lt; quantity_percentage" readonly="0"/>
                         <span>
                             (<field name="product_uom_qty" class="mw-25"  decoration-danger="quantity_percentage &lt; 0 or 1 &lt; quantity_percentage"/>
-                            <field name="product_uom" class="w-auto text-end" groups="uom.group_uom" options="{'no_open': True}"/>
+                            <field name="product_uom_id" class="w-auto text-end" groups="uom.group_uom" options="{'no_open': True}"/>
                             <span>)</span>
                         </span>
                     </div>

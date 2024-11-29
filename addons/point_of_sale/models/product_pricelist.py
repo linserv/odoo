@@ -3,11 +3,12 @@ from odoo import api, fields, models
 
 
 class ProductPricelist(models.Model):
+    _name = 'product.pricelist'
     _inherit = ['product.pricelist', 'pos.load.mixin']
 
     @api.model
     def _load_pos_data_domain(self, data):
-        config_id = self.env['pos.config'].browse(data['pos.config']['data'][0]['id'])
+        config_id = self.env['pos.config'].browse(data['pos.config'][0]['id'])
         return [('id', 'in', config_id.available_pricelist_ids.ids)] if config_id.use_pricelist else [('id', '=', config_id.pricelist_id.id)]
 
     @api.model
@@ -16,13 +17,14 @@ class ProductPricelist(models.Model):
 
 
 class ProductPricelistItem(models.Model):
+    _name = 'product.pricelist.item'
     _inherit = ['product.pricelist.item', 'pos.load.mixin']
 
     @api.model
     def _load_pos_data_domain(self, data):
-        product_tmpl_ids = [p['product_tmpl_id'] for p in data['product.product']['data']]
-        product_ids = [p['id'] for p in data['product.product']['data']]
-        pricelist_ids = [p['id'] for p in data['product.pricelist']['data']]
+        product_tmpl_ids = [p['product_tmpl_id'] for p in data['product.product']]
+        product_ids = [p['id'] for p in data['product.product']]
+        pricelist_ids = [p['id'] for p in data['product.pricelist']]
         today = fields.Date.today()
         return [
             ('pricelist_id', 'in', pricelist_ids),

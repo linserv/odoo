@@ -20,6 +20,7 @@ _logger = logging.getLogger(__name__)
 
 
 class PosOrder(models.Model):
+    _name = 'pos.order'
     _inherit = ["portal.mixin", "pos.bus.mixin", "pos.load.mixin", "mail.thread"]
     _description = "Point of Sale Orders"
     _order = "date_order desc, name desc, id desc"
@@ -32,47 +33,33 @@ class PosOrder(models.Model):
         taxes = taxes.compute_all(price, line.order_id.currency_id, line.qty, product=line.product_id, partner=line.order_id.partner_id or False)['taxes']
         return sum(tax.get('amount', 0.0) for tax in taxes)
 
-    # This deals with orders that belong to a closed session. In order
-    # to recover from this situation we create a new rescue session,
-    # making it obvious that something went wrong.
-    # A new, separate, rescue session is preferred for every such recovery,
-    # to avoid adding unrelated orders to live sessions.
+    # This function deals with orders that belong to a closed session. It attempts to find
+    # any open session that can be used to capture the order. If no open session is found,
+    # an error is raised, asking the user to open a session.
     def _get_valid_session(self, order):
         PosSession = self.env['pos.session']
         closed_session = PosSession.browse(order['session_id'])
 
-        _logger.warning('session %s (ID: %s) was closed but received order %s (total: %s) belonging to it',
+        _logger.warning('Session %s (ID: %s) was closed but received order %s (total: %s) belonging to it',
                         closed_session.name,
                         closed_session.id,
                         order['uuid'],
                         order['amount_total'])
-        rescue_session = PosSession.search([
+
+        open_session = PosSession.search([
             ('state', 'not in', ('closed', 'closing_control')),
-            ('rescue', '=', True),
-            ('config_id', '=', closed_session.config_id.id),
+            ('config_id', '=', closed_session.config_id.id)
         ], limit=1)
-        if rescue_session:
-            _logger.warning('reusing recovery session %s for saving order %s', rescue_session.name, order['uuid'])
-            rescue_session.write({'state': 'opened'})
-            return rescue_session
 
-        _logger.warning('attempting to create recovery session for saving order %s', order['uuid'])
-        new_session = PosSession.create({
-            'config_id': closed_session.config_id.id,
-            'name': _('(RESCUE FOR %(session)s)', session=closed_session.name),
-            'rescue': True,  # avoid conflict with live sessions
-        })
-        # bypass opening_control (necessary when using cash control)
-        new_session.action_pos_session_open()
-        if new_session.config_id.cash_control and new_session.rescue:
-            last_session = self.env['pos.session'].search([('config_id', '=', new_session.config_id.id), ('id', '!=', new_session.id)], limit=1)
-            new_session.cash_register_balance_start = last_session.cash_register_balance_end_real
+        if open_session:
+            _logger.warning('Using open session %s for saving order %s', open_session.name, order['name'])
+            return open_session
 
-        return new_session
+        raise UserError(_('No open session available. Please open a new session to capture the order.'))
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('state', '=', 'draft'), ('session_id', '=', data['pos.session']['data'][0]['id'])]
+        return [('state', '=', 'draft'), ('session_id', '=', data['pos.session'][0]['id'])]
 
     @api.model
     def _process_order(self, order, existing_order):
@@ -201,6 +188,7 @@ class PosOrder(models.Model):
                 'is_change': True,
             }
             order.add_payment(return_payment_vals)
+            order._compute_prices()
 
     def _prepare_tax_base_line_values(self):
         """ Convert pos order lines into dictionaries that would be used to compute taxes later.
@@ -432,10 +420,10 @@ class PosOrder(models.Model):
                 raise UserError(_("You can't: create a pos order from the backend interface, or unset the pricelist, or create a pos.order in a python test with Form tool, or edit the form view in studio if no PoS order exist"))
             currency = order.currency_id
             order.amount_paid = sum(payment.amount for payment in order.payment_ids)
-            order.amount_return = sum(payment.amount < 0 and payment.amount or 0 for payment in order.payment_ids)
+            order.amount_return = -sum(payment.amount < 0 and payment.amount or 0 for payment in order.payment_ids)
             order.amount_tax = currency.round(sum(self._amount_line_tax(line, order.fiscal_position_id) for line in order.lines))
             order.amount_total = order.amount_tax + currency.round(sum(line.price_subtotal for line in order.lines))
-            order.amount_difference = order.amount_paid - order.amount_total
+            order.amount_difference = currency.round(order.amount_paid - order.amount_total) or 0
 
     def _compute_batch_amount_all(self):
         """
@@ -1053,10 +1041,10 @@ class PosOrder(models.Model):
             order._ensure_access_token()
 
         # If the previous session is closed, the order will get a new session_id due to _get_valid_session in _process_order
-        is_rescue_session = any(order.get('session_id') not in session_ids for order in orders)
+        is_new_session = any(order.get('session_id') not in session_ids for order in orders)
         return {
             'pos.order': pos_order_ids.read(pos_order_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
-            'pos.session': pos_order_ids.session_id._load_pos_data({})['data'] if config_id and is_rescue_session else [],
+            'pos.session': pos_order_ids.session_id._load_pos_data({}) if config_id and is_new_session else [],
             'pos.payment': pos_order_ids.payment_ids.read(pos_order_ids.payment_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
             'pos.order.line': pos_order_ids.lines.read(pos_order_ids.lines._load_pos_data_fields(config_id), load=False) if config_id else [],
             'pos.pack.operation.lot': pos_order_ids.lines.pack_lot_ids.read(pos_order_ids.lines.pack_lot_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
@@ -1278,6 +1266,7 @@ class PosOrder(models.Model):
 
 
 class PosOrderLine(models.Model):
+    _name = 'pos.order.line'
     _description = "Point of Sale Order Lines"
     _rec_name = "product_id"
     _inherit = ['pos.load.mixin']
@@ -1331,7 +1320,7 @@ class PosOrderLine(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('order_id', 'in', [order['id'] for order in data['pos.order']['data']])]
+        return [('order_id', 'in', [order['id'] for order in data['pos.order']])]
 
     @api.model
     def _load_pos_data_fields(self, config_id):
@@ -1577,8 +1566,12 @@ class PosOrderLine(models.Model):
     @api.depends('price_subtotal', 'total_cost')
     def _compute_margin(self):
         for line in self:
-            line.margin = line.price_subtotal - line.total_cost
-            line.margin_percent = not float_is_zero(line.price_subtotal, precision_rounding=line.currency_id.rounding) and line.margin / line.price_subtotal or 0
+            if line.product_id.type == 'combo':
+                line.margin = 0
+                line.margin_percent = 0
+            else:
+                line.margin = line.price_subtotal - line.total_cost
+                line.margin_percent = not float_is_zero(line.price_subtotal, precision_rounding=line.currency_id.rounding) and line.margin / line.price_subtotal or 0
 
     def _prepare_tax_base_line_values(self):
         """ Convert pos order lines into dictionaries that would be used to compute taxes later.
@@ -1645,6 +1638,7 @@ class PosOrderLine(models.Model):
 
 
 class PosPackOperationLot(models.Model):
+    _name = 'pos.pack.operation.lot'
     _description = "Specify product lot/serial number in pos order line"
     _rec_name = "lot_name"
     _inherit = ['pos.load.mixin']
@@ -1656,7 +1650,7 @@ class PosPackOperationLot(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('pos_order_line_id', 'in', [line['id'] for line in data['pos.order.line']['data']])]
+        return [('pos_order_line_id', 'in', [line['id'] for line in data['pos.order.line']])]
 
     @api.model
     def _load_pos_data_fields(self, config_id):
@@ -1664,6 +1658,7 @@ class PosPackOperationLot(models.Model):
 
 
 class AccountCashRounding(models.Model):
+    _name = 'account.cash.rounding'
     _inherit = ['account.cash.rounding', 'pos.load.mixin']
 
     @api.constrains('rounding', 'rounding_method', 'strategy')
@@ -1675,7 +1670,7 @@ class AccountCashRounding(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('id', '=', data['pos.config']['data'][0]['rounding_method'])]
+        return [('id', '=', data['pos.config'][0]['rounding_method'])]
 
     @api.model
     def _load_pos_data_fields(self, config_id):

@@ -1,6 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 from datetime import date, timedelta
 
+from odoo import Command
 from odoo.addons.hr_holidays.tests.common import TestHrHolidaysCommon
 
 
@@ -16,7 +17,7 @@ class TestHolidaysFlow(TestHrHolidaysCommon):
         cls.departure_wizard = cls.env['hr.departure.wizard'].create({
             'departure_reason_id': departure_reason.id,
             'departure_date': cls.departure_date,
-            'employee_id': cls.employee.id,
+            'employee_ids': [Command.link(cls.employee.id)],
         })
         cls.leave_type = cls.env['hr.leave.type'].create({
             'name': 'Paid Time Off',
@@ -81,7 +82,7 @@ class TestHolidaysFlow(TestHrHolidaysCommon):
             'state': 'confirm',
             'date_from': self.departure_date + timedelta(days=-10),
             'date_to': self.departure_date,
-        }]).action_validate()
+        }]).action_approve()
         self._check_action_departure()
 
     def test_departure_allocation_after_departure_date(self):
@@ -93,7 +94,7 @@ class TestHolidaysFlow(TestHrHolidaysCommon):
             'state': 'confirm',
             'date_from': self.departure_date + timedelta(days=1),
             'date_to': self.departure_date + timedelta(days=10),
-        }]).action_validate()
+        }]).action_approve()
         self._check_action_departure()
 
     def test_departure_allocation_with_departure_date(self):
@@ -106,7 +107,7 @@ class TestHolidaysFlow(TestHrHolidaysCommon):
             'date_from': self.departure_date + timedelta(days=-10),
             'date_to': self.departure_date + timedelta(days=10),
         }])
-        allocation.action_validate()
+        allocation.action_approve()
         self._check_action_departure()
 
         allocation_msg = '<p>Validity End date has been updated because the employee will leave the company on %(departure_date)s.</p>' % {

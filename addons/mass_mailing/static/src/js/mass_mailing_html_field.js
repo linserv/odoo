@@ -143,7 +143,11 @@ export class MassMailingHtmlField extends HtmlField {
             const $editable = this.wysiwyg.getEditable();
             this.wysiwyg.odooEditor.historyPauseSteps();
             await this.wysiwyg.cleanForSave();
-            await super.commitChanges(...args);
+            if (args.length) {
+                await super.commitChanges({ ...args[0], urgent: true });
+            } else {
+                await super.commitChanges({ urgent: true });
+            }
 
             const $editorEnable = $editable.closest('.editor_enable');
             $editorEnable.removeClass('editor_enable');
@@ -207,7 +211,7 @@ export class MassMailingHtmlField extends HtmlField {
      * @private
      */
     _updateIframe() {
-        const iframe = this.wysiwyg.$iframe[0];
+        const iframe = this.wysiwyg?.$iframe?.[0];
         if (!iframe || !iframe.contentDocument) {
             return;
         }
@@ -271,7 +275,17 @@ export class MassMailingHtmlField extends HtmlField {
         const sidebar = document.querySelector("#oe_snippets");
         if (!sidebar) {
             return;
-        } else if (!this._isFullScreen()) {
+        } else if (this._isFullScreen()) {
+            sidebar.style.height = "";
+            sidebar.style.top = "0";
+        } else if (this.env.inDialog) {
+            const scrollableY = closestScrollableY(sidebar);
+            if (scrollableY) {
+                const rect = scrollableY.getBoundingClientRect();
+                sidebar.style.height = `${rect.height}px`;
+                sidebar.style.top = "0";
+            }
+        } else {
             const scrollableY = closestScrollableY(sidebar);
             const top = scrollableY
                 ? `${-1 * (parseInt(getComputedStyle(scrollableY).paddingTop) || 0)}px`
@@ -280,9 +294,6 @@ export class MassMailingHtmlField extends HtmlField {
             const offsetHeight = window.innerHeight - document.querySelector(".o_content").getBoundingClientRect().y;
             sidebar.style.height = `${Math.min(maxHeight, offsetHeight)}px`;
             sidebar.style.top = top;
-        } else {
-            sidebar.style.height = "";
-            sidebar.style.top = "0";
         }
     }
 
@@ -440,8 +451,6 @@ export class MassMailingHtmlField extends HtmlField {
 
             const isSnippetsFolded = uiUtils.isSmall() || themeName === 'basic';
             this.wysiwyg.setSnippetsMenuFolded(isSnippetsFolded);
-            // Inform the iframe content of the snippets menu visibility
-            this.wysiwyg.$iframeBody.closest('body').toggleClass("has_snippets_sidebar", !isSnippetsFolded);
 
             const $editable = this.wysiwyg.$editable.find('.o_editable');
             this.$editorMessageElements = $editable

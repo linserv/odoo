@@ -1,5 +1,5 @@
 import { Component } from "@odoo/owl";
-import { useSelfOrder } from "@pos_self_order/app/self_order_service";
+import { useSelfOrder } from "@pos_self_order/app/services/self_order_service";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
 import { CancelPopup } from "@pos_self_order/app/components/cancel_popup/cancel_popup";
@@ -69,7 +69,7 @@ export class OrderWidget extends Component {
                 if (value.qty && value.qty > 0) {
                     const line = this.selfOrder.models["pos.order.line"].getBy("uuid", key);
                     acc.count += value.qty;
-                    acc.price += line.get_display_price();
+                    acc.price += line.getDisplayPrice();
                 }
                 return acc;
             },

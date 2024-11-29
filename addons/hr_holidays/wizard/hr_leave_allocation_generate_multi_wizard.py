@@ -5,6 +5,7 @@ from odoo.addons.resource.models.utils import HOURS_PER_DAY
 
 
 class HrLeaveAllocationGenerateMultiWizard(models.TransientModel):
+    _name = 'hr.leave.allocation.generate.multi.wizard'
     _description = 'Generate time off allocations for multiple employees'
 
     name = fields.Char("Description", compute="_compute_name", store=True, readonly=False)
@@ -93,7 +94,7 @@ class HrLeaveAllocationGenerateMultiWizard(models.TransientModel):
                 mail_notify_force_send=False,
                 mail_activity_automation_skip=True
             ).create(vals_list)
-            allocations.filtered(lambda c: c.validation_type != 'no_validation').action_validate()
+            allocations.filtered(lambda c: c.validation_type != 'no_validation').action_approve()
 
             return {
                 'type': 'ir.actions.act_window',

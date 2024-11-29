@@ -20,6 +20,7 @@ except ImportError:
 
 
 class ResCurrency(models.Model):
+    _name = 'res.currency'
     _description = "Currency"
     _rec_names_search = ['name', 'full_name']
     _order = 'active desc, name'
@@ -47,10 +48,14 @@ class ResCurrency(models.Model):
     currency_subunit_label = fields.Char(string="Currency Subunit", translate=True)
     is_current_company_currency = fields.Boolean(compute='_compute_is_current_company_currency')
 
-    _sql_constraints = [
-        ('unique_name', 'unique (name)', 'The currency code must be unique!'),
-        ('rounding_gt_zero', 'CHECK (rounding>0)', 'The rounding factor must be greater than 0!')
-    ]
+    _unique_name = models.Constraint(
+        'unique (name)',
+        "The currency code must be unique!",
+    )
+    _rounding_gt_zero = models.Constraint(
+        'CHECK (rounding>0)',
+        "The rounding factor must be greater than 0!",
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -327,9 +332,11 @@ class ResCurrency(models.Model):
 
 
 class ResCurrencyRate(models.Model):
+    _name = 'res.currency.rate'
     _description = "Currency Rate"
     _rec_names_search = ['name', 'rate']
     _order = "name desc"
+    _check_company_domain = models.check_company_domain_parent_of
 
     name = fields.Date(string='Date', required=True, index=True,
                            default=fields.Date.context_today)
@@ -357,10 +364,14 @@ class ResCurrencyRate(models.Model):
     company_id = fields.Many2one('res.company', string='Company',
                                  default=lambda self: self.env.company.root_id)
 
-    _sql_constraints = [
-        ('unique_name_per_day', 'unique (name,currency_id,company_id)', 'Only one currency rate per day allowed!'),
-        ('currency_rate_check', 'CHECK (rate>0)', 'The currency rate must be strictly positive.'),
-    ]
+    _unique_name_per_day = models.Constraint(
+        'unique (name,currency_id,company_id)',
+        "Only one currency rate per day allowed!",
+    )
+    _currency_rate_check = models.Constraint(
+        'CHECK (rate>0)',
+        "The currency rate must be strictly positive.",
+    )
 
     def _sanitize_vals(self, vals):
         if 'inverse_company_rate' in vals and ('company_rate' in vals or 'rate' in vals):
@@ -451,7 +462,7 @@ class ResCurrencyRate(models.Model):
     def _check_company_id(self):
         for rate in self:
             if rate.company_id.parent_id:
-                raise ValidationError("Currency rates should only be created for main companies")
+                raise ValidationError(self.env._("Currency rates should only be created for main companies"))
 
     @api.model
     def _search_display_name(self, operator, value):

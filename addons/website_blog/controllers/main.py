@@ -102,13 +102,7 @@ class WebsiteBlog(http.Controller):
         else:
             domain += [("post_date", "<=", fields.Datetime.now())]
 
-        use_cover = request.website.is_view_active('website_blog.opt_blog_cover_post')
-        fullwidth_cover = request.website.is_view_active('website_blog.opt_blog_cover_post_fullwidth_design')
-
-        # if blog, we show blog title, if use_cover and not fullwidth_cover we need pager + latest always
         offset = (page - 1) * self._blog_post_per_page
-        if not blog and use_cover and not fullwidth_cover and not tags and not date_begin and not date_end and not search:
-            offset += 1
 
         options = self._get_blog_post_search_options(
             blog=blog,
@@ -181,7 +175,7 @@ class WebsiteBlog(http.Controller):
     ], type='http', auth="public", website=True, sitemap=True)
     def blog(self, blog=None, tag=None, page=1, search=None, **opt):
         Blog = request.env['blog.blog']
-        blogs = tools.lazy(lambda: Blog.search(request.website.website_domain(), order="create_date asc, id asc"))
+        blogs = tools.lazy(lambda: Blog.search(request.website.website_domain(), order="sequence"))
 
         if not blog and len(blogs) == 1:
             url = QueryURL('/blog/%s' % request.env['ir.http']._slug(blogs[0]), search=search, **opt)()
@@ -246,7 +240,7 @@ class WebsiteBlog(http.Controller):
         date_begin, date_end = post.get('date_begin'), post.get('date_end')
 
         domain = request.website.website_domain()
-        blogs = blog.search(domain, order="create_date, id asc")
+        blogs = blog.search(domain, order="sequence")
 
         tag = None
         if tag_id:

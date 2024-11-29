@@ -8,6 +8,7 @@ from .diff_utils import apply_patch, generate_comparison, generate_patch
 
 
 class HtmlFieldHistoryMixin(models.AbstractModel):
+    _name = 'html.field.history.mixin'
     _description = "Field html History"
     _html_field_history_size_limit = 300
 
@@ -51,7 +52,7 @@ class HtmlFieldHistoryMixin(models.AbstractModel):
             fields_data = self.env[self._name]._fields
 
             if any(f in vals and not fields_data[f].sanitize for f in versioned_fields):
-                raise ValidationError(
+                raise ValidationError(  # pylint: disable=missing-gettext
                     "Ensure all versioned fields ( %s ) in model %s are declared as sanitize=True"
                     % (str(versioned_fields), self._name)
                 )

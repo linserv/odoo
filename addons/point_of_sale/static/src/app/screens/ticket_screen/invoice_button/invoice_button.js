@@ -3,7 +3,7 @@ import { useService } from "@web/core/utils/hooks";
 import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { Component } from "@odoo/owl";
-import { ask, makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { ask, makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { PartnerList } from "../../partner_list/partner_list";
 
 export class InvoiceButton extends Component {
@@ -73,7 +73,7 @@ export class InvoiceButton extends Component {
 
         // Part 1: Handle missing partner.
         // Write to pos.order the selected partner.
-        let partner = order.get_partner();
+        let partner = order.getPartner();
         if (!partner) {
             const _confirmed = await ask(this.dialog, {
                 title: _t("Need customer to invoice"),

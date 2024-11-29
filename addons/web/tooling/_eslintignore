@@ -13,14 +13,21 @@ addons/*
 !web_enterprise
 !web_enterprise/**/*
 
+# Whitelist web_mobile
+!web_mobile
+!web_mobile/**/*
+
 # Whitelist web_studio
 !web_studio
 !web_studio/**/*
 
-# BlackList libs except HOOT
+# BlackList libs
 addons/web/static/lib/**/*
+
+# Whitelist Hoot (but not its libs)
 !addons/web/static/lib/hoot
 !addons/web/static/lib/hoot/**/*
+addons/web/static/lib/hoot/lib/**/*
 
 # Ignore everything in web legacy but the top level (adapters)
 addons/web/static/src/legacy/**/*
@@ -222,6 +229,10 @@ addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js
 !stock_barcode_quality_control_picking_batch/**/*
 !stock_barcode_quality_mrp
 !stock_barcode_quality_mrp/**/*
+
+# Whitelist Brazilian eCommerce adaptations
+!addons/l10n_br_website_sale
+!addons/l10n_br_website_sale/**/*
 
 # Whitelist point_of_sale
 !addons/point_of_sale

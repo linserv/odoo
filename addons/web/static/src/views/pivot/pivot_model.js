@@ -3,7 +3,7 @@ import { Domain } from "@web/core/domain";
 import { cartesian, sections, sortBy, symmetricalDifference } from "@web/core/utils/arrays";
 import { KeepLast, Race } from "@web/core/utils/concurrency";
 import { DEFAULT_INTERVAL } from "@web/search/utils/dates";
-import { Model } from "@web/model/model";
+import { addPropertyFieldDefs, Model } from "@web/model/model";
 import { computeReportMeasures, processMeasure } from "@web/views/utils";
 
 /**
@@ -732,6 +732,13 @@ export class PivotModel extends Model {
             ...allActivesMeasures,
         ]);
         const config = { metaData, data: this.data };
+        await addPropertyFieldDefs(
+            this.orm,
+            metaData.resModel,
+            searchParams.context,
+            metaData.fields,
+            new Set([...metaData.rowGroupBys, ...metaData.colGroupBys])
+        );
         return this._loadData(config);
     }
     /**
@@ -832,14 +839,8 @@ export class PivotModel extends Model {
         metaData.customGroupBys = new Map([...metaData.customGroupBys]);
         // shallow copy sortedColumn because we never modify groupId in place
         metaData.sortedColumn = metaData.sortedColumn ? { ...metaData.sortedColumn } : null;
-        if (this.searchParams.comparison) {
-            const domains = this.searchParams.comparison.domains.slice().reverse();
-            metaData.domains = domains.map((d) => d.arrayRepr);
-            metaData.origins = domains.map((d) => d.description);
-        } else {
-            metaData.domains = [this.searchParams.domain];
-            metaData.origins = [""];
-        }
+        metaData.domains = [this.searchParams.domain];
+        metaData.origins = [""];
         Object.defineProperty(metaData, "fullColGroupBys", {
             get() {
                 return metaData.colGroupBys.concat(metaData.expandedColGroupBys);

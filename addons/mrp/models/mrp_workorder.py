@@ -11,6 +11,7 @@ from odoo.tools import float_compare, format_datetime, float_is_zero, float_roun
 
 
 class MrpWorkorder(models.Model):
+    _name = 'mrp.workorder'
     _description = 'Work Order'
     _order = 'sequence, leave_id, date_start, id'
 
@@ -151,10 +152,6 @@ class MrpWorkorder(models.Model):
 
     @api.depends('production_availability', 'blocked_by_workorder_ids.state', 'qty_ready')
     def _compute_state(self):
-        # Force to compute the production_availability right away.
-        # It is a trick to force that the state of workorder is computed at the end of the
-        # cyclic depends with the mo.state, mo.reservation_state and wo.state and avoid recursion error
-        self.mapped('production_availability')
         for workorder in self:
             if workorder.state not in ('pending', 'waiting', 'ready'):
                 continue
@@ -427,9 +424,10 @@ class MrpWorkorder(models.Model):
         if self.date_start and self.workcenter_id:
             self.date_finished = self._calculate_date_finished()
 
-    def _calculate_date_finished(self, date_finished=False):
-        return self.workcenter_id.resource_calendar_id.plan_hours(
-            self.duration_expected / 60.0, date_finished or self.date_start,
+    def _calculate_date_finished(self, date_start=False, new_workcenter=False):
+        workcenter = new_workcenter or self.workcenter_id
+        return workcenter.resource_calendar_id.plan_hours(
+            self.duration_expected / 60.0, date_start or self.date_start,
             compute_leaves=True, domain=[('time_type', 'in', ['leave', 'other'])]
         )
 
@@ -456,6 +454,7 @@ class MrpWorkorder(models.Model):
                 return res
 
     def write(self, values):
+        new_workcenter = False
         if 'qty_produced' in values:
             if any(w.state in ['done', 'cancel'] for w in self):
                 raise UserError(_('You cannot change the quantity produced of a work order that is in done or cancel state.'))
@@ -467,14 +466,15 @@ class MrpWorkorder(models.Model):
         if 'production_id' in values and any(values['production_id'] != w.production_id.id for w in self):
             raise UserError(_('You cannot link this work order to another manufacturing order.'))
         if 'workcenter_id' in values:
+            new_workcenter = self.env['mrp.workcenter'].browse(values['workcenter_id'])
             for workorder in self:
                 if workorder.workcenter_id.id != values['workcenter_id']:
                     if workorder.state in ('progress', 'done', 'cancel'):
                         raise UserError(_('You cannot change the workcenter of a work order that is in progress or done.'))
-                    workorder.leave_id.resource_id = self.env['mrp.workcenter'].browse(values['workcenter_id']).resource_id
+                    workorder.leave_id.resource_id = new_workcenter.resource_id
                     workorder.duration_expected = workorder._get_duration_expected()
                     if workorder.date_start:
-                        workorder.date_finished = workorder._calculate_date_finished()
+                        workorder.date_finished = workorder._calculate_date_finished(new_workcenter=new_workcenter)
         if 'date_start' in values or 'date_finished' in values:
             for workorder in self:
                 date_start = fields.Datetime.to_datetime(values.get('date_start', workorder.date_start))
@@ -483,7 +483,7 @@ class MrpWorkorder(models.Model):
                     raise UserError(_('The planned end date of the work order cannot be prior to the planned start date, please correct this to save the work order.'))
                 if 'duration_expected' not in values and not self.env.context.get('bypass_duration_calculation'):
                     if values.get('date_start') and values.get('date_finished'):
-                        computed_finished_time = workorder._calculate_date_finished(date_start)
+                        computed_finished_time = workorder._calculate_date_finished(date_start=date_start, new_workcenter=new_workcenter)
                         values['date_finished'] = computed_finished_time
                     elif date_start and date_finished:
                         computed_duration = workorder._calculate_duration_expected(date_start=date_start, date_finished=date_finished)
@@ -603,7 +603,7 @@ class MrpWorkorder(models.Model):
         total = 0
         for wo in self:
             if date:
-                duration = sum(wo.time_ids.filtered(lambda t: t.date_end <= date).mapped('duration'))
+                duration = sum(wo.time_ids.filtered(lambda t: t.date_end and t.date_end <= date).mapped('duration'))
             else:
                 duration = sum(wo.time_ids.mapped('duration'))
             total += (duration / 60.0) * wo.workcenter_id.costs_hour

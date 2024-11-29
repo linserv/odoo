@@ -32,13 +32,13 @@ def get_cloud_storage_google_credential(env):
 
 
 class IrAttachment(models.Model):
-    _inherit = ['ir.attachment']
+    _inherit = 'ir.attachment'
     _cloud_storage_google_url_pattern = re.compile(r'https://storage\.googleapis\.com/(?P<bucket_name>[\w\-.]+)/(?P<blob_name>[^?]+)')
 
     def _get_cloud_storage_google_info(self):
         match = self._cloud_storage_google_url_pattern.match(self.url)
         if not match:
-            raise ValidationError('%s is not a valid Google Cloud Storage URL.', self.url)
+            raise ValidationError(self.env._('%s is not a valid Google Cloud Storage URL.', self.url))
         return {
             'bucket_name': match['bucket_name'],
             'blob_name': unquote(match['blob_name']),

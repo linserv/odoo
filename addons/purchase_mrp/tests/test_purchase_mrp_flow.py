@@ -158,6 +158,7 @@ class TestPurchaseMrpFlow(AccountTestInvoicingCommon):
         p = Form(cls.env['product.product'])
         p.name = name
         p.is_storable = True
+        p.categ_id = cls.env.ref('product.product_category_goods')
         p.uom_id = uom_id
         p.uom_po_id = uom_id
         p.route_ids.clear()
@@ -569,7 +570,7 @@ class TestPurchaseMrpFlow(AccountTestInvoicingCommon):
         # Create a PO with one unit of the kit product
         self.po = self.env['purchase.order'].create({
             'partner_id': self.partner.id,
-            'order_line': [(0, 0, {'name': self.kit_1.name, 'product_id': self.kit_1.id, 'product_qty': 1, 'product_uom': self.kit_1.uom_id.id, 'price_unit': 60.0, 'date_planned': fields.Datetime.now()})],
+            'order_line': [(0, 0, {'name': self.kit_1.name, 'product_id': self.kit_1.id, 'product_qty': 1, 'product_uom_id': self.kit_1.uom_id.id, 'price_unit': 60.0, 'date_planned': fields.Datetime.now()})],
         })
         # Validate the PO
         self.po.button_confirm()
@@ -1096,7 +1097,7 @@ class TestPurchaseMrpFlow(AccountTestInvoicingCommon):
         with po_form.order_line.new() as pol_form:
             pol_form.product_id = kit
             pol_form.product_qty = 30
-            pol_form.product_uom = self.uom_kg
+            pol_form.product_uom_id = self.uom_kg
             pol_form.price_unit = 90000
             pol_form.taxes_id.clear()
         po = po_form.save()

@@ -1,4 +1,4 @@
-import { waitUntilSubscribe } from "@bus/../tests/bus_test_helpers";
+import { waitNotifications, waitUntilSubscribe } from "@bus/../tests/bus_test_helpers";
 import {
     defineLivechatModels,
     loadDefaultEmbedConfig,
@@ -24,6 +24,7 @@ import {
 
 import { LivechatButton } from "@im_livechat/embed/common/livechat_button";
 import { rpc } from "@web/core/network/rpc";
+import { queryFirst } from "@odoo/hoot-dom";
 
 describe.current.tags("desktop");
 defineLivechatModels();
@@ -76,11 +77,11 @@ test("Fold state is saved on the server", async () => {
     await click(".o-mail-ChatBubble");
 });
 
-test("Seen message is saved on the server [REQUIRE FOCUS]", async () => {
+test.tags("focus required")("Seen message is saved on the server", async () => {
     const pyEnv = await startServer();
     await loadDefaultEmbedConfig();
     const userId = serverState.userId;
-    await start({ authenticateAs: false });
+    const env = await start({ authenticateAs: false });
     await mountWithCleanup(LivechatButton);
     await click(".o-livechat-LivechatButton");
     await contains(".o-mail-Thread");
@@ -90,7 +91,7 @@ test("Seen message is saved on the server [REQUIRE FOCUS]", async () => {
     await waitUntilSubscribe();
     const initialSeenMessageId =
         getService("im_livechat.livechat").thread.selfMember.seen_message_id?.id;
-    $(".o-mail-Composer-input").blur();
+    queryFirst(".o-mail-Composer-input").blur();
     await withUser(userId, () =>
         rpc("/mail/message/post", {
             post_data: {
@@ -111,6 +112,7 @@ test("Seen message is saved on the server [REQUIRE FOCUS]", async () => {
         ["guest_id", "=", guestId],
         ["channel_id", "=", getService("im_livechat.livechat").thread.id],
     ]);
+    await waitNotifications([env, "mail.record/insert"]);
     expect(initialSeenMessageId).not.toBe(member.seen_message_id[0]);
     expect(getService("im_livechat.livechat").thread.selfMember.seen_message_id.id).toBe(
         member.seen_message_id[0]

@@ -6,6 +6,7 @@ from odoo.tools import split_every
 
 
 class AccountTax(models.Model):
+    _name = 'account.tax'
     _inherit = ['account.tax', 'pos.load.mixin']
 
     def write(self, vals):
@@ -52,7 +53,7 @@ class AccountTax(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return self.env['account.tax']._check_company_domain(data['pos.config']['data'][0]['company_id'])
+        return self.env['account.tax']._check_company_domain(data['pos.config'][0]['company_id'])
 
     @api.model
     def _load_pos_data_fields(self, config_id):

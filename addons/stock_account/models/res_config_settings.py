@@ -5,7 +5,7 @@ from odoo import fields, models
 
 
 class ResConfigSettings(models.TransientModel):
-    _inherit = ['res.config.settings']
+    _inherit = 'res.config.settings'
 
     module_stock_landed_costs = fields.Boolean("Landed Costs",
         help="Affect landed costs on reception operations and split them among products to update their cost price.")
@@ -17,6 +17,6 @@ class ResConfigSettings(models.TransientModel):
     def set_values(self):
         automatic_before = self.env.user.has_group('stock_account.group_stock_accounting_automatic')
         super().set_values()
-        if automatic_before and not self.group_stock_accounting_automatic:
+        if automatic_before and not self.env.user.has_group('stock_account.group_stock_accounting_automatic'):
             self.env['product.category'].sudo().with_context(active_test=False).search([
                 ('property_valuation', '=', 'real_time')]).property_valuation = 'manual_periodic'

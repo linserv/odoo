@@ -18,6 +18,7 @@ SPLIT_METHOD = [
 
 
 class StockLandedCost(models.Model):
+    _name = 'stock.landed.cost'
     _description = 'Stock Landed Cost'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'date desc, id desc'
@@ -126,7 +127,8 @@ class StockLandedCost(models.Model):
                 linked_layer = line.move_id._get_stock_valuation_layer_ids()
 
                 # Prorate the value at what's still in stock
-                cost_to_add = (remaining_qty / line.move_id.quantity) * line.additional_landed_cost
+                move_qty = line.move_id.product_uom._compute_quantity(line.move_id.quantity, line.move_id.product_id.uom_id)
+                cost_to_add = (remaining_qty / move_qty) * line.additional_landed_cost
                 product = line.move_id.product_id
                 if not cost.company_id.currency_id.is_zero(cost_to_add):
                     vals_list = []
@@ -338,6 +340,7 @@ class StockLandedCost(models.Model):
 
 
 class StockLandedCostLines(models.Model):
+    _name = 'stock.landed.cost.lines'
     _description = 'Stock Landed Cost Line'
 
     name = fields.Char('Description')
@@ -368,6 +371,7 @@ class StockLandedCostLines(models.Model):
 
 
 class StockValuationAdjustmentLines(models.Model):
+    _name = 'stock.valuation.adjustment.lines'
     _description = 'Valuation Adjustment Lines'
 
     name = fields.Char(
@@ -418,7 +422,7 @@ class StockValuationAdjustmentLines(models.Model):
         if self.move_id._is_dropshipped():
             debit_account_id = accounts.get('expense') and accounts['expense'].id or False
         already_out_account_id = accounts['stock_output'].id
-        credit_account_id = self.cost_line_id.account_id.id or cost_product.categ_id.property_stock_account_input_categ_id.id
+        credit_account_id = self.cost_line_id.account_id.id or cost_product._get_product_accounts()['stock_input'].id
 
         if not credit_account_id:
             raise UserError(_('Please configure Stock Expense Account for product: %s.', cost_product.name))

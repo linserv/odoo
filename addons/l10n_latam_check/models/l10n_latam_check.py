@@ -12,6 +12,7 @@ _logger = logging.getLogger(__name__)
 
 
 class L10n_LatamCheck(models.Model):
+    _name = 'l10n_latam.check'
     _description = 'Account payment check'
     _check_company_auto = True
     _inherit = ['mail.thread', 'mail.activity.mixin']
@@ -60,15 +61,8 @@ class L10n_LatamCheck(models.Model):
         store=True,
     )
 
-    def _auto_init(self):
-        super()._auto_init()
-        if not index_exists(self.env.cr, 'l10n_latam_check_unique'):
-            # issue_state is used to know that is an own check and also that is posted
-            self.env.cr.execute("""
-                CREATE UNIQUE INDEX l10n_latam_check_unique
-                    ON l10n_latam_check(name, payment_method_line_id)
-                WHERE outstanding_line_id IS NOT NULL
-            """)
+    # issue_state is used to know that is an own check and also that is posted
+    _unique = models.UniqueIndex("(name, payment_method_line_id) WHERE outstanding_line_id IS NOT NULL")
 
     @api.onchange('name')
     def _onchange_name(self):
@@ -217,4 +211,4 @@ class L10n_LatamCheck(models.Model):
     @api.ondelete(at_uninstall=False)
     def _unlink_if_payment_is_draft(self):
         if any(check.payment_id.state != 'draft' for check in self):
-            raise UserError("Can't delete a check if payment is In Process!")
+            raise UserError(self.env._("Can't delete a check if payment is In Process!"))

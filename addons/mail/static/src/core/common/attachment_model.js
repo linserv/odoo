@@ -24,9 +24,9 @@ export class Attachment extends FileModelMixin(Record) {
     static new() {
         /** @type {import("models").Attachment} */
         const attachment = super.new(...arguments);
-        Record.onChange(attachment, ["extension", "filename"], () => {
-            if (!attachment.extension && attachment.filename) {
-                attachment.extension = attachment.filename.split(".").pop();
+        Record.onChange(attachment, ["extension", "name"], () => {
+            if (!attachment.extension && attachment.name) {
+                attachment.extension = attachment.name.split(".").pop();
             }
         });
         return attachment;
@@ -37,7 +37,7 @@ export class Attachment extends FileModelMixin(Record) {
     message = Record.one("mail.message", { inverse: "attachment_ids" });
     /** @type {luxon.DateTime} */
     create_date = Record.attr(undefined, { type: "datetime" });
-    /** @type {string} */
+    /** @type {'binary'|'url'} */
     type;
     /** @type {string} */
     url;

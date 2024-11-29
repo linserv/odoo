@@ -6,7 +6,7 @@ from unittest.mock import patch
 from odoo import Command
 
 from odoo.tools import DEFAULT_SERVER_DATE_FORMAT
-from odoo.tests import loaded_demo_data, tagged
+from odoo.tests import tagged
 from odoo.addons.account.tests.common import AccountTestInvoicingHttpCommon
 from odoo.addons.point_of_sale.tests.common_setup_methods import setup_product_combo_items
 from datetime import date, timedelta
@@ -169,6 +169,7 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
             'available_in_pos': True,
             'list_price': 4.80,
             'taxes_id': False,
+            'categ_id': env.ref('product.product_category_services').id,
             'pos_categ_ids': [(4, pos_cat_chair_test.id)],
         })
         cls.desk_organizer = env['product.template'].create({
@@ -372,7 +373,7 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
 
         product_category_3 = env['product.category'].create({
             'name': 'Services',
-            'parent_id': env.ref('product.product_category_1').id,
+            'parent_id': env.ref('product.product_category_services').id,
         })
 
         env['product.pricelist'].create({
@@ -382,7 +383,7 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
                 'compute_price': 'fixed',
                 'fixed_price': 1,
                 'applied_on': '2_product_category',
-                'categ_id': product_category_3.id,  # All / Saleable / Services
+                'categ_id': product_category_3.id,
             }), (0, 0, {
                 'compute_price': 'fixed',
                 'fixed_price': 2,
@@ -395,12 +396,12 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
                 'compute_price': 'fixed',
                 'fixed_price': 2,
                 'applied_on': '2_product_category',
-                'categ_id': env.ref('product.product_category_all').id,
+                'categ_id': env.ref('product.product_category_services').id,
             }), (0, 0, {
                 'compute_price': 'fixed',
                 'fixed_price': 1,
                 'applied_on': '2_product_category',
-                'categ_id': product_category_3.id,  # All / Saleable / Services
+                'categ_id': product_category_3.id,
             })],
         })
 
@@ -520,9 +521,24 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
         })
 
         # Set customers
-        cls.partner_test_1 = cls.env['res.partner'].create({'name': 'Partner Test 1'})
-        cls.partner_test_2 = cls.env['res.partner'].create({'name': 'Partner Test 2'})
-        cls.partner_test_3 = cls.env['res.partner'].create({'name': 'Partner Test 3'})
+        partners = cls.env['res.partner'].create([
+            {'name': 'Partner Test 1'},
+            {'name': 'Partner Test 2'},
+            {'name': 'Partner Test 3'},
+            {
+                'name': 'Partner Full',
+                'email': 'partner.full@example.com',
+                'street': '77 Santa Barbara Rd',
+                'city': 'Pleasant Hill',
+                'state_id': cls.env.ref('base.state_us_5').id,
+                'zip': '94523',
+                'country_id': cls.env.ref('base.us').id,
+            }
+        ])
+        cls.partner_test_1 = partners[0]
+        cls.partner_test_2 = partners[1]
+        cls.partner_test_3 = partners[2]
+        cls.partner_full = partners[3]
 
         # Change the default sale pricelist of customers,
         # so the js tests can expect deterministically this pricelist when selecting a customer.
@@ -533,11 +549,6 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
 @tagged('post_install', '-at_install')
 class TestUi(TestPointOfSaleHttpCommon):
     def test_01_pos_basic_order(self):
-        if not loaded_demo_data(self.env):
-            _logger.warning("This test relies on demo data. To be rewritten independently of demo data for accurate and reliable results.")
-            return
-
-        # Verify that the tip product is not taxable
         self.tip.write({
             'taxes_id': False
         })
@@ -545,6 +556,11 @@ class TestUi(TestPointOfSaleHttpCommon):
             'iface_tipproduct': True,
             'tip_product_id': self.tip.id,
             'ship_later': True
+        })
+
+        # Mark a product as favorite to check if it is displayed in first position
+        self.whiteboard_pen.write({
+            'is_favorite': True
         })
 
         # open a session, the /pos/ui controller will redirect to it
@@ -572,9 +588,6 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.assertEqual(email_count, 1)
 
     def test_02_pos_with_invoiced(self):
-        if not loaded_demo_data(self.env):
-            _logger.warning("This test relies on demo data. To be rewritten independently of demo data for accurate and reliable results.")
-            return
         self.pos_user.write({
             'groups_id': [
                 (4, self.env.ref('account.group_account_invoice').id),
@@ -605,9 +618,6 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.start_pos_tour('ProductConfiguratorTour')
 
     def test_05_ticket_screen(self):
-        if not loaded_demo_data(self.env):
-            _logger.warning("This test relies on demo data. To be rewritten independently of demo data for accurate and reliable results.")
-            return
         self.pos_user.write({
             'groups_id': [
                 (4, self.env.ref('account.group_account_invoice').id),
@@ -656,6 +666,7 @@ class TestUi(TestPointOfSaleHttpCommon):
             'available_in_pos': True,
             'list_price': 0,
             'taxes_id': [(6, 0, [fixed_tax.id])],
+            'categ_id': self.env.ref('product.product_category_services').id,
         })
 
         # Make an order with the zero-amount product from the frontend.
@@ -675,7 +686,7 @@ class TestUi(TestPointOfSaleHttpCommon):
 
         self.assertEqual(lines[0].account_id, bank_pm.receivable_account_id or self.env.company.account_default_pos_receivable_account_id)
         self.assertAlmostEqual(lines[0].balance, -1)
-        self.assertEqual(lines[1].account_id, zero_amount_product.categ_id.property_account_income_categ_id)
+        self.assertEqual(lines[1].account_id, self.env.company.income_account_id)
         self.assertAlmostEqual(lines[1].balance, 0)
         self.assertEqual(lines[2].account_id, tax_received_account)
         self.assertAlmostEqual(lines[2].balance, 1)
@@ -1151,7 +1162,6 @@ class TestUi(TestPointOfSaleHttpCommon):
             'available_in_pos': True,
             'list_price': 100,
             'taxes_id': [(6, 0, self.tax1.ids)],
-            'categ_id': self.env.ref('product.product_category_all').id,
         })
 
         #add the fiscal position to the PoS
@@ -1169,7 +1179,6 @@ class TestUi(TestPointOfSaleHttpCommon):
             'name': 'Product A',
             'is_storable': True,
             'tracking': 'serial',
-            'categ_id': self.env.ref('product.product_category_all').id,
             'available_in_pos': True,
         })
 
@@ -1181,7 +1190,6 @@ class TestUi(TestPointOfSaleHttpCommon):
             'name': 'Product A',
             'is_storable': True,
             'tracking': 'lot',
-            'categ_id': self.env.ref('product.product_category_all').id,
             'available_in_pos': True,
         })
         self.main_pos_config.with_user(self.pos_user).open_ui()
@@ -1404,10 +1412,10 @@ class TestUi(TestPointOfSaleHttpCommon):
             {
                 "available_in_pos": True,
                 "list_price": 7,
+                "standard_price": 10,
                 "name": "Desk Combo",
                 "type": "combo",
                 "taxes_id": False,
-                "categ_id": self.env.ref("product.product_category_1").id,
                 "combo_ids": [
                     (6, 0, [combo.id for combo in combos])
                 ],
@@ -1416,6 +1424,9 @@ class TestUi(TestPointOfSaleHttpCommon):
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour(f"/pos/ui?config_id={self.main_pos_config.id}", 'ProductComboPriceCheckTour', login="pos_user")
+        order = self.env['pos.order'].search([], limit=1)
+        self.assertEqual(order.lines.filtered(lambda l: l.product_id.type == 'combo').margin, 0)
+        self.assertEqual(order.lines.filtered(lambda l: l.product_id.type == 'combo').margin_percent, 0)
 
     def test_customer_display_as_public(self):
         self.main_pos_config.customer_display_type = 'remote'
@@ -1566,6 +1577,33 @@ class TestUi(TestPointOfSaleHttpCommon):
         })
         self.main_pos_config.with_user(self.pos_admin).open_ui()
         self.start_tour(f"/pos/ui?config_id={self.main_pos_config.id}", 'PosProductWithDynamicAttributes', login="pos_admin")
+
+    def test_autofill_cash_count(self):
+        """Make sure that when the decimal separator is a comma, the shown orderline price is correct.
+        """
+        lang = self.env['res.lang'].search([('code', '=', self.pos_user.lang)])
+        lang.write({'thousands_sep': '.', 'decimal_point': ','})
+        self.env["product.product"].create(
+            {
+                "available_in_pos": True,
+                "list_price": 123456,
+                "name": "Test Expensive",
+                "taxes_id": False
+            }
+        )
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, "AutofillCashCount", login="pos_user")
+
+    def test_lot(self):
+        self.product1 = self.env['product.product'].create({
+            'name': 'Product A',
+            'is_storable': True,
+            'tracking': 'serial',
+            'available_in_pos': True,
+        })
+
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'LotTour', login="pos_user")
 
 
 # This class just runs the same tests as above but with mobile emulation

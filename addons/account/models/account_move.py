@@ -19,7 +19,6 @@ from odoo.addons.account.tools import format_structured_reference_iso
 from odoo.exceptions import UserError, ValidationError, AccessError, RedirectWarning
 from odoo.osv import expression
 from odoo.tools import (
-    create_index,
     date_utils,
     float_compare,
     float_is_zero,
@@ -30,7 +29,6 @@ from odoo.tools import (
     frozendict,
     get_lang,
     groupby,
-    index_exists,
     OrderedSet,
     SQL,
 )
@@ -55,9 +53,9 @@ PAYMENT_STATE_SELECTION = [
 TYPE_REVERSE_MAP = {
     'entry': 'entry',
     'out_invoice': 'out_refund',
-    'out_refund': 'entry',
+    'out_refund': 'out_invoice',
     'in_invoice': 'in_refund',
-    'in_refund': 'entry',
+    'in_refund': 'in_invoice',
     'out_receipt': 'out_refund',
     'in_receipt': 'in_refund',
 }
@@ -77,6 +75,7 @@ EMPTY = object()
 
 
 class AccountMove(models.Model):
+    _name = 'account.move'
     _inherit = ['portal.mixin', 'mail.thread.main.attachment', 'mail.activity.mixin', 'sequence.mixin', 'product.catalog.mixin']
     _description = "Journal Entry"
     _order = 'date desc, name desc, invoice_date desc, id desc'
@@ -575,7 +574,7 @@ class AccountMove(models.Model):
         help='Use this field to encode the total amount of the invoice.\n'
              'Odoo will automatically create one invoice line with default values to match it.',
     )
-    quick_encoding_vals = fields.Binary(compute='_compute_quick_encoding_vals', exportable=False)
+    quick_encoding_vals = fields.Json(compute='_compute_quick_encoding_vals', exportable=False)
 
     # === Misc Information === #
     narration = fields.Html(
@@ -694,46 +693,20 @@ class AccountMove(models.Model):
         search='_search_next_payment_date',
     )
 
-    _sql_constraints = [(
-        'unique_name', "", "Another entry with the same name already exists.",
-    )]
+    _checked_idx = models.Index("(journal_id) WHERE (checked IS NOT TRUE)")
+    _payment_idx = models.Index("(journal_id, state, payment_state, move_type, date)")
+    _unique_name = models.UniqueIndex(
+        "(name, journal_id) WHERE (state = 'posted'AND name != '/')",
+        "Another entry with the same name already exists.",
+    )
+    _journal_id_company_id_idx = models.Index('(journal_id, company_id, date)')
+    # used in <account.journal>._query_has_sequence_holes
+    _made_gaps = models.Index('(journal_id, state, payment_state, move_type, date) WHERE (made_sequence_gap IS TRUE)')
 
     def _auto_init(self):
         super()._auto_init()
-        if not index_exists(self.env.cr, 'account_move_checked_idx'):
-            self.env.cr.execute("""
-                CREATE INDEX account_move_checked_idx
-                          ON account_move(journal_id)
-                       WHERE checked = false
-            """)
-        if not index_exists(self.env.cr, 'account_move_payment_idx'):
-            self.env.cr.execute("""
-                CREATE INDEX account_move_payment_idx
-                          ON account_move(journal_id, state, payment_state, move_type, date)
-            """)
-        if not index_exists(self.env.cr, 'account_move_unique_name'):
-            self.env.cr.execute("""
-                CREATE UNIQUE INDEX account_move_unique_name
-                                 ON account_move(name, journal_id)
-                              WHERE (state = 'posted' AND name != '/')
-            """)
-
         if not column_exists(self.env.cr, "account_move", "preferred_payment_method_line_id"):
             create_column(self.env.cr, "account_move", "preferred_payment_method_line_id", "int4")
-
-    def init(self):
-        super().init()
-        create_index(self.env.cr,
-                     indexname='account_move_journal_id_company_id_idx',
-                     tablename='account_move',
-                     expressions=['journal_id', 'company_id', 'date'])
-        create_index(
-            self.env.cr,
-            indexname='account_move_made_gaps',
-            tablename='account_move',
-            expressions=['journal_id', 'company_id', 'date'],
-            where="made_sequence_gap = TRUE",
-        )  # used in <account.journal>._query_has_sequence_holes
 
     # -------------------------------------------------------------------------
     # COMPUTE METHODS
@@ -1833,42 +1806,53 @@ class AccountMove(models.Model):
             column_names = SQL(', ').join(SQL.identifier(field_name) for field_name in values)
             move_table_and_alias = SQL("(VALUES (%s)) AS move(%s)", casted_values, column_names)
 
-        result = self.env.execute_query(SQL("""
-            SELECT
-                   move.id AS move_id,
-                   array_agg(duplicate_move.id) AS duplicate_ids
-              FROM %(move_table_and_alias)s
-              JOIN account_move AS duplicate_move ON
-                   move.company_id = duplicate_move.company_id
-               AND move.id != duplicate_move.id
-               AND duplicate_move.state IN %(matching_states)s
-               AND move.move_type = duplicate_move.move_type
-               AND (
-                   move.commercial_partner_id = duplicate_move.commercial_partner_id
-                   OR (move.commercial_partner_id IS NULL AND duplicate_move.state = 'draft')
+        to_query = []
+        out_moves = moves.filtered(lambda m: m.move_type in ('out_invoice', 'out_refund'))
+        if out_moves:
+            out_moves_sql_condition = SQL("""
+                move.move_type in ('out_invoice', 'out_refund')
+                AND (
+                   move.amount_total = duplicate_move.amount_total
+                   AND move.invoice_date = duplicate_move.invoice_date
                 )
-               AND (
-                   -- For out moves
-                   move.move_type in ('out_invoice', 'out_refund')
+            """)
+            to_query.append((out_moves, out_moves_sql_condition))
+
+        in_moves = moves.filtered(lambda m: m.move_type in ('in_invoice', 'in_refund'))
+        if in_moves:
+            in_moves_sql_condition = SQL("""
+                move.move_type in ('in_invoice', 'in_refund')
+                AND (
+                   move.ref = duplicate_move.ref
+                   AND (move.invoice_date = duplicate_move.invoice_date OR move.state = 'draft')
+                )
+            """)
+            to_query.append((in_moves, in_moves_sql_condition))
+
+        result = []
+        for moves, move_type_sql_condition in to_query:
+            result.extend(self.env.execute_query(SQL("""
+                SELECT move.id AS move_id,
+                       array_agg(duplicate_move.id) AS duplicate_ids
+                  FROM %(move_table_and_alias)s
+                  JOIN account_move AS duplicate_move
+                    ON move.company_id = duplicate_move.company_id
+                   AND move.id != duplicate_move.id
+                   AND duplicate_move.state IN %(matching_states)s
+                   AND move.move_type = duplicate_move.move_type
                    AND (
-                       move.amount_total = duplicate_move.amount_total
-                       AND move.invoice_date = duplicate_move.invoice_date
-                   )
-                   OR
-                   -- For in moves
-                   move.move_type in ('in_invoice', 'in_refund')
-                   AND (
-                       move.ref = duplicate_move.ref
-                       AND (move.invoice_date = duplicate_move.invoice_date OR move.state = 'draft')
-                   )
-               )
-             WHERE move.id IN %(moves)s
-             GROUP BY move.id
-            """,
-            matching_states=tuple(matching_states),
-            moves=tuple(moves.ids or [0]),
-            move_table_and_alias=move_table_and_alias,
-        ))
+                           move.commercial_partner_id = duplicate_move.commercial_partner_id
+                           OR (move.commercial_partner_id IS NULL AND duplicate_move.state = 'draft')
+                       )
+                   AND (%(move_type_sql_condition)s)
+                 WHERE move.id IN %(moves)s
+                 GROUP BY move.id
+                """,
+                matching_states=tuple(matching_states),
+                moves=tuple(moves.ids or [0]),
+                move_table_and_alias=move_table_and_alias,
+                move_type_sql_condition=move_type_sql_condition,
+            )))
         return {
             self.env['account.move'].browse(move_id): self.env['account.move'].browse(duplicate_ids)
             for move_id, duplicate_ids in result
@@ -3045,6 +3029,19 @@ class AccountMove(models.Model):
             result = [fname for fname in result if fname not in weirdos]
         return result
 
+    @api.model
+    def _get_default_read_fields(self):
+        weirdos = {'needed_terms', 'quick_encoding_vals', 'payment_term_details'}
+        return [fname for fname in self.fields_get(attributes=()) if fname not in weirdos]
+
+    def read(self, fields=None, load='_classic_read'):
+        fields = fields or self._get_default_read_fields()
+        return super().read(fields, load)
+
+    def search_read(self, domain=None, fields=None, offset=0, limit=None, order=None, **read_kwargs):
+        fields = fields or self._get_default_read_fields()
+        return super().search_read(domain, fields, offset, limit, order, **read_kwargs)
+
     def copy_data(self, default=None):
         default = dict(default or {})
         vals_list = super().copy_data(default)
@@ -3876,9 +3873,9 @@ class AccountMove(models.Model):
                     force_hash=force_hash, include_pre_last_hash=include_pre_last_hash, early_stop=early_stop
                 )
 
-                if chain_info is False:
+                if not chain_info:
                     continue
-                if early_stop and chain_info:
+                if early_stop:
                     return True
 
                 if 'unreconciled' in chain_info['warnings']:
@@ -4702,18 +4699,25 @@ class AccountMove(models.Model):
         is_part_of_audit_trail = self.posted_before and self.company_id.check_account_audit_trail
         return not self.inalterable_hash and self.date > lock_date and not is_part_of_audit_trail
 
+    def _is_protected_by_audit_trail(self):
+        return any(move.posted_before and move.company_id.check_account_audit_trail for move in self)
+
     def _unlink_or_reverse(self):
         if not self:
             return
-        to_reverse = self.env['account.move']
         to_unlink = self.env['account.move']
+        to_cancel = self.env['account.move']
+        to_reverse = self.env['account.move']
         for move in self:
-            if move._can_be_unlinked():
-                to_unlink += move
-            else:
+            if not move._can_be_unlinked():
                 to_reverse += move
+            elif move._is_protected_by_audit_trail():
+                to_cancel += move
+            else:
+                to_unlink += move
         to_unlink.filtered(lambda m: m.state in ('posted', 'cancel')).button_draft()
         to_unlink.filtered(lambda m: m.state == 'draft').unlink()
+        to_cancel.button_cancel()
         return to_reverse._reverse_moves(cancel=True)
 
     def _post(self, soft=True):
@@ -4850,11 +4854,9 @@ class AccountMove(models.Model):
         to_post.line_ids._reconcile_marked()
 
         for invoice in to_post:
-            invoice.message_subscribe([
-                p.id
-                for p in [invoice.partner_id]
-                if p not in invoice.sudo().message_partner_ids
-            ])
+            partner_id = invoice.partner_id
+            subscribers = [partner_id.id] if partner_id and partner_id not in invoice.sudo().message_partner_ids else None
+            invoice.message_subscribe(subscribers)
 
         customer_count, supplier_count = defaultdict(int), defaultdict(int)
         for invoice in to_post:

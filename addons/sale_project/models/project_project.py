@@ -12,7 +12,7 @@ from odoo.tools.translate import _
 
 
 class ProjectProject(models.Model):
-    _inherit = ['project.project']
+    _inherit = 'project.project'
 
     def _domain_sale_line_id(self):
         domain = expression.AND([
@@ -22,13 +22,13 @@ class ProjectProject(models.Model):
                 ('order_partner_id', '=?', unquote("partner_id")),
             ],
         ])
-        return str(domain)
+        return domain
 
     allow_billable = fields.Boolean("Billable")
     sale_line_id = fields.Many2one(
         'sale.order.line', 'Sales Order Item', copy=False,
         compute="_compute_sale_line_id", store=True, readonly=False, index='btree_not_null',
-        domain=_domain_sale_line_id,
+        domain=lambda self: str(self._domain_sale_line_id()),
         help="Sales order item that will be selected by default on the tasks and timesheets of this project,"
             " except if the employee set on the timesheets is explicitely linked to another sales order item on the project.\n"
             "It can be modified on each task and timesheet entry individually if necessary.")
@@ -145,6 +145,36 @@ class ProjectProject(models.Model):
     def _onchange_sale_line_id(self):
         if not self.reinvoiced_sale_order_id and self.sale_line_id:
             self.reinvoiced_sale_order_id = self.sale_line_id.order_id
+
+    def _ensure_sale_order_linked(self, sol_ids):
+        """ Orders created from project/task are supposed to be confirmed to match the typical flow from sales, but since
+        we allow SO creation from the project/task itself we want to confirm newly created SOs immediately after creation.
+        However this would leads to SOs being confirmed without a single product, so we'd rather do it on record save.
+        """
+        quotations = self.env['sale.order.line'].sudo()._read_group(
+            domain=[('state', '=', 'draft'), ('id', 'in', sol_ids)],
+            aggregates=['order_id:recordset'],
+        )[0][0]
+        if quotations:
+            quotations.action_confirm()
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        projects = super().create(vals_list)
+        sol_ids = {
+            vals['sale_line_id']
+            for vals in vals_list
+            if vals.get('sale_line_id')
+        }
+        if sol_ids:
+            projects._ensure_sale_order_linked(list(sol_ids))
+        return projects
+
+    def write(self, vals):
+        project = super().write(vals)
+        if sol_id := vals.get('sale_line_id'):
+            self._ensure_sale_order_linked([sol_id])
+        return project
 
     def action_view_sols(self):
         self.ensure_one()
@@ -434,7 +464,7 @@ class ProjectProject(models.Model):
             'sol_items': [{
                 **sol_read,
                 **get_action(sol_read['id']),
-            } for sol_read in all_sols.with_context(with_price_unit=True)._read_format(['name', 'product_uom_qty', 'qty_delivered', 'qty_invoiced', 'product_uom', 'product_id'])],
+            } for sol_read in all_sols.with_context(with_price_unit=True)._read_format(['name', 'product_uom_qty', 'qty_delivered', 'qty_invoiced', 'product_uom_id', 'product_id'])],
             'displayLoadMore': display_load_more,
         }
 
@@ -608,12 +638,14 @@ class ProjectProject(models.Model):
     def _get_revenues_items_from_invoices_domain(self, domain=None):
         if domain is None:
             domain = []
+        included_invoice_line_ids = self._get_already_included_profitability_invoice_line_ids()
         return expression.AND([
             domain,
             [('move_id.move_type', 'in', self.env['account.move'].get_sale_types()),
             ('parent_state', 'in', ['draft', 'posted']),
             ('price_subtotal', '!=', 0),
-            ('is_downpayment', '=', False)],
+            ('is_downpayment', '=', False),
+            ('id', 'not in', included_invoice_line_ids)],
         ])
 
     def _get_revenues_items_from_invoices(self, excluded_move_line_ids=None, with_action=True):

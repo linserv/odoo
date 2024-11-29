@@ -4,6 +4,11 @@ import { user } from "@web/core/user";
 import { useService, useAutofocus } from "@web/core/utils/hooks";
 import { useDebounced } from "@web/core/utils/timing";
 import { rpc } from "@web/core/network/rpc";
+import { PICKER_PROPS, usePicker } from "@web/core/emoji_picker/emoji_picker";
+
+export function useGifPicker(...args) {
+    return usePicker(GifPicker, ...args);
+}
 
 /**
  * @typedef {Object} TenorCategory
@@ -47,7 +52,7 @@ import { rpc } from "@web/core/network/rpc";
 
 export class GifPicker extends Component {
     static template = "discuss.GifPicker";
-    static props = ["PICKERS?", "className?", "close?", "onSelect", "state?"];
+    static props = PICKER_PROPS;
 
     setup() {
         super.setup();
@@ -141,6 +146,9 @@ export class GifPicker extends Component {
     }
 
     async loadCategories() {
+        if (!this.store.hasGifPickerFeature) {
+            return;
+        }
         try {
             let { language, region } = new Intl.Locale(user.lang);
             if (!region && language === "sr") {
@@ -244,7 +252,7 @@ export class GifPicker extends Component {
      */
     async onClickCategory(category) {
         this.clear();
-        this.props.state.searchTerm = category.searchterm;
+        this.searchTerm = category.searchterm;
         this.closeCategories();
     }
 
@@ -265,6 +273,9 @@ export class GifPicker extends Component {
     }
 
     async loadFavorites() {
+        if (!this.store.hasGifPickerFeature) {
+            return;
+        }
         this.state.loadingGif = true;
         try {
             const [results] = await rpc(

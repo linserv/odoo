@@ -4,6 +4,7 @@ from odoo import models
 
 
 class AccountEdiXmlUbl_Nl(models.AbstractModel):
+    _name = 'account.edi.xml.ubl_nl'
     _inherit = ["account.edi.xml.ubl_bis3"]
     _description = "SI-UBL 2.0 (NLCIUS)"
 
@@ -43,7 +44,7 @@ class AccountEdiXmlUbl_Nl(models.AbstractModel):
         for tax in vals_list:
             # [BR-NL-35] The use of a tax exemption reason code (cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory
             # /cbc:TaxExemptionReasonCode) is not recommended
-            tax.pop('tax_exemption_reason_code')
+            tax.pop('tax_exemption_reason_code', None)
         return vals_list
 
     def _get_partner_address_vals(self, partner):
@@ -51,7 +52,7 @@ class AccountEdiXmlUbl_Nl(models.AbstractModel):
         vals = super()._get_partner_address_vals(partner)
         # [BR-NL-28] The use of a country subdivision (cac:AccountingCustomerParty/cac:Party/cac:PostalAddress
         # /cbc:CountrySubentity) is not recommended
-        vals.pop('country_subentity')
+        vals.pop('country_subentity', None)
         return vals
 
     def _get_invoice_line_allowance_vals_list(self, line, tax_values_list=None):
@@ -71,7 +72,7 @@ class AccountEdiXmlUbl_Nl(models.AbstractModel):
         vals_list = super()._get_invoice_payment_means_vals_list(invoice)
         # [BR-NL-29] The use of a payment means text (cac:PaymentMeans/cbc:PaymentMeansCode/@name) is not recommended
         for vals in vals_list:
-            vals.pop('payment_means_code_attrs')
+            vals.pop('payment_means_code_attrs', None)
         return vals_list
 
     def _export_invoice_vals(self, invoice):

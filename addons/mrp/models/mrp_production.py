@@ -15,7 +15,7 @@ from odoo.addons.web.controllers.utils import clean_action
 from odoo.exceptions import UserError, ValidationError
 from odoo.osv import expression
 from odoo.tools import float_compare, float_round, float_is_zero, format_datetime
-from odoo.tools.misc import OrderedSet, format_date, groupby as tools_groupby
+from odoo.tools.misc import OrderedSet, format_date, groupby as tools_groupby, topological_sort
 
 from odoo.addons.stock.models.stock_move import PROCUREMENT_PRIORITIES
 
@@ -272,10 +272,14 @@ class MrpProduction(models.Model):
         search='_search_date_category', readonly=True
     )
 
-    _sql_constraints = [
-        ('name_uniq', 'unique(name, company_id)', 'Reference must be unique per Company!'),
-        ('qty_positive', 'check (product_qty > 0)', 'The quantity to produce must be positive!'),
-    ]
+    _name_uniq = models.Constraint(
+        'unique(name, company_id)',
+        'Reference must be unique per Company!',
+    )
+    _qty_positive = models.Constraint(
+        'check (product_qty > 0)',
+        'The quantity to produce must be positive!',
+    )
 
     @api.depends('procurement_group_id.stock_move_ids.created_production_id.procurement_group_id.mrp_production_ids',
                  'procurement_group_id.stock_move_ids.move_orig_ids.created_production_id.procurement_group_id.mrp_production_ids')
@@ -618,7 +622,7 @@ class MrpProduction(models.Model):
             if production.state in ('draft', 'done', 'cancel'):
                 production.reservation_state = False
                 continue
-            relevant_move_state = production.move_raw_ids._get_relevant_state_among_moves()
+            relevant_move_state = production.move_raw_ids.filtered(lambda m: not m.picked)._get_relevant_state_among_moves()
             # Compute reservation state according to its component's moves.
             if relevant_move_state == 'partially_available':
                 if production.workorder_ids.operation_id and production.bom_id.ready_to_produce == 'asap':
@@ -924,8 +928,6 @@ class MrpProduction(models.Model):
                     finished_move_lines.write({'lot_id': vals.get('lot_producing_id')})
                 if 'qty_producing' in vals:
                     finished_move.quantity = vals.get('qty_producing')
-                    if production.product_tracking == 'lot':
-                        finished_move.move_line_ids.lot_id = production.lot_producing_id
             if self._has_workorders() and not production.workorder_ids.operation_id and vals.get('date_start') and not vals.get('date_finished'):
                 new_date_start = fields.Datetime.to_datetime(vals.get('date_start'))
                 if not production.date_finished or new_date_start >= production.date_finished:
@@ -1992,7 +1994,7 @@ class MrpProduction(models.Model):
             # Adapt quantities produced
             for workorder in production.workorder_ids.sorted('id'):
                 initial_workorder_remaining_qty.append(max(initial_qty - workorder.qty_reported_from_previous_wo - workorder.qty_produced, 0))
-                if workorder.production_id.id not in self.env.context.get('mo_ids_to_backorder', []):
+                if workorder.production_id.id not in (self.env.context.get('mo_ids_to_backorder') or []):
                     workorder.qty_produced = min(workorder.qty_produced, workorder.qty_production)
             workorders_len = len(production.workorder_ids)
             for index, workorder in enumerate(bo.workorder_ids):
@@ -2895,9 +2897,11 @@ class MrpProduction(models.Model):
             else:
                 entity.unlink()
         elif quantity > 0:
-            new_line = self._get_new_catalog_line_values(product_id, quantity, **kwargs)
-            command = Command.create(new_line)
+            new_line_vals = self._get_new_catalog_line_values(product_id, quantity, **kwargs)
+            command = Command.create(new_line_vals)
             self.write({child_field: [command]})
+            new_line = self[child_field].filtered(lambda mv: mv.product_id.id == product_id)[-1:]
+            self._update_catalog_line_quantity(new_line, quantity, **kwargs)
 
         return self.env['product.product'].browse(product_id).standard_price
 
@@ -2950,3 +2954,9 @@ class MrpProduction(models.Model):
         for index_wo, wo in enumerate(non_phantom_workorders):
             wo.sequence = index_wo + offset
         return True
+
+    def _track_get_fields(self):
+        res = super()._track_get_fields()
+        if res:
+            res = OrderedSet(topological_sort(self.fields_get(res, ('depends'))))
+        return res

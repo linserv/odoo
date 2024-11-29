@@ -183,7 +183,7 @@ test("Last selected spreadsheet is kept when go back from breadcrumb", async fun
         sheets: [
             {
                 id: "sheet1",
-                cells: { A1: { content: `=PIVOT.VALUE("1", "probability")` } },
+                cells: { A1: { content: '=PIVOT.VALUE("1", "probability")' } },
             },
         ],
         pivots: {
@@ -294,7 +294,7 @@ test("share dashboard from dashboard view", async function () {
     expect(target.querySelector(".o_field_CopyClipboardChar").innerText).toBe(
         "localhost:8069/share/url/132465"
     );
-    await contains(".fa-clone").click();
+    await contains(".fa-clipboard").click();
     expect.verifySteps(["share url copied"]);
 });
 

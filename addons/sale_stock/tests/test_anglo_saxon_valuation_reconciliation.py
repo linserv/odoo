@@ -23,7 +23,6 @@ class TestValuationReconciliationCommon(ValuationReconciliationTestCommon):
                     'name': product.name,
                     'product_id': product.id,
                     'product_uom_qty': quantity,
-                    'product_uom': product.uom_po_id.id,
                     'price_unit': 66.0,
                 })],
             'date_order': date,
@@ -43,7 +42,6 @@ class TestValuationReconciliationCommon(ValuationReconciliationTestCommon):
                 'price_unit': 66.0,
                 'quantity': quantity,
                 'discount': 0.0,
-                'product_uom_id': product.uom_id.id,
                 'product_id': product.id,
                 'sale_line_ids': [(6, 0, sale_order.order_line.ids)],
             })],
@@ -162,6 +160,7 @@ class TestValuationReconciliation(TestValuationReconciliationCommon):
             'list_price': 10 * i,
             'standard_price': 10 * i,
             'is_storable': True,
+            'categ_id': self.env.ref('product.product_category_goods').id,
         } for i in range(1, 3)]))
         product_1.categ_id.property_valuation = 'real_time'
         product_1.categ_id.property_cost_method = 'fifo'
@@ -179,7 +178,7 @@ class TestValuationReconciliation(TestValuationReconciliationCommon):
                     'name': product.name,
                     'product_id': product.id,
                     'product_uom_qty': 2,
-                    'product_uom': product.uom_po_id.id,
+                    'product_uom_id': product.uom_po_id.id,
                     'price_unit': 10.0,
                 }) for product in 2 * [product_1] + [product_2]],
             'date_order': '2021-01-01',
@@ -200,7 +199,6 @@ class TestValuationReconciliation(TestValuationReconciliationCommon):
                 'price_unit': 10.0,
                 'quantity': 2,
                 'discount': 0.0,
-                'product_uom_id': line.product_id.uom_id.id,
                 'product_id': line.product_id.id,
                 'sale_line_ids': [(6, 0, line.ids)],
             }) for line in so.order_line],

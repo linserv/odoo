@@ -1,6 +1,4 @@
 import {
-    SIZES,
-    assertSteps,
     click,
     contains,
     defineMailModels,
@@ -8,9 +6,9 @@ import {
     onRpcBefore,
     openDiscuss,
     patchUiSize,
+    SIZES,
     start,
     startServer,
-    step,
     triggerEvents,
 } from "@mail/../tests/mail_test_helpers";
 import { mailDataHelpers } from "@mail/../tests/mock_server/mail_mock_server";
@@ -18,11 +16,14 @@ import { mailDataHelpers } from "@mail/../tests/mock_server/mail_mock_server";
 import { describe, expect, test } from "@odoo/hoot";
 import { hover, queryFirst } from "@odoo/hoot-dom";
 import { mockUserAgent } from "@odoo/hoot-mock";
+import { EventBus } from "@odoo/owl";
 import {
+    asyncStep,
     Command,
     mockService,
     patchWithCleanup,
     serverState,
+    waitForSteps,
 } from "@web/../tests/web_test_helpers";
 
 import { browser } from "@web/core/browser/browser";
@@ -42,15 +43,15 @@ test("basic rendering", async () => {
     await contains(".o-discuss-CallParticipantCard[aria-label='Mitchell Admin']");
     await contains(".o-discuss-CallActionList");
     await contains(".o-discuss-CallMenu-buttonContent");
-    await contains(".o-discuss-CallActionList button", { count: 5 });
+    await contains(".o-discuss-CallActionList button", { count: 6 });
     await contains("button[aria-label='Unmute'], button[aria-label='Mute']"); // FIXME depends on current browser permission
     await contains(".o-discuss-CallActionList button[aria-label='Deafen']");
     await contains(".o-discuss-CallActionList button[aria-label='Turn camera on']");
+    await contains(".o-discuss-CallActionList button[aria-label='Share Screen']");
     await contains("[title='More']");
     await contains(".o-discuss-CallActionList button[aria-label='Disconnect']");
     await click("[title='More']");
     await contains("[title='Raise Hand']");
-    await contains("[title='Share Screen']");
     await contains("[title='Enter Full Screen']");
     // screen sharing not available in mobile OS
     mockUserAgent("Chrome/0.0.0 Android (OdooMobile; Linux; Android 13; Odoo TestSuite)");
@@ -128,7 +129,7 @@ test("should disconnect when closing page while in call", async () => {
                 if (data instanceof Blob && route === "/mail/rtc/channel/leave_call") {
                     const blobText = await data.text();
                     const blobData = JSON.parse(blobText);
-                    step(`sendBeacon_leave_call:${blobData.params.channel_id}`);
+                    asyncStep(`sendBeacon_leave_call:${blobData.params.channel_id}`);
                 }
             },
         },
@@ -138,7 +139,7 @@ test("should disconnect when closing page while in call", async () => {
     await contains(".o-discuss-Call");
     // simulate page close
     window.dispatchEvent(new Event("pagehide"), { bubble: true });
-    await assertSteps([`sendBeacon_leave_call:${channelId}`]);
+    await waitForSteps([`sendBeacon_leave_call:${channelId}`]);
 });
 
 test("should display invitations", async () => {
@@ -153,22 +154,22 @@ test("should display invitations", async () => {
         channel_member_id: memberId,
         channel_id: channelId,
     });
-    onRpcBefore("/mail/action", (args) => {
+    onRpcBefore("/mail/data", (args) => {
         if (args.init_messaging) {
-            step(`/mail/action - ${JSON.stringify(args)}`);
+            asyncStep(`/mail/data - ${JSON.stringify(args)}`);
         }
     });
     mockService("mail.sound_effects", {
         play(name) {
-            step(`play - ${name}`);
+            asyncStep(`play - ${name}`);
         },
         stop(name) {
-            step(`stop - ${name}`);
+            asyncStep(`stop - ${name}`);
         },
     });
     await start();
-    await assertSteps([
-        `/mail/action - ${JSON.stringify({
+    await waitForSteps([
+        `/mail/data - ${JSON.stringify({
             init_messaging: {},
             failures: true,
             systray_get_activities: true,
@@ -193,7 +194,7 @@ test("should display invitations", async () => {
             .get_result()
     );
     await contains(".o-discuss-CallInvitation");
-    await assertSteps(["play - incoming-call"]);
+    await waitForSteps(["play - call-invitation"]);
     // Simulate stop receiving call invitation
 
     pyEnv["bus.bus"]._sendone(
@@ -204,7 +205,7 @@ test("should display invitations", async () => {
         }).get_result()
     );
     await contains(".o-discuss-CallInvitation", { count: 0 });
-    await assertSteps(["stop - incoming-call"]);
+    await waitForSteps(["stop - call-invitation"]);
 });
 
 test("can share screen", async () => {
@@ -283,12 +284,12 @@ test("join/leave sounds are only played on main tab", async () => {
     const env2 = await start({ asTab: true });
     patchWithCleanup(env1.services["mail.sound_effects"], {
         play(name) {
-            step(`tab1 - play - ${name}`);
+            asyncStep(`tab1 - play - ${name}`);
         },
     });
     patchWithCleanup(env2.services["mail.sound_effects"], {
         play(name) {
-            step(`tab2 - play - ${name}`);
+            asyncStep(`tab2 - play - ${name}`);
         },
     });
     await openDiscuss(channelId, { target: env1 });
@@ -296,11 +297,11 @@ test("join/leave sounds are only played on main tab", async () => {
     await click("[title='Start a Call']", { target: env1 });
     await contains(".o-discuss-Call", { target: env1 });
     await contains(".o-discuss-Call", { target: env2 });
-    await assertSteps(["tab1 - play - channel-join"]);
+    await waitForSteps(["tab1 - play - call-join"]);
     await click("[title='Disconnect']:not([disabled])", { target: env1 });
     await contains(".o-discuss-Call", { target: env1, count: 0 });
     await contains(".o-discuss-Call", { target: env2, count: 0 });
-    await assertSteps(["tab1 - play - channel-leave"]);
+    await waitForSteps(["tab1 - play - call-leave"]);
 });
 
 test("'Start a meeting' in mobile", async () => {
@@ -318,6 +319,8 @@ test("'Start a meeting' in mobile", async () => {
     await click(".o-discuss-ChannelInvitation-selectable", { text: "Partner 2" });
     await click("button:not([disabled])", { text: "Invite to Group Chat" });
     await contains(".o-discuss-Call");
+    // dropdown requires an extra delay before click (because handler is registered in useEffect)
+    await contains("[title='Open Actions Menu']");
     await click("[title='Open Actions Menu']");
     await click(".o-dropdown-item", { text: "Members" });
     await contains(".o-discuss-ChannelMember", { text: "Partner 2" });
@@ -426,4 +429,22 @@ test("expand call participants when joining a call", async () => {
     await contains("img[title='Eric']");
     await contains("img[title='Frank']");
     await contains("img[title='Mitchell Admin']");
+});
+
+test("start call when accepting from push notification", async () => {
+    patchWithCleanup(window.navigator, {
+        serviceWorker: Object.assign(new EventBus(), { register: () => Promise.resolve() }),
+    });
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
+    await start();
+    await openDiscuss();
+    await contains(".o-mail-Discuss-threadName[title=Inbox]");
+    browser.navigator.serviceWorker.dispatchEvent(
+        new MessageEvent("message", {
+            data: { action: "OPEN_CHANNEL", data: { id: channelId, joinCall: true } },
+        })
+    );
+    await contains(".o-mail-Discuss-threadName[title=General]");
+    await contains(`.o-discuss-CallParticipantCard[title='${serverState.partnerName}']`);
 });

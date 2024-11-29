@@ -163,14 +163,14 @@
                                     Default sales tax for products
                                 </div>
                                 <div class="content-group mt16">
-                                    <field name="sale_tax_id" colspan="4" nolabel="1" domain="[('type_tax_use', 'in', ('sale', 'all'))]"/>
+                                    <field name="sale_tax_id" widget="many2one_tax_tags" colspan="4" nolabel="1" domain="[('type_tax_use', 'in', ('sale', 'all'))]"/>
                                 </div>
                                 <div class="mt8">
                                     <button name="%(account.action_tax_form)d" icon="oi-arrow-right" type="action" string="Taxes" class="btn-link"/>
                                 </div>
                             </setting>
                             <setting groups="account.group_account_readonly">
-                                <label string="Default Temporary Account" for="account_default_pos_receivable_account_id"/>
+                                <label string="Default POS Receivable Account" for="account_default_pos_receivable_account_id"/>
                                 <i class="fa fa-info-circle me-1" title="This setting is common to all PoS." pos-data-toggle="tooltip"/>
                                 <div class="text-muted">
                                     Intermediary account used for unidentified customers.
@@ -328,9 +328,6 @@
                             </setting>
                             <setting title="The transactions are processed by Viva Wallet on terminal or tap on phone." string="Viva Wallet" help="Accept payments with Viva Wallet on a terminal or tap on phone">
                                 <field name="module_pos_viva_wallet"/>
-                            </setting>
-                            <setting title="The transactions are processed by PayTM. Set your PayTM credentials on the related payment method." string="PayTM" help="Accept payments with a PayTM payment terminal">
-                                <field name="module_pos_paytm"/>
                             </setting>
                             <setting id="pos_razorpay_setting" title="The transactions are processed by Razorpay. Set your Razorpay credentials on the related payment method." string="Razorpay" help="Accept payments with a Razorpay payment terminal">
                                 <field name="module_pos_razorpay"/>

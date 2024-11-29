@@ -1,14 +1,14 @@
-import * as ProductScreenPos from "@point_of_sale/../tests/tours/utils/product_screen_util";
+import * as ProductScreenPos from "@point_of_sale/../tests/pos/tours/utils/product_screen_util";
 import * as ProductScreenResto from "@pos_restaurant/../tests/tours/utils/product_screen_util";
 const ProductScreen = { ...ProductScreenPos, ...ProductScreenResto };
-import * as Dialog from "@point_of_sale/../tests/tours/utils/dialog_util";
-import * as PaymentScreen from "@point_of_sale/../tests/tours/utils/payment_screen_util";
-import * as ReceiptScreen from "@point_of_sale/../tests/tours/utils/receipt_screen_util";
+import * as Dialog from "@point_of_sale/../tests/generic_helpers/dialog_util";
+import * as PaymentScreen from "@point_of_sale/../tests/pos/tours/utils/payment_screen_util";
+import * as ReceiptScreen from "@point_of_sale/../tests/pos/tours/utils/receipt_screen_util";
 import * as FloorScreen from "@pos_restaurant/../tests/tours/utils/floor_screen_util";
-import * as TicketScreen from "@point_of_sale/../tests/tours/utils/ticket_screen_util";
+import * as TicketScreen from "@point_of_sale/../tests/pos/tours/utils/ticket_screen_util";
 import * as TipScreen from "@pos_restaurant/../tests/tours/utils/tip_screen_util";
-import * as NumberPopup from "@point_of_sale/../tests/tours/utils/number_popup_util";
-import * as Chrome from "@point_of_sale/../tests/tours/utils/chrome_util";
+import * as NumberPopup from "@point_of_sale/../tests/generic_helpers/number_popup_util";
+import * as Chrome from "@point_of_sale/../tests/pos/tours/utils/chrome_util";
 import { registry } from "@web/core/registry";
 
 registry.category("web_tour.tours").add("PosResTipScreenTour", {
@@ -37,7 +37,9 @@ registry.category("web_tour.tours").add("PosResTipScreenTour", {
             ProductScreen.totalAmountIs("4.0"),
             Chrome.clickPlanButton(),
             Chrome.clickMenuOption("Orders"),
-            TicketScreen.nthRowContains("2", "Tipping"),
+            {
+                trigger: `.ticket-screen .orders > .order-row:contains(Tipping):contains($ 2.00)`,
+            },
             Chrome.clickPlanButton(),
 
             // Create without syncing the draft.
@@ -62,8 +64,9 @@ registry.category("web_tour.tours").add("PosResTipScreenTour", {
             ProductScreen.clickCloseButton(),
             Chrome.clickPlanButton(),
             Chrome.clickMenuOption("Orders"),
-            TicketScreen.nthRowContains("4", "Tipping"),
-
+            {
+                trigger: `.ticket-screen .orders > .order-row:contains(Tipping):contains($ 6.00)`,
+            },
             // Tip 20% on order1
             TicketScreen.selectOrderByPrice("2.0"),
             TicketScreen.loadSelectedOrder(),
@@ -118,8 +121,9 @@ registry.category("web_tour.tours").add("PosResTipScreenTour", {
             TicketScreen.tipContains("1.00"),
             TicketScreen.settleTips(),
             TicketScreen.selectFilter("All active orders"),
-            TicketScreen.nthRowContains(2, "Ongoing"),
-
+            {
+                trigger: `.ticket-screen .orders > .order-row:contains(Ongoing):contains($ 4.00)`,
+            },
             // tip order2 during payment
             // tip screen should not show after validating payment screen
             TicketScreen.selectOrderByPrice("4.0"),

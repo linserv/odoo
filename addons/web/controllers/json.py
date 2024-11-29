@@ -15,7 +15,7 @@ from werkzeug.exceptions import BadRequest, NotFound
 from odoo import http
 from odoo.exceptions import AccessError
 from odoo.http import request
-from odoo.models import regex_object_name
+from odoo.models import check_object_name
 from odoo.osv import expression
 from odoo.tools.safe_eval import safe_eval
 
@@ -150,7 +150,7 @@ class WebJsonController(http.Controller):
             domains.append([('activity_ids', '!=', False)])
             # add activity fields
             for field_name, field in model._fields.items():
-                if field_name.startswith('activity_') and field_name not in spec and field.is_accessible(env):
+                if field_name.startswith('activity_') and field_name not in spec and model._has_field_access(field, 'read'):
                     spec[field_name] = {}
 
         # Group by
@@ -270,7 +270,7 @@ def get_default_domain(model, action, context, eval_context):
             for key, value in context.items():
                 if key.startswith('search_default_') and value:
                     filter_name = key[15:]
-                    if not regex_object_name.match(filter_name):
+                    if not check_object_name(filter_name):
                         raise ValueError(model.env._("Invalid default search filter name for %s", key))
                     if view_tree is None:
                         view = model.get_view(action.search_view_id.id, 'search')

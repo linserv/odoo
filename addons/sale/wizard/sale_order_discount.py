@@ -8,6 +8,7 @@ from odoo.fields import Command
 
 
 class SaleOrderDiscount(models.TransientModel):
+    _name = 'sale.order.discount'
     _description = "Discount Wizard"
 
     sale_order_id = fields.Many2one(
@@ -44,7 +45,7 @@ class SaleOrderDiscount(models.TransientModel):
 
     def _prepare_discount_product_values(self):
         self.ensure_one()
-        return {
+        values = {
             'name': _('Discount'),
             'type': 'service',
             'invoice_policy': 'order',
@@ -52,6 +53,10 @@ class SaleOrderDiscount(models.TransientModel):
             'company_id': self.company_id.id,
             'taxes_id': None,
         }
+        services_category = self.env.ref('product.product_category_services', raise_if_not_found=False)
+        if services_category:
+            values['categ_id'] = services_category.id
+        return values
 
     def _prepare_discount_line_values(self, product, amount, taxes, description=None):
         self.ensure_one()
@@ -61,7 +66,7 @@ class SaleOrderDiscount(models.TransientModel):
             'product_id': product.id,
             'sequence': 999,
             'price_unit': -amount,
-            'tax_id': [Command.set(taxes.ids)],
+            'tax_ids': [Command.set(taxes.ids)],
         }
         if description:
             # If not given, name will fallback on the standard SOL logic (cf. _compute_name)
@@ -72,15 +77,15 @@ class SaleOrderDiscount(models.TransientModel):
     def _get_discount_product(self):
         """Return product.product used for discount line"""
         self.ensure_one()
-        discount_product = self.company_id.sale_discount_product_id
+        company = self.company_id
+        discount_product = company.sale_discount_product_id
         if not discount_product:
             if (
                 self.env['product.product'].has_access('create')
-                and self.company_id.has_access('write')
-                and self.company_id._filtered_access('write')
-                and self.company_id.check_field_access_rights('write', ['sale_discount_product_id'])
+                and company.has_access('write')
+                and company._has_field_access(company._fields['sale_discount_product_id'], 'write')
             ):
-                self.company_id.sale_discount_product_id = self.env['product.product'].create(
+                company.sale_discount_product_id = self.env['product.product'].create(
                     self._prepare_discount_product_values()
                 )
             else:
@@ -89,7 +94,7 @@ class SaleOrderDiscount(models.TransientModel):
                     " You can either use a per-line discount, or ask an administrator to grant the"
                     " discount the first time."
                 ))
-            discount_product = self.company_id.sale_discount_product_id
+            discount_product = company.sale_discount_product_id
         return discount_product
 
     def _create_discount_lines(self):
@@ -111,7 +116,7 @@ class SaleOrderDiscount(models.TransientModel):
                 if not line.product_uom_qty or not line.price_unit:
                     continue
 
-                total_price_per_tax_groups[line.tax_id] += (line.price_unit * line.product_uom_qty)
+                total_price_per_tax_groups[line.tax_ids] += (line.price_unit * line.product_uom_qty)
 
             if not total_price_per_tax_groups:
                 # No valid lines on which the discount can be applied

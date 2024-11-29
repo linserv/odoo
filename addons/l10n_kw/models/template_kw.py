@@ -3,15 +3,13 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('kw')
     def _get_kw_template_data(self):
         return {
             'property_account_receivable_id': 'kw_account_100201',
             'property_account_payable_id': 'kw_account_200101',
-            'property_account_expense_categ_id': 'kw_account_500101',
-            'property_account_income_categ_id': 'kw_account_400101',
             'property_account_expense_id': 'kw_account_500101',
             'property_account_income_id': 'kw_account_400101',
             'property_stock_valuation_account_id': 'kw_account_100502',
@@ -39,5 +37,7 @@ class AccountChartTemplate(models.AbstractModel):
                 'default_cash_difference_expense_account_id': 'kw_account_500909',
                 'deferred_expense_account_id': 'kw_account_100416',
                 'deferred_revenue_account_id': 'kw_account_200401',
+                'expense_account_id': 'kw_account_500101',
+                'income_account_id': 'kw_account_400101',
             },
         }

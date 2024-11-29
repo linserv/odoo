@@ -1,9 +1,7 @@
-# Part of Odoo. See LICENSE file for full copyright and licensing details.
 import logging
 import optparse
 import sys
 import time
-from pathlib import Path
 
 from . import Command
 import odoo
@@ -23,7 +21,7 @@ class Populate(Command):
 
     def run(self, cmdargs):
         parser = odoo.tools.config.parser
-        parser.prog = f'{Path(sys.argv[0]).name} {self.name}'
+        parser.prog = self.prog
         group = optparse.OptionGroup(parser, "Populate Configuration")
         group.add_option("--factors", dest="factors",
                          help="Comma separated list of factors for each model, or just a single factor."
@@ -53,8 +51,10 @@ class Populate(Command):
         except TypeError:
             raise ValueError("Separator must be a single Unicode character.")
 
-        dbname = odoo.tools.config['db_name']
-        registry = Registry(dbname)
+        dbnames = odoo.tools.config['db_name']
+        if len(dbnames) > 1:
+            sys.exit("-d/--database/db_name has multiple database, please provide a single one")
+        registry = Registry(dbnames[0])
         with registry.cursor() as cr:
             env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {'active_test': False})
             self.populate(env, model_factors, separator_code)

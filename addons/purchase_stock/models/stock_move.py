@@ -8,7 +8,7 @@ from odoo.exceptions import UserError
 
 
 class StockMove(models.Model):
-    _inherit = ['stock.move']
+    _inherit = 'stock.move'
 
     purchase_line_id = fields.Many2one(
         'purchase.order.line', 'Purchase Order Line',
@@ -49,8 +49,8 @@ class StockMove(models.Model):
         order = line.order_id
         received_qty = line.qty_received
         if self.state == 'done':
-            received_qty -= self.product_uom._compute_quantity(self.quantity, line.product_uom, rounding_method='HALF-UP')
-        if line.product_id.purchase_method == 'purchase' and float_compare(line.qty_invoiced, received_qty, precision_rounding=line.product_uom.rounding) > 0:
+            received_qty -= self.product_uom._compute_quantity(self.quantity, line.product_uom_id, rounding_method='HALF-UP')
+        if line.product_id.purchase_method == 'purchase' and float_compare(line.qty_invoiced, received_qty, precision_rounding=line.product_uom_id.rounding) > 0:
             move_layer = line.move_ids.sudo().stock_valuation_layer_ids
             invoiced_layer = line.sudo().invoice_lines.stock_valuation_layer_ids
             # value on valuation layer is in company's currency, while value on invoice line is in order's currency
@@ -83,7 +83,7 @@ class StockMove(models.Model):
             # TODO currency check
             remaining_value = total_invoiced_value - receipt_value
             # TODO qty_received in product uom
-            remaining_qty = invoiced_qty - line.product_uom._compute_quantity(received_qty, line.product_id.uom_id)
+            remaining_qty = invoiced_qty - line.product_uom_id._compute_quantity(received_qty, line.product_id.uom_id)
             if order.currency_id != order.company_id.currency_id and remaining_value and remaining_qty:
                 # will be rounded during currency conversion
                 price_unit = remaining_value / remaining_qty
@@ -170,13 +170,13 @@ class StockMove(models.Model):
         """
         am_vals_list = super()._account_entry_move(qty, description, svl_id, cost)
         returned_move = self.origin_returned_move_id
-        pdiff_exists = bool((self | returned_move).stock_valuation_layer_ids.stock_valuation_layer_ids.account_move_line_id)
+        move = (self | returned_move).with_prefetch(self._prefetch_ids)
+        pdiff_exists = bool(move.stock_valuation_layer_ids.stock_valuation_layer_ids.account_move_line_id)
 
         if not am_vals_list or not self.purchase_line_id or pdiff_exists or float_is_zero(qty, precision_rounding=self.product_id.uom_id.rounding):
             return am_vals_list
 
         layer = self.env['stock.valuation.layer'].browse(svl_id)
-        returned_move = self.origin_returned_move_id
 
         if returned_move and self._is_out() and self._is_returned(valued_type='out'):
             returned_layer = returned_move.stock_valuation_layer_ids.filtered(lambda svl: not svl.stock_valuation_layer_id)[:1]
@@ -224,7 +224,8 @@ class StockMove(models.Model):
         """ Overridden to return the vendor bills related to this stock move.
         """
         rslt = super(StockMove, self)._get_related_invoices()
-        rslt += self.mapped('picking_id.purchase_id.invoice_ids').filtered(lambda x: x.state == 'posted')
+        purchase_ids = self.env['purchase.order'].search([('picking_ids', 'in', self.picking_id.ids)])
+        rslt += purchase_ids.invoice_ids.filtered(lambda x: x.state == 'posted')
         return rslt
 
     def _get_source_document(self):

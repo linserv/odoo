@@ -45,6 +45,7 @@
     <record id="l10n_fr_holiday_status_cl" model="hr.leave.type">
         <field name="name">Paid Time Off</field>
         <field name="company_id" ref="base.demo_company_fr"/>
+        <field name="country_id" ref="base.fr"/>
         <field name="requires_allocation">yes</field>
         <field name="employee_requests">no</field>
         <field name="leave_validation_type">both</field>
@@ -64,7 +65,7 @@
         <field name="date_to" eval="time.strftime('%Y-12-31')"/>
         <field name="employee_id" ref="l10n_fr_part_time_employee"/>
     </record>
-    <function model="hr.leave.allocation" name="action_validate">
+    <function model="hr.leave.allocation" name="action_approve">
         <value eval="[ref('l10n_fr_hr_holidays_allocation')]"/>
     </function>
 

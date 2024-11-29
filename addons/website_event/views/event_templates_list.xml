@@ -74,7 +74,19 @@
                     </t>
                 <div class="o_wevent_search d-flex w-100">
                     <div class="w-100 flex-grow-1">
-                        <t t-call="website_event.events_search_box_input"/>
+                        <t t-call="website.website_search_box_input">
+                            <t t-set="_classes" t-valuef="o_wevent_event_searchbar_form flex-grow-1"/>
+                            <t t-set="search_type">events</t>
+                            <t t-set="action" t-value="'/event/'"/>
+                            <t t-set="display_description" t-valuef="true"/>
+                            <t t-set="display_detail" t-valuef="false"/>
+                            <t t-set="search" t-value="search or searches and searches['search']"/>
+                            <t t-set="placeholder">Search an event..</t>
+                            <t t-foreach="searches" t-as="item">
+                                <input t-if="item != 'search' and item_value != 'all'" type="hidden"
+                                    t-att-name="item" t-att-value="item_value"/>
+                            </t>
+                        </t>
                     </div>
                     <button class="btn btn-light position-relative ms-2 d-lg-none"
                         data-bs-toggle="offcanvas"
@@ -370,8 +382,10 @@
                                 <span t-field="event.name" itemprop="name"/>
                             </h5>
                             <!-- Start Date & Time -->
-                            <small class="o_not_editable opacity-75" itemprop="description" t-out="event.subtitle">
+                            <!-- TODO remove t-out one in master -->
+                            <small t-if="False" class="o_not_editable opacity-75" itemprop="description" t-out="event.subtitle">
                             </small>
+                            <small class="opacity-75" itemprop="description" t-field="event.subtitle"/>
                         </div>
                         <!-- Location -->
                         <small class="o_not_editable fw-bold" itemprop="location" t-out="event.address_id" t-options="{'widget': 'contact', 'fields': ['city', 'country_id'], 'null_text': 'Online event'}"/>
@@ -456,14 +470,14 @@
         <h6 class="o_wevent_sidebar_title">Photos</h6>
         <a href="/event">
             <figure class="o_wevent_sidebar_block o_wevent_sidebar_figure figure">
-                <img class="figure-img img-fluid rounded" src="/website_event/static/src/img/event_past_0.jpg" alt=""/>
-                <figcaption class="figure-caption">A past event</figcaption>
+                <img class="figure-img img-fluid rounded oe_unremovable" src="/website_event/static/src/img/event_past_0.jpg" alt=""/>
+                <figcaption class="figure-caption oe_unremovable">A past event</figcaption>
             </figure>
         </a>
         <a href="/event">
             <figure class="o_wevent_sidebar_block o_wevent_sidebar_figure figure">
-                <img class="figure-img img-fluid rounded" src="/website_event/static/src/img/event_training_0.jpg" alt=""/>
-                <figcaption class="figure-caption">Our Trainings</figcaption>
+                <img class="figure-img img-fluid rounded oe_unremovable" src="/website_event/static/src/img/event_training_0.jpg" alt=""/>
+                <figcaption class="figure-caption oe_unremovable">Our Trainings</figcaption>
             </figure>
         </a>
     </xpath>

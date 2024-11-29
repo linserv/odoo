@@ -13,6 +13,7 @@ from markupsafe import Markup
 
 
 class ChatbotScriptStep(models.Model):
+    _name = 'chatbot.script.step'
     _description = 'Chatbot Script Step'
     _order = 'sequence, id'
     _rec_name = 'message'
@@ -369,10 +370,10 @@ class ChatbotScriptStep(models.Model):
 
     def _to_store(self, store: Store, /, *, fields=None):
         if fields is None:
-            fields = ["answer_ids", "message", "type"]
+            fields = ["answer_ids", "message", "type", "is_last"]
         for step in self:
-            data = self._read_format(
-                [f for f in fields if f not in {"answer_ids", "message", "type"}], load=False
+            data = step._read_format(
+                [f for f in fields if f not in {"answer_ids", "message", "type", "is_last"}], load=False
             )[0]
             if "answer_ids" in fields:
                 data["answers"] = Store.many(step.answer_ids)
@@ -380,24 +381,6 @@ class ChatbotScriptStep(models.Model):
                 data["message"] = plaintext2html(step.message) if step.message else False
             if "type" in fields:
                 data["type"] = step.step_type
+            if "is_last" in fields:
+                data["isLast"] = step._is_last_step()
             store.add("chatbot.script.step", data)
-
-    # --------------------------
-    # Tooling / Misc
-    # --------------------------
-
-    def _format_for_frontend(self):
-        """ Small utility method that formats the step into a dict usable by the frontend code. """
-        self.ensure_one()
-
-        return {
-            'id': self.id,
-            'answers': [{
-                'id': answer.id,
-                "name": answer.name,
-                "redirect_link": answer.redirect_link,
-            } for answer in self.answer_ids],
-            'message': plaintext2html(self.message) if not is_html_empty(self.message) else False,
-            'isLast': self._is_last_step(),
-            'type': self.step_type
-        }

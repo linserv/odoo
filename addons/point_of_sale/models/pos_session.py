@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 from collections import defaultdict
 from datetime import timedelta
@@ -6,13 +5,14 @@ from itertools import groupby, starmap
 from markupsafe import Markup
 
 from odoo import api, fields, models, _, Command
-from odoo.exceptions import AccessDenied, AccessError, UserError, ValidationError
-from odoo.tools import float_is_zero, float_compare, convert, plaintext2html
+from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.tools import float_is_zero, float_compare, plaintext2html
 from odoo.service.common import exp_version
 from odoo.osv.expression import AND
 
 
 class PosSession(models.Model):
+    _name = 'pos.session'
     _order = 'id desc'
     _description = 'Point of Sale Session'
     _inherit = ['mail.thread', 'mail.activity.mixin', "pos.bus.mixin", 'pos.load.mixin']
@@ -92,21 +92,22 @@ class PosSession(models.Model):
     update_stock_at_closing = fields.Boolean('Stock should be updated at closing')
     bank_payment_ids = fields.One2many('account.payment', 'pos_session_id', 'Bank Payments', help='Account payments representing aggregated and bank split payments.')
 
-    _sql_constraints = [('uniq_name', 'unique(name)', "The name of this POS Session must be unique!")]
+    _uniq_name = models.Constraint(
+        'unique(name)',
+        'The name of this POS Session must be unique!',
+    )
 
     @api.model
-    def _load_pos_data_relations(self, model, response):
+    def _load_pos_data_relations(self, model, fields):
         model_fields = self.env[model]._fields
-
-        if not response[model].get('relations'):
-            response[model]['relations'] = {}
+        relations = {}
 
         for name, params in model_fields.items():
-            if name not in response[model]['fields'] and len(response[model]['fields']) != 0:
+            if name not in fields and len(fields) != 0:
                 continue
 
             if params.comodel_name:
-                response[model]['relations'][name] = {
+                relations[name] = {
                     'name': name,
                     'model': params.model_name,
                     'compute': bool(params.compute),
@@ -115,16 +116,18 @@ class PosSession(models.Model):
                     'type': params.type,
                 }
                 if params.type == 'one2many' and params.inverse_name:
-                    response[model]['relations'][name]['inverse_name'] = params.inverse_name
+                    relations[name]['inverse_name'] = params.inverse_name
                 if params.type == 'many2many':
-                    response[model]['relations'][name]['relation_table'] = self.env[model]._fields[name].relation
+                    relations[name]['relation_table'] = self.env[model]._fields[name].relation
             else:
-                response[model]['relations'][name] = {
+                relations[name] = {
                     'name': name,
                     'type': params.type,
                     'compute': bool(params.compute),
                     'related': bool(params.related),
                 }
+
+        return relations
 
     @api.model
     def _load_pos_data_models(self, config_id):
@@ -132,7 +135,7 @@ class PosSession(models.Model):
             'pos.category', 'pos.bill', 'res.company', 'account.tax', 'account.tax.group', 'product.template', 'product.product', 'product.attribute', 'product.attribute.custom.value',
             'product.template.attribute.line', 'product.template.attribute.value', 'product.combo', 'product.combo.item', 'product.packaging', 'res.users', 'res.partner',
             'decimal.precision', 'uom.uom', 'uom.category', 'res.country', 'res.country.state', 'res.lang', 'product.pricelist', 'product.pricelist.item', 'product.category',
-            'account.cash.rounding', 'account.fiscal.position', 'account.fiscal.position.tax', 'stock.picking.type', 'res.currency', 'pos.note', 'ir.ui.view', 'ir.module.module']
+            'account.cash.rounding', 'account.fiscal.position', 'account.fiscal.position.tax', 'stock.picking.type', 'res.currency', 'pos.note', 'ir.ui.view', 'product.tag', 'ir.module.module']
 
     @api.model
     def _load_pos_data_domain(self, data):
@@ -149,21 +152,19 @@ class PosSession(models.Model):
         domain = self._load_pos_data_domain(data)
         fields = self._load_pos_data_fields(self.config_id.id)
         data = self.search_read(domain, fields, load=False, limit=1)
+        server_date = self.env.context.get('pos_last_server_date')
         data[0]['_partner_commercial_fields'] = self.env['res.partner']._commercial_fields()
         data[0]['_server_version'] = exp_version()
         data[0]['_base_url'] = self.get_base_url()
+        data[0]['_data_server_date'] = server_date or self.env.cr.now()
         data[0]['_has_cash_move_perm'] = self.env.user.has_group('account.group_account_invoice')
         data[0]['_has_available_products'] = self._pos_has_valid_product()
         data[0]['_pos_special_products_ids'] = self.env['pos.config']._get_special_products().ids
-        return {
-            'data': data,
-            'fields': fields
-        }
+        return data
 
-    def load_data(self, models_to_load, only_data=False):
+    def load_data(self, models_to_load):
         response = {}
         response['pos.session'] = self._load_pos_data(response)
-        self._load_pos_data_relations('pos.session', response)
 
         for model in self._load_pos_data_models(self.config_id.id):
             if models_to_load and model not in models_to_load:
@@ -171,15 +172,25 @@ class PosSession(models.Model):
 
             try:
                 response[model] = self.env[model]._load_pos_data(response)
-            except AccessError as e:
-                response[model] = {
-                    'data': [],
-                    'fields': self.env[model]._load_pos_data_fields(response['pos.config']['data'][0]['id']),
-                    'error': e.args[0]
-                }
+            except AccessError:
+                response[model] = []
 
-            if not only_data:
-                self._load_pos_data_relations(model, response)
+        return response
+
+    def load_data_params(self):
+        response = {}
+        fields = self._load_pos_data_fields(self.config_id.id)
+        response['pos.session'] = {
+            'fields': fields,
+            'relations': self._load_pos_data_relations('pos.session', fields)
+        }
+
+        for model in self._load_pos_data_models(self.config_id.id):
+            fields = self.env[model]._load_pos_data_fields(self.config_id.id)
+            response[model] = {
+                'fields': fields,
+                'relations': self._load_pos_data_relations(model, fields)
+            }
 
         return response
 
@@ -1129,7 +1140,10 @@ class PosSession(models.Model):
         return account_payment.move_id.line_ids.filtered(lambda line: line.account_id == self._get_receivable_account(payment_method))
 
     def _apply_diff_on_account_payment_move(self, account_payment, payment_method, diff_amount):
-        source_vals, dest_vals = self._get_diff_vals(payment_method.id, diff_amount)
+        diff_vals = self._get_diff_vals(payment_method.id, diff_amount)
+        if not diff_vals:
+            return
+        source_vals, dest_vals = diff_vals
         outstanding_line = account_payment.move_id.line_ids.filtered(lambda line: line.account_id.id == source_vals['account_id'])
         new_balance = outstanding_line.balance + self._amount_converter(diff_amount, self.stop_at, False)
         new_balance_compare_to_zero = self.currency_id.compare_amounts(new_balance, 0)
@@ -1721,7 +1735,7 @@ class PosSession(models.Model):
     def _alert_old_session(self):
         # If the session is open for more then one week,
         # log a next activity to close the session.
-        sessions = self.sudo().search([('start_at', '<=', (fields.datetime.now() - timedelta(days=7))), ('state', '!=', 'closed')])
+        sessions = self.sudo().search([('start_at', '<=', (fields.Datetime.now() - timedelta(days=7))), ('state', '!=', 'closed')])
         for session in sessions:
             if self.env['mail.activity'].search_count([('res_id', '=', session.id), ('res_model', '=', 'pos.session')]) == 0:
                 session.activity_schedule(
@@ -1835,13 +1849,14 @@ class PosSession(models.Model):
         product_template_fields = self.env['product.template']._load_pos_data_fields(config_id)
         product_packaging_fields = self.env['product.packaging']._load_pos_data_fields(config_id)
         product_tmpl_attr_value_fields = self.env['product.template.attribute.value']._load_pos_data_fields(config_id)
+        product_context = {**self.env.context, 'display_default_code': False}
         product = self.env['product.product'].search([
             ('barcode', '=', barcode),
             ('sale_ok', '=', True),
             ('available_in_pos', '=', True),
         ])
         if product:
-            product = product.with_context({'display_default_code': False})
+            product = product.with_context(product_context)
             return {
                 'product.product': product.read(product_fields, load=False),
                 'product.template': product.product_tmpl_id.read(product_template_fields, load=False),
@@ -1862,7 +1877,7 @@ class PosSession(models.Model):
         }
         packaging_params['search_params']['domain'] = [['barcode', '=', barcode]]
         packaging = self.env['product.packaging'].search(packaging_params['search_params']['domain'])
-        product = packaging.product_id.with_context({'display_default_code': False})
+        product = packaging.product_id.with_context(product_context)
         condition = packaging and packaging.product_id
         return {
             'product.product': product.read(product_fields, load=False) if condition else [],
@@ -1913,7 +1928,7 @@ class PosSession(models.Model):
 
 
 class ProcurementGroup(models.Model):
-    _inherit = ['procurement.group']
+    _inherit = 'procurement.group'
 
     @api.model
     def _run_scheduler_tasks(self, use_new_cursor=False, company_id=False):

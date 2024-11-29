@@ -13,13 +13,12 @@ class ResUsersSettingsVolumes(models.Model):
     guest_id = fields.Many2one('res.partner', ondelete='cascade', index=True)
     volume = fields.Float(default=0.5, help="Ranges between 0.0 and 1.0, scale depends on the browser implementation")
 
-    def init(self):
-        self.env.cr.execute("CREATE UNIQUE INDEX IF NOT EXISTS res_users_settings_volumes_partner_unique ON %s (user_setting_id, partner_id) WHERE partner_id IS NOT NULL" % self._table)
-        self.env.cr.execute("CREATE UNIQUE INDEX IF NOT EXISTS res_users_settings_volumes_guest_unique ON %s (user_setting_id, guest_id) WHERE guest_id IS NOT NULL" % self._table)
-
-    _sql_constraints = [
-        ("partner_or_guest_exists", "CHECK((partner_id IS NOT NULL AND guest_id IS NULL) OR (partner_id IS NULL AND guest_id IS NOT NULL))", "A volume setting must have a partner or a guest."),
-    ]
+    _partner_unique = models.UniqueIndex("(user_setting_id, partner_id) WHERE partner_id IS NOT NULL")
+    _guest_unique = models.UniqueIndex("(user_setting_id, guest_id) WHERE guest_id IS NOT NULL")
+    _partner_or_guest_exists = models.Constraint(
+        'CHECK((partner_id IS NOT NULL AND guest_id IS NULL) OR (partner_id IS NULL AND guest_id IS NOT NULL))',
+        'A volume setting must have a partner or a guest.',
+    )
 
     @api.depends('user_setting_id', 'partner_id', 'guest_id')
     def _compute_display_name(self):

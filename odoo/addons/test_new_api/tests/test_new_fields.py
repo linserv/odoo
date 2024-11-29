@@ -266,7 +266,6 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
     def test_10_display_name(self):
         """ test definition of automatic field 'display_name' """
         field = type(self.env['test_new_api.discussion']).display_name
-        self.assertTrue(field.automatic)
         self.assertTrue(field.compute)
         self.assertEqual(self.registry.field_depends[field], ('name',))
 
@@ -1616,6 +1615,25 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
         company_records = self.env['test_new_api.company'].search([('foo', '=', 'DEF')])
         self.assertEqual(len(company_records), 1)
 
+    def test_27_company_dependent_bool_integer_float(self):
+         company0 = self.env.ref('base.main_company')
+         company1 = self.env['res.company'].create({'name': 'A'})
+         Model = self.env['test_new_api.company']
+         record = Model.create({})
+         record.invalidate_recordset()
+         cr = self.env.cr
+         cr.execute("SELECT truth, count, phi FROM test_new_api_company WHERE id = %s", (record.id,))
+         self.assertEqual(cr.fetchone(), (None, None, None))
+         for company in [company0, company1]:
+             record_company = record.with_company(company)
+             self.assertEqual(record_company.truth, False)
+             self.assertEqual(record_company.count, 0)
+             self.assertEqual(record_company.phi, 0.0)
+         record.write({'truth': False, 'count': 0, 'phi': 0})  # write fallback equivalent
+         record.invalidate_recordset()
+         cr.execute("SELECT truth, count, phi FROM test_new_api_company WHERE id = %s", (record.id,))
+         self.assertEqual(cr.fetchone(), (None, None, None))
+
     def test_28_company_dependent_search(self):
         """ Test the search on company-dependent fields in all corner cases.
             This assumes that filtered_domain() correctly filters records when
@@ -2372,7 +2390,7 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
         """ test search on many2one ordered by id """
         with self.assertQueries(['''
             SELECT "test_new_api_message"."id" FROM "test_new_api_message"
-            WHERE ("test_new_api_message"."active" = %s)
+            WHERE ("test_new_api_message"."active" IS TRUE)
             ORDER BY  "test_new_api_message"."discussion"
         ''']):
             self.env['test_new_api.message'].search([], order='discussion')
@@ -2403,6 +2421,37 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
             self._search(Model, [('parent_id', 'child_of', 'Parent')]),
             active_parent + child_of_active + child_of_inactive,
         )
+
+    def test_53_boolean_query(self):
+        Model = self.env['test_new_api.model_active_field']
+
+        with self.assertQueries(["""
+            SELECT "test_new_api_model_active_field"."id"
+            FROM "test_new_api_model_active_field"
+            WHERE ("test_new_api_model_active_field"."active" IS TRUE)
+            ORDER BY "test_new_api_model_active_field"."id"
+        """, """
+            SELECT "test_new_api_model_active_field"."id"
+            FROM "test_new_api_model_active_field"
+            WHERE ("test_new_api_model_active_field"."active" IS NOT TRUE)
+            ORDER BY "test_new_api_model_active_field"."id"
+        """]):
+            Model.search([('active', '=', True)])
+            Model.search([('active', '=', False)])
+
+        with self.assertQueries(["""
+            SELECT "test_new_api_model_active_field"."id"
+            FROM "test_new_api_model_active_field"
+            WHERE TRUE
+            ORDER BY "test_new_api_model_active_field"."id"
+        """, """
+            SELECT "test_new_api_model_active_field"."id"
+            FROM "test_new_api_model_active_field"
+            WHERE FALSE
+            ORDER BY "test_new_api_model_active_field"."id"
+        """]):
+            Model.search([('active', 'in', [True, False])])
+            Model.search([('active', 'not in', [True, False])])
 
     def test_60_one2many_domain(self):
         """ test the cache consistency of a one2many field with a domain """
@@ -3831,14 +3880,12 @@ class TestMagicFields(TransactionCase):
         self.patch(registry, 'models', OrderedDict(sorted(models.items())))
         registry.setup_models(self.cr)
         field = registry['test_new_api.display'].display_name
-        self.assertFalse(field.automatic)
         self.assertTrue(field.store)
 
         # check setup of models in reverse alphanumeric order
         self.patch(registry, 'models', OrderedDict(sorted(models.items(), reverse=True)))
         registry.setup_models(self.cr)
         field = registry['test_new_api.display'].display_name
-        self.assertFalse(field.automatic)
         self.assertTrue(field.store)
 
 

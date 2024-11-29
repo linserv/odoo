@@ -4,7 +4,7 @@ from odoo.tools.date_utils import get_month
 
 
 class AccountMove(models.Model):
-    _inherit = ["account.move"]
+    _inherit = "account.move"
 
     l10n_in_is_withholding = fields.Boolean(
         string="Is Indian TDS Entry",
@@ -90,9 +90,9 @@ class AccountMove(models.Model):
                 }
             if sections:
                 tds_tcs_applicable_lines = (
-                    self.move_type == 'out_invoice'
-                    and self._get_tcs_applicable_lines(self.invoice_line_ids)
-                    or self.invoice_line_ids
+                    move.move_type == 'out_invoice'
+                    and move._get_tcs_applicable_lines(move.invoice_line_ids)
+                    or move.invoice_line_ids
                 )
                 warnings['tds_tcs_threshold_alert'] = {
                     'message': sections._get_warning_message(),
@@ -104,8 +104,8 @@ class AccountMove(models.Model):
                         'domain': [('id', 'in', tds_tcs_applicable_lines.ids)],
                         'views': [(self.env.ref('l10n_in_withholding.view_move_line_list_l10n_in_withholding').id, 'list')],
                         'context': {
-                            'default_tax_type_use': self.invoice_filter_type_domain,
-                            'move_type': self.move_type == 'in_invoice'
+                            'default_tax_type_use': move.invoice_filter_type_domain,
+                            'move_type': move.move_type == 'in_invoice'
                         },
                     }
                 }

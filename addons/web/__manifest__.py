@@ -61,7 +61,6 @@ This module provides the core of the Odoo Web Client.
             'web/static/src/scss/mimetypes.scss',
             'web/static/src/scss/ui.scss',
             'web/static/src/views/fields/translation_dialog.scss',
-            'web/static/src/legacy/scss/ui.scss',
 
             'web/static/src/polyfills/clipboard.js',
 
@@ -115,13 +114,9 @@ This module provides the core of the Odoo Web Client.
             'web/static/src/webclient/actions/reports/*.js',
             'web/static/src/webclient/actions/reports/*.xml',
 
-            'web/static/src/libs/pdfjs.js',
-
             'web/static/src/scss/ace.scss',
             'web/static/src/scss/base_document_layout.scss',
 
-            'web/static/src/legacy/scss/dropdown.scss',
-            'web/static/src/legacy/scss/fields.scss',
             'base/static/src/scss/res_partner.scss',
 
             # Form style should be computed before
@@ -188,8 +183,6 @@ This module provides the core of the Odoo Web Client.
             'web/static/src/views/fields/translation_dialog.scss',
             'web/static/src/views/fields/signature/signature_field.scss',
 
-            'web/static/src/legacy/scss/ui.scss',
-
             ('include', 'web.assets_frontend_minimal'),
 
             'web/static/lib/owl/owl.js',
@@ -238,7 +231,6 @@ This module provides the core of the Odoo Web Client.
             'web/static/src/public/error_notifications.js',
             'web/static/src/public/public_component_service.js',
             'web/static/src/public/datetime_picker_widget.js',
-            'web/static/src/libs/pdfjs.js',
 
             'web/static/src/legacy/js/public/public_root.js',
             'web/static/src/legacy/js/public/public_root_instance.js',
@@ -442,8 +434,6 @@ This module provides the core of the Odoo Web Client.
 
             'web/static/lib/owl/owl.js',
             'web/static/lib/owl/odoo_module.js',
-
-            'web/static/lib/jquery/jquery.js',
 
             'web/static/lib/hoot/**/*',
             'web/static/lib/hoot-dom/**/*',

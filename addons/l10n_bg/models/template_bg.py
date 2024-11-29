@@ -4,15 +4,13 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('bg')
     def _get_bg_template_data(self):
         return {
             'property_account_receivable_id': 'l10n_bg_411',
             'property_account_payable_id': 'l10n_bg_401',
-            'property_account_expense_categ_id': 'l10n_bg_601',
-            'property_account_income_categ_id': 'l10n_bg_701',
             'default_cash_difference_income_account_id': 'l10n_bg_791001',
             'default_cash_difference_expense_account_id': 'l10n_bg_691001',
             'code_digits': '6',
@@ -30,5 +28,8 @@ class AccountChartTemplate(models.AbstractModel):
                 'expense_currency_exchange_account_id': 'l10n_bg_624',
                 'account_sale_tax_id': 'l10n_bg_sale_vat_20',
                 'account_purchase_tax_id': 'l10n_bg_purchase_vat_20_ptc',
+                'account_default_pos_receivable_account_id': 'l10n_bg_4111',
+                'expense_account_id': 'l10n_bg_601',
+                'income_account_id': 'l10n_bg_701',
             },
         }

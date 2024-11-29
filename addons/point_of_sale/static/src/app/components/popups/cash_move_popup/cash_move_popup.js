@@ -7,7 +7,7 @@ import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { CashMoveReceipt } from "@point_of_sale/app/components/popups/cash_move_popup/cash_move_receipt/cash_move_receipt";
 import { Dialog } from "@web/core/dialog/dialog";
 import { useAsyncLockedMethod } from "@point_of_sale/app/hooks/hooks";
-import { Input } from "@point_of_sale/app/generic_components/inputs/input/input";
+import { Input } from "@point_of_sale/app/components/inputs/input/input";
 
 export class CashMovePopup extends Component {
     static template = "point_of_sale.CashMovePopup";
@@ -27,6 +27,7 @@ export class CashMovePopup extends Component {
             reason: "",
         });
         this.confirm = useAsyncLockedMethod(this.confirm);
+        this.ui = useService("ui");
     }
 
     async confirm() {
@@ -45,7 +46,7 @@ export class CashMovePopup extends Component {
         await this.pos.data.call(
             "pos.session",
             "try_cash_in_out",
-            this._prepare_try_cash_in_out_payload(type, amount, reason, extras),
+            this._prepareTryCashInOutPayload(type, amount, reason, extras),
             {},
             true
         );
@@ -83,7 +84,7 @@ export class CashMovePopup extends Component {
             ? this.env.utils.formatCurrency(parseFloat(value))
             : "";
     }
-    _prepare_try_cash_in_out_payload(type, amount, reason, extras) {
+    _prepareTryCashInOutPayload(type, amount, reason, extras) {
         return [[this.pos.session.id], type, amount, reason, extras];
     }
 }

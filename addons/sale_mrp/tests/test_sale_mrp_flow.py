@@ -292,13 +292,13 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         order_form.partner_id = self.env['res.partner'].create({'name': 'My Test Partner'})
         with order_form.order_line.new() as line:
             line.product_id = product_a
-            line.product_uom = self.uom_dozen
+            line.product_uom_id = self.uom_dozen
             line.product_uom_qty = 10
         order = order_form.save()
         order.action_confirm()
 
         # Verify buttons are working as expected
-        self.assertEqual(order.mrp_production_count, 1, "User should see the closest manufacture order in the smart button")
+        self.assertEqual(order.mrp_production_count, 2, "Mo for product A + child mo for product B")
 
         # ===============================================================================
         #  Sales order of 10 Dozen product A should create production order
@@ -487,7 +487,6 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
             'name': 'Table Kit',
             'type': 'consu',
             'invoice_policy': 'delivery',
-            'categ_id': self.env.ref('product.product_category_all').id,
         })
         # Remove the MTO route as purchase is not installed and since the procurement removal the exception is directly raised
         product.write({'route_ids': [(6, 0, [self.company_data['default_warehouse'].manufacture_pull_id.route_id.id])]})
@@ -581,7 +580,11 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         self.company = self.company_data['company']
         self.company.anglo_saxon_accounting = True
         self.partner = self.env['res.partner'].create({'name': 'My Test Partner'})
-        self.category = self.env.ref('product.product_category_1').copy({'name': 'Test category','property_valuation': 'real_time', 'property_cost_method': 'fifo'})
+        self.category = self.env.ref('product.product_category_goods').copy({
+            'name': 'Test category',
+            'property_valuation': 'real_time',
+            'property_cost_method': 'fifo',
+        })
         self.account_receiv = self.env['account.account'].create({'name': 'Receivable', 'code': 'RCV00', 'account_type': 'asset_receivable', 'reconcile': True})
         account_expense = self.env['account.account'].create({'name': 'Expense', 'code': 'EXP00', 'account_type': 'liability_current', 'reconcile': True})
         account_income = self.env['account.account'].create({'name': 'Income', 'code': 'INC00', 'account_type': 'asset_current', 'reconcile': True})
@@ -650,7 +653,6 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
                 'name': self.finished_product.name,
                 'product_id': self.finished_product.id,
                 'product_uom_qty': 3,
-                'product_uom': self.finished_product.uom_id.id,
                 'price_unit': self.finished_product.list_price
             })],
             'company_id': self.company.id,
@@ -1057,7 +1059,7 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         self.assertEqual(kit_parent_wh1.virtual_available, 1)
 
         # Check there arn't enough quantities available for the sale order
-        self.assertTrue(float_compare(order_line.virtual_available_at_date - order_line.product_uom_qty, 0, precision_rounding=line.product_uom.rounding) == -1)
+        self.assertTrue(float_compare(order_line.virtual_available_at_date - order_line.product_uom_qty, 0, precision_rounding=line.product_uom_id.rounding) == -1)
 
         # We receive enoug of each component in Warehouse 2 to make 3 kit_parent
         qty_to_process = {
@@ -1080,7 +1082,7 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         self.assertEqual(kit_parent_wh1.virtual_available, 1)
 
         # Check there arn't enough quantities available for the sale order
-        self.assertTrue(float_compare(order_line.virtual_available_at_date - order_line.product_uom_qty, 0, precision_rounding=line.product_uom.rounding) == -1)
+        self.assertTrue(float_compare(order_line.virtual_available_at_date - order_line.product_uom_qty, 0, precision_rounding=line.product_uom_id.rounding) == -1)
 
         # We receive enough of each component in Warehouse 2 to make 7 kit_parent
         qty_to_process = {
@@ -1292,7 +1294,7 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         self.assertEqual(virtual_available_wh_order, 1)
 
         # Check there arn't enough quantities available for the sale order
-        self.assertTrue(float_compare(order_line.virtual_available_at_date - order_line.product_uom_qty, 0, precision_rounding=line.product_uom.rounding) == -1)
+        self.assertTrue(float_compare(order_line.virtual_available_at_date - order_line.product_uom_qty, 0, precision_rounding=line.product_uom_id.rounding) == -1)
 
         # We receive enough of each component in Warehouse 1 to make 3 kit_uom_in_kit.
         # Moves are created instead of only updating the quant quantities in order to trigger every compute fields.
@@ -1305,7 +1307,7 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         self._create_move_quantities(qty_to_process, components, warehouse_1)
 
         # Check there arn't enough quantities available for the sale order
-        self.assertTrue(float_compare(order_line.virtual_available_at_date - order_line.product_uom_qty, 0, precision_rounding=line.product_uom.rounding) == -1)
+        self.assertTrue(float_compare(order_line.virtual_available_at_date - order_line.product_uom_qty, 0, precision_rounding=line.product_uom_id.rounding) == -1)
         kit_uom_in_kit.with_context(warehouse_id=warehouse_1.id)._compute_quantities()
         virtual_available_wh_order = kit_uom_in_kit.virtual_available
         self.assertEqual(virtual_available_wh_order, 3)
@@ -1391,7 +1393,6 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         order_form.partner_id = self.env['res.partner'].create({'name': 'My Test Partner'})
         with order_form.order_line.new() as line:
             line.product_id = kit_1
-            line.product_uom = self.uom_unit
             line.product_uom_qty = 5
         order = order_form.save()
         order.action_confirm()
@@ -1450,7 +1451,6 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         order_form.warehouse_id = warehouse_1
         with order_form.order_line.new() as line:
             line.product_id = kit_1
-            line.product_uom = self.uom_unit
             line.product_uom_qty = 2
         order = order_form.save()
         order.action_confirm()
@@ -1501,7 +1501,6 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
             line.name = finished_product.name
             line.product_id = finished_product
             line.product_uom_qty = 1.0
-            line.product_uom = self.uom_unit
             line.price_unit = 10.0
         sale_order = sale_form.save()
 
@@ -1550,7 +1549,6 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
             line.name = finished_product.name
             line.product_id = finished_product
             line.product_uom_qty = 1.0
-            line.product_uom = self.uom_unit
             line.price_unit = 10.0
         sale_order = sale_form.save()
 
@@ -1605,7 +1603,6 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
             line.name = finished_product.name
             line.product_id = finished_product
             line.product_uom_qty = 1.0
-            line.product_uom = self.uom_unit
             line.price_unit = 10.0
         sale_order = sale_form.save()
 
@@ -1778,7 +1775,11 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         self.env.company.currency_id = self.env.ref('base.USD')
         self.env.company.anglo_saxon_accounting = True
         self.partner = self.env['res.partner'].create({'name': 'Test Partner'})
-        self.category = self.env.ref('product.product_category_1').copy({'name': 'Test category', 'property_valuation': 'real_time', 'property_cost_method': 'fifo'})
+        self.category = self.env.ref('product.product_category_goods').copy({
+            'name': 'Test category',
+            'property_valuation': 'real_time',
+            'property_cost_method': 'fifo',
+        })
         account_receiv = self.env['account.account'].create({'name': 'Receivable', 'code': 'RCV00', 'account_type': 'asset_receivable', 'reconcile': True})
         account_expense = self.env['account.account'].create({'name': 'Expense', 'code': 'EXP00', 'account_type': 'liability_current', 'reconcile': True})
         account_income = self.env['account.account'].create({'name': 'Income', 'code': 'INC00', 'account_type': 'asset_current', 'reconcile': True})
@@ -1866,13 +1867,11 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
                 'name': self.variant_KIT.name,
                 'product_id': self.variant_KIT.id,
                 'product_uom_qty': 1,
-                'product_uom': self.uom_unit.id,
                 'price_unit': 100,
             }), (0, 0, {
                 'name': self.variant_NOKIT.name,
                 'product_id': self.variant_NOKIT.id,
                 'product_uom_qty': 1,
-                'product_uom': self.uom_unit.id,
                 'price_unit': 50
             })],
             'company_id': self.env.company.id
@@ -1920,7 +1919,11 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
 
         # Create environment
         self.partner = self.env['res.partner'].create({'name': 'Test Partner'})
-        self.category = self.env.ref('product.product_category_1').copy({'name': 'Test category', 'property_valuation': 'real_time', 'property_cost_method': 'fifo'})
+        self.category = self.env.ref('product.product_category_goods').copy({
+            'name': 'Test category',
+            'property_valuation': 'real_time',
+            'property_cost_method': 'fifo',
+        })
         account_receiv = self.env['account.account'].create({'name': 'Receivable', 'code': 'RCV00', 'account_type': 'asset_receivable', 'reconcile': True})
         account_income = self.env['account.account'].create({'name': 'Income', 'code': 'INC00', 'account_type': 'asset_current', 'reconcile': True})
         account_expense = self.env['account.account'].create({'name': 'Expense', 'code': 'EXP00', 'account_type': 'liability_current', 'reconcile': True})
@@ -2001,7 +2004,6 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
                 'name': self.variant_KIT_A.name,
                 'product_id': self.variant_KIT_A.id,
                 'product_uom_qty': 1,
-                'product_uom': self.uom_unit.id,
                 'price_unit': 50
             })],
             'company_id': self.env.company.id,
@@ -2137,7 +2139,7 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         with so_form.order_line.new() as line:
             line.product_id = self.kit_3
             line.product_uom_qty = 7
-            line.product_uom = self.uom_ten
+            line.product_uom_id = self.uom_ten
         so = so_form.save()
         so.action_confirm()
 
@@ -2207,7 +2209,7 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         with so_form.order_line.new() as line:
             line.product_id = self.kit_3
             line.product_uom_qty = 2
-            line.product_uom = self.uom_ten
+            line.product_uom_id = self.uom_ten
         so = so_form.save()
         so.action_confirm()
 
@@ -2246,7 +2248,7 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
         with so_form.order_line.new() as line:
             line.product_id = self.kit_3
             line.product_uom_qty = 2
-            line.product_uom = self.uom_ten
+            line.product_uom_id = self.uom_ten
         so = so_form.save()
         so.action_confirm()
 
@@ -2321,9 +2323,8 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
                     'name': kit.name,
                     'product_id': kit.id,
                     'product_uom_qty': 1.0,
-                    'product_uom': kit.uom_id.id,
                     'price_unit': 100,
-                    'tax_id': False,
+                    'tax_ids': False,
                 })],
         })
         so.action_confirm()
@@ -2387,9 +2388,8 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
                     'name': kit.name,
                     'product_id': kit.id,
                     'product_uom_qty': 1.0,
-                    'product_uom': kit.uom_id.id,
                     'price_unit': 5,
-                    'tax_id': False,
+                    'tax_ids': False,
                 })],
         })
         so.action_confirm()
@@ -2410,9 +2410,8 @@ class TestSaleMrpFlow(TestSaleMrpFlowCommon):
                     'name': self.kit_1.name,
                     'product_id': self.kit_1.id,
                     'product_uom_qty': 1.0,
-                    'product_uom': self.kit_1.uom_id.id,
                     'price_unit': 5,
-                    'tax_id': False,
+                    'tax_ids': False,
                 })],
         })
         self.bom_kit_1.action_archive()

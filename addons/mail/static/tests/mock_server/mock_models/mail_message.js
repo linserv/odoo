@@ -158,7 +158,7 @@ export class MailMessage extends models.ServerModel {
                 link_preview_ids: mailDataHelpers.Store.many(
                     MailLinkPreview.browse(message.link_preview_ids)
                 ),
-                notifications: mailDataHelpers.Store.many(
+                notification_ids: mailDataHelpers.Store.many(
                     notifications.filter(
                         (notification) => notification.mail_message_id == message.id
                     )
@@ -275,6 +275,31 @@ export class MailMessage extends models.ServerModel {
                 ),
             });
         }
+    }
+
+    unlink() {
+        const messageByPartnerId = {};
+        for (const message of this) {
+            for (const partnerId of message.partner_ids) {
+                messageByPartnerId[partnerId] ??= [];
+                messageByPartnerId[partnerId].push(message);
+            }
+            if (
+                this.env["mail.notification"]
+                    .browse(message.notification_ids)
+                    .some(({ failure_type }) => Boolean(failure_type))
+            ) {
+                messageByPartnerId[message.author_id] ??= [];
+                messageByPartnerId[message.author_id].push(message);
+            }
+        }
+        for (const [partnerId, messages] of Object.entries(messageByPartnerId)) {
+            const [partner] = this.env["res.partner"].browse(parseInt(partnerId));
+            this.env["bus.bus"]._sendone(partner, "mail.message/delete", {
+                message_ids: messages.map(({ id }) => id),
+            });
+        }
+        return super.unlink(...arguments);
     }
 
     /** @param {number[]} ids */
@@ -481,7 +506,7 @@ export class MailMessage extends models.ServerModel {
                 body: message.body,
                 date: message.date,
                 message_type: message.message_type,
-                notifications: mailDataHelpers.Store.many(
+                notification_ids: mailDataHelpers.Store.many(
                     MailNotification._filtered_for_web_client(
                         MailNotification.search([["mail_message_id", "=", message.id]])
                     )

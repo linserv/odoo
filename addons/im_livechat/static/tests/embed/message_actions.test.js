@@ -33,16 +33,17 @@ test("Only two quick actions are shown", async () => {
     // message data from post contains no reaction, wait now to avoid overriding newer value later
     await waitNotifications([env, "discuss.channel/new_message"]);
     await click("[title='Add a Reaction']");
-    await click(".o-Emoji", { text: "😅" });
+    await click(".o-mail-QuickReactionMenu button", { text: "😅" });
     await contains(".o-mail-MessageReaction", { text: "😅" });
     await contains(".o-mail-Message-actions i", { count: 3 });
     await contains("[title='Add a Reaction']");
     await contains("[title='Reply']");
     await contains("[title='Expand']");
     await click("[title='Expand']");
-    await contains(".o-mail-Message-actions i, .o-mail-Message-moreMenu i", { count: 7 });
-    await contains("[title='Copy Link']");
+    await contains(".o-mail-Message-actions i, .o-mail-Message-moreMenu i", { count: 8 });
+    await contains("[title='View Reactions']");
+    await contains("[title='Mark as Unread']");
     await contains("[title='Edit']");
     await contains("[title='Delete']");
-    await contains("[title='View Reactions']");
+    await contains("[title='Copy Link']");
 });

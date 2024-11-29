@@ -142,7 +142,6 @@ Featuring
             'web/static/src/core/color_picker/color_picker.scss',
             'web/static/src/views/fields/translation_dialog.scss',
             'web/static/src/views/fields/signature/signature_field.scss',
-            'web/static/src/legacy/scss/ui.scss',
             'website/static/src/libs/zoomodoo/zoomodoo.scss',
 
             'web/static/src/module_loader.js',
@@ -184,7 +183,6 @@ Featuring
             'website/static/src/libs/zoomodoo/zoomodoo.js',
             'web/static/src/core/**/*.js',
             'web/static/src/env.js',
-            'web/static/src/libs/pdfjs.js',
             ('remove', 'web/static/src/core/emoji_picker/emoji_data.js'),
 
             'website_slides/static/src/scss/website_slides.scss',

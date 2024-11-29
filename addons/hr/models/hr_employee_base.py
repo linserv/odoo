@@ -9,6 +9,7 @@ from odoo.tools import format_time
 
 
 class HrEmployeeBase(models.AbstractModel):
+    _name = 'hr.employee.base'
     _description = "Basic Employee"
     _order = 'name'
 
@@ -159,7 +160,7 @@ class HrEmployeeBase(models.AbstractModel):
         for employee in self:
             state = 'out_of_working_hour'
             if employee.company_id.sudo().hr_presence_control_login:
-                if 'online' in str(employee.user_id.im_status):
+                if employee.user_id._is_user_available():
                     state = 'present'
                 elif 'offline' in str(employee.user_id.im_status) and employee.id in working_now_list:
                     state = 'absent'
@@ -269,11 +270,6 @@ class HrEmployeeBase(models.AbstractModel):
         for employee in self:
             employee.is_fully_flexible = not employee.resource_calendar_id
             employee.is_flexible = employee.is_fully_flexible or employee.resource_calendar_id.flexible_hours
-
-    @api.model
-    def search_panel_select_range(self, field_name, **kwargs):
-        # make sure all the companies/departments accessible by the current user are visible in the search panel since the user can see employees in other companies.
-        return super(HrEmployeeBase, self.with_context(allowed_company_ids=self.env.user._get_company_ids())).search_panel_select_range(field_name, **kwargs)
 
     @api.model
     def _get_employee_working_now(self):

@@ -8,7 +8,7 @@ from odoo import api, fields, models
 
 
 class RestaurantTable(models.Model):
-    _inherit = ["restaurant.table"]
+    _inherit = "restaurant.table"
 
     identifier = fields.Char(
         "Security Token",
@@ -33,11 +33,11 @@ class RestaurantTable(models.Model):
 
     @api.model
     def _load_pos_self_data_domain(self, data):
-        return [('floor_id', 'in', [floor['id'] for floor in data['restaurant.floor']['data']])]
+        return [('floor_id', 'in', [floor['id'] for floor in data['restaurant.floor']])]
 
 
 class RestaurantFloor(models.Model):
-    _inherit = ["restaurant.floor"]
+    _inherit = "restaurant.floor"
 
     @api.model
     def _load_pos_self_data_fields(self, config_id):
@@ -45,4 +45,4 @@ class RestaurantFloor(models.Model):
 
     @api.model
     def _load_pos_self_data_domain(self, data):
-        return [('id', 'in', data['pos.config']['data'][0]['floor_ids'])]
+        return [('id', 'in', data['pos.config'][0]['floor_ids'])]

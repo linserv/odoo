@@ -3,11 +3,11 @@ from contextlib import contextmanager
 
 from odoo import api, fields, models, _, Command
 from odoo.exceptions import UserError
-from odoo.tools import create_index
 from odoo.tools.misc import formatLang
 
 
 class AccountBankStatement(models.Model):
+    _name = 'account.bank.statement'
     _description = "Bank Statement"
     _order = "first_line_index desc"
     _check_company_auto = True
@@ -103,18 +103,8 @@ class AccountBankStatement(models.Model):
         string="Attachments",
     )
 
-    def init(self):
-        super().init()
-        create_index(self.env.cr,
-                     indexname='account_bank_statement_journal_id_date_desc_id_desc_idx',
-                     tablename='account_bank_statement',
-                     expressions=['journal_id', 'date DESC', 'id DESC'])
-        create_index(
-            self.env.cr,
-            indexname='account_bank_statement_first_line_index_idx',
-            tablename='account_bank_statement',
-            expressions=['journal_id', 'first_line_index'],
-        )
+    _journal_id_date_desc_id_desc_idx = models.Index("(journal_id, date DESC, id DESC)")
+    _first_line_index_idx = models.Index("(journal_id, first_line_index)")
 
     # -------------------------------------------------------------------------
     # COMPUTE METHODS
@@ -128,7 +118,8 @@ class AccountBankStatement(models.Model):
     @api.depends('line_ids.internal_index', 'line_ids.state')
     def _compute_date_index(self):
         for stmt in self:
-            sorted_lines = stmt.line_ids.sorted('internal_index')
+            # When we create lines manually from the form view, they don't have any `internal_index` set yet.
+            sorted_lines = stmt.line_ids.filtered("internal_index").sorted('internal_index')
             stmt.first_line_index = sorted_lines[:1].internal_index
             stmt.date = sorted_lines.filtered(lambda l: l.state == 'posted')[-1:].date
 

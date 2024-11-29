@@ -5,6 +5,7 @@ from odoo.tools.translate import html_translate
 
 
 class ProductPublicCategory(models.Model):
+    _name = 'product.public.category'
     _inherit = [
         'website.seo.metadata',
         'website.multi.mixin',
@@ -63,6 +64,7 @@ class ProductPublicCategory(models.Model):
 
     #=== COMPUTE METHODS ===#
 
+    @api.depends('parent_path')
     def _compute_parents_and_self(self):
         for category in self:
             if category.parent_path:

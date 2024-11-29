@@ -18,8 +18,6 @@ class BaseMailPerformance(MailCommon, TransactionCaseWithUserDemo):
     def setUpClass(cls):
         super(BaseMailPerformance, cls).setUpClass()
 
-        # creating partners is required notably with template usage
-        cls.user_employee.write({'groups_id': [(4, cls.env.ref('base.group_partner_manager').id)]})
         res_users = cls.env["res.users"].with_context(cls._test_context)
         cls.user_test = cls.user_test_inbox = res_users.create(
             {
@@ -1386,7 +1384,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                                     "message_type": "comment",
                                     "model": "mail.test.simple",
                                     "needaction": True,
-                                    "notifications": [notif_1.id, notif_2.id],
+                                    "notification_ids": [notif_1.id, notif_2.id],
                                     "pinned_at": False,
                                     "rating_id": False,
                                     "reactions": [],
@@ -1406,7 +1404,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                                 {
                                     "failure_type": False,
                                     "id": notif_1.id,
-                                    "message": message.id,
+                                    "mail_message_id": message.id,
                                     "notification_status": "sent",
                                     "notification_type": "inbox",
                                     "persona": {
@@ -1417,7 +1415,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                                 {
                                     "failure_type": False,
                                     "id": notif_2.id,
-                                    "message": message.id,
+                                    "mail_message_id": message.id,
                                     "notification_status": "sent",
                                     "notification_type": "inbox",
                                     "persona": {
@@ -1451,7 +1449,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                                     "name": "OdooBot",
                                     "userId": self.env.user.id,
                                     "write_date": fields.Datetime.to_string(
-                                        self.env.user.write_date
+                                        self.env.user.partner_id.write_date
                                     ),
                                 },
                             ),
@@ -1489,7 +1487,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                                     "message_type": "comment",
                                     "model": "mail.test.simple",
                                     "needaction": True,
-                                    "notifications": [notif_1.id, notif_2.id],
+                                    "notification_ids": [notif_1.id, notif_2.id],
                                     "pinned_at": False,
                                     "rating_id": False,
                                     "reactions": [],
@@ -1509,7 +1507,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                                 {
                                     "failure_type": False,
                                     "id": notif_1.id,
-                                    "message": message.id,
+                                    "mail_message_id": message.id,
                                     "notification_status": "sent",
                                     "notification_type": "inbox",
                                     "persona": {
@@ -1520,7 +1518,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                                 {
                                     "failure_type": False,
                                     "id": notif_2.id,
-                                    "message": message.id,
+                                    "mail_message_id": message.id,
                                     "notification_status": "sent",
                                     "notification_type": "inbox",
                                     "persona": {
@@ -1554,7 +1552,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                                     "name": "OdooBot",
                                     "userId": self.env.user.id,
                                     "write_date": fields.Datetime.to_string(
-                                        self.env.user.write_date
+                                        self.env.user.partner_id.write_date
                                     ),
                                 },
                             ),

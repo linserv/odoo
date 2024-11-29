@@ -10,7 +10,7 @@ from odoo.exceptions import ValidationError
 
 
 class StockMoveLine(models.Model):
-    _inherit = ['stock.move.line']
+    _inherit = 'stock.move.line'
 
     workorder_id = fields.Many2one('mrp.workorder', 'Work Order', check_company=True)
     production_id = fields.Many2one('mrp.production', 'Production Order', check_company=True)
@@ -181,7 +181,7 @@ class StockMoveLine(models.Model):
 
 
 class StockMove(models.Model):
-    _inherit = ['stock.move']
+    _inherit = 'stock.move'
 
     created_production_id = fields.Many2one('mrp.production', 'Created Production Order', check_company=True, index=True)
     production_id = fields.Many2one(
@@ -526,11 +526,13 @@ class StockMove(models.Model):
         self.ensure_one()
         action = super().action_show_details()
         if self.raw_material_production_id:
+            action['name'] = _("Components")
             action['views'] = [(self.env.ref('mrp.view_stock_move_operations_raw').id, 'form')]
             action['context']['show_destination_location'] = False
             action['context']['force_manual_consumption'] = True
             action['context']['active_mo_id'] = self.raw_material_production_id.id
         elif self.production_id:
+            action['name'] = _("Move Byproduct")
             action['views'] = [(self.env.ref('mrp.view_stock_move_operations_finished').id, 'form')]
             action['context']['show_source_location'] = False
             action['context']['show_reserved_quantity'] = False
@@ -625,6 +627,12 @@ class StockMove(models.Model):
         if float_is_zero(self.product_uom_qty, precision_rounding=self.product_uom.rounding):
             return True
         return False
+
+    def _prepare_move_line_vals(self, quantity=None, reserved_quant=None):
+        vals = super()._prepare_move_line_vals(quantity, reserved_quant)
+        if self.production_id.product_tracking == 'lot' and self.product_id == self.production_id.product_id:
+            vals['lot_id'] = self.production_id.lot_producing_id.id
+        return vals
 
     def _key_assign_picking(self):
         keys = super(StockMove, self)._key_assign_picking()

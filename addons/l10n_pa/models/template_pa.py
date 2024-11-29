@@ -4,7 +4,7 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('pa')
     def _get_pa_template_data(self):
@@ -12,8 +12,6 @@ class AccountChartTemplate(models.AbstractModel):
             'code_digits': '7',
             'property_account_receivable_id': '121',
             'property_account_payable_id': '211',
-            'property_account_expense_categ_id': '62_01',
-            'property_account_income_categ_id': '411_01',
         }
 
     @template('pa', 'res.company')
@@ -29,5 +27,7 @@ class AccountChartTemplate(models.AbstractModel):
                 'expense_currency_exchange_account_id': 'loss81_01',
                 'account_sale_tax_id': 'ITAX_19',
                 'account_purchase_tax_id': 'OTAX_19',
+                'expense_account_id': '62_01',
+                'income_account_id': '411_01',
             },
         }

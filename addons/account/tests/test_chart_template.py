@@ -24,8 +24,6 @@ def test_get_data(self, template_code):
         'template_data': {
             'code_digits': 6,
             'currency_id': 'base.EUR',
-            'property_account_income_categ_id': 'test_account_income_template',
-            'property_account_expense_categ_id': 'test_account_expense_template',
             'property_account_receivable_id': 'test_account_receivable_template',
             'property_account_payable_id': 'test_account_payable_template',
         },
@@ -41,6 +39,8 @@ def test_get_data(self, template_code):
                 'bank_account_code_prefix': '1000',
                 'cash_account_code_prefix': '2000',
                 'transfer_account_code_prefix': '3000',
+                'income_account_id': 'test_account_income_template',
+                'expense_account_id': 'test_account_expense_template',
             },
         },
         'account.account.tag': {
@@ -598,6 +598,20 @@ class TestChartTemplate(AccountTestInvoicingCommon):
 
             # silently ignore if the field doesn't exist (yet)
             self.env['account.chart.template'].try_loading('test', company=company, install_demo=False)
+
+    def test_branch(self):
+        # Test the auto-installation of a chart template (including demo data) on a branch
+        # Create a new main company, because install_demo doesn't do anything when reloading data
+        company = self.env['res.company'].create([{'name': 'Test Company'}])
+        branch = self.env['res.company'].create([{
+            'name': 'Test Branch',
+            'parent_id': company.id,
+        }])
+
+        with patch.object(AccountChartTemplate, '_get_chart_template_data', side_effect=test_get_data, autospec=True):
+            self.env['account.chart.template'].try_loading('test', company=company, install_demo=True)
+        self.assertEqual(company.chart_template, 'test')
+        self.assertEqual(branch.chart_template, 'test')
 
     def test_change_coa(self):
         def _get_chart_template_mapping(self, get_all=False):

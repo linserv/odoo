@@ -2,6 +2,7 @@ from odoo import api, fields, models
 
 
 class UomCategory(models.Model):
+    _name = 'uom.category'
     _inherit = ['uom.category', 'pos.load.mixin']
 
     is_pos_groupable = fields.Boolean(string='Group Products in POS',
@@ -9,7 +10,7 @@ class UomCategory(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('uom_ids', 'in', [uom['category_id'] for uom in data['uom.uom']['data']])]
+        return [('id', 'in', [uom['category_id'] for uom in data['uom.uom']])]
 
     @api.model
     def _load_pos_data_fields(self, config_id):
@@ -17,6 +18,7 @@ class UomCategory(models.Model):
 
 
 class UomUom(models.Model):
+    _name = 'uom.uom'
     _inherit = ['uom.uom', 'pos.load.mixin']
 
     is_pos_groupable = fields.Boolean(related='category_id.is_pos_groupable', readonly=False)
@@ -27,8 +29,5 @@ class UomUom(models.Model):
 
     def _load_pos_data(self, data):
         domain = self._load_pos_data_domain(data)
-        fields = self._load_pos_data_fields(data['pos.config']['data'][0]['id'])
-        return {
-            'data': self.with_context({**self.env.context}).search_read(domain, fields, load=False),
-            'fields': fields,
-        }
+        fields = self._load_pos_data_fields(data['pos.config'][0]['id'])
+        return self.with_context({**self.env.context}).search_read(domain, fields, load=False)

@@ -11,19 +11,18 @@ from operator import attrgetter
 
 from psycopg2.extras import Json as PsycopgJson
 
+from odoo import SUPERUSER_ID
 from odoo.exceptions import AccessError, MissingError
 from odoo.osv import expression
 from odoo.tools import SQL, lazy_property, sql
+from odoo.tools.constants import PREFETCH_MAX
 from odoo.tools.misc import SENTINEL, Sentinel
 
-from .utils import PREFETCH_MAX, expand_ids
+from .utils import expand_ids
 
 if typing.TYPE_CHECKING:
     from .models import BaseModel
 T = typing.TypeVar("T")
-
-# hacky-ish way to prevent access to a field through the ORM (except for sudo mode)
-NO_ACCESS='.'
 
 IR_MODELS = (
     'ir.model', 'ir.model.data', 'ir.model.fields', 'ir.model.fields.selection',
@@ -35,12 +34,6 @@ COMPANY_DEPENDENT_FIELDS = (
 )
 
 _logger = logging.getLogger('odoo.fields')
-
-
-def first(records):
-    """ Return the first record in ``records``, with the same prefetching. """
-    # TODO move to tools.misc
-    return next(iter(records)) if len(records) > 1 else records
 
 
 def resolve_mro(model, name, predicate):
@@ -257,7 +250,6 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
     _direct = False                     # whether self may be used directly (shared)
     _toplevel = False                   # whether self is on the model's registry class
 
-    automatic = False                   # whether the field is automatically created ("magic" field)
     inherited = False                   # whether the field is inherited (_inherits)
     inherited_field = None              # the corresponding inherited field
 
@@ -354,7 +346,7 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
         :param owner: the owner class of the field (the model's definition or registry class)
         :param name: the name of the field
         """
-        assert issubclass(owner, _models.BaseModel)
+        assert isinstance(owner, _models.MetaModel)
         self.model_name = owner._name
         self.name = name
         if getattr(owner, 'pool', None) is None:  # models.is_definition_class(owner)
@@ -552,12 +544,6 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
             depends.extend(deps(model) if callable(deps) else deps)
             depends_context.extend(getattr(func, '_depends_context', ()))
 
-        # display_name may depend on context['lang'] (`test_lp1071710`)
-        if self.automatic and self.name == 'display_name' and model._rec_name:
-            if model._fields[model._rec_name].base_field.translate:
-                if 'lang' not in depends_context:
-                    depends_context.append('lang')
-
         return depends, depends_context
 
     #
@@ -628,7 +614,9 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
         """ Traverse the fields of the related field `self` except for the last
         one, and return it as a pair `(last_record, last_field)`. """
         for name in self.related.split('.')[:-1]:
-            record = first(record[name])
+            # take the first record when traversing
+            corecord = record[name]
+            record = next(iter(corecord), corecord)
         return record, self.related_field
 
     def _compute_related(self, records):
@@ -662,7 +650,7 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
         values = list(records)
         for name in self.related.split('.')[:-1]:
             try:
-                values = [first(value[name]) for value in values]
+                values = [next(iter(val := value[name]), val) for value in values]
             except AccessError as e:
                 description = records.env['ir.model']._get(records._name).name
                 env = records.env
@@ -751,7 +739,10 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
 
     def get_company_dependent_fallback(self, records):
         assert self.company_dependent
-        fallback = records.env['ir.default']._get_model_defaults(records._name).get(self.name)
+        fallback = records.env['ir.default'] \
+            .with_user(SUPERUSER_ID) \
+            .with_company(records.env.company) \
+            ._get_model_defaults(records._name).get(self.name)
         fallback = self.convert_to_cache(fallback, records, validate=False)
         return self.convert_to_record(fallback, records)
 
@@ -916,14 +907,6 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
         """ Return whether the field can be editable in a view. """
         return not self.readonly
 
-    def is_accessible(self, env):
-        """ Return whether the field is accessible from the given environment. """
-        if not self.groups or env.is_superuser():
-            return True
-        if self.groups == '.':
-            return False
-        return env.user.has_groups(self.groups)
-
     ############################################################################
     #
     # Conversion of values
@@ -988,15 +971,6 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
         ``record``.
         """
         return False if value is None else value
-
-    def convert_to_record_multi(self, values, records):
-        """ Convert a list of values from the cache format to the record format.
-        Some field classes may override this method to add optimizations for
-        batch processing.
-        """
-        # spare the method lookup overhead
-        convert = self.convert_to_record
-        return [convert(value, record) for value, record in zip(values, records)]
 
     def convert_to_read(self, value, record, use_display_name=True):
         """ Convert ``value`` from the record format to the format returned by
@@ -1226,7 +1200,7 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
         #
         if self.store and record.id:
             # real record: fetch from database
-            recs = record._in_cache_without(self)
+            recs = self._in_cache_without(record, PREFETCH_MAX)
             try:
                 recs._fetch_field(self)
             except AccessError:
@@ -1251,7 +1225,7 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
                 value = self.convert_to_cache(False, record, validate=False)
                 env.cache.set(record, self, value)
             else:
-                recs = record if self.recursive else record._in_cache_without(self)
+                recs = record if self.recursive else self._in_cache_without(record, PREFETCH_MAX)
                 try:
                     self.compute_value(recs)
                 except (AccessError, MissingError):
@@ -1303,34 +1277,18 @@ class Field(MetaField('DummyField', (object,), {}), typing.Generic[T]):
 
         return self.convert_to_record(value, record)
 
-    def mapped(self, records):
-        """ Return the values of ``self`` for ``records``, either as a list
-        (scalar fields), or as a recordset (relational fields).
-
-        This method is meant to be used internally and has very little benefit
-        over a simple call to `~odoo.models.BaseModel.mapped()` on a recordset.
-        """
-        if self.name == 'id':
-            # not stored in cache
-            return list(records._ids)
-
-        if self.compute and self.store:
-            # process pending computations
-            self.recompute(records)
-
-        # retrieve values in cache, and fetch missing ones
-        vals = records.env.cache.get_until_miss(records, self)
-        while len(vals) < len(records):
-            # It is important to construct a 'remaining' recordset with the
-            # _prefetch_ids of the original recordset, in order to prefetch as
-            # many records as possible. If not done this way, scenarios such as
-            # [rec.line_ids.mapped('name') for rec in recs] would generate one
-            # query per record in `recs`!
-            remaining = records.__class__(records.env, records._ids[len(vals):], records._prefetch_ids)
-            self.__get__(first(remaining))
-            vals += records.env.cache.get_until_miss(remaining, self)
-
-        return self.convert_to_record_multi(vals, records)
+    def _in_cache_without(self, record, limit=None):
+        """ Return records to prefetch that have no value in cache. """
+        ids = expand_ids(record.id, record._prefetch_ids)
+        ids = record.env.cache.get_missing_ids(record.browse(ids), self)
+        if limit:
+            ids = itertools.islice(ids, limit)
+        # Those records are aimed at being either fetched, or computed.  But the
+        # method '_fetch_field' is not correct with new records: it considers
+        # them as forbidden records, and clears their cache!  On the other hand,
+        # compute methods are not invoked with a mix of real and new records for
+        # the sake of code simplicity.
+        return record.browse(ids)
 
     def __set__(self, records, value):
         """ set the value of field ``self`` on ``records`` """

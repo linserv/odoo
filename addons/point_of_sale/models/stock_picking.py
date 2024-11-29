@@ -3,14 +3,14 @@
 
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
-from odoo.tools import float_is_zero, float_compare
+from odoo.tools import float_is_zero
 
 from itertools import groupby
 from collections import defaultdict
 
 
 class StockPicking(models.Model):
-    _inherit = ['stock.picking']
+    _inherit = 'stock.picking'
 
     pos_session_id = fields.Many2one('pos.session', index=True)
     pos_order_id = fields.Many2one('pos.order', index=True)
@@ -130,8 +130,9 @@ class StockPicking(models.Model):
                 for line in rec.pos_order_id.lines:
                     if not line.product_id.is_storable or line.product_id.valuation != 'real_time':
                         continue
-                    out = line.product_id.categ_id.property_stock_account_output_categ_id
-                    exp = line.product_id._get_product_accounts()['expense']
+                    accounts = line.product_id._get_product_accounts()
+                    out = accounts['stock_output']
+                    exp = accounts['expense']
                     cost_per_account[(out, exp)] += line.total_cost
                 move_vals = []
                 for (out_acc, exp_acc), cost in cost_per_account.items():
@@ -160,6 +161,7 @@ class StockPicking(models.Model):
 
 
 class StockPickingType(models.Model):
+    _name = 'stock.picking.type'
     _inherit = ['stock.picking.type', 'pos.load.mixin']
 
     @api.depends('warehouse_id')
@@ -180,7 +182,7 @@ class StockPickingType(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('id', '=', data['pos.config']['data'][0]['picking_type_id'])]
+        return [('id', '=', data['pos.config'][0]['picking_type_id'])]
 
     @api.model
     def _load_pos_data_fields(self, config_id):
@@ -188,13 +190,13 @@ class StockPickingType(models.Model):
 
 
 class ProcurementGroup(models.Model):
-    _inherit = ['procurement.group']
+    _inherit = 'procurement.group'
 
     pos_order_id = fields.Many2one('pos.order', 'POS Order')
 
 
 class StockMove(models.Model):
-    _inherit = ['stock.move']
+    _inherit = 'stock.move'
 
     def _get_new_picking_values(self):
         vals = super(StockMove, self)._get_new_picking_values()

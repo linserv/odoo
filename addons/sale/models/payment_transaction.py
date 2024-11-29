@@ -9,7 +9,7 @@ from odoo.tools import str2bool
 
 
 class PaymentTransaction(models.Model):
-    _inherit = ['payment.transaction']
+    _inherit = 'payment.transaction'
 
     sale_order_ids = fields.Many2many('sale.order', 'sale_order_transaction_rel', 'transaction_id', 'sale_order_id',
                                       string='Sales Orders', copy=False, readonly=True)
@@ -19,10 +19,12 @@ class PaymentTransaction(models.Model):
         self.ensure_one()
         if self.provider_id.so_reference_type == 'so_name':
             order_reference = order.name
-        else:
-            # self.provider_id.so_reference_type == 'partner'
+        elif self.provider_id.so_reference_type == 'partner':
             identification_number = order.partner_id.id
             order_reference = '%s/%s' % ('CUST', str(identification_number % 97).rjust(2, '0'))
+        else:
+            # self.provider_id.so_reference_type is empty
+            order_reference = False
 
         invoice_journal = self.env['account.journal'].search([('type', '=', 'sale'), ('company_id', '=', self.env.company.id)], limit=1)
         if invoice_journal:

@@ -33,7 +33,7 @@ class AuthSignupHome(Home):
                 return request.redirect_query('/web/login_successful', query={'account_created': True})
         return response
 
-    @http.route('/web/signup', type='http', auth='public', website=True, sitemap=False)
+    @http.route('/web/signup', type='http', auth='public', website=True, sitemap=False, captcha='signup')
     def web_auth_signup(self, *args, **kw):
         qcontext = self.get_auth_signup_qcontext()
 
@@ -78,7 +78,7 @@ class AuthSignupHome(Home):
         response.headers['Content-Security-Policy'] = "frame-ancestors 'self'"
         return response
 
-    @http.route('/web/reset_password', type='http', auth='public', website=True, sitemap=False)
+    @http.route('/web/reset_password', type='http', auth='public', website=True, sitemap=False, captcha='password_reset')
     def web_auth_reset_password(self, *args, **kw):
         qcontext = self.get_auth_signup_qcontext()
 
@@ -163,9 +163,8 @@ class AuthSignupHome(Home):
 
     def _signup_with_values(self, token, values):
         login, password = request.env['res.users'].sudo().signup(values, token)
-        request.env.cr.commit()     # as authenticate will use its own cursor we need to commit the current transaction
         credential = {'login': login, 'password': password, 'type': 'password'}
-        request.session.authenticate(request.db, credential)
+        request.session.authenticate(request.env, credential)
 
 class AuthBaseSetup(BaseSetup):
     @http.route()

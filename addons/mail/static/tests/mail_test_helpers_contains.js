@@ -2,12 +2,9 @@
 
 import { __debug__, after, afterEach, expect, getFixture } from "@odoo/hoot";
 import { queryAll, queryFirst } from "@odoo/hoot-dom";
-import { Deferred, tick } from "@odoo/hoot-mock";
+import { Deferred, animationFrame, tick } from "@odoo/hoot-mock";
 import { isMacOS } from "@web/core/browser/feature_detection";
 import { isVisible } from "@web/core/utils/ui";
-import { step as webStep, assertSteps as webAssertSteps } from "@web/../tests/web_test_helpers";
-export const step = webStep;
-export const assertSteps = webAssertSteps;
 
 /** @param {EventInit} [args] */
 const mapBubblingEvent = (args) => ({ ...args, bubbles: true });
@@ -263,9 +260,17 @@ export async function editInput(el, selector, value) {
         throw new Error("Only 'input' and 'textarea' elements can be edited with 'editInput'.");
     }
     if (
-        !["text", "textarea", "email", "search", "color", "number", "file", "tel"].includes(
-            input.type
-        )
+        ![
+            "text",
+            "textarea",
+            "email",
+            "search",
+            "color",
+            "number",
+            "file",
+            "tel",
+            "range",
+        ].includes(input.type)
     ) {
         throw new Error(`Type "${input.type}" not supported by 'editInput'.`);
     }
@@ -410,6 +415,7 @@ export async function insertText(selector, content, options = {}) {
     const { replace = false } = options;
     delete options.replace;
     await contains(selector, { ...options, insertText: { content, replace } });
+    await animationFrame(); // wait for t-model synced with new value
 }
 
 /**
@@ -605,6 +611,9 @@ class Contains {
         this.done = false;
         this.def = new Deferred();
         this.scrollListeners = new Set();
+        this.onBlur = () => this.runOnce("after blur");
+        this.onChange = () => this.runOnce("after change");
+        this.onFocus = () => this.runOnce("after focus");
         this.onScroll = () => this.runOnce("after scroll");
         if (!this.runOnce("immediately")) {
             this.timer = setTimeout(
@@ -623,6 +632,9 @@ class Contains {
                 childList: true,
                 subtree: true,
             });
+            document.body.addEventListener("blur", this.onBlur, { capture: true });
+            document.body.addEventListener("change", this.onChange, { capture: true });
+            document.body.addEventListener("focus", this.onFocus, { capture: true });
             after(() => {
                 if (!this.done) {
                     this.runOnce("Test ended", { crashOnFail: true });
@@ -653,6 +665,9 @@ class Contains {
             for (const el of this.scrollListeners ?? []) {
                 el.removeEventListener("scroll", this.onScroll);
             }
+            document.body.removeEventListener("blur", this.onBlur, { capture: true });
+            document.body.removeEventListener("change", this.onChange, { capture: true });
+            document.body.removeEventListener("focus", this.onFocus, { capture: true });
             this.done = true;
         }
         if ((res?.length ?? 0) === this.options.count) {

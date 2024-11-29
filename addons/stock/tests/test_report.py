@@ -21,7 +21,7 @@ class TestReportsCommon(TransactionCase):
         cls.product1 = cls.env['product.product'].create({
             'name': 'Mellohi"',
             'is_storable': True,
-            'categ_id': cls.env.ref('product.product_category_all').id,
+            'categ_id': cls.env.ref('product.product_category_goods').id,
             'tracking': 'lot',
             'default_code': 'C4181234""154654654654',
             'barcode': 'scan""me'
@@ -30,6 +30,7 @@ class TestReportsCommon(TransactionCase):
         product_form = Form(cls.env['product.product'])
         product_form.is_storable = True
         product_form.name = 'Product'
+        product_form.categ_id = cls.env.ref('product.product_category_goods')
         cls.product = product_form.save()
         cls.product_template = cls.product.product_tmpl_id
         cls.wh_2 = cls.env['stock.warehouse'].create({
@@ -76,7 +77,6 @@ class TestReports(TestReportsCommon):
         product_test = self.env['product.product'].create({
             'name': 'Mellohi"',
             'is_storable': True,
-            'categ_id': self.env.ref('product.product_category_all').id,
             'tracking': 'lot',
             'default_code': 'C4181234""154654654654',
             'barcode': '9745213796142'
@@ -1358,7 +1358,12 @@ class TestReports(TestReportsCommon):
             whose source is a sublocation of the stock warehouse location
         """
         stock_location = self.env.ref('stock.warehouse0').lot_stock_id
-        sublocation = stock_location.child_ids[0]
+        sublocation = self.env['stock.location'].create({
+            'name': 'Warehouse0 / Sublocation',
+            'posx': 0,
+            'barcode': 'TEST_BARCODE_LOCATION',
+            'location_id': stock_location.id
+        })
         self.env['stock.quant']._update_available_quantity(self.product, sublocation, 10.0)
         delivery_form = Form(self.env['stock.picking'])
         delivery_form.picking_type_id = self.picking_type_out
@@ -1389,6 +1394,18 @@ class TestReports(TestReportsCommon):
                 'forecast_availability': 3.0,
             }
         ])
+        _, _, lines = self.get_report_forecast(product_template_ids=self.product.product_tmpl_id.ids)
+        self.assertEqual(len(lines), 2)
+        picking_line = next(filter(lambda line: line.get('document_out'), lines))
+        self.assertEqual(
+            (picking_line['quantity'], picking_line['replenishment_filled'], picking_line['document_out']['id']),
+            (3.0, True, delivery.id)
+        )
+        stock_line = next(filter(lambda line: not line.get('document_out'), lines))
+        self.assertEqual(
+            (stock_line['quantity'], stock_line['replenishment_filled']),
+            (7.0, True)
+        )
 
     def test_report_forecast_14_ongoing_multi_step_delivery(self):
         """ Check that an ongoing multi-step delivery is properly picked up by the forecast report.
@@ -1419,13 +1436,11 @@ class TestReports(TestReportsCommon):
         product2 = self.env['product.product'].create({
             'name': 'Extra Product',
             'is_storable': True,
-            'categ_id': self.env.ref('product.product_category_all').id,
         })
 
         product3 = self.env['product.product'].create({
             'name': 'Unpopular Product',
             'is_storable': True,
-            'categ_id': self.env.ref('product.product_category_all').id,
         })
 
         # Creates some deliveries for reception report to match against

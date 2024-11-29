@@ -3,28 +3,25 @@ import { useService } from "@web/core/utils/hooks";
 import { useBarcodeReader } from "@point_of_sale/app/hooks/barcode_reader_hook";
 import { _t } from "@web/core/l10n/translation";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
-import { Component, onMounted, useState, reactive, onWillRender } from "@odoo/owl";
-import { CategorySelector } from "@point_of_sale/app/generic_components/category_selector/category_selector";
-import { Input } from "@point_of_sale/app/generic_components/inputs/input/input";
+import { Component, onMounted, useEffect, useState, reactive, onWillRender } from "@odoo/owl";
+import { CategorySelector } from "@point_of_sale/app/components/category_selector/category_selector";
+import { Input } from "@point_of_sale/app/components/inputs/input/input";
 import {
     BACKSPACE,
     Numpad,
     getButtons,
     DEFAULT_LAST_ROW,
-} from "@point_of_sale/app/generic_components/numpad/numpad";
+} from "@point_of_sale/app/components/numpad/numpad";
 import { ActionpadWidget } from "@point_of_sale/app/screens/product_screen/action_pad/action_pad";
-import { Orderline } from "@point_of_sale/app/generic_components/orderline/orderline";
-import { OrderWidget } from "@point_of_sale/app/generic_components/order_widget/order_widget";
+import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
+import { OrderWidget } from "@point_of_sale/app/components/order_widget/order_widget";
 import { OrderSummary } from "@point_of_sale/app/screens/product_screen/order_summary/order_summary";
 import { ProductInfoPopup } from "@point_of_sale/app/components/popups/product_info_popup/product_info_popup";
-import { fuzzyLookup } from "@web/core/utils/search";
-import { ProductCard } from "@point_of_sale/app/generic_components/product_card/product_card";
+import { ProductCard } from "@point_of_sale/app/components/product_card/product_card";
 import {
     ControlButtons,
     ControlButtonsPopup,
 } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
-import { pick } from "@web/core/utils/objects";
-import { unaccent } from "@web/core/utils/strings";
 import { CameraBarcodeScanner } from "@point_of_sale/app/screens/product_screen/camera_barcode_scanner";
 
 export class ProductScreen extends Component {
@@ -53,6 +50,7 @@ export class ProductScreen extends Component {
         this.state = useState({
             previousSearchWord: "",
             currentOffset: 0,
+            quantityByProductTmplId: {},
         });
         onMounted(() => {
             this.pos.openOpeningControl();
@@ -66,7 +64,7 @@ export class ProductScreen extends Component {
         onWillRender(() => {
             // If its a shared order it can be paid from another POS
             if (this.currentOrder?.state !== "draft") {
-                this.pos.add_new_order();
+                this.pos.addNewOrder();
             }
         });
 
@@ -85,52 +83,18 @@ export class ProductScreen extends Component {
         this.numberBuffer.use({
             useWithBarcode: true,
         });
-    }
-    getAncestorsAndCurrent() {
-        const selectedCategory = this.pos.selectedCategory;
-        return selectedCategory
-            ? [undefined, ...selectedCategory.allParents, selectedCategory]
-            : [selectedCategory];
-    }
-    getChildCategories(selectedCategory) {
-        return selectedCategory
-            ? [...selectedCategory.child_ids]
-            : this.pos.models["pos.category"].filter((category) => !category.parent_id);
-    }
 
-    getCategoriesList(list, allParents, depth) {
-        return list.map((category) => {
-            if (category.id === allParents[depth]?.id && category.child_ids?.length) {
-                return [
-                    category,
-                    this.getCategoriesList(category.child_ids, allParents, depth + 1),
-                ];
-            }
-            return category;
-        });
-    }
-
-    getCategoriesAndSub() {
-        const rootCategories = this.pos.models["pos.category"].filter(
-            (category) => !category.parent_id
+        useEffect(
+            () => {
+                this.state.quantityByProductTmplId = this.currentOrder?.lines?.reduce((acc, ol) => {
+                    acc[ol.product_id.product_tmpl_id.id]
+                        ? (acc[ol.product_id.product_tmpl_id.id] += ol.qty)
+                        : (acc[ol.product_id.product_tmpl_id.id] = ol.qty);
+                    return acc;
+                }, {});
+            },
+            () => [this.currentOrder.totalQuantity]
         );
-        const selected = this.pos.selectedCategory ? [this.pos.selectedCategory] : [];
-        const allParents = selected.concat(this.pos.selectedCategory?.allParents || []).reverse();
-        return this.getCategoriesList(rootCategories, allParents, 0)
-            .flat(Infinity)
-            .map(this.getChildCategoriesInfo, this);
-    }
-
-    getChildCategoriesInfo(category) {
-        return {
-            ...pick(category, "id", "name", "color"),
-            imgSrc:
-                this.pos.config.show_category_images && category.has_image
-                    ? `/web/image?model=pos.category&field=image_128&id=${category.id}`
-                    : undefined,
-            isSelected: this.getAncestorsAndCurrent().includes(category),
-            isChildren: this.getChildCategories(this.pos.selectedCategory).includes(category),
-        };
     }
 
     getNumpadButtons() {
@@ -174,10 +138,10 @@ export class ProductScreen extends Component {
         this.numberBuffer.sendKey(buttonValue);
     }
     get currentOrder() {
-        return this.pos.get_order();
+        return this.pos.getOrder();
     }
     get total() {
-        return this.env.utils.formatCurrency(this.currentOrder?.get_total_with_tax() ?? 0);
+        return this.env.utils.formatCurrency(this.currentOrder?.getTotalWithTax() ?? 0);
     }
     get items() {
         return this.currentOrder.lines?.reduce((items, line) => items + line.qty, 0) ?? 0;
@@ -238,17 +202,17 @@ export class ProductScreen extends Component {
     async _barcodePartnerAction(code) {
         const partner = await this._getPartnerByBarcode(code);
         if (partner) {
-            if (this.currentOrder.get_partner() !== partner) {
-                this.currentOrder.set_partner(partner);
+            if (this.currentOrder.getPartner() !== partner) {
+                this.currentOrder.setPartner(partner);
             }
             return;
         }
         this.barcodeReader.showNotFoundNotification(code);
     }
     _barcodeDiscountAction(code) {
-        var last_orderline = this.currentOrder.get_last_orderline();
+        var last_orderline = this.currentOrder.getLastOrderline();
         if (last_orderline) {
-            last_orderline.set_discount(code.value);
+            last_orderline.setDiscount(code.value);
         }
     }
     /**
@@ -278,14 +242,14 @@ export class ProductScreen extends Component {
         this.dialog.add(ControlButtonsPopup);
     }
     get selectedOrderlineQuantity() {
-        return this.currentOrder.get_selected_orderline()?.get_quantity_str();
+        return this.currentOrder.getSelectedOrderline()?.getQuantityStr();
     }
     get selectedOrderlineDisplayName() {
-        return this.currentOrder.get_selected_orderline()?.get_full_product_name();
+        return this.currentOrder.getSelectedOrderline()?.getFullProductName();
     }
     get selectedOrderlineTotal() {
         return this.env.utils.formatCurrency(
-            this.currentOrder.get_selected_orderline()?.get_display_price()
+            this.currentOrder.getSelectedOrderline()?.getDisplayPrice()
         );
     }
     /**
@@ -297,7 +261,7 @@ export class ProductScreen extends Component {
      */
     get animationKey() {
         return [
-            this.currentOrder.get_selected_orderline()?.uuid,
+            this.currentOrder.getSelectedOrderline()?.uuid,
             this.selectedOrderlineQuantity,
             this.selectedOrderlineDisplayName,
             this.selectedOrderlineTotal,
@@ -319,70 +283,6 @@ export class ProductScreen extends Component {
 
     get searchWord() {
         return this.pos.searchProductWord.trim();
-    }
-
-    get products() {
-        return this.pos.models["product.template"].getAll();
-    }
-
-    get productsToDisplay() {
-        let list = [];
-
-        if (this.searchWord !== "") {
-            list = this.addMainProductsToDisplay(this.getProductsBySearchWord(this.searchWord));
-        } else if (this.pos.selectedCategory?.id) {
-            list = this.getProductsByCategory(this.pos.selectedCategory);
-        } else {
-            list = this.products;
-        }
-
-        if (!list || list.length === 0) {
-            return [];
-        }
-
-        const excludedProductIds = [
-            this.pos.config.tip_product_id?.id,
-            ...this.pos.hiddenProductIds,
-            ...this.pos.session._pos_special_products_ids,
-        ];
-
-        list = list
-            .filter(
-                (product) => !excludedProductIds.includes(product.id) && product.available_in_pos
-            )
-            .slice(0, 100);
-
-        return this.searchWord !== ""
-            ? list
-            : list.sort((a, b) => a.display_name.localeCompare(b.display_name));
-    }
-
-    getProductsBySearchWord(searchWord) {
-        return fuzzyLookup(unaccent(searchWord, false), this.products, (product) =>
-            unaccent(product.searchString, false)
-        );
-    }
-
-    addMainProductsToDisplay(products) {
-        const uniqueProductsMap = new Map();
-        for (const product of products) {
-            if (product.id in this.pos.mainProductVariant) {
-                const mainProduct = this.pos.mainProductVariant[product.id];
-                uniqueProductsMap.set(mainProduct.id, mainProduct);
-            } else {
-                uniqueProductsMap.set(product.id, product);
-            }
-        }
-        return Array.from(uniqueProductsMap.values());
-    }
-
-    getProductsByCategory(category) {
-        const allCategoryIds = category.getAllChildren().map((cat) => cat.id);
-        const products = allCategoryIds.flatMap(
-            (catId) => this.pos.models["product.product"].getBy("pos_categ_ids", catId) || []
-        );
-        // Remove duplicates since owl doesn't like it.
-        return Array.from(new Set(products));
     }
 
     async onPressEnterKey() {

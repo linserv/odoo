@@ -20,6 +20,7 @@ PAYMENT_MEANS_CODE = {
 
 
 class AccountEdiXmlUbl_21Zatca(models.AbstractModel):
+    _name = 'account.edi.xml.ubl_21.zatca'
     _inherit = ['account.edi.xml.ubl_21']
     _description = "UBL 2.1 (ZATCA)"
 
@@ -117,7 +118,7 @@ class AccountEdiXmlUbl_21Zatca(models.AbstractModel):
     def _get_invoice_payment_means_vals_list(self, invoice):
         """ Override to include/update values specific to ZATCA's UBL 2.1 specs """
         res = super()._get_invoice_payment_means_vals_list(invoice)
-        res[0]['payment_means_code'] = PAYMENT_MEANS_CODE[self._l10n_sa_get_payment_means_code(invoice)]
+        res[0]['payment_means_code'] = PAYMENT_MEANS_CODE.get(self._l10n_sa_get_payment_means_code(invoice), PAYMENT_MEANS_CODE['unknown'])
         res[0]['payment_means_code_attrs'] = {'listID': 'UN/ECE 4461'}
         res[0]['adjustment_reason'] = invoice.ref
         return res
@@ -253,7 +254,7 @@ class AccountEdiXmlUbl_21Zatca(models.AbstractModel):
         non_retention_taxes = taxes.filtered(lambda t: not t.l10n_sa_is_retention)
         return super()._get_tax_category_list(customer, supplier, non_retention_taxes)
 
-    def _get_document_allowance_charge_vals_list(self, invoice):
+    def _get_document_allowance_charge_vals_list(self, invoice, taxes_vals=None):
         """
         Charge Reasons & Codes (As per ZATCA):
         https://unece.org/fileadmin/DAM/trade/untdid/d16b/tred/tred5189.htm

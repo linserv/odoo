@@ -65,6 +65,7 @@ def get_weekday_occurence(date):
 
 
 class CalendarEvent(models.Model):
+    _name = 'calendar.event'
     _description = "Calendar Event"
     _order = "start desc"
     _inherit = ["mail.thread"]
@@ -751,9 +752,10 @@ class CalendarEvent(models.Model):
     def _check_private_event_conditions(self):
         """ Checks if the event is private, returning True if the conditions match and False otherwise. """
         self.ensure_one()
-        event_is_private = (self.privacy == 'private' or (not self.privacy and self.user_id and self.user_id.calendar_default_privacy == 'private'))
+        event_is_private = self.privacy == 'private'
+        calendar_is_private = not self.privacy and self.sudo().user_id.calendar_default_privacy == 'private'
         user_is_not_partner = self.user_id.id != self.env.uid and self.env.user.partner_id not in self.partner_ids
-        return event_is_private and user_is_not_partner
+        return (event_is_private or calendar_is_private) and user_is_not_partner
 
     @api.depends('privacy', 'user_id')
     def _compute_display_name(self):
@@ -1060,7 +1062,7 @@ class CalendarEvent(models.Model):
 
     def get_next_alarm_date(self, events_by_alarm):
         self.ensure_one()
-        now = fields.datetime.now()
+        now = fields.Datetime.now()
         sorted_alarms = self.alarm_ids.sorted("duration_minutes")
         triggered_alarms = sorted_alarms.filtered(lambda alarm: alarm.id in events_by_alarm)[0]
         event_has_future_alarms = sorted_alarms[0] != triggered_alarms

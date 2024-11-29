@@ -174,6 +174,7 @@ def check_identity(fn):
 
 
 class ResGroups(models.Model):
+    _name = 'res.groups'
     _description = "Access Groups"
     _rec_name = 'full_name'
     _order = 'name'
@@ -194,10 +195,12 @@ class ResGroups(models.Model):
     api_key_duration = fields.Float(string='API Keys maximum duration days',
         help="Determines the maximum duration of an api key created by a user belonging to this group.")
 
-    _sql_constraints = [
-        ('name_uniq', 'unique (category_id, name)', 'The name of the group must be unique within an application!'),
-        ('check_api_key_duration', 'CHECK(api_key_duration >= 0)', 'The api key duration cannot be a negative value.'),
-    ]
+    _name_uniq = models.Constraint("UNIQUE (category_id, name)",
+        'The name of the group must be unique within an application!')
+    _check_api_key_duration = models.Constraint(
+        'CHECK(api_key_duration >= 0)',
+        'The api key duration cannot be a negative value.',
+    )
 
     @api.constrains('users')
     def _check_one_user_type(self):
@@ -297,6 +300,7 @@ class ResGroups(models.Model):
 
 
 class ResUsersLog(models.Model):
+    _name = 'res.users.log'
     _order = 'id desc'
     _description = 'Users Log'
     # Uses the magical fields `create_uid` and `create_date` for recording logins.
@@ -330,7 +334,8 @@ class ResUsers(models.Model):
     def _check_company_domain(self, companies):
         if not companies:
             return []
-        return [('company_ids', 'in', models.to_company_ids(companies))]
+        company_ids = companies if isinstance(companies, str) else models.to_record_ids(companies)
+        return [('company_ids', 'in', company_ids)]
 
     @property
     def SELF_READABLE_FIELDS(self):
@@ -342,7 +347,7 @@ class ResUsers(models.Model):
             'image_1024', 'image_512', 'image_256', 'image_128', 'lang', 'tz',
             'tz_offset', 'groups_id', 'partner_id', 'write_date', 'action_id',
             'avatar_1920', 'avatar_1024', 'avatar_512', 'avatar_256', 'avatar_128',
-            'share', 'device_ids',
+            'share', 'device_ids', 'api_key_ids',
         ]
 
     @property
@@ -350,7 +355,7 @@ class ResUsers(models.Model):
         """ The list of fields a user can write on their own user record.
         In order to add fields, please override this property on model extensions.
         """
-        return ['signature', 'action_id', 'company_id', 'email', 'name', 'image_1920', 'lang', 'tz']
+        return ['signature', 'action_id', 'company_id', 'email', 'name', 'image_1920', 'lang', 'tz', 'api_key_ids']
 
     def _default_groups(self):
         """Default groups for employees
@@ -371,6 +376,7 @@ class ResUsers(models.Model):
         help="Specify a value only when creating a user or if you're "\
              "changing the user's password, otherwise leave empty. After "\
              "a change of password, the user has to login again.")
+    api_key_ids = fields.One2many('res.users.apikeys', 'user_id', string="API Keys")
     signature = fields.Html(string="Email Signature", compute='_compute_signature', readonly=False, store=True)
     active = fields.Boolean(default=True)
     active_partner = fields.Boolean(related='partner_id.active', readonly=True, string="Partner is Active")
@@ -408,9 +414,8 @@ class ResUsers(models.Model):
     groups_count = fields.Integer('# Groups', help='Number of groups that apply to the current user',
                                   compute='_compute_accesses_count', compute_sudo=True)
 
-    _sql_constraints = [
-        ('login_key', 'UNIQUE (login)', 'You can not have two users with the same login!')
-    ]
+    _login_key = models.Constraint("UNIQUE (login)",
+        'You can not have two users with the same login!')
 
     def init(self):
         cr = self.env.cr
@@ -442,6 +447,10 @@ class ResUsers(models.Model):
             (pw, uid)
         )
         self.browse(uid).invalidate_recordset(['password'])
+
+    def _rpc_api_keys_only(self):
+        """ To be overridden if RPC access needs to be restricted to API keys, e.g. for 2FA """
+        return False
 
     def _check_credentials(self, credential, env):
         """ Validates the current user's password.
@@ -476,29 +485,51 @@ class ResUsers(models.Model):
         """
         if not (credential['type'] == 'password' and credential['password']):
             raise AccessDenied()
-        self.env.cr.execute(
-            "SELECT COALESCE(password, '') FROM res_users WHERE id=%s",
-            [self.env.user.id]
-        )
-        [hashed] = self.env.cr.fetchone()
-        valid, replacement = self._crypt_context()\
-            .verify_and_update(credential['password'], hashed)
-        if replacement is not None:
-            self._set_encrypted_password(self.env.user.id, replacement)
-            if request and self == self.env.user:
-                self.env.flush_all()
-                self.env.registry.clear_cache()
-                # update session token so the user does not get logged out
-                new_token = self.env.user._compute_session_token(request.session.sid)
-                request.session.session_token = new_token
 
-        if not valid:
-            raise AccessDenied()
-        return {
-            'uid': self.env.user.id,
-            'auth_method': 'password',
-            'mfa': 'default',
-        }
+        env = env or {}
+        interactive = env.get('interactive', True)
+
+        if interactive or not self.env.user._rpc_api_keys_only():
+            if 'interactive' not in env:
+                _logger.warning(
+                    "_check_credentials without 'interactive' env key, assuming interactive login. \
+                    Check calls and overrides to ensure the 'interactive' key is properly set in \
+                    all _check_credentials environments"
+                )
+
+            self.env.cr.execute(
+                "SELECT COALESCE(password, '') FROM res_users WHERE id=%s",
+                [self.env.user.id]
+            )
+            [hashed] = self.env.cr.fetchone()
+            valid, replacement = self._crypt_context()\
+                .verify_and_update(credential['password'], hashed)
+            if replacement is not None:
+                self._set_encrypted_password(self.env.user.id, replacement)
+                if request and self == self.env.user:
+                    self.env.flush_all()
+                    self.env.registry.clear_cache()
+                    # update session token so the user does not get logged out
+                    new_token = self.env.user._compute_session_token(request.session.sid)
+                    request.session.session_token = new_token
+
+            if valid:
+                return {
+                    'uid': self.env.user.id,
+                    'auth_method': 'password',
+                    'mfa': 'default',
+                }
+
+        if not interactive:
+            # 'rpc' scope does not really exist, we basically require a global key (scope NULL)
+            if self.env['res.users.apikeys']._check_credentials(scope='rpc', key=credential['password']) == self.env.uid:
+                return {
+                    'uid': self.env.user.id,
+                    'auth_method': 'apikey',
+                    'mfa': 'default',
+                }
+
+        raise AccessDenied()
 
     def _compute_password(self):
         for user in self:
@@ -658,13 +689,12 @@ class ResUsers(models.Model):
             self = self.sudo()
         return super().read(fields=fields, load=load)
 
-    @api.model
-    def check_field_access_rights(self, operation, field_names):
-        readable = self.SELF_READABLE_FIELDS
-        if field_names and self == self.env.user and all(key in readable or key.startswith('context_') for key in field_names):
-            # safe fields only, so we read as super-user to bypass access rights
-            self = self.sudo()
-        return super().check_field_access_rights(operation, field_names)
+    def _has_field_access(self, field, operation):
+        return super()._has_field_access(field, operation) or (
+            self == self.env.user
+            and operation == 'read'
+            and (field.name in self.SELF_READABLE_FIELDS or field.name.startswith('context_'))
+        )
 
     @api.model
     def _read_group_select(self, aggregate_spec, query):
@@ -694,6 +724,14 @@ class ResUsers(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        for values in vals_list:
+            if 'groups_id' in values:
+                # complete 'groups_id' with implied groups
+                user = self.new(values)
+                gs = user.groups_id._origin
+                gs = gs | gs.trans_implied_ids
+                values['groups_id'] = self._fields['groups_id'].convert_to_write(gs, user)
+
         users = super().create(vals_list)
         setting_vals = []
         for user in users:
@@ -741,10 +779,12 @@ class ResUsers(models.Model):
                 self = self.sudo()
 
         old_groups = []
-        if 'groups_id' in values and self._apply_groups_to_existing_employees():
-            # if modify groups_id content, compute the delta of groups to apply
-            # the new ones to other existing users
-            old_groups = self._default_groups()
+        if 'groups_id' in values:
+            users_before = self.filtered(lambda u: u._is_internal())
+            if self._apply_groups_to_existing_employees():
+                # if modify groups_id content, compute the delta of groups to apply
+                # the new ones to other existing users
+                old_groups = self._default_groups()
 
         res = super().write(values)
 
@@ -764,20 +804,32 @@ class ResUsers(models.Model):
 
         if 'company_id' in values or 'company_ids' in values:
             # Reset lazy properties `company` & `companies` on all envs,
-            # and also their _cache_key, which may depend on them.
             # This is unlikely in a business code to change the company of a user and then do business stuff
             # but in case it happens this is handled.
             # e.g. `account_test_savepoint.py` `setup_company_data`, triggered by `test_account_invoice_report.py`
             for env in list(self.env.transaction.envs):
                 if env.user in self:
                     lazy_property.reset_all(env)
-                    env._cache_key.clear()
 
-        # clear caches linked to the users
-        if self.ids and 'groups_id' in values:
-            # DLE P139: Calling invalidate_cache on a new, well you lost everything as you wont be able to take it back from the cache
-            # `test_00_equipment_multicompany_user`
-            self.env['ir.model.access'].call_cache_clearing_methods()
+        if 'groups_id' in values:
+            # Do not use `_is_internal` as it relies on the ormcache which is not yet invalidated
+            internal_group_id = self.env['ir.model.data']._xmlid_to_res_id("base.group_user")
+            demoted_users = users_before.filtered(lambda u: internal_group_id not in u.groups_id.ids)
+            if demoted_users:
+                # demoted users are restricted to the assigned groups only
+                vals = {'groups_id': [Command.clear()] + values['groups_id']}
+                super(ResUsers, demoted_users).write(vals)
+            # add implied groups for all users (in batches)
+            users_batch = defaultdict(self.browse)
+            for user in self:
+                users_batch[user.groups_id] += user
+            for groups, users in users_batch.items():
+                gs = set(concat(g.trans_implied_ids for g in groups))
+                vals = {'groups_id': [Command.link(g.id) for g in gs]}
+                super(ResUsers, users).write(vals)
+            # clear caches linked to the users
+            if self.ids:
+                self.env['ir.model.access'].call_cache_clearing_methods()
 
         # per-method / per-model caches have been removed so the various
         # clear_cache/clear_caches methods pretty much just end up calling
@@ -817,7 +869,8 @@ class ResUsers(models.Model):
         domain = super()._search_display_name(operator, value)
         if operator in ('=', 'ilike') and value:
             name_domain = [('login', '=', value)]
-            domain = expression.OR([name_domain, domain])
+            if users := self.search(name_domain):
+                domain = [('id', 'in', users.ids)]
         return domain
 
     def copy_data(self, default=None):
@@ -908,34 +961,31 @@ class ResUsers(models.Model):
     def _get_login_order(self):
         return self._order
 
-    @classmethod
-    def _login(cls, db, credential, user_agent_env):
+    def _login(self, credential, user_agent_env):
         login = credential['login']
         ip = request.httprequest.environ['REMOTE_ADDR'] if request else 'n/a'
         try:
-            with cls.pool.cursor() as cr:
-                self = api.Environment(cr, SUPERUSER_ID, {})[cls._name]
-                with self._assert_can_auth(user=login):
-                    user = self.search(self._get_login_domain(login), order=self._get_login_order(), limit=1)
-                    if not user:
-                        raise AccessDenied()
-                    user = user.with_user(user)
-                    auth_info = user._check_credentials(credential, user_agent_env)
-                    tz = request.cookies.get('tz') if request else None
-                    if tz in pytz.all_timezones and (not user.tz or not user.login_date):
-                        # first login or missing tz -> set tz to browser tz
-                        user.tz = tz
-                    user._update_last_login()
+            with self._assert_can_auth(user=login):
+                user = self.sudo().search(self._get_login_domain(login), order=self._get_login_order(), limit=1)
+                if not user:
+                    # ruff: noqa: TRY301
+                    raise AccessDenied()
+                user = user.with_user(user).sudo()
+                auth_info = user._check_credentials(credential, user_agent_env)
+                tz = request.cookies.get('tz') if request else None
+                if tz in pytz.all_timezones and (not user.tz or not user.login_date):
+                    # first login or missing tz -> set tz to browser tz
+                    user.tz = tz
+                user._update_last_login()
         except AccessDenied:
-            _logger.info("Login failed for db:%s login:%s from %s", db, login, ip)
+            _logger.info("Login failed for login:%s from %s", login, ip)
             raise
 
-        _logger.info("Login successful for db:%s login:%s from %s", db, login, ip)
+        _logger.info("Login successful for login:%s from %s", login, ip)
 
         return auth_info
 
-    @classmethod
-    def authenticate(cls, db, credential, user_agent_env):
+    def authenticate(self, credential, user_agent_env):
         """Verifies and returns the user ID corresponding to the given
         ``credential``, or False if there was no matching user.
 
@@ -950,20 +1000,19 @@ class ResUsers(models.Model):
         :return: auth_info
         :rtype: dict
         """
-        auth_info = cls._login(db, credential, user_agent_env=user_agent_env)
+        auth_info = self._login(credential, user_agent_env=user_agent_env)
         if user_agent_env and user_agent_env.get('base_location'):
-            with cls.pool.cursor() as cr:
-                env = api.Environment(cr, auth_info['uid'], {})
-                if env.user.has_group('base.group_system'):
-                    # Successfully logged in as system user!
-                    # Attempt to guess the web base url...
-                    try:
-                        base = user_agent_env['base_location']
-                        ICP = env['ir.config_parameter']
-                        if not ICP.get_param('web.base.url.freeze'):
-                            ICP.set_param('web.base.url', base)
-                    except Exception:
-                        _logger.exception("Failed to update web.base.url configuration parameter")
+            env = self.env(user=auth_info['uid'])
+            if env.user.has_group('base.group_system'):
+                # Successfully logged in as system user!
+                # Attempt to guess the web base url...
+                try:
+                    base = user_agent_env['base_location']
+                    ICP = env['ir.config_parameter']
+                    if not ICP.get_param('web.base.url.freeze'):
+                        ICP.set_param('web.base.url', base)
+                except Exception:
+                    _logger.exception("Failed to update web.base.url configuration parameter")
         return auth_info
 
     @classmethod
@@ -1132,6 +1181,16 @@ class ResUsers(models.Model):
         }
 
     @check_identity
+    def api_key_wizard(self):
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'res.users.apikeys.description',
+            'name': 'New API Key',
+            'target': 'new',
+            'views': [(False, 'form')],
+        }
+
+    @check_identity
     def action_revoke_all_devices(self):
         return self._action_revoke_all_devices()
 
@@ -1140,6 +1199,7 @@ class ResUsers(models.Model):
         devices.filtered(lambda d: not d.is_current)._revoke()
         return {'type': 'ir.actions.client', 'tag': 'reload'}
 
+    @api.readonly
     def has_groups(self, group_spec: str) -> bool:
         """ Return whether user ``self`` satisfies the given group restrictions
         ``group_spec``, i.e., whether it is member of at least one of the groups,
@@ -1171,6 +1231,7 @@ class ResUsers(models.Model):
             return True
         return not positives
 
+    @api.readonly
     def has_group(self, group_ext_id: str) -> bool:
         """ Return whether user ``self`` belongs to the given group (given by its
         fully-qualified external ID).
@@ -1446,7 +1507,7 @@ ResUsersPatchedInTest = ResUsers
 # TODO: reorganize or split the file to avoid declaring classes multiple times
 # pylint: disable=E0102
 class ResGroups(models.Model):  # noqa: F811
-    _inherit = ['res.groups']
+    _inherit = 'res.groups'
 
     implied_ids = fields.Many2many('res.groups', 'res_groups_implied_rel', 'gid', 'hid',
         string='Inherits', help='Users of this group automatically inherit those groups')
@@ -1561,41 +1622,6 @@ class ResGroups(models.Model):  # noqa: F811
         return SetDefinitions(data)
 
 
-class UsersImplied(models.Model):
-    _name = 'res.users'
-    _inherit = ['res.users']
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        for values in vals_list:
-            if 'groups_id' in values:
-                # complete 'groups_id' with implied groups
-                user = self.new(values)
-                gs = user.groups_id._origin
-                gs = gs | gs.trans_implied_ids
-                values['groups_id'] = self._fields['groups_id'].convert_to_write(gs, user)
-        return super().create(vals_list)
-
-    def write(self, values):
-        if not values.get('groups_id'):
-            return super().write(values)
-        users_before = self.filtered(lambda u: u._is_internal())
-        res = super().write(values)
-        demoted_users = users_before.filtered(lambda u: not u._is_internal())
-        if demoted_users:
-            # demoted users are restricted to the assigned groups only
-            vals = {'groups_id': [Command.clear()] + values['groups_id']}
-            super(UsersImplied, demoted_users).write(vals)
-        # add implied groups for all users (in batches)
-        users_batch = defaultdict(self.browse)
-        for user in self:
-            users_batch[user.groups_id] += user
-        for groups, users in users_batch.items():
-            gs = set(concat(g.trans_implied_ids for g in groups))
-            vals = {'groups_id': [Command.link(g.id) for g in gs]}
-            super(UsersImplied, users).write(vals)
-        return res
-
 #
 # Virtual checkbox and selection for res.user form view
 #
@@ -1621,7 +1647,7 @@ class UsersImplied(models.Model):
 
 # pylint: disable=E0102
 class ResGroups(models.Model):  # noqa: F811
-    _inherit = ['res.groups']
+    _inherit = 'res.groups'
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -1841,7 +1867,7 @@ class ResGroups(models.Model):  # noqa: F811
 
 
 class IrModuleCategory(models.Model):
-    _inherit = ["ir.module.category"]
+    _inherit = "ir.module.category"
 
     def write(self, values):
         res = super().write(values)
@@ -1855,9 +1881,8 @@ class IrModuleCategory(models.Model):
         return res
 
 
-# pylint: disable=E0102
-class ResUsers(models.Model):  # noqa: F811
-    _inherit = ['res.users']
+class UsersView(models.Model):
+    _inherit = 'res.users'
 
     user_group_warning = fields.Text(string="User Group Warning", compute="_compute_user_group_warning")
 
@@ -2211,6 +2236,7 @@ class ChangePasswordUser(models.TransientModel):
 
 
 class ChangePasswordOwn(models.TransientModel):
+    _name = 'change.password.own'
     _description = "User, change own password wizard"
     _transient_max_hours = 0.1
 
@@ -2241,63 +2267,8 @@ KEY_CRYPT_CONTEXT = CryptContext(
 )
 
 
-# pylint: disable=E0102
-class ResUsers(models.Model):  # noqa: F811
-    _inherit = ['res.users']
-
-    api_key_ids = fields.One2many('res.users.apikeys', 'user_id', string="API Keys")
-
-    @property
-    def SELF_READABLE_FIELDS(self):
-        return super().SELF_READABLE_FIELDS + ['api_key_ids']
-
-    @property
-    def SELF_WRITEABLE_FIELDS(self):
-        return super().SELF_WRITEABLE_FIELDS + ['api_key_ids']
-
-    def _rpc_api_keys_only(self):
-        """ To be overridden if RPC access needs to be restricted to API keys, e.g. for 2FA """
-        return False
-
-    def _check_credentials(self, credential, user_agent_env):
-        user_agent_env = user_agent_env or {}
-        if user_agent_env.get('interactive', True):
-            if 'interactive' not in user_agent_env:
-                _logger.warning(
-                    "_check_credentials without 'interactive' env key, assuming interactive login. \
-                    Check calls and overrides to ensure the 'interactive' key is properly set in \
-                    all _check_credentials environments"
-                )
-            return super()._check_credentials(credential, user_agent_env)
-
-        if not self.env.user._rpc_api_keys_only():
-            try:
-                return super()._check_credentials(credential, user_agent_env)
-            except AccessDenied:
-                pass
-
-        # 'rpc' scope does not really exist, we basically require a global key (scope NULL)
-        if self.env['res.users.apikeys']._check_credentials(scope='rpc', key=credential['password']) == self.env.uid:
-            return {
-                'uid': self.env.user.id,
-                'auth_method': 'apikey',
-                'mfa': 'default',
-            }
-
-        raise AccessDenied()
-
-    @check_identity
-    def api_key_wizard(self):
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'res.users.apikeys.description',
-            'name': 'New API Key',
-            'target': 'new',
-            'views': [(False, 'form')],
-        }
-
-
 class ResUsersApikeys(models.Model):
+    _name = 'res.users.apikeys'
     _description = 'Users API Keys'
     _auto = False # so we can have a secret column
     _allow_sudo_commands = False
@@ -2421,6 +2392,7 @@ class ResUsersApikeys(models.Model):
 
 
 class ResUsersApikeysDescription(models.TransientModel):
+    _name = 'res.users.apikeys.description'
     _description = 'API Key Description'
 
     def _selection_duration(self):
@@ -2503,6 +2475,7 @@ class ResUsersApikeysDescription(models.TransientModel):
 
 
 class ResUsersApikeysShow(models.AbstractModel):
+    _name = 'res.users.apikeys.show'
     _description = 'Show API Key'
 
     # the field 'id' is necessary for the onchange that returns the value of 'key'

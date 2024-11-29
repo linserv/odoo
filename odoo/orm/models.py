@@ -4,7 +4,7 @@
 """
     Object Relational Mapping module:
      * Hierarchical structure
-     * Constraints consistency and validation
+     * Constraints consistency and validation, indexes
      * Object metadata depends on its status
      * Optimised processing by complex query (multiple actions at once)
      * Default field values
@@ -37,13 +37,12 @@ import uuid
 import warnings
 from collections import defaultdict, deque
 from collections.abc import MutableMapping, Callable
-from contextlib import closing
 from inspect import getmembers
 from operator import attrgetter, itemgetter
 
 import babel
 import babel.dates
-import psycopg2
+import psycopg2.errors
 import psycopg2.extensions
 from psycopg2.extras import Json
 
@@ -57,6 +56,7 @@ from odoo.tools import (
     ormcache, partition, Query, split_every, unique,
     SQL, sql,
 )
+from odoo.tools.constants import GC_UNLINK_LIMIT, PREFETCH_MAX
 from odoo.tools.lru import LRU
 from odoo.tools.misc import LastOrderedSet, ReversedIterable, unquote
 from odoo.tools.translate import _, LazyTranslate
@@ -64,18 +64,19 @@ from odoo.tools.translate import _, LazyTranslate
 from . import fields
 from . import decorators as api
 from .commands import Command
-from .fields import Field
+from .fields import Field, determine
 from .fields_misc import Id
 from .fields_temporal import Datetime
 from .fields_textual import Char
 
 from .identifiers import NewId
-from .utils import OriginIds, expand_ids, check_pg_name, check_object_name, check_property_field_value_name, origin_ids, PREFETCH_MAX, READ_GROUP_ALL_TIME_GRANULARITY, READ_GROUP_TIME_GRANULARITY, READ_GROUP_NUMBER_GRANULARITY
+from .utils import OriginIds, check_pg_name, check_object_name, check_property_field_value_name, origin_ids, READ_GROUP_ALL_TIME_GRANULARITY, READ_GROUP_TIME_GRANULARITY, READ_GROUP_NUMBER_GRANULARITY
 from odoo.osv import expression
 
 import typing
 if typing.TYPE_CHECKING:
     from collections.abc import Reversible
+    from .table_objects import TableObject
     from .environments import Environment
     from .registry import Registry
     from .types import Self, ValuesType, IdType
@@ -102,11 +103,13 @@ regex_read_group_spec = re.compile(r'(\w+)(\.(\w+))?(?::(\w+))?$')  # For _read_
 regex_camel_case = re.compile(r'(?<=[^_])([A-Z])')
 
 AUTOINIT_RECALCULATE_STORED_FIELDS = 1000
-GC_UNLINK_LIMIT = 100_000
 
 INSERT_BATCH_SIZE = 100
 UPDATE_BATCH_SIZE = 100
 SQL_DEFAULT = psycopg2.extensions.AsIs("DEFAULT")
+
+# hacky-ish way to prevent access to a field through the ORM (except for sudo mode)
+NO_ACCESS = '.'
 
 
 def class_name_to_model_name(classname: str) -> str:
@@ -147,12 +150,14 @@ def fix_import_export_id_paths(fieldname):
     return fixed_external_id.split('/')
 
 
-def to_company_ids(companies):
-    if isinstance(companies, BaseModel):
-        return companies.ids
-    elif isinstance(companies, (list, tuple, str)):
-        return companies
-    return [companies]
+def to_record_ids(arg) -> list[int]:
+    """ Return the record ids of ``arg``, which may be a recordset, an integer or a list of integers. """
+    if isinstance(arg, BaseModel):
+        return arg.ids
+    elif isinstance(arg, int):
+        return [arg] if arg else []
+    else:
+        return [id_ for id_ in arg if id_]
 
 
 def check_company_domain_parent_of(self, companies):
@@ -163,7 +168,7 @@ def check_company_domain_parent_of(self, companies):
     if isinstance(companies, str):
         return ['|', ('company_id', '=', False), ('company_id', 'parent_of', companies)]
 
-    companies = [id for id in to_company_ids(companies) if id]
+    companies = to_record_ids(companies)
     if not companies:
         return [('company_id', '=', False)]
 
@@ -181,7 +186,7 @@ def check_companies_domain_parent_of(self, companies):
     if isinstance(companies, str):
         return [('company_ids', 'parent_of', companies)]
 
-    companies = [id_ for id_ in to_company_ids(companies) if id_]
+    companies = to_record_ids(companies)
     if not companies:
         return []
 
@@ -203,6 +208,8 @@ class MetaModel(api.Meta):
         attrs.setdefault('__slots__', ())
         # this collects the fields defined on the class (via Field.__set_name__())
         attrs.setdefault('_field_definitions', [])
+        # this collects the table object definitions on the class (via TableObject.__set_name__())
+        attrs.setdefault('_table_object_definitions', [])
 
         if attrs.get('_register', True):
             # determine '_module'
@@ -247,23 +254,20 @@ class MetaModel(api.Meta):
                     setattr(self, name, field)
                     field.__set_name__(self, name)
 
-            add('id', Id(automatic=True))
-            add_default('display_name', Char(
-                string='Display Name', automatic=True,
-                compute='_compute_display_name',
-                search='_search_display_name',
-            ))
+            # make sure `id` field is still a `fields.Id`
+            if not isinstance(self.id, Id):
+                raise TypeError(f"Field {self.id} is not an instance of fields.Id")
 
             if attrs.get('_log_access', self._auto):
                 from .fields_relational import Many2one  # noqa: PLC0415
                 add_default('create_uid', Many2one(
-                    'res.users', string='Created by', automatic=True, readonly=True))
+                    'res.users', string='Created by', readonly=True))
                 add_default('create_date', Datetime(
-                    string='Created on', automatic=True, readonly=True))
+                    string='Created on', readonly=True))
                 add_default('write_uid', Many2one(
-                    'res.users', string='Last Updated by', automatic=True, readonly=True))
+                    'res.users', string='Last Updated by', readonly=True))
                 add_default('write_date', Datetime(
-                    string='Last Updated on', automatic=True, readonly=True))
+                    string='Last Updated on', readonly=True))
 
 
 # special columns automatically created by the ORM
@@ -512,9 +516,10 @@ class BaseModel(metaclass=MetaModel):
       :attr:`~odoo.models.Model._inherits`-ed models, the inherited field will
       correspond to the last one (in the inherits list order).
     """
-    _table = None                   #: SQL table name used by model if :attr:`_auto`
-    _table_query = None             #: SQL expression of the table's content (optional)
-    _sql_constraints: list[tuple[str, str, str]] = []   #: SQL constraints [(name, sql_def, message)]
+    _table: str = ''                 #: SQL table name used by model if :attr:`_auto`
+    _table_query: str | None = None  #: SQL expression of the table's content (optional)
+    _table_objects: dict[str, TableObject] = frozendict()  #: SQL/Table objects
+    _inherit_children: OrderedSet[str]
 
     _rec_name = None                #: field to use for labeling records, default: ``name``
     _rec_names_search: list[str] | None = None    #: fields to consider in ``name_search``
@@ -562,6 +567,13 @@ class BaseModel(metaclass=MetaModel):
     _transient_max_hours = lazy_classproperty(lambda _: config.get('transient_age_limit'))
     "maximum idle lifetime (in hours), unlimited if ``0``"
 
+    id = Id()
+    display_name = Char(
+        string='Display Name',
+        compute='_compute_display_name',
+        search='_search_display_name',
+    )
+
     def _valid_field_parameter(self, field, name):
         """ Return whether the given parameter name is valid for the field. """
         return name == 'related_sudo'
@@ -578,13 +590,13 @@ class BaseModel(metaclass=MetaModel):
             for model in [cls] + [self.env.registry[inherit] for inherit in cls._inherits]
         )
         if not (is_class_field or self.env['ir.model.fields']._is_manual_name(name)):
-            raise ValidationError(
+            raise ValidationError(  # pylint: disable=missing-gettext
                 f"The field `{name}` is not defined in the `{cls._name}` Python class and does not start with 'x_'"
             )
 
         # Assert the attribute to assign is a Field
         if not isinstance(field, fields.Field):
-            raise ValidationError("You can only add `fields.Field` objects to a model fields")
+            raise ValidationError("You can only add `fields.Field` objects to a model fields")  # pylint: disable=missing-gettext
 
         if not isinstance(getattr(cls, name, field), Field):
             _logger.warning("In model %r, field %r overriding existing value", cls._name, name)
@@ -624,13 +636,12 @@ class BaseModel(metaclass=MetaModel):
         the Python sense) from all classes that define the model, and possibly
         other registry classes.
         """
-        if getattr(cls, '_constraints', None):
+        if hasattr(cls, '_constraints'):
             _logger.warning("Model attribute '_constraints' is no longer supported, "
                             "please use @api.constrains on methods instead.")
-
-        # Keep links to non-inherited constraints in cls; this is useful for
-        # instance when exporting translations
-        cls._local_sql_constraints = cls.__dict__.get('_sql_constraints', [])
+        if hasattr(cls, '_sql_constraints'):
+            _logger.warning("Model attribute '_sql_constraints' is no longer supported, "
+                            "please define model.Constraint on the model.")
 
         # all models except 'base' implicitly inherit from 'base'
         name = cls._name
@@ -654,6 +665,7 @@ class BaseModel(metaclass=MetaModel):
                 '_inherit_children': OrderedSet(),      # names of children models
                 '_inherits_children': set(),            # names of children models
                 '_fields': {},                          # populated in _setup_base()
+                '_table_objects': frozendict(),         # populated in _setup_base()
             })
             check_parent = cls._build_model_check_parent
 
@@ -724,7 +736,6 @@ class BaseModel(metaclass=MetaModel):
         cls._log_access = cls._auto
         inherits = {}
         depends = {}
-        cls._sql_constraints = {}
 
         for base in reversed(cls.__base_classes):
             if is_definition_class(base):
@@ -739,11 +750,6 @@ class BaseModel(metaclass=MetaModel):
 
             for mname, fnames in base._depends.items():
                 depends.setdefault(mname, []).extend(fnames)
-
-            for cons in base._sql_constraints:
-                cls._sql_constraints[cons[0]] = cons
-
-        cls._sql_constraints = list(cls._sql_constraints.values())
 
         # avoid assigning an empty dict to save memory
         if inherits:
@@ -762,10 +768,6 @@ class BaseModel(metaclass=MetaModel):
 
     @classmethod
     def _init_constraints_onchanges(cls):
-        # store list of sql constraint qualified names
-        for (key, _, _) in cls._sql_constraints:
-            cls.pool._sql_constraints.add(cls._table + '_' + key)
-
         # reset properties memoized on cls
         cls._constraint_methods = BaseModel._constraint_methods
         cls._ondelete_methods = BaseModel._ondelete_methods
@@ -818,7 +820,7 @@ class BaseModel(metaclass=MetaModel):
         methods = []
         for attr, func in getmembers(cls, is_constraint):
             if callable(func._constrains):
-                func = wrap(func, func._constrains(self))
+                func = wrap(func, func._constrains(self.sudo()))
             for name in func._constrains:
                 field = cls._fields.get(name)
                 if not field:
@@ -1251,7 +1253,12 @@ class BaseModel(metaclass=MetaModel):
                     messages.append(dict(info, type='warning', message=str(e)))
                 except psycopg2.Error as e:
                     info = rec_data['info']
-                    messages.append(dict(info, type='error', **PGERROR_TO_OE[e.pgcode](self, fg, info, e)))
+                    pg_error_info = {'message': self._sql_error_to_message(e)}
+                    if e.diag.table_name == self._table:
+                        e_fields = get_columns_from_sql_diagnostics(self.env.cr, e.diag, check_registry=True)
+                        if len(e_fields) == 1:
+                            pg_error_info['field'] = e_fields[0]
+                    messages.append(dict(info, type='error', **pg_error_info))
                     # Failed to write, log to messages, rollback savepoint (to
                     # avoid broken transaction) and keep going
                     errors += 1
@@ -1477,7 +1484,7 @@ class BaseModel(metaclass=MetaModel):
             xid = record.get('id', False)
             # dbid
             dbid = False
-            if '.id' in record:
+            if record.get('.id'):
                 try:
                     dbid = int(record['.id'])
                 except ValueError:
@@ -1656,6 +1663,8 @@ class BaseModel(metaclass=MetaModel):
 
         if query.is_empty():
             # optimization: don't execute the query at all
+            if not self.env.su:  # check access to fields
+                self._determine_fields_to_fetch(field_names)
             return self.browse()
 
         fields_to_fetch = self._determine_fields_to_fetch(field_names)
@@ -2838,7 +2847,7 @@ class BaseModel(metaclass=MetaModel):
             fname = f"{fname}.{property_name}"
             raise ValueError(f"Invalid field {fname!r} on model {self._name!r}")
 
-        self.check_field_access_rights('read', [field.name])
+        self._check_field_access(field, 'read')
 
         field_to_flush = field if flush and fname != 'id' else None
         sql_field = SQL.identifier(alias, fname, to_flush=field_to_flush)
@@ -2865,7 +2874,7 @@ class BaseModel(metaclass=MetaModel):
                     fallback=fallback,
                     column_type=SQL(field._column_type[1]),
                 )
-            if field.type in ('boolean', 'integer', 'float', 'monetary'):
+            if field.type in ('boolean', 'integer', 'float'):
                 return SQL('(%s)::%s', sql_field, SQL(field._column_type[1]))
             # here the specified value for a company might be NULL e.g. '{"1": null}'::jsonb
             # the result of current sql_field might be 'null'::jsonb
@@ -3011,6 +3020,20 @@ class BaseModel(metaclass=MetaModel):
         is_char_field = field.type in ('char', 'text', 'html')
         sql_operator = expression.SQL_OPERATORS[operator]
 
+        if field.type == 'boolean':
+            if operator in ('in', 'not in'):
+                values = {bool(v) for v in value}
+                if len(values) != 1:
+                    return SQL("TRUE") if (operator == 'in') == bool(values) else SQL("FALSE")
+                value = next(iter(values))
+                operator = '=' if operator == 'in' else '!='
+
+            if operator in ('=', '!='):
+                if (operator == '=') == bool(value):
+                    return SQL("(%s IS TRUE)", sql_field)
+                else:
+                    return SQL("(%s IS NOT TRUE)", sql_field)
+
         if operator in ('in', 'not in'):
             # Two cases: value is a boolean or a list. The boolean case is an
             # abuse and handled for backward compatibility.
@@ -3030,12 +3053,7 @@ class BaseModel(metaclass=MetaModel):
             elif isinstance(value, (list, tuple)):
                 params = [it for it in value if it is not False and it is not None]
                 check_null = len(params) < len(value)
-                if field.type == 'boolean':
-                    # just replace instead of casting, only truthy values remain
-                    params = [True] if any(params) else []
-                    if check_null:
-                        params.append(False)
-                elif is_number_field:
+                if is_number_field:
                     if check_null and 0 not in params:
                         params.append(0)
                     check_null = check_null or (0 in params)
@@ -3060,13 +3078,6 @@ class BaseModel(metaclass=MetaModel):
 
             else:  # Must not happen
                 raise ValueError(f"Invalid domain term {(fname, operator, value)!r}")
-
-        if field.type == 'boolean' and operator in ('=', '!=') and isinstance(value, bool):
-            value = (not value) if operator in expression.NEGATIVE_TERM_OPERATORS else value
-            if value:
-                return SQL("(%s = TRUE)", sql_field)
-            else:
-                return SQL("(%s IS NULL OR %s = FALSE)", sql_field, sql_field)
 
         if (field.relational or field.name == 'id') and operator in ('=', '!=') and isinstance(value, NewId):
             _logger.warning("_condition_to_sql: ignored (%r, %r, NewId), did you mean (%r, 'in', recs.ids)?", fname, operator, fname)
@@ -3346,37 +3357,83 @@ class BaseModel(metaclass=MetaModel):
             _logger.error('parent_path field on model %r should be indexed! Add index=True to the field definition.', self._name)
 
     def _add_sql_constraints(self):
-        """ Modify this model's database table constraints so they match the one
-        in _sql_constraints.
-
+        """ Modify this model's database table objects so they match the one
+        in _table_objects.
         """
-        cr = self._cr
-        foreign_key_re = re.compile(r'\s*foreign\s+key\b.*', re.I)
+        for obj in self._table_objects.values():
+            obj.apply_to_database(self)
 
-        for (key, definition, _message) in self._sql_constraints:
-            conname = '%s_%s' % (self._table, key)
-            if len(conname) > 63:
-                hashed_conname = sql.make_identifier(conname)
-                current_definition = sql.constraint_definition(cr, self._table, hashed_conname)
-                if not current_definition:
-                    _logger.info("Constraint name %r has more than 63 characters, internal PG identifier is %r", conname, hashed_conname)
-                conname = hashed_conname
-            else:
-                current_definition = sql.constraint_definition(cr, self._table, conname)
-            if current_definition == definition:
-                continue
+    @api.model
+    def _sql_error_to_message(self, exc: psycopg2.Error) -> str:
+        """ Convert a database exception to a user error message depending on the model.
 
-            if current_definition:
-                # constraint exists but its definition may have changed
-                sql.drop_constraint(cr, self._table, conname)
+        Note that the cursor on self has to be in a valid state.
+        """
+        if (constraint_name := exc.diag.constraint_name) and (cons := self._table_objects.get(constraint_name)):
+            cons_rec = self.env['ir.model.constraint'].search_fetch([
+                ('name', '=', constraint_name),
+                ('model.model', '=', self._name),
+            ], ['message'], limit=1)
+            if message := cons_rec.message:
+                return message
+            # get the message from the object
+            if message := cons.get_error_message(self, exc.diag):
+                return message
+        return self._sql_error_to_message_generic(exc)
 
-            if not definition:
-                # virtual constraint (e.g. implemented by a custom index)
-                self.pool.post_init(sql.check_index_exist, cr, conname)
-            elif foreign_key_re.match(definition):
-                self.pool.post_init(sql.add_constraint, cr, self._table, conname, definition)
-            else:
-                self.pool.post_constraint(sql.add_constraint, cr, self._table, conname, definition)
+    @api.model
+    def _sql_error_to_message_generic(self, exc: psycopg2.Error) -> str:
+        """ Convert a database exception to a generic user error message. """
+        diag = exc.diag
+        unknown = self.env._('Unknown')
+        model_string = self.env['ir.model']._get(self._name).name or self._description
+        info = {
+            'model_display': f"'{model_string}' ({self._name})",
+            'table_name': diag.table_name,
+            'constraint_name': diag.constraint_name,
+        }
+        if self._table == diag.table_name:
+            columns = get_columns_from_sql_diagnostics(self.env.cr, diag, check_registry=True)
+        else:
+            columns = get_columns_from_sql_diagnostics(self.env.cr, diag)
+            info['model_display'] = unknown
+        if not columns:
+            info['field_display'] = unknown
+        elif len(columns) == 1 and (field := self._fields.get(columns[0])):
+            field_string = field._description_string(self.env)
+            info['field_display'] = f"'{field_string}' ({field.name})"
+        else:
+            info['field_display'] = f"'{format_list(self.env, columns)}'"
+
+        if isinstance(exc, psycopg2.errors.NotNullViolation):
+            return self.env._(
+                "Missing required value for the field %(field_display)s.\n"
+                "Model: %(model_display)s\n"
+                "- create/update: a mandatory field is not set\n"
+                "- delete: another model requires the record being deleted, you can archive it instead\n",
+                **info,
+            )
+
+        if isinstance(exc, psycopg2.errors.ForeignKeyViolation):
+            if len(columns) != 1:
+                info['field_display'] = info['constraint_name']
+            return self.env._(
+                "Another model requires the record being deleted, if possible, archive it instead.\n\n"
+                "Model: %(model_display)s\n"
+                "Foreign key: %(field_display)s\n",
+                **info,
+            )
+
+        if isinstance(exc, psycopg2.errors.UniqueViolation) and columns:
+            column_names = [self._fields[f].string if f in self._fields else f for f in columns]
+            info['field_display'] = f"'{', '.join(columns)}' ({format_list(self.env, column_names)})"
+            info['detail'] = diag.message_detail  # contains conflicting key and value
+            return self.env._("The value for %(field_display)s already exists.\n\nDetail: %(detail)s\n", **info)
+
+        # No good message can be created for psycopg2.errors.CheckViolation
+
+        # fallback
+        return tools.exception_to_unicode(exc)
 
     #
     # Update objects that use this one to update their _inherits fields
@@ -3538,6 +3595,15 @@ class BaseModel(metaclass=MetaModel):
         elif 'x_active' in cls._fields:
             cls._active_name = 'x_active'
 
+        # 7. determine table objects
+        assert not cls._table_object_definitions, "cls is a registry model"
+        cls._table_objects = frozendict({
+            cons.full_name(self): cons
+            for klass in reversed(cls._model_classes)
+            if isinstance(klass, MetaModel)
+            for cons in klass._table_object_definitions
+        })
+
     @api.model
     def _setup_fields(self):
         """ Setup the fields, except for recomputation triggers. """
@@ -3591,7 +3657,7 @@ class BaseModel(metaclass=MetaModel):
         for fname, field in self._fields.items():
             if allfields and fname not in allfields:
                 continue
-            if not field.is_accessible(self.env):
+            if not self._has_field_access(field, 'read'):
                 continue
 
             description = field.get_description(self.env, attributes=attributes)
@@ -3600,8 +3666,73 @@ class BaseModel(metaclass=MetaModel):
         return res
 
     @api.model
-    def check_field_access_rights(self, operation, field_names):
+    def _has_field_access(self, field: Field, operation: str) -> bool:
+        """ Determine whether the user access rights on the given field for the given operation.
+        You may override this method to customize the access to fields.
+
+        :param field: the field to check
+        :param operation: one of ``create``, ``read``, ``write``, ``unlink``
+        :return: whether the field is accessible
+        """
+        if not field.groups or self.env.su:
+            return True
+        if field.groups == NO_ACCESS:
+            return False
+        return self.env.user.has_groups(field.groups)
+
+    @api.model
+    def _check_field_access(self, field: Field, operation: str) -> None:
+        """Check the user access rights on the given field.
+
+        :param field: the field to check
+        :param operation: one of ``create``, ``read``, ``write``, ``unlink``
+        :raise AccessError: if the user is not allowed to access the provided field
+        """
+        if self._has_field_access(field, operation):
+            return
+
+        _logger.info('Access Denied by ACLs for operation: %s, uid: %s, model: %s, field: %s',
+            operation, self.env.uid, self._name, field.name)
+
+        description = self.env['ir.model']._get(self._name).name
+
+        error_msg = _(
+            "You do not have enough rights to access the field \"%(field)s\""
+            " on %(document_kind)s (%(document_model)s). "
+            "Please contact your system administrator."
+            "\n\nOperation: %(operation)s",
+            field=field.name,
+            document_kind=description,
+            document_model=self._name,
+            operation=operation,
+        )
+
+        if self.env.user._has_group('base.group_no_one'):
+            if field.groups == NO_ACCESS:
+                allowed_groups_msg = _("always forbidden")
+            else:
+                groups_list = [self.env.ref(g) for g in field.groups.split(',')]
+                groups = self.env['res.groups'].union(*groups_list).sorted('id')
+                allowed_groups_msg = _(
+                    "allowed for groups %s",
+                    ', '.join(repr(g.display_name) for g in groups),
+                )
+            error_msg += _(
+                "\nUser: %(user)s"
+                "\nGroups: %(allowed_groups_msg)s",
+                user=self.env.uid,
+                allowed_groups_msg=allowed_groups_msg,
+            )
+
+        raise AccessError(error_msg)
+
+    @api.model
+    def check_field_access_rights(self, operation: str, field_names: list[str] | None) -> list[str]:
         """Check the user access rights on the given fields.
+
+        If `field_names` is not provided, we list accessible fields to the user.
+        Otherwise, an error is raised if we try to access a forbidden field.
+        Note that this function ignores unknown (virtual) fields.
 
         :param str operation: one of ``create``, ``read``, ``write``, ``unlink``
         :param field_names: names of the fields
@@ -3612,56 +3743,27 @@ class BaseModel(metaclass=MetaModel):
         :raise AccessError: if the user is not allowed to access
           the provided fields.
         """
+        warnings.warn(
+            "Deprecated since 19.0, use `_check_field_access` on models."
+            " To get the list of allowed fields, use `fields_get`.",
+            DeprecationWarning,
+        )
         if self.env.su:
             return field_names or list(self._fields)
 
         if not field_names:
-            field_names = [name for name, field in self._fields.items() if field.is_accessible(self.env)]
-        else:
+            return [
+                field_name
+                for field_name, field in self._fields.items()
+                if self._has_field_access(field, operation)
+            ]
+
+        for field_name in field_names:
             # Unknown (or virtual) fields are considered accessible because they will not be read and nothing will be written to them.
-            invalid_fields = [name for name in field_names if name in self._fields and not self._fields[name].is_accessible(self.env)]
-            if invalid_fields:
-                _logger.info('Access Denied by ACLs for operation: %s, uid: %s, model: %s, fields: %s',
-                             operation, self._uid, self._name, ', '.join(invalid_fields))
-
-                description = self.env['ir.model']._get(self._name).name
-
-                error_msg = _(
-                    "You do not have enough rights to access the fields \"%(fields)s\""
-                    " on %(document_kind)s (%(document_model)s). "
-                    "Please contact your system administrator."
-                    "\n\nOperation: %(operation)s",
-                    fields=','.join(invalid_fields),
-                    document_kind=description,
-                    document_model=self._name,
-                    operation=operation,
-                )
-
-                if self.env.user._has_group('base.group_no_one'):
-                    def format_groups(field):
-                        if field.groups == '.':
-                            return _("always forbidden")
-
-                        groups_list = [self.env.ref(g) for g in field.groups.split(',')]
-                        groups = self.env['res.groups'].union(*groups_list).sorted('id')
-                        return _(
-                            "allowed for groups %s",
-                            ', '.join(repr(g.display_name) for g in groups),
-                        )
-
-                    error_msg += _(
-                        "\nUser: %(user)s"
-                        "\nFields:"
-                        "\n%(fields_list)s",
-                        user=self._uid,
-                        fields_list='\n'.join(
-                            '- %s (%s)' % (f, format_groups(self._fields[f]))
-                            for f in sorted(invalid_fields)
-                        ),
-                    )
-
-                raise AccessError(error_msg)
-
+            field = self._fields.get(field_name)
+            if field is None:
+                continue
+            self._check_field_access(field, operation)
         return field_names
 
     @api.readonly
@@ -3684,7 +3786,10 @@ class BaseModel(metaclass=MetaModel):
         order to modify how fields are read from database, see methods
         :meth:`_fetch_query` and :meth:`_read_format`.
         """
-        fields = self.check_field_access_rights('read', fields)
+        if not fields:
+            fields = list(self.fields_get(attributes=()))
+        elif not self and not self.env.su:  # check field access, otherwise done during fetch()
+            self._determine_fields_to_fetch(fields)
         self._origin.fetch(fields)
         return self._read_format(fnames=fields, load=load)
 
@@ -3721,7 +3826,8 @@ class BaseModel(metaclass=MetaModel):
         self.ensure_one()
 
         self.check_access('write')
-        self.check_field_access_rights('write', [field_name])
+        field = self._fields[field_name]
+        self._check_field_access(field, 'write')
 
         valid_langs = set(code for code, _ in self.env['res.lang'].get_installed()) | {'en_US'}
         source_lang = source_lang or 'en_US'
@@ -3731,8 +3837,6 @@ class BaseModel(metaclass=MetaModel):
                 _("The following languages are not activated: %(missing_names)s",
                 missing_names=', '.join(missing_langs))
             )
-
-        field = self._fields[field_name]
 
         if not field.translate:
             return False  # or raise error
@@ -3928,7 +4032,7 @@ class BaseModel(metaclass=MetaModel):
         """ Read from the database in order to fetch ``field`` (:class:`Field`
             instance) for ``self`` in cache.
         """
-        self.check_field_access_rights('read', [field.name])
+        self._check_field_access(field, 'read')
         # determine which fields can be prefetched
         if self._context.get('prefetch_fields', True) and field.prefetch:
             fnames = [
@@ -3937,7 +4041,7 @@ class BaseModel(metaclass=MetaModel):
                 # select fields with the same prefetch group
                 if f.prefetch == field.prefetch
                 # discard fields with groups that the user may not access
-                if f.is_accessible(self.env)
+                if self._has_field_access(f, 'read')
             ]
             if field.name not in fnames:
                 fnames.append(field.name)
@@ -3997,6 +4101,7 @@ class BaseModel(metaclass=MetaModel):
         :param field_names: the list of fields requested
         :param ignore_when_in_cache: whether to ignore fields that are alreay in cache for ``self``
         :return: the list of fields that must be fetched
+        :raise AccessError: when trying to fetch fields to which the user does not have access
         """
         if not field_names:
             return []
@@ -4004,17 +4109,21 @@ class BaseModel(metaclass=MetaModel):
         cache = self.env.cache
 
         fields_to_fetch = []
-        field_names_todo = deque(self.check_field_access_rights('read', field_names))
-        field_names_done = {'id'}  # trick: ignore 'id'
+        fields_todo = deque()
+        fields_done = {self._fields['id']}  # trick: ignore 'id'
+        for field_name in field_names:
+            try:
+                field = self._fields[field_name]
+            except KeyError as e:
+                raise ValueError(f"Invalid field {field_name!r} on {self._name!r}") from e
+            self._check_field_access(field, 'read')
+            fields_todo.append(field)
 
-        while field_names_todo:
-            field_name = field_names_todo.popleft()
-            if field_name in field_names_done:
+        while fields_todo:
+            field = fields_todo.popleft()
+            if field in fields_done:
                 continue
-            field_names_done.add(field_name)
-            field = self._fields.get(field_name)
-            if not field:
-                raise ValueError(f"Invalid field {field_name!r} on model {self._name!r}")
+            fields_done.add(field)
             if ignore_when_in_cache and not any(cache.get_missing_ids(self, field)):
                 # field is already in cache: don't fetch it
                 continue
@@ -4024,10 +4133,11 @@ class BaseModel(metaclass=MetaModel):
                 # optimization: fetch field dependencies
                 for dotname in self.pool.field_depends[field]:
                     dep_field = self._fields[dotname.split('.', 1)[0]]
-                    if (not dep_field.store) or (dep_field.prefetch is True and
-                        dep_field.is_accessible(self.env)
+                    if (not dep_field.store) or (
+                        dep_field.prefetch is True
+                        and self._has_field_access(dep_field, 'read')
                     ):
-                        field_names_todo.append(dep_field.name)
+                        fields_todo.append(dep_field)
 
         return fields_to_fetch
 
@@ -4160,7 +4270,7 @@ class BaseModel(metaclass=MetaModel):
             return [('company_id', '=', False)]
         if isinstance(companies, str):
             return [('company_id', 'in', unquote(f'{companies} + [False]'))]
-        return [('company_id', 'in', to_company_ids(companies) + [False])]
+        return [('company_id', 'in', to_record_ids(companies) + [False])]
 
     def _check_company(self, fnames=None):
         """ Check the companies of the values of the given field names.
@@ -4545,7 +4655,11 @@ class BaseModel(metaclass=MetaModel):
             return True
 
         self.check_access('write')
-        self.check_field_access_rights('write', vals.keys())
+        for field_name in vals:
+            try:
+                self._check_field_access(self._fields[field_name], 'write')
+            except KeyError as e:
+                raise ValueError(f"Invalid field {field_name!r} in {self._name!r}") from e
         env = self.env
 
         bad_names = {'id', 'parent_path'}
@@ -5121,7 +5235,7 @@ class BaseModel(metaclass=MetaModel):
         return records
 
     def _compute_field_value(self, field):
-        fields.determine(field.compute, self)
+        determine(field.compute, self)
 
         if field.store and any(self._ids):
             # check constraints of the fields that have been computed
@@ -5307,7 +5421,7 @@ class BaseModel(metaclass=MetaModel):
                 continue
             d_id, d_module, d_name, d_model, d_res_id, d_noupdate, r_id = row
             if self._name != d_model:
-                raise ValidationError(
+                raise ValidationError(  # pylint: disable=missing-gettext
                     f"For external id {xml_id} "
                     f"when trying to create/update a record of model {self._name} "
                     f"found record of different model {d_model} ({d_id})"
@@ -5965,7 +6079,8 @@ class BaseModel(metaclass=MetaModel):
         :return: List of dictionaries containing the asked fields.
         :rtype: list(dict).
         """
-        fields = self.check_field_access_rights('read', fields)
+        if not fields:
+            fields = list(self.fields_get(attributes=()))
         records = self.search_fetch(domain or [], fields, offset=offset, limit=limit, order=order)
 
         # Method _read_format() ignores 'active_test', but it would forward it
@@ -6029,6 +6144,22 @@ class BaseModel(metaclass=MetaModel):
             return self.company_id
         elif 'company_ids' in self:
             return (self.company_ids & self.env.user.company_ids)[:1]
+        return False
+
+    def _can_return_content(
+            self, field_name: str | None = None, access_token: str | None = None
+    ) -> bool:
+        """Determine whether one can export a file or an image from a field of
+        record ``self``, even if ``self`` is not accessible to the current user.
+        If so, the record will be ``sudo()``-ed to access the corresponding file
+        or image.
+        :param Optional[str] field_name: image field name to check the access to
+        :param Optional[str] access_token: access token to use instead of the
+            access rights and access rules
+        :rtype: bool
+        :return: whether the extra access is allowed
+        """
+        self.ensure_one()
         return False
 
     #
@@ -6297,19 +6428,6 @@ class BaseModel(metaclass=MetaModel):
     # Record traversal and update
     #
 
-    def _mapped_func(self, func):
-        """ Apply function ``func`` on all records in ``self``, and return the
-            result as a list or a recordset (if ``func`` returns recordsets).
-        """
-        if self:
-            vals = [func(rec) for rec in self]
-            if isinstance(vals[0], BaseModel):
-                return vals[0].union(*vals)         # union of all recordsets
-            return vals
-        else:
-            vals = func(self)
-            return vals if isinstance(vals, BaseModel) else []
-
     def mapped(self, func):
         """Apply ``func`` on all records in ``self``, and return the result as a
         list or a recordset (if ``func`` return recordsets). In the latter
@@ -6340,13 +6458,34 @@ class BaseModel(metaclass=MetaModel):
         """
         if not func:
             return self                 # support for an empty path of fields
+
         if isinstance(func, str):
-            recs = self
-            for name in func.split('.'):
-                recs = recs._fields[name].mapped(recs)
-            return recs
+            # special case: sequence of field names
+            *rel_field_names, field_name = func.split('.')
+            records = self
+            for rel_field_name in rel_field_names:
+                records = records[rel_field_name]
+            if len(records) > PREFETCH_MAX:
+                # fetch fields for all recordset in case we have a recordset
+                # that is larger than the prefetch
+                records.fetch([field_name])
+            field = records._fields[field_name]
+            getter = field.__get__
+            if field.relational:
+                # union of records
+                return getter(records)
+            return [getter(record) for record in records]
+
+        if self:
+            vals = [func(rec) for rec in self]
+            if isinstance(vals[0], BaseModel):
+                return vals[0].union(*vals)
+            return vals
         else:
-            return self._mapped_func(func)
+            # we want to follow-up the comodel from the function
+            # so we pass an empty recordset
+            vals = func(self)
+            return vals if isinstance(vals, BaseModel) else []
 
     def filtered(self, func) -> Self:
         """Return the records in ``self`` satisfying ``func``.
@@ -6363,11 +6502,14 @@ class BaseModel(metaclass=MetaModel):
             # only keep records whose partner is a company
             records.filtered("partner_id.is_company")
         """
+        if not func:
+            # align with mapped()
+            return self
         if isinstance(func, str):
             if '.' in func:
                 return self.browse(rec.id for rec in self if any(rec.mapped(func)))
-            else:  # Avoid costly mapped
-                return self.browse(rec.id for rec in self if rec[func])
+            # avoid costly mapped
+            func = self._fields[func].__get__
         return self.browse(rec.id for rec in self if func(rec))
 
     def grouped(self, key):
@@ -6915,22 +7057,6 @@ class BaseModel(metaclass=MetaModel):
         """ Return the cache of ``self``, mapping field names to values. """
         return RecordCache(self)
 
-    def _in_cache_without(self, field, limit=PREFETCH_MAX):
-        """ Return records to prefetch that have no value in cache for ``field``
-            (:class:`Field` instance), including ``self``.
-            Return at most ``limit`` records.
-        """
-        ids = expand_ids(self.id, self._prefetch_ids)
-        ids = self.env.cache.get_missing_ids(self.browse(ids), field)
-        if limit:
-            ids = itertools.islice(ids, limit)
-        # Those records are aimed at being either fetched, or computed.  But the
-        # method '_fetch_field' is not correct with new records: it considers
-        # them as forbidden records, and clears their cache!  On the other hand,
-        # compute methods are not invoked with a mix of real and new records for
-        # the sake of code simplicity.
-        return self.browse(ids)
-
     def invalidate_model(self, fnames=None, flush=True):
         """ Invalidate the cache of all records of ``self``'s model, when the
         cached values no longer correspond to the database values.  If the
@@ -7365,80 +7491,25 @@ def itemgetter_tuple(items):
     return operator.itemgetter(*items)
 
 
-def convert_pgerror_not_null(model, fields, info, e):
-    env = model.env
-    if e.diag.table_name != model._table:
-        return {'message': env._("Missing required value for the field '%(name)s' on a linked model [%(linked_model)s]", name=e.diag.column_name, linked_model=e.diag.table_name)}
-
-    field_name = e.diag.column_name
-    field = fields[field_name]
-    message = env._("Missing required value for the field '%(name)s' (%(technical_name)s)", name=field['string'], technical_name=field_name)
-    return {
-        'message': message,
-        'field': field_name,
-    }
-
-
-def convert_pgerror_unique(model, fields, info, e):
-    # new cursor since we're probably in an error handler in a blown
-    # transaction which may not have been rollbacked/cleaned yet
-    with closing(model.env.registry.cursor()) as cr_tmp:
-        cr_tmp.execute(SQL("""
-            SELECT
-                conname AS "constraint name",
-                t.relname AS "table name",
-                ARRAY(
-                    SELECT attname FROM pg_attribute
-                    WHERE attrelid = conrelid
-                      AND attnum = ANY(conkey)
-                ) as "columns"
-            FROM pg_constraint
-            JOIN pg_class t ON t.oid = conrelid
-            WHERE conname = %s
-        """, e.diag.constraint_name))
-        constraint, table, ufields = cr_tmp.fetchone() or (None, None, None)
-    # if the unique constraint is on an expression or on an other table
-    if not ufields or model._table != table:
-        return {'message': tools.exception_to_unicode(e)}
-
-    # TODO: add stuff from e.diag.message_hint? provides details about the constraint & duplication values but may be localized...
-    if len(ufields) == 1:
-        field_name = ufields[0]
-        field = fields[field_name]
-        message = model.env._(
-            "The value for the field '%(field)s' already exists (this is probably '%(other_field)s' in the current model).",
-            field=field_name,
-            other_field=field['string'],
-        )
-        return {
-            'message': message,
-            'field': field_name,
-        }
-    field_strings = [fields[fname]['string'] for fname in ufields]
-    message = model.env._(
-        "The values for the fields '%(fields)s' already exist (they are probably '%(other_fields)s' in the current model).",
-        fields=format_list(model.env, ufields),
-        other_fields=format_list(model.env, field_strings),
-    )
-    return {
-        'message': message,
-        # no field, unclear which one we should pick and they could be in any order
-    }
-
-
-def convert_pgerror_constraint(model, fields, info, e):
-    sql_constraints = dict([(('%s_%s') % (e.diag.table_name, x[0]), x) for x in model._sql_constraints])
-    if e.diag.constraint_name in sql_constraints.keys():
-        return {'message': "'%s'" % sql_constraints[e.diag.constraint_name][2]}
-    return {'message': tools.exception_to_unicode(e)}
-
-
-PGERROR_TO_OE = defaultdict(
-    # shape of mapped converters
-    lambda: (lambda model, fvg, info, pgerror: {'message': tools.exception_to_unicode(pgerror)}),
-    {
-        '23502': convert_pgerror_not_null,
-        '23505': convert_pgerror_unique,
-        '23514': convert_pgerror_constraint,
-    },
-)
+def get_columns_from_sql_diagnostics(cr, diagnostics, *, check_registry=False) -> list[str]:
+    """Given the diagnostics of an error, return the affected column names by the constraint.
+    Return an empty list if we cannot determine the columns.
+    """
+    if column := diagnostics.column_name:
+        return [column]
+    if not check_registry:
+        return []
+    cr.execute(SQL("""
+        SELECT
+            ARRAY(
+                SELECT attname FROM pg_attribute
+                WHERE attrelid = conrelid
+                AND attnum = ANY(conkey)
+            ) as "columns"
+        FROM pg_constraint
+        JOIN pg_class t ON t.oid = conrelid
+        WHERE conname = %s
+            AND t.relname = %s
+    """, diagnostics.constraint_name, diagnostics.table_name))
+    [columns] = cr.fetchone() or ([])
+    return columns

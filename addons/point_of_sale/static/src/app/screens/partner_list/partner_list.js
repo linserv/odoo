@@ -4,7 +4,7 @@ import { fuzzyLookup } from "@web/core/utils/search";
 import { Dialog } from "@web/core/dialog/dialog";
 import { PartnerLine } from "@point_of_sale/app/screens/partner_list/partner_line/partner_line";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
-import { Input } from "@point_of_sale/app/generic_components/inputs/input/input";
+import { Input } from "@point_of_sale/app/components/inputs/input/input";
 import { Component, useState } from "@odoo/owl";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
 import { unaccent } from "@web/core/utils/strings";
@@ -58,7 +58,7 @@ export class PartnerList extends Component {
     goToOrders(partner) {
         this.props.close();
         const partnerHasActiveOrders = this.pos
-            .get_open_orders()
+            .getOpenOrders()
             .some((order) => order.partner?.id === partner.id);
         const stateOverride = {
             search: {

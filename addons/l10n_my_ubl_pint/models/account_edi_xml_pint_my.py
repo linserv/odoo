@@ -4,17 +4,13 @@ from odoo import models, _
 
 
 class AccountEdiXmlPint_My(models.AbstractModel):
+    _name = 'account.edi.xml.pint_my'
     _inherit = ["account.edi.xml.ubl_bis3"]
     _description = "Malaysian implementation of Peppol International (PINT) model for Billing"
     """
     * PINT Official documentation: https://docs.peppol.eu/poac/pint/pint/
     * PINT MY Official documentation: https://docs.peppol.eu/poac/my/pint-my
     """
-
-    def _get_customization_ids(self):
-        vals = super()._get_customization_ids()
-        vals['pint_my'] = 'urn:peppol:pint:billing-1@my-1'
-        return vals
 
     def _export_invoice_filename(self, invoice):
         # EXTENDS account_edi_ubl_cii

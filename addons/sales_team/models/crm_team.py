@@ -14,6 +14,7 @@ from odoo.tools import SQL
 
 
 class CrmTeam(models.Model):
+    _name = 'crm.team'
     _inherit = ['mail.thread']
     _description = "Sales Team"
     _order = "sequence ASC, create_date DESC, id DESC"
@@ -163,23 +164,15 @@ class CrmTeam(models.Model):
             return
         # done in a loop, but to be used in form view only -> not optimized
         for team in self:
-            member_warning = False
             other_memberships = self.env['crm.team.member'].search([
-                ('crm_team_id', '!=', team.id if team.ids else False),  # handle NewID
+                ('crm_team_id', '!=', team._origin.id if team.ids else False),
                 ('user_id', 'in', team.member_ids.ids)
             ])
-            if other_memberships and len(other_memberships) == 1:
-                member_warning = _("Adding %(user_name)s in this team would remove him/her from its current team %(team_name)s.",
-                                   user_name=other_memberships.user_id.name,
-                                   team_name=other_memberships.crm_team_id.name
-                                  )
-            elif other_memberships:
-                member_warning = _("Adding %(user_names)s in this team would remove them from their current teams (%(team_names)s).",
+            if other_memberships:
+                team.member_warning = _("%(user_names)s already in other teams (%(team_names)s).",
                                    user_names=", ".join(other_memberships.mapped('user_id.name')),
                                    team_names=", ".join(other_memberships.mapped('crm_team_id.name'))
                                   )
-            if member_warning:
-                team.member_warning = member_warning + " " + _("To add a Salesperson into multiple Teams, activate the Multi-Team option in settings.")
 
     def _search_member_ids(self, operator, value):
         return [('crm_team_member_ids.user_id', operator, value)]

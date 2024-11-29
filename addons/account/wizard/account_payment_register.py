@@ -8,6 +8,7 @@ from odoo.tools import frozendict, SQL
 
 
 class AccountPaymentRegister(models.TransientModel):
+    _name = 'account.payment.register'
     _description = 'Pay'
     _check_company_auto = True
 
@@ -178,7 +179,7 @@ class AccountPaymentRegister(models.TransientModel):
         '''
         if len(lines.move_id) == 1:
             move = lines.move_id
-            label = (len(lines) == 1 and lines.name) or move.ref or move.name
+            label = move.payment_reference or move.ref or move.name
         else:
             label = self.company_id.get_next_batch_payment_communication()
         return label

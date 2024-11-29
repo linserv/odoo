@@ -9,7 +9,7 @@ from odoo.tools import html2plaintext
 
 
 class SurveyUser_Input(models.Model):
-    _inherit = ['survey.user_input']
+    _inherit = 'survey.user_input'
 
     def _mark_done(self):
         """ Will add certification to employee's resume if
@@ -46,7 +46,7 @@ class SurveyUser_Input(models.Model):
                     'name': survey.title,
                     'date_start': date_start,
                     'date_end': date_start + relativedelta(months=validity_month) if validity_month else False,
-                    'description': html2plaintext(survey.description),
+                    'description': html2plaintext(survey.description) if survey.description else '',
                     'line_type_id': line_type.id if line_type else False,
                     'display_type': 'certification',
                     'survey_id': survey.id,

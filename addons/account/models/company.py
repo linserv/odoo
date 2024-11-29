@@ -7,10 +7,11 @@ import calendar
 from odoo import fields, models, api, _, Command
 from odoo.exceptions import ValidationError, UserError, RedirectWarning
 from odoo.osv import expression
-from odoo.tools import format_list, SQL
+from odoo.tools import date_utils, format_list, SQL
 from odoo.tools.mail import is_html_empty
 from odoo.tools.misc import format_date
 from odoo.addons.account.models.account_move import MAX_HASH_VERSION
+from odoo.addons.account.models.product import ACCOUNT_DOMAIN
 from odoo.addons.base_vat.models.res_partner import _ref_vat
 
 
@@ -51,6 +52,7 @@ LOCK_DATE_FIELDS = [
 
 
 class ResCompany(models.Model):
+    _name = 'res.company'
     _inherit = ["res.company", "mail.thread"]
 
     fiscalyear_last_day = fields.Integer(default=31, required=True)
@@ -251,6 +253,21 @@ class ResCompany(models.Model):
     )
     company_vat_placeholder = fields.Char(compute='_compute_company_vat_placeholder')
 
+    income_account_id = fields.Many2one(
+        comodel_name='account.account',
+        string="Income Account",
+        domain=ACCOUNT_DOMAIN,
+        help="This account will be used when validating a customer invoice.",
+    )
+    expense_account_id = fields.Many2one(
+        comodel_name='account.account',
+        string="Expense Account",
+        domain=ACCOUNT_DOMAIN,
+        help="The expense is accounted for when a vendor bill is validated, except in anglo-saxon"
+             " accounting with perpetual inventory valuation in which case the expense (Cost of"
+             " Goods Sold account) is recognized at the customer invoice validation.",
+    )
+
     def get_next_batch_payment_communication(self):
         '''
         When in need of a batch payment communication reference (several invoices paid at the same time)
@@ -276,7 +293,7 @@ class ResCompany(models.Model):
     @api.constrains("account_price_include")
     def _check_set_account_price_include(self):
         if any(company.sudo()._existing_accounting() for company in self):
-            raise ValidationError("Cannot change Price Tax computation method on a company that has already started invoicing.")
+            raise ValidationError(self.env._("Cannot change Price Tax computation method on a company that has already started invoicing."))
 
     @api.constrains('account_opening_move_id', 'fiscalyear_last_day', 'fiscalyear_last_month')
     def _check_fiscalyear_last_day(self):
@@ -686,6 +703,21 @@ class ResCompany(models.Model):
         }
 
     @api.model
+    def setting_init_credit_card_account_action(self):
+        """ Called by the Financial configuration menu 'Add a credit card account' """
+        view_id = self.env.ref('account.setup_credit_card_account_wizard').id
+        context = {'dialog_size': 'medium', **self.env.context}
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Setup Credit Card Account'),
+            'res_model': 'account.setup.bank.manual.config',
+            'target': 'new',
+            'view_mode': 'form',
+            'views': [[view_id, 'form']],
+            'context': context,
+        }
+
+    @api.model
     def _get_default_opening_move_values(self):
         """ Get the default values to create the opening move.
 
@@ -859,9 +891,9 @@ class ResCompany(models.Model):
             # No automatic install during the loading of a chart_template
             return False
         if res := super().install_l10n_modules():
-            self.env.flush_all()
-            self.env.reset()     # clear the set of environments
-            env = self.env()     # get an environment that refers to the new registry
+            env = self.env
+            env.flush_all()
+            env.transaction.reset()
             for company in self.filtered(lambda c: c.country_id and not c.chart_template):
                 template_code = company.parent_id.chart_template or self.env['account.chart.template']._guess_chart_template(company.country_id)
                 if template_code != 'generic_coa':
@@ -997,16 +1029,14 @@ class ResCompany(models.Model):
 
     def compute_fiscalyear_dates(self, current_date):
         """
-        The role of this method is to provide a fallback when account_accounting is not installed.
-        As the fiscal year is irrelevant when account_accounting is not installed, this method returns the calendar year.
-        :param current_date: A datetime.date/datetime.datetime object.
+        Returns the dates of the fiscal year containing the provided date for this company.
         :return: A dictionary containing:
             * date_from
             * date_to
         """
-
-        return {'date_from': datetime(year=current_date.year, month=1, day=1).date(),
-                'date_to': datetime(year=current_date.year, month=12, day=31).date()}
+        self.ensure_one()
+        date_from, date_to = date_utils.get_fiscal_year(current_date, day=self.fiscalyear_last_day, month=int(self.fiscalyear_last_month))
+        return {'date_from': date_from, 'date_to': date_to}
 
     @api.depends('country_id', 'account_fiscal_country_id')
     def _compute_company_vat_placeholder(self):

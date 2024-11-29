@@ -2,7 +2,7 @@ from odoo import api, fields, models
 
 
 class ResCurrencyRate(models.Model):
-    _inherit = ["res.currency.rate"]
+    _inherit = "res.currency.rate"
 
     @api.model
     def _get_rate_for_spreadsheet(self, currency_from_code, currency_to_code, date=None, company_id=None):
@@ -17,6 +17,7 @@ class ResCurrencyRate(models.Model):
         date = fields.Date.from_string(date) if date else fields.Date.context_today(self)
         return Currency._get_conversion_rate(currency_from, currency_to, company, date)
 
+    @api.readonly
     @api.model
     def get_rates_for_spreadsheet(self, requests):
         result = []

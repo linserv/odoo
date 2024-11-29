@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 
 
 class Base(models.AbstractModel):
-    _inherit = ['base']
+    _inherit = 'base'
     _mail_defaults_to_email = False
 
     def _valid_field_parameter(self, field, name):
@@ -231,7 +231,7 @@ class Base(models.AbstractModel):
         for record in self:
             email_cc_lst, email_to_lst = [], []
             # main recipients (res.partner)
-            recipients_all = customers.get(record.id)
+            recipients_all = customers.get(record.id).filtered(lambda p: not p.is_public)
             recipients = recipients_all.filtered(lambda p: p.email)
             # to computation
             to_fn = next(

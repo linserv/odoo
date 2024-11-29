@@ -4,17 +4,17 @@ import { user } from "@web/core/user";
 
 import {
     addGlobalFilter,
+    redo,
     selectCell,
     setCellContent,
     undo,
-    redo,
 } from "@spreadsheet/../tests/helpers/commands";
 import {
     getCell,
     getCellContent,
     getCellFormula,
-    getCellValue,
     getCells,
+    getCellValue,
     getEvaluatedCell,
     getEvaluatedGrid,
 } from "@spreadsheet/../tests/helpers/getters";
@@ -29,7 +29,8 @@ import {
     defineSpreadsheetActions,
     defineSpreadsheetModels,
     generateListDefinition,
-    getBasicServerData,
+    Partner,
+    Product,
 } from "@spreadsheet/../tests/helpers/data";
 
 import { waitForDataLoaded } from "@spreadsheet/helpers/model";
@@ -78,17 +79,25 @@ test("Boolean fields are correctly formatted", async () => {
 });
 
 test("properties field displays property display names", async () => {
-    const serverData = getBasicServerData();
-    serverData.models.partner.records = [
+    Product._records = [
         {
-            partner_properties: [
-                { name: "dbfc66e0afaa6a8d", type: "date", string: "prop 1", default: false },
-                { name: "f80b6fb58d0d4c72", type: "integer", string: "prop 2", default: 0 },
+            id: 1,
+            properties_definitions: [
+                { name: "dbfc66e0afaa6a8d", type: "date", string: "prop 1" },
+                { name: "f80b6fb58d0d4c72", type: "integer", string: "prop 2" },
             ],
         },
     ];
+    Partner._records = [
+        {
+            product_id: 1,
+            partner_properties: {
+                dbfc66e0afaa6a8d: false,
+                f80b6fb58d0d4c72: 0,
+            },
+        },
+    ];
     const { model } = await createSpreadsheetWithList({
-        serverData,
         columns: ["partner_properties"],
     });
     expect(getCellValue(model, "A2")).toBe("prop 1, prop 2");
@@ -316,7 +325,7 @@ test("user context is combined with list context to fetch data", async function 
             {
                 id: "sheet1",
                 cells: {
-                    A1: { content: `=ODOO.LIST("1", "1", "name")` },
+                    A1: '=ODOO.LIST("1", "1", "name")',
                 },
             },
         ],
@@ -733,9 +742,9 @@ test("fetch all and only required fields", async function () {
             {
                 id: "sheet1",
                 cells: {
-                    A1: { content: '=ODOO.LIST(1, 1, "foo")' }, // in the definition
-                    A2: { content: '=ODOO.LIST(1, 1, "product_id")' }, // not in the definition
-                    A3: { content: '=ODOO.LIST(1, 1, "invalid_field")' },
+                    A1: '=ODOO.LIST(1, 1, "foo")', // in the definition
+                    A2: '=ODOO.LIST(1, 1, "product_id")', // not in the definition
+                    A3: '=ODOO.LIST(1, 1, "invalid_field")',
                 },
             },
         ],
@@ -775,9 +784,9 @@ test("fetch all required positions, including the evaluated ones", async functio
             {
                 id: "sheet1",
                 cells: {
-                    A1: { content: '=ODOO.LIST(1, 11, "foo")' },
-                    A2: { content: '=ODOO.LIST(1, A3, "foo")' },
-                    A3: { content: "111" },
+                    A1: '=ODOO.LIST(1, 11, "foo")',
+                    A2: '=ODOO.LIST(1, A3, "foo")',
+                    A3: "111",
                 },
             },
         ],
@@ -832,7 +841,7 @@ test("List record limit is computed during the import and UPDATE_CELL", async fu
             {
                 id: "sheet1",
                 cells: {
-                    A1: { content: `=ODOO.LIST("1", "1", "foo")` },
+                    A1: '=ODOO.LIST("1", "1", "foo")',
                 },
             },
         ],
@@ -1047,4 +1056,30 @@ test("INSERT_ODOO_LIST_WITH_TABLE adds a table that maches the list dimension", 
     expect(table.range.zone).toEqual(toZone("A20:D25"));
     expect(table.type).toBe("static");
     expect(table.config).toEqual({ ...PIVOT_TABLE_CONFIG, firstColumn: false });
+});
+
+test("An error is displayed if the list has invalid model", async function () {
+    const { model } = await createSpreadsheetWithList({
+        mockRPC: async function (route, { model, method, kwargs }) {
+            if (model === "unknown" && method === "fields_get") {
+                throw makeServerError({ code: 404 });
+            }
+        },
+    });
+    const listId = model.getters.getListIds()[0];
+    const listDefinition = model.getters.getListModelDefinition(listId);
+    model.dispatch("UPDATE_ODOO_LIST", {
+        listId,
+        list: {
+            ...listDefinition,
+            metaData: {
+                ...listDefinition.metaData,
+                resModel: "unknown",
+            },
+        },
+    });
+    setCellContent(model, "A1", `=ODOO.LIST(1,1,"foo")`);
+    await animationFrame();
+    expect(getCellValue(model, "A1")).toBe("#ERROR");
+    expect(getEvaluatedCell(model, "A1").message).toBe(`The model "unknown" does not exist.`);
 });

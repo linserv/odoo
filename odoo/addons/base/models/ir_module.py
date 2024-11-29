@@ -77,6 +77,7 @@ def assert_log_admin_access(method):
 
 
 class IrModuleCategory(models.Model):
+    _name = 'ir.module.category'
     _description = "Application"
     _order = 'name'
     _allow_sudo_commands = False
@@ -149,6 +150,7 @@ XML_DECLARATION = (
 
 
 class IrModuleModule(models.Model):
+    _name = 'ir.module.module'
     _rec_name = "shortdesc"
     _rec_names_search = ['name', 'shortdesc', 'summary']
     _description = "Module"
@@ -304,9 +306,10 @@ class IrModuleModule(models.Model):
     to_buy = fields.Boolean('Odoo Enterprise Module', default=False)
     has_iap = fields.Boolean(compute='_compute_has_iap')
 
-    _sql_constraints = [
-        ('name_uniq', 'UNIQUE (name)', 'The name of the module must be unique!'),
-    ]
+    _name_uniq = models.Constraint(
+        'UNIQUE (name)',
+        "The name of the module must be unique!",
+    )
 
     def _compute_has_iap(self):
         for module in self:
@@ -615,7 +618,7 @@ class IrModuleModule(models.Model):
 
     @assert_log_admin_access
     def button_uninstall(self):
-        un_installable_modules = set(odoo.conf.server_wide_modules) & set(self.mapped('name'))
+        un_installable_modules = set(odoo.tools.config['server_wide_modules']) & set(self.mapped('name'))
         if un_installable_modules:
             raise UserError(_("Those modules cannot be uninstalled: %s", ', '.join(un_installable_modules)))
         if any(state not in ('installed', 'to upgrade') for state in self.mapped('state')):
@@ -955,6 +958,7 @@ DEP_STATES = STATES + [('unknown', 'Unknown')]
 
 
 class IrModuleModuleDependency(models.Model):
+    _name = 'ir.module.module.dependency'
     _description = "Module dependency"
     _log_access = False  # inserts are done manually, create and write uid, dates are always null
     _allow_sudo_commands = False
@@ -1019,6 +1023,7 @@ class IrModuleModuleDependency(models.Model):
 
 
 class IrModuleModuleExclusion(models.Model):
+    _name = 'ir.module.module.exclusion'
     _description = "Module exclusion"
     _allow_sudo_commands = False
 

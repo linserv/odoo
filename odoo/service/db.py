@@ -69,7 +69,7 @@ def _initialize_db(id, db_name, demo, lang, user_password, login='admin', countr
             odoo.tools.config['load_language'] = lang
             cr.commit()
 
-        registry = odoo.modules.registry.Registry.new(db_name, demo, None, update_module=True)
+        registry = odoo.modules.registry.Registry.new(db_name, demo, update_module=True)
 
         with closing(registry.cursor()) as cr:
             env = odoo.api.Environment(cr, SUPERUSER_ID, {})
@@ -414,8 +414,7 @@ def list_dbs(force=False):
         # In case --db-filter is not provided and --database is passed, Odoo will not
         # fetch the list of databases available on the postgres server and instead will
         # use the value of --database as comma seperated list of exposed databases.
-        res = sorted(db.strip() for db in odoo.tools.config['db_name'].split(','))
-        return res
+        return sorted(odoo.tools.config['db_name'])
 
     chosen_template = odoo.tools.config['db_template']
     templates_list = tuple({'postgres', chosen_template})

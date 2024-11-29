@@ -64,6 +64,7 @@ def att_names(name):
 
 
 class IrUiViewCustom(models.Model):
+    _name = 'ir.ui.view.custom'
     _description = 'Custom View'
     _order = 'create_date desc'  # search(limit=1) should return the last customization
     _rec_name = 'user_id'
@@ -73,11 +74,7 @@ class IrUiViewCustom(models.Model):
     user_id = fields.Many2one('res.users', string='User', index=True, required=True, ondelete='cascade')
     arch = fields.Text(string='View Architecture', required=True)
 
-    def _auto_init(self):
-        res = super()._auto_init()
-        tools.create_index(self._cr, 'ir_ui_view_custom_user_id_ref_id',
-                           self._table, ['user_id', 'ref_id'])
-        return res
+    _user_id_ref_id = models.Index('(user_id, ref_id)')
 
 
 def _hasclass(context, *cls):
@@ -140,6 +137,7 @@ WRONGCLASS = re.compile(r"(@class\s*=|=\s*@class|contains\(@class)")
 
 
 class IrUiView(models.Model):
+    _name = 'ir.ui.view'
     _description = 'View'
     _order = "priority,name,id"
     _allow_sudo_commands = False
@@ -347,14 +345,15 @@ actual arch.
                         self._raise_view_error(message, node)
         return True
 
-    @api.constrains('arch_db')
     def _check_xml(self):
         # Sanity checks: the view should not break anything upon rendering!
         # Any exception raised below will cause a transaction rollback.
         partial_validation = self.env.context.get('ir_ui_view_partial_validation')
-        self = self.with_context(validate_view_ids=(self._ids if partial_validation else True))
+        views = self.with_context(validate_view_ids=(self._ids if partial_validation else True))
 
-        for view in self:
+        for view in views:
+            if partial_validation and not view.arch:
+                continue
             try:
                 # verify the view is valid xml and that the inheritance resolves
                 if view.inherit_id:
@@ -436,21 +435,15 @@ actual arch.
         if self._has_cycle('inherit_id'):
             raise ValidationError(_('You cannot create recursive inherited views.'))
 
-    _sql_constraints = [
-        ('inheritance_mode',
-         "CHECK (mode != 'extension' OR inherit_id IS NOT NULL)",
-         "Invalid inheritance mode: if the mode is 'extension', the view must"
-         " extend an other view"),
-        ('qweb_required_key',
-         "CHECK (type != 'qweb' OR key IS NOT NULL)",
-         "Invalid key: QWeb view should have a key"),
-    ]
-
-    def _auto_init(self):
-        res = super()._auto_init()
-        tools.create_index(self._cr, 'ir_ui_view_model_type_inherit_id',
-                           self._table, ['model', 'inherit_id'])
-        return res
+    _inheritance_mode = models.Constraint(
+        "CHECK (mode != 'extension' OR inherit_id IS NOT NULL)",
+        "Invalid inheritance mode: if the mode is 'extension', the view must extend an other view",
+    )
+    _qweb_required_key = models.Constraint(
+        "CHECK (type != 'qweb' OR key IS NOT NULL)",
+        "Invalid key: QWeb view should have a key",
+    )
+    _model_type_inherit_id = models.Index('(model, inherit_id)')
 
     def _compute_defaults(self, values):
         if 'inherit_id' in values:
@@ -513,8 +506,9 @@ actual arch.
             values.update(self._compute_defaults(values))
 
         self.env.registry.clear_cache('templates')
-        result = super(IrUiView, self.with_context(ir_ui_view_partial_validation=True)).create(vals_list)
-        return result.with_env(self.env)
+        result = super().create(vals_list)
+        result.with_context(ir_ui_view_partial_validation=True)._check_xml()
+        return result
 
     def write(self, vals):
         # Keep track if view was modified. That will be useful for the --dev mode
@@ -534,16 +528,9 @@ actual arch.
 
         res = super().write(self._compute_defaults(vals))
 
-        # Check the xml of the view if it gets re-activated.
-        # Ideally, `active` shoud have been added to the `api.constrains` of `_check_xml`,
-        # but the ORM writes and validates regular field (such as `active`) before inverse fields (such as `arch`),
-        # and therefore when writing `active` and `arch` at the same time, `_check_xml` is called twice,
-        # and the first time it tries to validate the view without the modification to the arch,
-        # which is problematic if the user corrects the view at the same time he re-enables it.
-        if vals.get('active'):
-            # Call `_validate_fields` instead of `_check_xml` to have the regular constrains error dialog
-            # instead of the traceback dialog.
-            self._validate_fields(['arch_db'])
+        # Check the xml of the view if it gets re-activated or changed.
+        if vals.get('active') or 'arch_db' in vals:
+            self.filtered('active')._check_xml()
 
         return res
 
@@ -894,7 +881,7 @@ actual arch.
         queue = collections.deque(sorted(hierarchy[self], key=lambda v: v.mode))
         while queue:
             view = queue.popleft()
-            arch = etree.fromstring(view.arch)
+            arch = etree.fromstring(view.arch or '<data/>')
             if view.env.context.get('inherit_branding'):
                 view.inherit_branding(arch)
             self._add_validation_flag(combined_arch, view, arch)
@@ -2225,8 +2212,7 @@ actual arch.
             WHERE md.module = %s AND md.name IN %s AND md.noupdate
         """, module, names)))
 
-        for view in views:
-            view._check_xml()
+        views._check_xml()
 
     def _create_all_specific_views(self, processed_modules):
         """To be overriden and have specific view behaviour on create"""
@@ -2359,8 +2345,7 @@ class ResetViewArchWizard(models.TransientModel):
 
 
 class Base(models.AbstractModel):
-
-    _inherit = ['base']
+    _inherit = 'base'
 
     _date_name = 'date'         #: field to use for default calendar view
 
@@ -2411,7 +2396,7 @@ class Base(models.AbstractModel):
         left_group = E.group()
         right_group = E.group()
         for fname, field in self._fields.items():
-            if field.automatic:
+            if fname in models.MAGIC_COLUMNS or (fname == 'display_name' and field.readonly):
                 continue
             elif field.type in ('one2many', 'many2many', 'text', 'html'):
                 # append to sheet left and right group if needed

@@ -125,7 +125,6 @@ class TestFrontendCommon(TestPointOfSaleHttpCommon):
             'name': 'Coca-Cola',
             'weight': 0.01,
             'pos_categ_ids': [(4, drinks_category.id)],
-            'categ_id': cls.env.ref('point_of_sale.product_category_pos').id,
             'taxes_id': [(6, 0, [])],
         })
 
@@ -135,7 +134,6 @@ class TestFrontendCommon(TestPointOfSaleHttpCommon):
             'name': 'Water',
             'weight': 0.01,
             'pos_categ_ids': [(4, drinks_category.id)],
-            'categ_id': cls.env.ref('point_of_sale.product_category_pos').id,
             'taxes_id': [(6, 0, [])],
         })
 
@@ -145,7 +143,6 @@ class TestFrontendCommon(TestPointOfSaleHttpCommon):
             'name': 'Minute Maid',
             'weight': 0.01,
             'pos_categ_ids': [(4, drinks_category.id)],
-            'categ_id': cls.env.ref('point_of_sale.product_category_pos').id,
             'taxes_id': [(6, 0, [])],
         })
 
@@ -156,7 +153,6 @@ class TestFrontendCommon(TestPointOfSaleHttpCommon):
             'name': 'Test Multi Category Product',
             'weight': 0.01,
             'pos_categ_ids': [(4, drinks_category.id), (4, food_category.id)],
-            'categ_id': cls.env.ref('point_of_sale.product_category_pos').id,
             'taxes_id': [(6, 0, [])],
         })
 
@@ -310,3 +306,17 @@ class TestFrontend(TestFrontendCommon):
     def test_13_category_check(self):
         self.pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('CategLabelCheck')
+
+    def test_14_change_synced_order(self):
+        self.pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('OrderChange')
+
+    def test_13_crm_team(self):
+        if self.env['ir.module.module']._get('pos_sale').state != 'installed':
+            self.skipTest("'pos_sale' module is required")
+        sale_team = self.env['crm.team'].search([], limit=1)
+        self.pos_config.crm_team_id = sale_team
+        self.pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('CrmTeamTour')
+        order = self.env['pos.order'].search([], limit=1)
+        self.assertEqual(order.crm_team_id.id, sale_team.id)

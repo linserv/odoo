@@ -7,7 +7,7 @@ from odoo.tools.misc import format_date
 
 
 class IrAttachment(models.Model):
-    _inherit = ['ir.attachment']
+    _inherit = 'ir.attachment'
 
     @api.ondelete(at_uninstall=True)
     def _except_audit_trail(self):
@@ -35,7 +35,7 @@ class IrAttachment(models.Model):
         invoice_pdf_attachments = self.filtered(lambda attachment:
             attachment.res_model == 'account.move'
             and attachment.res_id
-            and attachment.res_field in ('invoice_pdf_report_file', 'ubl_cii_xml_id')
+            and attachment.res_field in ('invoice_pdf_report_file', 'ubl_cii_xml_file')
         )
         if invoice_pdf_attachments:
             # only detach the document from the field, but keep it in the database for the audit trail

@@ -106,7 +106,7 @@ export class AttachmentUploadService {
         this.deferredByAttachmentId.delete(tmpId);
         this.uploadingAttachmentIds.delete(tmpId);
         this.targetsByTmpId.delete(tmpId);
-        this.store["ir.attachment"].get(tmpId).remove();
+        this.store["ir.attachment"].get(tmpId)?.remove();
     }
 
     getUploadURL(thread) {
@@ -176,7 +176,6 @@ export class AttachmentUploadService {
 
     _makeAttachmentData(upload, tmpId, thread, tmpUrl) {
         const attachmentData = {
-            filename: upload.title,
             id: tmpId,
             mimetype: upload.type,
             name: upload.title,

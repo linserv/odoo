@@ -6,7 +6,7 @@ from odoo.exceptions import UserError
 
 
 class AccountMoveReversal(models.TransientModel):
-    _inherit = ['account.move.reversal']
+    _inherit = 'account.move.reversal'
 
     l10n_es_tbai_is_required = fields.Boolean(
         compute="_compute_l10n_es_tbai_is_required", readonly=True,
@@ -25,7 +25,7 @@ class AccountMoveReversal(models.TransientModel):
         for wizard in self:
             moves_tbai_required = set(m.l10n_es_tbai_is_required for m in wizard.move_ids)
             if len(moves_tbai_required) > 1:
-                raise UserError("Reversals mixing invoices with and without TicketBAI are not allowed.")
+                raise UserError(self.env._("Reversals mixing invoices with and without TicketBAI are not allowed."))
             wizard.l10n_es_tbai_is_required = moves_tbai_required.pop()
 
     def _prepare_default_reversal(self, move):

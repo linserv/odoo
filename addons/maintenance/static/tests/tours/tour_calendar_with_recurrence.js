@@ -66,6 +66,10 @@ registry.category("web_tour.tours").add("test_drag_and_drop_event_in_calendar", 
             run: "click",
         },
         {
+            content: 'Wait for monthly view to load',
+            trigger: '.fc-dayGridMonth-view',
+        },
+        {
             content: "Move event to 15th of the month",
             trigger: 'a[data-event-id="1"]',
             run: 'drag_and_drop .fc-daygrid-day[data-date$="15"] .fc-daygrid-day-events',

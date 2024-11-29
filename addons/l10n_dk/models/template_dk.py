@@ -4,15 +4,13 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('dk')
     def _get_dk_template_data(self):
         return {
             'property_account_receivable_id': 'dk_coa_6190',
             'property_account_payable_id': 'dk_coa_7440',
-            'property_account_expense_categ_id': 'dk_coa_1610',
-            'property_account_income_categ_id': 'dk_coa_1010',
             'code_digits': '4',
         }
 
@@ -32,6 +30,8 @@ class AccountChartTemplate(models.AbstractModel):
                 'account_journal_early_pay_discount_gain_account_id': 'dk_coa_2720',
                 'account_sale_tax_id': 'tax_s1',
                 'account_purchase_tax_id': 'tax_k1',
+                'expense_account_id': 'dk_coa_1610',
+                'income_account_id': 'dk_coa_1010',
             },
         }
 

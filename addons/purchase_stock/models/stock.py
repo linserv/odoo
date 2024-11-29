@@ -7,7 +7,7 @@ from odoo.osv.expression import AND
 
 
 class StockPicking(models.Model):
-    _inherit = ['stock.picking']
+    _inherit = 'stock.picking'
 
     purchase_id = fields.Many2one(
         'purchase.order', related='move_ids.purchase_line_id.order_id',
@@ -40,7 +40,7 @@ class StockPicking(models.Model):
 
 
 class StockWarehouse(models.Model):
-    _inherit = ['stock.warehouse']
+    _inherit = 'stock.warehouse'
 
     buy_to_resupply = fields.Boolean('Buy to Resupply', default=True,
                                      help="When products are bought, they can be delivered to this warehouse")
@@ -103,7 +103,7 @@ class StockWarehouse(models.Model):
 
 
 class StockReturnPicking(models.TransientModel):
-    _inherit = ["stock.return.picking"]
+    _inherit = "stock.return.picking"
 
     def _prepare_move_default_values(self, return_line, new_picking):
         vals = super()._prepare_move_default_values(return_line, new_picking)
@@ -119,7 +119,7 @@ class StockReturnPicking(models.TransientModel):
 
 
 class StockWarehouseOrderpoint(models.Model):
-    _inherit = ["stock.warehouse.orderpoint"]
+    _inherit = "stock.warehouse.orderpoint"
 
     show_supplier = fields.Boolean('Show supplier column', compute='_compute_show_suppplier')
     supplier_id = fields.Many2one(
@@ -159,7 +159,12 @@ class StockWarehouseOrderpoint(models.Model):
 
     def _compute_days_to_order(self):
         res = super()._compute_days_to_order()
-        for orderpoint in self:
+        # Avoid computing rule_ids if no stock.rules with the buy action
+        if not self.env['stock.rule'].search([('action', '=', 'buy')]):
+            return res
+        # Compute rule_ids only for orderpoint whose compnay_id.days_to_purchase != orderpoint.days_to_order
+        orderpoints_to_compute = self.filtered(lambda orderpoint: orderpoint.days_to_order != orderpoint.company_id.days_to_purchase)
+        for orderpoint in orderpoints_to_compute:
             if 'buy' in orderpoint.rule_ids.mapped('action'):
                 orderpoint.days_to_order = orderpoint.company_id.days_to_purchase
         return res
@@ -245,7 +250,7 @@ class StockWarehouseOrderpoint(models.Model):
 
 
 class StockLot(models.Model):
-    _inherit = ['stock.lot']
+    _inherit = 'stock.lot'
 
     purchase_order_ids = fields.Many2many('purchase.order', string="Purchase Orders", compute='_compute_purchase_order_ids', readonly=True, store=False)
     purchase_order_count = fields.Integer('Purchase order count', compute='_compute_purchase_order_ids')
@@ -270,7 +275,7 @@ class StockLot(models.Model):
 
 
 class ProcurementGroup(models.Model):
-    _inherit = ['procurement.group']
+    _inherit = 'procurement.group'
 
     purchase_line_ids = fields.One2many('purchase.order.line', 'group_id', string='Linked Purchase Order Lines', copy=False)
 

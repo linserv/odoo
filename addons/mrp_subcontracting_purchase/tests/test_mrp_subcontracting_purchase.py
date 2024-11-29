@@ -54,7 +54,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': 'finished',
                 'product_id': self.finished.id,
                 'product_qty': 1.0,
-                'product_uom': self.finished.uom_id.id,
+                'product_uom_id': self.finished.uom_id.id,
                 'price_unit': 50.0}
             )],
         })
@@ -80,7 +80,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': 'finished',
                 'product_id': self.finished.id,
                 'product_qty': product_qty,
-                'product_uom': self.finished.uom_id.id,
+                'product_uom_id': self.finished.uom_id.id,
                 'price_unit': 50.0}
             )],
         })
@@ -129,7 +129,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': self.finished2.name,
                 'product_id': self.finished2.id,
                 'product_uom_qty': 10,
-                'product_uom': self.finished2.uom_id.id,
+                'product_uom_id': self.finished2.uom_id.id,
                 'price_unit': 1,
             })],
         })
@@ -171,7 +171,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': self.finished2.name,
                 'product_id': self.finished2.id,
                 'product_uom_qty': 10,
-                'product_uom': self.finished2.uom_id.id,
+                'product_uom_id': self.finished2.uom_id.id,
                 'price_unit': 1,
             })],
         })
@@ -240,7 +240,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
             'order_line': [(0, 0, {
                 'product_id': product.id,
                 'product_qty': 1,
-                'product_uom': product.uom_id.id,
+                'product_uom_id': product.uom_id.id,
                 'name': product.name,
                 'price_unit': 1,
             })],
@@ -273,7 +273,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': self.finished2.name,
                 'product_id': self.finished2.id,
                 'product_uom_qty': 10,
-                'product_uom': self.finished2.uom_id.id,
+                'product_uom_id': self.finished2.uom_id.id,
                 'price_unit': 1,
             })],
         })
@@ -303,14 +303,13 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
         """Test that the price difference is correctly computed when a subcontracted
         product is resupplied.
         """
-        if not loaded_demo_data(self.env):
-            _logger.warning("This test relies on demo data. To be rewritten independently of demo data for accurate and reliable results.")
-            return
+        self.env.company.anglo_saxon_accounting = True
         resupply_sub_on_order_route = self.env['stock.route'].search([('name', '=', 'Resupply Subcontractor on Order')])
         (self.comp1 + self.comp2).write({'route_ids': [(6, None, [resupply_sub_on_order_route.id])]})
-        product_category_all = self.env.ref('product.product_category_all')
+        product_category_all = self.product_category
         product_category_all.property_cost_method = 'standard'
         product_category_all.property_valuation = 'real_time'
+        self._setup_category_stock_journals()
 
         stock_price_diff_acc_id = self.env['account.account'].create({
             'name': 'default_account_stock_price_diff',
@@ -362,7 +361,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
             An extra SVL should be created to correct the valuation of the product
             Also check account move data for real time inventory
         """
-        product_category_all = self.env.ref('product.product_category_all')
+        product_category_all = self.product_category
         product_category_all.property_cost_method = 'fifo'
         product_category_all.property_valuation = 'real_time'
         in_account = self.env['account.account'].create({
@@ -400,14 +399,14 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                     'name': self.comp1.name,
                     'product_id': self.comp1.id,
                     'product_uom_qty': 1,
-                    'product_uom': self.finished.uom_id.id,
+                    'product_uom_id': self.finished.uom_id.id,
                     'price_unit': 10,
                 }),
                 Command.create({
                     'name': self.comp2.name,
                     'product_id': self.comp2.id,
                     'product_uom_qty': 1,
-                    'product_uom': self.finished.uom_id.id,
+                    'product_uom_id': self.finished.uom_id.id,
                     'price_unit': 10,
                 })
             ],
@@ -423,7 +422,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': self.finished.name,
                 'product_id': self.finished.id,
                 'product_uom_qty': 1,
-                'product_uom': self.finished.uom_id.id,
+                'product_uom_id': self.finished.uom_id.id,
                 'price_unit': 100,
             })],
         })
@@ -465,7 +464,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': self.finished2.name,
                 'product_id': self.finished2.id,
                 'product_qty': 10,
-                'product_uom': self.finished2.uom_id.id,
+                'product_uom_id': self.finished2.uom_id.id,
                 'price_unit': 1,
             })],
         })
@@ -634,7 +633,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': 'finished',
                 'product_id': self.finished.id,
                 'product_qty': 1.0,
-                'product_uom': self.finished.uom_id.id,
+                'product_uom_id': self.finished.uom_id.id,
                 'price_unit': 50.0}
             )],
         })
@@ -712,7 +711,6 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
         """
         search_qty_less_than_or_equal_moved = 10
         moved_quantity_to_subcontractor = 20
-        search_qty_less_than_or_equal_total = 90
         total_component_quantity = 100
         search_qty_more_than_total = 110
 
@@ -761,8 +759,8 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
         self.assertEqual(quantity_after_move, quantity_before_move + moved_quantity_to_subcontractor)
 
         report_values = self.env['report.mrp.report_bom_structure']._get_report_data(bom.id, searchQty=search_qty_less_than_or_equal_moved, searchVariant=False)
-        self.assertEqual(report_values['lines']['components'][0]['quantity_available'], total_component_quantity)
-        self.assertEqual(report_values['lines']['components'][0]['quantity_on_hand'], total_component_quantity)
+        self.assertEqual(report_values['lines']['components'][0]['quantity_available'], moved_quantity_to_subcontractor)
+        self.assertEqual(report_values['lines']['components'][0]['quantity_on_hand'], moved_quantity_to_subcontractor)
         self.assertEqual(report_values['lines']['quantity_available'], 0)
         self.assertEqual(report_values['lines']['quantity_on_hand'], 0)
         self.assertEqual(report_values['lines']['producible_qty'], moved_quantity_to_subcontractor)
@@ -770,7 +768,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
 
         self.assertEqual(report_values['lines']['components'][0]['stock_avail_state'], 'available')
 
-        report_values = self.env['report.mrp.report_bom_structure']._get_report_data(bom.id, searchQty=search_qty_less_than_or_equal_total, searchVariant=False)
+        report_values = self.env['report.mrp.report_bom_structure']._get_report_data(bom.id, searchQty=search_qty_less_than_or_equal_moved, searchVariant=False)
         self.assertEqual(report_values['lines']['components'][0]['stock_avail_state'], 'available')
 
         report_values = self.env['report.mrp.report_bom_structure']._get_report_data(bom.id, searchQty=search_qty_more_than_total, searchVariant=False)
@@ -855,7 +853,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': self.finished.name,
                 'product_id': self.finished.id,
                 'product_qty': 2.0,
-                'product_uom': self.finished.uom_id.id,
+                'product_uom_id': self.finished.uom_id.id,
                 'price_unit': 1.0,
             })],
         })
@@ -899,7 +897,7 @@ class MrpSubcontractingPurchaseTest(TestMrpSubcontractingCommon):
                 'name': self.finished.name,
                 'product_id': self.finished.id,
                 'product_qty': 2.0,
-                'product_uom': self.finished.uom_id.id,
+                'product_uom_id': self.finished.uom_id.id,
                 'price_unit': 10.0,
             })],
         })

@@ -1,5 +1,5 @@
 import { Component, onMounted, onWillStart, onWillUnmount, useState } from "@odoo/owl";
-import { useSelfOrder } from "@pos_self_order/app/self_order_service";
+import { useSelfOrder } from "@pos_self_order/app/services/self_order_service";
 import { cookie } from "@web/core/browser/cookie";
 import { useService } from "@web/core/utils/hooks";
 import { OrderReceipt } from "@point_of_sale/app/screens/receipt_screen/receipt/order_receipt";
@@ -32,7 +32,7 @@ export class ConfirmationPage extends Component {
                     try {
                         await this.printer.print(OrderReceipt, {
                             data: this.selfOrder.orderExportForPrinting(this.confirmedOrder),
-                            formatCurrency: this.selfOrder.formatMonetary,
+                            formatCurrency: this.selfOrder.formatMonetary.bind(this.selfOrder),
                         });
                         if (!this.selfOrder.has_paper) {
                             this.updateHasPaper(true);

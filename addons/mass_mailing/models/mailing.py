@@ -234,11 +234,10 @@ class MailingMailing(models.Model):
         'Warning Message', compute='_compute_warning_message',
         help='Warning message displayed in the mailing form view')
 
-    _sql_constraints = [(
-        'percentage_valid',
+    _percentage_valid = models.Constraint(
         'CHECK(ab_testing_pc >= 0 AND ab_testing_pc <= 100)',
-        'The A/B Testing Percentage needs to be between 0 and 100%'
-    )]
+        'The A/B Testing Percentage needs to be between 0 and 100%',
+    )
 
     @api.constrains('mailing_model_id', 'mailing_filter_id')
     def _check_mailing_filter_model(self):
@@ -356,9 +355,9 @@ class MailingMailing(models.Model):
         for mass_mailing in self:
             if mass_mailing.schedule_date:
                 # max in case the user schedules a date in the past
-                mass_mailing.next_departure = max(mass_mailing.schedule_date, fields.datetime.now())
+                mass_mailing.next_departure = max(mass_mailing.schedule_date, fields.Datetime.now())
             else:
-                mass_mailing.next_departure = fields.datetime.now()
+                mass_mailing.next_departure = fields.Datetime.now()
         past = self.filtered(
             lambda mailing: mailing.state == 'in_queue' and mailing.next_departure < fields.Datetime.now()
         )

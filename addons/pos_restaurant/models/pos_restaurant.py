@@ -6,6 +6,7 @@ from odoo.exceptions import UserError
 
 
 class RestaurantFloor(models.Model):
+    _name = 'restaurant.floor'
 
     _description = 'Restaurant Floor'
     _order = "sequence, name"
@@ -23,7 +24,7 @@ class RestaurantFloor(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('pos_config_ids', '=', data['pos.config']['data'][0]['id'])]
+        return [('pos_config_ids', '=', data['pos.config'][0]['id'])]
 
     @api.model
     def _load_pos_data_fields(self, config_id):
@@ -46,8 +47,12 @@ class RestaurantFloor(models.Model):
             for config in floor.pos_config_ids:
                 if config.has_active_session and (vals.get('pos_config_ids') or vals.get('active')):
                     raise UserError(
-                        'Please close and validate the following open PoS Session before modifying this floor.\n'
-                        'Open session: %s' % (' '.join(config.mapped('name')),))
+                        self.env._(
+                            "Please close and validate the following open PoS Session before modifying this floor.\n"
+                            "Open session: %(session_names)s",
+                            session_names=" ".join(config.mapped("name")),
+                        )
+                    )
             for table in floor.table_ids:
                 # Verify if table number begin by old prefix
                 if table.table_number and str(table.table_number).startswith(str(self.floor_prefix)) and vals.get('floor_prefix'):
@@ -89,6 +94,7 @@ class RestaurantFloor(models.Model):
 
 
 class RestaurantTable(models.Model):
+    _name = 'restaurant.table'
 
     _description = 'Restaurant Table'
     _inherit = ['pos.load.mixin']
@@ -114,7 +120,8 @@ class RestaurantTable(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('active', '=', True), ('floor_id', 'in', [floor['id'] for floor in data['restaurant.floor']['data']])]
+        floor_ids = self.env['pos.config'].browse(data['pos.config'][0]['id']).floor_ids.ids
+        return [('active', '=', True), ('floor_id', 'in', floor_ids)]
 
     @api.model
     def _load_pos_data_fields(self, config_id):

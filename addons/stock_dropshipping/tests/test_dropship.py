@@ -19,7 +19,6 @@ class TestDropship(common.TransactionCase):
         cls.dropship_product = cls.env['product.product'].create({
             'name': "Pen drive",
             'is_storable': True,
-            'categ_id': cls.env.ref('product.product_category_1').id,
             'lst_price': 100.0,
             'standard_price': 0.0,
             'uom_id': cls.env.ref('uom.product_uom_unit').id,
@@ -41,9 +40,8 @@ class TestDropship(common.TransactionCase):
         })
 
     def test_change_qty(self):
-        # enable the dropship and MTO route on the product
-        mto_route = self.env.ref('stock.route_warehouse0_mto')
-        self.dropship_product.write({'route_ids': [(6, 0, [self.dropshipping_route.id, mto_route.id])]})
+        # enable the dropship route on the product
+        self.dropship_product.write({'route_ids': [(6, 0, [self.dropshipping_route.id])]})
 
         # sell one unit of dropship product
         so = self.env['sale.order'].create({
@@ -54,7 +52,6 @@ class TestDropship(common.TransactionCase):
                 'name': self.dropship_product.name,
                 'product_id': self.dropship_product.id,
                 'product_uom_qty': 1.00,
-                'product_uom': self.dropship_product.uom_id.id,
                 'price_unit': 12,
             })],
             'picking_policy': 'direct',
@@ -246,7 +243,6 @@ class TestDropship(common.TransactionCase):
         self.dropship_product = self.env['product.product'].create({
             'name': "Pen drive",
             'is_storable': "True",
-            'categ_id': self.env.ref('product.product_category_1').id,
             'lst_price': 100.0,
             'standard_price': 0.0,
             'uom_id': self.env.ref('uom.product_uom_unit').id,

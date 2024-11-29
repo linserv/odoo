@@ -38,13 +38,13 @@ class TestSaleStockMargin(TestStockValuationCommon):
             'price_unit': price_unit,
             'product_id': product.id,
             'product_uom_qty': quantity,
-            'product_uom': self.env.ref('uom.product_uom_unit').id,
         })
 
     def _create_product(self):
         product_template = self.env['product.template'].create({
             'name': 'Super product',
             'is_storable': True,
+            'categ_id': self.env.ref('product.product_category_goods').id,
         })
         product_template.categ_id.property_cost_method = 'fifo'
         return product_template.product_variant_ids

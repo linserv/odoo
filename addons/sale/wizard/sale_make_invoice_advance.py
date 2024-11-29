@@ -7,6 +7,7 @@ from odoo.tools import frozendict
 
 
 class SaleAdvancePaymentInv(models.TransientModel):
+    _name = 'sale.advance.payment.inv'
     _description = "Sales Advance Payment Invoice"
 
     advance_payment_method = fields.Selection(
@@ -53,7 +54,8 @@ class SaleAdvancePaymentInv(models.TransientModel):
     display_draft_invoice_warning = fields.Boolean(compute="_compute_display_draft_invoice_warning")
     consolidated_billing = fields.Boolean(
         string="Consolidated Billing", default=True,
-        help="Create one invoice for all orders related to same customer and same invoicing address"
+        help="Create one invoice for all orders related to same customer, same invoicing address"
+             " and same delivery address."
     )
 
     #=== COMPUTE METHODS ===#
@@ -238,7 +240,7 @@ class SaleAdvancePaymentInv(models.TransientModel):
             AccountTax._add_tax_details_in_base_line(base_line_values, order.company_id)
             tax_details = base_line_values['tax_details']
 
-            taxes = line.tax_id.flatten_taxes_hierarchy()
+            taxes = line.tax_ids.flatten_taxes_hierarchy()
             fixed_taxes = taxes.filtered(lambda tax: tax.amount_type == 'fixed')
             down_payment_values.append([
                 taxes - fixed_taxes,
@@ -269,14 +271,14 @@ class SaleAdvancePaymentInv(models.TransientModel):
         downpayment_line_map = {}
         analytic_map = {}
         base_downpayment_lines_values = self._prepare_base_downpayment_line_values(order)
-        for tax_id, analytic_distribution, price_subtotal, account in down_payment_values:
+        for tax_ids, analytic_distribution, price_subtotal, account in down_payment_values:
             grouping_key = frozendict({
-                'tax_id': tuple(sorted(tax_id.ids)),
+                'tax_ids': tuple(sorted(tax_ids.ids)),
                 'account_id': account,
             })
             downpayment_line_map.setdefault(grouping_key, {
                 **base_downpayment_lines_values,
-                'tax_id': grouping_key['tax_id'],
+                'tax_ids': grouping_key['tax_ids'],
                 'product_uom_qty': 0.0,
                 'price_unit': 0.0,
             })

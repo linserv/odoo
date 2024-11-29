@@ -4,15 +4,13 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('hn')
     def _get_hn_template_data(self):
         return {
             'property_account_receivable_id': 'cta110201',
             'property_account_payable_id': 'cta210101',
-            'property_account_income_categ_id': 'cta410101',
-            'property_account_expense_categ_id': 'cta510101',
             'code_digits': '9',
         }
 
@@ -31,5 +29,7 @@ class AccountChartTemplate(models.AbstractModel):
                 'account_journal_early_pay_discount_gain_account_id': 'cta420102',
                 'account_sale_tax_id': 'impuestos_plantilla_isv_por_pagar',
                 'account_purchase_tax_id': 'impuestos_plantilla_isv_por_cobrar',
+                'income_account_id': 'cta410101',
+                'expense_account_id': 'cta510101',
             },
         }

@@ -15,24 +15,23 @@ PRICE_CONTEXT_KEYS = ['pricelist', 'quantity', 'uom', 'date']
 
 
 class ProductTemplate(models.Model):
+    _name = 'product.template'
     _inherit = ['mail.thread', 'mail.activity.mixin', 'image.mixin']
     _description = "Product"
     _order = "is_favorite desc, name"
     _check_company_auto = True
     _check_company_domain = models.check_company_domain_parent_of
 
-    @tools.ormcache()
-    def _get_default_category_id(self):
-        # Deletion forbidden (at least through unlink)
-        return self.env.ref('product.product_category_all')
+    def default_get(self, fields_list):
+        res = super().default_get(fields_list)
+        if 'uom_id' in fields_list and not res.get('uom_id'):
+            res['uom_id'] = self._get_default_uom_id().id
+        return res
 
     @tools.ormcache()
     def _get_default_uom_id(self):
         # Deletion forbidden (at least through unlink)
         return self.env.ref('uom.product_uom_unit')
-
-    def _get_default_uom_po_id(self):
-        return self.default_get(['uom_id']).get('uom_id') or self._get_default_uom_id()
 
     def _read_group_categ_id(self, categories, domain):
         category_ids = self.env.context.get('default_categ_id')
@@ -76,9 +75,10 @@ class ProductTemplate(models.Model):
         readonly=False,
     )
     categ_id = fields.Many2one(
-        'product.category', 'Product Category',
-        change_default=True, default=_get_default_category_id, group_expand='_read_group_categ_id',
-        required=True)
+        string="Product Category",
+        comodel_name='product.category',
+        group_expand='_read_group_categ_id',
+    )
 
     currency_id = fields.Many2one(
         'res.currency', 'Currency', compute='_compute_currency_id')
@@ -115,9 +115,11 @@ class ProductTemplate(models.Model):
         default=_get_default_uom_id, required=True,
         help="Default unit of measure used for all stock operations.")
     uom_name = fields.Char(string='Unit of Measure Name', related='uom_id.name', readonly=True)
+    uom_category_id = fields.Many2one('uom.category', string='UoM Category', related="uom_id.category_id")
     uom_po_id = fields.Many2one(
         'uom.uom', 'Purchase Unit',
-        default=_get_default_uom_po_id, required=True,
+        domain="[('category_id', '=', uom_category_id)]",
+        compute='_compute_uom_po_id', required=True, readonly=False, store=True, precompute=True,
         help="Default unit of measure used for purchase orders. It must be in the same category as the default unit of measure.")
     company_id = fields.Many2one(
         'res.company', 'Company', index=True)
@@ -162,6 +164,8 @@ class ProductTemplate(models.Model):
     can_image_1024_be_zoomed = fields.Boolean("Can Image 1024 be zoomed", compute='_compute_can_image_1024_be_zoomed', store=True)
     has_configurable_attributes = fields.Boolean("Is a configurable product", compute='_compute_has_configurable_attributes', store=True)
 
+    is_dynamically_created = fields.Boolean("Is Dynamically Created", compute='_compute_is_dynamically_created')
+
     product_tooltip = fields.Char(compute='_compute_product_tooltip')
 
     is_favorite = fields.Boolean(string="Favorite")
@@ -178,6 +182,12 @@ class ProductTemplate(models.Model):
 
     def _compute_purchase_ok(self):
         pass
+
+    @api.depends('uom_id')
+    def _compute_uom_po_id(self):
+        for template in self:
+            if not template.uom_po_id or template.uom_id.category_id != template.uom_po_id.category_id:
+                template.uom_po_id = template.uom_id
 
     def _compute_item_count(self):
         for template in self:
@@ -226,6 +236,14 @@ class ProductTemplate(models.Model):
                     or ptal.value_ids.is_custom
                     for ptal in product.attribute_line_ids
                 )
+            )
+
+    @api.depends('attribute_line_ids.attribute_id')
+    def _compute_is_dynamically_created(self):
+        for template in self:
+            template.is_dynamically_created = any(
+                line.attribute_id.create_variant == 'dynamic'
+                for line in template.attribute_line_ids
             )
 
     @api.depends('product_variant_ids')
@@ -459,11 +477,6 @@ class ProductTemplate(models.Model):
         if self.uom_id:
             self.uom_po_id = self.uom_id.id
 
-    @api.onchange('uom_po_id')
-    def _onchange_uom(self):
-        if self.uom_id and self.uom_po_id and self.uom_id.category_id != self.uom_po_id.category_id:
-            self.uom_po_id = self.uom_id
-
     @api.onchange('type')
     def _onchange_type(self):
         if self.type == 'combo':
@@ -515,11 +528,6 @@ class ProductTemplate(models.Model):
         return templates
 
     def write(self, vals):
-        if 'uom_id' in vals or 'uom_po_id' in vals:
-            uom_id = self.env['uom.uom'].browse(vals.get('uom_id')) or self.uom_id
-            uom_po_id = self.env['uom.uom'].browse(vals.get('uom_po_id')) or self.uom_po_id
-            if uom_id and uom_po_id and uom_id.category_id != uom_po_id.category_id:
-                vals['uom_po_id'] = uom_id.id
         res = super(ProductTemplate, self).write(vals)
         if self._context.get("create_product_product", True) and 'attribute_line_ids' in vals or (vals.get('active') and len(self.product_variant_ids) == 0):
             self._create_variant_ids()

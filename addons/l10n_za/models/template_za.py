@@ -4,15 +4,13 @@ from odoo.addons.account.models.chart_template import template
 
 
 class AccountChartTemplate(models.AbstractModel):
-    _inherit = ['account.chart.template']
+    _inherit = 'account.chart.template'
 
     @template('za')
     def _get_za_template_data(self):
         return {
             'property_account_receivable_id': '110010',
             'property_account_payable_id': '220010',
-            'property_account_expense_categ_id': '600010',
-            'property_account_income_categ_id': '500010',
             'property_stock_account_input_categ_id': '200010',
             'property_stock_account_output_categ_id': '100050',
             'property_stock_valuation_account_id': '100020',
@@ -35,5 +33,7 @@ class AccountChartTemplate(models.AbstractModel):
                 'default_cash_difference_expense_account_id': '610460',
                 'account_sale_tax_id': 'ST1',
                 'account_purchase_tax_id': 'PT15',
+                'expense_account_id': '600010',
+                'income_account_id': '500010',
             },
         }

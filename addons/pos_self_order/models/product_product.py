@@ -5,7 +5,7 @@ from odoo import api, models, fields
 
 
 class ProductTemplate(models.Model):
-    _inherit = ['product.template']
+    _inherit = 'product.template'
 
     self_order_available = fields.Boolean(
         string="Available in Self Order",
@@ -17,12 +17,12 @@ class ProductTemplate(models.Model):
         domain = self._load_pos_data_domain(data)
 
         # Add custom fields for 'formula' taxes.
-        fields = set(self._load_pos_data_fields(data['pos.config']['data'][0]['id']))
+        fields = set(self._load_pos_data_fields(data['pos.config'][0]['id']))
         taxes = self.env['account.tax'].search(self.env['account.tax']._load_pos_data_domain(data))
         product_fields = taxes._eval_taxes_computation_prepare_product_fields()
         fields = list(fields.union(product_fields))
 
-        config = self.env['pos.config'].browse(data['pos.config']['data'][0]['id'])
+        config = self.env['pos.config'].browse(data['pos.config'][0]['id'])
         products = self.search_read(
             domain,
             fields,
@@ -31,13 +31,10 @@ class ProductTemplate(models.Model):
             load=False
         )
 
-        data['pos.config']['data'][0]['_product_default_values'] = \
+        data['pos.config'][0]['_product_default_values'] = \
             self.env['account.tax']._eval_taxes_computation_prepare_product_default_values(product_fields)
 
-        return {
-            'data': products,
-            'fields': fields,
-        }
+        return products
 
     @api.model
     def _load_pos_self_data_fields(self, config_id):
@@ -72,7 +69,7 @@ class ProductTemplate(models.Model):
 
 
 class ProductProduct(models.Model):
-    _inherit = ["product.product"]
+    _inherit = "product.product"
 
     def _filter_applicable_attributes(self, attributes_by_ptal_id: Dict) -> List[Dict]:
         """
@@ -101,3 +98,8 @@ class ProductProduct(models.Model):
                 config._notify('PRODUCT_CHANGED', {
                     'product.product': self.read(self._load_pos_self_data_fields(config.id), load=False)
                 })
+
+    def _can_return_content(self, field_name=None, access_token=None):
+        if self.self_order_available and field_name in ["image_128", "image_512"]:
+            return True
+        return super()._can_return_content(field_name, access_token)

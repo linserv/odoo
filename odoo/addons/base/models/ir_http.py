@@ -29,7 +29,7 @@ except ImportError:
 import odoo
 from odoo import api, http, models, tools, SUPERUSER_ID
 from odoo.exceptions import AccessDenied
-from odoo.http import request, Response, ROUTING_KEYS
+from odoo.http import request, Response, ROUTING_KEYS, SAFE_HTTP_METHODS
 from odoo.modules.registry import Registry
 from odoo.service import security
 from odoo.tools.json import json_default
@@ -133,6 +133,7 @@ class FasterRule(werkzeug.routing.Rule):
 
 
 class IrHttp(models.AbstractModel):
+    _name = 'ir.http'
     _description = "HTTP Routing"
 
     @classmethod
@@ -229,12 +230,12 @@ class IrHttp(models.AbstractModel):
             if not uid:
                 raise werkzeug.exceptions.Unauthorized("Invalid apikey")
             if request.env.uid and request.env.uid != uid:
-                raise AccessDenied("Session user does not match the used apikey")
+                raise AccessDenied("Session user does not match the used apikey")  # pylint: disable=missing-gettext
             request.update_env(user=uid)
         elif not request.env.uid:
             raise werkzeug.exceptions.Unauthorized('User not authenticated, use the "Authorization" header')
         elif not check_sec_headers():
-            raise AccessDenied("Missing \"Authorization\" or Sec-headers for interactive usage")
+            raise AccessDenied("Missing \"Authorization\" or Sec-headers for interactive usage")  # pylint: disable=missing-gettext
         cls._auth_method_user()
 
     @classmethod
@@ -325,6 +326,11 @@ class IrHttp(models.AbstractModel):
 
     @classmethod
     def _dispatch(cls, endpoint):
+        # Verify the captcha in case it was set on @http.route
+        # https://httpwg.org/specs/rfc9110.html#safe.methods
+        captcha = endpoint.routing.get('captcha')
+        if captcha and request.httprequest.method not in SAFE_HTTP_METHODS:
+            request.env['ir.http']._verify_request_recaptcha_token(captcha)
         result = endpoint(**request.params)
         if isinstance(result, Response) and result.is_qweb:
             result.flatten()
@@ -360,7 +366,7 @@ class IrHttp(models.AbstractModel):
     def routing_map(self, key=None):
         _logger.info("Generating routing map for key %s", str(key))
         registry = Registry(threading.current_thread().dbname)
-        installed = registry._init_modules.union(odoo.conf.server_wide_modules)
+        installed = registry._init_modules.union(odoo.tools.config['server_wide_modules'])
         mods = sorted(installed)
         # Note : when routing map is generated, we put it on the class `cls`
         # to make it available for all instance. Since `env` create an new instance
@@ -425,3 +431,7 @@ class IrHttp(models.AbstractModel):
     @classmethod
     def _is_allowed_cookie(cls, cookie_type):
         return True if cookie_type == 'required' else bool(request.env.user)
+
+    @api.model
+    def _verify_request_recaptcha_token(self, action: str):
+        return

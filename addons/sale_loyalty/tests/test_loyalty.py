@@ -351,7 +351,7 @@ class TestLoyalty(TestSaleCouponCommon):
             'order_line': [
                 Command.create({
                     'product_id': self.product_A.id,
-                    'tax_id': False,
+                    'tax_ids': False,
                 }),
             ]
         })
@@ -398,7 +398,7 @@ class TestLoyalty(TestSaleCouponCommon):
             'order_line': [
                 Command.create({
                     'product_id': self.product_A.id,
-                    'tax_id': False,
+                    'tax_ids': False,
                 }),
             ]
         })
@@ -416,10 +416,8 @@ class TestLoyalty(TestSaleCouponCommon):
         related to that discount is not in the domain of the loyalty program.
         Expected behavior: The discount is not included in the computation of points
         """
-        product_category_base = self.env.ref('product.product_category_1')
         product_category_food = self.env['product.category'].create({
             'name': "Food",
-            'parent_id': product_category_base.id
         })
 
         self.product_A.categ_id = product_category_food
@@ -439,11 +437,11 @@ class TestLoyalty(TestSaleCouponCommon):
             'order_line': [
                 Command.create({
                     'product_id': self.product_A.id,
-                    'tax_id': False,
+                    'tax_ids': False,
                 }),
                 Command.create({
                     'product_id': self.product_B.id,
-                    'tax_id': False,
+                    'tax_ids': False,
                 }),
             ]
         })
@@ -462,10 +460,8 @@ class TestLoyalty(TestSaleCouponCommon):
         domain of the loyalty program.
         Expected behavior: The discount is included in the computation of points
         """
-        product_category_base = self.env.ref('product.product_category_1')
         product_category_food = self.env['product.category'].create({
             'name': "Food",
-            'parent_id': product_category_base.id
         })
 
         self.product_A.categ_id = product_category_food
@@ -492,11 +488,11 @@ class TestLoyalty(TestSaleCouponCommon):
             'order_line': [
                 Command.create({
                     'product_id': self.product_A.id,
-                    'tax_id': False,
+                    'tax_ids': False,
                 }),
                 Command.create({
                     'product_id': self.product_B.id,
-                    'tax_id': False,
+                    'tax_ids': False,
                 }),
             ]
         })
@@ -523,7 +519,7 @@ class TestLoyalty(TestSaleCouponCommon):
             'order_line': [
                 Command.create({
                     'product_id': self.product_A.id,
-                    'tax_id': False,
+                    'tax_ids': False,
                 }),
             ]
         })
@@ -571,7 +567,7 @@ class TestLoyalty(TestSaleCouponCommon):
             'order_line': [
                 Command.create({
                     'product_id': self.product_A.id,
-                    'tax_id': False,
+                    'tax_ids': False,
                 }),
             ]
         })
@@ -646,13 +642,11 @@ class TestLoyalty(TestSaleCouponCommon):
             (0, False, {
                 'product_id': self.product_A.id,
                 'name': '1 Product A',
-                'product_uom': self.uom_unit.id,
                 'product_uom_qty': 1.0,
             }),
             (0, False, {
                 'product_id': self.product_B.id,
                 'name': '2 Product B',
-                'product_uom': self.uom_unit.id,
                 'product_uom_qty': 1.0,
             }),
         ]})
@@ -717,7 +711,6 @@ class TestLoyalty(TestSaleCouponCommon):
             (0, False, {
                 'product_id': self.product_A.id,
                 'name': '1 Product A',
-                'product_uom': self.uom_unit.id,
                 'product_uom_qty': 1.0,
             }),
         ]})

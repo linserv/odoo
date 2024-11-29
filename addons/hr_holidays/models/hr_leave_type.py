@@ -19,6 +19,7 @@ _logger = logging.getLogger(__name__)
 
 
 class HrLeaveType(models.Model):
+    _name = 'hr.leave.type'
     _description = "Time Off Type"
     _order = 'sequence'
 
@@ -52,8 +53,14 @@ class HrLeaveType(models.Model):
         compute='_compute_allocation_count', string='Allocations')
     group_days_leave = fields.Float(
         compute='_compute_group_days_leave', string='Group Time Off')
-    company_id = fields.Many2one('res.company', string='Company', default=lambda self: self.env.company)
-    country_id = fields.Many2one('res.country', string='Country', related='company_id.country_id', readonly=True)
+    is_used = fields.Boolean(compute="_compute_is_used")
+    company_id = fields.Many2one('res.company', string='Company',
+                                 domain=lambda self: [('id', 'in', self.env.companies.ids)])
+    country_id = fields.Many2one('res.country', string='Country',
+                                 default=lambda self: self.env.company.country_id,
+                                 compute="_compute_country_id",
+                                 store=True,
+                                 domain=lambda self: [('id', 'in', self.env.companies.country_id.ids)])
     country_code = fields.Char(related='country_id.code', depends=['country_id'], readonly=True)
     responsible_ids = fields.Many2many(
         'res.users', 'hr_leave_type_res_users_rel', 'hr_leave_type_id', 'res_users_id', string='Notified Time Off Officer',
@@ -104,14 +111,13 @@ class HrLeaveType(models.Model):
     # negative time off
     allows_negative = fields.Boolean(string='Allow Negative Cap',
         help="If checked, users request can exceed the allocated days and balance can go in negative.")
-    max_allowed_negative = fields.Integer(string="Amount in Negative",
+    max_allowed_negative = fields.Integer(string="Maximum Excess Amount",
         help="Define the maximum level of negative days this kind of time off can reach. Value must be at least 1.")
 
-    _sql_constraints = [(
-        'check_negative',
+    _check_negative = models.Constraint(
         'CHECK(NOT allows_negative OR max_allowed_negative > 0)',
-        'The negative amount must be greater than 0. If you want to set 0, disable the negative cap instead.'
-    )]
+        'The maximum excess amount should be greater than 0. If you want to set 0, disable the negative cap instead.'
+    )
 
     @api.model
     def _search_valid(self, operator, value):
@@ -220,8 +226,14 @@ class HrLeaveType(models.Model):
 
     @api.constrains('requires_allocation')
     def check_allocation_requirement_edit_validity(self):
-        if self.env['hr.leave'].search_count([('holiday_status_id', 'in', self.ids)], limit=1):
+        if not self.env.context.get('install_mode') and self.env['hr.leave'].search_count([('holiday_status_id', 'in', self.ids)], limit=1):
             raise UserError(_("The allocation requirement of a time off type cannot be changed once leaves of that type have been taken. You should create a new time off type instead."))
+
+    @api.depends('company_id')
+    def _compute_country_id(self):
+        for holiday_type in self:
+            if holiday_type.company_id:
+                holiday_type.country_id = holiday_type.company_id.country_id
 
     def _search_max_leaves(self, operator, value):
         value = float(value)
@@ -301,7 +313,7 @@ class HrLeaveType(models.Model):
             ('holiday_status_id', 'in', self.ids),
             ('date_from', '>=', min_datetime),
             ('date_from', '<=', max_datetime),
-            ('state', 'in', ('confirm', 'validate')),
+            ('state', 'in', ('confirm', 'validate', 'validate1')),
         ]
 
         grouped_res = self.env['hr.leave.allocation']._read_group(
@@ -336,6 +348,34 @@ class HrLeaveType(models.Model):
         mapped_data = {time_off_type.id: count for time_off_type, count in accrual_allocations}
         for leave_type in self:
             leave_type.accrual_count = mapped_data.get(leave_type.id, 0)
+
+    def _compute_is_used(self):
+        leaves_count = self._leaves_count_by_leave_type_id()
+        allocations_count = self._allocations_count_by_leave_type_id()
+        for leave_type in self:
+            leave_type.is_used = leaves_count.get(leave_type.id, 0) or allocations_count.get(leave_type.id, 0)
+
+    def _leaves_count_by_leave_type_id(self):
+        leave_domain = [
+            ('holiday_status_id', 'in', self.ids),
+        ]
+        leaves_count = self.env['hr.leave']._read_group(
+            leave_domain,
+            ['holiday_status_id'],
+            ['__count'],
+        )
+        return {holiday_status.id: count for holiday_status, count in leaves_count}
+
+    def _allocations_count_by_leave_type_id(self):
+        allocation_domain = [
+            ('holiday_status_id', 'in', self.ids),
+        ]
+        allocations_count = self.env['hr.leave.allocation']._read_group(
+            allocation_domain,
+            ['holiday_status_id'],
+            ['__count'],
+        )
+        return {holiday_status.id: count for holiday_status, count in allocations_count}
 
     @api.depends('employee_requests')
     def _compute_allocation_validation_type(self):
@@ -497,6 +537,7 @@ class HrLeaveType(models.Model):
                         'icon': leave_type.sudo().icon_id.url,
                         'allows_negative': leave_type.allows_negative,
                         'max_allowed_negative': leave_type.max_allowed_negative,
+                        'employee_company': employee.company_id.id,
                     },
                     leave_type.requires_allocation,
                     leave_type.id)
@@ -598,7 +639,7 @@ class HrLeaveType(models.Model):
         for allocation in allocations:
             expiration_date = allocation.date_to
 
-            accrual_plan_level = allocation._get_current_accrual_plan_level_id(target_date)[0]
+            accrual_plan_level = allocation.sudo()._get_current_accrual_plan_level_id(target_date)[0]
             carryover_policy = accrual_plan_level.action_with_unused_accruals if accrual_plan_level else False
             carryover_date = False
             if carryover_policy in ['maximum', 'lost']:
@@ -625,7 +666,7 @@ class HrLeaveType(models.Model):
                 if expiration_date and expiration_date == closest_expiration_date:
                     expiring_leaves_count += remaining_leaves[allocation]['virtual_remaining_leaves']
                 elif carryover_date and carryover_date == closest_expiration_date:
-                    accrual_plan_level = allocation._get_current_accrual_plan_level_id(target_date)[0]
+                    accrual_plan_level = allocation.sudo()._get_current_accrual_plan_level_id(target_date)[0]
                     expiring_leaves_count += max(0, remaining_leaves[allocation]['virtual_remaining_leaves'] - accrual_plan_level.postpone_max_days)
             if expiring_leaves_count != 0:
                 return closest_expiration_date, expiring_leaves_count

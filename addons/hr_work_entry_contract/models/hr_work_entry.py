@@ -12,19 +12,14 @@ from odoo.addons.hr_work_entry_contract.models.hr_work_intervals import WorkInte
 
 
 class HrWorkEntry(models.Model):
-    _inherit = ['hr.work.entry']
+    _inherit = 'hr.work.entry'
 
     contract_id = fields.Many2one('hr.contract', string="Contract", required=True)
     employee_id = fields.Many2one(domain=[('contract_ids.state', 'in', ('open', 'pending'))])
     work_entry_source = fields.Selection(related='contract_id.work_entry_source')
 
-    def init(self):
-        # FROM 7s by query to 2ms (with 2.6 millions entries)
-        self.env.cr.execute("""
-            CREATE INDEX IF NOT EXISTS hr_work_entry_contract_date_start_stop_idx
-            ON hr_work_entry(contract_id, date_start, date_stop)
-            WHERE state in ('draft', 'validated');
-        """)
+    # FROM 7s by query to 2ms (with 2.6 millions entries)
+    _contract_date_start_stop_idx = models.Index("(contract_id, date_start, date_stop) WHERE state IN ('draft', 'validated')")
 
     def _init_column(self, column_name):
         if column_name != 'contract_id':
@@ -186,7 +181,7 @@ class HrWorkEntry(models.Model):
 
 
 class HrWorkEntryType(models.Model):
-    _inherit = ['hr.work.entry.type']
+    _inherit = 'hr.work.entry.type'
     _description = 'HR Work Entry Type'
 
     is_leave = fields.Boolean(

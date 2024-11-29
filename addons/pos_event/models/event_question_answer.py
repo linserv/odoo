@@ -4,6 +4,7 @@ from odoo import api, models
 
 
 class EventQuestionAnswer(models.Model):
+    _name = 'event.question.answer'
     _inherit = ['event.question.answer', 'pos.load.mixin']
 
     @api.model
@@ -12,4 +13,4 @@ class EventQuestionAnswer(models.Model):
 
     @api.model
     def _load_pos_data_domain(self, data):
-        return [('question_id', 'in', [quest['id'] for quest in data['event.question']['data']])]
+        return [('question_id', 'in', [quest['id'] for quest in data['event.question']])]

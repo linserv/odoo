@@ -13,7 +13,6 @@ from odoo.http import request
 from odoo.osv import expression
 from odoo.tools import (
     SQL,
-    create_index,
     float_is_zero,
     format_amount,
     format_date,
@@ -42,16 +41,16 @@ SALE_ORDER_STATE = [
 
 
 class SaleOrder(models.Model):
+    _name = 'sale.order'
     _inherit = ['portal.mixin', 'product.catalog.mixin', 'mail.thread', 'mail.activity.mixin', 'utm.mixin']
     _description = "Sales Order"
     _order = 'date_order desc, id desc'
     _check_company_auto = True
 
-    _sql_constraints = [
-        ('date_order_conditional_required',
-         "CHECK((state = 'sale' AND date_order IS NOT NULL) OR state != 'sale')",
-         "A confirmed sales order requires a confirmation date."),
-    ]
+    _date_order_conditional_required = models.Constraint(
+        "CHECK((state = 'sale' AND date_order IS NOT NULL) OR state != 'sale')",
+        'A confirmed sales order requires a confirmation date.',
+    )
 
     @property
     def _rec_names_search(self):
@@ -312,8 +311,7 @@ class SaleOrder(models.Model):
     show_update_pricelist = fields.Boolean(
         string="Has Pricelist Changed", store=False)  # True if the pricelist was changed
 
-    def init(self):
-        create_index(self._cr, 'sale_order_date_order_id_idx', 'sale_order', ["date_order desc", "id desc"])
+    _date_order_id_idx = models.Index("(date_order desc, id desc)")
 
     #=== COMPUTE METHODS ===#
 
@@ -1284,7 +1282,7 @@ class SaleOrder(models.Model):
 
     def _recompute_taxes(self):
         lines_to_recompute = self.order_line.filtered(lambda line: not line.display_type)
-        lines_to_recompute._compute_tax_id()
+        lines_to_recompute._compute_tax_ids()
         self.show_update_fpos = False
 
     def action_update_prices(self):
@@ -1302,8 +1300,7 @@ class SaleOrder(models.Model):
     def _recompute_prices(self):
         lines_to_recompute = self._get_update_prices_lines()
         lines_to_recompute.invalidate_recordset(['pricelist_item_id'])
-        lines_to_recompute.technical_price_unit = 0.0
-        lines_to_recompute._compute_price_unit()
+        lines_to_recompute.with_context(force_price_recomputation=True)._compute_price_unit()
         # Special case: we want to overwrite the existing discount on _recompute_prices call
         # i.e. to make sure the discount is correctly reset
         # if pricelist rule is different than when the price was first computed.
@@ -1408,7 +1405,7 @@ class SaleOrder(models.Model):
         return action
 
     def _get_invoice_grouping_keys(self):
-        return ['company_id', 'partner_id', 'currency_id']
+        return ['company_id', 'partner_id', 'partner_shipping_id', 'currency_id']
 
     def _nothing_to_invoice_error_message(self):
         return _(
@@ -1515,7 +1512,7 @@ class SaleOrder(models.Model):
         if not invoice_vals_list and self._context.get('raise_if_nothing_to_invoice', True):
             raise UserError(self._nothing_to_invoice_error_message())
 
-        # 2) Manage 'grouped' parameter: group by (partner_id, currency_id).
+        # 2) Manage 'grouped' parameter: group by (partner_id, partner_shipping_id, currency_id).
         if not grouped:
             new_invoice_vals_list = []
             invoice_grouping_keys = self._get_invoice_grouping_keys()

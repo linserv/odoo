@@ -10,7 +10,7 @@ _lt = LazyTranslate(__name__)
 
 
 class Website(models.Model):
-    _inherit = ['website']
+    _inherit = 'website'
 
     #=== DEFAULT METHODS ===#
 
@@ -197,7 +197,7 @@ class Website(models.Model):
     def _get_product_sort_mapping():
         return [
             ('website_sequence asc', _("Featured")),
-            ('create_date desc', _("Newest Arrivals")),
+            ('publish_date desc', _("Newest Arrivals")),
             ('name asc', _("Name (A-Z)")),
             ('list_price asc', _("Price - Low to High")),
             ('list_price desc', _("Price - High to Low")),
@@ -424,7 +424,7 @@ class Website(models.Model):
             if request.session.get('sale_order_id'):
                 request.session.pop('sale_order_id')
                 request.session.pop('website_sale_cart_quantity', None)
-            return self.env['sale.order']
+            return SaleOrder
 
         partner_sudo = self.env.user.partner_id
 

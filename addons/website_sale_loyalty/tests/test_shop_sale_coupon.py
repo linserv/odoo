@@ -24,6 +24,7 @@ class WebsiteSaleLoyaltyTestUi(TestSaleProductAttributeValueCommon, HttpCase):
             'company_id': cls.env.company.id,
             'company_ids': [(4, cls.env.company.id)],
             'name': 'Mitchell Admin',
+            'email': 'mitchell.admin@example.com',
             'street': '215 Vine St',
             'phone': '+1 555-555-5555',
             'city': 'Scranton',
@@ -67,7 +68,6 @@ class WebsiteSaleLoyaltyTestUi(TestSaleProductAttributeValueCommon, HttpCase):
             'purchase_ok': False,
             'invoice_policy': 'order',
             'default_code': 'FREELARGECABINET',
-            'categ_id': self.env.ref('product.product_category_all').id,
             'taxes_id': False,
         })
 
@@ -79,7 +79,6 @@ class WebsiteSaleLoyaltyTestUi(TestSaleProductAttributeValueCommon, HttpCase):
             'purchase_ok': False,
             'invoice_policy': 'order',
             'default_code': '10PERCENTDISC',
-            'categ_id': self.env.ref('product.product_category_all').id,
             'taxes_id': False,
         })
 
@@ -331,7 +330,7 @@ class TestWebsiteSaleCoupon(HttpCase):
         icp_validity = ICP.create({'key': 'website_sale_coupon.abandonned_coupon_validity', 'value': 5})
         self.env.flush_all()
         query = """UPDATE %s SET write_date = %%s WHERE id = %%s""" % (order._table,)
-        self.env.cr.execute(query, (fields.Datetime.to_string(fields.datetime.now() - timedelta(days=4, hours=2)), order.id))
+        self.env.cr.execute(query, (fields.Datetime.to_string(fields.Datetime.now() - timedelta(days=4, hours=2)), order.id))
         order._gc_abandoned_coupons()
 
         self.assertEqual(len(order.applied_coupon_ids), 1, "The coupon shouldn't have been removed from the order the order is 4 days old but icp validity is 5 days")

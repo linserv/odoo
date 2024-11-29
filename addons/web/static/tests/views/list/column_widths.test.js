@@ -492,22 +492,6 @@ test(`width computation: no record, nameless and stringless buttons`, async () =
     expect(columnWidths[2]).toBeGreaterThan(300);
 });
 
-test(`width computation: no record, datetime field with date widget`, async () => {
-    Foo._records = [];
-
-    await mountView({
-        resModel: "foo",
-        type: "list",
-        arch: `
-            <list editable="top">
-                <field name="datetime" widget="date"/>
-                <field name="text"/>
-            </list>
-        `,
-    });
-    expect(getColumnWidths()).toEqual([40, 89, 671]);
-});
-
 test(`width computation: x2many`, async () => {
     await mountView({
         type: "form",
@@ -717,6 +701,27 @@ test(`width computation: button columns don't have a max width`, async () => {
     // indices 0 and 1 because selectors aren't displayed on small screens
     expect(columnWidths[0]).toBe(100);
     expect(columnWidths[1]).toBeGreaterThan(330);
+});
+
+test(`width computation: button with width in arch`, async () => {
+    Foo._records = [];
+
+    await mountView({
+        resModel: "foo",
+        type: "list",
+        arch: `
+            <list>
+                <field name="foo"/>
+                <button string="choucroute"/>
+                <button icon="fa-heart" width="25px"/>
+                <button icon="fa-cog" width="59px"/>
+                <button icon="fa-list"/>
+                <button icon="fa-play"/>
+            </list>
+        `,
+    });
+
+    expect(getColumnWidths()).toEqual([40, 216, 216, 34, 68, 227]);
 });
 
 // freeze column widths

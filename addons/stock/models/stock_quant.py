@@ -17,6 +17,7 @@ _logger = logging.getLogger(__name__)
 
 
 class StockQuant(models.Model):
+    _name = 'stock.quant'
     _description = 'Quants'
     _rec_name = 'product_id'
     _rec_names_search = ['location_id', 'lot_id', 'package_id', 'owner_id']
@@ -177,8 +178,9 @@ class StockQuant(models.Model):
 
     def _search(self, domain, *args, **kwargs):
         domain = [
-            line if not isinstance(line, (list, tuple)) or not line[0].startswith('lot_properties.')
-            else ['lot_id', 'any', [line]]
+            ['lot_id', 'any', [line]]
+            if line and isinstance(line, (list, tuple)) and isinstance(line[0], str) and line[0].startswith('lot_properties.')
+            else line
             for line in domain
         ]
         return super()._search(domain, *args, **kwargs)

@@ -451,6 +451,7 @@ def is_html_empty(html_content):
     tag_re = r'<\s*\/?(?:p|div|section|span|br|b|i|font)\b(?:(\s+[A-Za-z_-][A-Za-z0-9-_]*(\s*=\s*[\'"][^"\']*[\'"]))*)(?:\s*>|\s*\/\s*>)'
     return not bool(re.sub(tag_re, '', html_content).strip()) and not re.search(icon_re, html_content)
 
+
 def html_keep_url(text):
     """ Transform the url into clickable link with <a/> tag """
     idx = 0
@@ -458,7 +459,7 @@ def html_keep_url(text):
     link_tags = re.compile(r"""(?<!["'])((ftp|http|https):\/\/(\w+:{0,1}\w*@)?([^\s<"']+)(:[0-9]+)?(\/|\/([^\s<"']))?)(?![^\s<"']*["']|[^\s<"']*</a>)""")
     for item in re.finditer(link_tags, text):
         final += text[idx:item.start()]
-        final += '<a href="%s" target="_blank" rel="noreferrer noopener">%s</a>' % (item.group(0), item.group(0))
+        final += create_link(item.group(0), item.group(0))
         idx = item.end()
     final += text[idx:]
     return final
@@ -478,6 +479,10 @@ def html_to_inner_content(html):
     processed = htmllib.unescape(processed)
     processed = processed.strip()
     return processed
+
+
+def create_link(url, label):
+    return f'<a href="{url}" target="_blank" rel="noreferrer noopener">{label}</a>'
 
 
 def html2plaintext(html, body_id=None, encoding='utf-8'):
@@ -781,6 +786,26 @@ def email_normalize_all(text):
     return list(filter(None, [_normalize_email(email) for email in emails]))
 
 def _normalize_email(email):
+    """ As of rfc5322 section 3.4.1 local-part is case-sensitive. However most
+    main providers do consider the local-part as case insensitive. With the
+    introduction of smtp-utf8 within odoo, this assumption is certain to fall
+    short for international emails. We now consider that
+
+      * if local part is ascii: normalize still 'lower' ;
+      * else: use as it, SMTP-UF8 is made for non-ascii local parts;
+
+    Concerning domain part of the address, as of v14 international domain (IDNA)
+    are handled fine. The domain is always lowercase, lowering it is fine as it
+    is probably an error. With the introduction of IDNA, there is an encoding
+    that allow non-ascii characters to be encoded to ascii ones, using 'idna.encode'.
+
+    A normalized email is considered as :
+    - having a left part + @ + a right part (the domain can be without '.something')
+    - having no name before the address. Typically, having no 'Name <>'
+    Ex:
+    - Possible Input Email : 'Name <NaMe@DoMaIn.CoM>'
+    - Normalized Output Email : 'name@domain.com'
+    """
     local_part, at, domain = email.rpartition('@')
     try:
         local_part.encode('ascii')

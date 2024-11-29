@@ -27,7 +27,7 @@ class WebsiteForm(http.Controller):
         return ""
 
     # Check and insert values from the form on the model <model>
-    @http.route('/website/form/<string:model_name>', type='http', auth="public", methods=['POST'], website=True, csrf=False)
+    @http.route('/website/form/<string:model_name>', type='http', auth="public", methods=['POST'], website=True, csrf=False, captcha='website_form')
     def website_form(self, model_name, **kwargs):
         # Partial CSRF check, only performed when session is authenticated, as there
         # is no real risk for unauthenticated sessions here. It's a common case for
@@ -43,17 +43,14 @@ class WebsiteForm(http.Controller):
             # this controller method. Instead, we use a savepoint to roll back
             # what has been done inside the try clause.
             with request.env.cr.savepoint():
-                if request.env['ir.http']._verify_request_recaptcha_token('website_form'):
-                    # request.params was modified, update kwargs to reflect the changes
-                    kwargs = dict(request.params)
-                    kwargs.pop('model_name')
-                    return self._handle_website_form(model_name, **kwargs)
-            error = _("Suspicious activity detected by Google reCaptcha.")
+                # request.params was modified, update kwargs to reflect the changes
+                kwargs = dict(request.params)
+                kwargs.pop('model_name')
+                return self._handle_website_form(model_name, **kwargs)
         except (ValidationError, UserError) as e:
-            error = e.args[0]
-        return json.dumps({
-            'error': error,
-        })
+            return json.dumps({
+                'error': e.args[0],
+            })
 
     def _handle_website_form(self, model_name, **kwargs):
         model_record = request.env['ir.model'].sudo().search([('model', '=', model_name), ('website_form_access', '=', True)])
@@ -85,7 +82,7 @@ class WebsiteForm(http.Controller):
                         value = kwargs['email_to'] + (':email_cc' if form_has_email_cc else '')
                         hash_value = hmac(model_record.env, 'website_form_signature', value)
                         if not consteq(kwargs["website_form_signature"], hash_value):
-                            raise AccessDenied('invalid website_form_signature')
+                            raise AccessDenied(self.env._('invalid website_form_signature'))
                     request.env[model_name].sudo().browse(id_record).send()
 
         # Some fields have additional SQL constraints that we can't check generically

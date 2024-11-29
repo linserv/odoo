@@ -6,7 +6,7 @@ from odoo.exceptions import UserError
 
 
 class PosConfig(models.Model):
-    _inherit = ['pos.config']
+    _inherit = 'pos.config'
 
     # NOTE: this funtions acts as a m2m field with loyalty.program model. We do this to handle an excpetional use case:
     # When no PoS is specified at a loyalty program form, this program is applied to every PoS (instead of none)
@@ -41,7 +41,7 @@ class PosConfig(models.Model):
 
         if invalid_reward_products_msg:
             prefix_error_msg = _("To continue, make the following reward products available in Point of Sale.")
-            raise UserError(f"{prefix_error_msg}\n{invalid_reward_products_msg}")
+            raise UserError(f"{prefix_error_msg}\n{invalid_reward_products_msg}")  # pylint: disable=missing-gettext
         if gift_card_programs:
             for gc_program in gift_card_programs:
                 # Do not allow a gift card program with more than one rule or reward, and check that they make sense

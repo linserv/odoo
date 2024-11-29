@@ -71,7 +71,7 @@
                     <field name="price_unit" string="Unit Price" optional="hide" widget="monetary"
                            options="{'currency_field': 'company_currency_id', 'field_digits': True}" readonly="True"/>
                     <field name="quantity" optional="hide" readonly="not is_editable or not product_has_cost"/>
-                    <field name="tax_ids" optional="hide" widget="many2many_tags"
+                    <field name="tax_ids" optional="hide" widget="many2many_tax_tags"
                            groups="account.group_account_invoice,account.group_account_readonly"
                            readonly="not is_editable or not product_has_cost"/>
                     <field name="tax_amount" sum="Total Taxes" readonly="True"
@@ -222,7 +222,7 @@
                             <div class="o_row">
                                 <field name="tax_ids"
                                        force_save="1"
-                                       widget="many2many_tags"
+                                       widget="many2many_tax_tags"
                                        readonly="not is_editable"
                                        options="{'no_create': True}"/>
                                 <field name="tax_amount_currency"/>
@@ -395,7 +395,8 @@
                            filter_domain="['|', '|', ('employee_id', 'ilike', self), ('name', 'ilike', self), ('product_id', 'ilike', self)]"/>
                     <field name="date"/>
                     <field name="employee_id"/>
-                    <filter string="My Expenses" name="my_expenses" domain="[('employee_id.user_id', '=', uid)]"/>
+                    <filter string="My Open Expenses" name="my_open_expenses" domain="[('employee_id.user_id', '=', uid), ('state', 'not in', ('done', 'refused'))]"/>
+                    <filter string="My Closed Expenses" name="my_closed_expenses" domain="[('employee_id.user_id', '=', uid), ('state', 'in', ('done', 'refused'))]"/>
                     <filter string="My Team" name="my_team_expenses" domain="[('employee_id.parent_id.user_id', '=', uid)]"
                             groups="hr_expense.group_hr_expense_team_approver" help="Expenses of Your Team Member"/>
                     <separator />
@@ -491,7 +492,7 @@
             <field name="res_model">hr.expense</field>
             <field name="view_mode">list,kanban,form,graph,pivot,activity</field>
             <field name="search_view_id" ref="hr_expense_view_search"/>
-            <field name="context">{'search_default_my_expenses': 1}</field>
+            <field name="context">{'search_default_my_open_expenses': 1}</field>
             <field name="help" type="html">
                 <div class="o_view_nocontent_expense_receipt o_view_pink_overlay">
                     <p class="o_view_nocontent_expense_receipt_image"/>
@@ -592,7 +593,7 @@
                             </group>
                             <group>
                                 <field name="property_account_expense_id" class="w-50" groups="account.group_account_readonly"/>
-                                <field name="supplier_taxes_id" class="w-50" widget="many2many_tags"
+                                <field name="supplier_taxes_id" class="w-50" widget="many2many_tax_tags"
                                        context="{'default_type_tax_use':'purchase', 'default_price_include': 1}"
                                        options="{'no_quick_create': True}" placeholder="no taxes"/>
                             </group>
@@ -644,7 +645,7 @@
                     <field name="description" string="Note" optional="show" readonly="1"/>
                     <field name="lst_price" widget='monetary' options="{'currency_field': 'currency_id', 'field_digits': True}" optional="show" string="Sales Price"/>
                     <field name="standard_price" widget='monetary' options="{'currency_field': 'currency_id', 'field_digits': True}" optional="show"/>
-                    <field name="supplier_taxes_id" widget="many2many_tags" optional="show"/>
+                    <field name="supplier_taxes_id" widget="many2many_tax_tags" optional="show"/>
                 </list>
             </field>
         </record>
@@ -786,9 +787,16 @@
                     <button name="action_reset_expense_sheets"
                             string="Reset to Draft"
                             type="object"
-                            data-hotkey="c"
+                            data-hotkey="r"
                             invisible="not can_reset or state  == 'draft'"
-                            groups="account.group_account_readonly,account.group_account_invoice"/>
+                            groups="account.group_account_invoice"/>
+                    <!-- v In the case where the user has no accounting rights, we don't show the button in the post & done states  -->
+                    <button name="action_reset_expense_sheets"
+                            string="Reset to Draft"
+                            type="object"
+                            data-hotkey="r"
+                            invisible="not can_reset or state in ('draft', 'post', 'done')"
+                            groups="!account.group_account_invoice"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,submit,approve,post,done"
                            force_save="1" invisible="state == 'cancel'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,submit,cancel"
@@ -902,7 +910,7 @@
                                     <field name="price_unit" optional="hide" widget="monetary" options="{'currency_field': 'company_currency_id', 'field_digits': True}" readonly="True"/>
                                     <field name="currency_id" optional="hide" readonly="True" groups="base.group_multi_currency"/>
                                     <field name="quantity" optional="hide" readonly="True"/>
-                                    <field name="tax_ids" string="Taxes" optional="show" widget="many2many_tags"
+                                    <field name="tax_ids" string="Taxes" optional="show" widget="many2many_tax_tags"
                                            context="{'default_company_id': company_id}" readonly="True"/>
                                     <field name="tax_amount_currency" optional="hide"  options="{'currency_field': 'currency_id'}"
                                            context="{'default_company_id': company_id}" readonly="True" groups="base.group_multi_currency"/>

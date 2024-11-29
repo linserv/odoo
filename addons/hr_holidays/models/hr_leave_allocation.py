@@ -124,9 +124,10 @@ class HrLeaveAllocation(models.Model):
     leaves_taken = fields.Float(compute='_compute_leaves', string='Time off Taken')
     expiring_carryover_days = fields.Float("The number of carried over days that will expire on carried_over_days_expiration_date")
     carried_over_days_expiration_date = fields.Date("Carried over days expiration date")
-    _sql_constraints = [
-        ('duration_check', "CHECK( ( number_of_days > 0 AND allocation_type='regular') or (allocation_type != 'regular'))", "The duration must be greater than 0."),
-    ]
+    _duration_check = models.Constraint(
+        "CHECK( ( number_of_days > 0 AND allocation_type='regular') or (allocation_type != 'regular'))",
+        'The duration must be greater than 0.',
+    )
 
     @api.constrains('date_from', 'date_to')
     def _check_date_from_date_to(self):
@@ -601,11 +602,11 @@ class HrLeaveAllocation(models.Model):
             return 0
 
         fake_allocation = self.env['hr.leave.allocation'].with_context(default_date_from=accrual_date).new(origin=self)
-        fake_allocation.sudo()._process_accrual_plans(accrual_date, log=False)
+        fake_allocation.sudo().with_context(default_date_from=accrual_date)._process_accrual_plans(accrual_date, log=False)
         if self.type_request_unit in ['hour']:
             return float_round(fake_allocation.number_of_hours_display - self.number_of_hours_display, precision_digits=2)
         res = round((fake_allocation.number_of_days - self.number_of_days), 2)
-        fake_allocation._invalidate_cache(['number_of_days', 'number_of_days_display', 'lastcall', 'nextcall', 'number_of_hours_display'])
+        fake_allocation.invalidate_recordset()
         return res
 
     ####################################################
@@ -685,7 +686,7 @@ class HrLeaveAllocation(models.Model):
             if not self._context.get('import_file'):
                 allocation.activity_update()
             if allocation.validation_type == 'no_validation' and allocation.state == 'confirm':
-                allocation.action_validate()
+                allocation.action_approve()
         return allocations
 
     def write(self, values):
@@ -750,26 +751,6 @@ class HrLeaveAllocation(models.Model):
     # Business methods
     ####################################################
 
-    def action_validate(self):
-        if any(allocation.state not in ['confirm', 'validate1'] and allocation.validation_type != 'no_validation' for allocation in self):
-            raise UserError(_('Allocation must be "To Approve" or "Second Approval" in order to validate it.'))
-
-        to_validate = self.filtered(lambda alloc: alloc.state == 'confirm' and alloc.validation_type != 'both')
-        to_second_validate = self.filtered(lambda alloc: alloc.state == 'validate1' and alloc.validation_type == 'both')
-        if to_validate:
-            to_validate.write({
-                'state': 'validate',
-                'approver_id': self.env.user.employee_id.id
-            })
-            to_validate.activity_update()
-        if to_second_validate:
-            to_second_validate.write({
-                'state': 'validate',
-                'second_approver_id': self.env.user.employee_id.id
-            })
-            to_second_validate.activity_update()
-        return True
-
     def action_set_to_confirm(self):
         if any(allocation.state != 'refuse' for allocation in self):
             raise UserError(_('Allocation state must be "Refused" in order to be reset to "To Approve".'))
@@ -782,17 +763,21 @@ class HrLeaveAllocation(models.Model):
         return True
 
     def action_approve(self):
-        # if allocation_validation_type == 'both': this method is the first approval
-        # if allocation_validation_type != 'both': this method calls action_validate() below
 
-        if any(allocation.validation_type != 'no_validation' and allocation.state != 'confirm' for allocation in self):
-            raise UserError(_('Allocation must be confirmed ("To Approve") in order to approve it.'))
+        if any(allocation.state not in ['confirm', 'validate1'] and allocation.validation_type != 'no_validation' for allocation in self):
+            raise UserError(_('Allocation must be "To Approve" or "Second Approval" in order to approve it.'))
 
         current_employee = self.env.user.employee_id
-        self.filtered(lambda alloc: alloc.validation_type == 'both').write({'state': 'validate1', 'approver_id': current_employee.id})
+        single_validate_allocs = self.filtered(lambda alloc: alloc.state == 'confirm' and alloc.validation_type != 'both')
+        first_validate_allocs = self.filtered(lambda alloc: alloc.state == 'confirm' and alloc.validation_type == 'both')
+        second_validate_allocs = self.filtered(lambda alloc: alloc.state == 'validate1' and alloc.validation_type == 'both')
 
-        self.filtered(lambda alloc: alloc.validation_type != 'both').action_validate()
+        single_validate_allocs.write({'state': 'validate', 'approver_id': current_employee.id})
+        first_validate_allocs.write({'state': 'validate1', 'approver_id': current_employee.id})
+        second_validate_allocs.write({'state': 'validate', 'second_approver_id': current_employee.id})
+
         self.activity_update()
+
         return True
 
     def action_refuse(self):
