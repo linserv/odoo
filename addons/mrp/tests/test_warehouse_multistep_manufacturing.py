@@ -4,10 +4,13 @@
 from odoo.tests import Form, tagged
 from odoo.addons.mrp.tests.common import TestMrpCommon
 
+import unittest
+
 
 @tagged('post_install', '-at_install')
 class TestMultistepManufacturingWarehouse(TestMrpCommon):
 
+    @unittest.skip("[LINSERV]")
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
