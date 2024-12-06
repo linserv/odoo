@@ -5876,7 +5876,10 @@ class AccountMove(models.Model):
 
         # Search for partners using the user.
         if not senders:
-            senders = partners = list(self._mail_search_on_user(from_mail_addresses))
+            user_partners = self.env['res.users'].sudo().search(
+                [('email_normalized', 'in', from_mail_addresses)]
+            ).mapped('partner_id')
+            senders = partners = list(self.env['res.partner'].search([('id', 'in', user_partners.ids)]))
 
         if partners:
             # Check we are not in the case when an internal user forwarded the mail manually.
@@ -6109,6 +6112,19 @@ class AccountMove(models.Model):
         Down-payments can be created from a sale order. This method is overridden in the sale order module.
         '''
         return False
+
+    def _refunds_origin_required(self):
+        return False
+
+    def _set_reversed_entry(self, credit_note):
+        """ Try to find the original invoice for a single credit_note. """
+        if len(credit_note) != 1 or credit_note.move_type != 'out_refund':
+            return
+
+        original_invoice = self.filtered(lambda inv: inv.move_type == 'out_invoice'
+                                         and credit_note.invoice_line_ids.sale_line_ids in inv.invoice_line_ids.sale_line_ids)
+        if len(original_invoice) == 1 and original_invoice._refunds_origin_required():
+            credit_note.reversed_entry_id = original_invoice.id
 
     @api.model
     def get_invoice_localisation_fields_required_to_invoice(self, country_id):
