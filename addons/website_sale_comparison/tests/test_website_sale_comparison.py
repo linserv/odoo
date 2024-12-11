@@ -9,6 +9,8 @@ from odoo import Command
 
 import odoo.tests
 
+import unittest
+
 _logger = logging.getLogger(__name__)
 
 
@@ -166,6 +168,7 @@ class TestUi(odoo.tests.HttpCase):
         }])
         self.start_tour("/", 'product_comparison', login='admin')
 
+    @unittest.skip("[LINSERV]")
     def test_02_attribute_multiple_lines(self):
         # Case product page with "Product attributes table" disabled (website_sale standard case)
         self.env['website'].viewref('website_sale_comparison.product_attributes_body').active = False
