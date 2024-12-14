@@ -4,6 +4,8 @@ import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment
 import { FloorScreen } from "@pos_restaurant/app/screens/floor_screen/floor_screen";
 import { ConnectionLostError } from "@web/core/network/rpc";
 import { _t } from "@web/core/l10n/translation";
+import { EditOrderNamePopup } from "@pos_restaurant/app/popup/edit_order_name_popup/edit_order_name_popup";
+import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
 
 const NON_IDLE_EVENTS = [
     "mousemove",
@@ -24,6 +26,7 @@ patch(PosStore.prototype, {
     async setup() {
         this.isEditMode = false;
         this.tableSyncing = false;
+        this.tableSelectorState = false;
         await super.setup(...arguments);
     },
     get firstScreen() {
@@ -33,7 +36,17 @@ patch(PosStore.prototype, {
             return screen;
         }
 
-        return screen === "LoginScreen" ? "LoginScreen" : "FloorScreen";
+        return screen === "LoginScreen" ? "LoginScreen" : this.defaultScreen;
+    },
+    get defaultScreen() {
+        if (this.config.module_pos_restaurant) {
+            const screens = {
+                register: "ProductScreen",
+                tables: "FloorScreen",
+            };
+            return screens[this.config.default_screen];
+        }
+        return super.defaultScreen;
     },
     async onDeleteOrder(order) {
         const orderIsDeleted = await super.onDeleteOrder(...arguments);
@@ -105,25 +118,14 @@ patch(PosStore.prototype, {
     },
     async actionAfterIdle() {
         if (!document.querySelector(".modal-open")) {
-            const table = this.selectedTable;
             const order = this.getOrder();
             if (order && order.getScreenData().name === "ReceiptScreen") {
                 // When the order is finalized, we can safely remove it from the memory
                 // We check that it's in ReceiptScreen because we want to keep the order if it's in a tipping state
                 this.removeOrder(order);
             }
-            this.showScreen("FloorScreen", { floor: table?.floor });
+            this.showScreen(this.defaultScreen);
         }
-    },
-    getReceiptHeaderData(order) {
-        const json = super.getReceiptHeaderData(...arguments);
-        if (this.config.module_pos_restaurant && order) {
-            if (order.getTable()) {
-                json.table = order.getTable().table_number;
-            }
-            json.customer_count = order.getCustomerCount();
-        }
-        return json;
     },
     shouldResetIdleTimer() {
         const stayPaymentScreen =
@@ -134,9 +136,20 @@ patch(PosStore.prototype, {
             this.mainScreen.component !== FloorScreen
         );
     },
-    showScreen(screenName) {
+    showScreen(screenName, props = {}, newOrder = false) {
+        const order = this.getOrder();
+        if (
+            this.config.module_pos_restaurant &&
+            this.mainScreen.component === ProductScreen &&
+            order &&
+            !order.isBooked
+        ) {
+            this.removeOrder(order);
+        }
         super.showScreen(...arguments);
-        this.setIdleTimer();
+        if (this.screenName != this.defaultScreen) {
+            this.setIdleTimer();
+        }
     },
     closeScreen() {
         if (this.config.module_pos_restaurant && !this.getOrder()) {
@@ -144,8 +157,11 @@ patch(PosStore.prototype, {
         }
         return super.closeScreen(...arguments);
     },
-    addOrderIfEmpty() {
-        if (!this.config.module_pos_restaurant) {
+    showDefault() {
+        this.showScreen(this.defaultScreen, {}, this.defaultScreen == "ProductScreen");
+    },
+    addOrderIfEmpty(forceEmpty) {
+        if (!this.config.module_pos_restaurant || forceEmpty) {
             return super.addOrderIfEmpty(...arguments);
         }
     },
@@ -175,10 +191,20 @@ patch(PosStore.prototype, {
         return await super.afterProcessServerData(...arguments);
     },
     //@override
-    addNewOrder() {
+    addNewOrder(data = {}) {
         const order = super.addNewOrder(...arguments);
         this.addPendingOrder([order.id]);
         return order;
+    },
+    createOrderIfNeeded(data) {
+        if (this.config.module_pos_restaurant && !data["table_id"]) {
+            let order = this.models["pos.order"].find((order) => order.isDirectSale);
+            if (!order) {
+                order = this.createNewOrder(data);
+            }
+            return order;
+        }
+        return super.createOrderIfNeeded(...arguments);
     },
     getSyncAllOrdersContext(orders, options = {}) {
         const context = super.getSyncAllOrdersContext(...arguments);
@@ -210,7 +236,7 @@ patch(PosStore.prototype, {
     getDefaultSearchDetails() {
         if (this.selectedTable && this.selectedTable.id) {
             return {
-                fieldName: "TABLE",
+                fieldName: "REFERENCE",
                 searchTerm: this.selectedTable.getName(),
             };
         }
@@ -255,8 +281,58 @@ patch(PosStore.prototype, {
             this.loadingOrderState = false;
         }
     },
+    editFloatingOrderName(order) {
+        this.dialog.add(EditOrderNamePopup, {
+            title: _t("Edit Order Name"),
+            placeholder: _t("18:45 John 4P"),
+            startingValue: order.floating_order_name || "",
+            getPayload: async (newName) => {
+                if (typeof order.id == "number") {
+                    this.data.write("pos.order", [order.id], {
+                        floating_order_name: newName,
+                    });
+                } else {
+                    order.floating_order_name = newName;
+                }
+            },
+        });
+    },
+    setFloatingOrder(floatingOrder) {
+        if (this.getOrder()?.isFilledDirectSale) {
+            this.transferOrder(this.getOrder().uuid, null, floatingOrder);
+            return;
+        }
+        this.setOrder(floatingOrder);
+
+        const props = {};
+        const screenName = floatingOrder.getScreenData().name;
+        if (screenName === "PaymentScreen") {
+            props.orderUuid = floatingOrder.uuid;
+        }
+
+        this.showScreen(screenName || "ProductScreen", props);
+    },
+    findTable(tableNumber) {
+        const find_table = (t) => t.table_number === parseInt(tableNumber);
+        return (
+            this.currentFloor?.table_ids.find(find_table) ||
+            this.models["restaurant.table"].find(find_table)
+        );
+    },
+    searchOrder(buffer) {
+        const table = this.findTable(buffer);
+        if (table) {
+            this.setTableFromUi(table);
+            return true;
+        }
+        return false;
+    },
     async setTableFromUi(table, orderUuid = null) {
         try {
+            if (!orderUuid && this.getOrder()?.isFilledDirectSale) {
+                this.transferOrder(this.getOrder().uuid, table);
+                return;
+            }
             this.tableSyncing = true;
             if (table.parent_id) {
                 table = table.getParent();
@@ -314,43 +390,154 @@ patch(PosStore.prototype, {
             [...el.classList].find((c) => c.includes("tableId")).split("-")[1]
         );
     },
-    async transferOrder(orderUuid, destinationTable) {
-        const order = this.models["pos.order"].getBy("uuid", orderUuid);
+    prepareOrderTransfer(order, destinationTable) {
         const originalTable = order.table_id;
         this.loadingOrderState = false;
         this.alert.dismiss();
+
         if (destinationTable.id === originalTable?.id) {
             this.setOrder(order);
             this.setTable(destinationTable);
-            return;
+            return false;
         }
+
         if (!this.tableHasOrders(destinationTable)) {
+            order.origin_table_id = originalTable?.id;
             order.table_id = destinationTable;
             this.setOrder(order);
             this.addPendingOrder([order.id]);
-        } else {
-            const destinationOrder = this.getActiveOrdersOnTable(destinationTable)[0];
-            const linesToUpdate = [];
-            for (const orphanLine of order.lines) {
-                const adoptingLine = destinationOrder.lines.find((l) =>
-                    l.canBeMergedWith(orphanLine)
-                );
-                if (adoptingLine) {
-                    adoptingLine.merge(orphanLine);
-                } else {
-                    linesToUpdate.push(orphanLine);
-                }
-            }
-            linesToUpdate.forEach((orderline) => {
-                orderline.order_id = destinationOrder;
-            });
-            this.setOrder(destinationOrder);
-            if (destinationOrder?.id) {
-                this.addPendingOrder([destinationOrder.id]);
-            }
-            await this.deleteOrders([order]);
+            return false;
         }
+        return true;
+    },
+    async updateOrderLinesForTableChange(orderDetails, canBeMergedWithLine = false) {
+        const { sourceOrder, destinationOrder } = orderDetails;
+        const linesToUpdate = [];
+
+        for (const orphanLine of sourceOrder.lines) {
+            const adoptingLine = destinationOrder?.lines.find((l) => l.canBeMergedWith(orphanLine));
+            if (adoptingLine && canBeMergedWithLine) {
+                if (sourceOrder.last_order_preparation_change.lines[orphanLine.preparationKey]) {
+                    if (
+                        destinationOrder.last_order_preparation_change.lines[
+                            adoptingLine.preparationKey
+                        ]
+                    ) {
+                        destinationOrder.last_order_preparation_change.lines[
+                            adoptingLine.preparationKey
+                        ]["quantity"] +=
+                            sourceOrder.last_order_preparation_change.lines[
+                                orphanLine.preparationKey
+                            ]["quantity"];
+                        destinationOrder.last_order_preparation_change.lines[
+                            adoptingLine.preparationKey
+                        ]["transferredQty"] =
+                            sourceOrder.last_order_preparation_change.lines[
+                                orphanLine.preparationKey
+                            ]["quantity"];
+                    } else {
+                        destinationOrder.last_order_preparation_change.lines[
+                            adoptingLine.preparationKey
+                        ] = {
+                            ...sourceOrder.last_order_preparation_change.lines[
+                                orphanLine.preparationKey
+                            ],
+                            uuid: adoptingLine.uuid,
+                            transferredQty:
+                                sourceOrder.last_order_preparation_change.lines[
+                                    orphanLine.preparationKey
+                                ]["quantity"],
+                        };
+                    }
+                }
+                adoptingLine.merge(orphanLine);
+            } else {
+                if (
+                    sourceOrder.last_order_preparation_change.lines[orphanLine.preparationKey] &&
+                    !destinationOrder.last_order_preparation_change.lines[orphanLine.preparationKey]
+                ) {
+                    destinationOrder.last_order_preparation_change.lines[
+                        orphanLine.preparationKey
+                    ] = sourceOrder.last_order_preparation_change.lines[orphanLine.preparationKey];
+                    orphanLine.skip_change = true;
+                }
+                linesToUpdate.push(orphanLine);
+            }
+        }
+
+        linesToUpdate.forEach((orderline) => {
+            if (!orderline.origin_order_id) {
+                orderline.origin_order_id = orderline.order_id.id;
+            }
+            orderline.order_id = destinationOrder;
+        });
+
+        this.setOrder(destinationOrder);
+        if (destinationOrder?.id) {
+            this.addPendingOrder([destinationOrder.id]);
+        }
+    },
+    async transferOrder(orderUuid, destinationTable = null, destinationOrder = null) {
+        if (!destinationTable && !destinationOrder) {
+            return;
+        }
+        const sourceOrder = this.models["pos.order"].getBy("uuid", orderUuid);
+
+        if (destinationTable) {
+            if (!this.prepareOrderTransfer(sourceOrder, destinationTable)) {
+                return;
+            }
+            destinationOrder = this.getActiveOrdersOnTable(destinationTable.rootTable)[0];
+        }
+        await this.updateOrderLinesForTableChange({ sourceOrder, destinationOrder }, true);
+
+        sourceOrder.isTransferedOrder = true;
+        await this.deleteOrders([sourceOrder]);
+        if (destinationTable) {
+            await this.setTable(destinationTable);
+        }
+    },
+    async mergeTableOrders(orderUuid, destinationTable) {
+        const sourceOrder = this.models["pos.order"].getBy("uuid", orderUuid);
+
+        if (!this.prepareOrderTransfer(sourceOrder, destinationTable)) {
+            return;
+        }
+
+        const destinationOrder = this.getActiveOrdersOnTable(destinationTable.rootTable)[0];
+        await this.updateOrderLinesForTableChange({ sourceOrder, destinationOrder }, false);
         await this.setTable(destinationTable);
+    },
+    async restoreOrdersToOriginalTable(orderToExtract, mergedOrder) {
+        const orderlines = mergedOrder.lines.filter((line) => line.origin_order_id);
+        for (const orderline of orderlines) {
+            if (
+                orderline?.origin_order_id.id === orderToExtract.id ||
+                orderToExtract.table_id.children.length
+            ) {
+                orderline.order_id = orderToExtract;
+                if (orderline?.origin_order_id.id === orderToExtract.id) {
+                    if (orderline.skip_change) {
+                        orderline.toggleSkipChange();
+                    }
+                    orderline.origin_order_id = null;
+                }
+                if (
+                    mergedOrder.last_order_preparation_change.lines[orderline.preparationKey] &&
+                    !orderToExtract.last_order_preparation_change.lines[orderline.preparationKey]
+                ) {
+                    orderToExtract.last_order_preparation_change.lines[orderline.preparationKey] =
+                        mergedOrder.last_order_preparation_change.lines[orderline.preparationKey];
+                    orderline.setHasChange(true);
+                    orderline.toggleSkipChange();
+                    orderline.uiState.hideSkipChangeClass = true;
+                }
+                delete mergedOrder.last_order_preparation_change.lines[orderline.preparationKey];
+            }
+        }
+
+        this.addPendingOrder([orderToExtract.id, mergedOrder.id]);
+        await this.setTable(orderToExtract.table_id);
     },
     updateTables(...tables) {
         this.data.call("restaurant.table", "update_tables", [
@@ -372,6 +559,9 @@ patch(PosStore.prototype, {
     },
     toggleEditMode() {
         this.isEditMode = !this.isEditMode;
+        if (this.isEditMode) {
+            this.tableSelectorState = false;
+        }
     },
     _shouldLoadOrders() {
         return super._shouldLoadOrders() || this.config.module_pos_restaurant;

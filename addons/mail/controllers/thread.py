@@ -7,11 +7,13 @@ from werkzeug.exceptions import NotFound
 from odoo import http
 from odoo.http import request
 from odoo.tools import frozendict
+from odoo.tools import email_normalize
 from odoo.addons.mail.models.discuss.mail_guest import add_guest_to_context
 from odoo.addons.mail.tools.discuss import Store
 
 
 class ThreadController(http.Controller):
+
     @http.route("/mail/thread/data", methods=["POST"], type="jsonrpc", auth="public", readonly=True)
     def mail_thread_data(self, thread_model, thread_id, request_list, **kwargs):
         thread = request.env[thread_model]._get_thread_with_access(thread_id, **kwargs)
@@ -21,7 +23,7 @@ class ThreadController(http.Controller):
                 {"hasReadAccess": False, "hasWriteAccess": False},
                 as_thread=True,
             ).get_result()
-        return Store(thread, as_thread=True, request_list=request_list).get_result()
+        return Store(thread, request_list=request_list, as_thread=True).get_result()
 
     @http.route("/mail/thread/messages", methods=["POST"], type="jsonrpc", auth="user")
     def mail_thread_messages(self, thread_model, thread_id, fetch_params=None):
@@ -37,7 +39,7 @@ class ThreadController(http.Controller):
         return {
             **res,
             "data": Store(messages, for_current_user=True).get_result(),
-            "messages": Store.many_ids(messages),
+            "messages": messages.ids,
         }
 
     @http.route("/mail/partner/from_email", methods=["POST"], type="jsonrpc", auth="user")
@@ -53,9 +55,9 @@ class ThreadController(http.Controller):
         """Computes:
         - message_subtype_data: data about document subtypes: which are
             available, which are followed if any"""
-        request.env["mail.followers"].check_access("read")
-        follower = request.env["mail.followers"].sudo().browse(follower_id)
-        follower.ensure_one()
+        # limited to internal, who can read all followers
+        follower = request.env["mail.followers"].browse(follower_id)
+        follower.check_access("read")
         record = request.env[follower.res_model].browse(follower.res_id)
         record.check_access("read")
         # find current model subtypes, add them to a dictionary
@@ -84,10 +86,14 @@ class ThreadController(http.Controller):
         if "body" in post_data:
             post_data["body"] = Markup(post_data["body"])  # contains HTML such as @mentions
         if "partner_emails" in kwargs and request.env.user.has_group("base.group_partner_manager"):
+            additional_values = {
+                email_normalize(email, strict=False) or email: values
+                for email, values in kwargs.get("partner_additional_values", {}).items()
+            }
             partners |= request.env["res.partner"].browse(
                 partner.id
                 for partner in request.env["res.partner"]._find_or_create_from_emails(
-                    kwargs["partner_emails"], kwargs.get("partner_additional_values", {})
+                    kwargs["partner_emails"], additional_values
                 )
             )
         if not request.env.user._is_internal():

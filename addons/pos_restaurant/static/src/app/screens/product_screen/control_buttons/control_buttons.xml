@@ -29,22 +29,10 @@
                 <button class="btn btn-secondary btn-lg py-5" t-on-click.stop="() => this.clickTransferOrder()">
                     <i class="oi oi-arrow-right me-1" />Transfer / Merge
                 </button>
-                <button t-if="!pos.getOrder()?.table_id" class="btn btn-secondary btn-lg py-5" t-on-click="() => this.editFloatingOrderName(this.pos.getOrder())">
+                <button t-if="!pos.getOrder()?.table_id" class="btn btn-secondary btn-lg py-5" t-on-click="() => this.pos.editFloatingOrderName(this.pos.getOrder())">
                     <i class="fa fa-pencil-square-o me-1" />Edit Order Name
                 </button>
             </t>
-        </xpath>
-        <xpath expr="//button[hasclass('o_fiscal_position_button')]" position="after">
-            <button t-if="pos.config.takeaway"
-                t-attf-class="btn-secondary btn btn-lg py-5"
-                t-on-click="clickTakeAway">
-                <i t-attf-class="{{ currentOrder.takeaway ? 'fa fa-cutlery' : 'fa fa-car' }} me-1"></i>
-                <span t-if="currentOrder.takeaway">Switch to Dine in</span>
-                <span t-else="">Switch to Takeaway</span>
-            </button>
-        </xpath>
-        <xpath expr="//button[hasclass('o_fiscal_position_button')]" position="attributes">
-            <attribute name="t-if">!pos.config.takeaway</attribute>
         </xpath>
     </t>
 </templates>

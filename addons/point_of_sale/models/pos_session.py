@@ -131,7 +131,7 @@ class PosSession(models.Model):
 
     @api.model
     def _load_pos_data_models(self, config_id):
-        return ['pos.config', 'pos.order', 'pos.order.line', 'pos.pack.operation.lot', 'pos.payment', 'pos.payment.method', 'pos.printer',
+        return ['pos.config', 'pos.preset', 'resource.calendar.attendance', 'pos.order', 'pos.order.line', 'pos.pack.operation.lot', 'pos.payment', 'pos.payment.method', 'pos.printer',
             'pos.category', 'pos.bill', 'res.company', 'account.tax', 'account.tax.group', 'product.template', 'product.product', 'product.attribute', 'product.attribute.custom.value',
             'product.template.attribute.line', 'product.template.attribute.value', 'product.combo', 'product.combo.item', 'product.packaging', 'res.users', 'res.partner',
             'decimal.precision', 'uom.uom', 'uom.category', 'res.country', 'res.country.state', 'res.lang', 'product.pricelist', 'product.pricelist.item', 'product.category',
@@ -935,11 +935,12 @@ class PosSession(models.Model):
                         combine_receivables_pay_later[payment_method] = self._update_amounts(combine_receivables_pay_later[payment_method], {'amount': amount}, date)
 
             if not order_is_invoiced:
-                base_lines = order._prepare_tax_base_line_values()
+                base_lines = order.with_context(linked_to_pos=True)._prepare_tax_base_line_values()
                 AccountTax._add_tax_details_in_base_lines(base_lines, order.company_id)
                 AccountTax._round_base_lines_tax_details(base_lines, order.company_id)
                 AccountTax._add_accounting_data_in_base_lines_tax_details(base_lines, order.company_id)
                 tax_results = AccountTax._prepare_tax_lines(base_lines, order.company_id)
+                total_amount_currency = 0.0
                 for base_line, to_update in tax_results['base_lines_to_update']:
                     # Combine sales/refund lines
                     sale_key = (
@@ -952,6 +953,7 @@ class PosSession(models.Model):
                         tuple(base_line['tax_tag_ids'].ids),
                         base_line['product_id'].id if self.config_id.is_closing_entry_by_product else False,
                     )
+                    total_amount_currency += to_update['amount_currency']
                     sales[sale_key] = self._update_amounts(
                         sales[sale_key],
                         {
@@ -970,6 +972,7 @@ class PosSession(models.Model):
                         tax_line['tax_repartition_line_id'],
                         tuple(tax_line['tax_tag_ids'][0][2]),
                     )
+                    total_amount_currency += tax_line['amount_currency']
                     taxes[tax_key] = self._update_amounts(
                         taxes[tax_key],
                         {
@@ -981,7 +984,7 @@ class PosSession(models.Model):
                     )
 
                 if self.config_id.cash_rounding:
-                    diff = order.amount_paid - order.amount_total
+                    diff = order.amount_paid + total_amount_currency
                     rounding_difference = self._update_amounts(rounding_difference, {'amount': diff}, order.date_order)
 
                 # Increasing current partner's customer_rank

@@ -16,6 +16,7 @@ class WebsiteSaleProductConfiguratorController(SaleProductConfiguratorController
         type='jsonrpc',
         auth='public',
         website=True,
+        readonly=True,
     )
     def website_sale_should_show_product_configurator(
         self, product_template_id, ptav_ids, is_product_configured
@@ -49,6 +50,7 @@ class WebsiteSaleProductConfiguratorController(SaleProductConfiguratorController
         type='jsonrpc',
         auth='public',
         website=True,
+        readonly=True,
     )
     def website_sale_product_configurator_get_values(self, *args, **kwargs):
         self._populate_currency_and_pricelist(kwargs)
@@ -70,6 +72,7 @@ class WebsiteSaleProductConfiguratorController(SaleProductConfiguratorController
         auth='public',
         methods=['POST'],
         website=True,
+        readonly=True,
     )
     def website_sale_product_configurator_update_combination(self, *args, **kwargs):
         self._populate_currency_and_pricelist(kwargs)
@@ -80,6 +83,7 @@ class WebsiteSaleProductConfiguratorController(SaleProductConfiguratorController
         type='jsonrpc',
         auth='public',
         website=True,
+        readonly=True,
     )
     def website_sale_product_configurator_get_optional_products(self, *args, **kwargs):
         self._populate_currency_and_pricelist(kwargs)
@@ -250,11 +254,11 @@ class WebsiteSaleProductConfiguratorController(SaleProductConfiguratorController
         if pricelist_rule._show_discount_on_shop():
             pricelist_base_price = self._apply_taxes_to_price(
                 pricelist_rule._compute_price_before_discount(
-                    product_or_template,
-                    1.0,
-                    product_or_template.uom_id,
-                    date,
-                    currency,
+                    product=product_or_template,
+                    quantity=1.0,
+                    uom=product_or_template.uom_id,
+                    date=date,
+                    currency=currency,
                 ),
                 product_or_template,
                 currency,

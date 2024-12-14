@@ -7,7 +7,6 @@ import { useService } from "@web/core/utils/hooks";
 import { useAsyncLockedMethod } from "@point_of_sale/app/hooks/hooks";
 import { patch } from "@web/core/utils/patch";
 import { BillScreen } from "@pos_restaurant/app/screens/bill_screen/bill_screen";
-import { TextInputPopup } from "@point_of_sale/app/components/popups/text_input_popup/text_input_popup";
 
 patch(ControlButtons.prototype, {
     setup() {
@@ -19,8 +18,7 @@ patch(ControlButtons.prototype, {
     async clickPrintBill() {
         // Need to await to have the result in case of automatic skip screen.
         (await this.printer.print(OrderReceipt, {
-            data: this.pos.orderExportForPrinting(this.pos.getOrder()),
-            formatCurrency: this.env.utils.formatCurrency,
+            order: this.pos.getOrder(),
         })) || this.dialog.add(BillScreen);
     },
     clickTableGuests() {
@@ -65,30 +63,6 @@ patch(ControlButtons.prototype, {
             },
             { once: true }
         );
-    },
-    clickTakeAway() {
-        const isTakeAway = !this.currentOrder.takeaway;
-        const defaultFp = this.pos.config?.default_fiscal_position_id ?? false;
-        const takeawayFp = this.pos.config.takeaway_fp_id;
-
-        this.currentOrder.takeaway = isTakeAway;
-        this.currentOrder.fiscal_position_id = isTakeAway ? takeawayFp : defaultFp;
-    },
-    editFloatingOrderName(order) {
-        this.dialog.add(TextInputPopup, {
-            title: _t("Edit Order Name"),
-            placeholder: _t("18:45 John 4P"),
-            startingValue: order.floating_order_name || "",
-            getPayload: async (newName) => {
-                if (typeof order.id == "number") {
-                    this.pos.data.write("pos.order", [order.id], {
-                        floating_order_name: newName,
-                    });
-                } else {
-                    order.floating_order_name = newName;
-                }
-            },
-        });
     },
 });
 patch(ControlButtons, {

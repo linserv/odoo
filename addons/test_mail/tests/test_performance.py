@@ -1426,10 +1426,10 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                             ],
                             "mail.thread": self._filter_threads_fields(
                                 {
+                                    "display_name": "Test",
                                     "id": record.id,
                                     "model": "mail.test.simple",
                                     "module_icon": "/base/static/description/icon.png",
-                                    "name": "Test",
                                     "selfFollower": follower_1.id,
                                 },
                             ),
@@ -1529,21 +1529,21 @@ class TestMessageToStorePerformance(BaseMailPerformance):
                             ],
                             "mail.thread": self._filter_threads_fields(
                                 {
+                                    "display_name": "Test",
                                     "id": record.id,
                                     "model": "mail.test.simple",
                                     "module_icon": "/base/static/description/icon.png",
-                                    "name": "Test",
                                     "selfFollower": follower_2.id,
                                 },
                             ),
                             "res.partner": self._filter_partners_fields(
                                 {
-                                    "id": self.user_test_inbox_2.partner_id.id,
-                                    "name": "Jeannette Testouille",
-                                },
-                                {
                                     "id": self.user_test_inbox.partner_id.id,
                                     "name": "Paulette Testouille",
+                                },
+                                {
+                                    "id": self.user_test_inbox_2.partner_id.id,
+                                    "name": "Jeannette Testouille",
                                 },
                                 {
                                     "id": self.env.user.partner_id.id,
@@ -1564,7 +1564,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
         self._reset_bus()
         self.env.invalidate_all()
         with self.assertBus(get_params=get_bus_params):
-            with self.assertQueryCount(20):
+            with self.assertQueryCount(19):
                 record.message_post(
                     body=Markup("<p>Test Post Performances with multiple inbox ping!</p>"),
                     message_type="comment",

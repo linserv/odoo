@@ -2,7 +2,6 @@ import * as Chrome from "@point_of_sale/../tests/pos/tours/utils/chrome_util";
 import * as Dialog from "@point_of_sale/../tests/generic_helpers/dialog_util";
 import * as ProductScreen from "@point_of_sale/../tests/pos/tours/utils/product_screen_util";
 import * as PaymentScreen from "@point_of_sale/../tests/pos/tours/utils/payment_screen_util";
-import * as ReceiptScreen from "@point_of_sale/../tests/pos/tours/utils/receipt_screen_util";
 import { registry } from "@web/core/registry";
 import * as OfflineUtil from "@point_of_sale/../tests/generic_helpers/offline_util";
 
@@ -92,7 +91,7 @@ registry.category("web_tour.tours").add("PaymentScreenRoundingUp", {
             PaymentScreen.totalIs("2.00"),
             PaymentScreen.clickPaymentMethod("Cash", true, { remaining: "0.0" }),
 
-            Chrome.clickMenuOption("Orders"),
+            Chrome.clickOrders(),
             Chrome.createFloatingOrder(),
 
             ProductScreen.addOrderline("Product Test", "-1"),
@@ -114,7 +113,7 @@ registry.category("web_tour.tours").add("PaymentScreenRoundingDown", {
             PaymentScreen.totalIs("1.95"),
             PaymentScreen.clickPaymentMethod("Cash", true, { remaining: "0.0" }),
 
-            Chrome.clickMenuOption("Orders"),
+            Chrome.clickOrders(),
             Chrome.createFloatingOrder(),
 
             ProductScreen.addOrderline("Product Test", "-1"),
@@ -136,7 +135,7 @@ registry.category("web_tour.tours").add("PaymentScreenRoundingHalfUp", {
             PaymentScreen.totalIs("1.00"),
             PaymentScreen.clickPaymentMethod("Cash", true, { remaining: "0.0" }),
 
-            Chrome.clickMenuOption("Orders"),
+            Chrome.clickOrders(),
             Chrome.createFloatingOrder(),
 
             ProductScreen.addOrderline("Product Test 1.25", "1"),
@@ -145,7 +144,7 @@ registry.category("web_tour.tours").add("PaymentScreenRoundingHalfUp", {
             PaymentScreen.totalIs("1.5"),
             PaymentScreen.clickPaymentMethod("Cash", true, { remaining: "0.0" }),
 
-            Chrome.clickMenuOption("Orders"),
+            Chrome.clickOrders(),
             Chrome.createFloatingOrder(),
 
             ProductScreen.addOrderline("Product Test 1.4", "1"),
@@ -154,7 +153,7 @@ registry.category("web_tour.tours").add("PaymentScreenRoundingHalfUp", {
             PaymentScreen.totalIs("1.5"),
             PaymentScreen.clickPaymentMethod("Cash", true, { remaining: "0.0" }),
 
-            Chrome.clickMenuOption("Orders"),
+            Chrome.clickOrders(),
             Chrome.createFloatingOrder(),
 
             ProductScreen.addOrderline("Product Test 1.2", "1"),
@@ -166,46 +165,6 @@ registry.category("web_tour.tours").add("PaymentScreenRoundingHalfUp", {
             PaymentScreen.fillPaymentLineAmountMobile("Cash", "2"),
 
             PaymentScreen.changeIs("1.0"),
-        ].flat(),
-});
-
-registry.category("web_tour.tours").add("PaymentScreenRoundingHalfUpCashAndBank", {
-    steps: () =>
-        [
-            Chrome.startPoS(),
-            Dialog.confirm("Open Register"),
-            ProductScreen.addOrderline("Product Test 40", "1"),
-            ProductScreen.clickPartnerButton(),
-            ProductScreen.clickCustomer("Partner Test 1"),
-            ProductScreen.clickPayButton(),
-
-            PaymentScreen.totalIs("40.00"),
-            PaymentScreen.clickPaymentMethod("Bank"),
-            PaymentScreen.clickNumpad("3 8"),
-            PaymentScreen.fillPaymentLineAmountMobile("Bank", "38"),
-            PaymentScreen.remainingIs("2.0"),
-            PaymentScreen.clickPaymentMethod("Cash", true, { remaining: "0.0" }),
-
-            PaymentScreen.clickInvoiceButton(),
-            PaymentScreen.clickValidate(),
-            ReceiptScreen.receiptIsThere(),
-            ReceiptScreen.clickNextOrder(),
-
-            ProductScreen.addOrderline("Product Test 41", "1"),
-            ProductScreen.clickPartnerButton(),
-            ProductScreen.clickCustomer("Partner Test 1"),
-            ProductScreen.clickPayButton(),
-
-            PaymentScreen.totalIs("41.00"),
-            PaymentScreen.clickPaymentMethod("Bank"),
-            PaymentScreen.clickNumpad("3 8"),
-            PaymentScreen.fillPaymentLineAmountMobile("Bank", "38"),
-            PaymentScreen.remainingIs("3.0"),
-            PaymentScreen.clickPaymentMethod("Cash", true, { remaining: "0.0" }),
-
-            PaymentScreen.clickInvoiceButton(),
-            PaymentScreen.clickValidate(),
-            ReceiptScreen.receiptIsThere(),
         ].flat(),
 });
 

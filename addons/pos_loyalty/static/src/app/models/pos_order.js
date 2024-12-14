@@ -146,20 +146,6 @@ patch(PosOrder.prototype, {
             super.waitForPushOrder(...arguments)
         );
     },
-    /**
-     * Add additional information for our ticket, such as new coupons and loyalty point gains.
-     *
-     * @override
-     */
-    exportForPrinting(baseUrl, headerData) {
-        const result = super.exportForPrinting(...arguments);
-        if (this.getPartner()) {
-            result.loyaltyStats = this.getLoyaltyPoints();
-            result.partner = this.getPartner();
-        }
-        result.new_coupon_info = this.new_coupon_info;
-        return result;
-    },
     //@override
     _getIgnoredProductIdsTotalDiscount() {
         const productIds = super._getIgnoredProductIdsTotalDiscount(...arguments);
@@ -1004,7 +990,8 @@ patch(PosOrder.prototype, {
                             lineRewardApplicableProductsIds.has(product) &&
                             applicableProductIds.has(product)
                     ) &&
-                        lineReward.reward_type === "discount")
+                        lineReward.reward_type === "discount" &&
+                        lineReward.discount_mode != "percent")
                 ) {
                     linesToDiscount.push(line);
                 }
@@ -1031,26 +1018,19 @@ patch(PosOrder.prototype, {
             if (!discountedLines.length) {
                 continue;
             }
-            const commonLines = linesToDiscount.filter((line) => discountedLines.includes(line));
-            const nonCommonLines = discountedLines.filter(
-                (line) => !linesToDiscount.includes(line)
-            );
-            const discountedAmounts = lines.reduce((map, line) => {
-                map[line.tax_ids.map((t) => t.id)];
-                return map;
-            }, {});
-            const process = (line) => {
-                const key = line.tax_ids.map((t) => t.id);
-                if (!discountedAmounts[key] || line.reward_id) {
-                    return;
+            if (lineReward.discount_mode === "percent") {
+                const discount = lineReward.discount / 100;
+                for (const line of discountedLines) {
+                    if (line.reward_id) {
+                        continue;
+                    }
+                    if (lineReward.discount_applicability === "cheapest") {
+                        remainingAmountPerLine[line.uuid] *= 1 - discount / line.getQuantity();
+                    } else {
+                        remainingAmountPerLine[line.uuid] *= 1 - discount;
+                    }
                 }
-                const remaining = remainingAmountPerLine[line.uuid];
-                const consumed = Math.min(remaining, discountedAmounts[key]);
-                discountedAmounts[key] -= consumed;
-                remainingAmountPerLine[line.uuid] -= consumed;
-            };
-            nonCommonLines.forEach(process);
-            commonLines.forEach(process);
+            }
         }
 
         let discountable = 0;

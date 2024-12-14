@@ -3,7 +3,7 @@ import { useService } from "@web/core/utils/hooks";
 import { useBarcodeReader } from "@point_of_sale/app/hooks/barcode_reader_hook";
 import { _t } from "@web/core/l10n/translation";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
-import { Component, onMounted, useEffect, useState, reactive, onWillRender } from "@odoo/owl";
+import { Component, onMounted, useEffect, useState, onWillRender, onWillUnmount } from "@odoo/owl";
 import { CategorySelector } from "@point_of_sale/app/components/category_selector/category_selector";
 import { Input } from "@point_of_sale/app/components/inputs/input/input";
 import {
@@ -14,7 +14,6 @@ import {
 } from "@point_of_sale/app/components/numpad/numpad";
 import { ActionpadWidget } from "@point_of_sale/app/screens/product_screen/action_pad/action_pad";
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
-import { OrderWidget } from "@point_of_sale/app/components/order_widget/order_widget";
 import { OrderSummary } from "@point_of_sale/app/screens/product_screen/order_summary/order_summary";
 import { ProductInfoPopup } from "@point_of_sale/app/components/popups/product_info_popup/product_info_popup";
 import { ProductCard } from "@point_of_sale/app/components/product_card/product_card";
@@ -24,13 +23,14 @@ import {
 } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
 import { CameraBarcodeScanner } from "@point_of_sale/app/screens/product_screen/camera_barcode_scanner";
 
+const { DateTime } = luxon;
+
 export class ProductScreen extends Component {
     static template = "point_of_sale.ProductScreen";
     static components = {
         ActionpadWidget,
         Numpad,
         Orderline,
-        OrderWidget,
         CategorySelector,
         Input,
         ControlButtons,
@@ -65,6 +65,21 @@ export class ProductScreen extends Component {
             // If its a shared order it can be paid from another POS
             if (this.currentOrder?.state !== "draft") {
                 this.pos.addNewOrder();
+            }
+        });
+
+        onWillUnmount(async () => {
+            if (
+                this.pos.config.use_presets &&
+                this.currentOrder &&
+                this.currentOrder.preset_id &&
+                this.currentOrder.preset_time
+            ) {
+                const orderDateTime = DateTime.fromSQL(this.currentOrder.preset_time);
+                if (orderDateTime > DateTime.now()) {
+                    this.pos.addPendingOrder([this.currentOrder.id]);
+                    await this.pos.syncAllOrders();
+                }
             }
         });
 
@@ -104,6 +119,9 @@ export class ProductScreen extends Component {
             "-": "o_colorlist_item_color_transparent_3",
         };
 
+        const defaultLastRowValues =
+            DEFAULT_LAST_ROW.map((button) => button.value) + [BACKSPACE.value];
+
         return getButtons(DEFAULT_LAST_ROW, [
             { value: "quantity", text: _t("Qty") },
             { value: "discount", text: _t("%"), disabled: !this.pos.config.manual_discount },
@@ -116,6 +134,7 @@ export class ProductScreen extends Component {
         ]).map((button) => ({
             ...button,
             class: `
+                ${defaultLastRowValues.includes(button.value) ? "border-0" : ""}
                 ${colorClassMap[button.value] || ""}
                 ${this.pos.numpadMode === button.value ? "active" : ""}
                 ${button.value === "quantity" ? "numpad-qty rounded-0 rounded-top mb-0" : ""}
@@ -348,11 +367,11 @@ export class ProductScreen extends Component {
     }
 
     async addProductToOrder(product) {
-        await reactive(this.pos).addLineToCurrentOrder({ product_tmpl_id: product }, {});
+        await this.pos.addLineToCurrentOrder({ product_tmpl_id: product }, {});
     }
 
     async onProductInfoClick(productTemplate) {
-        const info = await reactive(this.pos).getProductInfo(productTemplate, 1);
+        const info = await this.pos.getProductInfo(productTemplate, 1);
         this.dialog.add(ProductInfoPopup, { info: info, productTemplate: productTemplate });
     }
 }

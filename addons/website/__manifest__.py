@@ -163,6 +163,7 @@
         'views/snippets/s_quadrant.xml',
         'views/snippets/s_cta_card.xml',
         'views/snippets/s_image_frame.xml',
+        'views/snippets/s_cta_mobile.xml',
         'views/new_page_template_templates.xml',
         'views/website_views.xml',
         'views/website_pages_views.xml',
@@ -292,7 +293,8 @@
         'web_editor.assets_wysiwyg': [
             'website/static/src/js/editor/editor.js',
             'website/static/src/xml/web_editor.xml',
-            'website/static/src/js/editor/add_snippet_dialog.js'
+            'website/static/src/js/editor/add_snippet_dialog.js',
+            'website/static/src/js/editor/widget_link.js',
         ],
         'website.assets_wysiwyg': [
             ('include', 'web._assets_helpers'),

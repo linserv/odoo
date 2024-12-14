@@ -2,11 +2,17 @@ import { busService } from "@bus/services/bus_service";
 
 import { after, expect, registerDebugInfo } from "@odoo/hoot";
 import { Deferred } from "@odoo/hoot-mock";
-import { MockServer, defineModels, webModels } from "@web/../tests/web_test_helpers";
+import {
+    MockServer,
+    defineModels,
+    patchWithCleanup,
+    webModels,
+} from "@web/../tests/web_test_helpers";
 import { BusBus } from "./mock_server/mock_models/bus_bus";
 import { IrWebSocket } from "./mock_server/mock_models/ir_websocket";
 
 import { registry } from "@web/core/registry";
+import { deepEqual } from "@web/core/utils/objects";
 import { patch } from "@web/core/utils/patch";
 import { patchWebsocketWorkerWithCleanup } from "./mock_websocket";
 
@@ -55,7 +61,7 @@ viewsRegistry.category("form").add(
 
 // should be enough to decide whether or not notifications/channel
 // subscriptions... are received.
-const TIMEOUT = 500;
+const TIMEOUT = 2000;
 
 /**
  * @param {string} eventName
@@ -171,14 +177,21 @@ function _waitNotification(notification) {
     const [env, type, payload, { received = true } = {}] = notification;
     const notificationDeferred = new Deferred();
     const failTimeout = setTimeout(() => {
-        expect(!received).toBe(true, {
-            message: `Notification of type "${type}" with payload ${payload} not received.`,
-        });
+        const msgParts = [`Notification of type "${type}"`];
+        if (payload) {
+            msgParts.push(`with payload ${JSON.stringify(payload)}`);
+        }
+        msgParts.push("not received.");
+        expect(!received).toBe(true, { message: msgParts.join(" ") });
         env.services["bus_service"].unsubscribe(type, callback);
-        notificationDeferred.resolve();
+        if (received) {
+            notificationDeferred.reject(new Error(msgParts.join(" ")));
+        } else {
+            notificationDeferred.resolve();
+        }
     }, TIMEOUT);
     const callback = (notifPayload) => {
-        if (payload === undefined || JSON.stringify(notifPayload) === JSON.stringify(payload)) {
+        if (payload === undefined || deepEqual(notifPayload, payload)) {
             expect(received).toBe(true, {
                 message: `Notification of type "${type}" with payload ${JSON.stringify(
                     notifPayload
@@ -236,4 +249,30 @@ export function waitForWorkerEvent(targetAction) {
     });
     after(unpatch);
     return evReceivedDeferred;
+}
+
+/**
+ * Lock the bus service start process until the returned function is called.
+ * This is useful in tests where an environment is mounted and the bus service
+ * is started immediately. However, some tests need to wait in order to setup
+ * their listeners.
+ *
+ * @returns {Function} A function that can be used to unlock the bus service
+ * start process.
+ */
+export function lockBusServiceStart() {
+    const unlockDeferred = new Deferred();
+    patchWithCleanup(busService, {
+        start() {
+            const API = super.start(...arguments);
+            patch(API, {
+                async start() {
+                    await unlockDeferred;
+                    return super.start(...arguments);
+                },
+            });
+            return API;
+        },
+    });
+    return () => unlockDeferred.resolve();
 }

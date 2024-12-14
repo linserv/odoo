@@ -545,7 +545,6 @@ const isValidFieldValue = (record, fieldDef) => {
         case "binary":
         case "char":
         case "html":
-        case "json":
         case "text": {
             return typeof value === "string";
         }
@@ -565,6 +564,8 @@ const isValidFieldValue = (record, fieldDef) => {
         case "integer": {
             return Number.isInteger(value);
         }
+        case "json":
+            return typeof value === "string" || isObject(value);
         case "many2many":
         case "one2many": {
             return (
@@ -1269,6 +1270,7 @@ export class Model extends Array {
                     model._computes = { ...previous._computes };
                     model._fetch = previous._fetch;
                     model._fields = { ...previous._fields };
+                    model._fold_name = previous._fold_name;
                     model._inherit = previous._inherit;
                     model._name = previous._name;
                     model._onChanges = { ...previous._onChanges };
@@ -1325,6 +1327,13 @@ export class Model extends Array {
     }
     static set _filters(value) {
         this.definition._filters = value;
+    }
+
+    static get _fold_name() {
+        return this.definition._fold_name;
+    }
+    static set _fold_name(value) {
+        this.definition._fold_name = value;
     }
 
     static get _inherit() {
@@ -1410,6 +1419,8 @@ export class Model extends Array {
     _fields = {};
     /** @type {Record<string, any>[]} */
     _filters = [];
+    /** @type {string} */
+    _fold_name = "fold";
     /** @type {string | null} */
     _inherit = null;
     /** @type {string} */
@@ -1461,6 +1472,7 @@ export class Model extends Array {
             this._computes = modelInstance._computes;
             this._fetch = modelInstance._fetch;
             this._fields = modelInstance._fields;
+            this._fold_name = modelInstance._fold_name;
             this._inherit = modelInstance._inherit;
             this._name = modelInstance._name;
             this._onChanges = modelInstance._onChanges;
@@ -1966,6 +1978,10 @@ export class Model extends Array {
                     const relatedRecord = this.env[relation].find(({ id }) => id === value);
                     if (relatedRecord) {
                         group[gbField] = [value, relatedRecord.display_name];
+                        const _fold_name = this.env[relation]._fold_name;
+                        if (_fold_name in this.env[relation]._fields) {
+                            group.__fold = relatedRecord[_fold_name] || false;
+                        }
                     } else {
                         group[gbField] = false;
                     }

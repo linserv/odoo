@@ -348,31 +348,24 @@ class ChatbotScriptStep(models.Model):
 
             # next, add the human_operator to the channel and post a "Operator joined the channel" notification
             discuss_channel.with_user(human_operator).sudo().add_members(human_operator.partner_id.ids, open_chat_window=True)
-
-            # finally, rename the channel to include the operator's name
-            discuss_channel.sudo().name = ' '.join([
-                self.env.user.display_name if not self.env.user._is_public() else discuss_channel.anonymous_name,
-                human_operator.livechat_username if human_operator.livechat_username else human_operator.name
-            ])
-
-            discuss_channel._broadcast(human_operator.partner_id.ids)
+            # sudo - discuss.channel: let the chat bot proceed to the forward step (change channel operator, add human operator
+            # as member, remove bot from channel, rename channel and finally broadcast the channel to the new operator).
+            channel_sudo = discuss_channel.sudo()
+            channel_sudo.livechat_operator_id = human_operator.partner_id
+            if bot_member := channel_sudo.channel_member_ids.filtered(
+                lambda m: m.partner_id == self.chatbot_script_id.operator_partner_id
+            ):
+                channel_sudo._action_unfollow(partner=bot_member.partner_id)
+            channel_sudo.name = (human_operator.livechat_username or human_operator.name,)
+            channel_sudo._broadcast(human_operator.partner_id.ids)
             discuss_channel.channel_pin(pinned=True)
 
         return posted_message
 
-    def _to_store(self, store: Store, /, *, fields=None):
-        if fields is None:
-            fields = ["answer_ids", "message", "type", "is_last"]
-        for step in self:
-            data = step._read_format(
-                [f for f in fields if f not in {"answer_ids", "message", "type", "is_last"}], load=False
-            )[0]
-            if "answer_ids" in fields:
-                data["answers"] = Store.many(step.answer_ids)
-            if "message" in fields:
-                data["message"] = plaintext2html(step.message) if step.message else False
-            if "type" in fields:
-                data["type"] = step.step_type
-            if "is_last" in fields:
-                data["isLast"] = step._is_last_step()
-            store.add("chatbot.script.step", data)
+    def _to_store_defaults(self):
+        return [
+            Store.Many("answer_ids", rename="answers"),
+            Store.Attr("is_last", lambda step: step._is_last_step()),
+            Store.Attr("message", lambda s: plaintext2html(s.message) if s.message else False),
+            Store.Attr("step_type", rename="type"),
+        ]

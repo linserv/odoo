@@ -8,7 +8,6 @@ import { ActionpadWidget } from "@point_of_sale/app/screens/product_screen/actio
 import { BackButton } from "@point_of_sale/app/screens/product_screen/action_pad/back_button/back_button";
 import { InvoiceButton } from "@point_of_sale/app/screens/ticket_screen/invoice_button/invoice_button";
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
-import { OrderWidget } from "@point_of_sale/app/components/order_widget/order_widget";
 import { CenteredIcon } from "@point_of_sale/app/components/centered_icon/centered_icon";
 import { SearchBar } from "@point_of_sale/app/screens/ticket_screen/search_bar/search_bar";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
@@ -23,6 +22,7 @@ import { PosOrderLineRefund } from "@point_of_sale/app/models/pos_order_line_ref
 import { fuzzyLookup } from "@web/core/utils/search";
 import { parseUTCString } from "@point_of_sale/utils";
 import { useTrackedAsync } from "@point_of_sale/app/hooks/hooks";
+import { OrderDisplay } from "@point_of_sale/app/components/order_display/order_display";
 
 const NBR_BY_PAGE = 30;
 
@@ -33,7 +33,7 @@ export class TicketScreen extends Component {
         ActionpadWidget,
         InvoiceButton,
         Orderline,
-        OrderWidget,
+        OrderDisplay,
         CenteredIcon,
         SearchBar,
         Numpad,
@@ -73,6 +73,7 @@ export class TicketScreen extends Component {
             search: this.pos.getDefaultSearchDetails(),
             selectedOrder: this.pos.getOrder() || null,
             selectedOrderlineIds: {},
+            selectedPreset: null,
         });
         Object.assign(this.state, this.props.stateOverride || {});
 
@@ -84,8 +85,22 @@ export class TicketScreen extends Component {
             this.onFilterSelected(this.state.filter);
         });
     }
+    onPresetSelected(preset) {
+        if (this.state.selectedPreset === preset) {
+            this.state.selectedPreset = null;
+        } else {
+            this.state.selectedPreset = preset;
+            const firstFilteredOrder = this.getFilteredOrderList()[0];
+
+            if (firstFilteredOrder) {
+                this.onClickOrder(firstFilteredOrder);
+            }
+        }
+    }
     async onFilterSelected(selectedFilter) {
         this.state.filter = selectedFilter;
+        this.pos.ticketScreenState.totalCount = 0;
+        this.pos.ticketScreenState.offsetByDomain = {};
 
         if (this.state.filter == "SYNCED") {
             await this._fetchSyncedOrders();
@@ -120,13 +135,17 @@ export class TicketScreen extends Component {
     async onNextPage() {
         if (this.state.page < this.getNbrPages()) {
             this.state.page += 1;
-            await this._fetchSyncedOrders();
+            if (this.state.filter == "SYNCED") {
+                await this._fetchSyncedOrders();
+            }
         }
     }
     async onPrevPage() {
         if (this.state.page > 1) {
             this.state.page -= 1;
-            await this._fetchSyncedOrders();
+            if (this.state.filter == "SYNCED") {
+                await this._fetchSyncedOrders();
+            }
         }
     }
     async onInvoiceOrder(orderId) {
@@ -228,7 +247,6 @@ export class TicketScreen extends Component {
                 ? this.props.destinationOrder
                 : this._getEmptyOrder(partner);
 
-        destinationOrder.takeaway = order.takeaway;
         // Add orderline for each toRefundDetail to the destinationOrder.
         const lines = [];
         for (const refundDetail of this._getRefundableDetails(partner, order)) {
@@ -330,6 +348,10 @@ export class TicketScreen extends Component {
             orders = fuzzyLookup(this.state.search.searchTerm, orders, repr);
         }
 
+        if (this.state.selectedPreset) {
+            orders = orders.filter((order) => order.preset_id?.id === this.state.selectedPreset.id);
+        }
+
         const sortOrders = (orders, ascending = false) =>
             orders.sort((a, b) => {
                 const dateA = parseUTCString(a.date_order, "yyyy-MM-dd HH:mm:ss");
@@ -350,7 +372,11 @@ export class TicketScreen extends Component {
                 this.state.page * NBR_BY_PAGE
             );
         } else {
-            return sortOrders(orders, true);
+            this.pos.ticketScreenState.totalCount = orders.length;
+            return sortOrders(orders, true).slice(
+                (this.state.page - 1) * NBR_BY_PAGE,
+                this.state.page * NBR_BY_PAGE
+            );
         }
     }
     getDate(order) {
@@ -430,9 +456,12 @@ export class TicketScreen extends Component {
     }
     getPageNumber() {
         if (!this.pos.ticketScreenState.totalCount) {
-            return `1/1`;
+            return `0/0`;
         } else {
-            return `${this.state.page}/${this.getNbrPages()}`;
+            return `${(this.state.page - 1) * NBR_BY_PAGE + 1}-${Math.min(
+                this.state.page * NBR_BY_PAGE,
+                this.pos.ticketScreenState.totalCount
+            )} / ${this.pos.ticketScreenState.totalCount}`;
         }
     }
     getHasItemsToRefund() {
@@ -565,24 +594,24 @@ export class TicketScreen extends Component {
         return orderStates;
     }
     /**
-     * @returns {Record<string, { repr: (order: models.Order) => string, displayName: string, modelField: string }>}
+     * @returns {Record<string, { repr: (order: models.Order) => string, displayName: string, modelFields: Array }>}
      */
     _getSearchFields() {
         const fields = {
-            TRACKING_NUMBER: {
-                repr: (order) => order.tracking_number,
-                displayName: _t("Order Number"),
-                modelField: "tracking_number",
+            REFERENCE: {
+                repr: (order) => order.getName(),
+                displayName: _t("Reference"),
+                modelFields: ["tracking_number", "floating_order_name"],
             },
             RECEIPT_NUMBER: {
                 repr: (order) => order.pos_reference,
                 displayName: _t("Receipt Number"),
-                modelField: "pos_reference",
+                modelFields: ["pos_reference"],
             },
             DATE: {
                 repr: (order) => this.getDate(order),
                 displayName: _t("Date"),
-                modelField: "date_order",
+                modelFields: ["date_order"],
                 formatSearch: (searchTerm) => {
                     const includesTime = searchTerm.includes(":");
                     let parsedDateTime;
@@ -601,7 +630,7 @@ export class TicketScreen extends Component {
             PARTNER: {
                 repr: (order) => order.getPartnerName(),
                 displayName: _t("Customer"),
-                modelField: "partner_id.complete_name",
+                modelFields: ["partner_id.complete_name"],
             },
         };
 
@@ -609,7 +638,7 @@ export class TicketScreen extends Component {
             fields.CARDHOLDER_NAME = {
                 repr: (order) => order.getCardHolderName(),
                 displayName: _t("Cardholder Name"),
-                modelField: "payment_ids.cardholder_name",
+                modelFields: ["payment_ids.cardholder_name"],
             };
         }
 
@@ -654,11 +683,18 @@ export class TicketScreen extends Component {
             return [];
         }
         const searchField = this._getSearchFields()[fieldName];
-        if (searchField && searchField.modelField && searchField.modelField !== null) {
+        if (searchField && searchField.modelFields && searchField.modelFields.length > 0) {
             if (searchField.formatSearch) {
                 searchTerm = searchField.formatSearch(searchTerm);
             }
-            return [[searchField.modelField, "ilike", `%${searchTerm}%`]];
+            const domain = [];
+            for (const modelField of searchField.modelFields) {
+                domain.unshift([modelField, "ilike", `%${searchTerm}%`]);
+                if (domain.length > 1) {
+                    domain.unshift("|");
+                }
+            }
+            return domain;
         } else {
             return [];
         }

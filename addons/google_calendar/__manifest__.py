@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 {
@@ -22,9 +21,6 @@
         ],
         'web.qunit_suite_tests': [
             'google_calendar/static/tests/**/*',
-        ],
-        'web.qunit_mobile_suite_tests': [
-            'google_calendar/static/tests/google_calendar_mock_server.js',
         ],
     },
     'license': 'LGPL-3',

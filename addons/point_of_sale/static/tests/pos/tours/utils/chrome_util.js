@@ -42,7 +42,7 @@ export function isSyncStatusConnected() {
 export function clickPlanButton() {
     return {
         content: "go back to the floor screen",
-        trigger: ".pos-leftheader .back-button:not(:has(.btn-primary))",
+        trigger: ".pos-leftheader .table-button",
         run: "click",
     };
 }
@@ -71,4 +71,46 @@ export function fillTextArea(target, value) {
 }
 export function createFloatingOrder() {
     return { trigger: ".pos-leftheader .list-plus-btn", run: "click" };
+}
+
+function _hasFloatingOrder(name, yes) {
+    const negateIfNecessary = (trigger) => (yes ? trigger : negate(trigger));
+    return [
+        {
+            isActive: ["desktop"],
+            trigger: negateIfNecessary(
+                `.pos-topheader .floating-order-container:contains('${name}')`
+            ),
+        },
+        {
+            isActive: ["mobile"],
+            trigger: ".pos-leftheader button.fa-caret-down",
+            run: "click",
+        },
+        {
+            isActive: ["mobile"],
+            trigger: negateIfNecessary(
+                `.modal-header:contains(Choose an order) ~ .modal-body .floating-order-container:contains('${name}')`
+            ),
+        },
+        {
+            isActive: ["mobile"],
+            trigger: ".oi-arrow-left",
+            run: "click",
+        },
+    ];
+}
+
+export function hasFloatingOrder(name) {
+    return _hasFloatingOrder(name, true);
+}
+
+export function noFloatingOrder(name) {
+    return _hasFloatingOrder(name, false);
+}
+export function clickOrders() {
+    return { trigger: ".pos-leftheader .orders-button", run: "click" };
+}
+export function clickRegister() {
+    return { trigger: ".pos-leftheader .register-label", run: "click" };
 }

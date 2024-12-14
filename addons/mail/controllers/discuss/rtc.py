@@ -61,7 +61,7 @@ class RtcController(http.Controller):
 
     @http.route("/mail/rtc/channel/join_call", methods=["POST"], type="jsonrpc", auth="public")
     @add_guest_to_context
-    def channel_call_join(self, channel_id, check_rtc_session_ids=None):
+    def channel_call_join(self, channel_id, check_rtc_session_ids=None, camera=False):
         """Joins the RTC call of a channel if the user is a member of that channel
         :param int channel_id: id of the channel to join
         """
@@ -73,20 +73,21 @@ class RtcController(http.Controller):
             raise NotFound()
         store = Store()
         # sudo: discuss.channel.rtc.session - member of current user can join call
-        member.sudo()._rtc_join_call(store, check_rtc_session_ids=check_rtc_session_ids)
+        member.sudo()._rtc_join_call(store, check_rtc_session_ids=check_rtc_session_ids, camera=camera)
         return store.get_result()
 
     @http.route("/mail/rtc/channel/leave_call", methods=["POST"], type="jsonrpc", auth="public")
     @add_guest_to_context
-    def channel_call_leave(self, channel_id):
+    def channel_call_leave(self, channel_id, session_id=None):
         """Disconnects the current user from a rtc call and clears any invitation sent to that user on this channel
         :param int channel_id: id of the channel from which to disconnect
+        :param int session_id: id of the leaving session
         """
         member = request.env["discuss.channel.member"].search([("channel_id", "=", channel_id), ("is_self", "=", True)])
         if not member:
             raise NotFound()
         # sudo: discuss.channel.rtc.session - member of current user can leave call
-        member.sudo()._rtc_leave_call()
+        member.sudo()._rtc_leave_call(session_id)
 
     @http.route("/mail/rtc/channel/cancel_call_invitation", methods=["POST"], type="jsonrpc", auth="public")
     @add_guest_to_context
@@ -131,10 +132,10 @@ class RtcController(http.Controller):
             channel_member_sudo.channel_id.rtc_session_ids.filtered_domain(domain).write({})  # update write_date
         current_rtc_sessions, outdated_rtc_sessions = channel_member_sudo._rtc_sync_sessions(check_rtc_session_ids)
         return (
-            Store(member.channel_id, {"rtcSessions": Store.many(current_rtc_sessions, "ADD")})
+            Store(member.channel_id, {"rtcSessions": Store.Many(current_rtc_sessions, mode="ADD")})
             .add(
                 member.channel_id,
-                {"rtcSessions": Store.many(outdated_rtc_sessions, "DELETE", only_id=True)},
+                {"rtcSessions": Store.Many(outdated_rtc_sessions, [], mode="DELETE")},
             )
             .get_result()
         )

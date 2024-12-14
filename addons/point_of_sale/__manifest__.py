@@ -7,7 +7,7 @@
     'category': 'Sales/Point of Sale',
     'sequence': 40,
     'summary': 'User-friendly PoS interface for shops and restaurants',
-    'depends': ['stock_account', 'barcodes', 'web_editor', 'digest', 'phone_validation'],
+    'depends': ['resource', 'stock_account', 'barcodes', 'web_editor', 'digest', 'phone_validation'],
     'uninstall_hook': 'uninstall_hook',
     'data': [
         'security/point_of_sale_security.xml',
@@ -42,6 +42,7 @@
         'views/res_partner_view.xml',
         'views/report_userlabel.xml',
         'views/report_saledetails.xml',
+        'views/pos_preset_view.xml',
         'views/point_of_sale_dashboard.xml',
         'views/report_invoice.xml',
         'views/pos_printer_view.xml',
@@ -77,6 +78,7 @@
             'point_of_sale/static/src/backend/pos_payment_provider_cards/*',
             'point_of_sale/static/src/app/hooks/hooks.js',
             'point_of_sale/static/src/backend/many2one_with_placeholder_field/*',
+            'point_of_sale/static/src/backend/many2many_placeholder_list_view/*',
         ],
         'web.assets_tests': [
             'barcodes/static/tests/legacy/helpers.js',
@@ -94,7 +96,16 @@
             'point_of_sale/static/src/proxy_trap.js',
             'point_of_sale/static/src/lazy_getter.js',
             'point_of_sale/static/src/app/services/data_service.js',
+
+            'point_of_sale/static/src/app/utils/html-to-image.js',
+            'point_of_sale/static/src/app/services/render_service.js',
             'point_of_sale/static/tests/unit/**/*',
+
+            'point_of_sale/static/src/app/components/odoo_logo/*',
+            'point_of_sale/static/src/app/components/centered_icon/*',
+            'point_of_sale/static/src/app/components/inputs/**/*',
+            'point_of_sale/static/tests/generic_components/**/*',
+
         ],
 
         # PoS assets
@@ -149,6 +160,7 @@
             'web/static/src/scss/bootstrap_overridden.scss',
             'web/static/src/scss/fontawesome_overridden.scss',
             'web/static/fonts/fonts.scss',
+            "web/static/src/scss/ui.scss",
 
             ('remove', 'web/static/src/core/errors/error_handlers.js'), # error handling in PoS is different from the webclient
             ('remove', '/web/static/src/core/dialog/dialog.scss'),
@@ -184,6 +196,7 @@
             ('remove', 'web/static/src/webclient/actions/reports/layout_assets/**/*'),
             ('remove', 'web/static/src/webclient/actions/**/*css'),
             'web/static/src/webclient/company_service.js',
+            'point_of_sale/static/src/customer_display/customer_display_adapter.js',
         ],
         'point_of_sale.base_tests': [
             "web/static/lib/hoot-dom/**/*",
@@ -202,11 +215,11 @@
         'point_of_sale.customer_display_assets': [
             ('include', 'point_of_sale.base_app'),
             "point_of_sale/static/src/app/components/odoo_logo/*",
-            "point_of_sale/static/src/app/components/order_widget/*",
             "point_of_sale/static/src/app/components/orderline/*",
             "point_of_sale/static/src/app/components/centered_icon/*",
             "point_of_sale/static/src/utils.js",
             "point_of_sale/static/src/customer_display/**/*",
+            ('remove', 'point_of_sale/static/src/customer_display/customer_display_adapter.js'),
         ],
         'point_of_sale.customer_display_assets_test': [
             ('include', 'point_of_sale.base_tests'),

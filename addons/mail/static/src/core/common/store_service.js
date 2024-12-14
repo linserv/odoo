@@ -68,6 +68,8 @@ export class Store extends BaseStore {
     MessageReactions;
     /** @type {typeof import("@mail/core/common/persona_model").Persona} */
     Persona;
+    /** @type {typeof import("@mail/core/common/country_model").Country} */
+    ["res.country"];
     /** @type {typeof import("@mail/core/common/settings_model").Settings} */
     Settings;
     /** @type {typeof import("@mail/core/common/thread_model").Thread} */
@@ -569,7 +571,7 @@ export class Store extends BaseStore {
     }
 
     async joinChat(id, forceOpen = false) {
-        const data = await this.env.services.orm.call("discuss.channel", "channel_get", [], {
+        const data = await rpc("/discuss/channel/get_or_create_chat", {
             partners_to: [id],
             force_open: forceOpen,
         });

@@ -13,28 +13,24 @@ class PosConfig(models.Model):
     floor_ids = fields.Many2many('restaurant.floor', string='Restaurant Floors', help='The restaurant floors served by this point of sale.')
     set_tip_after_payment = fields.Boolean('Set Tip After Payment', help="Adjust the amount authorized by payment terminals to add a tip after the customers left or at the end of the day.")
     module_pos_restaurant_appointment = fields.Boolean("Table Booking")
-    takeaway = fields.Boolean("Takeaway", help="Allow to create orders for takeaway customers.")
-    takeaway_fp_id = fields.Many2one(
-        'account.fiscal.position',
-        string='Alternative Fiscal Position',
-        help='This is useful for restaurants with onsite and take-away services that imply specific tax rates.',
-    )
+    default_screen = fields.Selection([('tables', 'Tables'), ('register', 'Register')], string='Default Screen', default='tables')
 
     def _get_forbidden_change_fields(self):
         forbidden_keys = super(PosConfig, self)._get_forbidden_change_fields()
         forbidden_keys.append('floor_ids')
         return forbidden_keys
 
-    @api.depends('takeaway_fp_id', 'takeaway')
-    def _compute_local_data_integrity(self):
-        super()._compute_local_data_integrity()
-
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
             is_restaurant = 'module_pos_restaurant' in vals and vals['module_pos_restaurant']
-            if is_restaurant and 'iface_splitbill' not in vals:
-                vals['iface_splitbill'] = True
+            if is_restaurant:
+                if 'iface_printbill' not in vals:
+                    vals['iface_printbill'] = True
+                if 'show_product_images' not in vals:
+                    vals['show_product_images'] = False
+                if 'show_category_images' not in vals:
+                    vals['show_category_images'] = False
             if not is_restaurant or not vals.get('iface_tipproduct', False):
                 vals['set_tip_after_payment'] = False
         pos_configs = super().create(vals_list)
@@ -87,7 +83,7 @@ class PosConfig(models.Model):
             self._load_bar_data()
 
         journal, payment_methods_ids = self._create_journal_and_payment_methods(cash_journal_vals={'name': 'Cash Bar', 'show_on_dashboard': False})
-        bar_categories = self.get_categories([
+        bar_categories = self.get_record_by_ref([
             'pos_restaurant.pos_category_cocktails',
             'pos_restaurant.pos_category_soft_drinks',
         ])
@@ -114,9 +110,14 @@ class PosConfig(models.Model):
             self._load_restaurant_data()
 
         journal, payment_methods_ids = self._create_journal_and_payment_methods(cash_journal_vals={'name': 'Cash Restaurant', 'show_on_dashboard': False})
-        restaurant_categories = self.get_categories([
+        restaurant_categories = self.get_record_by_ref([
             'pos_restaurant.food',
             'pos_restaurant.drinks',
+        ])
+        presets = self.get_record_by_ref([
+            'pos_restaurant.pos_takein_preset',
+            'pos_restaurant.pos_takeout_preset',
+            'pos_restaurant.pos_delivery_preset',
         ])
         config = self.env['pos.config'].create({
             'name': _('Restaurant'),
@@ -127,6 +128,9 @@ class PosConfig(models.Model):
             'iface_available_categ_ids': restaurant_categories,
             'iface_splitbill': True,
             'module_pos_restaurant': True,
+            'use_presets': True,
+            'default_preset_id': presets[0],
+            'available_preset_ids': [(6, 0, presets[1:])],
         })
         self.env['ir.model.data']._update_xmlids([{
             'xml_id': self._get_suffixed_ref_name(ref_name),

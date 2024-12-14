@@ -10,10 +10,10 @@ import os
 from pathlib import Path
 from queue import Queue, Empty
 import re
+import requests
 import subprocess
 from threading import Lock
 import time
-import urllib3
 from usb import util
 
 from odoo import http
@@ -86,12 +86,13 @@ class KeyboardUSBDriver(Driver):
     def send_layouts_list(cls):
         server = helpers.get_odoo_server_url()
         if server:
-            urllib3.disable_warnings()
-            pm = urllib3.PoolManager(cert_reqs='CERT_NONE')
             server = server + '/iot/keyboard_layouts'
             try:
-                pm.request('POST', server, fields={'available_layouts': json.dumps(cls.available_layouts)})
-            except Exception:
+                response = requests.post(
+                    server, data={'available_layouts': json.dumps(cls.available_layouts)}, timeout=5
+                )
+                response.raise_for_status()
+            except requests.exceptions.RequestException:
                 _logger.exception('Could not reach configured server to send available layouts')
 
     @classmethod
@@ -181,7 +182,7 @@ class KeyboardUSBDriver(Driver):
                 - variant (str): An optional key to represent the variant of the
                                  selected layout
         """
-        file_path = Path.home() / 'odoo-keyboard-layouts.conf'
+        file_path = helpers.path_file('odoo-keyboard-layouts.conf')
         if file_path.exists():
             data = json.loads(file_path.read_text())
         else:
@@ -193,7 +194,7 @@ class KeyboardUSBDriver(Driver):
         """Read the layout from the saved filed and set it as current layout.
         If no file or no layout is found we use 'us' by default.
         """
-        file_path = Path.home() / 'odoo-keyboard-layouts.conf'
+        file_path = helpers.path_file('odoo-keyboard-layouts.conf')
         if file_path.exists():
             data = json.loads(file_path.read_text())
             layout = data.get(self.device_identifier, {'layout': 'us'})
@@ -213,7 +214,7 @@ class KeyboardUSBDriver(Driver):
         scanner_name = ['barcode', 'scanner', 'reader']
         is_scanner = any(x in device_name for x in scanner_name) or self.dev.interface_protocol == '0'
 
-        file_path = Path.home() / 'odoo-keyboard-is-scanner.conf'
+        file_path = helpers.path_file('odoo-keyboard-is-scanner.conf')
         if file_path.exists():
             data = json.loads(file_path.read_text())
             is_scanner = data.get(self.device_identifier, {}).get('is_scanner', is_scanner)
@@ -255,7 +256,7 @@ class KeyboardUSBDriver(Driver):
         We need that in order to keep the selected type of device after a reboot.
         """
         is_scanner = {'is_scanner': data.get('is_scanner')}
-        file_path = Path.home() / 'odoo-keyboard-is-scanner.conf'
+        file_path = helpers.path_file('odoo-keyboard-is-scanner.conf')
         if file_path.exists():
             data = json.loads(file_path.read_text())
         else:

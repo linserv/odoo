@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 {
@@ -24,9 +23,6 @@
         'web.qunit_suite_tests': [
             'microsoft_calendar/static/tests/microsoft_calendar_mock_server.js',
             'microsoft_calendar/static/tests/microsoft_calendar_tests.js',
-        ],
-        'web.qunit_mobile_suite_tests': [
-            'microsoft_calendar/static/tests/microsoft_calendar_mock_server.js',
         ],
     },
     'license': 'LGPL-3',

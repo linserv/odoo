@@ -132,6 +132,15 @@ test("should disconnect when closing page while in call", async () => {
                     asyncStep(`sendBeacon_leave_call:${blobData.params.channel_id}`);
                 }
             },
+            serviceWorker: {
+                controller: {
+                    postMessage(data) {
+                        if (data.name === "UNEXPECTED_CALL_TERMINATION") {
+                            asyncStep(`postMessage:${data.name}:${data.channelId}`);
+                        }
+                    },
+                },
+            },
         },
     });
 
@@ -139,7 +148,10 @@ test("should disconnect when closing page while in call", async () => {
     await contains(".o-discuss-Call");
     // simulate page close
     window.dispatchEvent(new Event("pagehide"), { bubble: true });
-    await waitForSteps([`sendBeacon_leave_call:${channelId}`]);
+    await waitForSteps([
+        `postMessage:UNEXPECTED_CALL_TERMINATION:${channelId}`,
+        `sendBeacon_leave_call:${channelId}`,
+    ]);
 });
 
 test("should display invitations", async () => {
@@ -235,6 +247,50 @@ test("can share user camera", async () => {
     await contains("video");
     await click("[title='Stop camera']");
     await contains("video", { count: 0 });
+});
+
+test("Card should remain in focus after Share Screen is toggled", async () => {
+    mockGetMedia();
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
+    await start();
+    await openDiscuss(channelId);
+    await click("[title='Start a Call']");
+    await contains(".o-discuss-Call.o-minimized"); // minimized = no card focused
+    await click(".o-discuss-CallParticipantCard-avatar");
+    await contains(
+        ".o-discuss-Call:not(.o-minimized) .o-discuss-CallParticipantCard:not(.o-inset) img" // inset = aside, not inset = center
+    );
+    await click("[title='Share Screen']");
+    await contains(".o-discuss-CallParticipantCard.o-inset img");
+    await contains(
+        ".o-discuss-Call:not(.o-minimized) .o-discuss-CallParticipantCard:not(.o-inset) video[type='screen']"
+    );
+    await click("[title='Stop Sharing Screen']");
+    await contains(".o-discuss-CallParticipantCard.o-inset", { count: 0 });
+    await contains(
+        ".o-discuss-Call:not(.o-minimized) .o-discuss-CallParticipantCard:not(.o-inset) img"
+    );
+});
+
+test("Camera video stream stays in focus when on/off", async () => {
+    mockGetMedia();
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
+    await start();
+    await openDiscuss(channelId);
+    await click("[title='Start a Call']");
+    await click(".o-discuss-CallParticipantCard-avatar");
+    await click("[title='Turn camera on']");
+    await click("[title='Stop camera']");
+    await click("[title='Turn camera on']");
+    await contains("video[type='camera']:not(.o-inset)");
+    // test screen sharing then camera on to check camera aside
+    await click("[title='Stop camera']");
+    await click("[title='Share Screen']");
+    await click("[title='Turn camera on']");
+    await contains("video[type='screen']:not(.o-inset)");
+    await contains("video[type='camera'].o-inset");
 });
 
 test("Create a direct message channel when clicking on start a meeting", async () => {
@@ -386,6 +442,53 @@ test("show call participants in discuss sidebar", async () => {
     await contains(".o-mail-DiscussSidebar", {
         contains: [
             ".o-mail-DiscussSidebarChannel:contains('General') ~ .o-mail-DiscussSidebarCallParticipants:contains(Mitchell Admin)",
+        ],
+    });
+});
+
+test("Sort call participants in side bar by name", async () => {
+    mockGetMedia();
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
+    pyEnv["discuss.channel.rtc.session"].create([
+        {
+            channel_member_id: pyEnv["discuss.channel.member"].create({
+                channel_id: channelId,
+                partner_id: pyEnv["res.partner"].create({ name: "CCC" }),
+            }),
+            channel_id: channelId,
+        },
+        {
+            channel_member_id: pyEnv["discuss.channel.member"].create({
+                channel_id: channelId,
+                partner_id: pyEnv["res.partner"].create({ name: "AAA" }),
+            }),
+            channel_id: channelId,
+        },
+        {
+            channel_member_id: pyEnv["discuss.channel.member"].create({
+                channel_id: channelId,
+                partner_id: pyEnv["res.partner"].create({ name: "BBB" }),
+            }),
+            channel_id: channelId,
+        },
+    ]);
+    await start();
+    await openDiscuss(channelId);
+    await click("[title='Expand']");
+    await contains(".o-mail-DiscussSidebarCallParticipants", {
+        contains: [
+            ".o-mail-DiscussSidebarCallParticipants-participant:nth-child(1):contains('AAA')",
+        ],
+    });
+    await contains(" .o-mail-DiscussSidebarCallParticipants", {
+        contains: [
+            ".o-mail-DiscussSidebarCallParticipants-participant:nth-child(2):contains('BBB')",
+        ],
+    });
+    await contains(" .o-mail-DiscussSidebarCallParticipants", {
+        contains: [
+            ".o-mail-DiscussSidebarCallParticipants-participant:nth-child(3):contains('CCC')",
         ],
     });
 });

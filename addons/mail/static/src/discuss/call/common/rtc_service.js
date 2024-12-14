@@ -24,6 +24,21 @@ import { callActionsRegistry } from "./call_actions";
  */
 const loadSfuAssets = memoize(async () => await loadBundle("mail.assets_odoo_sfu"));
 
+/**
+ *
+ * @param {EventTarget} target
+ * @param {string} event
+ * @param {Function} f event listener callback
+ * @return {Function} unsubscribe function
+ */
+function subscribe(target, event, f) {
+    target.addEventListener(event, f);
+    return () => target.removeEventListener(event, f);
+}
+
+const SW_MESSAGE_TYPE = {
+    UNEXPECTED_CALL_TERMINATION: "UNEXPECTED_CALL_TERMINATION",
+};
 export const CONNECTION_TYPES = { P2P: "p2p", SERVER: "server" };
 const SCREEN_CONFIG = {
     width: { max: 1920 },
@@ -183,6 +198,8 @@ export class Rtc extends Record {
     actionsStack = [];
     /** @type {string|undefined} String representing the last call action activated, or undefined if none are */
     lastSelfCallAction = undefined;
+    /** callbacks to be called when cleaning the state up after a call */
+    cleanups = [];
 
     callActions = Record.attr([], {
         compute() {
@@ -267,7 +284,11 @@ export class Rtc extends Record {
             }
         });
         this.store.env.bus.addEventListener("RTC-SERVICE:PLAY_MEDIA", () => {
-            for (const session of this.state.channel.rtcSessions) {
+            const channel = this.state.channel;
+            if (!channel) {
+                return;
+            }
+            for (const session of channel.rtcSessions) {
                 session.playAudio();
             }
         });
@@ -299,8 +320,12 @@ export class Rtc extends Record {
 
         browser.addEventListener("pagehide", () => {
             if (this.state.channel) {
+                browser.navigator.serviceWorker?.controller?.postMessage({
+                    name: SW_MESSAGE_TYPE.UNEXPECTED_CALL_TERMINATION,
+                    channelId: this.state.channel.id,
+                });
                 const data = JSON.stringify({
-                    params: { channel_id: this.state.channel.id },
+                    params: { channel_id: this.state.channel.id, session_id: this.selfSession.id },
                 });
                 const blob = new Blob([data], { type: "application/json" });
                 // using sendBeacon allows sending a post request even when the
@@ -749,6 +774,7 @@ export class Rtc extends Record {
         const data = await rpc(
             "/mail/rtc/channel/join_call",
             {
+                camera,
                 channel_id: channel.id,
                 check_rtc_session_ids: channel.rtcSessions.map((session) => session.id),
             },
@@ -805,6 +831,9 @@ export class Rtc extends Record {
             { leading: true, trailing: true }
         );
         this.state.channel.rtcInvitingSession = undefined;
+        if (camera) {
+            await this.toggleVideo("camera");
+        }
         await this._initConnection();
         if (!this.state.channel?.id) {
             return;
@@ -819,9 +848,15 @@ export class Rtc extends Record {
         if (!this.state.channel?.id) {
             return;
         }
-        if (camera) {
-            await this.toggleVideo("camera");
-        }
+        this.cleanups.push(
+            // only register the beforeunload event if there is a call as FireFox will not place
+            // the pages with beforeunload listeners in the bfcache.
+            subscribe(browser, "beforeunload", (event) => {
+                if (this.store.env.services["multi_tab"].isOnLastTab) {
+                    event.preventDefault();
+                }
+            })
+        );
     }
 
     async rpcLeaveCall(channel) {
@@ -875,6 +910,7 @@ export class Rtc extends Record {
                 session.isTalking = false;
             }
         }
+        this.cleanups.splice(0).forEach((cleanup) => cleanup());
         this.sfuClient = undefined;
         this.network = undefined;
         this.state.serverState = undefined;
@@ -980,7 +1016,10 @@ export class Rtc extends Record {
         if (this.selfSession) {
             switch (type) {
                 case "camera": {
-                    this.removeVideoFromSession(this.selfSession, "camera");
+                    this.removeVideoFromSession(this.selfSession, {
+                        type: "camera",
+                        cleanup: false,
+                    });
                     if (this.state.cameraTrack) {
                         this.updateStream(this.selfSession, this.state.cameraTrack);
                     }
@@ -988,7 +1027,10 @@ export class Rtc extends Record {
                 }
                 case "screen": {
                     if (!this.state.screenTrack) {
-                        this.removeVideoFromSession(this.selfSession, "screen");
+                        this.removeVideoFromSession(this.selfSession, {
+                            type: "screen",
+                            cleanup: false,
+                        });
                     } else {
                         this.updateStream(this.selfSession, this.state.screenTrack);
                     }
@@ -1039,10 +1081,6 @@ export class Rtc extends Record {
      * @param {String} type 'camera' or 'screen'
      */
     async setVideo(track, type, activateVideo = false) {
-        if (this.blurManager) {
-            this.blurManager.close();
-            this.blurManager = undefined;
-        }
         const stopVideo = () => {
             if (track) {
                 track.stop();
@@ -1066,13 +1104,17 @@ export class Rtc extends Record {
             if (type === "screen") {
                 this.soundEffectsService.play("screen-sharing");
             }
+            if (type === "camera" && this.blurManager) {
+                this.blurManager.close();
+                this.blurManager = undefined;
+            }
             stopVideo();
             return;
         }
         let sourceStream;
         try {
             if (type === "camera") {
-                if (this.state.sourceCameraStream && this.state.sendCamera) {
+                if (this.state.sourceCameraStream) {
                     sourceStream = this.state.sourceCameraStream;
                 } else {
                     sourceStream = await browser.navigator.mediaDevices.getUserMedia({
@@ -1081,7 +1123,7 @@ export class Rtc extends Record {
                 }
             }
             if (type === "screen") {
-                if (this.state.sourceScreenStream && this.state.sendScreen) {
+                if (this.state.sourceScreenStream) {
                     sourceStream = this.state.sourceScreenStream;
                 } else {
                     sourceStream = await browser.navigator.mediaDevices.getDisplayMedia({
@@ -1099,14 +1141,21 @@ export class Rtc extends Record {
             stopVideo();
             return;
         }
-        let videoStream = sourceStream;
+        let outputTrack = sourceStream ? sourceStream.getVideoTracks()[0] : undefined;
+        if (outputTrack) {
+            outputTrack.addEventListener("ended", async () => {
+                await this.toggleVideo(type, false);
+            });
+        }
         if (this.store.settings.useBlur && type === "camera") {
             try {
+                this.blurManager?.close();
                 this.blurManager = new BlurManager(sourceStream, {
                     backgroundBlur: this.store.settings.backgroundBlurAmount,
                     edgeBlur: this.store.settings.edgeBlurAmount,
                 });
-                videoStream = await this.blurManager.stream;
+                const bluredStream = await this.blurManager.stream;
+                outputTrack = bluredStream.getVideoTracks()[0];
             } catch (_e) {
                 this.notification.add(
                     _t("%(name)s: %(message)s)", { name: _e.name, message: _e.message }),
@@ -1115,26 +1164,20 @@ export class Rtc extends Record {
                 this.store.settings.useBlur = false;
             }
         }
-        track = videoStream ? videoStream.getVideoTracks()[0] : undefined;
-        if (track) {
-            track.addEventListener("ended", async () => {
-                await this.toggleVideo(type, false);
-            });
-        }
         switch (type) {
             case "camera": {
                 Object.assign(this.state, {
                     sourceCameraStream: sourceStream,
-                    cameraTrack: track,
-                    sendCamera: Boolean(track),
+                    cameraTrack: outputTrack,
+                    sendCamera: Boolean(outputTrack),
                 });
                 break;
             }
             case "screen": {
                 Object.assign(this.state, {
                     sourceScreenStream: sourceStream,
-                    screenTrack: track,
-                    sendScreen: Boolean(track),
+                    screenTrack: outputTrack,
+                    sendScreen: Boolean(outputTrack),
                 });
                 break;
             }
@@ -1282,16 +1325,22 @@ export class Rtc extends Record {
 
     /**
      * @param {import("models").RtcSession} session
-     * @param {String} [videoType]
+     * @param {Object} [param1]
+     * @param {String} [param1.type]
+     * @param {boolean} [param1.cleanup]
      */
-    removeVideoFromSession(session, videoType = false) {
-        if (videoType) {
-            this.updateActiveSession(session, videoType);
-            closeStream(session.videoStreams.get(videoType));
-            session.videoStreams.delete(videoType);
+    removeVideoFromSession(session, { type, cleanup = true } = {}) {
+        if (type) {
+            this.updateActiveSession(session, type);
+            if (cleanup) {
+                closeStream(session.videoStreams.get(type));
+            }
+            session.videoStreams.delete(type);
         } else {
-            for (const stream of session.videoStreams.values()) {
-                closeStream(stream);
+            if (cleanup) {
+                for (const stream of session.videoStreams.values()) {
+                    closeStream(stream);
+                }
             }
             session.videoStreams.clear();
         }
@@ -1337,8 +1386,11 @@ export class Rtc extends Record {
         if (activeRtcSession.isMainVideoStreamActive) {
             if (videoType === session.mainVideoStreamType) {
                 if (videoType === "screen") {
-                    this.state.channel.activeRtcSession = undefined;
-                } else {
+                    session.mainVideoStreamType = "camera";
+                } else if (
+                    this.actionsStack.includes("camera-on") &&
+                    this.actionsStack.includes("share-screen")
+                ) {
                     session.mainVideoStreamType = "screen";
                 }
             }
@@ -1390,7 +1442,9 @@ export const rtcService = {
         "discuss.ptt_extension",
         "mail.sound_effects",
         "mail.store",
+        "multi_tab",
         "notification",
+        "presence",
     ],
     /**
      * @param {import("@web/env").OdooEnv} env
@@ -1440,6 +1494,17 @@ export const rtcService = {
                     rtc.store.insert(data);
                 }
             }
+        );
+        /**
+         * Attempts to play RTC medias when a user shows signs of presence (interaction with the page) as
+         * they cannot be played on windows that have not been interacted with.
+         */
+        services["presence"].bus.addEventListener(
+            "presence",
+            () => {
+                env.bus.trigger("RTC-SERVICE:PLAY_MEDIA");
+            },
+            { once: true }
         );
         return rtc;
     },

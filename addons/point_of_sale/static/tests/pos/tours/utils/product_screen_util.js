@@ -451,6 +451,21 @@ export function productIsDisplayed(name, position = -1) {
         },
     ];
 }
+export function searchProduct(string) {
+    return [
+        {
+            isActive: ["mobile"],
+            content: `Click search field`,
+            trigger: `.fa-search`,
+            run: `click`,
+        },
+        {
+            content: "Search for a product using the search bar",
+            trigger: ".pos-rightheader .form-control > input",
+            run: `edit ${string}`,
+        },
+    ];
+}
 export function totalAmountIs(amount) {
     return inLeftSide(...Order.hasTotal(amount));
 }
@@ -543,7 +558,7 @@ export function addCustomerNote(note) {
         Dialog.confirm(),
     ].flat();
 }
-export function addInternalNote(note, buttonLabel = "Internal Note") {
+export function addInternalNote(note, buttonLabel = "Note") {
     return [
         clickInternalNoteButton(buttonLabel),
         TextInputPopup.inputText(note),
