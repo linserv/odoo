@@ -6,6 +6,8 @@ import { ConnectionLostError } from "@web/core/network/rpc";
 import { _t } from "@web/core/l10n/translation";
 import { EditOrderNamePopup } from "@pos_restaurant/app/popup/edit_order_name_popup/edit_order_name_popup";
 import { ProductScreen } from "@point_of_sale/app/screens/product_screen/product_screen";
+import { ReceiptScreen } from "@point_of_sale/app/screens/receipt_screen/receipt_screen";
+import { TipScreen } from "../screens/tip_screen/tip_screen";
 
 const NON_IDLE_EVENTS = [
     "mousemove",
@@ -58,17 +60,130 @@ patch(PosStore.prototype, {
             this.showScreen("FloorScreen");
         }
     },
-    // using the same floorplan.
     async wsSyncTableCount(data) {
-        if (data["login_number"] === odoo.login_number) {
+        if (data.login_number == this.session.login_number) {
+            this.computeTableCount(data);
             return;
         }
 
-        const orderIds = this.models["pos.order"]
-            .filter((order) => !order.finalized && typeof order.id === "number")
-            .map((o) => o.id);
-        const orderToLoad = new Set([...data["order_ids"], ...orderIds]);
-        await this.data.read("pos.order", [...orderToLoad]);
+        const missingTable = data["table_ids"].find(
+            (tableId) => !(tableId in this.models["restaurant.table"].getAllBy("id"))
+        );
+        if (missingTable) {
+            const response = await this.data.searchRead("restaurant.floor", [
+                ["pos_config_ids", "in", this.config.id],
+            ]);
+
+            const table_ids = response.map((floor) => floor.raw.table_ids).flat();
+            await this.data.read("restaurant.table", table_ids);
+        }
+        const tableLocalOrders = this.models["pos.order"].filter(
+            (o) => data["table_ids"].includes(o.table_id?.id) && !o.finalized
+        );
+        const localOrderlines = tableLocalOrders
+            .filter((o) => typeof o.id === "number")
+            .flatMap((o) => o.lines)
+            .filter((l) => typeof l.id !== "number");
+        const lineIdByOrderId = localOrderlines.reduce((acc, curr) => {
+            if (!acc[curr.order_id.id]) {
+                acc[curr.order_id.id] = [];
+            }
+            acc[curr.order_id.id].push(curr.id);
+            return acc;
+        }, {});
+
+        const orders = await this.data.searchRead("pos.order", [
+            ["session_id", "=", this.session.id],
+            ["table_id", "in", data["table_ids"]],
+        ]);
+        await this.data.read(
+            "pos.order.line",
+            orders.flatMap((o) => o.lines).map((l) => l.id),
+            ["qty"]
+        );
+        for (const [orderId, lineIds] of Object.entries(lineIdByOrderId)) {
+            const lines = this.models["pos.order.line"].readMany(lineIds);
+            for (const line of lines) {
+                line.update({ order_id: orderId });
+            }
+        }
+
+        let isDraftOrder = false;
+        for (const order of orders) {
+            if (order.state !== "draft") {
+                this.removePendingOrder(order);
+                continue;
+            } else {
+                this.addPendingOrder([order.id]);
+            }
+
+            const tableId = order.table_id?.id;
+            if (!tableId) {
+                continue;
+            }
+
+            const draftOrder = this.models["pos.order"].find(
+                (o) => o.table_id?.id === tableId && o.id !== order.id && o.state === "draft"
+            );
+
+            if (!draftOrder) {
+                continue;
+            }
+
+            for (const orphanLine of draftOrder.lines) {
+                const adoptingLine = order.lines.find((l) => l.canBeMergedWith(orphanLine));
+                if (adoptingLine && adoptingLine.id !== orphanLine.id) {
+                    adoptingLine.merge(orphanLine);
+                } else if (!adoptingLine) {
+                    orphanLine.update({ order_id: order });
+                }
+            }
+
+            if (this.selectedOrderUuid === draftOrder.uuid) {
+                this.selectedOrderUuid = order.uuid;
+            }
+
+            await this.removeOrder(draftOrder, true);
+            isDraftOrder = true;
+        }
+
+        if (
+            this.getOrder()?.finalized &&
+            ![ReceiptScreen, TipScreen].includes(this.mainScreen.component)
+        ) {
+            this.addNewOrder();
+        }
+
+        if (isDraftOrder) {
+            await this.syncAllOrders();
+        }
+
+        this.computeTableCount(data);
+    },
+    computeTableCount(data) {
+        const tableIds = data?.table_ids;
+        const tables = tableIds
+            ? this.models["restaurant.table"].readMany(tableIds)
+            : this.models["restaurant.table"].getAll();
+        const orders = this.getOpenOrders();
+        for (const table of tables) {
+            const tableOrders = orders.filter(
+                (order) => order.table_id?.id === table.id && !order.finalized
+            );
+            const qtyChange = tableOrders.reduce(
+                (acc, order) => {
+                    const quantityChange = this.getOrderChanges(false, order);
+                    const quantitySkipped = this.getOrderChanges(true, order);
+                    acc.changed += quantityChange.count;
+                    acc.skipped += quantitySkipped.count;
+                    return acc;
+                },
+                { changed: 0, skipped: 0 }
+            );
+
+            table.uiState.orderCount = tableOrders.length;
+            table.uiState.changeCount = qtyChange.changed;
+        }
     },
     get categoryCount() {
         const orderChanges = this.getOrderChanges();
@@ -96,6 +211,21 @@ patch(PosStore.prototype, {
             (count, note) => count + (note in orderChanges ? 1 : 0),
             0
         );
+
+        const nbNoteChange = Object.keys(orderChanges.noteUpdated).length;
+        if (nbNoteChange) {
+            categories["noteUpdate"] = { count: nbNoteChange, name: _t("Note") };
+        }
+        // Only send modeUpdate if there's already an older mode in progress.
+        const currentOrder = this.getOrder();
+        if (
+            orderChanges.modeUpdate &&
+            Object.keys(currentOrder.last_order_preparation_change.lines).length
+        ) {
+            const displayName = _t(currentOrder.preset_id?.name);
+            categories["modeUpdate"] = { count: 1, name: displayName };
+        }
+
         return [
             ...Object.values(categories),
             ...(noteCount > 0 ? [{ count: noteCount, name: _t("Message") }] : []),
@@ -390,6 +520,26 @@ patch(PosStore.prototype, {
             [...el.classList].find((c) => c.includes("tableId")).split("-")[1]
         );
     },
+    startTransferOrder() {
+        this.isOrderTransferMode = true;
+        const orderUuid = this.getOrder().uuid;
+        this.getOrder().setBooked(true);
+        this.showScreen("FloorScreen");
+        document.addEventListener(
+            "click",
+            async (ev) => {
+                this.isOrderTransferMode = false;
+                const tableElement = ev.target.closest(".table");
+                if (!tableElement) {
+                    return;
+                }
+                const table = this.getTableFromElement(tableElement);
+                await this.transferOrder(orderUuid, table);
+                this.setTableFromUi(table);
+            },
+            { once: true }
+        );
+    },
     prepareOrderTransfer(order, destinationTable) {
         const originalTable = order.table_id;
         this.loadingOrderState = false;
@@ -554,16 +704,23 @@ patch(PosStore.prototype, {
         const tableOrders = this.getTableOrders(tableId).filter((order) => !order.finalized);
         return tableOrders.reduce((count, order) => count + order.getCustomerCount(), 0);
     },
-    isOpenOrderShareable() {
-        return super.isOpenOrderShareable(...arguments) || this.config.module_pos_restaurant;
-    },
     toggleEditMode() {
         this.isEditMode = !this.isEditMode;
         if (this.isEditMode) {
             this.tableSelectorState = false;
         }
     },
-    _shouldLoadOrders() {
-        return super._shouldLoadOrders() || this.config.module_pos_restaurant;
+    storeFloorScrollPosition(floorId, position) {
+        if (!floorId) {
+            return;
+        }
+        this.floorScrollPositions = this.floorScrollPositions || {};
+        this.floorScrollPositions[floorId] = position;
+    },
+    getFloorScrollPositions(floorId) {
+        if (!floorId || !this.floorScrollPositions) {
+            return;
+        }
+        return this.floorScrollPositions[floorId];
     },
 });

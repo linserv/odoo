@@ -1,4 +1,5 @@
 from odoo import api, fields, models, _
+from odoo.exceptions import ValidationError
 from odoo.osv.expression import FALSE_DOMAIN
 
 
@@ -93,6 +94,7 @@ class ExportOne2manyMultiple(models.Model):
 class ExportOne2manyMultipleChild(models.Model):
     # FIXME: orm.py:1161, fix to display_name on m2o field
     _rec_name = 'value'
+    _name = 'export.one2many.multiple.child'
     _description = 'Export One To Many Multiple Child'
 
     parent_id = fields.Many2one('export.one2many.multiple')
@@ -208,3 +210,17 @@ class ExportMany2oneRequiredSubfield(models.Model):
     _description = 'export.many2one.required.subfield'
 
     name = fields.Many2one('export.with.required.field')
+
+
+class WithNonDemoConstraint(models.Model):
+    _name = 'export.with.non.demo.constraint'
+    _description = 'export.with.non.demo.constraint'
+
+    name = fields.Char()
+
+    @api.constrains('name')
+    def _check_name_starts_with_uppercase_except_demo_data(self):
+        if self.env.context.get('install_mode'):
+            return  # skipped on demo data
+        if any(rec.name and rec.name[0].islower() for rec in self):
+            raise ValidationError('Name must start with an uppercase letter')

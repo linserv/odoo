@@ -3,7 +3,8 @@
 
 from odoo import fields, models, tools
 
-from odoo.addons.rating.models.rating_data import RATING_LIMIT_MIN, RATING_TEXT
+from odoo.addons.rating.models.rating_data import RATING_LIMIT_MIN
+from odoo.addons.resource.models.utils import filter_domain_leaf
 
 
 class ReportProjectTaskUser(models.Model):
@@ -20,6 +21,7 @@ class ReportProjectTaskUser(models.Model):
     date_end = fields.Datetime(string='Ending Date', readonly=True)
     date_deadline = fields.Datetime(string='Deadline', readonly=True)
     date_last_stage_update = fields.Datetime(string='Last Stage Update', readonly=True)
+    display_in_project = fields.Boolean(export_string_translation=False)
     project_id = fields.Many2one('project.project', string='Project', readonly=True)
     working_days_close = fields.Float(string='Working Days to Close',
         digits=(16, 2), readonly=True, aggregator="avg")
@@ -49,7 +51,6 @@ class ReportProjectTaskUser(models.Model):
     partner_id = fields.Many2one('res.partner', string='Customer', readonly=True)
     stage_id = fields.Many2one('project.task.type', string='Stage', readonly=True)
     task_id = fields.Many2one('project.task', string='Tasks', readonly=True)
-    active = fields.Boolean(readonly=True)
     tag_ids = fields.Many2many('project.tags', relation='project_tags_project_task_rel',
         column1='project_task_id', column2='project_tags_id',
         string='Tags', readonly=True)
@@ -69,12 +70,12 @@ class ReportProjectTaskUser(models.Model):
                 (select 1) AS nbr,
                 t.id as id,
                 t.id as task_id,
-                t.active,
                 t.create_date,
                 t.date_assign,
                 t.date_end,
                 t.date_last_stage_update,
                 t.date_deadline,
+                t.display_in_project,
                 t.project_id,
                 t.priority,
                 t.name as name,
@@ -100,7 +101,6 @@ class ReportProjectTaskUser(models.Model):
     def _group_by(self):
         return """
                 t.id,
-                t.active,
                 t.create_date,
                 t.date_assign,
                 t.date_end,
@@ -151,3 +151,12 @@ class ReportProjectTaskUser(models.Model):
           WHERE %s
        GROUP BY %s
         """ % (self._table, self._select(), self._from(), self._where(), self._group_by()))
+
+    def _where_calc(self, domain, active_test=True):
+        """ Tasks views don't show the sub-tasks / ('display_in_project', '=', True).
+            The pseudo-filter "Show Sub-tasks" adds the key 'show_subtasks' in the context.
+            In that case, we pop the leaf from the domain.
+        """
+        if self.env.context.get('show_subtasks'):
+            domain = filter_domain_leaf(domain, lambda field: field != 'display_in_project')
+        return super()._where_calc(domain, active_test)

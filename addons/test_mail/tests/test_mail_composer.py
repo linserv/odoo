@@ -1253,23 +1253,28 @@ class TestComposerInternals(TestMailComposer):
         # cannot schedule a message in mass_mail mode
         composer = self.env['mail.compose.message'].with_context(
             self._get_web_context(self.test_record)
-            ).create({'body': 'Test', 'composition_mode': 'mass_mail'})
+            ).create({'body': 'Test', 'composition_mode': 'mass_mail', 'scheduled_date': FieldDatetime.to_string(self.reference_now + timedelta(hours=2))})
         with self.assertRaises(UserError):
-            composer.action_schedule_message(FieldDatetime.to_string(self.reference_now + timedelta(hours=2)))
+            composer.action_schedule_message()
 
         # schedule a message in mono-comment mode
         attachment_data = self._generate_attachments_data(1, 'mail.compose.message', 0)[0]
         composer = self.env['mail.compose.message'].with_context(
-            self._get_web_context(self.test_record)
+            self._get_web_context(self.test_record, False, additional_ctx_key=True)
             ).create({
                 'body': '<p>Test Body</p>',
                 'subject': 'Test Subject',
                 'attachment_ids': [(0, 0, attachment_data)],
                 'partner_ids': [(4, self.test_record.customer_id.id)],
             })
+        # cannot schedule a message without a scheduled date
+        with self.assertRaises(UserError):
+            composer.action_schedule_message()
+
+        composer.write({'scheduled_date': FieldDatetime.to_string(self.reference_now + timedelta(hours=2))})
         composer_attachment = composer.attachment_ids
         with self.mock_datetime_and_now(self.reference_now):
-            composer.action_schedule_message(FieldDatetime.to_string(self.reference_now + timedelta(hours=2)))
+            composer.action_schedule_message()
         # should have created a scheduled message with correct parameters
         scheduled_message = self.env['mail.scheduled.message'].search([
             ['model', '=', self.test_record._name],
@@ -1284,6 +1289,7 @@ class TestComposerInternals(TestMailComposer):
         self.assertEqual(scheduled_message.author_id, self.partner_employee)
         self.assertEqual(scheduled_message.partner_ids, self.test_record.customer_id)
         self.assertFalse(scheduled_message.is_note)
+        self.assertEqual(scheduled_message.send_context, {'additional_ctx_key': True})
         # attachment transfer
         self.assertEqual(composer_attachment.res_model, scheduled_message._name)
         self.assertEqual(composer_attachment.res_id, scheduled_message.id)
@@ -1547,6 +1553,29 @@ class TestComposerResultsComment(TestMailComposer, CronMixinCase):
         })
         _mail, message = composer._action_send_mail()
         self.assertEqual(message.subtype_id, self.env.ref('mail.mt_note'))
+
+        # Check that the message created from the mail composer gets the values
+        # we passed to the composer context. When we provide a custom `body`
+        # and `email_add_signature` flag, the message should keep those values
+        # and should not add any signature to the message body.
+
+        composer = self.env['mail.compose.message'].with_context(
+            self._get_web_context(self.test_record),
+            default_body='<p>Hello world</p>',
+            default_email_add_signature=False
+        ).create({})
+        _mail, message = composer._action_send_mail()
+        self.assertFalse(message.email_add_signature)
+        self.assertEqual(message.body, '<p>Hello world</p>')
+
+        composer = self.env['mail.compose.message'].with_context(
+            self._get_web_context(self.test_record),
+            default_body='<p>Hi there</p>',
+            default_email_add_signature=True
+        ).create({})
+        _mail, message = composer._action_send_mail()
+        self.assertTrue(message.email_add_signature)
+        self.assertEqual(message.body, '<p>Hi there</p>')
 
     @users('employee')
     @mute_logger('odoo.tests', 'odoo.addons.mail.models.mail_mail', 'odoo.models.unlink')

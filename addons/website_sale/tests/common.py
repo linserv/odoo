@@ -5,7 +5,6 @@ from odoo.fields import Command
 from odoo.addons.delivery.tests.common import DeliveryCommon
 from odoo.addons.product.tests.common import ProductCommon
 
-
 # from odoo.addons.website.tests.common import WebsiteCommon
 
 
@@ -49,16 +48,14 @@ class WebsiteSaleCommon(ProductCommon, DeliveryCommon):
         ).website_published = True
         cls.pricelist.website_id = cls.website
 
-        country_be_id = cls.env['ir.model.data']._xmlid_to_res_id('base.be')
-        country_us_id = cls.env['ir.model.data']._xmlid_to_res_id('base.us')
-        cls.country_be = cls.env['res.country'].browse(country_be_id)
-        cls.country_us = cls.env['res.country'].browse(country_us_id)
+        cls.country_be = cls.quick_ref('base.be')
+        cls.country_us = cls.quick_ref('base.us')
         cls.country_us_state_id = cls.env['ir.model.data']._xmlid_to_res_id('base.state_us_39')
         cls.dummy_partner_address_values = {
             'street': '215 Vine St',
             'city': 'Scranton',
             'zip': '18503',
-            'country_id': country_us_id,
+            'country_id': cls.country_us.id,
             'state_id': cls.country_us_state_id,
             'phone': '+1 555-555-5555',
             'email': 'admin@yourcompany.example.com',
@@ -80,3 +77,9 @@ class WebsiteSaleCommon(ProductCommon, DeliveryCommon):
     def _prepare_carrier(cls, product, website_published=True, **values):
         # Publish carriers by default
         return super()._prepare_carrier(product, website_published=website_published, **values)
+
+    @classmethod
+    def _create_product(cls, **kwargs):
+        if 'website_published' not in kwargs:
+            kwargs['website_published'] = True
+        return super()._create_product(**kwargs)

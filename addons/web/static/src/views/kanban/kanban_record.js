@@ -184,7 +184,6 @@ export class KanbanRecord extends Component {
         "record",
         "progressBarState?",
     ];
-    static Compiler = KanbanCompiler;
     static KANBAN_CARD_ATTRIBUTE = KANBAN_CARD_ATTRIBUTE;
     static KANBAN_MENU_ATTRIBUTE = KANBAN_MENU_ATTRIBUTE;
     static menuTemplate = "web.KanbanRecordMenu";
@@ -197,7 +196,7 @@ export class KanbanRecord extends Component {
         this.notification = useService("notification");
 
         const { Compiler, archInfo } = this.props;
-        const ViewCompiler = Compiler || this.constructor.Compiler;
+        const ViewCompiler = Compiler || KanbanCompiler;
         const { templateDocs: templates } = archInfo;
 
         this.templates = useViewCompiler(ViewCompiler, templates);
@@ -233,8 +232,10 @@ export class KanbanRecord extends Component {
         const { activeActions } = archInfo;
         // Widget
         const deletable =
-            activeActions.delete && (!groupByField || groupByField.type !== "many2many");
-        const editable = activeActions.edit;
+            activeActions.delete &&
+            (!groupByField || groupByField.type !== "many2many") &&
+            !props.readonly;
+        const editable = activeActions.edit && !props.readonly;
         this.dataState.widget = {
             deletable,
             editable,
@@ -304,10 +305,6 @@ export class KanbanRecord extends Component {
         const { archInfo, openRecord, deleteRecord, record, archiveRecord } = this.props;
         const { type } = params;
         switch (type) {
-            // deprecated, records are always in edit mode in form views now, use "open" instead
-            case "edit": {
-                return openRecord(record, { mode: "edit" });
-            }
             case "open": {
                 return openRecord(record);
             }
@@ -362,7 +359,6 @@ export class KanbanRecord extends Component {
             context: this.props.record.context,
             JSON,
             luxon,
-            read_only_mode: this.props.readonly,
             record: this.dataState.record,
             selection_mode: this.props.forceGlobalClick,
             widget: this.dataState.widget,

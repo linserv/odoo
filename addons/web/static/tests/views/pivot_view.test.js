@@ -562,9 +562,9 @@ test("pivot view grouped by date field", async () => {
     expect.assertions(2);
 
     onRpc("read_group", ({ kwargs }) => {
-        const wrongFields = kwargs.fields.filter((field) => {
-            return !(field.split(":")[0] in Partner._fields);
-        });
+        const wrongFields = kwargs.fields.filter(
+            (field) => !(field.split(":")[0] in Partner._fields)
+        );
         expect(wrongFields.length).toBe(0);
     });
 
@@ -3227,7 +3227,7 @@ test("pivot_row_groupby should be also used after first load", async () => {
 
     onRpc("create_or_replace", ({ args }) => {
         expect(args[0].context).toEqual(expectedContexts.shift());
-        return ids.shift();
+        return [ids.shift()];
     });
 
     await mountView({
@@ -3397,7 +3397,7 @@ test("favorite pivot_measures should be used even if found also in global contex
             pivot_measures: ["computed_field"],
             pivot_row_groupby: [],
         });
-        return 1;
+        return [1];
     });
 
     await mountView({
@@ -3768,18 +3768,35 @@ test("middle clicking on a cell triggers a doAction", async () => {
     await contains(".o_pivot_cell_value:eq(1)").click({ ctrlKey: true }); // should trigger a do_action
 });
 
-test("display '0' for empty int field values in grouped pivot view", async () => {
+test("display '0' for false group, when grouped by int field", async () => {
     Partner._records[0].foo = false;
 
     await mountView({
         type: "pivot",
         resModel: "partner",
         arch: `
-            <pivot o_enable_linking="1">
+            <pivot>
                 <field name="foo" type="row"/>
             </pivot>`,
         groupBy: ["foo"],
     });
 
     expect(queryAllTexts("tbody th")).toEqual(["Total", "1", "2", "17", "0"]);
+});
+
+test("display the field's falsy_value_label for false group, if defined", async () => {
+    Partner._fields.product_id.falsy_value_label = "I'm the false group";
+    Partner._records[0].product_id = false;
+
+    await mountView({
+        type: "pivot",
+        resModel: "partner",
+        arch: `
+            <pivot>
+                <field name="foo" type="row"/>
+            </pivot>`,
+        groupBy: ["product_id"],
+    });
+
+    expect(queryAllTexts("tbody th")).toEqual(["Total", "xpad", "I'm the false group"]);
 });

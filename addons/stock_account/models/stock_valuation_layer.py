@@ -13,6 +13,7 @@ from collections import defaultdict
 class StockValuationLayer(models.Model):
     """Stock Valuation Layer"""
 
+    _name = 'stock.valuation.layer'
     _description = 'Stock Valuation Layer'
     _order = 'create_date, id'
 
@@ -263,3 +264,7 @@ class StockValuationLayer(models.Model):
         account_moves = self.env['account.move'].sudo().create(am_vals_list)
         if account_moves:
             account_moves._post()
+
+    def _should_impact_price_unit_receipt_value(self):
+        self.ensure_one()
+        return True

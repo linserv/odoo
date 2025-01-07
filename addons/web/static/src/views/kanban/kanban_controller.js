@@ -34,8 +34,9 @@ export class KanbanController extends Component {
         editable: { type: Boolean, optional: true },
         forceGlobalClick: { type: Boolean, optional: true },
         onSelectionChanged: { type: Function, optional: true },
+        readonly: { type: Boolean, optional: true },
         showButtons: { type: Boolean, optional: true },
-        Compiler: { type: Function, optional: true }, // optional in stable for backward compatibility
+        Compiler: Function,
         Model: Function,
         Renderer: Function,
         buttonTemplate: String,
@@ -143,12 +144,10 @@ export class KanbanController extends Component {
         });
         useSetupAction({
             rootRef: this.rootRef,
-            getLocalState: () => {
-                return {
-                    activeBars: this.progressBarState?.activeBars,
-                    modelState: this.model.exportState(),
-                };
-            },
+            getLocalState: () => ({
+                activeBars: this.progressBarState?.activeBars,
+                modelState: this.model.exportState(),
+            }),
         });
         usePager(() => {
             const root = this.model.root;
@@ -249,9 +248,9 @@ export class KanbanController extends Component {
         return evaluateBooleanExpr(modifier, { context: this.props.context });
     }
 
-    async openRecord(record, { mode, newWindow } = {}) {
+    async openRecord(record, { newWindow } = {}) {
         const activeIds = this.model.root.records.map((datapoint) => datapoint.resId);
-        this.props.selectRecord(record.resId, { activeIds, mode, newWindow });
+        this.props.selectRecord(record.resId, { activeIds, newWindow });
     }
 
     async createRecord() {

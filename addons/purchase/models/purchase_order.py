@@ -379,7 +379,6 @@ class PurchaseOrder(models.Model):
     # MAIL.THREAD
     # ------------------------------------------------------------
 
-    @api.returns('mail.message', lambda value: value.id)
     def message_post(self, **kwargs):
         if self.env.context.get('mark_rfq_as_sent'):
             self.filtered(lambda o: o.state == 'draft').write({'state': 'sent'})
@@ -388,9 +387,8 @@ class PurchaseOrder(models.Model):
             kwargs['notify_author'] = self.env.user.partner_id.id in (kwargs.get('partner_ids') or [])
         return super(PurchaseOrder, self.with_context(**po_ctx)).message_post(**kwargs)
 
-    def _notify_get_recipients_groups(self, message, model_description, msg_vals=None):
-        """ Tweak 'view document' button for portal customers, calling directly
-        routes for confirm specific to PO model. """
+    def _notify_get_recipients_groups(self, message, model_description, msg_vals=False):
+        # Tweak 'view document' button for portal customers, calling directly routes for confirm specific to PO model.
         groups = super()._notify_get_recipients_groups(
             message, model_description, msg_vals=msg_vals
         )
@@ -415,7 +413,7 @@ class PurchaseOrder(models.Model):
     def _notify_by_email_prepare_rendering_context(self, message, msg_vals=False, model_description=False,
                                                    force_email_company=False, force_email_lang=False):
         render_context = super()._notify_by_email_prepare_rendering_context(
-            message, msg_vals, model_description=model_description,
+            message, msg_vals=msg_vals, model_description=model_description,
             force_email_company=force_email_company, force_email_lang=force_email_lang
         )
         subtitles = [render_context['record'].name]
@@ -472,6 +470,7 @@ class PurchaseOrder(models.Model):
             'default_composition_mode': 'comment',
             'default_email_layout_xmlid': "mail.mail_notification_layout_with_responsible_signature",
             'force_email': True,
+            'hide_mail_template_management_options': True,
             'mark_rfq_as_sent': True,
         })
 
@@ -994,6 +993,9 @@ class PurchaseOrder(models.Model):
         res = super().action_add_from_catalog()
         if res['context'].get('product_catalog_order_model') == 'purchase.order':
             res['search_view_id'] = [self.env.ref('purchase.product_view_search_catalog').id, 'search']
+        kanban_view_id = self.env.ref('purchase.product_view_kanban_catalog_purchase_only').id
+        res['views'][0] = (kanban_view_id, 'kanban')
+        res['context']['partner_id'] = self.partner_id.id
         return res
 
     def _get_action_add_from_catalog_extra_context(self):

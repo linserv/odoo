@@ -40,6 +40,7 @@ mso_re = re.compile(r"\[if mso\]>[\s\S]*<!\[endif\]")
 
 class MailingMailing(models.Model):
     """ Mass Mailing models the sending of emails to a list of recipients for a mass mailing campaign."""
+    _name = 'mailing.mailing'
     _description = 'Mass Mailing'
     _inherit = ['mail.thread',
                 'mail.activity.mixin',
@@ -335,10 +336,11 @@ class MailingMailing(models.Model):
             }
             total = (values['expected'] - values['canceled']) or 1
             total_no_error = (values['expected'] - values['canceled'] - values['bounced'] - values['failed']) or 1
+            total_sent = (values['expected'] - values['canceled'] - values['failed']) or 1
             values['received_ratio'] = float_round(100.0 * values['delivered'] / total, precision_digits=2)
             values['opened_ratio'] = float_round(100.0 * values['opened'] / total_no_error, precision_digits=2)
             values['replied_ratio'] = float_round(100.0 * values['replied'] / total_no_error, precision_digits=2)
-            values['bounced_ratio'] = float_round(100.0 * values['bounced'] / total, precision_digits=2)
+            values['bounced_ratio'] = float_round(100.0 * values['bounced'] / total_sent, precision_digits=2)
             mailing.update(values)
 
     @api.depends('schedule_date', 'state')

@@ -15,7 +15,7 @@ export function firstProductIsFavorite(name) {
     ];
 }
 
-export function clickLine(productName, quantity = "1.0") {
+export function clickLine(productName, quantity = "1") {
     return [
         ...Order.hasLine({
             withoutClass: ".selected",
@@ -26,7 +26,7 @@ export function clickLine(productName, quantity = "1.0") {
         ...Order.hasLine({ withClass: ".selected", productName, quantity }),
     ].flat();
 }
-export function clickSelectedLine(productName, quantity = "1.0") {
+export function clickSelectedLine(productName, quantity = "1") {
     return [
         ...Order.hasLine({
             withClass: ".selected",
@@ -102,7 +102,7 @@ export function clickInfoProduct(name) {
         },
     ];
 }
-export function clickOrderline(productName, quantity = "1.0") {
+export function clickOrderline(productName, quantity = "1") {
     return [
         ...clickLine(productName, quantity),
         {
@@ -127,9 +127,6 @@ export function clickSubcategory(name) {
 }
 /**
  * Press the numpad in sequence based on the given space-separated keys.
- * NOTE: Maximum of 2 characters because NumberBuffer only allows 2 consecutive
- * fast inputs. Fast inputs is the case in tours.
- *
  * @param {...String} keys space-separated numpad keys
  */
 export function clickNumpad(...keys) {
@@ -181,6 +178,32 @@ export function customerIsSelected(name) {
         {
             content: `customer '${name}' is selected`,
             trigger: `.product-screen .set-partner:contains("${name}")`,
+        },
+    ];
+}
+export function inputCustomerSearchbar(value) {
+    return [
+        {
+            isActive: ["mobile"],
+            content: "click more button",
+            trigger: ".modal-header .fa-search",
+            run: "click",
+        },
+        {
+            trigger: ".modal-header .input-group input",
+            run: "edit " + value,
+        },
+        {
+            /**
+             * Manually trigger keyup event to show the search field list
+             * because the previous step do not trigger keyup event.
+             */
+            trigger: ".modal-header .input-group input",
+            run: function () {
+                document
+                    .querySelector(".modal-header .input-group input")
+                    .dispatchEvent(new KeyboardEvent("keyup", { key: "" }));
+            },
         },
     ];
 }
@@ -528,12 +551,16 @@ export function addOrderline(productName, quantity = 1, unitPrice, expectedTotal
         }
         return key;
     };
+
+    // Press +/- to set a negative quantity. For example, pressing +/- followed by "1" will result in "-11".
+    // To adjust the quantity from "-1" to "-3," first press "0" followed by "3" since pressing +/- will initially set it to "-1,"
+    // and entering "3" directly would result in "-13." so send 0(num) when want to change sign and set a number
     const numpadWrite = (val) =>
         val
             .toString()
             .split("")
             .flatMap((key) => Numpad.click(mapKey(key)));
-    res.push(...selectedOrderlineHasDirect(productName, "1.00"));
+    res.push(...selectedOrderlineHasDirect(productName, "1"));
     if (unitPrice) {
         res.push(
             ...[
@@ -629,6 +656,32 @@ export function finishOrder() {
 
 export function checkTaxAmount(amount) {
     return {
-        trigger: `.tax:contains(${amount})`,
+        trigger: `.order-summary .tax:contains(${amount})`,
+    };
+}
+
+export function checkRoundingAmountIsNotThere() {
+    return [
+        {
+            isActive: ["desktop"], // not rendered on mobile
+            trigger: ".order-summary",
+            run: function () {
+                if (document.querySelector(".rounding")) {
+                    throw new Error("A rounding amount has been found in order display.");
+                }
+            },
+        },
+    ];
+}
+
+export function checkRoundingAmount(amount) {
+    return {
+        trigger: `.order-summary .rounding:contains(${amount})`,
+    };
+}
+
+export function checkTotalAmount(amount) {
+    return {
+        trigger: `.order-summary .total:contains(${amount})`,
     };
 }

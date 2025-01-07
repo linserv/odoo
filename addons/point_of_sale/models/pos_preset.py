@@ -5,6 +5,7 @@ from collections import defaultdict
 
 
 class PosPreset(models.Model):
+    _name = 'pos.preset'
     _inherit = ['pos.load.mixin']
     _description = 'Easily load a set of configuration options'
 
@@ -92,7 +93,6 @@ class PosPreset(models.Model):
                         'periode': attendance_id.day_period,
                         'datetime': start,
                         'sql_datetime': start.strftime("%Y-%m-%d %H:%M:%S"),
-                        'humain_readable': start.strftime("%H:%M"),
                     }
                     start += interval
 

@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 from odoo import _, api, fields, tools, models, Command
 from odoo.addons.web.controllers.utils import clean_action
 from odoo.exceptions import UserError, ValidationError
+from odoo.osv import expression
 from odoo.tools import OrderedSet, format_list, groupby
 from odoo.tools.float_utils import float_compare, float_is_zero, float_round
 
@@ -152,7 +153,7 @@ class StockMoveLine(models.Model):
             sml_uom = record.product_uom_id
 
             move_demand = record.move_id.product_uom._compute_quantity(record.move_id.product_uom_qty, sml_uom, rounding_method='HALF-UP')
-            move_quantity = record.move_id.product_uom._compute_quantity(record.move_id.quantity, sml_uom, rounding_method='HALF-UP')
+            move_quantity = record.move_id.product_uom._compute_quantity(record.move_id._visible_quantity(), sml_uom, rounding_method='HALF-UP')
             quant_qty = product_uom._compute_quantity(record.quant_id.available_quantity, sml_uom, rounding_method='HALF-UP')
 
             if float_compare(move_demand, move_quantity, precision_rounding=sml_uom.rounding) > 0:
@@ -273,7 +274,8 @@ class StockMoveLine(models.Model):
                     excluded_smls.discard(sml.id)
                     used_locations.add(sml.location_dest_id)
                 if len(used_locations) > 1:
-                    smls.location_dest_id = smls.move_id.location_dest_id
+                    for move, grouped_smls in smls.grouped('move_id').items():
+                        grouped_smls.location_dest_id = move.location_dest_id
                 else:
                     smls.package_level_id.location_dest_id = smls.location_dest_id
             else:
@@ -298,6 +300,42 @@ class StockMoveLine(models.Model):
             qty = ml.product_uom_id._compute_quantity(ml.quantity, ml.product_id.uom_id)
             addtional_qty[ml.location_dest_id.id] = addtional_qty.get(ml.location_dest_id.id, 0) - qty
         return addtional_qty
+
+    def get_move_line_quant_match(self, move_id, dirty_move_line_ids, dirty_quant_ids):
+        # Since the quant_id field is neither stored nor computed, this method is used to compute the match if it exists
+        move = self.env['stock.move'].browse(move_id)
+        deleted_move_lines = move.move_line_ids - self
+        dirty_move_lines = self.env['stock.move.line'].browse(dirty_move_line_ids)
+        quants_data = []
+        move_lines_data = []
+        domain = [("id", "in", dirty_quant_ids)]
+        for move_line in dirty_move_lines | deleted_move_lines:
+            move_line_domain = [
+                ("product_id", "=", move_line.product_id.id),
+                ("lot_id", "=", move_line.lot_id.id),
+                ("location_id", "=", move_line.location_id.id),
+                ("package_id", "=", move_line.package_id.id),
+                ("owner_id", "=", move_line.owner_id.id),
+            ]
+            domain = expression.OR([domain, move_line_domain])
+        if domain:
+            quants = self.env['stock.quant'].search(domain)
+            for quant in quants:
+                dirty_lines = dirty_move_lines.filtered(lambda ml: ml.product_id == quant.product_id
+                    and ml.lot_id == quant.lot_id
+                    and ml.location_id == quant.location_id
+                    and ml.package_id == quant.package_id
+                    and ml.owner_id == quant.owner_id
+                )
+                deleted_lines = deleted_move_lines.filtered(lambda ml: ml.product_id == quant.product_id
+                    and ml.lot_id == quant.lot_id
+                    and ml.location_id == quant.location_id
+                    and ml.package_id == quant.package_id
+                    and ml.owner_id == quant.owner_id
+                )
+                quants_data.append((quant.id, {"available_quantity": quant.available_quantity + sum(ml.quantity_product_uom for ml in deleted_lines), "move_line_ids": dirty_lines.ids}))
+                move_lines_data += [(ml.id, {"quantity": ml.quantity, "quant_id": quant.id}) for ml in dirty_lines]
+        return [quants_data, move_lines_data]
 
     @api.model_create_multi
     def create(self, vals_list):

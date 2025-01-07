@@ -30,6 +30,7 @@ class ProcurementException(Exception):
 
 class StockRule(models.Model):
     """ A rule describe what a procurement should do; produce, buy, move, ... """
+    _name = 'stock.rule'
     _description = "Stock Rule"
     _order = "sequence, id"
     _check_company_auto = True
@@ -387,7 +388,7 @@ class StockRule(models.Model):
         delays = defaultdict(float)
         delay = sum(self.filtered(lambda r: r.action in ['pull', 'pull_push']).mapped('delay'))
         delays['total_delay'] += delay
-        global_visibility_days = self.env.context.get('global_visibility_days', 0)
+        global_visibility_days = self.env.context.get('global_visibility_days', self.env['ir.config_parameter'].sudo().get_param('stock.visibility_days', 0))
         if global_visibility_days:
             delays['total_delay'] += int(global_visibility_days)
         if self.env.context.get('bypass_delay_description'):
@@ -426,6 +427,7 @@ class ProcurementGroup(models.Model):
     The name is usually the name of the original document (sales order) or a
     sequence computed if created manually.
     """
+    _name = 'procurement.group'
     _description = 'Procurement Group'
     _order = "id desc"
 

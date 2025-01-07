@@ -70,6 +70,7 @@ class ResCompany(models.Model):
     website = fields.Char(related='partner_id.website', readonly=False)
     vat = fields.Char(related='partner_id.vat', string="Tax ID", readonly=False)
     company_registry = fields.Char(related='partner_id.company_registry', string="Company ID", readonly=False)
+    company_registry_placeholder = fields.Char(related='partner_id.company_registry_placeholder')
     paperformat_id = fields.Many2one('report.paperformat', 'Paper format', default=lambda self: self.env.ref('base.paperformat_euro', raise_if_not_found=False))
     external_report_layout_id = fields.Many2one('ir.ui.view', 'Document Template')
     font = fields.Selection([("Lato", "Lato"), ("Roboto", "Roboto"), ("Open_Sans", "Open Sans"), ("Montserrat", "Montserrat"), ("Oswald", "Oswald"), ("Raleway", "Raleway"), ('Tajawal', 'Tajawal'), ('Fira_Mono', 'Fira Mono')], default="Lato")
@@ -79,6 +80,7 @@ class ResCompany(models.Model):
     layout_background = fields.Selection([('Blank', 'Blank'), ('Demo logo', 'Demo logo'), ('Custom', 'Custom')], default="Blank", required=True)
     layout_background_image = fields.Binary("Background Image")
     uninstalled_l10n_module_ids = fields.Many2many('ir.module.module', compute='_compute_uninstalled_l10n_module_ids')
+
     _name_uniq = models.Constraint(
         'unique (name)',
         "The company name must be unique!",
@@ -261,15 +263,6 @@ class ResCompany(models.Model):
         newself = newself.with_context(context)
         domain = super(ResCompany, newself)._search_display_name(operator, value)
         return expression.AND([domain, constraint])
-
-    @api.model
-    @api.returns('self', lambda value: value.id)
-    def _company_default_get(self, object=False, field=False):
-        """ Returns the user's company
-            - Deprecated
-        """
-        _logger.warning("The method '_company_default_get' on res.company is deprecated and shouldn't be used anymore")
-        return self.env.company
 
     @api.depends('company_details')
     def _compute_empty_company_details(self):

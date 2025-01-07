@@ -871,6 +871,7 @@ class TestMrpOrder(TestMrpCommon):
         details_operation_form = Form(mo.move_raw_ids[-1], view=self.env.ref('stock.view_stock_move_operations'))
         with details_operation_form.move_line_ids.new() as ml:
             ml.quantity = 1
+            ml.picked = True
         details_operation_form.save()
         # Won't accept to be done, instead return a wizard
         mo.button_mark_done()
@@ -909,6 +910,7 @@ class TestMrpOrder(TestMrpCommon):
         details_operation_form = Form(mo.move_raw_ids[-1], view=self.env.ref('stock.view_stock_move_operations'))
         with details_operation_form.move_line_ids.new() as ml:
             ml.quantity = 1
+            ml.picked = True
         details_operation_form.save()
 
         # Won't accept to be done, instead return a wizard
@@ -3432,7 +3434,7 @@ class TestMrpOrder(TestMrpCommon):
 
         self.assertEqual(mo_backorder.workorder_ids[0].state, 'cancel')
         self.assertEqual(mo_backorder.workorder_ids[1].state, 'ready')
-        self.assertEqual(mo_backorder.workorder_ids[2].state, 'ready')
+        self.assertEqual(mo_backorder.workorder_ids[2].state, 'pending')
         self.assertFalse(mo_backorder.workorder_ids[0].date_start)
         self.assertEqual(mo_backorder.workorder_ids[1].date_start, datetime(2023, 3, 1, 12, 0))
         self.assertEqual(mo_backorder.workorder_ids[2].date_start, datetime(2023, 3, 1, 12, 45))
@@ -4889,6 +4891,28 @@ class TestMrpOrder(TestMrpCommon):
         production = production_form.save()
         self.assertEqual(production.workorder_ids[0].duration_expected, 15)
 
+    def test_mo_without_resource_calendar(self):
+        self.workcenter_1.resource_calendar_id = False
+
+        mo = self.env['mrp.production'].create({
+            'product_id': self.product_1.id,
+            'workorder_ids': [Command.create({
+                'name': 'Test Workorder',
+                'product_uom_id': self.product_1.uom_id.id,
+                'workcenter_id': self.workcenter_1.id,
+            })],
+        })
+
+        dt_start = datetime(2024, 12, 12, 8, 30)
+        dt_finished = datetime(2024, 12, 13, 8, 30)
+
+        mo.workorder_ids[0].date_start = dt_start
+        mo.workorder_ids[0].date_finished = dt_finished
+        mo.action_confirm()
+        mo.button_mark_done()
+
+        self.assertEqual(mo.state, 'done')
+        self.assertEqual(mo.workorder_ids[0].duration_expected, 1440.0)
 
 @tagged('-at_install', 'post_install')
 class TestTourMrpOrder(HttpCase):

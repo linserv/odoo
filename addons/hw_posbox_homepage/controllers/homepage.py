@@ -2,14 +2,18 @@
 
 import json
 import logging
+import netifaces
+import os
 import platform
+import requests
 import subprocess
 import threading
 import time
 
+from itertools import groupby
 from pathlib import Path
 from odoo import http
-from odoo.addons.hw_drivers.tools import helpers
+from odoo.addons.hw_drivers.tools import helpers, wifi
 from odoo.addons.hw_drivers.main import iot_devices
 from odoo.addons.hw_drivers.connection_manager import connection_manager
 from odoo.tools.misc import file_path
@@ -27,6 +31,15 @@ DRIVER_PREFIX = 'driver-'
 AVAILABLE_LOG_LEVELS = ('debug', 'info', 'warning', 'error')
 AVAILABLE_LOG_LEVELS_WITH_PARENT = AVAILABLE_LOG_LEVELS + ('parent',)
 
+CONTENT_SECURITY_POLICY = (
+    "default-src 'none';"
+    "script-src 'self' 'unsafe-eval';"  # OWL requires `unsafe-eval` to render templates
+    "connect-src 'self';"
+    "img-src 'self' data:;"             # `data:` scheme required as Bootstrap uses it for embedded SVGs
+    "style-src 'self';"
+    "font-src 'self';"
+)
+
 
 class IotBoxOwlHomePage(http.Controller):
     def __init__(self):
@@ -35,11 +48,15 @@ class IotBoxOwlHomePage(http.Controller):
 
     @http.route('/', auth='none', type='http')
     def index(self):
-        return http.Stream.from_path("hw_posbox_homepage/views/index.html").get_response(content_security_policy=None)
+        return http.Stream.from_path("hw_posbox_homepage/views/index.html").get_response(content_security_policy=CONTENT_SECURITY_POLICY)
 
     @http.route('/logs', auth='none', type='http')
     def logs_page(self):
-        return http.Stream.from_path("hw_posbox_homepage/views/logs.html").get_response(content_security_policy=None)
+        return http.Stream.from_path("hw_posbox_homepage/views/logs.html").get_response(content_security_policy=CONTENT_SECURITY_POLICY)
+
+    @http.route('/status', auth='none', type='http')
+    def status_page(self):
+        return http.Stream.from_path("hw_posbox_homepage/views/status_display.html").get_response(content_security_policy=CONTENT_SECURITY_POLICY)
 
     # ---------------------------------------------------------- #
     # GET methods                                                #
@@ -83,7 +100,8 @@ class IotBoxOwlHomePage(http.Controller):
 
     @http.route('/hw_posbox_homepage/wifi_clear', auth='none', type='http', cors='*')
     def clear_wifi_configuration(self):
-        helpers.unlink_file('wifi_network.txt')
+        helpers.update_conf({'wifi_ssid': '', 'wifi_password': ''})
+        wifi.disconnect(forget_network=True)
         return json.dumps({
             'status': 'success',
             'message': 'Successfully disconnected from wifi',
@@ -107,31 +125,36 @@ class IotBoxOwlHomePage(http.Controller):
 
     @http.route('/hw_posbox_homepage/data', auth="none", type="http", cors='*')
     def get_homepage_data(self):
+        network_interfaces = []
         if platform.system() == 'Linux':
-            ssid = helpers.get_ssid()
-            wired = helpers.read_file_first_line('/sys/class/net/eth0/operstate')
-        else:
-            wired = 'up'
-        if wired == 'up':
-            network = 'Ethernet'
-        elif ssid:
-            if helpers.access_point():
-                network = 'Wifi access point'
-            else:
-                network = 'Wifi : ' + ssid
-        else:
-            network = 'Not Connected'
+            ssid = wifi.get_current() or wifi.get_access_point_ssid()
+            interfaces = netifaces.interfaces()
+            for iface_id in interfaces:
+                if 'wlan' in iface_id or 'eth' in iface_id:
+                    is_wifi = 'wlan' in iface_id
+                    iface_obj = netifaces.ifaddresses(iface_id)
+                    ifconfigs = iface_obj.get(netifaces.AF_INET, [])
+                    for conf in ifconfigs:
+                        if conf.get('addr'):
+                            network_interfaces.append({
+                                'id': iface_id,
+                                'is_wifi': is_wifi,
+                                'ssid': ssid if is_wifi else None,
+                                'ip': conf.get('addr'),
+                            })
 
         is_certificate_ok, certificate_details = helpers.get_certificate_status()
 
-        iot_device = []
-        for device in iot_devices:
-            iot_device.append({
-                'name': iot_devices[device].device_name,
-                'value': str(iot_devices[device].data['value']),
-                'type': iot_devices[device].device_type.replace('_', ' '),
-                'identifier': iot_devices[device].device_identifier,
-            })
+        devices = [{
+            'name': device.device_name,
+            'value': str(device.data['value']),
+            'type': device.device_type,
+            'identifier': device.device_identifier
+        } for device in iot_devices.values()]
+        device_type_key = lambda device: device['type']
+        grouped_devices = {
+            device_type: list(devices) for device_type, devices in groupby(sorted(devices, key=device_type_key), device_type_key)
+        }
 
         terminal_id = helpers.get_conf('six_payment_terminal')
         six_terminal = terminal_id or 'Not Configured'
@@ -142,11 +165,12 @@ class IotBoxOwlHomePage(http.Controller):
             'hostname': helpers.get_hostname(),
             'ip': helpers.get_ip(),
             'mac': helpers.get_mac_address(),
-            'iot_device_status': iot_device,
+            'devices': grouped_devices,
             'server_status': helpers.get_odoo_server_url() or 'Not Configured',
             'pairing_code': connection_manager.pairing_code,
             'six_terminal': six_terminal,
-            'network_status': network,
+            'is_access_point_up': platform.system() == 'Linux' and wifi.is_access_point(),
+            'network_interfaces': network_interfaces,
             'version': helpers.get_version(),
             'system': platform.system(),
             'is_certificate_ok': is_certificate_ok,
@@ -155,7 +179,10 @@ class IotBoxOwlHomePage(http.Controller):
 
     @http.route('/hw_posbox_homepage/wifi', auth="none", type="http", cors='*')
     def get_available_wifi(self):
-        return json.dumps(helpers.get_wifi_essid())
+        return json.dumps({
+            'currentWiFi': wifi.get_current(),
+            'availableWiFi': wifi.get_available_ssids(),
+        })
 
     @http.route('/hw_posbox_homepage/generate_password', auth="none", type="http", cors='*')
     def generate_password(self):
@@ -163,24 +190,33 @@ class IotBoxOwlHomePage(http.Controller):
             'password': helpers.generate_password(),
         })
 
-    @http.route('/hw_posbox_homepage/upgrade', auth="none", type="http", cors='*')
-    def upgrade_iotbox(self):
-        commit = subprocess.check_output(
-            ["git", "--work-tree=/home/pi/odoo/", "--git-dir=/home/pi/odoo/.git", "log", "-1"]).decode('utf-8').replace("\n", "<br/>")
-        flashToVersion = helpers.check_image()
-        actualVersion = helpers.get_version()
+    @http.route('/hw_posbox_homepage/version_info', auth="none", type="http", cors='*')
+    def get_version_info(self):
+        git = ["git", "--work-tree=/home/pi/odoo/", "--git-dir=/home/pi/odoo/.git"]
+        # Check branch name and last commit hash on IoT Box
+        current_commit = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, check=False, text=True)
+        current_branch = subprocess.run(
+            [*git, "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, check=False, text=True
+        )
+        if current_commit.returncode != 0 or current_branch.returncode != 0:
+            return
+        current_commit = current_commit.stdout.strip()
+        current_branch = current_branch.stdout.strip()
 
-        if flashToVersion:
-            flashToVersion = '%s.%s' % (flashToVersion.get(
-                'major', ''), flashToVersion.get('minor', ''))
+        last_available_commit = subprocess.run(
+            [*git, "ls-remote", "origin", current_branch], capture_output=True, check=False, text=True
+        )
+        if last_available_commit.returncode != 0:
+            _logger.error("Failed to retrieve last commit available for branch origin/%s", current_branch)
+            return
+        last_available_commit = last_available_commit.stdout.split()[0].strip()
 
         return json.dumps({
-            'title': "Odoo's IoTBox - Software Upgrade",
-            'breadcrumb': 'IoT Box Software Upgrade',
-            'loading_message': 'Updating IoT box',
-            'commit': commit,
-            'flashToVersion': flashToVersion,
-            'actualVersion': actualVersion,
+            'status': 'success',
+            # Checkout requires db to align with its version (=branch)
+            'odooIsUpToDate': current_commit == last_available_commit or not bool(helpers.get_odoo_server_url()),
+            'imageIsUpToDate': not bool(helpers.check_image()),
+            'currentCommitHash': current_commit,
         })
 
     @http.route('/hw_posbox_homepage/log_levels', auth="none", type="http", cors='*')
@@ -205,24 +241,12 @@ class IotBoxOwlHomePage(http.Controller):
         })
 
     @http.route('/hw_posbox_homepage/load_iot_handlers', auth="none", type="http", cors='*')
-    def load_iot_log_level(self):
+    def load_iot_handlers(self):
         helpers.download_iot_handlers(False)
         helpers.odoo_restart(0)
         return json.dumps({
             'status': 'success',
             'message': 'IoT Handlers loaded successfully',
-        })
-
-    @http.route('/hw_posbox_homepage/clear_iot_handlers', auth="none", type="http", cors='*')
-    def clear_iot_handlers(self):
-        for directory in ['drivers', 'interfaces']:
-            for file in list(Path(file_path(f'hw_drivers/iot_handlers/{directory}')).glob('*')):
-                if file.name != '__pycache__':
-                    helpers.unlink_file(str(file.relative_to(*file.parts[:3])))
-
-        return json.dumps({
-            'status': 'success',
-            'message': 'IoT Handlers cleared successfully',
         })
 
     # ---------------------------------------------------------- #
@@ -254,10 +278,9 @@ class IotBoxOwlHomePage(http.Controller):
         }
 
     @http.route('/hw_posbox_homepage/update_wifi', auth="none", type="jsonrpc", methods=['POST'], cors='*')
-    def update_wifi(self, essid, password, persistent=False):
-        persistent = "1" if persistent else ""
-        subprocess.check_call([file_path(
-            'point_of_sale/tools/posbox/configuration/connect_to_wifi.sh'), essid, password, persistent])
+    def update_wifi(self, essid, password):
+        if wifi.connect(essid, password):
+            helpers.update_conf({'wifi_ssid': essid, 'wifi_password': password})
         server = helpers.get_odoo_server_url()
 
         res_payload = {
@@ -309,7 +332,7 @@ class IotBoxOwlHomePage(http.Controller):
 
         if iotname and platform.system() == 'Linux' and iotname != helpers.get_hostname():
             subprocess.run([file_path(
-                'point_of_sale/tools/posbox/configuration/rename_iot.sh'), iotname], check=False)
+                'iot_box_image/configuration/rename_iot.sh'), iotname], check=False)
 
         # 1 sec delay for IO operations (save_conf_server)
         helpers.odoo_restart(1)
@@ -347,6 +370,14 @@ class IotBoxOwlHomePage(http.Controller):
         return {
             'status': 'success',
             'message': 'Logger level updated',
+        }
+
+    @http.route('/hw_posbox_homepage/update_git_tree', auth="none", type="jsonrpc", methods=['POST'], cors='*')
+    def update_git_tree(self):
+        helpers.check_git_branch()
+        return {
+            'status': 'success',
+            'message': 'Successfully updated the IoT Box',
         }
 
     # ---------------------------------------------------------- #

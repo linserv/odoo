@@ -57,34 +57,6 @@ export class HandlerDialog extends Component {
         }
     }
 
-    async loadIotHandlers() {
-        try {
-            const data = await this.store.rpc({
-                url: "/hw_posbox_homepage/load_iot_handlers",
-            });
-
-            if (data.status === "success") {
-                this.state.waitRestart = true;
-            }
-        } catch {
-            console.warn("Error while saving data");
-        }
-    }
-
-    async clearIotHandlers() {
-        try {
-            const data = await this.store.rpc({
-                url: "/hw_posbox_homepage/clear_iot_handlers",
-            });
-
-            if (data.status === "success") {
-                this.state.waitRestart = true;
-            }
-        } catch {
-            console.warn("Error while saving data");
-        }
-    }
-
     static template = xml`
         <LoadingFullScreen t-if="this.state.waitRestart">
             <t t-set-slot="body">
@@ -97,7 +69,7 @@ export class HandlerDialog extends Component {
                 Handler logging
             </t>
             <t t-set-slot="body">
-                <div t-if="this.state.initialization" class="position-absolute top-0 start-0 bg-white h-100 w-100 justify-content-center align-items-center d-flex flex-column gap-3" style="z-index: 9999; min-height: 300px">
+                <div t-if="this.state.initialization" class="position-absolute top-0 start-0 bg-white h-100 w-100 justify-content-center align-items-center d-flex flex-column gap-3 always-on-top handler-loading">
                     <div class="spinner-border" role="status">
                         <span class="visually-hidden">Loading...</span>
                     </div>
@@ -168,17 +140,6 @@ export class HandlerDialog extends Component {
                                 <option value="error">Error</option>
                             </select>
                             <input t-else="" type="text" class="form-control" aria-label="Text input with dropdown button" disabled="true" placeholder="Logger uninitialised" />
-                        </div>
-                    </div>
-                    <div>
-                        <h5>Debug</h5>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-primary btn-sm" t-on-click="loadIotHandlers">
-                                Load IOT Handlers
-                            </button>
-                            <button class="btn btn-primary btn-sm" t-on-click="clearIotHandlers">
-                                Clear IOT Handlers
-                            </button>
                         </div>
                     </div>
                 </t>

@@ -194,7 +194,7 @@ class AccountTax(models.Model):
     country_code = fields.Char(related='country_id.code', readonly=True)
     is_used = fields.Boolean(string="Tax used", compute='_compute_is_used')
     repartition_lines_str = fields.Char(string="Repartition Lines", tracking=True, compute='_compute_repartition_lines_str')
-    invoice_legal_notes = fields.Html(string="Legal Notes", help="Legal mentions that have to be printed on the invoices.")
+    invoice_legal_notes = fields.Html(string="Legal Notes", translate=True, help="Legal mentions that have to be printed on the invoices.")
     # Technical field depicting if the tax has at least one repartition line with a percentage below 0.
     # Used for the taxes computation to manage the reverse charge taxes having a repartition +100 -100.
     has_negative_factor = fields.Boolean(compute='_compute_has_negative_factor')
@@ -2355,7 +2355,7 @@ class AccountTax(models.Model):
         taxes, company = self.env['account.tax'], company_id
         while not taxes and company:
             taxes = self.filtered(lambda t: t.company_id == company)
-            company = company.parent_id
+            company = company.sudo().parent_id
         return taxes
 
     @api.model

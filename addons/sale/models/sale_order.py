@@ -784,6 +784,12 @@ class SaleOrder(models.Model):
 
     #=== ONCHANGE METHODS ===#
 
+    def onchange(self, values, field_names, fields_spec):
+        self_with_context = self
+        if not field_names: # Some warnings should not be displayed for the first onchange
+            self_with_context = self.with_context(sale_onchange_first_call=True)
+        return super(SaleOrder, self_with_context).onchange(values, field_names, fields_spec)
+
     @api.onchange('commitment_date', 'expected_date')
     def _onchange_commitment_date(self):
         """ Warn if the commitment dates is sooner than the expected date """
@@ -799,6 +805,8 @@ class SaleOrder(models.Model):
     @api.onchange('company_id')
     def _onchange_company_id_warning(self):
         self.show_update_pricelist = True
+        if self.env.context.get('sale_onchange_first_call'):
+            return
         if self.order_line and self.state == 'draft':
             return {
                 'warning': {
@@ -988,6 +996,7 @@ class SaleOrder(models.Model):
             'default_res_ids': self.ids,
             'default_composition_mode': 'comment',
             'default_email_layout_xmlid': 'mail.mail_notification_layout_with_responsible_signature',
+            'hide_mail_template_management_options': True,
             'proforma': self.env.context.get('proforma', False),
         }
 
@@ -1666,7 +1675,6 @@ class SaleOrder(models.Model):
             return
         return super()._track_finalize()
 
-    @api.returns('mail.message', lambda value: value.id)
     def message_post(self, **kwargs):
         if self.env.context.get('mark_so_as_sent'):
             self.filtered(lambda o: o.state == 'draft').with_context(tracking_disable=True).write({'state': 'sent'})
@@ -1675,10 +1683,10 @@ class SaleOrder(models.Model):
             kwargs['notify_author'] = self.env.user.partner_id.id in (kwargs.get('partner_ids') or [])
         return super(SaleOrder, self.with_context(**so_ctx)).message_post(**kwargs)
 
-    def _notify_get_recipients_groups(self, message, model_description, msg_vals=None):
-        """ Give access button to users and portal customer as portal is integrated
-        in sale. Customer and portal group have probably no right to see
-        the document so they don't have the access button. """
+    def _notify_get_recipients_groups(self, message, model_description, msg_vals=False):
+        # Give access button to users and portal customer as portal is integrated
+        # in sale. Customer and portal group have probably no right to see
+        # the document so they don't have the access button.
         groups = super()._notify_get_recipients_groups(
             message, model_description, msg_vals=msg_vals
         )
@@ -1726,7 +1734,7 @@ class SaleOrder(models.Model):
     def _notify_by_email_prepare_rendering_context(self, message, msg_vals=False, model_description=False,
                                                    force_email_company=False, force_email_lang=False):
         render_context = super()._notify_by_email_prepare_rendering_context(
-            message, msg_vals, model_description=model_description,
+            message, msg_vals=msg_vals, model_description=model_description,
             force_email_company=force_email_company, force_email_lang=force_email_lang
         )
         lang_code = render_context.get('lang')
@@ -2183,7 +2191,7 @@ class SaleOrder(models.Model):
                 'product_uom_qty': quantity,
                 'sequence': ((self.order_line and self.order_line[-1].sequence + 1) or 10),  # put it at the end of the order
             })
-        return sol.price_unit
+        return sol.price_unit * (1-(sol.discount or 0.0)/100.0)
 
     #=== TOOLING ===#
 

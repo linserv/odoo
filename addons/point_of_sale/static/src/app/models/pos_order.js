@@ -1,12 +1,9 @@
 import { registry } from "@web/core/registry";
 import { Base } from "./related_models";
 import { _t } from "@web/core/l10n/translation";
-import { serializeDateTime } from "@web/core/l10n/dates";
 import { random5Chars, uuidv4 } from "@point_of_sale/utils";
-import { renderToElement } from "@web/core/utils/render";
 import { floatIsZero, roundPrecision } from "@web/core/utils/numbers";
 import { computeComboItems } from "./utils/compute_combo_items";
-import { changesToOrder } from "./utils/order_change";
 import { accountTaxHelpers } from "@account/helpers/account_tax";
 import { getTaxesAfterFiscalPosition } from "./utils/tax_utils";
 
@@ -24,9 +21,7 @@ export class PosOrder extends Base {
         }
 
         // Data present in python model
-        this.date_order = vals.date_order || serializeDateTime(luxon.DateTime.now());
         this.to_invoice = vals.to_invoice || false;
-        this.shipping_date = vals.shipping_date || false;
         this.state = vals.state || "draft";
         this.uuid = vals.uuid ? vals.uuid : uuidv4();
         this.last_order_preparation_change = vals.last_order_preparation_change
@@ -35,11 +30,16 @@ export class PosOrder extends Base {
                   lines: {},
                   general_customer_note: "",
                   internal_note: "",
+                  sittingMode: 0,
               };
         this.general_customer_note = vals.general_customer_note || "";
         this.internal_note = vals.internal_note || "";
         if (!vals.lines) {
             this.lines = [];
+        }
+
+        if (!this.date_order) {
+            this.date_order = DateTime.now();
         }
 
         // !!Keep all uiState in one object!!
@@ -75,7 +75,7 @@ export class PosOrder extends Base {
     }
 
     get currency() {
-        return this.models["res.currency"].getFirst();
+        return this.config.currency_id;
     }
 
     get pickingType() {
@@ -99,8 +99,9 @@ export class PosOrder extends Base {
     }
 
     get presetTime() {
-        const dateTime = DateTime.fromSQL(this.preset_time);
-        return dateTime.isValid ? dateTime.toFormat("HH:mm") : false;
+        return this.preset_time && this.preset_time.isValid
+            ? this.preset_time.toFormat("HH:mm")
+            : false;
     }
 
     getEmailItems() {
@@ -122,6 +123,8 @@ export class PosOrder extends Base {
         const company = this.company;
         const extraValues = { currency_id: currency };
         const orderLines = this.lines;
+        const isRefund = this._isRefundOrder();
+        const documentSign = isRefund ? -1 : 1;
 
         const baseLines = [];
         for (const line of orderLines) {
@@ -132,7 +135,7 @@ export class PosOrder extends Base {
             baseLines.push(
                 accountTaxHelpers.prepare_base_line_for_taxes_computation(line, {
                     ...extraValues,
-                    quantity: line.qty,
+                    quantity: documentSign * line.qty,
                     tax_ids: taxes,
                 })
             );
@@ -151,6 +154,7 @@ export class PosOrder extends Base {
         });
 
         cashRounding = this.config.rounding_method;
+        taxTotals.order_sign = documentSign;
         taxTotals.order_total =
             taxTotals.total_amount_currency - (taxTotals.cash_rounding_base_amount_currency || 0.0);
         taxTotals.order_rounding = taxTotals.cash_rounding_base_amount_currency || 0.0;
@@ -160,7 +164,7 @@ export class PosOrder extends Base {
         let amountPaid = 0.0;
         for (const payment of this.payment_ids) {
             if (payment.isDone() && !payment.is_change) {
-                amountPaid += payment.getAmount();
+                amountPaid += documentSign * payment.getAmount();
             }
         }
 
@@ -227,6 +231,7 @@ export class PosOrder extends Base {
         let totalAmountDue = this.getDue();
         if (paymentMethod.is_cash_count && this.config.cash_rounding) {
             const cashRounding = this.config.rounding_method;
+            const taxTotals = this.taxTotals;
 
             // Suppose you have a cash rounding 0.05 DOWN on the whole pos order.
             // Your pos order has a total amount of 15.72.
@@ -239,7 +244,8 @@ export class PosOrder extends Base {
             // To avoid that, we add the collected rounding so far to compute the suggested amount.
             // That way, the suggested cash amount will be computed on 15.05 and not 15.03.
             totalAmountDue = roundPrecision(
-                totalAmountDue - (this.taxTotals.cash_rounding_base_amount_currency || 0.0),
+                totalAmountDue -
+                    (taxTotals.order_sign * taxTotals.cash_rounding_base_amount_currency || 0.0),
                 cashRounding.rounding,
                 cashRounding.rounding_method
             );
@@ -263,79 +269,8 @@ export class PosOrder extends Base {
         });
     }
 
-    // NOTE args added [unwatchedPrinter]
-    async printChanges(skipped = false, orderPreparationCategories, cancelled, unwatchedPrinter) {
-        const orderChange = changesToOrder(this, skipped, orderPreparationCategories, cancelled);
-        const d = new Date();
-
-        let isPrintSuccessful = true;
-
-        let hours = "" + d.getHours();
-        hours = hours.length < 2 ? "0" + hours : hours;
-
-        let minutes = "" + d.getMinutes();
-        minutes = minutes.length < 2 ? "0" + minutes : minutes;
-
-        orderChange.new.sort((a, b) => {
-            const sequenceA = a.pos_categ_sequence;
-            const sequenceB = b.pos_categ_sequence;
-            if (sequenceA === 0 && sequenceB === 0) {
-                return a.pos_categ_id - b.pos_categ_id;
-            }
-
-            return sequenceA - sequenceB;
-        });
-
-        for (const printer of unwatchedPrinter) {
-            const changes = this._getPrintingCategoriesChanges(
-                printer.config.product_categories_ids,
-                orderChange
-            );
-            if (changes["new"].length > 0 || changes["cancelled"].length > 0) {
-                const printingChanges = {
-                    new: changes["new"],
-                    cancelled: changes["cancelled"],
-                    table_name: this.table_id?.table_number,
-                    floor_name: this.table_id?.floor_id?.name,
-                    time: {
-                        hours,
-                        minutes,
-                    },
-                    order_name: this.getName(),
-                };
-                const receipt = renderToElement("point_of_sale.OrderChangeReceipt", {
-                    changes: printingChanges,
-                });
-                const result = await printer.printReceipt(receipt);
-                if (!result.successful) {
-                    isPrintSuccessful = false;
-                }
-            }
-        }
-
-        return isPrintSuccessful;
-    }
-
     get isBooked() {
         return Boolean(this.uiState.booked || !this.isEmpty() || typeof this.id === "number");
-    }
-
-    _getPrintingCategoriesChanges(categories, currentOrderChange) {
-        const filterFn = (change) => {
-            const product = this.models["product.product"].get(change["product_id"]);
-            const categoryIds = product.parentPosCategIds;
-
-            for (const categoryId of categoryIds) {
-                if (categories.includes(categoryId)) {
-                    return true;
-                }
-            }
-        };
-
-        return {
-            new: currentOrderChange["new"].filter(filterFn),
-            cancelled: currentOrderChange["cancelled"].filter(filterFn),
-        };
     }
 
     get hasChange() {
@@ -358,12 +293,15 @@ export class PosOrder extends Base {
                         line.getQuantity();
                 } else {
                     this.last_order_preparation_change.lines[line.preparationKey] = {
-                        attribute_value_ids: line.attribute_value_ids.map((a) =>
-                            a.serialize({ orm: true })
-                        ),
+                        attribute_value_ids: line.attribute_value_ids.map((a) => ({
+                            ...a.serialize({ orm: true }),
+                            name: a.name,
+                        })),
                         uuid: line.uuid,
+                        isCombo: line.combo_item_id?.id,
                         product_id: line.getProduct().id,
                         name: line.getFullProductName(),
+                        basic_name: line.getProduct().name,
                         note: line.getNote(),
                         quantity: line.getQuantity(),
                     };
@@ -371,16 +309,17 @@ export class PosOrder extends Base {
                 line.setHasChange(false);
             }
         });
-
         // Checks whether an orderline has been deleted from the order since it
-        // was last sent to the preparation tools. If so we delete it to the changes.
+        // was last sent to the preparation tools or updated. If so we delete older changes.
         for (const [key, change] of Object.entries(this.last_order_preparation_change.lines)) {
-            if (!this.models["pos.order.line"].getBy("uuid", change.uuid)) {
+            const orderline = this.models["pos.order.line"].getBy("uuid", change.uuid);
+            if (!orderline || change.note.trim() !== orderline.note.trim()) {
                 delete this.last_order_preparation_change.lines[key];
             }
         }
         this.last_order_preparation_change.general_customer_note = this.general_customer_note;
         this.last_order_preparation_change.internal_note = this.internal_note;
+        this.last_order_preparation_change.sittingMode = this.preset_id?.id || 0;
     }
 
     hasSkippedChanges() {
@@ -402,7 +341,7 @@ export class PosOrder extends Base {
         this.lines.forEach((line) => line.updateSavedQuantity());
     }
 
-    assetEditable() {
+    assertEditable() {
         if (this.finalized) {
             throw new Error("Finalized Order cannot be modified");
         }
@@ -552,7 +491,7 @@ export class PosOrder extends Base {
                 delete this.uiState.lineToRefund[lineToRemove.refunded_orderline_id.uuid];
             }
 
-            if (this.assetEditable()) {
+            if (this.assertEditable()) {
                 lineToRemove.delete();
             }
         }
@@ -569,8 +508,17 @@ export class PosOrder extends Base {
         }
         return false;
     }
+
     doNotAllowRefundAndSales() {
-        return false;
+        return true;
+    }
+
+    _isRefundAndSalesNotAllowed(values, options) {
+        return (
+            this._isRefundOrder() &&
+            this.doNotAllowRefundAndSales() &&
+            (!values.qty || values.qty > 0)
+        );
     }
 
     getSelectedOrderline() {
@@ -599,7 +547,7 @@ export class PosOrder extends Base {
 
     /* ---- Payment Lines --- */
     addPaymentline(payment_method) {
-        this.assetEditable();
+        this.assertEditable();
         if (this.electronicPaymentInProgress()) {
             return false;
         } else {
@@ -612,7 +560,7 @@ export class PosOrder extends Base {
             newPaymentLine.setAmount(totalAmountDue);
 
             if (
-                payment_method.payment_terminal ||
+                (payment_method.payment_terminal && !this._isRefundOrder()) ||
                 payment_method.payment_method_type === "qr_code"
             ) {
                 newPaymentLine.setPaymentStatus("pending");
@@ -629,7 +577,7 @@ export class PosOrder extends Base {
     }
 
     removePaymentline(line) {
-        this.assetEditable();
+        this.assertEditable();
 
         if (this.getSelectedPaymentline() === line) {
             this.selectPaymentline(undefined);
@@ -688,11 +636,11 @@ export class PosOrder extends Base {
     }
 
     getTotalWithTax() {
-        return this.taxTotals.total_amount_currency;
+        return this.taxTotals.order_sign * this.taxTotals.total_amount_currency;
     }
 
     getTotalWithoutTax() {
-        return this.taxTotals.base_amount_currency;
+        return this.taxTotals.order_sign * this.taxTotals.base_amount_currency;
     }
 
     _getIgnoredProductIdsTotalDiscount() {
@@ -719,7 +667,10 @@ export class PosOrder extends Base {
                         orderLine.getUnitDisplayPriceBeforeDiscount() *
                         (orderLine.getDiscount() / 100) *
                         orderLine.getQuantity();
-                    if (orderLine.displayDiscountPolicy() === "without_discount") {
+                    if (
+                        orderLine.displayDiscountPolicy() === "without_discount" &&
+                        !(orderLine.price_type === "manual")
+                    ) {
                         sum +=
                             (orderLine.getTaxedlstUnitPrice() -
                                 orderLine.getUnitDisplayPriceBeforeDiscount()) *
@@ -733,7 +684,7 @@ export class PosOrder extends Base {
     }
 
     getTotalTax() {
-        return this.taxTotals.tax_amount_currency;
+        return this.taxTotals.order_sign * this.taxTotals.tax_amount_currency;
     }
 
     getTotalPaid() {
@@ -801,14 +752,15 @@ export class PosOrder extends Base {
     hasRemainingAmount() {
         const dueAmount = this.getDue();
         const changeAmount = this.getChange();
+        const orderSign = this.taxTotals.order_sign;
         return (
-            floatIsZero(changeAmount, this.currency.rounding) &&
-            (floatIsZero(dueAmount, this.currency.rounding) || dueAmount > 0.0)
+            floatIsZero(changeAmount, this.currency.decimal_places) &&
+            (floatIsZero(dueAmount, this.currency.decimal_places) || orderSign * dueAmount > 0.0)
         );
     }
 
     getChange() {
-        return this.taxTotals.order_change || 0.0;
+        return this.taxTotals.order_sign * (this.taxTotals.order_change || 0.0);
     }
 
     getDue() {
@@ -817,11 +769,23 @@ export class PosOrder extends Base {
     }
 
     getRoundingApplied() {
-        return this.taxTotals.payment_cash_rounding_amount_currency || 0.0;
+        return (
+            this.taxTotals.order_sign *
+            (this.taxTotals.payment_cash_rounding_amount_currency || 0.0)
+        );
     }
 
     isPaid() {
         return this.getDue() <= 0;
+    }
+
+    isRefundInProcess() {
+        return (
+            this._isRefundOrder() &&
+            this.payment_ids.some(
+                (pl) => pl.payment_method_id.use_payment_terminal && pl.payment_status !== "done"
+            )
+        );
     }
 
     isPaidWithCash() {
@@ -838,7 +802,7 @@ export class PosOrder extends Base {
 
     /* ---- Invoice --- */
     setToInvoice(to_invoice) {
-        this.assetEditable();
+        this.assertEditable();
         this.to_invoice = to_invoice;
     }
 
@@ -850,7 +814,7 @@ export class PosOrder extends Base {
     /* ---- Partner --- */
     // the partner related to the current order.
     setPartner(partner) {
-        this.assetEditable();
+        this.assertEditable();
         this.partner_id = partner;
         this.updatePricelistAndFiscalPosition(partner);
     }

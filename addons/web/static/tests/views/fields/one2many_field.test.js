@@ -974,7 +974,6 @@ test("use the limit attribute in arch (in field o2m non inline list view)", asyn
                     turtle_foo: {},
                 },
                 limit: 2,
-                order: "",
             },
         });
     });
@@ -1086,13 +1085,11 @@ test("embedded one2many with handle widget", async () => {
     await clickSave();
 
     expect(
-        Turtle._records.map((r) => {
-            return {
-                id: r.id,
-                turtle_foo: r.turtle_foo,
-                turtle_int: r.turtle_int,
-            };
-        })
+        Turtle._records.map((r) => ({
+            id: r.id,
+            turtle_foo: r.turtle_foo,
+            turtle_int: r.turtle_int,
+        }))
     ).toEqual([
         { id: 1, turtle_foo: "yop", turtle_int: 1 },
         { id: 2, turtle_foo: "blip", turtle_int: 0 },
@@ -1464,9 +1461,7 @@ test("onchange with modifiers for embedded one2many on the second page", async (
         resId: 1,
     });
 
-    const getTurtleFooValues = () => {
-        return queryAllTexts(".o_data_cell.o_list_char").join("");
-    };
+    const getTurtleFooValues = () => queryAllTexts(".o_data_cell.o_list_char").join("");
 
     expect(getTurtleFooValues()).toBe("#20#21#22#23#24#25#26#27#28#29");
 
@@ -1737,7 +1732,6 @@ test("x2many fields inside x2manys are fetched after an onchange", async () => {
                     turtle_foo: {},
                 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -1930,7 +1924,6 @@ test("onchange on one2many with x2many in list (no widget) and form view (list)"
                     },
                 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -2133,7 +2126,6 @@ test("onchange on one2many with x2many in list (many2many_tags) and form view (l
                     },
                 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -2464,7 +2456,7 @@ test("edition of one2many field with pager", async () => {
                         <templates>
                             <t t-name="card">
                                 <div>
-                                    <a t-if="!read_only_mode" type="delete" class="fa fa-times float-end delete_icon"/>
+                                    <a type="delete" class="fa fa-times float-end delete_icon"/>
                                     <field name="name"/>
                                 </div>
                             </t>
@@ -2600,7 +2592,7 @@ test("edition of one2many field with pager on desktop", async () => {
                         <templates>
                             <t t-name="card">
                                 <div>
-                                    <a t-if="!read_only_mode" type="delete" class="fa fa-times float-end delete_icon"/>
+                                    <a type="delete" class="fa fa-times float-end delete_icon"/>
                                     <field name="name"/>
                                 </div>
                             </t>
@@ -3034,7 +3026,6 @@ test("onchange specification complete after open sub form view not inline", asyn
                         turtle_foo: {},
                     },
                     limit: 40,
-                    order: "",
                 },
             });
         } else if (args[1].name === "test2") {
@@ -3049,12 +3040,10 @@ test("onchange specification complete after open sub form view not inline", asyn
                                 name: {},
                             },
                             limit: 40,
-                            order: "",
                         },
                         turtle_foo: {},
                     },
                     limit: 40,
-                    order: "",
                 },
             });
             return {
@@ -3440,7 +3429,7 @@ test("one2many kanban: edition", async () => {
                         <templates>
                             <t t-name="card">
                                 <div>
-                                    <a t-if="!read_only_mode" type="delete" class="fa fa-times float-end delete_icon"/>
+                                    <a type="delete" class="fa fa-times float-end delete_icon"/>
                                     <field name="name"/>
                                     <field name="color"/>
                                 </div>
@@ -3542,7 +3531,7 @@ test("one2many kanban: create action disabled", async () => {
                         <templates>
                             <t t-name="card">
                                 <div>
-                                    <a t-if="!read_only_mode" type="delete" class="fa fa-times float-end delete_icon"/>
+                                    <a type="delete" class="fa fa-times float-end delete_icon"/>
                                     <field name="name"/>
                                 </div>
                             </t>
@@ -4097,7 +4086,6 @@ test("save a record with not new, dirty and invalid subrecord", async () => {
                 </field>
             </form>`,
         resId: 1,
-        mode: "edit",
     });
 
     expect(".o_form_editable").toHaveCount(1);
@@ -4456,16 +4444,14 @@ test("onchange in a one2many", async () => {
     });
     Partner._records[1].p = [3];
     Partner._onChanges = { p: () => {} };
-    onRpc("onchange", (args) => {
-        return {
-            value: {
-                p: [
-                    [2, 3], // delete 3
-                    [0, 0, { foo: "from onchange" }], // create new
-                ],
-            },
-        };
-    });
+    onRpc("onchange", (args) => ({
+        value: {
+            p: [
+                [2, 3], // delete 3
+                [0, 0, { foo: "from onchange" }], // create new
+            ],
+        },
+    }));
     await mountView({
         type: "form",
         resModel: "partner",
@@ -4495,15 +4481,13 @@ test("one2many, default_get and onchange (basic)", async () => {
         default: [],
     });
     Partner._onChanges = { p: () => {} };
-    onRpc("onchange", (args) => {
-        return {
-            value: {
-                p: [
-                    [0, 0, { foo: "from onchange" }], // create new
-                ],
-            },
-        };
-    });
+    onRpc("onchange", (args) => ({
+        value: {
+            p: [
+                [0, 0, { foo: "from onchange" }], // create new
+            ],
+        },
+    }));
     await mountView({
         type: "form",
         resModel: "partner",
@@ -4809,6 +4793,33 @@ test("one2many editable list with onchange keeps the order", async () => {
     });
     contains(".o_form_view").click();
     expect(queryAllTexts(".o_data_cell")).toEqual(["new", "second record", "aaa"]);
+});
+
+test("one2many list: sort and save", async () => {
+    Partner._records[0].p = [1, 2, 4];
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        arch: `
+            <form>
+                <field name="int_field"/>
+                <field name="p">
+                    <list>
+                        <field name="name"/>
+                    </list>
+                </field>
+            </form>`,
+        resId: 1,
+    });
+    expect(queryAllTexts(".o_data_cell")).toEqual(["first record", "second record", "aaa"]);
+
+    await contains("th.o_column_sortable").click();
+    expect(queryAllTexts(".o_data_cell")).toEqual(["aaa", "first record", "second record"]);
+
+    await contains(".o_field_widget[name=int_field] input").edit("44");
+    await clickSave();
+    expect(queryAllTexts(".o_data_cell")).toEqual(["aaa", "first record", "second record"]);
 });
 
 test("one2many list (editable): readonly domain is evaluated", async () => {
@@ -6336,7 +6347,6 @@ test("nested x2many (inline form view) and _onChanges", async () => {
                     },
                 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -7436,7 +7446,6 @@ test("one2many: onchange that returns unknown field in list, but not in form", a
                     },
                 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -7579,11 +7588,9 @@ test("onchange on a one2many containing a one2many", async () => {
                                 name: {},
                             },
                             limit: 40,
-                            order: "",
                         },
                     },
                     limit: 40,
-                    order: "",
                 },
             });
         }
@@ -8149,18 +8156,16 @@ test("onchange on nested one2manys", async () => {
 test("one2many with multiple pages and sequence field", async () => {
     Partner._records[0].turtles = [3, 2, 1];
     Partner._onChanges.turtles = function () {};
-    onRpc("onchange", () => {
-        return {
-            value: {
-                turtles: [
-                    [2, 2],
-                    [2, 3],
-                    [4, 1, { id: 1, turtle_int: 0, turtle_foo: "yop", partner_ids: [] }],
-                    [1, 1, { turtle_foo: "from onchange" }],
-                ],
-            },
-        };
-    });
+    onRpc("onchange", () => ({
+        value: {
+            turtles: [
+                [2, 2],
+                [2, 3],
+                [4, 1, { id: 1, turtle_int: 0, turtle_foo: "yop", partner_ids: [] }],
+                [1, 1, { turtle_foo: "from onchange" }],
+            ],
+        },
+    }));
     await mountView({
         type: "form",
         resModel: "partner",
@@ -8183,18 +8188,16 @@ test("one2many with multiple pages and sequence field", async () => {
 test("one2many with multiple pages and sequence field, part2", async () => {
     Partner._records[0].turtles = [3, 2, 1];
     Partner._onChanges.turtles = function () {};
-    onRpc("onchange", () => {
-        return {
-            value: {
-                turtles: [
-                    [2, 2],
-                    [4, 1, { id: 1, turtle_int: 0, turtle_foo: "yop", partner_ids: [] }],
-                    [1, 1, { turtle_foo: "from onchange id2" }],
-                    [1, 3, { turtle_foo: "from onchange id3" }],
-                ],
-            },
-        };
-    });
+    onRpc("onchange", () => ({
+        value: {
+            turtles: [
+                [2, 2],
+                [4, 1, { id: 1, turtle_int: 0, turtle_foo: "yop", partner_ids: [] }],
+                [1, 1, { turtle_foo: "from onchange id2" }],
+                [1, 3, { turtle_foo: "from onchange id3" }],
+            ],
+        },
+    }));
     await mountView({
         type: "form",
         resModel: "partner",
@@ -10366,11 +10369,7 @@ test("reordering embedded one2many with handle widget starting with same sequenc
     ]);
 
     await clickSave();
-    expect(
-        Turtle._records.map((r) => {
-            return { id: r.id, turtle_int: r.turtle_int };
-        })
-    ).toEqual([
+    expect(Turtle._records.map((r) => ({ id: r.id, turtle_int: r.turtle_int }))).toEqual([
         { id: 1, turtle_int: 2 },
         { id: 2, turtle_int: 3 },
         { id: 3, turtle_int: 4 },
@@ -11803,7 +11802,6 @@ test("create a new record with an x2m invisible", async () => {
                     },
                 },
                 limit: 40,
-                order: "",
             },
         });
         return {
@@ -11975,7 +11973,6 @@ test("nested one2manys, multi page, onchange", async () => {
                 </field>
             </form>`,
         resId: 1,
-        mode: "edit",
     });
 
     await contains(".o_field_widget[name=int_field] input").edit("5", { confirm: "blur" });
@@ -12107,7 +12104,6 @@ test("active actions are passed to o2m field", async () => {
                 </field>
             </form>`,
         resId: 1,
-        mode: "edit",
     });
 
     expect(".o_data_row").toHaveCount(3);
@@ -12545,9 +12541,7 @@ test("add a row to an x2many and ask canBeRemoved twice", async () => {
             p: [[0, args.args[1].p[0][1], { name: "a name" }]],
         });
     });
-    onRpc("web_search_read", () => {
-        return def;
-    });
+    onRpc("web_search_read", () => def);
 
     const actions = [
         {
@@ -12638,22 +12632,20 @@ test("onchange create a record in an invisible x2many", async () => {
         foo: function () {},
     };
     Partner._records[0].p = [2];
-    onRpc("onchange", () => {
-        return {
-            value: {
-                p: [
-                    [
-                        1,
-                        2,
-                        {
-                            name: "plop",
-                            p: [[0, false, {}]],
-                        },
-                    ],
+    onRpc("onchange", () => ({
+        value: {
+            p: [
+                [
+                    1,
+                    2,
+                    {
+                        name: "plop",
+                        p: [[0, false, {}]],
+                    },
                 ],
-            },
-        };
-    });
+            ],
+        },
+    }));
     await mountView({
         type: "form",
         resModel: "partner",

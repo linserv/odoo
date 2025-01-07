@@ -75,8 +75,7 @@ export class ProductScreen extends Component {
                 this.currentOrder.preset_id &&
                 this.currentOrder.preset_time
             ) {
-                const orderDateTime = DateTime.fromSQL(this.currentOrder.preset_time);
-                if (orderDateTime > DateTime.now()) {
+                if (this.currentOrder.preset_time > DateTime.now()) {
                     this.pos.addPendingOrder([this.currentOrder.id]);
                     await this.pos.syncAllOrders();
                 }
@@ -124,11 +123,17 @@ export class ProductScreen extends Component {
 
         return getButtons(DEFAULT_LAST_ROW, [
             { value: "quantity", text: _t("Qty") },
-            { value: "discount", text: _t("%"), disabled: !this.pos.config.manual_discount },
+            {
+                value: "discount",
+                text: _t("%"),
+                disabled: !this.pos.config.manual_discount || this.pos.cashier._role === "minimal",
+            },
             {
                 value: "price",
                 text: _t("Price"),
-                disabled: !this.pos.cashierHasPriceControlRights(),
+                disabled:
+                    !this.pos.cashierHasPriceControlRights() ||
+                    this.pos.cashier._role === "minimal",
             },
             BACKSPACE,
         ]).map((button) => ({
@@ -293,7 +298,7 @@ export class ProductScreen extends Component {
     }
 
     getProductPrice(product) {
-        return this.pos.getProductPriceFormatted(product);
+        return this.pos.getProductPrice(product, false, true);
     }
 
     getProductImage(product) {

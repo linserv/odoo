@@ -88,6 +88,7 @@ import { standardFieldProps } from "@web/views/fields/standard_field_props";
 import { useBus } from "@web/core/utils/hooks";
 import { user } from "@web/core/user";
 import { buildSelector } from "@web/../tests/_framework/view_test_helpers";
+import { cookie } from "@web/core/browser/cookie";
 
 const { ResCompany, ResPartner, ResUsers } = webModels;
 
@@ -1434,6 +1435,50 @@ test(`invisible column based on the context are correctly displayed`, async () =
     expect(`th:not(.o_list_record_selector)`).toHaveAttribute("data-name", "foo");
 });
 
+test(`invisible column based on the company evalContext are correctly displayed`, async () => {
+    serverState.companies = [
+        {
+            id: 1,
+            name: "Company 1",
+            sequence: 1,
+            parent_id: false,
+            child_ids: [],
+            country_code: "BE",
+        },
+        {
+            id: 2,
+            name: "Company 2",
+            sequence: 2,
+            parent_id: false,
+            child_ids: [],
+            country_code: "PE",
+        },
+        {
+            id: 3,
+            name: "Company 3",
+            sequence: 3,
+            parent_id: false,
+            child_ids: [],
+            country_code: "AR",
+        },
+    ];
+    cookie.set("cids", "3-1");
+    await mountView({
+        resModel: "foo",
+        type: "list",
+        arch: `<list>
+                    <field name="date" column_invisible="not companies.has(companies.active_ids, 'country_code', 'PE')"/>
+                    <field name="foo" column_invisible="companies.has(companies.active_ids, 'country_code', 'PE')"/>
+                    <field name="bar" column_invisible="not companies.has(companies.active_ids, 'country_code', 'PE')"/>
+                </list>`,
+    });
+
+    expect(`th:not(.o_list_record_selector)`).toHaveCount(1, {
+        message: "should have 1 th for checkbox, 1 th for foo",
+    });
+    expect(`th:not(.o_list_record_selector)`).toHaveAttribute("data-name", "foo");
+});
+
 test(`invisible column based on the context are correctly displayed in o2m`, async () => {
     Foo._fields.foo_o2m = fields.One2many({ relation: "foo" });
 
@@ -2618,7 +2663,7 @@ test(`ordered target, sort attribute in context`, async () => {
     onRpc("create_or_replace", ({ args }) => {
         const favorite = args[0];
         expect.step(favorite.sort);
-        return 7;
+        return [7];
     });
 
     await mountView({
@@ -4886,15 +4931,13 @@ test(`fields are translatable in list view`, async () => {
         fr_BE: "Frenglish",
     });
 
-    onRpc("/web/dataset/call_kw/foo/get_field_translations", () => {
-        return [
-            [
-                { lang: "en_US", source: "yop", value: "yop" },
-                { lang: "fr_BE", source: "yop", value: "valeur français" },
-            ],
-            { translation_type: "char", translation_show_source: false },
-        ];
-    });
+    onRpc("/web/dataset/call_kw/foo/get_field_translations", () => [
+        [
+            { lang: "en_US", source: "yop", value: "yop" },
+            { lang: "fr_BE", source: "yop", value: "valeur français" },
+        ],
+        { translation_type: "char", translation_show_source: false },
+    ]);
 
     await mountView({
         resModel: "foo",
@@ -5526,11 +5569,15 @@ test(`pager, ungrouped, with count limit reached`, async () => {
     onRpc("web_search_read", ({ kwargs }) => {
         expect(kwargs.count_limit).toBe(expectedCountLimit);
     });
+    onRpc("search_count", ({ kwargs }) => {
+        expect(kwargs.context.xyz).toBe("abc");
+    });
 
     await mountView({
         resModel: "foo",
         type: "list",
         arch: `<list limit="2"><field name="foo"/><field name="bar"/></list>`,
+        context: { xyz: "abc" },
     });
     expect(`.o_data_row`).toHaveCount(2);
     expect(`.o_pager_value`).toHaveText("1-2");
@@ -9118,7 +9165,6 @@ test(`navigation with tab on a one2many list with create="0"`, async () => {
             </form>
         `,
         resId: 1,
-        mode: "edit",
     });
     expect(`.o_field_widget[name=o2m] .o_data_row`).toHaveCount(2);
 
@@ -17031,7 +17077,6 @@ test(`context keys not passed down the stack and not to fields`, async () => {
                 allowed_company_ids: [1],
                 bin_size: true,
                 list_view_ref: "foo_view_ref",
-                current_company_id: 1,
             },
         },
     ]);
@@ -17065,7 +17110,6 @@ test(`context keys not passed down the stack and not to fields`, async () => {
                 uid: 7,
                 allowed_company_ids: [1],
                 bin_size: true,
-                current_company_id: 1,
             },
         },
     ]);
@@ -17246,7 +17290,6 @@ test(`list: remove a record from sorted recordlist`, async () => {
             </form>
         `,
         resId: 1,
-        mode: "edit",
     });
     // 3 th (1 for delete button, 2 for columns)
     expect(`th`).toHaveCount(3, { message: "should have 2 columns and delete buttons" });
@@ -17594,35 +17637,42 @@ test("add custom field button not shown to non-system users (wo opt. col.)", asy
     expect("table .o_optional_columns_dropdown_toggle").toHaveCount(0);
 });
 
-test(`display 'None' for empty char field values in grouped list view`, async () => {
+test(`display 'None' for false group, when grouped by char field`, async () => {
     Foo._records[0].foo = false;
 
     await mountView({
         resModel: "foo",
         type: "list",
-        arch: `
-            <list open_form_view="True">
-                <field name="foo"/>
-            </list>
-        `,
+        arch: `<list><field name="foo"/></list>`,
         groupBy: ["foo"],
     });
 
     expect(`tbody tr:nth-child(3)`).toHaveText("None (1)");
 });
 
-test(`display '0' for empty int field values in grouped list view`, async () => {
+test(`display '0' for false group, when grouped by int field`, async () => {
     Foo._records[0].int_field = 0;
 
     await mountView({
         resModel: "foo",
         type: "list",
-        arch: `
-            <list expand="1">
-                <field name="foo"/>
-            </list>`,
+        arch: `<list><field name="foo"/></list>`,
         groupBy: ["int_field"],
     });
 
-    expect(`tbody tr:nth-child(3)`).toHaveText("0 (1)");
+    expect(`tbody tr:nth-child(2)`).toHaveText("0 (1)");
+});
+
+test(`display the field's falsy_value_label for false group, if defined`, async () => {
+    Foo._fields.foo.falsy_value_label = "I'm the false group";
+    Foo._records[0].foo = false;
+
+    await mountView({
+        resModel: "foo",
+        type: "list",
+        arch: `<list><field name="foo"/></list>`,
+        groupBy: ["foo"],
+    });
+
+    expect(`tbody tr:nth-child(3)`).toHaveText("I'm the false group (1)");
 });

@@ -3,6 +3,7 @@
 
 import configparser
 import contextlib
+import crypt
 import datetime
 from enum import Enum
 from functools import cache
@@ -30,11 +31,6 @@ from odoo.tools.misc import file_path
 
 lock = Lock()
 _logger = logging.getLogger(__name__)
-
-try:
-    import crypt
-except ImportError:
-    _logger.warning('Could not import library crypt')
 
 
 class Orientation(Enum):
@@ -79,8 +75,6 @@ elif platform.system() == 'Linux':
                 subprocess.run(["sudo", "mount", "-o", "remount,ro", "/root_bypass_ramdisks/"], check=False)
                 subprocess.run(["sudo", "mount", "-o", "remount,rw", "/root_bypass_ramdisks/etc/cups"], check=False)
 
-def access_point():
-    return get_ip() == '10.11.12.1'
 
 def start_nginx_server():
     if platform.system() == 'Windows':
@@ -172,7 +166,7 @@ def check_git_branch():
                 subprocess.run(git + ['remote', 'set-branches', 'origin', db_branch], check=True)
                 _logger.info("Updating odoo folder to the branch %s", db_branch)
                 subprocess.run(
-                    ['/home/pi/odoo/addons/point_of_sale/tools/posbox/configuration/posbox_update.sh'], check=True
+                    ['/home/pi/odoo/addons/iot_box_image/configuration/checkout.sh'], check=True
                 )
             odoo_restart()
     except Exception:
@@ -286,25 +280,19 @@ def get_mac_address():
 def get_path_nginx():
     return str(list(Path().absolute().parent.glob('*nginx*'))[0])
 
-def get_ssid():
-    ap = subprocess.call(['systemctl', 'is-active', '--quiet', 'hostapd']) # if service is active return 0 else inactive
-    if not ap:
-        return subprocess.check_output(['grep', '-oP', '(?<=ssid=).*', '/etc/hostapd/hostapd.conf']).decode('utf-8').rstrip()
-    process_iwconfig = subprocess.Popen(['iwconfig'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    process_grep = subprocess.Popen(['grep', 'ESSID:"'], stdin=process_iwconfig.stdout, stdout=subprocess.PIPE)
-    return subprocess.check_output(['sed', 's/.*"\\(.*\\)"/\\1/'], stdin=process_grep.stdout).decode('utf-8').rstrip()
-
 
 @cache
 def get_odoo_server_url():
     """Get the URL of the linked Odoo database.
-    If the IoT Box is in access point mode, it will return ``None`` to avoid
-    connecting to the server.
+    If no internet connection is available, return None to avoid trying
+    to reach the server.
 
     :return: The URL of the linked Odoo database.
     :rtype: str or None
     """
-    return None if access_point() else get_conf('remote_server')
+    if get_ip() == "10.11.12.1":
+        return None
+    return get_conf('remote_server')
 
 
 def get_token():
@@ -334,17 +322,8 @@ def get_version(detailed_version=False):
         version += f"-{release.version}"
         if platform.system() == 'Linux':
             version += f'#{get_commit_hash()}'
-    return version
 
-def get_wifi_essid():
-    wifi_options = []
-    process_iwlist = subprocess.Popen(['sudo', 'iwlist', 'wlan0', 'scan'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    process_grep = subprocess.Popen(['grep', 'ESSID:"'], stdin=process_iwlist.stdout, stdout=subprocess.PIPE).stdout.readlines()
-    for ssid in process_grep:
-        essid = ssid.decode('utf-8').split('"')[1]
-        if essid not in wifi_options:
-            wifi_options.append(essid)
-    return wifi_options
+    return version
 
 
 def load_certificate():
@@ -406,14 +385,19 @@ def delete_iot_handlers():
 
 
 def download_iot_handlers(auto=True):
-    """
-    Get the drivers from the configured Odoo server
+    """Get the drivers from the configured Odoo server.
+    If drivers did not change on the server, download
+    will be skipped.
     """
     server = get_odoo_server_url()
     if server:
+        etag = get_conf('iot_handlers_etag')
         try:
             response = requests.post(
-                server + '/iot/get_handlers', data={'mac': get_mac_address(), 'auto': auto}, timeout=8
+                server + '/iot/get_handlers',
+                data={'mac': get_mac_address(), 'auto': auto},
+                timeout=8,
+                headers={'If-None-Match': etag} if etag else None,
             )
             response.raise_for_status()
         except requests.exceptions.RequestException:
@@ -421,8 +405,14 @@ def download_iot_handlers(auto=True):
             return
 
         data = response.content
-        if not data:
+        if response.status_code == 304 or not data:
+            _logger.info('No new IoT handler to download')
             return
+
+        try:
+            update_conf({'iot_handlers_etag': response.headers['ETag'].strip('"')})
+        except KeyError:
+            _logger.exception('No ETag in the response headers')
 
         delete_iot_handlers()
         with writable():

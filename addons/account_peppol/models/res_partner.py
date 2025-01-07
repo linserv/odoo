@@ -95,8 +95,7 @@ class ResPartner(models.Model):
     def _get_participant_info(self, edi_identification):
         hash_participant = md5(edi_identification.lower().encode()).hexdigest()
         endpoint_participant = parse.quote_plus(f"iso6523-actorid-upis::{edi_identification}")
-        peppol_user = self.env.company.sudo().account_edi_proxy_client_ids.filtered(lambda user: user.proxy_type == 'peppol')
-        edi_mode = peppol_user and peppol_user.edi_mode or 'prod'
+        edi_mode = self.env.company._get_peppol_edi_mode()
         sml_zone = 'acc.edelivery' if edi_mode == 'test' else 'edelivery'
         smp_url = f"http://B-{hash_participant}.iso6523-actorid-upis.{sml_zone}.tech.ec.europa.eu/{endpoint_participant}"
 
@@ -109,6 +108,7 @@ class ResPartner(models.Model):
         return etree.fromstring(response.content)
 
     @api.model
+    @handle_demo
     def _check_peppol_participant_exists(self, participant_info, edi_identification, check_company=False):
         participant_identifier = participant_info.findtext('{*}ParticipantIdentifier')
         service_metadata = participant_info.find('.//{*}ServiceMetadataReference')
@@ -185,7 +185,6 @@ class ResPartner(models.Model):
     # BUSINESS ACTIONS
     # -------------------------------------------------------------------------
 
-    @handle_demo
     def button_account_peppol_check_partner_endpoint(self, company=None):
         """ A basic check for whether a participant is reachable at the given
         Peppol participant ID - peppol_eas:peppol_endpoint (ex: '9999:test')
@@ -206,8 +205,6 @@ class ResPartner(models.Model):
             self.peppol_eas,
             self_partner.invoice_edi_format
         )
-        if self_partner.peppol_verification_state == 'valid':
-            self_partner.invoice_sending_method = 'peppol'
 
         self._log_verification_state_update(company, old_value, self_partner.peppol_verification_state)
         return False

@@ -170,6 +170,7 @@ class ProductTemplate(models.Model):
     product_tooltip = fields.Char(compute='_compute_product_tooltip')
 
     is_favorite = fields.Boolean(string="Favorite")
+    _is_favorite_index = models.Index("(is_favorite) WHERE is_favorite IS TRUE")
 
     product_tag_ids = fields.Many2many(
         string="Tags", comodel_name='product.tag', relation='product_tag_product_template_rel'
@@ -232,9 +233,7 @@ class ProductTemplate(models.Model):
         for product in self:
             product.has_configurable_attributes = (
                 product.has_dynamic_attributes() or any(
-                    ptal.attribute_id.display_type == 'multi'
-                    or len(ptal.value_ids) >= 2
-                    or ptal.value_ids.is_custom
+                    ptal._is_configurable()
                     for ptal in product.attribute_line_ids
                 )
             )

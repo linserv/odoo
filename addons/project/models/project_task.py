@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import re
@@ -11,11 +10,12 @@ from odoo.addons.rating.models import rating_data
 from odoo.addons.web_editor.tools import handle_history_divergence
 from odoo.exceptions import UserError, ValidationError, AccessError
 from odoo.osv import expression
-from odoo.tools import format_list, SQL
+from odoo.tools import format_list, SQL, LazyTranslate
 from odoo.addons.resource.models.utils import filter_domain_leaf
 from odoo.addons.project.controllers.project_sharing_chatter import ProjectSharingChatter
 from odoo.addons.mail.tools.discuss import Store
 
+_lt = LazyTranslate(__name__)
 
 PROJECT_TASK_READABLE_FIELDS = {
     'id',
@@ -171,7 +171,7 @@ class ProjectTask(models.Model):
     date_end = fields.Datetime(string='Ending Date', index=True, copy=False)
     date_assign = fields.Datetime(string='Assigning Date', copy=False, readonly=True,
         help="Date on which this task was last assigned (or unassigned). Based on this, you can get statistics on the time it usually takes to assign tasks.")
-    date_deadline = fields.Datetime(string='Deadline', index=True, tracking=True)
+    date_deadline = fields.Datetime(string='Deadline', index=True, tracking=True, copy=False)
 
     date_last_stage_update = fields.Datetime(string='Last Stage Update',
         index=True,
@@ -181,17 +181,15 @@ class ProjectTask(models.Model):
             "Based on this information you can identify tasks that are stalling and get statistics on the time it usually takes to move tasks from one stage/state to another.")
 
     project_id = fields.Many2one('project.project', string='Project', domain="['|', ('company_id', '=', False), ('company_id', '=?',  company_id)]",
-                                 compute="_compute_project_id", store=True, precompute=True, recursive=True, readonly=False, index=True, tracking=True, change_default=True)
-    display_in_project = fields.Boolean(compute='_compute_display_in_project', store=True, readonly=False, export_string_translation=False)
-    # Technical field to display the 'Display in Project' button in the form view, depending on the project
-    show_display_in_project = fields.Boolean(compute='_compute_show_display_in_project')
+                                 compute="_compute_project_id", store=True, precompute=True, recursive=True, readonly=False, index=True, tracking=True, change_default=True, falsy_value_label=_lt("🔒 Private"))
+    display_in_project = fields.Boolean(compute='_compute_display_in_project', store=True, export_string_translation=False)
     task_properties = fields.Properties('Properties', definition='project_id.task_properties_definition', copy=True)
     allocated_hours = fields.Float("Allocated Time", tracking=True)
     subtask_allocated_hours = fields.Float("Sub-tasks Allocated Time", compute='_compute_subtask_allocated_hours', export_string_translation=False,
         help="Sum of the hours allocated for all the sub-tasks (and their own sub-tasks) linked to this task. Usually less than or equal to the allocated hours of this task.")
     # Tracking of this field is done in the write function
     user_ids = fields.Many2many('res.users', relation='project_task_user_rel', column1='task_id', column2='user_id',
-        string='Assignees', context={'active_test': False}, tracking=True, default=_default_user_ids, domain="[('share', '=', False), ('active', '=', True)]")
+        string='Assignees', context={'active_test': False}, tracking=True, default=_default_user_ids, domain="[('share', '=', False), ('active', '=', True)]", falsy_value_label=_lt("👤 Unassigned"))
     # User names displayed in project sharing views
     portal_user_names = fields.Char(compute='_compute_portal_user_names', compute_sudo=True, search='_search_portal_user_names', export_string_translation=False)
     # Second Many2many containing the actual personal stage for the current user
@@ -344,27 +342,12 @@ class ProjectTask(models.Model):
             if not task.display_in_project and task.parent_id and task.parent_id.project_id != task.project_id:
                 task.project_id = task.parent_id.project_id
 
-    @api.onchange('parent_id')
-    def _onchange_parent_id(self):
-        if self.display_in_project:
-            return
-        if not self.parent_id:
-            self.display_in_project = True
-        elif self.project_id != self.parent_id.project_id:
-            self.project_id = self.parent_id.project_id
-
-    @api.depends('project_id')
-    def _compute_display_in_project(self):
-        self.filtered(
-            lambda t: not t.display_in_project and (
-                not t.project_id or t.project_id != t.parent_id.project_id
-            )
-        ).display_in_project = True
-
     @api.depends('project_id', 'parent_id')
-    def _compute_show_display_in_project(self):
-        for task in self:
-            task.show_display_in_project = bool(task.parent_id) and task.project_id == task.parent_id.project_id
+    def _compute_display_in_project(self):
+        for record in self:
+            record.display_in_project = record.project_id and (
+                not record.parent_id or record.project_id != record.parent_id.project_id
+            )
 
     @api.depends('stage_id', 'depend_on_ids.state', 'project_id.allow_task_dependencies')
     def _compute_state(self):
@@ -474,7 +457,7 @@ class ProjectTask(models.Model):
                 personal_stage_by_user[user_id].sudo().write({'stage_id': stage.id})
 
     def message_subscribe(self, partner_ids=None, subtype_ids=None):
-        """ Set task notification based on project notification preference if user follow the project"""
+        # Set task notification based on project notification preference if user follow the project
         if not subtype_ids:
             project_followers = self.project_id.message_follower_ids.filtered(lambda f: f.partner_id.id in partner_ids)
             for project_follower in project_followers:
@@ -1326,6 +1309,10 @@ class ProjectTask(models.Model):
         elif 'project_id' in vals:
             self.filtered(lambda t: t.state != '04_waiting_normal').state = '01_in_progress'
 
+        # Do not recompute the state when changing the parent (to avoid resetting the state)
+        if 'parent_id' in vals:
+            self.env.remove_to_compute(self._fields['state'], self)
+
         self._task_message_auto_subscribe_notify({task: task.user_ids - old_user_ids[task] - self.env.user for task in self})
 
         if partner_ids:
@@ -1355,6 +1342,15 @@ class ProjectTask(models.Model):
             if task.id == last_task_id_per_recurrence_id.get(task.recurrence_id.id):
                 task.recurrence_id.unlink()
         return super().unlink()
+
+    def _where_calc(self, domain, active_test=True):
+        """ Tasks views don't show the sub-tasks / ('display_in_project', '=', True).
+            The pseudo-filter "Show Sub-tasks" adds the key 'show_subtasks' in the context.
+            In that case, we pop the leaf from the domain.
+        """
+        if self.env.context.get('show_subtasks'):
+            domain = filter_domain_leaf(domain, lambda field: field != 'display_in_project')
+        return super()._where_calc(domain, active_test)
 
     def update_date_end(self, stage_id):
         project_task_type = self.env['project.task.type'].browse(stage_id)
@@ -1468,7 +1464,7 @@ class ProjectTask(models.Model):
     def _notify_by_email_prepare_rendering_context(self, message, msg_vals=False, model_description=False,
                                                    force_email_company=False, force_email_lang=False):
         render_context = super()._notify_by_email_prepare_rendering_context(
-            message, msg_vals, model_description=model_description,
+            message, msg_vals=msg_vals, model_description=model_description,
             force_email_company=force_email_company, force_email_lang=force_email_lang
         )
         if self.stage_id:
@@ -1596,11 +1592,11 @@ class ProjectTask(models.Model):
                 res -= waiting_subtype
         return res
 
-    def _notify_get_recipients_groups(self, message, model_description, msg_vals=None):
-        """ Handle project users and managers recipients that can assign
-        tasks and create new one directly from notification emails. Also give
-        access button to portal users and portal customers. If they are notified
-        they should probably have access to the document. """
+    def _notify_get_recipients_groups(self, message, model_description, msg_vals=False):
+        # Handle project users and managers recipients that can assign
+        # tasks and create new one directly from notification emails. Also give
+        # access button to portal users and portal customers. If they are notified
+        # they should probably have access to the document.
         groups = super()._notify_get_recipients_groups(
             message, model_description, msg_vals=msg_vals
         )
@@ -1632,7 +1628,7 @@ class ProjectTask(models.Model):
         return groups
 
     def _notify_get_reply_to(self, default=None):
-        """ Override to set alias of tasks to their project if any. """
+        # Override to set alias of tasks to their project if any
         aliases = self.sudo().mapped('project_id')._notify_get_reply_to(default=default)
         res = {task.id: aliases.get(task.project_id.id) for task in self}
         leftover = self.filtered(lambda rec: not rec.project_id)
@@ -1657,10 +1653,6 @@ class ProjectTask(models.Model):
 
     @api.model
     def message_new(self, msg, custom_values=None):
-        """ Overrides mail_thread message_new that is called by the mailgateway
-            through message_process.
-            This override updates the document according to the email.
-        """
         # remove default author when going through the mail gateway. Indeed we
         # do not want to explicitly set user_id to False; however we do not
         # want the gateway user to be responsible if no other responsible is
@@ -1691,7 +1683,6 @@ class ProjectTask(models.Model):
         return task
 
     def message_update(self, msg, update_vals=None):
-        """ Override to update the task according to the email. """
         email_list = self.task_email_split(msg)
         partner_ids = [p.id for p in self.env['mail.thread']._mail_find_partner_from_emails(email_list, records=self, force_create=False) if p]
         self.message_subscribe(partner_ids)

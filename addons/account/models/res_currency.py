@@ -216,7 +216,7 @@ class ResCurrency(models.Model):
             """,
             period_key=period_key,
             main_company_id=main_company.root_id.id,
-            fiscal_year_bounds_values=SQL(",").join(SQL("(%(fy_from)s,%(fy_to)s)", fy_from=fy_from, fy_to=fy_to) for fy_from, fy_to in fiscal_year_bounds),
+            fiscal_year_bounds_values=SQL(",").join(SQL("(%(fy_from)s::date,%(fy_to)s::date)", fy_from=fy_from, fy_to=fy_to) for fy_from, fy_to in fiscal_year_bounds),
             other_company_ids=tuple(other_companies.ids),
             date_to=date_to,
             main_company_unit_factor=main_company_unit_factor,
@@ -225,7 +225,7 @@ class ResCurrency(models.Model):
     def _get_currency_table_fiscal_year_bounds(self, main_company):
         today_fiscal_year = main_company.compute_fiscalyear_dates(fields.Date.today())
         first_rate = self.env['res.currency.rate'].search(self.env['res.currency.rate']._check_company_domain(main_company), order="name ASC", limit=1)
-
+        fiscal_year_bounds = []
         if first_rate:
             first_rate_fiscal_year = main_company.compute_fiscalyear_dates(first_rate.name)
             fiscal_year_bounds = [(None, first_rate_fiscal_year['date_from'] - relativedelta(days=1))]  # Initialized to have a value for everything before the first rate

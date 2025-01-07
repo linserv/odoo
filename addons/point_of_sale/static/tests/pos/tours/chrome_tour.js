@@ -4,6 +4,7 @@ import * as Dialog from "@point_of_sale/../tests/generic_helpers/dialog_util";
 import * as PaymentScreen from "@point_of_sale/../tests/pos/tours/utils/payment_screen_util";
 import * as TicketScreen from "@point_of_sale/../tests/pos/tours/utils/ticket_screen_util";
 import * as Chrome from "@point_of_sale/../tests/pos/tours/utils/chrome_util";
+import * as Utils from "@point_of_sale/../tests/pos/tours/utils/common";
 import { registry } from "@web/core/registry";
 import { inLeftSide } from "@point_of_sale/../tests/pos/tours/utils/common";
 
@@ -49,7 +50,7 @@ registry.category("web_tour.tours").add("ChromeTour", {
             ProductScreen.productIsDisplayed("Desk Pad"),
             inLeftSide([
                 ...ProductScreen.clickLine("Desk Pad"),
-                ...ProductScreen.selectedOrderlineHasDirect("Desk Pad", "1.0", "2.0"),
+                ...ProductScreen.selectedOrderlineHasDirect("Desk Pad", "1", "2.0"),
             ]),
 
             // Select order 2, should be at Payment Screen
@@ -126,7 +127,7 @@ registry.category("web_tour.tours").add("OrderModificationAfterValidationError",
         [
             Chrome.startPoS(),
             Dialog.confirm("Open Register"),
-            ProductScreen.clickDisplayedProduct("Test Product", true, "1.00"),
+            ProductScreen.clickDisplayedProduct("Test Product", true, "1"),
             ProductScreen.clickPayButton(),
             PaymentScreen.clickPaymentMethod("Bank", true, { remaining: "0.0" }),
             PaymentScreen.clickValidate(),
@@ -139,6 +140,20 @@ registry.category("web_tour.tours").add("OrderModificationAfterValidationError",
             ProductScreen.isShown(),
 
             // Allow order changes after the error
-            ProductScreen.clickDisplayedProduct("Test Product", true, "2.00"),
+            ProductScreen.clickDisplayedProduct("Test Product", true, "2"),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("SearchMoreCustomer", {
+    checkDelay: 50,
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickPartnerButton(),
+            ProductScreen.inputCustomerSearchbar("1111"),
+            Utils.selectButton("Search more"),
+            ProductScreen.clickCustomer("BPartner"),
+            ProductScreen.isShown(),
         ].flat(),
 });

@@ -41,7 +41,13 @@ class ChatbotScriptStep(models.Model):
         copy=False,  # copied manually, see chatbot.script#copy
         string='Only If', help='Show this step only if all of these answers have been selected.')
     # forward-operator specifics
+    is_forward_operator = fields.Boolean(compute="_compute_is_forward_operator")
     is_forward_operator_child = fields.Boolean(compute='_compute_is_forward_operator_child')
+    operator_expertise_ids = fields.Many2many(
+        "im_livechat.expertise",
+        string="Operator Expertise",
+        help="When forwarding live chat conversations, the chatbot will prioritize users with matching expertise.",
+    )
 
     @api.depends('sequence')
     def _compute_triggering_answer_ids(self):
@@ -51,13 +57,25 @@ class ChatbotScriptStep(models.Model):
             if update_command:
                 step.triggering_answer_ids = update_command
 
-    @api.depends('sequence', 'triggering_answer_ids', 'chatbot_script_id.script_step_ids.triggering_answer_ids',
-                 'chatbot_script_id.script_step_ids.answer_ids', 'chatbot_script_id.script_step_ids.sequence')
+    @api.depends("step_type")
+    def _compute_is_forward_operator(self):
+        for step in self:
+            step.is_forward_operator = step.step_type == "forward_operator"
+
+    @api.depends(
+        "chatbot_script_id.script_step_ids.answer_ids",
+        "chatbot_script_id.script_step_ids.is_forward_operator",
+        "chatbot_script_id.script_step_ids.sequence",
+        "chatbot_script_id.script_step_ids.step_type",
+        "chatbot_script_id.script_step_ids.triggering_answer_ids",
+        "sequence",
+        "triggering_answer_ids",
+    )
     def _compute_is_forward_operator_child(self):
         parent_steps_by_chatbot = {}
         for chatbot in self.chatbot_script_id:
             parent_steps_by_chatbot[chatbot.id] = chatbot.script_step_ids.filtered(
-                lambda step: step.step_type in ['forward_operator', 'question_selection']
+                lambda step: step.is_forward_operator or step.step_type == "question_selection"
             ).sorted(lambda s: s.sequence, reverse=True)
         for step in self:
             parent_steps = parent_steps_by_chatbot[step.chatbot_script_id.id].filtered(
@@ -66,9 +84,9 @@ class ChatbotScriptStep(models.Model):
             parent = step
             while True:
                 parent = parent._get_parent_step(parent_steps)
-                if not parent or parent.step_type == 'forward_operator':
+                if not parent or parent.is_forward_operator:
                     break
-            step.is_forward_operator_child = parent and parent.step_type == 'forward_operator'
+            step.is_forward_operator_child = parent and parent.is_forward_operator
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -311,32 +329,34 @@ class ChatbotScriptStep(models.Model):
         Those will have a dedicated processing method with specific docstrings.
 
         Returns the mail.message posted by the chatbot's operator_partner_id. """
-
         self.ensure_one()
-        # sudo: discuss.channel - updating current step on the channel is allowed
-        discuss_channel.sudo().chatbot_current_step_id = self.id
-
         if self.step_type == 'forward_operator':
             return self._process_step_forward_operator(discuss_channel)
         return discuss_channel._chatbot_post_message(self.chatbot_script_id, plaintext2html(self.message))
 
-    def _process_step_forward_operator(self, discuss_channel):
+    def _process_step_forward_operator(self, discuss_channel, users=None):
         """ Special type of step that will add a human operator to the conversation when reached,
         which stops the script and allow the visitor to discuss with a real person.
 
         In case we don't find any operator (e.g: no-one is available) we don't post any messages.
         The script will continue normally, which allows to add extra steps when it's the case
-        (e.g: ask for the visitor's email and create a lead). """
+        (e.g: ask for the visitor's email and create a lead).
+
+        :param discuss_channel: channel on which to execute the step
+        :param users: recordset of candidate operators, if not provided the currently available
+            users of the livechat channel are used as candidates instead.
+        """
 
         human_operator = False
         posted_message = self.env["mail.message"]
 
         if discuss_channel.livechat_channel_id:
             # sudo: res.users - visitor can access operator of their channel
-            # sudo: res.lang - visitor can access their own lang
             human_operator = discuss_channel.livechat_channel_id.sudo()._get_operator(
-                lang=discuss_channel.livechat_visitor_id.sudo().lang_id.code if hasattr(discuss_channel, "livechat_visitor_id") else None,
-                country_id=discuss_channel.country_id.id
+                lang=self.env.context.get("lang"),
+                country_id=discuss_channel.country_id.id,
+                expertises=self.operator_expertise_ids,
+                users=users,
             )
 
         # handle edge case where we found yourself as available operator -> don't do anything
@@ -356,7 +376,17 @@ class ChatbotScriptStep(models.Model):
                 lambda m: m.partner_id == self.chatbot_script_id.operator_partner_id
             ):
                 channel_sudo._action_unfollow(partner=bot_member.partner_id)
-            channel_sudo.name = (human_operator.livechat_username or human_operator.name,)
+            # finally, rename the channel to include the operator's name
+            channel_sudo.name = " ".join(
+                [
+                    self.env.user.display_name
+                    if not self.env.user._is_public()
+                    else discuss_channel.anonymous_name,
+                    human_operator.livechat_username
+                    if human_operator.livechat_username
+                    else human_operator.name,
+                ]
+            )
             channel_sudo._broadcast(human_operator.partner_id.ids)
             discuss_channel.channel_pin(pinned=True)
 

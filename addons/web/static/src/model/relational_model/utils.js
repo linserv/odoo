@@ -15,6 +15,7 @@ import { effect } from "@web/core/utils/reactive";
 import { batched } from "@web/core/utils/timing";
 import { orderByToString } from "@web/search/utils/order_by";
 import { rpc } from "@web/core/network/rpc";
+import { _t } from "@web/core/l10n/translation";
 
 /**
  * @param {boolean || string} value boolean or string encoding a python expression
@@ -326,9 +327,10 @@ export function getBasicEvalContext(config) {
     const { uid, allowed_company_ids } = config.context;
     return {
         context: config.context,
+        companies: config.companies,
         uid,
         allowed_company_ids,
-        current_company_id: config.currentCompanyId,
+        current_company_id: config.companies.active_id,
     };
 }
 
@@ -344,7 +346,7 @@ function getFieldContextForSpec(activeFields, fields, fieldName, evalContext) {
     }
 }
 
-export function getFieldsSpec(activeFields, fields, evalContext, { withInvisible } = {}) {
+export function getFieldsSpec(activeFields, fields, evalContext, { orderBys, withInvisible } = {}) {
     const fieldsSpec = {};
     const properties = [];
     for (const fieldName in activeFields) {
@@ -371,8 +373,9 @@ export function getFieldsSpec(activeFields, fields, evalContext, { withInvisible
                         evalContext
                     );
                     fieldsSpec[fieldName].limit = limit;
-                    if (defaultOrderBy) {
-                        fieldsSpec[fieldName].order = orderByToString(defaultOrderBy);
+                    const orderBy = orderBys?.[fieldName] || defaultOrderBy || [];
+                    if (orderBy.length) {
+                        fieldsSpec[fieldName].order = orderByToString(orderBy);
                     }
                 }
                 break;
@@ -549,16 +552,26 @@ function getAggregatesFromGroupData(groupData, fields) {
 /**
  * @param {import("./datapoint").Field} field
  * @param {any} rawValue
- * @returns {string | false}
+ * @returns {string}
  */
 function getDisplayNameFromGroupData(field, rawValue) {
-    if (field.type === "selection") {
-        return Object.fromEntries(field.selection)[rawValue];
+    switch (field.type) {
+        case "selection": {
+            return Object.fromEntries(field.selection)[rawValue];
+        }
+        case "boolean": {
+            return rawValue ? _t("Yes") : _t("No");
+        }
+        case "integer": {
+            return rawValue ? String(rawValue) : "0";
+        }
+        case "many2one":
+        case "many2many":
+        case "tags": {
+            return (rawValue && rawValue[1]) || field.falsy_value_label || _t("None");
+        }
     }
-    if (["many2one", "many2many", "tags"].includes(field.type)) {
-        return rawValue ? rawValue[1] : false;
-    }
-    return rawValue;
+    return rawValue ? String(rawValue) : field.falsy_value_label || _t("None");
 }
 
 /**

@@ -84,6 +84,7 @@ export class ListRenderer extends Component {
         "noContentHelp?",
         "nestedKeyOptionalFieldsData?",
         "optionalActiveFields?",
+        "readonly?",
     ];
 
     setup() {
@@ -176,9 +177,7 @@ export class ListRenderer extends Component {
 
         useBus(this.props.list.model.bus, "FIELD_IS_DIRTY", (ev) => (this.lastIsDirty = ev.detail));
 
-        useBounceButton(this.rootRef, () => {
-            return this.showNoContentHelper;
-        });
+        useBounceButton(this.rootRef, () => this.showNoContentHelper);
 
         let isSmall = this.uiService.isSmall;
         useBus(this.uiService.bus, "resize", () => {
@@ -188,15 +187,13 @@ export class ListRenderer extends Component {
             }
         });
 
-        this.columnWidths = useMagicColumnWidths(this.tableRef, () => {
-            return {
-                columns: this.columns,
-                isEmpty: !this.props.list.records.length || this.props.list.model.useSampleModel,
-                hasSelectors: this.hasSelectors,
-                hasOpenFormViewColumn: this.hasOpenFormViewColumn,
-                hasActionsColumn: this.hasActionsColumn,
-            };
-        });
+        this.columnWidths = useMagicColumnWidths(this.tableRef, () => ({
+            columns: this.columns,
+            isEmpty: !this.props.list.records.length || this.props.list.model.useSampleModel,
+            hasSelectors: this.hasSelectors,
+            hasOpenFormViewColumn: this.hasOpenFormViewColumn,
+            hasActionsColumn: this.hasActionsColumn,
+        }));
 
         useExternalListener(window, "keydown", (ev) => {
             this.shiftKeyMode = ev.shiftKey;
@@ -335,7 +332,10 @@ export class ListRenderer extends Component {
 
     getFieldProps(record, column) {
         return {
-            readonly: this.isCellReadonly(column, record) || this.isRecordReadonly(record),
+            readonly:
+                this.props.readonly ||
+                this.isCellReadonly(column, record) ||
+                this.isRecordReadonly(record),
         };
     }
 
@@ -344,7 +344,7 @@ export class ListRenderer extends Component {
     }
 
     get canResequenceRows() {
-        if (!this.props.list.canResequence()) {
+        if (!this.props.list.canResequence() || this.props.readonly) {
             return false;
         }
         const { handleField, orderBy } = this.props.list;
@@ -487,9 +487,7 @@ export class ListRenderer extends Component {
         });
         keyParts.fields
             .sort((left, right) => (left < right ? -1 : 1))
-            .forEach((fieldName) => {
-                return viewIdentifier.push(fieldName);
-            });
+            .forEach((fieldName) => viewIdentifier.push(fieldName));
         return viewIdentifier.join(",");
     }
 
@@ -844,16 +842,6 @@ export class ListRenderer extends Component {
 
     evalColumnInvisible(columnInvisible) {
         return evaluateBooleanExpr(columnInvisible, this.props.list.evalContext);
-    }
-
-    getGroupDisplayName(group) {
-        if (group.groupByField.type === "boolean") {
-            return group.value ? _t("Yes") : _t("No");
-        } else if (group.groupByField.type === "integer") {
-            return group.displayName || "0";
-        } else {
-            return group.displayName || _t("None");
-        }
     }
 
     get canCreate() {

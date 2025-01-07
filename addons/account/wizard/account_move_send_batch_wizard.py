@@ -1,8 +1,11 @@
+from collections import Counter
+
 from odoo import _, api, Command, fields, models
 
 
 class AccountMoveSendBatchWizard(models.TransientModel):
     """Wizard that handles the sending of multiple invoices."""
+    _name = 'account.move.send.batch.wizard'
     _inherit = ['account.move.send']
     _description = "Account Move Send Batch Wizard"
 
@@ -29,19 +32,31 @@ class AccountMoveSendBatchWizard(models.TransientModel):
 
     @api.depends('move_ids')
     def _compute_summary_data(self):
+        extra_edis = self._get_all_extra_edis()
         sending_methods = dict(self.env['res.partner']._fields['invoice_sending_method'].selection)
+
         for wizard in self:
-            wizard.summary_data = {
-                sending_method: {'count': len(moves), 'label': sending_methods[sending_method]}
-                for sending_method, moves in wizard.move_ids.grouped(self._get_default_sending_method).items()
-            }
+            edi_counter = Counter()
+            sending_method_counter = Counter()
+
+            for move in wizard.move_ids:
+                edi_counter += Counter([edi for edi in self._get_default_extra_edis(move)])
+                sending_method_counter += Counter([sending_method for sending_method in self._get_default_sending_methods(move)])
+
+            summary_data = dict()
+            for edi, edi_count in edi_counter.items():
+                summary_data[edi] = {'count': edi_count, 'label': _("by %s", extra_edis[edi]['label'])}
+            for sending_method, sending_method_count in sending_method_counter.items():
+                summary_data[sending_method] = {'count': sending_method_count, 'label': sending_methods[sending_method]}
+
+            wizard.summary_data = summary_data
 
     @api.depends('summary_data')
     def _compute_alerts(self):
         for wizard in self:
             moves_data = {
                 move: {
-                    'sending_methods': {self._get_default_sending_method(move)},
+                    'sending_methods': self._get_default_sending_methods(move),
                     'invoice_edi_format': self._get_default_invoice_edi_format(move),
                     'extra_edis': self._get_default_extra_edis(move),
                 }

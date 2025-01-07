@@ -88,11 +88,12 @@ class PosOrder(models.Model):
         else:
             pos_order = self.env['pos.order'].browse(order.get('id'))
 
-            # Save line before to avoid exception if a line is deleted
+            # Save lines and payments before to avoid exception if a line is deleted
             # when vals change the state to 'paid'
-            if order.get('lines'):
-                pos_order.write({'lines': order.get('lines')})
-                order['lines'] = []
+            for field in ['lines', 'payment_ids']:
+                if order.get(field):
+                    pos_order.write({field: order.get(field)})
+                    order[field] = []
 
             pos_order.write(order)
 
@@ -108,10 +109,12 @@ class PosOrder(models.Model):
                 continue
 
             line = line[2]
-
             if line.get('combo_line_ids'):
                 filtered_lines = list(filter(lambda l: l[0] in [0, 1] and l[2].get('id') and l[2].get('id') in line.get('combo_line_ids'), order_vals['lines']))
-                acc[line['uuid']] = [l[2]['uuid'] for l in filtered_lines]
+                if line['uuid'] in acc:
+                    acc[line['uuid']].append([l[2]['uuid'] for l in filtered_lines])
+                else:
+                    acc[line['uuid']] = [l[2]['uuid'] for l in filtered_lines]
 
             line['combo_line_ids'] = False
             line['combo_parent_id'] = False
@@ -326,6 +329,15 @@ class PosOrder(models.Model):
     has_deleted_line = fields.Boolean(string='Has Deleted Line')
     order_edit_tracking = fields.Boolean(related="config_id.order_edit_tracking", readonly=True)
     available_payment_method_ids = fields.Many2many('pos.payment.method', related='config_id.payment_method_ids', string='Available Payment Methods', readonly=True, store=False)
+    invoice_status = fields.Selection([
+        ('invoiced', 'Fully Invoiced'),
+        ('to_invoice', 'To Invoice'),
+    ], string='Invoice Status', compute='_compute_invoice_status')
+
+    @api.depends('account_move')
+    def _compute_invoice_status(self):
+        for order in self:
+            order.invoice_status = 'invoiced' if len(order.account_move) else 'to_invoice'
 
     @api.depends('session_id')
     def _compute_order_config_id(self):
@@ -655,7 +667,8 @@ class PosOrder(models.Model):
             line_ids_commands = []
             rate = invoice.invoice_currency_rate
             sign = invoice.direction_sign
-            difference_currency = sign * (self.amount_paid - invoice.amount_total)
+            amount_paid = (-1 if self.amount_total < 0.0 else 1) * self.amount_paid
+            difference_currency = sign * (amount_paid - invoice.amount_total)
             difference_balance = invoice.company_currency_id.round(difference_currency / rate) if rate else 0.0
             if not self.currency_id.is_zero(difference_currency):
                 rounding_line = invoice.line_ids.filtered(lambda line: line.display_type == 'rounding' and not line.tax_line_id)
@@ -996,6 +1009,9 @@ class PosOrder(models.Model):
                 (invoice_receivables | payment_receivables).sudo().with_company(self.company_id).reconcile()
         return payment_moves
 
+    def _get_open_order(self, order):
+        return self.env["pos.order"].search([('uuid', '=', order.get('uuid'))], limit=1)
+
     @api.model
     def sync_from_ui(self, orders):
         """ Create and update Orders from the frontend PoS application.
@@ -1016,7 +1032,7 @@ class PosOrder(models.Model):
             if len(self._get_refunded_orders(order)) > 1:
                 raise ValidationError(_('You can only refund products from the same order.'))
 
-            existing_order = self.env['pos.order'].search([('uuid', '=', order.get('uuid'))])
+            existing_order = self._get_open_order(order)
             if existing_order and existing_order.state == 'draft':
                 order_ids.append(self._process_order(order, existing_order))
             elif not existing_order:
@@ -1356,9 +1372,10 @@ class PosOrderLine(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
-            if vals.get('order_id') and not vals.get('name'):
+            order = self.env['pos.order'].browse(vals['order_id']) if vals.get('order_id') else False
+            if order and order.exists() and not vals.get('name'):
                 # set name based on the sequence specified on the config
-                config = self.env['pos.order'].browse(vals['order_id']).session_id.config_id
+                config = order.session_id.config_id
                 if config.sequence_line_id:
                     vals['name'] = config.sequence_line_id._next()
             if not vals.get('name'):
@@ -1381,13 +1398,13 @@ class PosOrderLine(models.Model):
         return super().write(values)
 
     @api.model
-    def get_existing_lots(self, company_id, product_id):
+    def get_existing_lots(self, company_id, config_id, product_id):
         """
         Return the lots that are still available in the given company.
         The lot is available if its quantity in the corresponding stock_quant and pos stock location is > 0.
         """
         self.check_access('read')
-        pos_config = self.env['pos.config'].browse(self._context.get('config_id'))
+        pos_config = self.env['pos.config'].browse(config_id)
         if not pos_config:
             raise UserError(_('No PoS configuration found'))
 
@@ -1397,7 +1414,7 @@ class PosOrderLine(models.Model):
             ('company_id', '=', False),
             ('company_id', '=', company_id),
             ('product_id', '=', product_id),
-            ('location_id', '=', src_loc.id),
+            ('location_id', 'in', src_loc.child_internal_location_ids.ids),
         ])
         available_lots = src_loc_quants.\
             filtered(lambda q: float_compare(q.quantity, 0, precision_rounding=q.product_id.uom_id.rounding) > 0).\
@@ -1607,6 +1624,7 @@ class PosOrderLine(models.Model):
                         line,
                         partner_id=commercial_partner,
                         currency_id=self.order_id.currency_id,
+                        rate=self.order_id.currency_rate,
                         product_id=line.product_id,
                         tax_ids=line.tax_ids_after_fiscal_position,
                         price_unit=line.price_unit,

@@ -1,5 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import ast
 import calendar
 from collections import defaultdict
 from contextlib import ExitStack, contextmanager
@@ -114,6 +115,7 @@ class AccountMove(models.Model):
         tracking=True,
         index='trigram',
     )
+    name_placeholder = fields.Char(compute='_compute_name_placeholder')
     ref = fields.Char(
         string='Reference',
         copy=False,
@@ -868,26 +870,25 @@ class AccountMove(models.Model):
                 continue
 
             move_has_name = move.name and move.name != '/'
-            if move_has_name or move.state != 'posted':
-                if not move.posted_before and not move._sequence_matches_date():
-                    if move._get_last_sequence():
-                        # The name does not match the date and the move is not the first in the period:
-                        # Reset to draft
-                        move.name = False
-                        continue
-                else:
-                    if move_has_name and move.posted_before or not move_has_name and move._get_last_sequence():
-                        # The move either
-                        # - has a name and was posted before, or
-                        # - doesn't have a name, but is not the first in the period
-                        # so we don't recompute the name
-                        continue
-            if move.date and (not move_has_name or not move._sequence_matches_date()):
+            if not move.posted_before and not move._sequence_matches_date():
+                # The name does not match the date and the move is not the first in the period:
+                # Reset to draft
+                move.name = False
+                continue
+            if move.date and not move_has_name and move.state != 'draft':
                 move._set_next_sequence()
 
-        self.filtered(lambda m: not m.name and not move.quick_edit_mode).name = '/'
         self._inverse_name()
 
+    @api.depends('date', 'journal_id', 'move_type', 'name', 'posted_before', 'sequence_number', 'sequence_prefix', 'state')
+    def _compute_name_placeholder(self):
+        for move in self:
+            if (not move.name or move.name == '/') and not move._get_last_sequence():
+                sequence_format_string, sequence_format_values = move._get_sequence_format_param(move._get_starting_sequence())
+                sequence_format_values['seq'] = sequence_format_values['seq'] + 1
+                move.name_placeholder = sequence_format_string.format(**sequence_format_values)
+            else:
+                move.name_placeholder = False
 
     @api.depends('journal_id', 'date')
     def _compute_highest_name(self):
@@ -1292,7 +1293,7 @@ class AccountMove(models.Model):
             move.invoice_outstanding_credits_debits_widget = False
             move.invoice_has_outstanding = False
 
-            if move.state != 'posted' \
+            if move.state not in {'draft', 'posted'} \
                     or move.payment_state not in ('not_paid', 'partial') \
                     or not move.is_invoice(include_receipts=True):
                 continue
@@ -1364,7 +1365,7 @@ class AccountMove(models.Model):
         for move in self:
             payments_widget_vals = {'title': _('Less Payment'), 'outstanding': False, 'content': []}
 
-            if move.state == 'posted' and move.is_invoice(include_receipts=True):
+            if move.state in {'draft', 'posted'} and move.is_invoice(include_receipts=True):
                 reconciled_vals = []
                 reconciled_partials = move.sudo()._get_all_reconciled_invoice_partials()
                 for reconciled_partial in reconciled_partials:
@@ -2289,7 +2290,7 @@ class AccountMove(models.Model):
     @api.onchange('journal_id')
     def _onchange_journal_id(self):
         if not self.quick_edit_mode:
-            self.name = '/'
+            self.name = False
             self._compute_name()
 
     @api.onchange('invoice_cash_rounding_id')
@@ -4098,6 +4099,11 @@ class AccountMove(models.Model):
                     attachments_by_invoice[attachment] |= invoice
                 else:
                     attachments_by_invoice[attachment] = invoice
+                if not attachment.res_id:
+                    attachment.write({
+                        'res_id': invoice.id,
+                        'res_model': invoice._name,
+                    })
 
         file_data_list = attachments._unwrap_edi_attachments()
         attachments_by_invoice = {}
@@ -5111,8 +5117,6 @@ class AccountMove(models.Model):
         return self.action_force_register_payment()
 
     def action_force_register_payment(self):
-        if any(m.payment_state not in ('not_paid', 'partial', 'in_payment') for m in self):
-            raise UserError(_("You can only register payments for (partially) unpaid documents."))
         if any(m.move_type == 'entry' for m in self):
             raise UserError(_("You cannot register payments for miscellaneous entries."))
         return self.line_ids.action_register_payment()
@@ -5129,7 +5133,7 @@ class AccountMove(models.Model):
 
     def action_send_and_print(self):
         return {
-            'name': _("Print & Send"),
+            'name': _("Send"),
             'type': 'ir.actions.act_window',
             'view_mode': 'form',
             'res_model': 'account.move.send.wizard' if len(self) == 1 else 'account.move.send.batch.wizard',
@@ -5316,7 +5320,7 @@ class AccountMove(models.Model):
             else 'account.email_template_edi_invoice'
         )
 
-    def _notify_get_recipients_groups(self, message, model_description, msg_vals=None):
+    def _notify_get_recipients_groups(self, message, model_description, msg_vals=False):
         groups = super()._notify_get_recipients_groups(message, model_description, msg_vals=msg_vals)
         self.ensure_one()
 
@@ -5436,6 +5440,29 @@ class AccountMove(models.Model):
     # -------------------------------------------------------------------------
     # HELPER METHODS
     # -------------------------------------------------------------------------
+    def _get_available_action_reports(self, is_invoice_report=True):
+        domain = [('model', '=', 'account.move')]
+
+        if is_invoice_report:
+            domain += [('is_invoice_report', '=', 'True')]
+
+        model_reports = self.env['ir.actions.report'].search(domain)
+
+        available_reports = model_reports.filtered(
+            lambda model_template: len(self.filtered_domain(ast.literal_eval(model_template.domain))) == len(self)
+        )
+
+        return available_reports
+
+    def _is_action_report_available(self, action_report, is_invoice_report=True):
+        assert len(action_report) == 1
+
+        self.ensure_one()
+
+        if available_report := action_report.filtered(lambda available_report: not (is_invoice_report^available_report.is_invoice_report)):
+            return bool(self.filtered_domain(ast.literal_eval(available_report.domain)))
+
+        return False
 
     @api.model
     def get_invoice_types(self, include_receipts=False):
@@ -6038,8 +6065,9 @@ class AccountMove(models.Model):
         attachments_in_invoices = self.env['ir.attachment']
         for attachment in move_per_decodable_attachment:
             attachments_in_invoices += attachment
-        # Unlink the unused attachments
-        (attachments - attachments_in_invoices).unlink()
+        # Unlink the unused attachments (prevents storing marketing images sent with emails)
+        if self._context.get('from_alias'):
+            (attachments - attachments_in_invoices).unlink()
         return move_per_decodable_attachment
 
     def _creation_subtype(self):
@@ -6082,7 +6110,7 @@ class AccountMove(models.Model):
                                                    force_email_company=False, force_email_lang=False):
         # EXTENDS mail mail.thread
         render_context = super()._notify_by_email_prepare_rendering_context(
-            message, msg_vals, model_description=model_description,
+            message, msg_vals=msg_vals, model_description=model_description,
             force_email_company=force_email_company, force_email_lang=force_email_lang
         )
         record = render_context['record']
@@ -6208,14 +6236,9 @@ class AccountMove(models.Model):
 
     def get_extra_print_items(self):
         """ Helper to dynamically add items in the 'Print' menu of list and form of account.move.
-        This is necessary to avoid the re-generation of the PDF through the action_report.
-        Indeed, once a legal PDF is generated, it should be used and not re-generated.
         """
-        return [{
-            'key': 'download_pdf',
-            'description': _('PDF'),
-            **self.action_invoice_download_pdf()
-        }]
+        # TO OVERRIDE
+        return []
 
     @staticmethod
     def _can_commit():

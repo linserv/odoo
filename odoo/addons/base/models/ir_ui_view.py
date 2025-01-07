@@ -1603,7 +1603,7 @@ actual arch.
             if special not in ('cancel', 'save', 'add'):
                 self._raise_view_error(_("Invalid special '%(value)s' in button", value=special), node)
         elif type_:
-            if type_ == 'edit': # list_renderer, used in kanban view
+            if type_ != 'action' and type_ != 'object':
                 return
             elif not name:
                 self._raise_view_error(_("Button must have a name"), node)
@@ -2266,6 +2266,7 @@ actual arch.
 
 class ResetViewArchWizard(models.TransientModel):
     """ A wizard to compare and reset views architecture. """
+    _name = 'reset.view.arch.wizard'
     _description = "Reset View Architecture Wizard"
 
     view_id = fields.Many2one('ir.ui.view', string='View')
@@ -2782,7 +2783,7 @@ class Base(models.AbstractModel):
         return [
             'change_default', 'context', 'currency_field', 'definition_record', 'definition_record_field', 'digits', 'domain', 'aggregator', 'groups',
             'help', 'model_field', 'name', 'readonly', 'related', 'relation', 'relation_field', 'required', 'searchable', 'selection', 'size',
-            'sortable', 'store', 'string', 'translate', 'trim', 'type', 'groupable',
+            'sortable', 'store', 'string', 'translate', 'trim', 'type', 'groupable', 'falsy_value_label'
         ]
 
     @api.readonly

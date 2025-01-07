@@ -77,6 +77,7 @@ class SlideSlidePartner(models.Model):
 
 class SlideTag(models.Model):
     """ Tag to search slides across channels. """
+    _name = 'slide.tag'
     _description = 'Slide Tag'
 
     name = fields.Char('Name', required=True, translate=True)
@@ -117,7 +118,7 @@ class SlideSlide(models.Model):
     active = fields.Boolean(default=True, tracking=100)
     sequence = fields.Integer('Sequence', default=0)
     user_id = fields.Many2one('res.users', string='Uploaded by', default=lambda self: self.env.uid)
-    description = fields.Html('Description', translate=True, sanitize_attributes=False)
+    description = fields.Html('Description', translate=True, sanitize_attributes=False, sanitize_overridable=True)
     channel_id = fields.Many2one('slide.channel', string="Course", required=True, ondelete='cascade')
     tag_ids = fields.Many2many('slide.tag', 'rel_slide_tag', 'slide_id', 'tag_id', string='Tags')
     is_preview = fields.Boolean('Allow Preview', default=False, help="The course is accessible by anyone : the users don't need to join the channel to access the content of the course.")
@@ -715,7 +716,6 @@ class SlideSlide(models.Model):
     # Mail/Rating
     # ---------------------------------------------------------
 
-    @api.returns('mail.message', lambda value: value.id)
     def message_post(self, *, message_type='notification', **kwargs):
         self.ensure_one()
         if message_type == 'comment' and not self.channel_id.can_comment:  # user comments have a restriction on karma
@@ -735,8 +735,7 @@ class SlideSlide(models.Model):
             }
         return super()._get_access_action(access_uid=access_uid, force_website=force_website)
 
-    def _notify_get_recipients_groups(self, message, model_description, msg_vals=None):
-        """ Add access button to everyone if the document is active. """
+    def _notify_get_recipients_groups(self, message, model_description, msg_vals=False):
         groups = super()._notify_get_recipients_groups(
             message, model_description, msg_vals=msg_vals
         )

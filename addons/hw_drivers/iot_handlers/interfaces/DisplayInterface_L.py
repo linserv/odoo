@@ -3,14 +3,7 @@
 
 import logging
 import os
-import subprocess
-
-try:
-    import screeninfo
-except ImportError:
-    screeninfo = None
-    import RPi.GPIO as GPIO
-    from vcgencmd import Vcgencmd
+import screeninfo
 
 from odoo.addons.hw_drivers.interface import Interface
 
@@ -30,23 +23,13 @@ class DisplayInterface(Interface):
             }
         }
 
-        if screeninfo is None:
-            # On IoT image < 24.10 we don't have screeninfo installed, so we can't get the connected displays
-            # We use old method to get the connected display
-            hdmi_ports = {'hdmi_0': 2, 'hdmi_1': 7} if 'Pi 4' in GPIO.RPI_INFO.get('TYPE') else {'hdmi_0': 2}
-            try:
-                for x_screen, port in enumerate(hdmi_ports):
-                    if Vcgencmd().display_power_state(hdmi_ports.get(port)) == 'on':
-                        display_devices[port] = self._add_device(port, x_screen)
-            except subprocess.CalledProcessError:
-                _logger.warning('Vcgencmd "display_power_state" method call failed')
-
-            return display_devices or dummy_display
-
         try:
             os.environ['DISPLAY'] = ':0'
-            for x_screen, monitor in enumerate(screeninfo.get_monitors()):
-                display_devices[monitor.name] = self._add_device(monitor.name, x_screen)
+            display_devices = {
+                monitor.name: self._add_device(monitor.name, x_screen)
+                for x_screen, monitor in enumerate(screeninfo.get_monitors())
+                if "DUMMY" not in monitor.name
+            }
             return display_devices or dummy_display
         except screeninfo.common.ScreenInfoError:
             # If no display is connected, screeninfo raises an error, we return the distant display

@@ -46,11 +46,11 @@ export class KanbanRenderer extends Component {
     };
     static props = [
         "archInfo",
-        "Compiler?",
+        "Compiler",
         "list",
         "deleteRecord",
         "openRecord",
-        "readonly",
+        "readonly?",
         "forceGlobalClick?",
         "noContentHelp?",
         "scrollTop?",
@@ -401,7 +401,7 @@ export class KanbanRenderer extends Component {
             withProgressBars: true,
         });
         if (mode === "edit") {
-            await this.props.openRecord(record, { mode: "edit" });
+            await this.props.openRecord(record);
         } else {
             this.props.progressBarState?.updateCounts(group);
         }

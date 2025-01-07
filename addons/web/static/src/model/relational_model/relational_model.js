@@ -45,7 +45,7 @@ import { FetchRecordError } from "./errors";
  * @property {Object} activeFields
  * @property {object} context
  * @property {boolean} isMonoRecord
- * @property {number} currentCompanyId
+ * @property {object} companies
  * @property {boolean} isRoot
  * @property {Array} [domain]
  * @property {Array} [groupBy]
@@ -120,7 +120,7 @@ export class RelationalModel extends Model {
         /** @type {Config} */
         this.config = {
             isMonoRecord: false,
-            currentCompanyId: company.currentCompany.id,
+            companies: company.evalContext,
             context: {},
             ...params.config,
             isRoot: true,
@@ -325,13 +325,7 @@ export class RelationalModel extends Model {
         if (config.countLimit !== Number.MAX_SAFE_INTEGER) {
             config.countLimit = Math.max(config.countLimit, config.offset + config.limit);
         }
-        const { records, length } = await this._loadUngroupedList({
-            ...config,
-            context: {
-                ...config.context,
-                current_company_id: config.currentCompanyId,
-            },
-        });
+        const { records, length } = await this._loadUngroupedList(config);
         if (config.offset && !records.length) {
             config.offset = 0;
             return this._loadData(config);
@@ -377,6 +371,7 @@ export class RelationalModel extends Model {
             resModel: config.resModel,
             fields: config.fields,
             activeFields: config.activeFields,
+            companies: config.companies,
         };
         let groupRecordConfig;
         const groupRecordResIds = [];
@@ -385,6 +380,7 @@ export class RelationalModel extends Model {
                 ...this.groupByInfo[firstGroupByName],
                 resModel: config.fields[firstGroupByName].relation,
                 context: {},
+                companies: config.companies,
             };
         }
         const proms = [];
@@ -547,9 +543,7 @@ export class RelationalModel extends Model {
 
             return records;
         } else {
-            return resIds.map((resId) => {
-                return { id: resId };
-            });
+            return resIds.map((resId) => ({ id: resId }));
         }
     }
 
@@ -654,7 +648,9 @@ export class RelationalModel extends Model {
      * @returns {Promise<number>}
      */
     async _updateCount(config) {
-        const count = await this.keepLast.add(this.orm.searchCount(config.resModel, config.domain));
+        const count = await this.keepLast.add(
+            this.orm.searchCount(config.resModel, config.domain, { context: config.context })
+        );
         config.countLimit = Number.MAX_SAFE_INTEGER;
         return count;
     }

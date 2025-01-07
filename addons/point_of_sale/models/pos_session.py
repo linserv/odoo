@@ -6,7 +6,8 @@ from markupsafe import Markup
 
 from odoo import api, fields, models, _, Command
 from odoo.exceptions import AccessError, UserError, ValidationError
-from odoo.tools import float_is_zero, float_compare, plaintext2html
+from odoo.tools import float_is_zero, float_compare, plaintext2html, split_every
+from odoo.tools.constants import PREFETCH_MAX
 from odoo.service.common import exp_version
 from odoo.osv.expression import AND
 
@@ -992,7 +993,7 @@ class PosSession(models.Model):
                 partners._increase_rank('customer_rank')
 
         if self.company_id.anglo_saxon_accounting:
-            all_picking_ids = self.order_ids.filtered(lambda p: not p.is_invoiced).picking_ids.ids + self.picking_ids.filtered(lambda p: not p.pos_order_id).ids
+            all_picking_ids = self.order_ids.filtered(lambda p: not p.is_invoiced and not p.shipping_date).picking_ids.ids + self.picking_ids.filtered(lambda p: not p.pos_order_id).ids
             if all_picking_ids:
                 # Combine stock lines
                 stock_move_sudo = self.env['stock.move'].sudo()
@@ -1002,8 +1003,7 @@ class PosSession(models.Model):
                     ('product_id.categ_id.property_valuation', '=', 'real_time'),
                     ('product_id.is_storable', '=', True),
                 ])
-                for stock_moves_split in self.env.cr.split_for_in_conditions(stock_moves.ids):
-                    stock_moves_batch = stock_move_sudo.browse(stock_moves_split)
+                for stock_moves_batch in split_every(PREFETCH_MAX, stock_moves._ids, stock_moves.browse):
                     candidates = stock_moves_batch\
                         .filtered(lambda m: not bool(m.origin_returned_move_id and sum(m.stock_valuation_layer_ids.mapped('quantity')) >= 0))\
                         .mapped('stock_valuation_layer_ids')
@@ -1545,16 +1545,13 @@ class PosSession(models.Model):
         new_amounts['amount_converted'] += amount_converted
 
         # consider base_amount if present
-        if not amounts_to_add.get('base_amount') == None:
+
+        if amounts_to_add.get('base_amount'):
             base_amount = amounts_to_add.get('base_amount')
-            if self.is_in_company_currency or force_company_currency:
-                base_amount_converted = base_amount
-            else:
-                base_amount_converted = self._amount_converter(base_amount, date, round)
 
             # update base_amount and base_amount_converted
             new_amounts['base_amount'] += base_amount
-            new_amounts['base_amount_converted'] += base_amount_converted
+            new_amounts['base_amount_converted'] += base_amount
 
         return new_amounts
 

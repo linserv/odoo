@@ -73,3 +73,18 @@ registry.category("web_tour.tours").add("selfAlwaysAttributeVariants", {
         Utils.checkIsNoBtn("Order Now"),
     ],
 });
+
+registry.category("web_tour.tours").add("self_order_product_info", {
+    steps: () => [
+        Utils.clickBtn("Order Now"),
+        {
+            trigger:
+                ".self_order_product_card:contains('Product Info Test') .product-information-tag",
+            run: "click",
+        },
+        {
+            trigger: '.modal-body:contains("Nice Product")',
+            run: () => {},
+        },
+    ],
+});

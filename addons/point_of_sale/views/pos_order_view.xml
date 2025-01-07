@@ -8,7 +8,7 @@
                 <header>
                     <button name="%(action_pos_payment)d" string="Payment" class="oe_highlight" type="action" invisible="state != 'draft'" />
                     <button name="action_pos_order_invoice" string="Invoice" type="object"
-                            invisible="state != 'paid'"/>
+                            invisible="state not in ['paid', 'done']"/>
                     <button name="refund" string="Return Products" type="object"
                         invisible="state == 'draft' or not has_refundable_lines"/>
                     <field name="state" widget="statusbar" invisible="state == 'cancel'" statusbar_visible="draft,paid,done"/>
@@ -298,6 +298,7 @@
                 <field name="user_id" widget="many2one_avatar_user" readonly="state in ['done', 'invoiced']"/>
                 <field name="amount_total" sum="Amount total" widget="monetary" decoration-bf="1"/>
                 <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-success="state not in ('draft','cancel')"/>
+                <field name="invoice_status" widget="badge" decoration-success="invoice_status == 'invoiced'" decoration-info="invoice_status == 'to_invoice'"/>
                 <field name="is_edited" readonly="1" optional="hide"/>
             </list>
         </field>

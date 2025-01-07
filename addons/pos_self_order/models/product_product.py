@@ -13,11 +13,16 @@ class ProductTemplate(models.Model):
         default=True,
     )
 
+    self_order_visible = fields.Boolean(
+        compute='_compute_self_order_visible',
+        store=True
+    )
+
     def _load_pos_self_data(self, data):
         domain = self._load_pos_data_domain(data)
 
         # Add custom fields for 'formula' taxes.
-        fields = set(self._load_pos_data_fields(data['pos.config'][0]['id']))
+        fields = set(self._load_pos_self_data_fields(data['pos.config'][0]['id']))
         taxes = self.env['account.tax'].search(self.env['account.tax']._load_pos_data_domain(data))
         product_fields = taxes._eval_taxes_computation_prepare_product_fields()
         fields = list(fields.union(product_fields))
@@ -44,12 +49,6 @@ class ProductTemplate(models.Model):
                 product['_archived_combinations'].append(product_product.product_template_attribute_value_ids.ids)
 
     @api.model
-    def _load_pos_self_data_fields(self, config_id):
-        params = super()._load_pos_self_data_fields(config_id)
-        params += ['public_description']
-        return params
-
-    @api.model
     def _load_pos_data_fields(self, config_id):
         params = super()._load_pos_data_fields(config_id)
         params += ['self_order_available']
@@ -60,6 +59,13 @@ class ProductTemplate(models.Model):
         for record in self:
             if not record.available_in_pos:
                 record.self_order_available = False
+
+    @api.depends('pos_categ_ids', 'pos_categ_ids.pos_config_ids.self_ordering_mode')
+    def _compute_self_order_visible(self):
+        config_with_self = self.env['pos.config'].search([('self_ordering_mode', '!=', 'nothing')])
+        categ_ids = config_with_self.iface_available_categ_ids.ids
+        for product in self:
+            product.self_order_visible = any(p_cat_id in categ_ids for p_cat_id in product.pos_categ_ids.ids)
 
     def write(self, vals_list):
         if 'available_in_pos' in vals_list:

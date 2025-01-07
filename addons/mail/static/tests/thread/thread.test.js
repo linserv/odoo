@@ -341,7 +341,7 @@ test("mark channel as fetched when a new message is loaded", async () => {
 test.tags("focus required");
 test("mark channel as fetched when a new message is loaded and thread is focused", async () => {
     const pyEnv = await startServer();
-    const partnerId = pyEnv["res.partner"].create({});
+    const partnerId = pyEnv["res.partner"].create({ name: "Demo" });
     const userId = pyEnv["res.users"].create({ partner_id: partnerId });
     const channelId = pyEnv["discuss.channel"].create({
         name: "test",
@@ -519,7 +519,7 @@ test("Mention a partner with special character (e.g. apostrophe ')", async () =>
     await openDiscuss(channelId);
     await insertText(".o-mail-Composer-input", "@");
     await insertText(".o-mail-Composer-input", "Pyn");
-    await click(".o-mail-Composer-suggestion");
+    await click(".o-mail-Composer-suggestion", { text: "Pynya's spokesman" });
     await contains(".o-mail-Composer-input", { value: "@Pynya's spokesman " });
     await press("Enter");
     await contains(

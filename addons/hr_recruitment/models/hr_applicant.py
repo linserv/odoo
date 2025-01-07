@@ -578,10 +578,6 @@ class HrApplicant(models.Model):
 
     @api.model
     def message_new(self, msg, custom_values=None):
-        """ Overrides mail_thread message_new that is called by the mailgateway
-            through message_process.
-            This override updates the document according to the email.
-        """
         # Remove default author when going through the mail gateway. Indeed, we
         # do not want to explicitly set user_id to False; however we do not
         # want the gateway user to be responsible if no other responsible is
@@ -595,10 +591,18 @@ class HrApplicant(models.Model):
             candidate_defaults['company_id'] = job.company_id.id
 
         partner_name, email_from_normalized = tools.parse_contact_from_email(msg.get('from'))
-        candidate = self.env['hr.candidate'].create({
-            'partner_name': partner_name or email_from_normalized,
-            **candidate_defaults,
-        })
+        candidate = self.env["hr.candidate"].search(
+            [
+                ("email_from", "=", email_from_normalized),
+            ],
+            limit=1,
+        ) or self.env["hr.candidate"].create(
+            {
+                "partner_name": partner_name or email_from_normalized,
+                **candidate_defaults,
+            }
+        )
+
         defaults = {
             'candidate_id': candidate.id,
             'partner_name': partner_name,
@@ -650,6 +654,11 @@ class HrApplicant(models.Model):
         self.ensure_one()
         action = self.candidate_id.create_employee_from_candidate()
         employee = self.env['hr.employee'].browse(action['res_id'])
+        employee_attachments = self.env['ir.attachment'].search([('res_model', '=','hr.employee'), ('res_id', '=', employee.id)])
+        unique_attachments = self.attachment_ids.filtered(
+            lambda attachment: attachment.datas not in employee_attachments.mapped('datas')
+        )
+        unique_attachments.copy({'res_model': 'hr.employee', 'res_id': employee.id})
         employee.write({
             'job_id': self.job_id.id,
             'job_title': self.job_id.name,

@@ -55,10 +55,10 @@ import {
 } from "@web/../tests/web_test_helpers";
 
 import { browser } from "@web/core/browser/browser";
+import { cookie } from "@web/core/browser/cookie";
 import { registry } from "@web/core/registry";
 import { SIZES } from "@web/core/ui/ui_service";
 import { useBus, useService } from "@web/core/utils/hooks";
-import { session } from "@web/session";
 import { CharField } from "@web/views/fields/char/char_field";
 import { DateTimeField } from "@web/views/fields/datetime/datetime_field";
 import { Field } from "@web/views/fields/field";
@@ -1162,6 +1162,58 @@ test(`invisible fields are properly hidden`, async () => {
     expect(`label:contains(Foo)`).toHaveCount(0);
     expect(`.o_field_widget[name=foo]`).toHaveCount(0);
     expect(`.o_field_widget[name=float_field]`).toHaveCount(0);
+    expect(`.o_field_widget[name="child_ids"]`).toHaveCount(0);
+});
+
+test(`invisible, required and readonly using company evalContext`, async () => {
+    Partner._records[0].int_field = 3;
+    serverState.companies = [
+        {
+            id: 1,
+            name: "Company 1",
+            sequence: 1,
+            parent_id: false,
+            child_ids: [],
+            country_code: "BE",
+        },
+        {
+            id: 2,
+            name: "Company 2",
+            sequence: 2,
+            parent_id: false,
+            child_ids: [],
+            country_code: "PE",
+        },
+        {
+            id: 3,
+            name: "Company 3",
+            sequence: 3,
+            parent_id: false,
+            child_ids: [],
+            country_code: "AR",
+        },
+    ];
+    cookie.set("cids", "3-1");
+
+    await mountView({
+        resModel: "partner",
+        type: "form",
+        arch: `
+            <form>
+                <sheet>
+                    <field name="int_field" invisible="1"/>
+                    <group>
+                        <field name="foo" required="companies.has(companies.active_ids, 'country_code', 'BE')"/>
+                    </group>
+                    <field name="name" readonly="companies.has(companies.active_id, 'country_code', 'AR')"/>
+                    <field name="child_ids" invisible="not companies.has(int_field, 'country_code', 'PE')"/>
+                </sheet>
+            </form>
+        `,
+        resId: 1,
+    });
+    expect(`.o_field_widget[name=foo]`).toHaveClass("o_required_modifier");
+    expect(`.o_field_widget[name=name]`).toHaveClass("o_readonly_modifier");
     expect(`.o_field_widget[name="child_ids"]`).toHaveCount(0);
 });
 
@@ -3633,14 +3685,12 @@ test(`onchange send only the present fields to the server`, async () => {
                     },
                 },
                 limit: 40,
-                order: "",
             },
             type_ids: {
                 fields: {
                     name: {},
                 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -3852,7 +3902,6 @@ test(`default record with a one2many and an onchange on sub field`, async () => 
                     foo: {},
                 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -3922,7 +3971,6 @@ test(`form with one2many with dynamic context`, async () => {
                 },
                 context: { static: 4 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -6458,7 +6506,6 @@ test(`display_name not sent for onchanges if not in view`, async () => {
                     color: {},
                 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -6482,7 +6529,6 @@ test(`display_name not sent for onchanges if not in view`, async () => {
                     color: {},
                 },
                 limit: 40,
-                order: "",
             },
         });
     });
@@ -8422,9 +8468,15 @@ test(`form rendering with groups with col/colspan`, async () => {
 
     // Verify .group_4 content
     expect(`.group_4 > div.o_cell`).toHaveCount(4);
-    expect(`.group_4 > div.o_cell:first-child`).toHaveAttribute("style", "grid-column: span 3;");
-    expect(`.group_4 > div.o_cell:nth-child(2)`).toHaveAttribute("style", "grid-column: span 2;");
-    expect(`.group_4 > div.o_cell:last-child`).toHaveAttribute("style", "grid-column: span 4;");
+    expect(`.group_4 > div.o_cell:first-child`).toHaveAttribute(
+        "style",
+        "--o-grid-column-span: 3;"
+    );
+    expect(`.group_4 > div.o_cell:nth-child(2)`).toHaveAttribute(
+        "style",
+        "--o-grid-column-span: 2;"
+    );
+    expect(`.group_4 > div.o_cell:last-child`).toHaveAttribute("style", "--o-grid-column-span: 4;");
 
     // Verify .group_3 content
     expect(`.group_3 > *`).toHaveCount(3);
@@ -9033,47 +9085,6 @@ test(`form view is not broken if save operation fails`, async () => {
     await contains(`.o_field_widget[name=foo] input`).edit("correct value");
     await contains(`.o_form_button_save`).click();
     expect.verifySteps(["web_save"]); // write on save (it works)
-});
-
-test(`form view is not broken if save failed in readonly mode on field changed`, async () => {
-    expect.errors(1);
-
-    let failFlag = false;
-    onRpc("web_save", () => {
-        expect.step("web_save");
-        if (failFlag) {
-            throw makeServerError();
-        }
-    });
-    onRpc("web_read", () => expect.step("web_read"));
-
-    await mountView({
-        resModel: "partner",
-        type: "form",
-        arch: `
-            <form>
-                <header>
-                    <field name="parent_id" widget="statusbar" options="{'clickable': '1'}"/>
-                </header>
-            </form>
-        `,
-        mode: "readonly",
-        resId: 1,
-    });
-    expect.verifySteps(["web_read"]);
-    expect(`button[data-value="4"]`).toHaveClass("o_arrow_button_current");
-    expect(`button[data-value="4"]`).not.toBeEnabled();
-
-    failFlag = true;
-    await contains(`button[data-value="1"]`).click();
-    expect(`button[data-value="4"]`).toHaveClass("o_arrow_button_current");
-    expect.verifyErrors(["RPC_ERROR: Odoo Server Error"]);
-    expect.verifySteps(["web_save", "web_read"]); // must reload when saving fails
-
-    failFlag = false;
-    await contains(`button[data-value="1"]`).click();
-    expect(`button[data-value="4"]`).toHaveClass("o_arrow_button_current");
-    expect.verifySteps(["web_save"]);
 });
 
 test.tags("desktop");
@@ -10390,7 +10401,11 @@ test(`company_dependent field in form view, in multi company group`, async () =>
         help: "this is a tooltip",
     });
 
-    patchWithCleanup(session, { display_switch_company_menu: true });
+    serverState.companies = [
+        { id: 1, name: "Company 1", sequence: 1, parent_id: false, child_ids: [] },
+        { id: 2, name: "Company 2", sequence: 2, parent_id: false, child_ids: [] },
+        { id: 3, name: "Company 3", sequence: 3, parent_id: false, child_ids: [] },
+    ];
     await mountView({
         resModel: "partner",
         type: "form",
@@ -10423,7 +10438,10 @@ test(`company_dependent field in form view, not in multi company group`, async (
         help: "this is a tooltip",
     });
 
-    patchWithCleanup(session, { display_switch_company_menu: false });
+    serverState.companies = [
+        { id: 1, name: "Company 1", sequence: 1, parent_id: false, child_ids: [] },
+    ];
+
     await mountView({
         resModel: "partner",
         type: "form",
@@ -11206,9 +11224,11 @@ test(`setting : boolean field`, async () => {
 });
 
 test(`setting : char field`, async () => {
-    patchWithCleanup(session, {
-        display_switch_company_menu: true,
-    });
+    serverState.companies = [
+        { id: 1, name: "Company 1", sequence: 1, parent_id: false, child_ids: [] },
+        { id: 2, name: "Company 2", sequence: 2, parent_id: false, child_ids: [] },
+        { id: 3, name: "Company 3", sequence: 3, parent_id: false, child_ids: [] },
+    ];
 
     await mountView({
         resModel: "partner",

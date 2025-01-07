@@ -1,8 +1,10 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+from odoo import Command
 from odoo.addons.im_livechat.tests import chatbot_common
-from odoo.exceptions import ValidationError
-from odoo.tests.common import tagged
+from odoo.tests.common import JsonRpcException, new_test_user, tagged
+from odoo.tools.misc import mute_logger
+
 
 @tagged("post_install", "-at_install")
 class ChatbotCase(chatbot_common.ChatbotCase):
@@ -54,16 +56,14 @@ class ChatbotCase(chatbot_common.ChatbotCase):
         self.assertEqual(discuss_channel.chatbot_current_step_id, self.step_dispatch)
 
         self._post_answer_and_trigger_next_step(
-            discuss_channel,
-            self.step_dispatch_buy_software.name,
-            chatbot_script_answer=self.step_dispatch_buy_software
+            discuss_channel, chatbot_script_answer=self.step_dispatch_buy_software
         )
         self.assertEqual(discuss_channel.chatbot_current_step_id, self.step_email)
 
-        with self.assertRaises(ValidationError, msg="Should raise an error since it's not a valid email"):
-            self._post_answer_and_trigger_next_step(discuss_channel, 'test')
+        with self.assertRaises(JsonRpcException, msg='odoo.exceptions.ValidationError'), mute_logger("odoo.http"):
+            self._post_answer_and_trigger_next_step(discuss_channel, email="test")
 
-        self._post_answer_and_trigger_next_step(discuss_channel, 'test@example.com')
+        self._post_answer_and_trigger_next_step(discuss_channel, email="test@example.com")
         self.assertEqual(discuss_channel.chatbot_current_step_id, self.step_email_validated)
 
     def test_chatbot_steps_sequence(self):
@@ -131,3 +131,93 @@ class ChatbotCase(chatbot_common.ChatbotCase):
         self_member._rtc_join_call()
         self.assertTrue(guest_member.rtc_inviting_session_id)
         self.assertFalse(bot_member.rtc_inviting_session_id)
+
+    def test_forward_to_specific_operator(self):
+        """Test _process_step_forward_operator takes into account the given users as candidates."""
+        data = self.make_jsonrpc_request(
+            "/im_livechat/get_session",
+            {
+                "anonymous_name": "Test Visitor",
+                "channel_id": self.livechat_channel.id,
+                "chatbot_script_id": self.chatbot_script.id,
+            },
+        )
+        discuss_channel = (
+            self.env["discuss.channel"].sudo().browse(data["discuss.channel"][0]["id"])
+        )
+        self.step_forward_operator._process_step_forward_operator(discuss_channel)
+        self.assertEqual(
+            discuss_channel.livechat_operator_id, self.chatbot_script.operator_partner_id
+        )
+        self.step_forward_operator._process_step_forward_operator(
+            discuss_channel, users=self.user_employee
+        )
+        self.assertEqual(discuss_channel.livechat_operator_id, self.partner_employee)
+
+    def test_chatbot_multiple_rules_on_same_url(self):
+        bob_user = new_test_user(
+            self.env, login="bob_user", groups="im_livechat.im_livechat_group_user,base.group_user"
+        )
+        chatbot_no_operator = self.env["chatbot.script"].create(
+            {
+                "title": "Chatbot operators not available",
+                "script_step_ids": [
+                    Command.create(
+                        {
+                            "step_type": "text",
+                            "message": "I'm shown because there is no operator available",
+                        }
+                    )
+                ],
+            }
+        )
+        chatbot_operator = self.env["chatbot.script"].create(
+            {
+                "title": "Chatbot operators available",
+                "script_step_ids": [
+                    Command.create(
+                        {
+                            "step_type": "text",
+                            "message": "I'm shown because there is an operator available",
+                        }
+                    )
+                ],
+            }
+        )
+        self.livechat_channel.user_ids += bob_user
+        self.livechat_channel.rule_ids = self.env["im_livechat.channel.rule"].create(
+            [
+                {
+                    "channel_id": self.livechat_channel.id,
+                    "chatbot_script_id": chatbot_no_operator.id,
+                    "chatbot_only_if_no_operator": True,
+                    "regex_url": "/",
+                    "sequence": 1,
+                },
+                {
+                    "channel_id": self.livechat_channel.id,
+                    "chatbot_script_id": chatbot_operator.id,
+                    "regex_url": "/",
+                    "sequence": 2,
+                },
+            ]
+        )
+        self.assertFalse(self.livechat_channel.available_operator_ids)
+        self.assertEqual(
+            self.env["im_livechat.channel.rule"]
+            .match_rule(self.livechat_channel.id, "/")
+            .chatbot_script_id,
+            chatbot_no_operator,
+        )
+        self.env["bus.presence"]._update_presence(
+            inactivity_period=0, identity_field="user_id", identity_value=bob_user.id
+        )
+        # Force the recomputation of `available_operator_ids` after bob becomes online
+        self.livechat_channel.invalidate_recordset(["available_operator_ids"])
+        self.assertTrue(self.livechat_channel.available_operator_ids)
+        self.assertEqual(
+            self.env["im_livechat.channel.rule"]
+            .match_rule(self.livechat_channel.id, "/")
+            .chatbot_script_id,
+            chatbot_operator,
+        )

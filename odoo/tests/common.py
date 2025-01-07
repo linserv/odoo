@@ -1078,6 +1078,7 @@ class ChromeBrowser:
         self._websocket_send('Runtime.enable')
         self._logger.info('Chrome headless enable page notifications')
         self._websocket_send('Page.enable')
+        self._websocket_send('Emulation.setFocusEmulationEnabled', params={'enabled': True})
 
     @property
     def screencasts_frames_dir(self):
@@ -1207,7 +1208,7 @@ class ChromeBrowser:
             switches['--touch-events'] = ''
         if debug is not False:
             switches['--auto-open-devtools-for-tabs'] = ''
-            switches['--start-maximized'] = ''
+            switches['--start-fullscreen'] = ''
 
         cmd = [self.executable]
         cmd += ['%s=%s' % (k, v) if v else k for k, v in switches.items()]

@@ -1349,10 +1349,6 @@
                                     </t>
                                     <p t-if="True" class="css_not_available_msg alert alert-warning">This combination does not exist.</p>
                                     <div id="o_wsale_cta_wrapper" class="d-flex flex-wrap align-items-center">
-                                        <t t-set="hasQuantities" t-value="false"/>
-                                        <t t-set="hasBuyNow" t-value="false"/>
-                                        <t t-set="ctaSizeBig" t-value="not hasQuantities or not hasBuyNow"/>
-
                                         <div id="add_to_cart_wrap" t-attf-class="{{'d-none' if combination_info['prevent_zero_price_sale'] else 'd-inline-flex'}} align-items-center mb-2 me-auto">
                                             <a data-animation-selector=".o_wsale_product_images" role="button" id="add_to_cart" t-attf-class="btn btn-primary js_check_product a-submit flex-grow-1" href="#">
                                                 <i class="fa fa-shopping-cart me-2"/>
@@ -1654,9 +1650,6 @@
     </template>
 
     <template id="product_quantity" inherit_id="website_sale.product" name="Select Quantity">
-        <xpath expr="//t[@t-set='hasQuantities']" position="attributes">
-            <attribute name="t-value" remove="false" add="true" separator=" "/>
-        </xpath>
         <div id="add_to_cart_wrap" position="before">
             <div t-attf-class="css_quantity input-group {{'d-none' if combination_info['prevent_zero_price_sale'] else 'd-inline-flex'}} me-2 mb-2 align-middle" contenteditable="false">
                 <a t-attf-href="#" class="btn btn-link js_add_cart_json" aria-label="Remove one" title="Remove one">
@@ -1671,11 +1664,8 @@
     </template>
 
     <template id="product_buy_now" inherit_id="website_sale.product" active="False" name="Buy Now Button">
-        <xpath expr="//t[@t-set='hasBuyNow']" position="attributes">
-            <attribute name="t-value" remove="false" add="true" separator=" "/>
-        </xpath>
         <xpath expr="//a[@id='add_to_cart']" position="after">
-            <a role="button" t-attf-class="btn btn-outline-primary o_we_buy_now ms-1 #{'btn-lg' if ctaSizeBig else ''}" href="#">
+            <a role="button" class="btn btn-outline-primary o_we_buy_now ms-1" href="#">
                 <i class="fa fa-bolt me-2"/>
                 Buy now
             </a>
@@ -2187,7 +2177,7 @@
             - xmlid: The id of the xml templated rendered by the controller.
         -->
         <t t-set="step_specific_values" t-value="website._get_checkout_steps(xmlid)"/>
-        <div t-attf-class="#{_container_classes} d-flex #{_form_send_navigation and 'flex-column flex-lg-row align-items-lg-center' or 'flex-column'} pt-4">
+        <div t-attf-class="#{_container_classes} d-flex #{_form_send_navigation and 'flex-column flex-lg-row align-items-lg-center' or 'flex-column'} mb-5 mb-lg-0 pt-4">
             <t t-if="website_sale_order and website_sale_order.website_order_line">
                 <t t-if="xmlid == 'website_sale.payment'">
                     <div t-if="not errors and not website_sale_order.amount_total"
@@ -2818,7 +2808,7 @@
                                     <t t-call="website_sale.total">
                                         <t t-set="_cart_total_classes" t-valuef="border-top pt-3"/>
                                     </t>
-                                    <div t-if="show_navigation_button" class="o_cta_navigation_container position-absolute position-lg-static start-0 bottom-0 col-12">
+                                    <div t-if="show_navigation_button" class="o_cta_navigation_container position-absolute position-lg-static start-0 top-100 col-12">
                                         <t t-call="website_sale.navigation_buttons"/>
                                     </div>
                                 </div>
@@ -2827,10 +2817,6 @@
                         <div t-attf-class="oe_cart col-12 col-lg-7">
                             <t t-out="0"/>
                         </div>
-                        <!-- This div serves as an anchor for the navigation buttons on the mobile
-                             view. -->
-                        <div t-if="not show_shorter_cart_summary and show_navigation_button"
-                             class="o_cta_navigation_placeholder d-block d-lg-none order-lg-4"/>
                     </div>
                 </div>
                 <!-- This is the drag-and-drop area for website building blocs at the end of each
@@ -3124,7 +3110,6 @@
         <div
             id="o-carousel-product"
             t-attf-class="#{len(product_images) > 1 and 'o_carousel_not_single'} carousel slide position-sticky mb-3 overflow-hidden"
-            data-bs-ride="true"
             t-att-data-name="product_carousel_block_name"
         >
             <div

@@ -42,7 +42,7 @@
                     <div class="oe_button_box" name="button_box" groups="base.group_user">
                         <button class="oe_stat_button" type="object" name="action_view_tasks" icon="fa-check">
                             <div class="o_field_widget o_stat_info">
-                                <span class="o_stat_text">Tasks</span>
+                                <field name="label_tasks" readonly="1"/>
                                 <span class="o_stat_value">
                                     <field name="closed_task_count"/> / <field name="task_count"/>
                                     (<field name="task_completion_percentage" widget="percentage" options="{'digits': [1, 0]}"/>)
@@ -398,10 +398,10 @@
                                         <h5 role="menuitem" class="o_kanban_card_manage_title" groups="project.group_project_user">
                                             <span>Reporting</span>
                                         </h5>
-                                        <div role="menuitem" groups="project.group_project_user" name="task_analysis">
+                                        <div class="d-inline-block" role="menuitem" groups="project.group_project_user" name="task_analysis">
                                             <a name="action_view_tasks_analysis" type="object">Tasks Analysis</a>
                                         </div>
-                                        <div role="menuitem" name="project_burndown_menu" groups="project.group_project_user">
+                                        <div class="d-inline-block" role="menuitem" name="project_burndown_menu" groups="project.group_project_user">
                                             <a name="action_project_task_burndown_chart_report" type="object">Burndown Chart</a>
                                         </div>
                                     </div>

@@ -2663,10 +2663,11 @@ export class OdooEditor extends EventTarget {
         // Get the top table ancestors at range bounds.
         const startTable = ancestors(range.startContainer, this.editable).filter(node => node.nodeName === 'TABLE').pop();
         const endTable = ancestors(range.endContainer, this.editable).filter(node => node.nodeName === 'TABLE').pop();
-        if (startTd !== endTd && startTable === endTable) {
+        if ((startTd !== endTd || this.keepCellSelected) && startTable === endTable) {
             if (!isProtected(startTable)) {
                 // The selection goes through at least two different cells ->
-                // select cells.
+                // select cells. Select single cell if cell is selected through
+                // double click.
                 this._selectTableCells(range);
                 appliedCustomSelection = true;
             }
@@ -3239,9 +3240,21 @@ export class OdooEditor extends EventTarget {
                     : 'none';
             }
 
+            const selectionText = sel.toString().replace(/\s+/g, "");
             const translateDropdown = this.toolbar.querySelector('#translate');
             if (translateDropdown) {
-                translateDropdown.style.display = sel.isCollapsed ? 'none' : '';
+                const translateDropdownBtn = translateDropdown.querySelector('.btn');
+                if (sel.isCollapsed) {
+                    translateDropdown.style.display = 'none';
+                } else {
+                    translateDropdown.style.display = '';
+                    translateDropdownBtn.classList[!selectionText ? 'add' : 'remove']('disabled');
+                }
+            }
+
+            const chatGptBtn = this.toolbar.querySelector('#open-chatgpt.btn');
+            if (chatGptBtn && !sel.isCollapsed) {
+                chatGptBtn.classList[!selectionText ? 'add' : 'remove']('disabled');
             }
         }
         this.updateColorpickerLabels();
@@ -3437,7 +3450,10 @@ export class OdooEditor extends EventTarget {
         // Hide toolbar if it overflows the scroll container.
         const distToScrollContainer = Math.min(toolbarTop - scrollContainerRect.top,
                                                 scrollContainerRect.bottom - toolbarBottom);
-        this.toolbar.classList.toggle('d-none', distToScrollContainer < OFFSET / 2);
+        const isToolbarOverflow = distToScrollContainer < OFFSET / 2;
+        if (isToolbarOverflow) {
+            this.toolbar.style.top = `${(Math.max(selRect.top, scrollContainerRect.top) + OFFSET)}px`
+        }
     }
 
     // PASTING / DROPPING
@@ -4227,7 +4243,10 @@ export class OdooEditor extends EventTarget {
             this.execCommand('strikeThrough');
             this.historyResetLatestComputedSelection(true);
         } else if (IS_KEYBOARD_EVENT_LEFT_ARROW(ev) || IS_KEYBOARD_EVENT_RIGHT_ARROW(ev)) {
-            const side = ev.key === 'ArrowLeft' ? 'previous' : 'next';
+            const isRTL = this.options.direction === 'rtl';
+            const previousName = isRTL ? 'next' : 'previous';
+            const nextName = isRTL ? 'previous' : 'next';
+            const side = ev.key === 'ArrowLeft' ? previousName : nextName;
             const selection = this.document.getSelection();
             let { anchorNode, anchorOffset, focusNode, focusOffset } = selection || {};
             if (ev.shiftKey) {
@@ -4778,6 +4797,17 @@ export class OdooEditor extends EventTarget {
             this._activateContenteditable();
         }
 
+        const selection = this.document.getSelection();
+        const td = closestElement(selection.anchorNode, 'td');
+        if (td &&
+            !isProtected(td) &&
+            ((isEmptyBlock(td) && ev.detail === 2) || ev.detail === 3)
+        ) {
+            this._selectTableCells(selection.getRangeAt(0));
+            this.keepCellSelected = true;
+            return;
+        }
+        delete this.keepCellSelected;
         // Ignore any changes that might have happened before this point.
         this.observer.takeRecords();
 

@@ -228,6 +228,7 @@ class MrpWorkorder(models.Model):
                 workorder.production_id.qty_producing = workorder.qty_producing
                 workorder.production_id._set_qty_producing()
 
+    @api.depends('blocked_by_workorder_ids')
     def _compute_qty_ready(self):
         for workorder in self:
             if workorder.production_state not in ('confirmed', 'progress') or workorder.state in ('cancel', 'done'):
@@ -426,6 +427,9 @@ class MrpWorkorder(models.Model):
 
     def _calculate_date_finished(self, date_start=False, new_workcenter=False):
         workcenter = new_workcenter or self.workcenter_id
+        if not workcenter.resource_calendar_id:
+            duration_in_seconds = self.duration_expected * 60
+            return (date_start or self.date_start) + timedelta(seconds=duration_in_seconds)
         return workcenter.resource_calendar_id.plan_hours(
             self.duration_expected / 60.0, date_start or self.date_start,
             compute_leaves=True, domain=[('time_type', 'in', ['leave', 'other'])]
@@ -440,6 +444,8 @@ class MrpWorkorder(models.Model):
                               "You should unplan the Manufacturing Order instead in order to unplan all the linked operations."))
 
     def _calculate_duration_expected(self, date_start=False, date_finished=False):
+        if not self.workcenter_id.resource_calendar_id:
+            return ((date_finished or self.date_finished) - (date_start or self.date_start)).total_seconds() / 60
         interval = self.workcenter_id.resource_calendar_id.get_work_duration_data(
             date_start or self.date_start, date_finished or self.date_finished,
             domain=[('time_type', 'in', ['leave', 'other'])]

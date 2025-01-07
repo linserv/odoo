@@ -12,6 +12,7 @@ On a simple click, your visitors can subscribe to mailing lists managed in the E
     'category': 'Website/Website',
     'depends': ['website', 'mass_mailing', 'google_recaptcha'],
     'data': [
+        'security/ir.model.access.csv',
         'data/ir_model_data.xml',
         'views/snippets/s_popup.xml',
         'views/snippets_templates.xml',
@@ -19,6 +20,7 @@ On a simple click, your visitors can subscribe to mailing lists managed in the E
     'auto_install': ['website', 'mass_mailing'],
     'assets': {
         'web.assets_frontend': [
+            'website_mass_mailing/static/src/scss/website_mass_mailing.scss',
             'website_mass_mailing/static/src/scss/website_mass_mailing_popup.scss',
             'website_mass_mailing/static/src/js/website_mass_mailing.js',
             'website_mass_mailing/static/src/xml/*.xml',

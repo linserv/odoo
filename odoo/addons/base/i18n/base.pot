@@ -2321,15 +2321,6 @@ msgid ""
 msgstr ""
 
 #. module: base
-#: model:ir.module.module,description:base.module_documents_account_peppol
-msgid ""
-"\n"
-"Bridge module between the Documents and Peppol apps.\n"
-"It allows importing of received Peppol documents\n"
-"within the Documents app.\n"
-msgstr ""
-
-#. module: base
 #: model:ir.module.module,description:base.module_documents_account
 msgid ""
 "\n"
@@ -6007,6 +5998,22 @@ msgid ""
 msgstr ""
 
 #. module: base
+#: model:ir.module.module,description:base.module_l10n_bh
+msgid ""
+"\n"
+"This is the base module to manage the accounting chart for Bahrain in Odoo.\n"
+"===========================================================================\n"
+"Bahrain accounting basic charts and localization.\n"
+"\n"
+"Activates:\n"
+" - Chart of Accounts\n"
+" - Taxes\n"
+" - Tax reports\n"
+" - Fiscal Positions\n"
+" - States\n"
+msgstr ""
+
+#. module: base
 #: model:ir.module.module,description:base.module_l10n_be
 msgid ""
 "\n"
@@ -9229,16 +9236,12 @@ msgstr ""
 
 #. module: base
 #: model_terms:ir.ui.view,arch_db:base.view_partner_form
-msgid ""
-"A partner with the same <span><span class=\"o_vat_label\">Company "
-"Registry</span></span> already exists ("
+msgid "A partner with the same"
 msgstr ""
 
 #. module: base
 #: model_terms:ir.ui.view,arch_db:base.view_partner_form
-msgid ""
-"A partner with the same <span><span class=\"o_vat_label\">Tax "
-"ID</span></span> already exists ("
+msgid "already exists ("
 msgstr ""
 
 #. module: base
@@ -13265,6 +13268,12 @@ msgid "Bahamas"
 msgstr ""
 
 #. module: base
+#: model:ir.module.module,shortdesc:base.module_l10n_bh
+msgid "Bahrain - Accounting"
+msgstr ""
+
+
+#. module: base
 #: model:res.country,name:base.bh
 msgid "Bahrain"
 msgstr ""
@@ -15290,6 +15299,8 @@ msgid "Company Details"
 msgstr ""
 
 #. module: base
+#. odoo-python
+#: code:addons/base/models/res_partner.py:0
 #: model:ir.model.fields,field_description:base.field_res_company__company_registry
 #: model:ir.model.fields,field_description:base.field_res_partner__company_registry
 #: model:ir.model.fields,field_description:base.field_res_users__company_registry
@@ -17536,11 +17547,6 @@ msgid "Documents - Hong Kong Payroll"
 msgstr ""
 
 #. module: base
-#: model:ir.module.module,shortdesc:base.module_documents_account_peppol
-msgid "Documents - Import from Peppol"
-msgstr ""
-
-#. module: base
 #: model:ir.module.module,shortdesc:base.module_documents_l10n_ke_hr_payroll
 msgid "Documents - Kenyan Payroll"
 msgstr ""
@@ -17595,11 +17601,6 @@ msgstr ""
 #: model:ir.module.module,shortdesc:base.module_documents_spreadsheet
 #: model:ir.module.module,summary:base.module_documents_spreadsheet
 msgid "Documents Spreadsheet"
-msgstr ""
-
-#. module: base
-#: model:ir.module.module,summary:base.module_documents_account_peppol
-msgid "Documents from Peppol"
 msgstr ""
 
 #. module: base
@@ -27846,12 +27847,8 @@ msgstr ""
 #. odoo-python
 #: code:addons/base/models/res_users.py:0
 #: model_terms:ir.ui.view,arch_db:base.user_groups_view
-msgid "Other"
-msgstr ""
-
-#. module: base
 #: model:ir.model.fields.selection,name:base.selection__res_partner__type__other
-msgid "Other Address"
+msgid "Other"
 msgstr ""
 
 #. module: base
@@ -33731,6 +33728,8 @@ msgid "Task Logs"
 msgstr ""
 
 #. module: base
+#. odoo-python
+#: code:addons/base/models/res_partner.py:0
 #: model:ir.model.fields,field_description:base.field_res_company__vat
 #: model:ir.model.fields,field_description:base.field_res_partner__vat
 #: model:ir.model.fields,field_description:base.field_res_users__vat

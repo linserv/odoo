@@ -132,8 +132,8 @@ class ProjectProject(models.Model):
             "provided that they are given the corresponding URL (and that they are part of the followers if the project is private).")
     privacy_visibility_warning = fields.Char('Privacy Visibility Warning', compute='_compute_privacy_visibility_warning', export_string_translation=False)
     access_instruction_message = fields.Char('Access Instruction Message', compute='_compute_access_instruction_message', export_string_translation=False)
-    date_start = fields.Date(string='Start Date')
-    date = fields.Date(string='Expiration Date', index=True, tracking=True,
+    date_start = fields.Date(string='Start Date', copy=False)
+    date = fields.Date(string='Expiration Date', copy=False, index=True, tracking=True,
         help="Date on which this project ends. The timeframe defined on the project is taken into account when viewing its planning.")
     allow_task_dependencies = fields.Boolean('Task Dependencies', default=lambda self: self.env.user.has_group('project.group_project_task_dependencies'))
     allow_milestones = fields.Boolean('Milestones', default=lambda self: self.env.user.has_group('project.group_project_milestone'))
@@ -405,17 +405,10 @@ class ProjectProject(models.Model):
         defaults = self._map_tasks_default_values(project)
         new_tasks = tasks.with_context(copy_project=True).copy(defaults)
         all_subtasks = new_tasks._get_all_subtasks()
-        project.write({'tasks': [Command.set(new_tasks.ids)]})
-        subtasks_not_displayed = all_subtasks.filtered(
-            lambda task: not task.display_in_project
-        )
         all_subtasks.filtered(
             lambda child: child.project_id == self
         ).write({
             'project_id': project.id
-        })
-        subtasks_not_displayed.write({
-            'display_in_project': False
         })
         return True
 
@@ -666,7 +659,7 @@ class ProjectProject(models.Model):
                 res -= waiting_subtype
         return res
 
-    def _notify_get_recipients_groups(self, message, model_description, msg_vals=None):
+    def _notify_get_recipients_groups(self, message, model_description, msg_vals=False):
         """ Give access to the portal user/customer if the project visibility is portal. """
         groups = super()._notify_get_recipients_groups(message, model_description, msg_vals=msg_vals)
         if not self:
@@ -881,7 +874,7 @@ class ProjectProject(models.Model):
             )
         buttons = [{
             'icon': 'check',
-            'text': self.env._('Tasks'),
+            'text': self.label_tasks,
             'number': number,
             'action_type': 'object',
             'action': 'action_view_tasks',

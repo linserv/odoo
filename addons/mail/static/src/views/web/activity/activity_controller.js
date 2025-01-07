@@ -69,24 +69,28 @@ export class ActivityController extends Component {
         return { comparision, context, domain, groupBy, orderBy };
     }
 
+    get getSelectCreateDialogProps() {
+        return {
+            resModel: this.props.resModel,
+            searchViewId: this.env.searchModel.searchViewId,
+            domain: this.model.originalDomain,
+            title: _t("Search: %s", this.props.archInfo.title),
+            multiSelect: false,
+            context: this.props.context,
+            noCreate: this.props.context?.create === false,
+            onSelected: async (resIds) => {
+                await this.store.scheduleActivity(this.props.resModel, resIds);
+            },
+        };
+    }
+
     scheduleActivity() {
         this.dialog.add(
             SelectCreateDialog,
-            {
-                resModel: this.props.resModel,
-                searchViewId: this.env.searchModel.searchViewId,
-                domain: this.model.originalDomain,
-                title: _t("Search: %s", this.props.archInfo.title),
-                multiSelect: false,
-                context: this.props.context,
-                onSelected: async (resIds) => {
-                    await this.store.scheduleActivity(this.props.resModel, resIds);
-                },
-            },
+            this.getSelectCreateDialogProps,
             {
                 onClose: () => this.model.load(this.getSearchProps()),
-            }
-        );
+            });
     }
 
     openActivityFormView(resId, activityTypeId) {
@@ -124,9 +128,9 @@ export class ActivityController extends Component {
         this.model.orm.call(this.props.resModel, "activity_send_mail", [resIds, templateID], {});
     }
 
-    async openRecord(record, { mode, newWindow }) {
+    async openRecord(record, { newWindow }) {
         const activeIds = this.model.root.records.map((datapoint) => datapoint.resId);
-        this.props.selectRecord(record.resId, { activeIds, mode, newWindow });
+        this.props.selectRecord(record.resId, { activeIds, newWindow });
     }
 
     get rendererProps() {

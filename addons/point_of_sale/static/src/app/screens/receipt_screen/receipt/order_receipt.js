@@ -2,12 +2,9 @@ import { Component } from "@odoo/owl";
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
 import { ReceiptHeader } from "@point_of_sale/app/screens/receipt_screen/receipt/receipt_header/receipt_header";
 import { OrderDisplay } from "@point_of_sale/app/components/order_display/order_display";
-import { parseUTCString, qrCodeSrc } from "@point_of_sale/utils";
+import { qrCodeSrc } from "@point_of_sale/utils";
 import { _t } from "@web/core/l10n/translation";
-import { formatDate, formatDateTime } from "@web/core/l10n/dates";
 import { formatCurrency } from "@web/core/currency";
-
-const { DateTime } = luxon;
 
 export class OrderReceipt extends Component {
     static template = "point_of_sale.OrderReceipt";
@@ -37,16 +34,8 @@ export class OrderReceipt extends Component {
         return (
             this.order.company.point_of_sale_use_ticket_qr_code &&
             this.order.finalized &&
-            qrCodeSrc(`${baseUrl}/pos/ticket/`)
+            qrCodeSrc(`${baseUrl}/pos/ticket?order_uuid=${this.order.uuid}`)
         );
-    }
-
-    get formattedShippingDate() {
-        return formatDate(DateTime.fromSQL(this.order.shipping_date));
-    }
-
-    get orderDate() {
-        return formatDateTime(parseUTCString(this.order.date_order));
     }
 
     get paymentLines() {

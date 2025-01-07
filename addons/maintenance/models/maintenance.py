@@ -10,6 +10,7 @@ from odoo.exceptions import UserError
 class MaintenanceStage(models.Model):
     """ Model for case stages. This models the main stages of a Maintenance Request management flow. """
 
+    _name = 'maintenance.stage'
     _description = 'Maintenance Stage'
     _order = 'sequence, id'
 
@@ -196,7 +197,6 @@ class MaintenanceRequest(models.Model):
     _order = "id desc"
     _check_company_auto = True
 
-    @api.returns('self')
     def _default_stage(self):
         return self.env['maintenance.stage'].search([], limit=1)
 

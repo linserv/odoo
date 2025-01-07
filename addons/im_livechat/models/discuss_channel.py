@@ -13,6 +13,7 @@ class DiscussChannel(models.Model):
         It extends the base method for anonymous usage.
     """
 
+    _name = 'discuss.channel'
     _inherit = ['rating.mixin', 'discuss.channel']
 
     anonymous_name = fields.Char('Anonymous Name')
@@ -29,6 +30,8 @@ class DiscussChannel(models.Model):
         "CHECK((channel_type = 'livechat' and livechat_operator_id is not null) or (channel_type != 'livechat'))",
         'Livechat Operator ID is required for a channel of type livechat.',
     )
+
+    _livechat_active_idx = models.Index("(livechat_active) WHERE livechat_active IS TRUE")
 
     @api.depends('message_ids')
     def _compute_duration(self):
@@ -61,7 +64,7 @@ class DiscussChannel(models.Model):
             current_step_sudo = channel.chatbot_current_step_id.sudo().with_context(lang=lang)
             chatbot_script = current_step_sudo.chatbot_script_id
             step_message = self.env["chatbot.message"]
-            if current_step_sudo.step_type != "forward_operator":
+            if not current_step_sudo.is_forward_operator:
                 step_message = channel.sudo().chatbot_message_ids.filtered(
                     lambda m: m.script_step_id == current_step_sudo
                     and m.mail_message_id.author_id == chatbot_script.operator_partner_id
@@ -69,7 +72,7 @@ class DiscussChannel(models.Model):
             current_step = {
                 "scriptStep": current_step_sudo.id,
                 "message": step_message.mail_message_id.id,
-                "operatorFound": current_step_sudo.step_type == "forward_operator"
+                "operatorFound": current_step_sudo.is_forward_operator
                 and channel.livechat_operator_id != chatbot_script.operator_partner_id,
             }
             store.add(current_step_sudo)
@@ -153,9 +156,11 @@ class DiscussChannel(models.Model):
         """
         Converting message body back to plaintext for correct data formatting in HTML field.
         """
-        return Markup('').join(
-            Markup('%s: %s<br/>') % (message.author_id.name or self.anonymous_name, html2plaintext(message.body))
-            for message in self.message_ids.sorted('id')
+        return Markup("").join(
+            Markup("%s: %s<br/>")
+            % (message.author_id.name or self.anonymous_name, html2plaintext(message.body))
+            # sudo: discuss.channel: can read all previous messages when converting to lead
+            for message in self.sudo().message_ids.sorted("id")
         )
 
     # =======================

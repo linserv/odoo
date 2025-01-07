@@ -16,7 +16,7 @@
 @mixin form-break-table() {
     --fieldWidget-margin-bottom: 0;
 
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     margin-bottom: $o-form-spacing-unit * 4;
 
     .o_cell {
@@ -45,7 +45,9 @@
 
     @include media-breakpoint-down(md) {
         .o_cell:has(+ :is(.o_wrap_label, .o_wrap_field_boolean)),
+        .o_cell.o_wrap_input,
         .o_wrap_field_boolean,
+        .o_cell_custom:not(.o_wrap_label),
         .o_cell:first-child:last-child {
             margin-bottom: map-get($spacers, 3);
         }
@@ -77,9 +79,6 @@
     }
     .oe_text_center {
         text-align: center;
-    }
-    .oe_grey {
-        opacity: 0.5;
     }
     .oe_inline, .o_field_widget.oe_inline > * {
         width: auto!important;
@@ -465,7 +464,10 @@
 
     .o_inner_group {
         --columns: 1;
-        gap: map-get($spacers, 2) $o-horizontal-padding;
+        @include media-breakpoint-down(md) {
+            --inner-group-row-gap: 0;
+        }
+        gap: var(--inner-group-row-gap, map-get($spacers, 2)) $o-horizontal-padding;
         margin-bottom: map-get($spacers, 2);
 
         span, .o_field_boolean, .oe_avatar, .o_form_uri {
@@ -489,6 +491,10 @@
             grid-template-columns: fit-content(150px) minmax(0, 1fr);
             &.o_form_fw_labels {
                 grid-template-columns: 150px 1fr;
+            }
+
+            .o_cell_custom {
+                grid-column: span var(--o-grid-column-span, 1);
             }
         }
     }
@@ -655,6 +661,15 @@
                 }
             }
         }
+
+        &.o_field_many2one_avatar {
+            --fieldWidget-display: inline;
+        }
+
+        &.o_field_many2many_tags_avatar {
+            --fieldWidget-display: inline-flex;
+            min-height: calc(var(--Avatar-size, #{$o-avatar-size}) + #{$o-input-padding-y} * 2 + #{$input-border-width});
+        }
     }
     .o_field_widget, .btn {
         .o_field_widget {
@@ -674,7 +689,7 @@
         .o_field_translate:not(.o_field_input_buttons):not(.btn) {
             display: none;
         }
-        
+
         .o_field_translate.btn {
             // hide language button for current language
             visibility: hidden !important;
@@ -739,7 +754,7 @@
         }
     }
 
-    .o_field_DynamicModelFieldSelectorChar.oe_inline {
+    .o_field_field_selector.oe_inline {
         min-width: 7rem;
     }
 
@@ -933,12 +948,6 @@
             color: $o-main-text-color;
         }
     }
-    .o_form_readonly .o_field_widget .o_list_renderer .o_row_handle {
-        display: none;  // Hide the handler in non-edit mode
-    }
-    .o_field_widget.o_readonly_modifier .o_list_renderer .o_row_handle {
-        display: none;  // Hide the handler on readonly fields
-    }
 
     &.oe_form_configuration .o_form_renderer {
         .o_inner_group .o_form_label {
@@ -973,6 +982,9 @@
 
             .o_inner_group {
                 margin-bottom: 0 !important;
+                &:last-child {
+                    margin-bottom: map-get($spacers, 3) !important;
+                }
 
                 div[name="carrier_selection"] {
                     > div:not(.alert) {

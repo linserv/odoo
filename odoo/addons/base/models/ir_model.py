@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import itertools
 import logging
@@ -15,7 +14,7 @@ from psycopg2.extras import Json
 from odoo import api, fields, models, tools, Command
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.osv import expression
-from odoo.tools import format_list, lazy_property, sql, unique, OrderedSet, SQL
+from odoo.tools import format_list, lazy_property, split_every, sql, unique, OrderedSet, SQL
 from odoo.tools.safe_eval import safe_eval, datetime, dateutil, time
 from odoo.tools.translate import _, LazyTranslate
 
@@ -190,6 +189,7 @@ def upsert_en(model, fnames, rows, conflict):
 
 class Base(models.AbstractModel):
     """ The base model, which is implicitly inherited by all models. """
+    _name = 'base'
     _description = 'Base'
 
 
@@ -203,6 +203,7 @@ class Unknown(models.AbstractModel):
 
 
 class IrModel(models.Model):
+    _name = 'ir.model'
     _description = "Models"
     _order = 'model'
     _rec_names_search = ['name', 'model']
@@ -1791,6 +1792,7 @@ class IrModelConstraint(models.Model):
     This model tracks PostgreSQL indexes, foreign keys and constraints
     used by Odoo models.
     """
+    _name = 'ir.model.constraint'
     _description = 'Model Constraint'
     _allow_sudo_commands = False
 
@@ -1945,6 +1947,7 @@ class IrModelRelation(models.Model):
     This model tracks PostgreSQL tables used to implement Odoo many2many
     relations.
     """
+    _name = 'ir.model.relation'
     _description = 'Relation Model'
     _allow_sudo_commands = False
 
@@ -2162,6 +2165,7 @@ class IrModelData(models.Model):
              modules themselves, thus making it possible to later
              update them seamlessly.
     """
+    _name = 'ir.model.data'
     _description = 'Model Data'
     _order = 'module, model, name'
     _allow_sudo_commands = False
@@ -2293,7 +2297,7 @@ class IrModelData(models.Model):
                 FROM ir_model_data d LEFT JOIN "{}" r on d.res_id=r.id
                 WHERE d.module=%s AND d.name IN %s
             """.format(model._table)
-            for subsuffixes in cr.split_for_in_conditions(suffixes):
+            for subsuffixes in split_every(cr.IN_MAX, suffixes):
                 cr.execute(query, (prefix, subsuffixes))
                 result.extend(cr.fetchall())
 
@@ -2317,7 +2321,7 @@ class IrModelData(models.Model):
             noupdate = bool(data.get('noupdate'))
             rows.add((prefix, suffix, record._name, record.id, noupdate))
 
-        for sub_rows in self.env.cr.split_for_in_conditions(rows):
+        for sub_rows in split_every(self.env.cr.IN_MAX, rows):
             # insert rows or update them
             query = self._build_update_xmlids_query(sub_rows, update)
             try:

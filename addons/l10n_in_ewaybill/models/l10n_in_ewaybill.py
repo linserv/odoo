@@ -164,7 +164,7 @@ class L10nInEwaybill(models.Model):
         self.ensure_one()
         move = self.account_move_id
         return {
-            'document_number':  self._is_incoming() and move.ref or move.name,
+            'document_number':  move.is_purchase_document(True) and move.ref or move.name,
             'document_date': move.date
         }
 
@@ -174,11 +174,22 @@ class L10nInEwaybill(models.Model):
 
     def _get_seller_buyer_details(self):
         self.ensure_one()
-        return self.account_move_id._get_l10n_in_seller_buyer_party()
+        move = self.account_move_id
+        if move.is_outbound():
+            return {
+                'seller_details':  move.partner_id,
+                'dispatch_details': move.partner_shipping_id or move.partner_id,
+                'buyer_details': move.company_id.partner_id,
+                'ship_to_details': (
+                    move._l10n_in_get_warehouse_address()
+                    or move.company_id.partner_id
+                ),
+            }
+        return move._get_l10n_in_seller_buyer_party()
 
     def _is_incoming(self):
         self.ensure_one()
-        return self.account_move_id.is_purchase_document(include_receipts=True)
+        return self.account_move_id.is_outbound()
 
     # -------------- Compute Methods ----------------
 
@@ -523,13 +534,15 @@ class L10nInEwaybill(models.Model):
             'qtyUnit': line.product_id.uom_id.l10n_in_code and line.product_id.uom_id.l10n_in_code.split('-')[0] or 'OTH',
             'taxableAmount': round_value(line.balance * sign),
         }
-        if tax_details_by_code.get('igst_rate') or (line.move_id.l10n_in_state_id.l10n_in_tin != line.company_id.state_id.l10n_in_tin):
-            line_details.update({'igstRate': round_value(tax_details_by_code.get('igst_rate', 0.00))})
-        else:
-            line_details.update({
-                'cgstRate': round_value(tax_details_by_code.get('cgst_rate', 0.00)),
-                'sgstRate': round_value(tax_details_by_code.get('sgst_rate', 0.00)),
-            })
+        gst_types = {'cgst', 'sgst', 'igst'}
+        gst_tax_rates = {
+            f"{gst_type}Rate": round_value(gst_tax_rate)
+            for gst_type in gst_types
+            if (gst_tax_rate := tax_details_by_code.get(f"{gst_type}_rate"))
+        }
+        line_details.update(
+            gst_tax_rates or dict.fromkeys({f"{gst_type}Rate" for gst_type in gst_types}, 0.00)
+        )
         if tax_details_by_code.get('cess_rate'):
             line_details.update({'cessRate': round_value(tax_details_by_code.get('cess_rate'))})
         return line_details

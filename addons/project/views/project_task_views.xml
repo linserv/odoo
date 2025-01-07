@@ -31,7 +31,7 @@
                         <filter name="create_date_last_365_days" string="Last 365 Days" domain="[('date_last_stage_update', '&gt;', datetime.datetime.combine(context_today() - relativedelta(days=365), datetime.time(23, 59, 59)).to_utc())]"/>
                     </filter>
                     <separator/>
-                    <filter string="Archived" name="inactive" domain="[('active', '=', False)]"/>
+                    <filter string="Show Sub-tasks" name="show_subtasks" context="{'show_subtasks': True}" invisible="'my_tasks' in context"/>
                     <group expand="0" string="Group By">
                         <filter string="Stage" name="stage" context="{'group_by': 'stage_id'}"/>
                         <filter string="Milestone" name="milestone" context="{'group_by': 'milestone_id'}" groups="project.group_project_milestone"/>
@@ -112,11 +112,11 @@
                 <filter name="my_tasks" position="before">
                     <field string="Properties" name="task_properties"/>
                 </filter>
-                <filter name="inactive" position="before">
+                <filter name="show_subtasks" position="after">
+                    <separator/>
                     <filter string="Unread Messages" name="message_needaction" domain="[('message_needaction', '=', True)]" groups="mail.group_mail_notification_type_inbox"/>
                     <separator/>
-                </filter>
-                <filter name="inactive" position="after">
+                    <filter string="Archived" name="inactive" domain="[('active', '=', False)]"/>
                     <separator invisible="1"/>
                     <filter invisible="1" string="Late Activities" name="activities_overdue"
                         domain="[('my_activity_date_deadline', '&lt;', context_today().strftime('%Y-%m-%d'))]"
@@ -136,7 +136,7 @@
             <field name="name">project.task.graph</field>
             <field name="model">project.task</field>
             <field name="arch" type="xml">
-                <graph string="Tasks" sample="1" js_class="project_task_graph">
+                <graph string="Tasks" sample="1">
                     <field name="project_id" invisible="context.get('default_project_id', False)"/>
                     <field name="stage_id"/>
                     <field name="working_hours_open" widget="float_time"/>
@@ -169,7 +169,7 @@
             <field name="name">project.task.pivot</field>
             <field name="model">project.task</field>
             <field name="arch" type="xml">
-                <pivot string="Tasks" sample="1" js_class="project_pivot">
+                <pivot string="Tasks" sample="1">
                     <field name="project_id" type="row"/>
                     <field name="color" invisible="1"/>
                     <field name="sequence" invisible="1"/>
@@ -325,12 +325,10 @@
                     <field name="allow_milestones" invisible="1" />
                     <field name="parent_id" invisible="1"/>
                     <field name="company_id" invisible="1"/>
-                    <field name="project_id" invisible="1"/>
                     <field name="is_closed" invisible="1"/>
                     <field name="depend_on_count" invisible="1"/>
                     <field name="closed_depend_on_count" invisible="1"/>
                     <field name="html_field_history_metadata" invisible="1"/>
-                    <field name="show_display_in_project" invisible="1"/>
                     <header>
                         <field name="stage_id" widget="statusbar_duration" options="{'clickable': '1', 'fold_field': 'fold'}" invisible="not project_id and not stage_id"/>
                         <field name="state" widget="statusbar" options="{'clickable': '1', 'fold_field': 'fold'}" invisible="1"/>
@@ -370,7 +368,6 @@
                             invisible="not id or subtask_count == 0"
                             context="{
                                 'default_project_id': project_id,
-                                'default_display_in_project': False,
                                 'default_user_ids': user_ids,
                                 'default_milestone_id': milestone_id,
                                 'subtask_action': True,
@@ -407,23 +404,10 @@
                     </div>
                     <group>
                         <group>
-                            <label for="project_id"/>
-                            <div name="project" class="d-inline-flex w-100">
-                                <field name="project_id"
-                                       domain="[('active', '=', True), '|', ('company_id', '=', False), ('company_id', '=?', company_id)]"
-                                       widget="project"
-                                />
-                                <field name="display_in_project" string="Display the sub-task in your pipeline"
-                                       widget="boolean_icon" options="{'icon': 'fa-eye-slash'}"
-                                       class="ms-0" style="width: fit-content;" force_save="1"
-                                       invisible="display_in_project or not show_display_in_project"
-                                />
-                                <field name="display_in_project" string="Hide the sub-task in your pipeline"
-                                       widget="boolean_icon" options="{'icon': 'fa-eye'}"
-                                       class="ms-0" style="width: fit-content;" force_save="1"
-                                       invisible="not display_in_project or not show_display_in_project"
-                                />
-                            </div>
+                            <field name="project_id"
+                                domain="[('active', '=', True), '|', ('company_id', '=', False), ('company_id', '=?', company_id)]"
+                                required="parent_id or child_ids"
+                                widget="project"/>
                             <field name="milestone_id"
                                 placeholder="e.g. Product Launch"
                                 context="{'default_project_id': project_id}"
@@ -470,7 +454,6 @@
                                    mode="list,kanban"
                                    context="{
                                         'default_project_id': project_id,
-                                        'default_display_in_project': False,
                                         'default_user_ids': user_ids,
                                         'default_parent_id': id,
                                         'default_partner_id': partner_id,
@@ -490,7 +473,7 @@
                                     <field name="name" widget="name_with_subtask_count"/>
                                     <field name="subtask_count" column_invisible="True"/>
                                     <field name="closed_subtask_count" column_invisible="True"/>
-                                    <field name="project_id" string="Project" optional="hide" options="{'no_open': 1}" widget="project"/>
+                                    <field name="project_id" string="Project" optional="hide" required="1" options="{'no_open': 1}" widget="project"/>
                                     <field name="milestone_id"
                                         optional="hide"
                                         context="{'default_project_id': project_id}"
@@ -1024,7 +1007,7 @@
             <field name="view_mode">kanban,list,form,calendar,pivot,graph,activity</field>
             <field name="context">{
                 'search_default_open_tasks': 1,
-                'all_task': 0,
+                'my_tasks': 1,
                 'default_user_ids': [(4, uid)],
             }</field>
             <field name="search_view_id" ref="view_task_search_form"/>

@@ -614,7 +614,7 @@ class AccountJournal(models.Model):
             if journal.type == 'purchase':
                 title_has_sequence_holes = _("Irregularities due to draft, cancelled or deleted bills with a sequence number since last lock date.")
                 drag_drop_settings = {
-                    'image': '/account/static/src/img/Bill.svg',
+                    'image': '/account/static/src/img/bill.svg',
                     'text': _('Drop and let the AI process your bills automatically.'),
                 }
             else:
@@ -718,7 +718,7 @@ class AccountJournal(models.Model):
             *self.env['account.move']._check_company_domain(self.env.companies),
             ('journal_id', 'in', self.ids),
             ('payment_state', 'in', ('not_paid', 'partial')),
-            ('move_type', '=', 'out_invoice' if journal_type == 'sale' else 'in_invoice'),
+            ('move_type', 'in', ('out_invoice', 'out_refund') if journal_type == 'sale' else ('in_invoice', 'in_refund')),
             ('state', '=', 'posted'),
         ])
         selects = [

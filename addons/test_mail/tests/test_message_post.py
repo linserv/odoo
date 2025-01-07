@@ -15,7 +15,7 @@ from odoo.addons.mail.tests.common import mail_new_test_user, MailCommon
 from odoo.addons.test_mail.data.test_mail_data import MAIL_TEMPLATE_PLAINTEXT
 from odoo.addons.test_mail.models.test_mail_models import MailTestSimple
 from odoo.addons.test_mail.tests.common import TestRecipients
-from odoo.api import call_kw
+from odoo.service.model import call_kw
 from odoo.exceptions import AccessError
 from odoo.tests import tagged
 from odoo.tools import mute_logger, formataddr
@@ -1744,15 +1744,16 @@ class TestMessagePostGlobal(TestMessagePostCommon):
 
     @users('employee')
     def test_message_post_return(self):
-        """ Ensures calling message_post through RPC always return an ID. """
+        """ Ensures calling message_post through RPC always return a list with one ID. """
         test_record = self.env['mail.test.simple'].browse(self.test_record.ids)
 
         # Use call_kw as shortcut to simulate a RPC call.
-        message_id = call_kw(self.env['mail.test.simple'],
-                             'message_post',
-                             [test_record.id],
-                             {'body': 'test'})
-        self.assertTrue(isinstance(message_id, int))
+        result = call_kw(
+            self.env['mail.test.simple'],
+            'message_post',
+            [test_record.id],
+            {'body': 'test'})
+        self.assertTrue(tools.misc.has_list_types(result, (int,)))
 
 
 @tagged('mail_post', 'multi_lang')
@@ -1842,7 +1843,7 @@ class TestMessagePostLang(MailCommon, TestRecipients):
                     self.assertTrue(customer, 'Template usage should have created a contact based on record email')
                 self.assertEqual(customer.lang, exp_notif_lang)
 
-                customer_email = self._find_sent_mail_wemail(customer.email_formatted)
+                customer_email = self._find_sent_email_wemail(customer.email_formatted)
                 self.assertTrue(customer_email)
                 body = customer_email['body']
                 # check content: depends on object.lang / object.customer_id.lang
@@ -1899,7 +1900,7 @@ class TestMessagePostLang(MailCommon, TestRecipients):
         self.assertTrue(record0_customer, 'Template usage should have created a contact based on record email')
 
         for record, customer in zip(test_records, record0_customer + self.partner_2):
-            customer_email = self._find_sent_mail_wemail(customer.email_formatted)
+            customer_email = self._find_sent_email_wemail(customer.email_formatted)
             self.assertTrue(customer_email)
             body = customer_email['body']
             # check content
@@ -1924,7 +1925,7 @@ class TestMessagePostLang(MailCommon, TestRecipients):
                 subtype_xmlid='mail.mt_comment',
             )
 
-        customer_email = self._find_sent_mail_wemail(self.partner_2.email_formatted)
+        customer_email = self._find_sent_email_wemail(self.partner_2.email_formatted)
         self.assertTrue(customer_email)
         body = customer_email['body']
         # check content
@@ -1966,7 +1967,7 @@ class TestMessagePostLang(MailCommon, TestRecipients):
             record0_customer + self.partner_2,
             ('en_US', 'es_ES')  # new customer is en_US, partner_2 is es_ES
         ):
-            customer_email = self._find_sent_mail_wemail(customer.email_formatted)
+            customer_email = self._find_sent_email_wemail(customer.email_formatted)
             self.assertTrue(customer_email)
 
             # body and layouting are translated partly based on template. Bits
@@ -2000,6 +2001,47 @@ class TestMessagePostLang(MailCommon, TestRecipients):
                               '"View document" should be translated')
                 self.assertNotIn(f'View {test_records[1]._description}', body,
                                  '"View document" should be translated')
+
+    @users('employee')
+    @mute_logger('odoo.addons.mail.models.mail_mail')
+    def test_post_multi_lang_inactive(self):
+        """ Test posting using an inactive lang, due do some data in DB. It
+        should not crash when trying to search for translated terms / fetch
+        lang bits. """
+        installed = self.env['res.lang'].get_installed()
+        self.assertNotIn('fr_FR', [code for code, _name in installed])
+        test_records = self.test_records.with_env(self.env)
+        customer_inactive_lang = self.env['res.partner'].create({
+            'email': 'test.partner.fr@test.example.com',
+            'lang': 'fr_FR',
+            'name': 'French Inactive Customer',
+        })
+        test_records.message_subscribe(partner_ids=customer_inactive_lang.ids)
+
+        for record in test_records:
+            with self.subTest(record=record.name):
+                with self.mock_mail_gateway(mail_unlink_sent=False), \
+                        self.mock_mail_app():
+                    record.message_post(
+                        body=Markup('<p>Hi there</p>'),
+                        email_layout_xmlid='mail.test_layout',
+                        message_type='comment',
+                        subject='TeDeum',
+                        subtype_xmlid='mail.mt_comment',
+                    )
+                    message = record.message_ids[0]
+                    self.assertEqual(message.notified_partner_ids, customer_inactive_lang)
+
+                    email = self._find_sent_email(
+                        self.partner_employee.email_formatted,
+                        [customer_inactive_lang.email_formatted]
+                    )
+                    self.assertTrue(bool(email), 'Email not found, check recipients')
+
+                    exp_layout_content_en = 'English Layout for Lang Chatter Model'
+                    exp_button_en = 'View Lang Chatter Model'
+                    self.assertIn(exp_layout_content_en, email['body'])
+                    self.assertIn(exp_button_en, email['body'])
 
     @users('employee')
     @mute_logger('odoo.addons.mail.models.mail_mail')

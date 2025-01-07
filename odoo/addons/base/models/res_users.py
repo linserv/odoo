@@ -26,6 +26,7 @@ from passlib.context import CryptContext as _CryptContext
 from odoo import api, fields, models, tools, SUPERUSER_ID, _, Command
 from odoo.addons.base.models.ir_model import MODULE_UNINSTALL_FLAG
 from odoo.exceptions import AccessDenied, AccessError, UserError, ValidationError
+from odoo.fields import Domain
 from odoo.http import request, DEFAULT_LANG
 from odoo.osv import expression
 from odoo.tools import is_html_empty, partition, frozendict, lazy_property, SQL, SetDefinitions
@@ -327,6 +328,7 @@ class ResUsers(models.Model):
         used to store the data related to the partner: lang, name, address,
         avatar, ... The user model is now dedicated to technical data.
     """
+    _name = 'res.users'
     _description = 'User'
     _inherits = {'res.partner': 'partner_id'}
     _order = 'name, login'
@@ -348,7 +350,7 @@ class ResUsers(models.Model):
             'image_1024', 'image_512', 'image_256', 'image_128', 'lang', 'tz',
             'tz_offset', 'groups_id', 'partner_id', 'write_date', 'action_id',
             'avatar_1920', 'avatar_1024', 'avatar_512', 'avatar_256', 'avatar_128',
-            'share', 'device_ids', 'api_key_ids',
+            'share', 'device_ids', 'api_key_ids', 'phone',
         ]
 
     @property
@@ -356,7 +358,7 @@ class ResUsers(models.Model):
         """ The list of fields a user can write on their own user record.
         In order to add fields, please override this property on model extensions.
         """
-        return ['signature', 'action_id', 'company_id', 'email', 'name', 'image_1920', 'lang', 'tz', 'api_key_ids']
+        return ['signature', 'action_id', 'company_id', 'email', 'name', 'image_1920', 'lang', 'tz', 'api_key_ids', 'phone']
 
     def _default_groups(self):
         """Default groups for employees
@@ -407,6 +409,7 @@ class ResUsers(models.Model):
     # access to the user but not its corresponding partner
     name = fields.Char(related='partner_id.name', inherited=True, readonly=False)
     email = fields.Char(related='partner_id.email', inherited=True, readonly=False)
+    phone = fields.Char(related='partner_id.phone', inherited=True, readonly=False)
 
     accesses_count = fields.Integer('# Access Rights', help='Number of access rights that apply to the current user',
                                     compute='_compute_accesses_count', compute_sudo=True)
@@ -717,10 +720,9 @@ class ResUsers(models.Model):
 
     @api.model
     def _search(self, domain, offset=0, limit=None, order=None):
-        if not self.env.su and domain:
-            domain_fields = {term[0] for term in domain if isinstance(term, (tuple, list))}
-            if domain_fields.intersection(USER_PRIVATE_FIELDS):
-                raise AccessError(_('Invalid search criterion'))
+        domain = Domain(domain)
+        if not self.env.su and any(condition.field_expr in USER_PRIVATE_FIELDS for condition in domain.iter_conditions()):
+            raise AccessError(_('Invalid search criterion'))
         return super()._search(domain, offset, limit, order)
 
     @api.model_create_multi
@@ -2169,6 +2171,7 @@ class ResUsersIdentitycheck(models.TransientModel):
     some of the risk of a third party using such an unattended device to manipulate
     the account.
     """
+    _name = 'res.users.identitycheck'
     _description = "Password Check Wizard"
 
     request = fields.Char(readonly=True, groups=fields.NO_ACCESS)
@@ -2207,6 +2210,7 @@ class ResUsersIdentitycheck(models.TransientModel):
 
 class ChangePasswordWizard(models.TransientModel):
     """ A wizard to manage the change of users' passwords. """
+    _name = 'change.password.wizard'
     _description = "Change Password Wizard"
     _transient_max_hours = 0.2
 
@@ -2229,8 +2233,8 @@ class ChangePasswordWizard(models.TransientModel):
 
 class ChangePasswordUser(models.TransientModel):
     """ A model to configure users in the change password wizard. """
+    _name = 'change.password.user'
     _description = 'User, Change Password Wizard'
-
     wizard_id = fields.Many2one('change.password.wizard', string='Wizard', required=True, ondelete='cascade')
     user_id = fields.Many2one('res.users', string='User', required=True, ondelete='cascade')
     user_login = fields.Char(string='User Login', readonly=True)
@@ -2453,6 +2457,7 @@ class ResUsersApikeysDescription(models.TransientModel):
             }
             return {'warning': warning}
 
+    @api.model_create_multi
     def create(self, vals_list):
         res = super().create(vals_list)
         self.env['res.users.apikeys']._check_expiration_date(res.expiration_date)

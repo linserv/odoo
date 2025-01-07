@@ -15,7 +15,7 @@ import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { Component, useState, onMounted } from "@odoo/owl";
 import { Numpad, enhancedButtons } from "@point_of_sale/app/components/numpad/numpad";
 import { floatIsZero, roundPrecision } from "@web/core/utils/numbers";
-import { ask } from "@point_of_sale/app/utils/make_awaitable_dialog";
+import { ask, makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { handleRPCError } from "@point_of_sale/app/utils/error_handlers";
 import { sprintf } from "@web/core/utils/strings";
 import { serializeDateTime } from "@web/core/l10n/dates";
@@ -112,6 +112,9 @@ export class PaymentScreen extends Component {
     get currentOrder() {
         return this.pos.models["pos.order"].getBy("uuid", this.props.orderUuid);
     }
+    get isRefundOrder() {
+        return this.currentOrder._isRefundOrder();
+    }
     get paymentLines() {
         return this.currentOrder.payment_ids;
     }
@@ -147,7 +150,7 @@ export class PaymentScreen extends Component {
         }
         if (result) {
             this.numberBuffer.set(result.amount.toString());
-            if (paymentMethod.use_payment_terminal) {
+            if (paymentMethod.use_payment_terminal && !this.isRefundOrder) {
                 const newPaymentLine = this.paymentLines.at(-1);
                 this.sendPaymentRequest(newPaymentLine);
             }
@@ -209,19 +212,37 @@ export class PaymentScreen extends Component {
         this.hardwareProxy.openCashbox();
     }
     async addTip() {
-        // click_tip
         const tip = this.currentOrder.getTip();
         const change = this.currentOrder.getChange();
         const value = tip === 0 && change > 0 ? change : tip;
-
-        this.dialog.add(NumberPopup, {
+        const newTip = await makeAwaitable(this.dialog, NumberPopup, {
             title: tip ? _t("Change Tip") : _t("Add Tip"),
             startingValue: this.env.utils.formatCurrency(value, false),
             formatDisplayedValue: (x) => `${this.pos.currency.symbol} ${x}`,
-            getPayload: async (num) => {
-                await this.pos.setTip(parseFloat(num ?? ""));
-            },
         });
+
+        if (newTip === undefined) {
+            return;
+        }
+
+        await this.pos.setTip(parseFloat(newTip ?? ""));
+        const pLine =
+            this.selectedPaymentLine &&
+            (!this.selectedPaymentLine.isElectronic() ||
+                this.selectedPaymentLine.getPaymentStatus() === "pending")
+                ? this.selectedPaymentLine
+                : false;
+
+        if (!pLine || newTip === tip) {
+            this.notification.add(
+                _t(
+                    "The tip has been added to the order. However,the selected payment line does not allow tips to be added."
+                )
+            );
+            return;
+        }
+
+        pLine.setAmount(pLine.getAmount() - (tip || 0) + parseFloat(newTip));
     }
     async toggleShippingDatePicker() {
         if (!this.currentOrder.getShippingDate()) {
@@ -270,11 +291,22 @@ export class PaymentScreen extends Component {
         }
         if (await this._isOrderValid(isForceValidate)) {
             // remove pending payments before finalizing the validation
+            const toRemove = [];
             for (const line of this.paymentLines) {
-                if (!line.isDone()) {
-                    this.currentOrder.removePaymentline(line);
+                if (!line.isDone() || line.amount === 0) {
+                    toRemove.push(line);
                 }
             }
+
+            for (const line of toRemove) {
+                this.currentOrder.removePaymentline(line);
+            }
+
+            const cash = this.payment_methods_from_config.find((pm) => pm.is_cash_count);
+            if (this.currentOrder.getDue() > 0 && this.pos.config.cash_rounding && cash) {
+                this.currentOrder.addPaymentline(cash, 0);
+            }
+
             await this._finalizeValidation();
         }
     }
@@ -422,6 +454,10 @@ export class PaymentScreen extends Component {
     }
 
     async _isOrderValid(isForceValidate) {
+        if (this.currentOrder.isRefundInProcess()) {
+            return false;
+        }
+
         if (this.currentOrder.getOrderlines().length === 0 && this.currentOrder.isToInvoice()) {
             this.dialog.add(AlertDialog, {
                 title: _t("Empty Order"),
@@ -561,7 +597,8 @@ export class PaymentScreen extends Component {
             isPaymentSuccessful &&
             currentOrder.isPaid() &&
             floatIsZero(currentOrder.getDue(), currency.decimal_places) &&
-            config.auto_validate_terminal_payment
+            config.auto_validate_terminal_payment &&
+            !currentOrder.isRefundInProcess()
         ) {
             this.validateOrder(false);
         }

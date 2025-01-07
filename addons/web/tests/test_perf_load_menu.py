@@ -18,16 +18,16 @@ class TestPerfSessionInfo(common.HttpCase):
         self.authenticate(user.login, "info")
 
         self.env.registry.clear_all_caches()
-        # cold ormcache (only web: 42, all module: 112)
-        with self.assertQueryCount(112):
+        # cold ormcache (only web: 42, all module: 113)
+        with self.assertQueryCount(113):
             self.url_open(
                 "/web/session/get_session_info",
                 data=json.dumps({'jsonrpc': "2.0", 'method': "call", 'id': str(uuid4())}),
                 headers={"Content-Type": "application/json"},
             )
 
-        # cold fields cache - warm ormcache (only web: 6, all module: 22)
-        with self.assertQueryCount(22):
+        # cold fields cache - warm ormcache (only web: 6, all module: 23)
+        with self.assertQueryCount(23):
             self.url_open(
                 "/web/session/get_session_info",
                 data=json.dumps({'jsonrpc': "2.0", 'method': "call", 'id': str(uuid4())}),
@@ -37,7 +37,7 @@ class TestPerfSessionInfo(common.HttpCase):
     def test_load_web_menus_perf(self):
         self.env.registry.clear_all_caches()
         self.env.invalidate_all()
-        # cold orm/fields cache (only web: 10, all module: 40 - no demo)
+        # cold orm/fields cache (only web: 10, all module: 38; without demo: 40)
         with self.assertQueryCount(40):
             self.env['ir.ui.menu'].load_web_menus(False)
 
@@ -49,7 +49,7 @@ class TestPerfSessionInfo(common.HttpCase):
     def test_load_menus_perf(self):
         self.env.registry.clear_all_caches()
         self.env.invalidate_all()
-        # cold orm/fields cache (only web: 10, all module: 40 - no demo)
+        # cold orm/fields cache (only web: 10, all module: 38; without demo: 40)
         with self.assertQueryCount(40):
             self.env['ir.ui.menu'].load_menus(False)
 

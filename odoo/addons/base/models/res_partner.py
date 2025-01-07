@@ -176,17 +176,8 @@ class ResPartnerCategory(models.Model):
     def _search_display_name(self, operator, value):
         domain = super()._search_display_name(operator, value)
         if operator.endswith('like'):
-            return [('id', 'child_of', self._search(domain))]
+            return [('id', 'child_of', tuple(self._search(domain)))]
         return domain
-
-
-class ResPartnerTitle(models.Model):
-    _name = 'res.partner.title'
-    _order = 'name'
-    _description = 'Partner Title'
-
-    name = fields.Char(string='Title', required=True, translate=True)
-    shortcut = fields.Char(string='Abbreviation', translate=True)
 
 
 class ResPartner(models.Model):
@@ -223,7 +214,6 @@ class ResPartner(models.Model):
 
     name = fields.Char(index=True, default_export_compatible=True)
     complete_name = fields.Char(compute='_compute_complete_name', store=True, index=True)
-    title: ResPartnerTitle = fields.Many2one('res.partner.title')
     parent_id: ResPartner = fields.Many2one('res.partner', string='Related Company', index=True)
     parent_name = fields.Char(related='parent_id.name', readonly=True, string='Parent name')
     child_ids: ResPartner = fields.One2many('res.partner', 'parent_id', string='Contact', domain=[('active', '=', True)], context={'active_test': False})
@@ -244,10 +234,13 @@ class ResPartner(models.Model):
         readonly=False, store=True,
         help='The internal user in charge of this contact.')
     vat = fields.Char(string='Tax ID', index=True, help="The Tax Identification Number. Values here will be validated based on the country format. You can use '/' to indicate that the partner is not subject to tax.")
+    vat_label = fields.Char(string='Tax ID Label', compute='_compute_vat_label')
     same_vat_partner_id: ResPartner = fields.Many2one('res.partner', string='Partner with same Tax ID', compute='_compute_same_vat_partner_id', store=False)
     same_company_registry_partner_id: ResPartner = fields.Many2one('res.partner', string='Partner with same Company Registry', compute='_compute_same_vat_partner_id', store=False)
     company_registry = fields.Char(string="Company ID", compute='_compute_company_registry', store=True, readonly=False,
        help="The registry number of the company. Use it if it is different from the Tax ID. It must be unique across all partners of a same country")
+    company_registry_label = fields.Char(string='Company ID Label', compute='_compute_company_registry_label')
+    company_registry_placeholder = fields.Char(compute='_compute_company_registry_placeholder')
     bank_ids: ResPartnerBank = fields.One2many('res.partner.bank', 'partner_id', string='Banks')
     website = fields.Char('Website Link')
     comment = fields.Html(string='Notes')
@@ -259,9 +252,9 @@ class ResPartner(models.Model):
     function = fields.Char(string='Job Position')
     type = fields.Selection(
         [('contact', 'Contact'),
-         ('invoice', 'Invoice Address'),
-         ('delivery', 'Delivery Address'),
-         ('other', 'Other Address'),
+         ('invoice', 'Invoice'),
+         ('delivery', 'Delivery'),
+         ('other', 'Other'),
         ], string='Address Type',
         default='contact')
     # address fields
@@ -356,7 +349,9 @@ class ResPartner(models.Model):
         if self.type == 'delivery':
             return "base/static/img/truck.png"
         if self.type == 'invoice':
-            return "base/static/img/money.png"
+            return "base/static/img/bill.png"
+        if self.type == 'other':
+            return "base/static/img/puzzle.png"
         return super()._avatar_get_placeholder_path()
 
     def _get_complete_name(self):
@@ -430,6 +425,10 @@ class ResPartner(models.Model):
                 domain += [('id', '!=', partner_id), '!', ('id', 'child_of', partner_id)]
             partner.same_company_registry_partner_id = bool(partner.company_registry) and not partner.parent_id and Partner.search(domain, limit=1)
 
+    @api.depends_context('company')
+    def _compute_vat_label(self):
+        self.vat_label = self.env.company.country_id.vat_label or _("Tax ID")
+
     @api.depends(lambda self: self._display_address_depends())
     def _compute_contact_address(self):
         for partner in self:
@@ -457,6 +456,19 @@ class ResPartner(models.Model):
         # exists to allow overrides
         for company in self:
             company.company_registry = company.company_registry
+
+    @api.depends('country_id')
+    def _compute_company_registry_label(self):
+        label_by_country = self._get_company_registry_labels()
+        for company in self:
+            country_code = company.country_id.code
+            company.company_registry_label = label_by_country.get(country_code, _("Company ID"))
+
+    def _get_company_registry_labels(self):
+        return {}
+
+    def _compute_company_registry_placeholder(self):
+        self.company_registry_placeholder = False
 
     @api.constrains('parent_id')
     def _check_parent_id(self):
@@ -902,7 +914,6 @@ class ResPartner(models.Model):
         return partner.id, partner.display_name
 
     @api.model
-    @api.returns('self', lambda value: value.id)
     def find_or_create(self, email, assert_valid_email=False):
         """ Find a partner with the given ``email`` or use :py:method:`~.name_create`
         to create a new one.

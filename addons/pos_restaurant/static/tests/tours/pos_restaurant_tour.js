@@ -133,7 +133,11 @@ registry.category("web_tour.tours").add("pos_restaurant_sync", {
             ProductScreen.clickPayButton(),
             PaymentScreen.clickPaymentMethod("Bank"),
             PaymentScreen.clickValidate(),
-            // No "acknowledge printing error" this time as the printer order is already sent and no changes were made
+            {
+                ...Dialog.confirm(),
+                content:
+                    "acknowledge printing error ( because we don't have printer in the test. )",
+            },
             ReceiptScreen.clickNextOrder(),
 
             // After clicking next order, floor screen is shown.
@@ -190,7 +194,7 @@ registry.category("web_tour.tours").add("pos_restaurant_sync_second_login", {
             FloorScreen.clickTable("4"),
 
             // Test if products still get merged after transfering the order
-            ProductScreen.clickDisplayedProduct("Coca-Cola", true, "2.0"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola", true, "2"),
             ProductScreen.totalAmountIs("6.60"),
             ProductScreen.clickNumpad("1"),
             ProductScreen.totalAmountIs("4.40"),
@@ -223,7 +227,7 @@ registry.category("web_tour.tours").add("SaveLastPreparationChangesTour", {
             Chrome.startPoS(),
             Dialog.confirm("Open Register"),
             FloorScreen.clickTable("5"),
-            ProductScreen.clickDisplayedProduct("Coca-Cola", true, "1.0"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola", true, "1"),
             ProductScreen.clickOrderButton(),
             FloorScreen.clickTable("5"),
             ProductScreen.orderlinesHaveNoChange(),
@@ -261,14 +265,14 @@ registry.category("web_tour.tours").add("OrderTrackingTour", {
             Dialog.confirm("Open Register"),
             FloorScreen.clickTable("5"),
             ProductScreen.clickDisplayedProduct("Coca-Cola"),
-            ProductScreen.clickDisplayedProduct("Coca-Cola", true, "2.0"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola", true, "2"),
             Chrome.clickPlanButton(),
             FloorScreen.clickTable("5"),
             inLeftSide([
-                ...ProductScreen.clickLine("Coca-Cola", "2.0"),
-                ...ProductScreen.selectedOrderlineHasDirect("Coca-Cola", "2.0"),
+                ...ProductScreen.clickLine("Coca-Cola", "2"),
+                ...ProductScreen.selectedOrderlineHasDirect("Coca-Cola", "2"),
                 ...["⌫", "1"].map(Numpad.click),
-                ...ProductScreen.selectedOrderlineHasDirect("Coca-Cola", "1.0"),
+                ...ProductScreen.selectedOrderlineHasDirect("Coca-Cola", "1"),
             ]),
             ProductScreen.clickPayButton(),
             PaymentScreen.clickPaymentMethod("Bank"),
@@ -297,7 +301,7 @@ registry.category("web_tour.tours").add("OrderChange", {
             Chrome.startPoS(),
             Dialog.confirm("Open Register"),
             FloorScreen.clickTable("5"),
-            ProductScreen.clickDisplayedProduct("Coca-Cola", true, "1.0"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola", true, "1"),
             ProductScreen.clickOrderButton(),
             {
                 ...Dialog.confirm(),
@@ -325,5 +329,64 @@ registry.category("web_tour.tours").add("CrmTeamTour", {
             Chrome.clickPlanButton(),
             FloorScreen.clickTable("5"),
             Chrome.clickPlanButton(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("PoSPaymentSyncTour1", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.totalAmountIs("2.20"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.emptyPaymentlines("2.20"),
+            PaymentScreen.clickPaymentMethod("Bank"),
+            PaymentScreen.clickBackToProductScreen(),
+            ProductScreen.isShown(),
+            ProductScreen.clickOrderButton(),
+            ProductScreen.orderlinesHaveNoChange(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("PoSPaymentSyncTour2", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            FloorScreen.clickTable("5"),
+            PaymentScreen.isShown(),
+            PaymentScreen.clickBackToProductScreen(),
+            ProductScreen.isShown(),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.totalAmountIs("4.40"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.clickPaymentlineDelButton("Bank", "2.20"),
+            PaymentScreen.emptyPaymentlines("4.40"),
+            PaymentScreen.clickPaymentMethod("Bank"),
+            PaymentScreen.clickBackToProductScreen(),
+            ProductScreen.isShown(),
+            ProductScreen.clickOrderButton(),
+            ProductScreen.orderlinesHaveNoChange(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("PoSPaymentSyncTour3", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            FloorScreen.clickTable("5"),
+            PaymentScreen.isShown(),
+            PaymentScreen.clickBackToProductScreen(),
+            ProductScreen.isShown(),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.totalAmountIs("6.60"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.remainingIs("2.2"),
+            PaymentScreen.clickPaymentMethod("Bank"),
+            PaymentScreen.clickBackToProductScreen(),
+            ProductScreen.isShown(),
+            ProductScreen.clickOrderButton(),
+            ProductScreen.orderlinesHaveNoChange(),
         ].flat(),
 });

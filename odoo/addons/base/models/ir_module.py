@@ -493,7 +493,6 @@ class IrModuleModule(models.Model):
         orphans = self.env['ir.ui.view'].with_context(**{'active_test': False, MODULE_UNINSTALL_FLAG: True}).search(domain)
         orphans.unlink()
 
-    @api.returns('self')
     def downstream_dependencies(self, known_deps=None,
                                 exclude_states=('uninstalled', 'uninstallable', 'to remove')):
         """ Return the modules that directly or indirectly depend on the modules
@@ -519,7 +518,6 @@ class IrModuleModule(models.Model):
             known_deps |= missing_mods.downstream_dependencies(known_deps, exclude_states)
         return known_deps
 
-    @api.returns('self')
     def upstream_dependencies(self, known_deps=None,
                               exclude_states=('installed', 'uninstallable', 'to remove')):
         """ Return the dependency tree of modules of the modules in `self`, and
@@ -991,8 +989,12 @@ class IrModuleModuleDependency(models.Model):
             dep.depend_id = name_mod.get(dep.name)
 
     def _search_depend(self, operator, value):
-        assert operator == 'in'
-        modules = self.env['ir.module.module'].browse(set(value))
+        # support only `=` and `in`
+        if operator == '=':
+            value = [value]
+        else:
+            assert operator == 'in'
+        modules = self.env['ir.module.module'].browse(value)
         return [('name', 'in', modules.mapped('name'))]
 
     @api.depends('depend_id.state')

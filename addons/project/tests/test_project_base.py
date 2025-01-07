@@ -488,21 +488,18 @@ class TestProjectBase(TestProjectCommon):
                 Command.create({'name': 'subtask1', 'project_id': project1.id}),
                 Command.create({'name': 'subtask2', 'project_id': project1.id, 'state': '1_canceled'}),
                 Command.create({'name': 'subtask3', 'project_id': project2.id}),
-                Command.create({'name': 'subtask4', 'project_id': project1.id, 'display_in_project': True}),
-                Command.create({'name': 'subtask5', 'project_id': project1.id, 'state': '1_canceled', 'display_in_project': True}),
-                Command.create({'name': 'subtask6', 'project_id': project1.id, 'child_ids': [
-                    Command.create({'name': 'subsubtask1', 'project_id': project2.id}),
-                    Command.create({'name': 'subsubtask1', 'project_id': project1.id, 'display_in_project': True})
+                Command.create({'name': 'subtask4', 'project_id': project1.id, 'child_ids': [
+                    Command.create({'name': 'subsubtask41', 'project_id': project2.id}),
+                    Command.create({'name': 'subsubtask42', 'project_id': project1.id})
                 ]}),
-                Command.create({'name': 'subtask7', 'state': '1_done', 'project_id': project1.id, 'child_ids': [
-                    Command.create({'name': 'subsubtask1', 'project_id': project1.id, 'state': '1_done'}),
-                    Command.create({'name': 'subsubtask1', 'project_id': project1.id, 'display_in_project': True, 'state': '1_done'}),
+                Command.create({'name': 'subtask5', 'state': '1_done', 'project_id': project1.id, 'child_ids': [
+                    Command.create({'name': 'subsubtask51', 'project_id': project1.id, 'state': '1_done'}),
                 ]}),
             ]}
         ])
-        self.assertEqual(project1.task_count, 7)
-        self.assertEqual(project1.open_task_count, 4)
-        self.assertEqual(project1.closed_task_count, 3)
+        self.assertEqual(project1.task_count, 3)
+        self.assertEqual(project1.open_task_count, 2)
+        self.assertEqual(project1.closed_task_count, 1)
         self.assertEqual(project2.task_count, 2)
         self.assertEqual(project2.open_task_count, 2)
         self.assertEqual(project2.closed_task_count, 0)
@@ -523,3 +520,20 @@ class TestProjectBase(TestProjectCommon):
         task.active = False
         copy_task2 = task.copy()
         self.assertTrue(copy_task2.active, "Archived task should be active when duplicating an archived task")
+
+    def test_duplicate_doesnt_copy_date(self):
+        project = self.env['project.project'].create({
+            'name': 'Project',
+            'date_start': '2021-09-20',
+            'date': '2021-09-28',
+        })
+        task = self.env['project.task'].create({
+            'name': 'Task',
+            'project_id': project.id,
+            'date_deadline': '2021-09-26',
+        })
+        project_copy = project.copy()
+        self.assertFalse(project_copy.date_start, "The project's date fields shouldn't be copied on project duplication")
+        self.assertFalse(project_copy.date, "The project's date fields shouldn't be copied on project duplication")
+        self.assertFalse(project_copy.task_ids.date_deadline, "The task's date fields shouldn't be copied on project duplication")
+        self.assertFalse(task.copy().date_deadline, "The task's date fields shouldn't be copied on task duplication")

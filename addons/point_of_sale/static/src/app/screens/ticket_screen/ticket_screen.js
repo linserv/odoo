@@ -16,13 +16,14 @@ import {
     BACKSPACE,
     Numpad,
     getButtons,
-    DEFAULT_LAST_ROW,
+    ZERO,
+    DECIMAL,
 } from "@point_of_sale/app/components/numpad/numpad";
 import { PosOrderLineRefund } from "@point_of_sale/app/models/pos_order_line_refund";
 import { fuzzyLookup } from "@web/core/utils/search";
-import { parseUTCString } from "@point_of_sale/utils";
 import { useTrackedAsync } from "@point_of_sale/app/hooks/hooks";
 import { OrderDisplay } from "@point_of_sale/app/components/order_display/order_display";
+import { BarcodeVideoScanner } from "@web/core/barcode/barcode_video_scanner";
 
 const NBR_BY_PAGE = 30;
 
@@ -38,6 +39,7 @@ export class TicketScreen extends Component {
         SearchBar,
         Numpad,
         BackButton,
+        BarcodeVideoScanner,
     };
     static props = {
         destinationOrder: { type: Object, optional: true },
@@ -107,12 +109,34 @@ export class TicketScreen extends Component {
         }
     }
     getNumpadButtons() {
-        return getButtons(DEFAULT_LAST_ROW, [
-            { value: "quantity", text: _t("Qty"), class: "active border-primary" },
-            { value: "discount", text: _t("% Disc"), disabled: true },
-            { value: "price", text: _t("Price"), disabled: true },
-            BACKSPACE,
-        ]);
+        return getButtons(
+            [{ value: "-", text: "+/-", disabled: true }, ZERO, DECIMAL],
+            [
+                { value: "quantity", text: _t("Qty"), class: "active border-primary" },
+                { value: "discount", text: _t("% Disc"), disabled: true },
+                { value: "price", text: _t("Price"), disabled: true },
+                BACKSPACE,
+            ]
+        );
+    }
+    async onClickScanOrder(qrcode) {
+        if (qrcode) {
+            const ref = new URL(qrcode).searchParams.get("order_uuid");
+            const [order] = await this.pos.data.searchRead("pos.order", [["uuid", "=", ref]]);
+            if (order) {
+                this.state.filter = "SYNCED";
+                this.state.selectedOrder = order;
+                this.pos.scanning = !this.pos.scanning;
+            } else {
+                this.env.services.notification.add(_t("Invalid QR Code! Please, Scan again!"), {
+                    type: "warning",
+                });
+            }
+        } else {
+            this.env.services.notification.add(_t("Please, Scan again!"), {
+                type: "warning",
+            });
+        }
     }
     async onSearch(search) {
         this.state.search = search;
@@ -354,8 +378,8 @@ export class TicketScreen extends Component {
 
         const sortOrders = (orders, ascending = false) =>
             orders.sort((a, b) => {
-                const dateA = parseUTCString(a.date_order, "yyyy-MM-dd HH:mm:ss");
-                const dateB = parseUTCString(b.date_order, "yyyy-MM-dd HH:mm:ss");
+                const dateA = a.date_order;
+                const dateB = b.date_order;
 
                 if (a.date_order !== b.date_order) {
                     return ascending ? dateA - dateB : dateB - dateA;
@@ -380,7 +404,7 @@ export class TicketScreen extends Component {
         }
     }
     getDate(order) {
-        return formatDateTime(parseUTCString(order.date_order));
+        return formatDateTime(order.date_order);
     }
     getTotal(order) {
         return this.env.utils.formatCurrency(order.getTotalWithTax());
@@ -579,7 +603,7 @@ export class TicketScreen extends Component {
     }
 
     async _setOrder(order) {
-        if (this.pos.isOpenOrderShareable()) {
+        if (this.pos.config.isShareable) {
             await this.pos.syncAllOrders();
         }
         this.pos.setOrder(order);
@@ -731,7 +755,7 @@ export class TicketScreen extends Component {
             .filter((orderInfo) => {
                 const order = this.pos.models["pos.order"].get(orderInfo[0]);
 
-                if (order && parseUTCString(orderInfo[1]) > parseUTCString(order.date_order)) {
+                if (order && parseDateTime(orderInfo[1]) > order.date_order) {
                     return true;
                 }
 
