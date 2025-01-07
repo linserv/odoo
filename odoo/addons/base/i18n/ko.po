@@ -639,6 +639,9 @@ msgid ""
 "        ZATCA E-Invoicing, support for PoS\n"
 "    "
 msgstr ""
+"\n"
+"        ZATCA 전자 청구서, PoS 지원\n"
+"    "
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_ar_reports
@@ -2959,6 +2962,13 @@ msgstr ""
 "    - Regional State listings\n"
 
 #. module: base
+#: model:ir.module.module,description:base.module_l10n_tr_nilvera
+msgid ""
+"\n"
+"Base module containing core functionalities required by other Nilvera modules.\n"
+msgstr ""
+
+#. module: base
 #: model:ir.module.module,description:base.module_l10n_bo_reports
 msgid ""
 "\n"
@@ -4453,6 +4463,8 @@ msgid ""
 "\n"
 "E-invoice implementation for the Kingdom of Saudi Arabia (PoS)\n"
 msgstr ""
+"\n"
+"사우디아라비아의 전자 청구서 기능 구현 (PoS)\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_hr_skills_slides
@@ -4950,6 +4962,13 @@ msgid ""
 msgstr ""
 "\n"
 "조정 위젯에서 재고 내역을 필터링합니다.\n"
+
+#. module: base
+#: model:ir.module.module,description:base.module_l10n_tr_nilvera_einvoice
+msgid ""
+"\n"
+"For sending and receiving electronic invoices to Nilvera.\n"
+msgstr ""
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_fr_hr_payroll
@@ -9130,6 +9149,33 @@ msgstr ""
 "Source: https://www.paragraf.rs/propisi/pravilnik-o-kontnom-okviru-sadrzini-racuna-za-privredna-drustva-zadruge.html\n"
 
 #. module: base
+#: model:ir.module.module,description:base.module_l10n_bh
+msgid ""
+"\n"
+"This is the base module to manage the accounting chart for Bahrain in Odoo.\n"
+"===========================================================================\n"
+"Bahrain accounting basic charts and localization.\n"
+"\n"
+"Activates:\n"
+" - Chart of Accounts\n"
+" - Taxes\n"
+" - Tax reports\n"
+" - Fiscal Positions\n"
+" - States\n"
+msgstr ""
+"\n"
+"바레인의 회계 계정과목표를 관리하기 위한 Odoo 기본 모듈입니다..\n"
+"===========================================================================\n"
+"바레인 회계 기본 계정과목표 및 현지화.\n"
+"\n"
+"Activates:\n"
+" - Chart of Accounts\n"
+" - Taxes\n"
+" - Tax reports\n"
+" - Fiscal Positions\n"
+" - States\n"
+
+#. module: base
 #: model:ir.module.module,description:base.module_l10n_be
 msgid ""
 "\n"
@@ -9275,6 +9321,14 @@ msgid ""
 "* Taxes\n"
 "* Fiscal Positions\n"
 msgstr ""
+"\n"
+"이것은 Odoo에서 레바논의 계정과목표를 관리하는 데 사용되는 기본 모듈입니다. \n"
+"==============================================================================\n"
+"레바논 계정과목표, 세금 및 현지화..\n"
+"활성화:\n"
+"* 계정과목표\n"
+"* 세금\n"
+"* 재정 위치\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_lu
@@ -15829,6 +15883,11 @@ msgstr "배지 ID"
 #: model:res.country,name:base.bs
 msgid "Bahamas"
 msgstr "바하마"
+
+#. module: base
+#: model:ir.module.module,shortdesc:base.module_l10n_bh
+msgid "Bahrain - Accounting"
+msgstr "바레인 - 회계"
 
 #. module: base
 #: model:res.country,name:base.bh
@@ -25155,7 +25214,7 @@ msgstr "레바논"
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_l10n_lb_account
 msgid "Lebanon - Accounting"
-msgstr ""
+msgstr "레바논 - 회계"
 
 #. module: base
 #: model:ir.model.fields.selection,name:base.selection__report_paperformat__format__ledger
@@ -33521,7 +33580,7 @@ msgstr "사우디 아라비아 - 전자 청구서"
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_l10n_sa_edi_pos
 msgid "Saudi Arabia - E-invoicing (Simplified)"
-msgstr ""
+msgstr "사우디아라비아 - 전자 청구서 (간이 버전)"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_l10n_sa_pos
@@ -37669,6 +37728,16 @@ msgstr "터키 - 회계"
 #: model:ir.module.module,shortdesc:base.module_l10n_tr_reports
 msgid "Türkiye - Accounting Reports"
 msgstr "터키 - 회계 보고서"
+
+#. module: base
+#: model:ir.module.module,shortdesc:base.module_l10n_tr_nilvera
+msgid "Türkiye - Nilvera"
+msgstr ""
+
+#. module: base
+#: model:ir.module.module,shortdesc:base.module_l10n_tr_nilvera_einvoice
+msgid "Türkiye - Nilvera E-Invoice"
+msgstr ""
 
 #. module: base
 #: model:res.country,name:base.tm

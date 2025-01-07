@@ -66,6 +66,9 @@ ALLOWED_MIMETYPES = {
     'application/vnd.oasis.opendocument.spreadsheet',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.oasis.opendocument.presentation',
 }
 
 EMPTY = object()
@@ -3154,6 +3157,11 @@ class AccountMove(models.Model):
                     attachments_by_invoice[attachment] |= invoice
                 else:
                     attachments_by_invoice[attachment] = invoice
+                if not attachment.res_id:
+                    attachment.write({
+                        'res_id': invoice.id,
+                        'res_model': invoice._name,
+                    })
 
         file_data_list = attachments._unwrap_edi_attachments()
         attachments_by_invoice = {}
@@ -4807,8 +4815,9 @@ class AccountMove(models.Model):
         attachments_in_invoices = self.env['ir.attachment']
         for attachment in move_per_decodable_attachment:
             attachments_in_invoices += attachment
-        # Unlink the unused attachments
-        (attachments - attachments_in_invoices).unlink()
+        # Unlink the unused attachments (prevents storing marketing images sent with emails)
+        if self._context.get('from_alias'):
+            (attachments - attachments_in_invoices).unlink()
         return move_per_decodable_attachment
 
     def _creation_subtype(self):

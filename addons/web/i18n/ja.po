@@ -1411,6 +1411,13 @@ msgid "BACK arrow"
 msgstr "戻る矢印"
 
 #. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/search/control_panel/control_panel.js:0
+#, python-format
+msgid "Back to “%s”"
+msgstr "“%s” に戻る"
+
+#. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__layout_background_image
 msgid "Background Image"
 msgstr "背景画像"
@@ -3386,6 +3393,14 @@ msgstr "Odoo企業版では、この機能やその他多数の機能がご利�
 #, python-format
 msgid "Go to URL"
 msgstr "URLへ移動"
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/google_slide_viewer.js:0
+#: code:addons/web/static/src/views/fields/google_slide_viewer.xml:0
+#, python-format
+msgid "Google Slide Viewer"
+msgstr "Googleスライドビュワー"
 
 #. module: web
 #. odoo-javascript
@@ -6521,6 +6536,13 @@ msgstr "ビューを選択"
 #, python-format
 msgid "Select all"
 msgstr "全て選択"
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/list/list_controller.xml:0
+#, python-format
+msgid "Select all records matching the search"
+msgstr "検索条件に一致するレコードを全て選択"
 
 #. module: web
 #. odoo-javascript
