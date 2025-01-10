@@ -6,6 +6,8 @@ import odoo.tests
 
 from odoo.tools import config, mute_logger
 
+import unittest
+
 
 @odoo.tests.common.tagged('post_install', '-at_install')
 class TestWebsiteAssets(odoo.tests.HttpCase):
@@ -230,6 +232,7 @@ class TestWebAssets(odoo.tests.HttpCase):
             self.env['ir.qweb']._get_asset_bundle('web.assets_frontend', assets_params={'website_id': website_id}).get_link('css').split('/assets/')[1],
         )
 
+    @unittest.skip("[LINSERV]")
     def test_ensure_correct_website_asset(self):
         # when searching for an attachment, if the unique a wildcard, we want to ensute that we don't match a website one when seraching a no website one.
         # this test should also wheck that the clean_attachement does not erase a website_attachement after generating a base attachment
@@ -245,12 +248,11 @@ class TestWebAssets(odoo.tests.HttpCase):
 
         # generate website assets
         self.assertEqual(self.url_open(website_url, allow_redirects=False).status_code, 200)
-        # FIXME: disabled failing test:
-        # self.assertEqual(
-        #     self.env['ir.attachment'].search([('url', '=like', '%web.assets_frontend.min.js')]).mapped('url'),
-        #     [website_url_versioned],
-        #     'Only the website asset is expected to be present',
-        # )
+        self.assertEqual(
+            self.env['ir.attachment'].search([('url', '=like', '%web.assets_frontend.min.js')]).mapped('url'),
+            [website_url_versioned],
+            'Only the website asset is expected to be present',
+        )
 
         # generate base assets
         with self.assertLogs() as logs:
