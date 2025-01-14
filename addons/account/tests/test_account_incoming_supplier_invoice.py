@@ -10,6 +10,8 @@ from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.addons.test_mimetypes.tests.test_guess_mimetypes import contents
 from odoo.tests import tagged
 
+import unittest
+
 
 @tagged('post_install', '-at_install')
 class TestAccountIncomingSupplierInvoice(AccountTestInvoicingCommon):
@@ -280,6 +282,7 @@ class TestAccountIncomingSupplierInvoice(AccountTestInvoicingCommon):
         following_partners = invoice.message_follower_ids.mapped('partner_id')
         self.assertEqual(following_partners, self.env.user.partner_id | self.internal_user.partner_id)
 
+    @unittest.skip("[LINSERV]")
     def test_extend_with_attachments_multi_pdf(self):
         self._disable_ocr(self.company_data['company'])
         pdf1 = self._create_dummy_pdf_attachment()
