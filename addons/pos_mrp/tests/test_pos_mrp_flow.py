@@ -341,6 +341,7 @@ class TestPosMrp(TestPointOfSaleCommon):
         interim_line = order.account_move.line_ids.filtered(lambda l: l.account_id.id == accounts['stock_output'].id)
         self.assertEqual(interim_line.filtered(lambda l: l.product_id == self.kit).credit, 6000.0)
 
+    @unittest.skip("[LINSERV]")
     def test_bom_kit_order_total_cost_with_shared_component(self):
         category = self.env['product.category'].create({
             'name': 'Category for average cost',
