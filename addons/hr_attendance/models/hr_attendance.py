@@ -354,7 +354,7 @@ class HrAttendance(models.Model):
                             local_check_out = pytz.utc.localize(attendance.check_out)
                             work_duration += (local_check_out - local_check_in).total_seconds() / 3600.0
                         # In case of fully flexible employee, no overtime is computed
-                        if not emp.is_fully_flexible and work_duration > emp.resource_id.calendar_id.hours_per_day:
+                        if not emp.is_fully_flexible:
                             overtime_duration = work_duration - emp.resource_id.calendar_id.hours_per_day
                             overtime_duration_real = overtime_duration
 
@@ -707,7 +707,7 @@ class HrAttendance(models.Model):
             to_verify_company = to_verify.filtered(lambda a: a.employee_id.company_id.id == company.id)
 
             # Attendances where Last open attendance worked time + previously worked time on that day + tolerance greater than the planned worked hours in his calendar
-            to_check_out = to_verify_company.filtered(lambda a: (fields.Datetime.now() - a.check_in).seconds + mapped_previous_duration[a.employee_id][a.check_in.date()] - max_tol > (sum(a.employee_id.resource_calendar_id.attendance_ids.filtered(lambda att: att.dayofweek == str(a.check_in.weekday())).mapped('duration_hours'))))
+            to_check_out = to_verify_company.filtered(lambda a: (fields.Datetime.now() - a.check_in).seconds / 3600 + mapped_previous_duration[a.employee_id][a.check_in.date()] - max_tol > (sum(a.employee_id.resource_calendar_id.attendance_ids.filtered(lambda att: att.dayofweek == str(a.check_in.weekday())).mapped('duration_hours'))))
             body = _('This attendance was automatically checked out because the employee exceeded the allowed time for their scheduled work hours.')
 
             for att in to_check_out:

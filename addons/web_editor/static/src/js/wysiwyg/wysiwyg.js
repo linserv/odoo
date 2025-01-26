@@ -455,7 +455,7 @@ export class Wysiwyg extends Component {
                     const [deepestNode] = getDeepestPosition(selection.anchorNode, selection.anchorOffset);
                     const elementSelectors = [
                         'LI:not([t-field])',
-                        'DIV:not([t-field]):not(.o_not_editable)',
+                        "DIV:not([t-field]):not(.o_not_editable):not([contenteditable='false'])",
                         ...paragraphRelatedElements.map(tag => `${tag}:not([t-field])`),
                     ];
                     const baseNode = closestElement(deepestNode, elementSelectors.join(', '));
@@ -1478,7 +1478,7 @@ export class Wysiwyg extends Component {
                     if (
                         !ev.target.closest('#create-link') &&
                         !ev.target.closest(".o_technical_modal") &&
-                        (!ev.target.closest('.oe-toolbar') || !ev.target.closest('we-customizeblock-option')) &&
+                        !ev.target.closest('.oe-toolbar') &&
                         !ev.target.closest('.ui-autocomplete') &&
                         (!this.state.linkToolProps || ![ev.target, ...wysiwygUtils.ancestors(ev.target)].includes(this.linkToolsInfos.link))
                     ) {
@@ -1633,9 +1633,13 @@ export class Wysiwyg extends Component {
                     }
                 } else {
                     const commonBlock = selection.rangeCount && closestBlock(selection.getRangeAt(0).commonAncestorContainer);
-                    [anchorNode, focusNode] = commonBlock && link.contains(commonBlock) ? [commonBlock, commonBlock] : [link, link];
+                    if (commonBlock && link.contains(commonBlock)) {
+                        [anchorNode, focusNode] = [commonBlock, commonBlock];
+                    } else if (!this.$editable[0].contains(selection.anchorNode)) {
+                        [anchorNode, focusNode] = [link, link];
+                    }
                 }
-                if (!focusOffset) {
+                if (!focusOffset && focusNode) {
                     focusOffset = focusNode.childNodes.length || focusNode.length;
                 }
             }
@@ -1711,7 +1715,7 @@ export class Wysiwyg extends Component {
             close: () => restoreSelection(),
             ...this.options.mediaModalParams,
             ...params,
-            noVideos: !this.options.allowCommandVideo,
+            noVideos: !this.options.allowCommandVideo || params.noVideos,
         });
     }
     // todo: test me
@@ -2918,10 +2922,16 @@ export class Wysiwyg extends Component {
         }
     }
     _onSelectionChange() {
-        if (this.odooEditor.autohideToolbar && this.linkPopover) {
+        if (this.linkPopover && this.isSelectionInEditable()) {
             const selectionInLink = getInSelection(this.odooEditor.document, 'a') === this.linkPopover.target;
             const isVisible = this.linkPopover.el.offsetParent;
-            if (isVisible && !selectionInLink) {
+            if (
+                isVisible &&
+                (
+                    (this.options.autohideToolbar && !this.odooEditor.document.getSelection().isCollapsed) ||
+                    !selectionInLink
+                )
+            ) {
                 this.linkPopover.hide();
             }
         }

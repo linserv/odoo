@@ -333,12 +333,9 @@ export class PaymentScreen extends Component {
         }
 
         // 3. Post process.
-        if (
-            syncOrderResult &&
-            syncOrderResult.length > 0 &&
-            this.currentOrder.wait_for_push_order()
-        ) {
-            await this.postPushOrderResolve(syncOrderResult.map((res) => res.id));
+        const postPushOrders = syncOrderResult.filter((order) => order.wait_for_push_order());
+        if (postPushOrders.length > 0) {
+            await this.postPushOrderResolve(postPushOrders.map((order) => order.id));
         }
 
         await this.afterOrderValidation(!!syncOrderResult && syncOrderResult.length > 0);
@@ -580,6 +577,7 @@ export class PaymentScreen extends Component {
         );
         if (isCancelSuccessful) {
             line.set_payment_status("retry");
+            this.pos.paymentTerminalInProgress = false;
         } else {
             line.set_payment_status("waitingCard");
         }

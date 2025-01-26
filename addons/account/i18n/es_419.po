@@ -5,9 +5,9 @@
 # Translators:
 # Larissa Manderfeld, 2024
 # allen_infante <allen.infante@outlook.com>, 2024
-# Wil Odoo, 2024
 # Fernanda Alvarez, 2024
 # Patricia Gutiérrez Capetillo <pagc@odoo.com>, 2025
+# Wil Odoo, 2025
 # 
 msgid ""
 msgstr ""
@@ -15,7 +15,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2024-12-19 11:52+0000\n"
 "PO-Revision-Date: 2024-09-25 09:41+0000\n"
-"Last-Translator: Patricia Gutiérrez Capetillo <pagc@odoo.com>, 2025\n"
+"Last-Translator: Wil Odoo, 2025\n"
 "Language-Team: Spanish (Latin America) (https://app.transifex.com/odoo/teams/41243/es_419/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -4074,6 +4074,13 @@ msgstr ""
 
 #. module: account
 #. odoo-python
+#: code:addons/account/wizard/accrued_orders.py:0
+#, python-format
+msgid "Cannot create an accrual entry with orders in different currencies."
+msgstr ""
+
+#. module: account
+#. odoo-python
 #: code:addons/account/models/account_move.py:0
 msgid ""
 "Cannot find a chart of accounts for this company, You should configure it. \n"
@@ -5494,7 +5501,7 @@ msgstr "Moneda"
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_automatic_entry_wizard__display_currency_helper
 msgid "Currency Conversion Helper"
-msgstr "Asistente de conversión de divisa"
+msgstr "Asistente de conversión de moneda"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_res_config_settings__currency_exchange_journal_id
@@ -10277,6 +10284,12 @@ msgstr ""
 "Depósito por lote: cobre varios cheques de clientes a la vez y genere y envíe un solo depósito a su banco. Necesita el módulo account_batch_payment.\n"
 "Transferencia de crédito SEPA: envíe un archivo de transferencia de crédito SEPA a su banco para pagar en la zona SEPA. Necesita el módulo account_sepa.\n"
 "Domiciliación bancaria SEPA: cobre en la zona SEPA con el mandato que le otorgará su contacto. Necesita el módulo account_sepa.\n"
+
+#. module: account
+#. odoo-python
+#: code:addons/account/wizard/account_move_send_batch_wizard.py:0
+msgid "Manually"
+msgstr "Manual"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_form
@@ -16070,6 +16083,14 @@ msgid ""
 msgstr ""
 "El método de pago seleccionado no está disponible para este pago, elija "
 "otro."
+
+#. module: account
+#. odoo-python
+#: code:addons/account/models/account_move_send.py:0
+msgid ""
+"The sending of invoices is not set up properly, make sure the report used is"
+" set for invoices."
+msgstr ""
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_tax__sequence

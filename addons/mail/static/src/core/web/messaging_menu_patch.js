@@ -177,7 +177,10 @@ patch(MessagingMenu.prototype, {
         return this.store.discuss.activeTab !== "channel" && !this.state.adding;
     },
     get shouldAskPushPermission() {
-        return this.notification.permission === "prompt";
+        return (
+            this.notification.permission === "prompt" &&
+            !this.store.isNotificationPermissionDismissed
+        );
     },
     getFailureNotificationName(failure) {
         if (failure.type === "email") {

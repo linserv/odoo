@@ -1975,7 +1975,9 @@ class _String(Field[str | typing.Literal[False]]):
             translation_dictionary = self.get_translation_dictionary(from_lang_value, old_translations)
             text2terms = defaultdict(list)
             for term in new_terms:
-                text2terms[self.get_text_content(term)].append(term)
+                term_text = self.get_text_content(term)
+                if term_text:
+                    text2terms[term_text].append(term)
 
             is_text = self.translate.is_text if hasattr(self.translate, 'is_text') else lambda term: True
             term_adapter = self.translate.term_adapter if hasattr(self.translate, 'term_adapter') else None
@@ -1992,6 +1994,8 @@ class _String(Field[str | typing.Literal[False]]):
                         if old_is_text or not closest_is_text:
                             if not closest_is_text and records.env.context.get("install_mode") and lang == 'en_US' and term_adapter:
                                 adapter = term_adapter(closest_term)
+                                if adapter(old_term) is None:  # old term and closest_term have different structures
+                                    continue
                                 translation_dictionary[closest_term] = {k: adapter(v) for k, v in translation_dictionary.pop(old_term).items()}
                             else:
                                 translation_dictionary[closest_term] = translation_dictionary.pop(old_term)

@@ -8,8 +8,8 @@
 # Malaz Abuidris <msea@odoo.com>, 2024
 # Larissa Manderfeld, 2024
 # ILMIR <karamov@it-projects.info>, 2024
-# Wil Odoo, 2024
 # Ilya Rozhkov, 2025
+# Wil Odoo, 2025
 # 
 msgid ""
 msgstr ""
@@ -17,7 +17,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2024-12-19 11:52+0000\n"
 "PO-Revision-Date: 2024-09-25 09:41+0000\n"
-"Last-Translator: Ilya Rozhkov, 2025\n"
+"Last-Translator: Wil Odoo, 2025\n"
 "Language-Team: Russian (https://app.transifex.com/odoo/teams/41243/ru/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -3869,6 +3869,13 @@ msgstr "Невозможно создать документ закупки в �
 #: code:addons/account/models/account_move.py:0
 msgid "Cannot create a sale document in a non sale journal"
 msgstr "Невозможно создать документ продажи в журнале без продажи"
+
+#. module: account
+#. odoo-python
+#: code:addons/account/wizard/accrued_orders.py:0
+#, python-format
+msgid "Cannot create an accrual entry with orders in different currencies."
+msgstr ""
 
 #. module: account
 #. odoo-python
@@ -8289,7 +8296,7 @@ msgstr "Импорт банковских выписок в QIF"
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_move_line_tree
 msgid "In Currency"
-msgstr ""
+msgstr "В валюте"
 
 #. module: account
 #: model:ir.model.fields.selection,name:account.selection__account_invoice_report__payment_state__in_payment
@@ -10014,6 +10021,12 @@ msgstr ""
 "Прямое дебетование SEPA: Получайте оплату в зоне SEPA благодаря мандату, предоставленному вам вашим партнером. Необходим модуль account_sepa.\n"
 
 #. module: account
+#. odoo-python
+#: code:addons/account/wizard/account_move_send_batch_wizard.py:0
+msgid "Manually"
+msgstr "Вручную"
+
+#. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_form
 msgid "Mapping"
 msgstr ""
@@ -10761,7 +10774,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:account.view_account_invoice_filter
 #: model_terms:ir.ui.view,arch_db:account.view_account_payment_search
 msgid "Not Sent"
-msgstr ""
+msgstr "Не отправлено"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_secure_entries_wizard
@@ -11805,7 +11818,7 @@ msgstr "Квитанция об оплате"
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_payment__payment_receipt_title
 msgid "Payment Receipt Title"
-msgstr ""
+msgstr "Название квитанции об оплате"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_bank_statement_line__payment_reference
@@ -12218,7 +12231,7 @@ msgstr ""
 #. module: account
 #: model:account.account,name:account.1_prepaid_expenses
 msgid "Prepaid Expenses"
-msgstr ""
+msgstr "Авансовые расходы"
 
 #. module: account
 #: model:account.account,name:account.1_prepayments
@@ -13971,7 +13984,7 @@ msgstr ""
 #. odoo-python
 #: code:addons/account/models/company.py:0
 msgid "Show draft entries"
-msgstr ""
+msgstr "Показать черновые записи"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_tax_search
@@ -15033,6 +15046,8 @@ msgid ""
 "The amount for %(partner_name)s appears unusual. Based on your historical data, the expected amount is %(mean)s (± %(wiggle)s).\n"
 "Please verify if this amount is accurate."
 msgstr ""
+"Сумма для %(partner_name)s кажется необычной. На основе ваших исторических данных ожидаемая сумма составляет %(mean)s (± %(wiggle)s).\n"
+"Пожалуйста, проверьте, верна ли эта сумма."
 
 #. module: account
 #. odoo-python
@@ -15071,6 +15086,8 @@ msgid ""
 "The billing frequency for %(partner_name)s appears unusual. Based on your historical data, the expected next invoice date is not before %(expected_date)s (every %(mean)s (± %(wiggle)s) days).\n"
 "Please verify if this date is accurate."
 msgstr ""
+"Частота выставления счетов для %(partner_name)s кажется необычной. На основе ваших исторических данных следующая ожидаемая дата счёта не раньше %(expected_date)s (каждые %(mean)s (± %(wiggle)s дней).\n"
+"Пожалуйста, проверьте, верна ли эта дата."
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_bank_statement_line__tax_cash_basis_created_move_ids
@@ -15731,6 +15748,14 @@ msgstr ""
 " способ оплаты еще раз."
 
 #. module: account
+#. odoo-python
+#: code:addons/account/models/account_move_send.py:0
+msgid ""
+"The sending of invoices is not set up properly, make sure the report used is"
+" set for invoices."
+msgstr ""
+
+#. module: account
 #: model:ir.model.fields,help:account.field_account_tax__sequence
 msgid ""
 "The sequence field is used to define order in which the tax lines are "
@@ -15985,6 +16010,8 @@ msgstr ""
 msgid ""
 "There is no journal entry flagged for accounting data inalterability yet."
 msgstr ""
+"На данный момент нет записей журнала, отмеченных как неизменяемые для "
+"бухгалтерских данных."
 
 #. module: account
 #. odoo-python
@@ -16140,6 +16167,8 @@ msgid ""
 "This document is protected by a hash. Therefore, you cannot edit the "
 "following fields: %s."
 msgstr ""
+"Этот документ защищён хэшем. Поэтому вы не можете редактировать следующие "
+"поля: %sё."
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_tax__name_searchable
@@ -16841,12 +16870,12 @@ msgstr "Развернуть все"
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_journal__has_unhashed_entries
 msgid "Unhashed Entries"
-msgstr ""
+msgstr "Нехэшированные записи"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.account_journal_dashboard_kanban_view
 msgid "Unhashed entries"
-msgstr ""
+msgstr "Нехэшированные записи"
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_report_line__code
@@ -18537,7 +18566,7 @@ msgstr "активировать валюту счета-фактуры"
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_journal_form
 msgid "alias"
-msgstr ""
+msgstr "псевдоним"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.validate_account_move_view
@@ -18691,7 +18720,7 @@ msgstr "например https://www.ваш домейн.com"
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_journal_form
 msgid "e.g. mycompany.com"
-msgstr ""
+msgstr "например, mycompany.com"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_res_partner__invoice_edi_format
@@ -18713,7 +18742,7 @@ msgstr ""
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.validate_account_move_view
 msgid "fall outside the typical range."
-msgstr ""
+msgstr "выходят за пределы типичного диапазона."
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_payment_register_form
@@ -18964,6 +18993,8 @@ msgid ""
 "{amount} ({debit_credit}) from <strong>{account_source_name}</strong> were "
 "transferred to <strong>{account_target_name}</strong> by {link}"
 msgstr ""
+"{amount} ({debit_credit}) с <strong>{account_source_name}</strong> были "
+"переведены на <strong>{account_target_name}</strong> через {link}"
 
 #. module: account
 #. odoo-python

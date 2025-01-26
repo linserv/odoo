@@ -153,6 +153,26 @@ registry.category("web_tour.tours").add("ProductScreenTour", {
         ].flat(),
 });
 
+registry.category("web_tour.tours").add("FloatingOrderTour", {
+    checkDelay: 50,
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            ProductScreen.orderIsEmpty(),
+            ProductScreen.clickDisplayedProduct("Desk Organizer", true, "1.0", "5.10"),
+            ProductScreen.clickDisplayedProduct("Desk Organizer", true, "2.0", "10.20"),
+            ProductScreen.productCardQtyIs("Desk Organizer", "2.0"),
+            Chrome.createFloatingOrder(),
+            ProductScreen.clickDisplayedProduct("Letter Tray", true, "1.0", "5.28"),
+            ProductScreen.clickDisplayedProduct("Letter Tray", true, "2.0", "10.56"),
+            ProductScreen.selectFloatingOrder(0),
+            ProductScreen.productCardQtyIs("Desk Organizer", "2.0"),
+            ProductScreen.isShown(),
+            ProductScreen.selectFloatingOrder(1),
+            ProductScreen.productCardQtyIs("Letter Tray", "2.0"),
+        ].flat(),
+});
+
 registry.category("web_tour.tours").add("FiscalPositionNoTax", {
     checkDelay: 50,
     steps: () =>
@@ -264,6 +284,22 @@ registry.category("web_tour.tours").add("limitedProductPricelistLoading", {
 
             scan_barcode("0100300"),
             ProductScreen.selectedOrderlineHas("Test Product 3", "1.0", "50.0"),
+            Chrome.endTour(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("multiPricelistRulesTour", {
+    checkDelay: 50,
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickDisplayedProduct("Test Product 1"),
+            ProductScreen.selectedOrderlineHas("Test Product 1", "1.0", "200.0"),
+            ProductScreen.clickDisplayedProduct("Test Product 1"),
+            ProductScreen.selectedOrderlineHas("Test Product 1", "2.0", "200.0"), // 100.0 * 2
+            ProductScreen.clickDisplayedProduct("Test Product 1"),
+            ProductScreen.selectedOrderlineHas("Test Product 1", "3.0", "150.0"), // 50.0 * 3
             Chrome.endTour(),
         ].flat(),
 });

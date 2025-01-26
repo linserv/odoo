@@ -1401,6 +1401,10 @@ msgid ""
 "===========================================\n"
 "This provides a base chart of accounts and taxes template for use in Odoo.\n"
 msgstr ""
+"\n"
+"대한민국용 회계 모듈\n"
+"===========================================\n"
+"Odoo에서 사용할 수 있는 기본 계정과 세금 템플릿을 제공합니다.\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_account_reports
@@ -3112,6 +3116,15 @@ msgstr ""
 "    - Regional State listings\n"
 
 #. module: base
+#: model:ir.module.module,description:base.module_l10n_tr_nilvera
+msgid ""
+"\n"
+"Base module containing core functionalities required by other Nilvera modules.\n"
+msgstr ""
+"\n"
+"다른 Nilvera 모듈에 필요한 필수 기능을 포함하는 기본 모듈.\n"
+
+#. module: base
 #: model:ir.module.module,description:base.module_l10n_bo_reports
 msgid ""
 "\n"
@@ -4587,6 +4600,13 @@ msgid ""
 "It also creates an account entry to have the invoice paid-off and translate the credit to the factoring company.\n"
 "Additionally, it marks the invoice as 'yielded' in the payment state.\n"
 msgstr ""
+"\n"
+"전자 청구서 팩토링\n"
+"===================\n"
+"이 모듈은 칠레의 전자 청구서 발행을 확장하는 기능입니다.\n"
+"이 모듈은 청구서 크레딧을 할당하기 위한 전자 파일(Archivo Electrónico de Cesión de Créditos - AEC)을 생성합니다.\n"
+"청구서 지불을 용이하게 하고 팩토링 회사에 크레딧을 양도하기 위한 계정 항목을 생성합니다.\n"
+"또한, 결제 상태에서 청구서 상태를 '양도됨'으로 업데이트합니다.\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_it_edi
@@ -5277,6 +5297,15 @@ msgid ""
 msgstr ""
 "\n"
 "조정 위젯에서 재고 내역을 필터링합니다.\n"
+
+#. module: base
+#: model:ir.module.module,description:base.module_l10n_tr_nilvera_einvoice
+msgid ""
+"\n"
+"For sending and receiving electronic invoices to Nilvera.\n"
+msgstr ""
+"\n"
+"Nilvera에 전자 청구서를 보내고 받기 위한 모듈.\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_fr_hr_payroll
@@ -6522,6 +6551,10 @@ msgid ""
 "========================================\n"
 "This module is only temporary, its purpose is to make the transition from NHIF to SHIF in stables versions (17.0, 18.0).\n"
 msgstr ""
+"\n"
+"케냐 급여 규칙\n"
+"========================================\n"
+"이 모듈은 안정적인 버전 (17.0, 18.0)에서 새로운 필드를 추가하기 위한 임시 모듈입니다.\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_ke_hr_payroll
@@ -9264,6 +9297,8 @@ msgid ""
 "\n"
 "This bridge module adds the necessary fields to properly round the Tax Report for Estonia in the closing entries.\n"
 msgstr ""
+"\n"
+"이 연결 모듈은 결산 항목에서 에스토니아 세금 보고서를 적절하게 반올림하는 데 필요한 필드를 추가합니다.\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_mrp_subcontracting_dropshipping
@@ -11074,6 +11109,9 @@ msgid ""
 "This module enables the generation of Zengin-compliant files to send to your bank in order to\n"
 "push a set of payments.\n"
 msgstr ""
+"\n"
+"이 모듈은 은행으로 지불금을 송금하기 위해 Zengin 규격 파일을 생성할 수 있도록 \n"
+"도와줍니다.\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_in_qr_code_bill_scan
@@ -41479,6 +41517,8 @@ msgid ""
 "         Please install the new \"Fedex Shipping\" module and uninstall this"
 " one as soon as possible. This integration will stop working in 2024."
 msgstr ""
+"더 이상 지원되지 않는 FedEx 통합 레거시 버전입니다.         새로운 'FedEx 배송' 모듈을 설치 후 최대한 빠른 시일 "
+"내에 해당 모듈을 제거하시기 바랍니다. 통합 버전은 2024년에 작동이 중단됩니다."
 
 #. module: base
 #: model:ir.module.module,description:base.module_delivery_ups
@@ -42351,6 +42391,16 @@ msgstr "튀니지 - 회계 보고서"
 #: model:ir.model.fields.selection,name:base.selection__res_partner__tz__turkey
 msgid "Turkey"
 msgstr "터키"
+
+#. module: base
+#: model:ir.module.module,shortdesc:base.module_l10n_tr_nilvera
+msgid "Türkiye - Nilvera"
+msgstr "튀르키예 - Nilvera"
+
+#. module: base
+#: model:ir.module.module,shortdesc:base.module_l10n_tr_nilvera_einvoice
+msgid "Türkiye - Nilvera E-Invoice"
+msgstr "튀르키예 - Nilvera 전자 인보이스"
 
 #. module: base
 #: model:res.country,name:base.tm
@@ -45291,12 +45341,6 @@ msgstr "l10n_be_pos_sale"
 #: model:ir.model.fields.selection,name:base.selection__ir_model_fields__ttype__many2many
 msgid "many2many"
 msgstr "many2many"
-
-#. module: base
-#. odoo-python
-#: code:addons/base/models/ir_actions.py:0
-msgid "many2many fields cannot be evaluated by reference"
-msgstr "many2many 필드를 참조 사항으로 평가할 수 없습니다"
 
 #. module: base
 #: model:ir.model.fields.selection,name:base.selection__ir_model_fields__ttype__many2one
