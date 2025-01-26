@@ -3,10 +3,11 @@ import { compareDatetime } from "@mail/utils/common/misc";
 
 import { patch } from "@web/core/utils/patch";
 
-patch(Store.prototype, {
+/** @type {import("models").Store} */
+const storePatch = {
     setup() {
         super.setup(...arguments);
-        this.livechatChannels = this.makeCachedFetchData({ livechat_channels: true });
+        this.livechatChannels = this.makeCachedFetchData("im_livechat.channel");
         this.has_access_livechat = false;
     },
     /**
@@ -33,8 +34,7 @@ patch(Store.prototype, {
             return true;
         }
         const chatWindow = this.ChatWindow.insert({ thread: oldestUnreadThread });
-        chatWindow.open();
-        chatWindow.focus();
+        chatWindow.open({ focus: true });
         return true;
     },
     /**
@@ -50,4 +50,5 @@ patch(Store.prototype, {
         }
         return threadTypes;
     },
-});
+};
+patch(Store.prototype, storePatch);

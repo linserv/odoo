@@ -10,6 +10,7 @@ from odoo.tools import float_compare, float_round
 class StockLot(models.Model):
     _inherit = 'stock.lot'
 
+    lot_valuated = fields.Boolean(related='product_id.lot_valuated', readonly=True, store=False)
     value_svl = fields.Float(compute='_compute_value_svl', compute_sudo=True)
     quantity_svl = fields.Float(compute='_compute_value_svl', compute_sudo=True)
     avg_cost = fields.Monetary(string="Average Cost", compute='_compute_value_svl', compute_sudo=True, currency_field='company_currency_id')
@@ -61,6 +62,7 @@ class StockLot(models.Model):
             lot.avg_cost = avg_cost
             lot.total_value = avg_cost * quantity_sum
 
+    @api.model_create_multi
     def create(self, vals_list):
         lots = super().create(vals_list)
         for product, lots_by_product in lots.grouped('product_id').items():

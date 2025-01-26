@@ -93,9 +93,9 @@ class TestMrpOrder(TestMrpCommon):
         for move in man_order.move_raw_ids:
             self.assertEqual(move.date, date_start)
         first_move = man_order.move_raw_ids.filtered(lambda move: move.product_id == self.product_2)
-        self.assertEqual(first_move.product_qty, test_quantity / self.bom_1.product_qty * self.product_4.uom_id.factor_inv * 2)
+        self.assertEqual(first_move.product_qty, test_quantity / self.bom_1.product_qty * self.product_4.uom_id.factor * 2)
         first_move = man_order.move_raw_ids.filtered(lambda move: move.product_id == self.product_1)
-        self.assertEqual(first_move.product_qty, test_quantity / self.bom_1.product_qty * self.product_4.uom_id.factor_inv * 4)
+        self.assertEqual(first_move.product_qty, test_quantity / self.bom_1.product_qty * self.product_4.uom_id.factor * 4)
 
         # produce product
         mo_form = Form(man_order)
@@ -563,7 +563,8 @@ class TestMrpOrder(TestMrpCommon):
         """ Checks we round up when bringing goods to produce and round half-up when producing.
         This implementation allows to implement an efficiency notion (see rev 347f140fe63612ee05e).
         """
-        self.product_6.uom_id.rounding = 1.0
+        # FIXME QUWO: Still needs to production of bom from bigger uom with no decimals
+        # Only consider whole units
         bom_eff = self.env['mrp.bom'].create({
             'product_id': self.product_6.id,
             'product_tmpl_id': self.product_6.product_tmpl_id.id,
@@ -575,6 +576,7 @@ class TestMrpOrder(TestMrpCommon):
                 (0, 0, {'product_id': self.product_8.id, 'product_qty': 4.16})
             ]
         })
+        self.env['decimal.precision'].search([('name', '=', 'Product Unit')]).digits = 0
         production_form = Form(self.env['mrp.production'])
         production_form.product_id = self.product_6
         production_form.bom_id = bom_eff
@@ -1768,14 +1770,12 @@ class TestMrpOrder(TestMrpCommon):
             'name': 'Plastic Laminate',
             'is_storable': True,
             'uom_id': unit.id,
-            'uom_po_id': unit.id,
             'tracking': 'serial',
         })
         ply_veneer = self.env['product.product'].create({
             'name': 'Ply Veneer',
             'is_storable': True,
             'uom_id': unit.id,
-            'uom_po_id': unit.id,
         })
         bom = self.env['mrp.bom'].create({
             'product_tmpl_id': plastic_laminate.product_tmpl_id.id,
@@ -2051,13 +2051,9 @@ class TestMrpOrder(TestMrpCommon):
         uom_L = self.env.ref('uom.product_uom_litre')
         uom_cL = self.env['uom.uom'].create({
             'name': 'cL',
-            'category_id': uom_L.category_id.id,
-            'uom_type': 'smaller',
-            'factor': 100,
-            'rounding': 1,
+            'relative_factor': 0.01,
+            'relative_uom_id': uom_L.id,
         })
-        uom_units.rounding = 1
-        uom_L.rounding = 0.01
 
         product = self.env['product.product'].create({
             'name': 'SuperProduct',
@@ -2067,13 +2063,11 @@ class TestMrpOrder(TestMrpCommon):
             'name': 'Consumable Component',
             'type': 'consu',
             'uom_id': uom_cL.id,
-            'uom_po_id': uom_cL.id,
         })
         storable_component = self.env['product.product'].create({
             'name': 'Storable Component',
             'is_storable': True,
             'uom_id': uom_cL.id,
-            'uom_po_id': uom_cL.id,
         })
         self.env['stock.quant']._update_available_quantity(storable_component, self.env.ref('stock.stock_location_stock'), 100)
 
@@ -2129,26 +2123,20 @@ class TestMrpOrder(TestMrpCommon):
         picking_type = self.env['stock.picking.type'].search([('code', '=', 'mrp_operation')])[0]
 
         # the overall decimal accuracy is set to 3 digits
-        precision = self.env.ref('product.decimal_product_uom')
+        precision = self.env.ref('uom.decimal_product_uom')
         precision.digits = 3
 
         # define L and ml, L has rounding .001 but ml has rounding .01
         # when producing e.g. 187.5ml, it will be rounded to .188L
-        categ_test = self.env['uom.category'].create({'name': 'Volume Test'})
-
-        uom_L = self.env['uom.uom'].create({
-            'name': 'Test Liters',
-            'category_id': categ_test.id,
-            'uom_type': 'reference',
-            'rounding': 0.001
-        })
 
         uom_ml = self.env['uom.uom'].create({
             'name': 'Test ml',
-            'category_id': categ_test.id,
-            'uom_type': 'smaller',
-            'rounding': 0.01,
-            'factor_inv': 0.001,
+            'relative_factor': 1,
+        })
+        uom_L = self.env['uom.uom'].create({
+            'name': 'Test Liters',
+            'relative_factor': 1000,
+            'relative_uom_id': uom_ml.id,
         })
 
         # create a product component and the final product using the component
@@ -2157,7 +2145,6 @@ class TestMrpOrder(TestMrpCommon):
             'is_storable': True,
             'tracking': 'lot',
             'uom_id': uom_L.id,
-            'uom_po_id': uom_L.id,
         })
 
         product_final = self.env['product.product'].create({
@@ -2165,7 +2152,6 @@ class TestMrpOrder(TestMrpCommon):
             'is_storable': True,
             'tracking': 'lot',
             'uom_id': uom_L.id,
-            'uom_po_id': uom_L.id,
         })
 
         # the products are tracked by lot, so we go through _generate_consumed_move_line
@@ -3475,11 +3461,11 @@ class TestMrpOrder(TestMrpCommon):
 
         self.box250 = self.env['uom.uom'].create({
             'name': 'box250',
-            'category_id': self.env.ref('uom.product_uom_categ_unit').id,
-            'ratio': 250.0,
-            'uom_type': 'bigger',
-            'rounding': 1.0,
+            'relative_factor': 250.0,
+            'relative_uom_id': self.uom_unit.id,
         })
+        # Only consider whole units
+        self.env['decimal.precision'].search([('name', '=', 'Product Unit')]).digits = 0
 
         test_bom = self.env['mrp.bom'].create({
             'product_tmpl_id': self.product_7_template.id,
@@ -3523,7 +3509,6 @@ class TestMrpOrder(TestMrpCommon):
         consumed quantity is updated again. The test ensures that this update
         respects the rounding precisions
         """
-        self.uom_dozen.rounding = 1
         self.bom_4.product_uom_id = self.uom_dozen
 
         mo_form = Form(self.env['mrp.production'])
@@ -4152,7 +4137,7 @@ class TestMrpOrder(TestMrpCommon):
             {'name': "00003"},
             {'name': "00004"},
         ])
-        self.assertEqual(productions.mapped('state'), ['to_close'] * 4)
+        self.assertEqual(productions.mapped('state'), ['confirmed'] * 4)
 
     def test_batch_production_02(self):
         """ Test the wizard mrp.batch.produce with a single tracked serial.
@@ -4227,7 +4212,7 @@ class TestMrpOrder(TestMrpCommon):
             00001,LOT01;2|LOT02;3,P01|P02
             00002,LOT01;4,P03
             00003,LOT01,P04|P05
-            00004
+            00004,LOT03,P06
         """
         batch_produce = batch_produce.save()
         self.assertEqual(batch_produce.production_text_help.split('\n')[1],
@@ -4280,8 +4265,10 @@ class TestMrpOrder(TestMrpCommon):
 
         move_1 = production_4.move_raw_ids.filtered(lambda m: m.product_id == self.product_1)
         move_2 = production_4.move_raw_ids.filtered(lambda m: m.product_id == self.product_2)
-        self.assertRecordValues(move_2.move_line_ids, [{'quantity': 0.5, 'lot_id': False}])
-        self.assertRecordValues(move_1.move_line_ids, [{'quantity': 1, 'lot_id': False}])
+        self.assertRecordValues(move_2.move_line_ids, [{'quantity': 0.5}])
+        self.assertRecordValues(move_2.move_line_ids.lot_id, [{'name': 'LOT03'}])
+        self.assertRecordValues(move_1.move_line_ids, [{'quantity': 1}])
+        self.assertRecordValues(move_1.move_line_ids.lot_id, [{'name': 'P06'}])
 
     def test_batch_production_04(self):
         """ Test that splitting a MO correctly computes the duration of the workorders. """
@@ -4913,6 +4900,110 @@ class TestMrpOrder(TestMrpCommon):
 
         self.assertEqual(mo.state, 'done')
         self.assertEqual(mo.workorder_ids[0].duration_expected, 1440.0)
+
+    def test_additional_transfer_creation_in_progress_state(self):
+        """
+        Test the creation of additional component transfers for MOs in 'progress' and 'to_close'
+        state for both 2-step and 3-step MRP processes:
+            - If the picking is not validated, the extra quantity updates the existing move within the picking.
+            - If the picking is validated, a new picking is created for that extra quantity.
+        """
+        warehouse = self.env['stock.warehouse'].search([], limit=1)
+        warehouse.write({'manufacture_steps': 'pbm'})
+
+        product = self.env['product.product'].create({
+            'name': 'Product',
+            'is_storable': True,
+            'bom_ids': [Command.create({
+                'product_qty': 2.0,
+                'bom_line_ids': [Command.create({
+                    'product_id': self.product_1.id,
+                    'product_qty': 2.0,
+                })],
+            })],
+        })
+
+        mo = self.env['mrp.production'].create({
+            'product_id': product.id,
+            'product_uom_qty': 1.0,
+        })
+        mo.action_confirm()
+
+        # Verify that initially only one picking is created.
+        self.assertEqual(mo.delivery_count, 1.0)
+        mo.picking_ids.button_validate()
+
+        # Unlock MO and update the raw material quantity.
+        mo.is_locked = False
+        mo_form = Form(mo)
+        with mo_form.move_raw_ids.edit(0) as move:
+            move.product_uom_qty = 3
+        mo = mo_form.save()
+
+        # Verify that a new picking is created when mo is in confirmed state.
+        self.assertEqual(mo.delivery_count, 2.0)
+        mo.picking_ids.filtered(lambda picking: picking.state != "done").button_validate()
+
+        # Start the MO so that mo state is in progress.
+        mo.action_start()
+
+        # Update the raw material quantity again.
+        mo_form = Form(mo)
+        with mo_form.move_raw_ids.edit(0) as move:
+            move.product_uom_qty += 2
+        mo = mo_form.save()
+
+        # Verify that new picking is also created when mo is in 'progress' state.
+        self.assertEqual(mo.delivery_count, 3.0)
+
+        # Update the raw material quantity again but now quantity updates in exiting moves of picking.
+        mo_form = Form(mo)
+        with mo_form.move_raw_ids.edit(0) as move:
+            move.product_uom_qty += 3
+        mo = mo_form.save()
+
+        # For that new picking is not created.
+        self.assertEqual(mo.delivery_count, 3.0)
+
+        # Now check the latest not-done picking's quantity.
+        not_done_picking = mo.picking_ids.filtered(lambda picking: picking.state != "done")
+        self.assertEqual(not_done_picking.move_ids.product_uom_qty, 5.0)
+        not_done_picking.button_validate()
+
+        # Verify that new picking is also created when mo is in 'to_close' state.
+        mo_form = Form(mo)
+        mo_form.qty_producing = 1.0
+        mo = mo_form.save()
+
+        mo_form = Form(mo)
+        with mo_form.move_raw_ids.edit(0) as move:
+            move.product_uom_qty += 3
+        mo = mo_form.save()
+
+        # Now check the latest not-done picking's quantity.
+        self.assertEqual(mo.delivery_count, 4.0)
+        not_done_picking = mo.picking_ids.filtered(lambda picking: picking.state != "done")
+        self.assertEqual(not_done_picking.move_ids.product_uom_qty, 3.0)
+
+    def test_wo_date_finished_on_done_unplanned_mo(self):
+        """
+        Checks that the work order's date_finished and leave_id.date_to fields are equal to
+        the date_finished field on a done manufacturing order that was not planned.
+        """
+        production_form = Form(self.env['mrp.production'])
+        production_form.bom_id = self.bom_4
+        production = production_form.save()
+
+        production.action_confirm()
+
+        self.assertFalse(production.workorder_ids[0].date_finished)
+        self.assertFalse(production.workorder_ids[0].leave_id)
+
+        production.button_mark_done()
+
+        self.assertEqual(production.workorder_ids[0].date_finished, production.date_finished)
+        self.assertEqual(production.workorder_ids[0].leave_id.date_to, production.date_finished)
+
 
 @tagged('-at_install', 'post_install')
 class TestTourMrpOrder(HttpCase):

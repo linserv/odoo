@@ -317,6 +317,9 @@ class HrApplicant(models.Model):
         applicants = super().create(vals_list)
         applicants.sudo().interviewer_ids._create_recruitment_interviewers()
 
+        department_manager_partner = applicants.department_id.manager_id._get_related_partners()
+        applicants.message_unsubscribe(partner_ids=department_manager_partner.ids)
+
         if (applicants.interviewer_ids.partner_id - self.env.user.partner_id):
             for applicant in applicants:
                 interviewers_to_notify = applicant.interviewer_ids.partner_id - self.env.user.partner_id
@@ -340,7 +343,7 @@ class HrApplicant(models.Model):
             ('res_model', '=', "hr.candidate")
         ], groupby=['res_id'], aggregates=['id:recordset']))
         for applicant in applicants:
-            if applicant.company_id != applicant.candidate_id.company_id:
+            if applicant.candidate_id.company_id and applicant.company_id != applicant.candidate_id.company_id:
                 raise ValidationError(_("You cannot create an applicant in a different company than the candidate"))
             candidate_id = applicant.candidate_id.id
             if candidate_id not in attachments_by_candidate:
@@ -548,25 +551,28 @@ class HrApplicant(models.Model):
             return self.env.ref('hr_recruitment.mt_applicant_stage_changed')
         return super()._track_subtype(init_values)
 
-    def _notify_get_reply_to(self, default=None):
+    def _notify_get_reply_to(self, default=None, author_id=False):
         """ Override to set alias of applicants to their job definition if any. """
-        aliases = self.mapped('job_id')._notify_get_reply_to(default=default)
+        aliases = self.mapped('job_id')._notify_get_reply_to(default=default, author_id=author_id)
         res = {app.id: aliases.get(app.job_id.id) for app in self}
         leftover = self.filtered(lambda rec: not rec.job_id)
         if leftover:
-            res.update(super(HrApplicant, leftover)._notify_get_reply_to(default=default))
+            res.update(super(HrApplicant, leftover)._notify_get_reply_to(default=default, author_id=author_id))
         return res
 
-    def _message_get_suggested_recipients(self):
-        recipients = super()._message_get_suggested_recipients()
-        if self.partner_id:
-            self._message_add_suggested_recipient(recipients, partner=self.partner_id.sudo(), reason=_('Contact'))
-        elif self.email_from:
-            email_from = tools.email_normalize(self.email_from)
-            if email_from and self.partner_name:
-                email_from = tools.formataddr((self.partner_name, email_from))
-                self._message_add_suggested_recipient(recipients, email=email_from, reason=_('Contact Email'))
-        return recipients
+    def _get_customer_information(self):
+        email_keys_to_values = super()._get_customer_information()
+
+        for applicant in self:
+            email_key = tools.email_normalize(applicant.email_from) or applicant.email_from
+            # do not fill Falsy with random data, unless monorecord (= always correct)
+            if not email_key and len(self) > 1:
+                continue
+            email_keys_to_values.setdefault(email_key, {}).update({
+                'name': applicant.partner_name or tools.parse_contact_from_email(applicant.email_from)[0] or applicant.email_from,
+                'phone': applicant.partner_phone,
+            })
+        return email_keys_to_values
 
     @api.depends('partner_name')
     @api.depends_context('show_partner_name')
@@ -582,26 +588,24 @@ class HrApplicant(models.Model):
         # do not want to explicitly set user_id to False; however we do not
         # want the gateway user to be responsible if no other responsible is
         # found.
-        self = self.with_context(default_user_id=False, mail_notify_author=True)  # Allows sending stage updates to the author
+        self = self.with_context(default_user_id=False)
         stage = False
         candidate_defaults = {}
+        partner_name, email_from_normalized = tools.parse_contact_from_email(msg.get('from'))
+        candidate_domain = [
+            ("email_from", "=", email_from_normalized),
+        ]
         if custom_values and 'job_id' in custom_values:
             job = self.env['hr.job'].browse(custom_values['job_id'])
             stage = job._get_first_stage()
             candidate_defaults['company_id'] = job.company_id.id
+            candidate_domain = expression.AND([candidate_domain, [("company_id", "in", [job.company_id.id, False])]])
 
-        partner_name, email_from_normalized = tools.parse_contact_from_email(msg.get('from'))
-        candidate = self.env["hr.candidate"].search(
-            [
-                ("email_from", "=", email_from_normalized),
-            ],
-            limit=1,
-        ) or self.env["hr.candidate"].create(
-            {
+        candidate = self.env["hr.candidate"].search(candidate_domain, limit=1)\
+            or self.env["hr.candidate"].create({
                 "partner_name": partner_name or email_from_normalized,
                 **candidate_defaults,
-            }
-        )
+            })
 
         defaults = {
             'candidate_id': candidate.id,
@@ -699,10 +703,9 @@ class HrApplicant(models.Model):
         return super(HrApplicant, self.with_context(just_unarchived=True)).action_archive()
 
     def action_unarchive(self):
-        active_applicants = super(HrApplicant, self.with_context(just_unarchived=True)).action_unarchive()
-        if active_applicants:
-            active_applicants.reset_applicant()
-        return active_applicants
+        res = super(HrApplicant, self.with_context(just_unarchived=True)).action_unarchive()
+        self.reset_applicant()
+        return res
 
     def action_send_email(self):
         return {

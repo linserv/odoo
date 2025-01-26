@@ -23,7 +23,7 @@ class CreateChatDialog extends Component {
 
     setup() {
         super.setup();
-        this.store = useState(useService("mail.store"));
+        this.store = useService("mail.store");
         this.invitePeopleState = useState({
             selectablePartners: [],
             selectedPartners: [],
@@ -53,7 +53,7 @@ class CreateChannelDialog extends Component {
 
     setup() {
         super.setup();
-        this.store = useState(useService("mail.store"));
+        this.store = useService("mail.store");
         this.orm = useService("orm");
         this.state = useState({ name: this.props.name || "", isInvalid: false });
     }
@@ -97,8 +97,8 @@ class DiscussCommand extends Component {
 
     setup() {
         super.setup();
-        this.store = useState(useService("mail.store"));
-        this.ui = useState(useService("ui"));
+        this.store = useService("mail.store");
+        this.ui = useService("ui");
     }
 }
 
@@ -119,7 +119,7 @@ async function makeNewChannel(name, store) {
     });
     const { Thread } = store.insert(data);
     const [channel] = Thread;
-    channel.open();
+    channel.open({ focus: true });
 }
 
 export class DiscussCommandPalette {
@@ -218,7 +218,7 @@ export class DiscussCommandPalette {
                 Component: DiscussCommand,
                 action: async () => {
                     const channel = await this.store.Thread.getOrFetch(thread);
-                    channel.open();
+                    channel.open({ focus: true });
                 },
                 name: thread.displayName,
                 category,

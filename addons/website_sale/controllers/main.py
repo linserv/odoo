@@ -1,5 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import base64
 import json
 from datetime import datetime
 
@@ -29,6 +30,7 @@ from odoo.addons.portal.controllers.portal import _build_url_w_params
 from odoo.addons.sale.controllers import portal as sale_portal
 from odoo.addons.website.controllers.main import QueryURL
 from odoo.addons.website.models.ir_http import sitemap_qs2dom
+from odoo.addons.web_editor.tools import get_video_thumbnail
 
 
 class TableCompute:
@@ -495,22 +497,41 @@ class WebsiteSale(payment_portal.PaymentPortal):
         # Compatibility pre-v14
         return request.redirect(_build_url_w_params("/shop/%s" % request.env['ir.http']._slug(product), request.params), code=301)
 
-    @route(['/shop/product/extra-images'], type='jsonrpc', auth='user', website=True)
-    def add_product_images(self, images, product_product_id, product_template_id, combination_ids=None):
+    @route(['/shop/product/extra-media'], type='jsonrpc', auth='user', website=True)
+    def add_product_media(self, media, type, product_product_id, product_template_id, combination_ids=None):
         """
-        Turns a list of image ids refering to ir.attachments to product.images,
+        Handles adding both images and videos to product variants or templates,
         links all of them to product.
+        :param type: [...] can be either image or video
         :raises NotFound : If the user is not allowed to access Attachment model
         """
 
         if not request.env.user.has_group('website.group_website_restricted_editor'):
             raise NotFound()
 
-        image_ids = request.env["ir.attachment"].browse(i['id'] for i in images)
-        image_create_data = [Command.create({
-                    'name': image.name,                          # Images uploaded from url do not have any datas. This recovers them manually
-                    'image_1920': image.datas if image.datas else request.env['ir.qweb.field.image'].load_remote_url(image.url),
-                }) for image in image_ids]
+        if type == 'image':  # Image case
+            image_ids = request.env["ir.attachment"].browse(i['id'] for i in media)
+            media_create_data = [Command.create({
+                'name': image.name,   # Images uploaded from url do not have any datas. This recovers them manually
+                'image_1920': image.datas
+                    if image.datas
+                    else request.env['ir.qweb.field.image'].load_remote_url(image.url),
+            }) for image in image_ids]
+        elif type == 'video':  # Video case
+            video_data = media[0]
+            thumbnail = None
+            if video_data.get('src'):  # Check if a valid video URL is provided
+                try:
+                    thumbnail = base64.b64encode(get_video_thumbnail(video_data['src']))
+                except Exception:
+                    thumbnail = None
+            else:
+                raise ValidationError(_("Invalid video URL provided."))
+            media_create_data = [Command.create({
+                'name': video_data.get('name', 'Odoo Video'),
+                'video_url': video_data['src'],
+                'image_1920': thumbnail,
+            })]
 
         product_product = request.env['product.product'].browse(int(product_product_id)) if product_product_id else False
         product_template = request.env['product.template'].browse(int(product_template_id)) if product_template_id else False
@@ -525,11 +546,11 @@ class WebsiteSale(payment_portal.PaymentPortal):
                 product_product = product_template._create_product_variant(combination)
         if product_template.has_configurable_attributes and product_product and not all(pa.create_variant == 'no_variant' for pa in product_template.attribute_line_ids.attribute_id):
             product_product.write({
-                'product_variant_image_ids': image_create_data
+                'product_variant_image_ids': media_create_data
             })
         else:
             product_template.write({
-                'product_template_image_ids': image_create_data
+                'product_template_image_ids': media_create_data
             })
 
     @route(['/shop/product/clear-images'], type='jsonrpc', auth='user', website=True)
@@ -637,7 +658,8 @@ class WebsiteSale(payment_portal.PaymentPortal):
     @route(['/shop/product/is_add_to_cart_allowed'], type='jsonrpc', auth="public", website=True, readonly=True)
     def is_add_to_cart_allowed(self, product_id, **kwargs):
         product = request.env['product.product'].browse(product_id)
-        return product._is_add_to_cart_allowed()
+        # In sudo mode to check fields and conditions not accessible to the customer directly.
+        return product.sudo()._is_add_to_cart_allowed()
 
     def _product_get_query_url_kwargs(self, category, search, **kwargs):
         return {
@@ -740,238 +762,10 @@ class WebsiteSale(payment_portal.PaymentPortal):
                     order_sudo._recompute_prices()
         return request.redirect(redirect)
 
-    def _cart_values(self, **post):
-        """
-        This method is a hook to pass additional values when rendering the 'website_sale.cart' template (e.g. add
-        a flag to trigger a style variation)
-        """
-        return {}
-
-    @route(['/shop/cart'], type='http', auth="public", website=True, sitemap=False)
-    def cart(self, access_token=None, revive='', **post):
-        """
-        Main cart management + abandoned cart revival
-        access_token: Abandoned cart SO access token
-        revive: Revival method when abandoned cart. Can be 'merge' or 'squash'
-        """
-        if not request.website.has_ecommerce_access():
-            return request.redirect('/web/login')
-
-        order = request.website.sale_get_order()
-        if order and order.state != 'draft':
-            request.session['sale_order_id'] = None
-            order = request.website.sale_get_order()
-
-        request.session['website_sale_cart_quantity'] = order.cart_quantity
-
-        values = {}
-        if access_token:
-            abandoned_order = request.env['sale.order'].sudo().search([('access_token', '=', access_token)], limit=1)
-            if not abandoned_order:  # wrong token (or SO has been deleted)
-                raise NotFound()
-            if abandoned_order.state != 'draft':  # abandoned cart already finished
-                values.update({'abandoned_proceed': True})
-            elif revive == 'squash' or (revive == 'merge' and not request.session.get('sale_order_id')):  # restore old cart or merge with unexistant
-                request.session['sale_order_id'] = abandoned_order.id
-                return request.redirect('/shop/cart')
-            elif revive == 'merge':
-                abandoned_order.order_line.write({'order_id': request.session['sale_order_id']})
-                abandoned_order.action_cancel()
-            elif abandoned_order.id != request.session.get('sale_order_id'):  # abandoned cart found, user have to choose what to do
-                values.update({'access_token': abandoned_order.access_token})
-
-        values.update({
-            'website_sale_order': order,
-            'date': fields.Date.today(),
-            'suggested_products': [],
-        })
-        if order:
-            order.order_line.filtered(lambda sol: sol.product_id and not sol.product_id.active).unlink()
-            values['suggested_products'] = order._cart_accessories()
-            values.update(self._get_express_shop_payment_values(order))
-
-        values.update(self._cart_values(**post))
-        return request.render("website_sale.cart", values)
-
-    @route(['/shop/cart/update'], type='http', auth="public", methods=['POST'], website=True)
-    def cart_update(
-        self, product_id, add_qty=1, set_qty=0, product_custom_attribute_values=None,
-        no_variant_attribute_value_ids=None, **kwargs
-    ):
-        """This route is called when adding a product to cart (no options)."""
-        sale_order = request.website.sale_get_order(force_create=True)
-        if sale_order.state != 'draft':
-            request.session['sale_order_id'] = None
-            sale_order = request.website.sale_get_order(force_create=True)
-
-        if product_custom_attribute_values:
-            product_custom_attribute_values = json_scriptsafe.loads(product_custom_attribute_values)
-
-        # old API, will be dropped soon with product configurator refactorings
-        no_variant_attribute_values = kwargs.pop('no_variant_attribute_values', None)
-        if no_variant_attribute_values and no_variant_attribute_value_ids is None:
-            no_variants_attribute_values_data = json_scriptsafe.loads(no_variant_attribute_values)
-            no_variant_attribute_value_ids = [
-                int(ptav_data['value']) for ptav_data in no_variants_attribute_values_data
-            ]
-
-        sale_order._cart_update(
-            product_id=int(product_id),
-            add_qty=add_qty,
-            set_qty=set_qty,
-            product_custom_attribute_values=product_custom_attribute_values,
-            no_variant_attribute_value_ids=no_variant_attribute_value_ids,
-            **kwargs
-        )
-
-        request.session['website_sale_cart_quantity'] = sale_order.cart_quantity
-
-        return request.redirect("/shop/cart")
-
-    @route(['/shop/cart/update_json'], type='jsonrpc', auth="public", methods=['POST'], website=True)
-    def cart_update_json(
-        self, product_id, line_id=None, add_qty=None, set_qty=None, display=True,
-        product_custom_attribute_values=None, no_variant_attribute_value_ids=None, **kwargs
-    ):
-        """
-        This route is called :
-            - When changing quantity from the cart.
-            - When adding a product from the wishlist.
-            - When adding a product to cart on the same page (without redirection).
-        """
-        order = request.website.sale_get_order(force_create=True)
-        if order.state != 'draft':
-            request.website.sale_reset()
-            if kwargs.get('force_create'):
-                order = request.website.sale_get_order(force_create=True)
-            else:
-                return {}
-
-        if product_custom_attribute_values:
-            product_custom_attribute_values = json_scriptsafe.loads(product_custom_attribute_values)
-
-        # old API, will be dropped soon with product configurator refactorings
-        no_variant_attribute_values = kwargs.pop('no_variant_attribute_values', None)
-        if no_variant_attribute_values and no_variant_attribute_value_ids is None:
-            no_variants_attribute_values_data = json_scriptsafe.loads(no_variant_attribute_values)
-            no_variant_attribute_value_ids = [
-                int(ptav_data['value']) for ptav_data in no_variants_attribute_values_data
-            ]
-
-        values = order._cart_update(
-            product_id=product_id,
-            line_id=line_id,
-            add_qty=add_qty,
-            set_qty=set_qty,
-            product_custom_attribute_values=product_custom_attribute_values,
-            no_variant_attribute_value_ids=no_variant_attribute_value_ids,
-            **kwargs
-        )
-        # If the line is a combo product line, and it already has combo items, we need to update
-        # the combo item quantities as well.
-        line = request.env['sale.order.line'].browse(values['line_id'])
-        if line.product_type == 'combo' and line.linked_line_ids:
-            for linked_line_id in line.linked_line_ids:
-                if values['quantity'] != linked_line_id.product_uom_qty:
-                    order._cart_update(
-                        product_id=linked_line_id.product_id.id,
-                        line_id=linked_line_id.id,
-                        set_qty=values['quantity'],
-                    )
-
-        values['notification_info'] = self._get_cart_notification_information(order, [values['line_id']])
-        values['notification_info']['warning'] = values.pop('warning', '')
-        request.session['website_sale_cart_quantity'] = order.cart_quantity
-
-        if not order.cart_quantity:
-            request.website.sale_reset()
-            return values
-
-        values['cart_quantity'] = order.cart_quantity
-        values['minor_amount'] = payment_utils.to_minor_currency_units(
-            order.amount_total, order.currency_id
-        )
-        values['amount'] = order.amount_total
-
-        if not display:
-            return values
-
-        values['cart_ready'] = order._is_cart_ready()
-        values['website_sale.cart_lines'] = request.env['ir.ui.view']._render_template(
-            "website_sale.cart_lines", {
-                'website_sale_order': order,
-                'date': fields.Date.today(),
-                'suggested_products': order._cart_accessories()
-            }
-        )
-        values['website_sale.total'] = request.env['ir.ui.view']._render_template(
-            "website_sale.total", {
-                'website_sale_order': order,
-            }
-        )
-        return values
-
     @route('/shop/save_shop_layout_mode', type='jsonrpc', auth='public', website=True)
     def save_shop_layout_mode(self, layout_mode):
         assert layout_mode in ('grid', 'list'), "Invalid shop layout mode"
         request.session['website_sale_shop_layout_mode'] = layout_mode
-
-    @route(['/shop/cart/quantity'], type='jsonrpc', auth="public", methods=['POST'], website=True)
-    def cart_quantity(self):
-        if 'website_sale_cart_quantity' not in request.session:
-            return request.website.sale_get_order().cart_quantity
-        return request.session['website_sale_cart_quantity']
-
-    @route(['/shop/cart/clear'], type='jsonrpc', auth="public", website=True)
-    def clear_cart(self):
-        order = request.website.sale_get_order()
-        for line in order.order_line:
-            line.unlink()
-
-    def _get_cart_notification_information(self, order, line_ids):
-        """ Get the information about the sale order lines to show in the notification.
-
-        :param recordset order: The sale order containing the lines.
-        :param list(int) line_ids: The ids of the lines to display in the notification.
-        :rtype: dict
-        :return: A dict with the following structure:
-            {
-                'currency_id': int
-                'lines': [{
-                    'id': int
-                    'image_url': int
-                    'quantity': float
-                    'name': str
-                    'description': str
-                    'line_price_total': float
-                }],
-            }
-        """
-        lines = order.order_line.filtered(lambda line: line.id in line_ids)
-        if not lines:
-            return {}
-
-        show_tax = order.website_id.show_line_subtotals_tax_selection == 'tax_included'
-        return {
-            'currency_id': order.currency_id.id,
-            'lines': [
-                { # For the cart_notification
-                    'id': line.id,
-                    'image_url': order.website_id.image_url(line.product_id, 'image_128'),
-                    'quantity': line._get_displayed_quantity(),
-                    'name': line.name_short,
-                    'description': line._get_sale_order_line_multiline_description_variants(),
-                    'line_price_total': line.price_total if show_tax else line.price_subtotal,
-                    **self._get_additional_notification_information(line),
-                } for line in lines
-            ],
-        }
-
-    def _get_additional_notification_information(self, line):
-        # Only set the linked line id for combo items, not for optional products.
-        if line.combo_item_id:
-            return {'linked_line_id': line.linked_line_id.id}
-        return {}
 
     # ------------------------------------------------------
     # Checkout
@@ -1775,30 +1569,6 @@ class WebsiteSale(payment_portal.PaymentPortal):
         return request.render("website_sale.extra_info", values)
 
     # === CHECKOUT FLOW - PAYMENT/CONFIRMATION METHODS === #
-
-    def _get_express_shop_payment_values(self, order, **kwargs):
-        payment_form_values = sale_portal.CustomerPortal._get_payment_values(
-            self, order, website_id=request.website.id, is_express_checkout=True
-        )
-        payment_form_values.update({
-            'payment_access_token': payment_form_values.pop('access_token'),  # Rename the key.
-            'minor_amount': payment_utils.to_minor_currency_units(
-                order.amount_total, order.currency_id
-            ),
-            'merchant_name': request.website.name,
-            'transaction_route': f'/shop/payment/transaction/{order.id}',
-            'express_checkout_route': self._express_checkout_route,
-            'landing_route': '/shop/payment/validate',
-            'payment_method_unknown_id': request.env.ref('payment.payment_method_unknown').id,
-            'shipping_info_required': order._has_deliverable_products(),
-            'delivery_amount': payment_utils.to_minor_currency_units(
-                order.order_line.filtered(lambda l: l.is_delivery).price_total, order.currency_id
-            ),
-            'shipping_address_update_route': self._express_checkout_delivery_route,
-        })
-        if request.website.is_public_user():
-            payment_form_values['partner_id'] = -1
-        return payment_form_values
 
     def _get_shop_payment_values(self, order, **kwargs):
         checkout_page_values = {

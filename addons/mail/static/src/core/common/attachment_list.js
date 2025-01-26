@@ -1,4 +1,4 @@
-import { Component, useState } from "@odoo/owl";
+import { Component } from "@odoo/owl";
 import { isMobileOS } from "@web/core/browser/feature_detection";
 
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
@@ -37,7 +37,7 @@ export class AttachmentList extends Component {
 
     setup() {
         super.setup();
-        this.ui = useState(useService("ui"));
+        this.ui = useService("ui");
         // Arbitrary high value, this is effectively a max-width.
         this.imagesWidth = 1920;
         this.dialog = useService("dialog");
@@ -100,6 +100,10 @@ export class AttachmentList extends Component {
             cancel: () => {},
             confirm: () => this.onConfirmUnlink(attachment),
         });
+    }
+
+    onClickAttachment(attachment) {
+        this.fileViewer.open(attachment, this.props.attachments);
     }
 
     /**

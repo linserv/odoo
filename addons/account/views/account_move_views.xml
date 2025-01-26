@@ -411,6 +411,7 @@
                     <field name="move_type" column_invisible="True"/>
                     <field name="is_same_currency" column_invisible="True"/>
                     <field name="is_account_reconcile" column_invisible="True"/>
+                    <field name="currency_id" groups="!base.group_multi_currency" column_invisible="True"/>
                     <groupby name="partner_id">
                         <button name="edit" type="edit" icon="fa-edit" title="Edit"/>
                     </groupby>
@@ -473,7 +474,7 @@
                     <field name="made_sequence_gap" column_invisible="True"/>
                     <field name="invoice_date" string="Invoice Date" optional="hide" readonly="state != 'draft'"/>
                     <field name="date" readonly="state in ['cancel', 'posted']"/>
-                    <field name="name" decoration-danger="made_sequence_gap and state == 'posted'"/>
+                    <field name="name" decoration-danger="made_sequence_gap and state == 'posted'" widget="char_with_placeholder_field" placeholder="/"/>
                     <field name="partner_id" optional="show" readonly="state != 'draft'"/>
                     <field name="ref" optional="show"/>
                     <field name="journal_id"/>
@@ -1146,8 +1147,7 @@
                                                options="{'product_field': 'product_id', 'account_field': 'account_id', 'amount_field': 'price_subtotal'}"
                                                business_domain_compute="parent.move_type in ['out_invoice', 'out_refund', 'out_receipt'] and 'invoice' or parent.move_type in ['in_invoice', 'in_refund', 'in_receipt'] and 'bill' or 'general'"/>
                                         <field name="quantity" optional="show"/>
-                                        <field name="product_uom_category_id" column_invisible="True"/>
-                                        <field name="product_uom_id" string="UoM" groups="uom.group_uom" optional="show" width="92px"/>
+                                        <field name="product_uom_id" groups="uom.group_uom" optional="show" width="92px" options="{'no_create': True}" widget="many2one_uom"/>
                                         <!-- /l10n_in_edi.test_edi_json -->
                                         <!-- required for @api.onchange('product_id') -->
                                         <field name="product_uom_id" column_invisible="True"/>
@@ -1198,7 +1198,7 @@
                                                                 <div class="text-muted">
                                                                     Quantity:
                                                                     <field name="quantity"/>
-                                                                    <field name="product_uom_id" groups="uom.group_uom"/>
+                                                                    <field name="product_uom_id" groups="uom.group_uom" widget="many2one_uom"/>
                                                                 </div>
                                                                 <div class="text-muted">
                                                                     Unit Price:
@@ -1236,8 +1236,7 @@
                                                 <label for="name" string="Note" invisible="display_type != 'line_note'"/>
                                                 <field name="name" widget="text" nolabel="1"/>
                                                 <field name="quantity"/>
-                                                <field name="product_uom_category_id" invisible="1"/>
-                                                <field name="product_uom_id" groups="uom.group_uom"/>
+                                                <field name="product_uom_id" groups="uom.group_uom" widget="many2one_uom"/>
                                                 <field name="price_unit"/>
                                                 <field name="discount" string="Disc.%"/>
                                             </group>
@@ -1801,6 +1800,7 @@
             <field name="context">{'journal_type':'general', 'search_default_posted':1}</field>
             <field name="name">Journal Items</field>
             <field name="res_model">account.move.line</field>
+            <field name="path">items</field>
             <field name="domain">[('display_type', 'not in', ('line_section', 'line_note')), ('parent_state', '!=', 'cancel')]</field>
             <field name="view_id" ref="view_move_line_tree"/>
             <field name="view_mode">list,pivot,graph,kanban</field>
@@ -1811,6 +1811,7 @@
         <record id="action_move_journal_line" model="ir.actions.act_window">
             <field name="name">Journal Entries</field>
             <field name="res_model">account.move</field>
+            <field name="path">entries</field>
             <field name="view_mode">list,kanban,form,activity</field>
             <field name="view_id" ref="view_move_tree"/>
             <field name="search_view_id" ref="view_account_move_filter"/>
@@ -1862,10 +1863,10 @@
             </field>
         </record>
 
-        <record id="action_move_out_refund_type" model="ir.actions.act_window">
+        <record id="action_move_out_refund_type_non_legacy" model="ir.actions.act_window">
             <field name="name">Credit Notes</field>
             <field name="res_model">account.move</field>
-            <field name="path">credit-notes</field>
+            <field name="path">customer-credit-notes</field>
             <field name="view_mode">list,kanban,form,activity</field>
             <field name="view_id" ref="view_out_credit_note_tree"/>
             <field name="search_view_id" ref="view_account_invoice_filter"/>
@@ -1923,6 +1924,7 @@
         <record id="action_move_in_refund_type" model="ir.actions.act_window">
             <field name="name">Refunds</field>
             <field name="res_model">account.move</field>
+            <field name="path">vendor-refunds</field>
             <field name="view_mode">list,kanban,form,activity</field>
             <field name="view_id" ref="view_in_invoice_refund_tree"/>
             <field name="search_view_id" ref="view_account_bill_filter"/>
@@ -1956,6 +1958,7 @@
         <record id="action_move_out_receipt_type" model="ir.actions.act_window">
             <field name="name">Receipts</field>
             <field name="res_model">account.move</field>
+            <field name="path">customer-receipts</field>
             <field name="view_mode">list,kanban,form,activity</field>
             <field name="view_id" ref="view_invoice_tree"/>
             <field name="search_view_id" ref="view_account_invoice_filter"/>
@@ -1974,6 +1977,7 @@
         <record id="action_move_in_receipt_type" model="ir.actions.act_window">
             <field name="name">Receipts</field>
             <field name="res_model">account.move</field>
+            <field name="path">vendor-receipts</field>
             <field name="view_mode">list,kanban,form,activity</field>
             <field name="view_id" ref="view_in_invoice_receipt_tree"/>
             <field name="search_view_id" ref="view_account_invoice_filter"/>
@@ -2040,6 +2044,26 @@ if records:
             <field name="state">code</field>
             <field name="code">
                 action = env.company._action_check_hash_integrity()
+            </field>
+        </record>
+
+        <!-- ============= LEGACY (kept to not break the previous action with their path ================-->
+        <record id="action_move_out_refund_type" model="ir.actions.act_window">
+            <field name="name">Credit Notes</field>
+            <field name="res_model">account.move</field>
+            <field name="path">credit-notes</field>
+            <field name="view_mode">list,kanban,form,activity</field>
+            <field name="view_id" ref="view_out_credit_note_tree"/>
+            <field name="search_view_id" ref="view_account_invoice_filter"/>
+            <field name="domain">[('move_type', 'in', ['out_invoice', 'out_refund'])]</field>
+            <field name="context">{'search_default_out_refund': 1, 'default_move_type': 'out_refund', 'display_account_trust': True}</field>
+            <field name="help" type="html">
+              <p class="o_view_nocontent_smiling_face">
+                Create a credit note
+              </p><p>
+                Note that the easiest way to create a credit note is to do it directly
+                from the customer invoice.
+              </p>
             </field>
         </record>
 

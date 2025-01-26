@@ -49,7 +49,7 @@ export class Discuss extends Component {
 
     setup() {
         super.setup();
-        this.store = useState(useService("mail.store"));
+        this.store = useService("mail.store");
         this.messageHighlight = useMessageHighlight();
         this.messageEdition = useMessageEdition();
         this.messageToReplyTo = useMessageToReplyTo();
@@ -58,7 +58,7 @@ export class Discuss extends Component {
         this.state = useState({ jumpThreadPresent: 0 });
         this.orm = useService("orm");
         this.effect = useService("effect");
-        this.ui = useState(useService("ui"));
+        this.ui = useService("ui");
         useSubEnv({
             inDiscussApp: true,
             messageHighlight: this.messageHighlight,
@@ -84,7 +84,7 @@ export class Discuss extends Component {
                         return;
                     }
                     if (isSmall) {
-                        this.chatWindow = this.thread.openChatWindow();
+                        this.chatWindow = this.thread.openChatWindow({ focus: true });
                     } else {
                         this.chatWindow?.close();
                     }

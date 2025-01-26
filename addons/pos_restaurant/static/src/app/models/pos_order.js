@@ -42,7 +42,7 @@ patch(PosOrder.prototype, {
             if (this.getTable()) {
                 const table = this.getTable();
                 const child_tables = this.models["restaurant.table"].filter((t) => {
-                    if (t.floor_id.id === table.floor_id.id) {
+                    if (t.floor_id && t.floor_id.id === table.floor_id.id) {
                         return table.isParent(t);
                     }
                 });
@@ -65,5 +65,11 @@ patch(PosOrder.prototype, {
     },
     get isFilledDirectSale() {
         return this.isDirectSale && !this.isEmpty();
+    },
+    setPartner(partner) {
+        if (this.config.module_pos_restaurant && this.isDirectSale) {
+            this.floating_order_name = partner.name;
+        }
+        return super.setPartner(...arguments);
     },
 });

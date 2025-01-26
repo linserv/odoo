@@ -177,9 +177,9 @@ class AccountAccruedOrdersWizard(models.TransientModel):
                 for order_line in lines:
                     if is_purchase:
                         account = self._get_computed_account(order, order_line.product_id, is_purchase)
-                        if any(tax.price_include for tax in order_line.taxes_id):
+                        if any(tax.price_include for tax in order_line.tax_ids):
                             # As included taxes are not taken into account in the price_unit, we need to compute the price_subtotal
-                            price_subtotal = order_line.taxes_id.compute_all(
+                            price_subtotal = order_line.tax_ids.compute_all(
                                 order_line.price_unit,
                                 currency=order_line.order_id.currency_id,
                                 quantity=order_line.qty_to_invoice,
@@ -238,6 +238,7 @@ class AccountAccruedOrdersWizard(models.TransientModel):
             'journal_id': self.journal_id.id,
             'date': self.date,
             'line_ids': move_lines,
+            'currency_id': orders.currency_id.id or self.company_id.currency_id.id,
         }
         return move_vals, orders_with_entries
 
@@ -246,6 +247,9 @@ class AccountAccruedOrdersWizard(models.TransientModel):
 
         if self.reversal_date <= self.date:
             raise UserError(_('Reversal date must be posterior to date.'))
+        orders = self.env[self._context['active_model']].with_company(self.company_id).browse(self._context['active_ids'])
+        if len({order.currency_id or order.company_id.currency_id for order in orders}) != 1:
+            raise UserError(_('Cannot create an accrual entry with orders in different currencies.'))
 
         move_vals, orders_with_entries = self._compute_move_vals()
         move = self.env['account.move'].create(move_vals)

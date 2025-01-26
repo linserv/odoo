@@ -1,6 +1,6 @@
-import { cleanTerm, prettifyMessageContent } from "@mail/utils/common/format";
 import { Store as BaseStore, makeStore, Record } from "@mail/core/common/record";
 import { threadCompareRegistry } from "@mail/core/common/thread_compare";
+import { cleanTerm, prettifyMessageContent } from "@mail/utils/common/format";
 
 import { reactive } from "@odoo/owl";
 
@@ -11,6 +11,7 @@ import { user } from "@web/core/user";
 import { Deferred, Mutex } from "@web/core/utils/concurrency";
 import { debounce } from "@web/core/utils/timing";
 import { session } from "@web/session";
+import { browser } from "@web/core/browser/browser";
 
 /**
  * @typedef {{isSpecial: boolean, channel_types: string[], label: string, displayName: string, description: string}} SpecialMention
@@ -70,6 +71,8 @@ export class Store extends BaseStore {
     Persona;
     /** @type {typeof import("@mail/core/common/country_model").Country} */
     ["res.country"];
+    /** @type {typeof import("@mail/core/common/res_groups_model").ResGroups} */
+    ["res.groups"];
     /** @type {typeof import("@mail/core/common/settings_model").Settings} */
     Settings;
     /** @type {typeof import("@mail/core/common/thread_model").Thread} */
@@ -110,11 +113,12 @@ export class Store extends BaseStore {
     openInviteThread = Record.one("Thread");
 
     fetchDeferred = new Deferred();
-    fetchParams = {};
+    /** @type {[string | [string, any]]} */
+    fetchParams = [];
     fetchReadonly = true;
     fetchSilent = true;
 
-    cannedReponses = this.makeCachedFetchData({ canned_responses: true });
+    cannedReponses = this.makeCachedFetchData("mail.canned.response");
 
     specialMentions = [
         {
@@ -126,11 +130,25 @@ export class Store extends BaseStore {
         },
     ];
 
-    get initMessagingParams() {
-        return {
-            init_messaging: {},
-        };
-    }
+    isNotificationPermissionDismissed = Record.attr(false, {
+        compute() {
+            return (
+                browser.localStorage.getItem("mail.user_setting.push_notification_dismissed") ===
+                "true"
+            );
+        },
+        /** @this {import("models").DiscussApp} */
+        onUpdate() {
+            if (this.isNotificationPermissionDismissed) {
+                browser.localStorage.setItem(
+                    "mail.user_setting.push_notification_dismissed",
+                    "true"
+                );
+            } else {
+                browser.localStorage.removeItem("mail.user_setting.push_notification_dismissed");
+            }
+        },
+    });
 
     messagePostMutex = new Mutex();
 
@@ -199,36 +217,40 @@ export class Store extends BaseStore {
     }
 
     /**
+     * @param {string} name
+     * @param {any} params
      * @returns {Deferred}
      */
-    async fetchData(params, { readonly = true, silent = true } = {}) {
-        Object.assign(this.fetchParams, params);
+    async fetchStoreData(name, params, { readonly = true, silent = true } = {}) {
+        this.fetchParams.push(params ? [name, params] : name);
         this.fetchReadonly = this.fetchReadonly && readonly;
         this.fetchSilent = this.fetchSilent && silent;
         const fetchDeferred = this.fetchDeferred;
-        this._fetchDataDebounced();
+        this._fetchStoreDataDebounced();
         return fetchDeferred;
     }
 
     /** Import data received from init_messaging */
     async initialize() {
-        await this.fetchData(this.initMessagingParams);
+        this.chatHub.init();
+        await this.fetchStoreData("init_messaging");
         this.isReady.resolve();
     }
 
     /**
-     * Create a cacheable version of the `fetchData` method. The result of the
+     * Create a cacheable version of the `fetchStoreData` method. The result of the
      * request is cached once acquired. In case of failure, the deferred is
      * rejected and the cache is reset allowing to retry the request when
      * calling the function again.
      *
-     * @param {{[key: string]: boolean}} params Parameters to pass to the `fetchData` method.
+     * @param {string} name
+     * @param {*} params Parameters to pass to the `fetchStoreData` method.
      * @returns {{
-     *      fetch: () => ReturnType<Store["fetchData"]>,
+     *      fetch: () => ReturnType<Store["fetchStoreData"]>,
      *      status: "not_fetched"|"fetching"|"fetched"
      * }}
      */
-    makeCachedFetchData(params) {
+    makeCachedFetchData(name, params) {
         let def = null;
         const r = reactive({
             status: "not_fetched",
@@ -238,7 +260,7 @@ export class Store extends BaseStore {
                 }
                 r.status = "fetching";
                 def = new Deferred();
-                this.fetchData(params).then(
+                this.fetchStoreData(name, params).then(
                     (result) => {
                         r.status = "fetched";
                         def.resolve(result);
@@ -254,15 +276,15 @@ export class Store extends BaseStore {
         return r;
     }
 
-    async _fetchDataDebounced() {
+    _fetchStoreDataDebounced() {
         const fetchDeferred = this.fetchDeferred;
-        this.fetchParams.context = {
-            ...user.context,
-            ...this.fetchParams.context,
-        };
-        rpc(this.fetchReadonly ? "/mail/data" : "/mail/action", this.fetchParams, {
-            silent: this.fetchSilent,
-        }).then(
+        rpc(
+            this.fetchReadonly ? "/mail/data" : "/mail/action",
+            { fetch_params: this.fetchParams, context: user.context },
+            {
+                silent: this.fetchSilent,
+            }
+        ).then(
             (data) => {
                 const recordsByModel = this.insert(data, { html: true });
                 fetchDeferred.resolve(recordsByModel);
@@ -270,7 +292,7 @@ export class Store extends BaseStore {
             (error) => fetchDeferred.reject(error)
         );
         this.fetchDeferred = new Deferred();
-        this.fetchParams = {};
+        this.fetchParams = [];
         this.fetchReadonly = true;
         this.fetchSilent = true;
     }
@@ -353,7 +375,7 @@ export class Store extends BaseStore {
             ev.preventDefault();
             this.Thread.getOrFetch({ model, id }).then((thread) => {
                 if (thread) {
-                    thread.open();
+                    thread.open({ focus: true });
                 }
             });
             return true;
@@ -361,27 +383,14 @@ export class Store extends BaseStore {
             ev.preventDefault();
             this.openChat({ partnerId: id });
             return true;
-        } else if (ev.target.tagName === "A" && model && id) {
-            ev.preventDefault();
-            Promise.resolve(
-                this.env.services.action.doAction({
-                    type: "ir.actions.act_window",
-                    res_model: model,
-                    views: [[false, "form"]],
-                    res_id: id,
-                })
-            ).then(() => this.onLinkFollowed(thread));
-            return true;
         }
         return false;
     }
 
-    onLinkFollowed(fromThread) {}
-
     setup() {
         super.setup();
-        this._fetchDataDebounced = debounce(
-            this._fetchDataDebounced,
+        this._fetchStoreDataDebounced = debounce(
+            this._fetchStoreDataDebounced,
             Store.FETCH_DATA_DEBOUNCE_DELAY
         );
     }
@@ -398,9 +407,12 @@ export class Store extends BaseStore {
      */
     async getChat({ userId, partnerId }) {
         const partner = await this.getPartner({ userId, partnerId });
-        let chat = partner?.searchChat();
+        if (!partner) {
+            return;
+        }
+        let chat = partner.searchChat();
         if (!chat || !chat.is_pinned) {
-            chat = await this.joinChat(partnerId || partner?.id);
+            chat = await this.joinChat(partner.id);
         }
         if (!chat) {
             this.env.services.notification.add(
@@ -446,8 +458,14 @@ export class Store extends BaseStore {
      * Get the parameters to pass to the message post route.
      */
     async getMessagePostParams({ body, postData, thread }) {
-        const { attachments, cannedResponseIds, emailAddSignature, isNote, mentionedChannels, mentionedPartners } =
-            postData;
+        const {
+            attachments,
+            cannedResponseIds,
+            emailAddSignature,
+            isNote,
+            mentionedChannels,
+            mentionedPartners,
+        } = postData;
         const subtype = isNote ? "mail.mt_note" : "mail.mt_comment";
         const validMentions = this.getMentionsFromText(body, {
             mentionedChannels,
@@ -455,7 +473,6 @@ export class Store extends BaseStore {
         });
         const partner_ids = validMentions?.partners.map((partner) => partner.id) ?? [];
         const recipientEmails = [];
-        const recipientAdditionalValues = {};
         if (!isNote) {
             const recipientIds = thread.suggestedRecipients
                 .filter((recipient) => recipient.persona && recipient.checked)
@@ -464,7 +481,6 @@ export class Store extends BaseStore {
                 .filter((recipient) => recipient.checked && !recipient.persona)
                 .forEach((recipient) => {
                     recipientEmails.push(recipient.email);
-                    recipientAdditionalValues[recipient.email] = recipient.create_values;
                 });
             partner_ids.push(...recipientIds);
         }
@@ -484,9 +500,7 @@ export class Store extends BaseStore {
             postData.special_mentions = validMentions.specialMentions;
         }
         const params = {
-            context: {
-                mail_post_autofollow: !isNote && thread.hasWriteAccess,
-            },
+            // Changed in 18.2+: finally get rid of autofollow, following should be done manually
             post_data: postData,
             thread_id: thread.id,
             thread_model: thread.model,
@@ -500,7 +514,6 @@ export class Store extends BaseStore {
         if (recipientEmails.length) {
             Object.assign(params, {
                 partner_emails: recipientEmails,
-                partner_additional_values: recipientAdditionalValues,
             });
         }
         return params;
@@ -572,17 +585,20 @@ export class Store extends BaseStore {
     }
 
     async joinChat(id, forceOpen = false) {
-        const data = await rpc("/discuss/channel/get_or_create_chat", {
+        const { channel_id, data } = await rpc("/discuss/channel/get_or_create_chat", {
             partners_to: [id],
-            force_open: forceOpen,
         });
-        const { Thread } = this.store.insert(data);
-        return Thread[0];
+        this.store.insert(data);
+        const thread = this.store.Thread.get({ id: channel_id, model: "discuss.channel" });
+        if (forceOpen) {
+            thread.openChatWindow({ focus: true });
+        }
+        return thread;
     }
 
     async openChat(person) {
         const chat = await this.getChat(person);
-        chat?.open();
+        chat?.open({ focus: true });
     }
 
     openDocument({ id, model }) {
@@ -618,7 +634,7 @@ export class Store extends BaseStore {
 Store.register();
 
 export const storeService = {
-    dependencies: ["bus_service", "ui"],
+    dependencies: ["bus_service", "im_status", "ui"],
     /**
      * @param {import("@web/env").OdooEnv} env
      * @param {import("services").ServiceFactories} services

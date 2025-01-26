@@ -20,7 +20,7 @@ class StockForecasted_Product_Product(models.AbstractModel):
             'doc_ids': docids,
             'doc_model': 'product.product',
             'docs': self._get_report_data(product_ids=docids),
-            'precision': self.env['decimal.precision'].precision_get('Product Unit of Measure'),
+            'precision': self.env['decimal.precision'].precision_get('Product Unit'),
         }
 
     def _product_domain(self, product_template_ids, product_ids):
@@ -116,11 +116,7 @@ class StockForecasted_Product_Product(models.AbstractModel):
         assert product_template_ids or product_ids
         res = {}
 
-        if self.env.context.get('warehouse_id') and isinstance(self.env.context['warehouse_id'], int):
-            warehouse = self.env['stock.warehouse'].browse(self.env.context.get('warehouse_id'))
-        else:
-            warehouse = self.env['stock.warehouse'].search([['active', '=', True]])[0]
-
+        warehouse = self.env['stock.warehouse'].browse(self.env.context.get('warehouse_id', False)) or self.env['stock.warehouse'].search([['active', '=', True]])[0]
         wh_location_ids = [loc['id'] for loc in self.env['stock.location'].search_read(
             [('id', 'child_of', warehouse.view_location_id.id)],
             ['id'],
@@ -454,5 +450,5 @@ class StockForecasted_Product_Template(models.AbstractModel):
             'doc_ids': docids,
             'doc_model': 'product.template',
             'docs': self._get_report_data(product_template_ids=docids),
-            'precision': self.env['decimal.precision'].precision_get('Product Unit of Measure'),
+            'precision': self.env['decimal.precision'].precision_get('Product Unit'),
         }

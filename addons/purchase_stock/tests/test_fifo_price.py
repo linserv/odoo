@@ -25,7 +25,6 @@ class TestFifoPrice(ValuationReconciliationTestCommon):
             'list_price': 100.0,
             'standard_price': 70.0,
             'uom_id': self.env.ref('uom.product_uom_kgm').id,
-            'uom_po_id': self.env.ref('uom.product_uom_kgm').id,
             'supplier_taxes_id': [],
             'description': 'FIFO Ice Cream',
         })
@@ -215,7 +214,6 @@ class TestFifoPrice(ValuationReconciliationTestCommon):
             'list_price': 100.0,
             'standard_price': 70.0,
             'uom_id': self.env.ref('uom.product_uom_kgm').id,
-            'uom_po_id': self.env.ref('uom.product_uom_kgm').id,
             'supplier_taxes_id': [],
             'description': 'FIFO Ice Cream',
         })
@@ -343,7 +341,7 @@ class TestFifoPrice(ValuationReconciliationTestCommon):
                 'product_uom_id': super_product.uom_id.id,
                 'price_unit': super_product.standard_price,
                 'date_planned': time.strftime('%Y-%m-%d'),
-                'taxes_id': [(4, tax.id)],
+                'tax_ids': [(4, tax.id)],
             })],
         })
 

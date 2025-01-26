@@ -31,7 +31,7 @@ class PosSession(models.Model):
         'pos.config', string='Point of Sale',
         required=True,
         index=True)
-    name = fields.Char(string='Session ID', required=True, readonly=True, default='/')
+    name = fields.Char(string='Session ID', readonly=True, default='/')
     user_id = fields.Many2one(
         'res.users', string='Opened By',
         required=True,
@@ -93,18 +93,13 @@ class PosSession(models.Model):
     update_stock_at_closing = fields.Boolean('Stock should be updated at closing')
     bank_payment_ids = fields.One2many('account.payment', 'pos_session_id', 'Bank Payments', help='Account payments representing aggregated and bank split payments.')
 
-    _uniq_name = models.Constraint(
-        'unique(name)',
-        'The name of this POS Session must be unique!',
-    )
-
     @api.model
     def _load_pos_data_relations(self, model, fields):
         model_fields = self.env[model]._fields
         relations = {}
 
         for name, params in model_fields.items():
-            if name not in fields and len(fields) != 0:
+            if (name not in fields and len(fields)) or (params.manual and not len(fields)):
                 continue
 
             if params.comodel_name:
@@ -134,8 +129,8 @@ class PosSession(models.Model):
     def _load_pos_data_models(self, config_id):
         return ['pos.config', 'pos.preset', 'resource.calendar.attendance', 'pos.order', 'pos.order.line', 'pos.pack.operation.lot', 'pos.payment', 'pos.payment.method', 'pos.printer',
             'pos.category', 'pos.bill', 'res.company', 'account.tax', 'account.tax.group', 'product.template', 'product.product', 'product.attribute', 'product.attribute.custom.value',
-            'product.template.attribute.line', 'product.template.attribute.value', 'product.combo', 'product.combo.item', 'product.packaging', 'res.users', 'res.partner',
-            'decimal.precision', 'uom.uom', 'uom.category', 'res.country', 'res.country.state', 'res.lang', 'product.pricelist', 'product.pricelist.item', 'product.category',
+            'product.template.attribute.line', 'product.template.attribute.value', 'product.combo', 'product.combo.item', 'res.users', 'res.partner', 'product.uom',
+            'decimal.precision', 'uom.uom', 'res.country', 'res.country.state', 'res.lang', 'product.pricelist', 'product.pricelist.item', 'product.category',
             'account.cash.rounding', 'account.fiscal.position', 'account.fiscal.position.tax', 'stock.picking.type', 'res.currency', 'pos.note', 'ir.ui.view', 'product.tag', 'ir.module.module']
 
     @api.model
@@ -209,9 +204,9 @@ class PosSession(models.Model):
         pricelist_item_fields = self.env['product.pricelist.item']._load_pos_data_fields(config_id)
         today = fields.Date.today()
         pricelist_item_domain = [
-            '|',
-            ('company_id', '=', False),
-            ('company_id', '=', self.company_id.id),
+            '&',
+            ('pricelist_id', 'in', self.config_id._get_available_pricelists().ids),
+            *self.env['product.pricelist.item']._check_company_domain(self.company_id),
             '|',
             '&', ('product_id', '=', False), ('product_tmpl_id', 'in', product_tmpl_ids),
             ('product_id', 'in', product_ids),
@@ -348,9 +343,6 @@ class PosSession(models.Model):
         """
         self.ensure_one()
 
-        if ref_prefix is None:
-            ref_prefix = _("Order")
-
         sequence_num = int(self.order_seq_id._next())
 
         YY = fields.Datetime.now().strftime('%y')
@@ -358,7 +350,7 @@ class PosSession(models.Model):
         SSS = f"{self.id:03}"
         F = 0  # -> means server-generated pos_reference
         OOOO = f"{sequence_num:04}"
-        order_ref = f"{ref_prefix} {YY}{LL}-{SSS}-{F}{OOOO}"
+        order_ref = f"{ref_prefix} {YY}{LL}-{SSS}-{F}{OOOO}" if ref_prefix else f"{YY}{LL}-{SSS}-{F}{OOOO}"
 
         return order_ref, sequence_num, tracking_prefix + f"{sequence_num:03}"
 
@@ -375,16 +367,9 @@ class PosSession(models.Model):
             # the .xml files as the CoA is not yet installed.
             pos_config = self.env['pos.config'].browse(config_id)
 
-            pos_name = self.env['ir.sequence'].with_context(
-                company_id=pos_config.company_id.id
-            ).next_by_code('pos.session')
-            if vals.get('name'):
-                pos_name += ' ' + vals['name']
-
             update_stock_at_closing = pos_config.company_id.point_of_sale_update_stock_quantities == "closing"
 
             vals.update({
-                'name': pos_name,
                 'config_id': config_id,
                 'update_stock_at_closing': update_stock_at_closing,
             })
@@ -420,10 +405,13 @@ class PosSession(models.Model):
             session.write(values)
         return True
 
+    def get_session_orders(self):
+        return self.order_ids
+
     def action_pos_session_closing_control(self, balancing_account=False, amount_to_balance=0, bank_payment_method_diffs=None):
         bank_payment_method_diffs = bank_payment_method_diffs or {}
         for session in self:
-            if any(order.state == 'draft' for order in session.order_ids):
+            if any(order.state == 'draft' for order in self.get_session_orders()):
                 raise UserError(_("You cannot close the POS when orders are still in draft"))
             if session.state == 'closed':
                 raise UserError(_('This session is already closed.'))
@@ -461,7 +449,7 @@ class PosSession(models.Model):
         self.ensure_one()
         data = {}
         sudo = self.env.user.has_group('point_of_sale.group_pos_user')
-        if self.order_ids.filtered(lambda o: o.state != 'cancel') or self.sudo().statement_line_ids:
+        if self.get_session_orders().filtered(lambda o: o.state != 'cancel') or self.sudo().statement_line_ids:
             self.cash_real_transaction = sum(self.sudo().statement_line_ids.mapped('amount'))
             if self.state == 'closed':
                 raise UserError(_('This session is already closed.'))
@@ -507,7 +495,7 @@ class PosSession(models.Model):
             self.sudo()._post_statement_difference(self.cash_register_difference)
 
         if self.config_id.order_edit_tracking:
-            edited_orders = self.order_ids.filtered(lambda o: o.is_edited)
+            edited_orders = self.get_session_orders().filtered(lambda o: o.is_edited)
             if len(edited_orders) > 0:
                 body = _("Edited order(s) during the session:%s",
                     Markup("<br/><ul>%s</ul>") % Markup().join(Markup("<li>%s</li>") % order._get_html_link() for order in edited_orders)
@@ -591,7 +579,7 @@ class PosSession(models.Model):
         self.ensure_one()
         # Even if this is called in `post_closing_cash_details`, we need to call this here too for case
         # where cash_control = False
-        open_order_ids = self.order_ids.filtered(lambda o: o.state == 'draft').ids
+        open_order_ids = self.get_session_orders().filtered(lambda o: o.state == 'draft').ids
         check_closing_session = self._cannot_close_session(bank_payment_method_diffs)
         if check_closing_session:
             check_closing_session['open_order_ids'] = open_order_ids
@@ -611,7 +599,7 @@ class PosSession(models.Model):
             }
 
         self.post_close_register_message()
-
+        self.config_id._notify(('CLOSING_SESSION', {'login_number': self.env.context.get('login_number', False)}))
         return {'successful': True}
 
     def post_close_register_message(self):
@@ -638,7 +626,7 @@ class PosSession(models.Model):
         self.ensure_one()
         check_closing_session = self._cannot_close_session()
         if check_closing_session:
-            open_order_ids = self.order_ids.filtered(lambda o: o.state == 'draft').ids
+            open_order_ids = self.get_session_orders().filtered(lambda o: o.state == 'draft').ids
             check_closing_session['open_order_ids'] = open_order_ids
             return check_closing_session
 
@@ -695,7 +683,7 @@ class PosSession(models.Model):
         It should return {'successful': False, 'message': str, 'redirect': bool} if we can't close the session
         """
         bank_payment_method_diffs = bank_payment_method_diffs or {}
-        if any(order.state == 'draft' for order in self.order_ids):
+        if any(order.state == 'draft' for order in self.get_session_orders()):
             return {'successful': False, 'message': _("You cannot close the POS when orders are still in draft"), 'redirect': False}
         if self.state == 'closed':
             return {
@@ -1327,7 +1315,7 @@ class PosSession(models.Model):
         accounts = all_lines.mapped('account_id')
         lines_by_account = [all_lines.filtered(lambda l: l.account_id == account and not l.reconciled) for account in accounts if account.reconcile]
         for lines in lines_by_account:
-            lines.reconcile()
+            lines.with_context(no_cash_basis=True).reconcile()
 
 
         for payment_method, lines in payment_method_to_receivable_lines.items():
@@ -1696,12 +1684,16 @@ class PosSession(models.Model):
     def set_opening_control(self, cashbox_value: int, notes: str):
         self.state = 'opened'
 
+        self.name = self.env['ir.sequence'].with_context(
+            company_id=self.config_id.company_id.id
+        ).next_by_code('pos.session') + (self.name if self.name != '/' else '')
+            
         cash_payment_method_ids = self.config_id.payment_method_ids.filtered(lambda pm: pm.is_cash_count)
         if cash_payment_method_ids:
             self.opening_notes = notes
             difference = cashbox_value - self.cash_register_balance_start
-            self.cash_register_balance_start = cashbox_value
             self._post_cash_details_message('Opening cash', self.cash_register_balance_start, difference, notes)
+            self.cash_register_balance_start = cashbox_value
         elif notes:
             message = _('Opening control message: ')
             message += notes
@@ -1748,7 +1740,7 @@ class PosSession(models.Model):
                 )
 
     def _check_if_no_draft_orders(self):
-        draft_orders = self.order_ids.filtered(lambda order: order.state == 'draft')
+        draft_orders = self.get_session_orders().filtered(lambda order: order.state == 'draft')
         if draft_orders:
             raise UserError(_(
                     'There are still orders in draft state in the session. '
@@ -1811,43 +1803,13 @@ class PosSession(models.Model):
 
         return res
 
-    def _get_pos_fallback_nomenclature_id(self):
-        """
-        Retrieve the fallback barcode nomenclature.
-        If a fallback_nomenclature_id is specified in the config parameters,
-        it retrieves the nomenclature with that ID. Otherwise, it retrieves
-        the first non-GS1 nomenclature if the main nomenclature is GS1.
-        """
-        def convert_to_int(string_value):
-            try:
-                return int(string_value)
-            except (TypeError, ValueError, OverflowError):
-                return None
-
-        fallback_nomenclature_id = self.env['ir.config_parameter'].sudo().get_param('point_of_sale.fallback_nomenclature_id')
-
-        if not self.company_id.nomenclature_id.is_gs1_nomenclature and not fallback_nomenclature_id:
-            return None
-
-        if fallback_nomenclature_id:
-            fallback_nomenclature_id = convert_to_int(fallback_nomenclature_id)
-            if not fallback_nomenclature_id or self.company_id.nomenclature_id.id == fallback_nomenclature_id:
-                return None
-            domain = [('id', '=', fallback_nomenclature_id)]
-        else:
-            domain = [('is_gs1_nomenclature', '=', False)]
-
-        record = self.env['barcode.nomenclature'].search(domain=domain, limit=1)
-
-        return record.id if record else None
-
     def _get_partners_domain(self):
         return []
 
     def find_product_by_barcode(self, barcode, config_id):
         product_fields = self.env['product.product']._load_pos_data_fields(config_id)
         product_template_fields = self.env['product.template']._load_pos_data_fields(config_id)
-        product_packaging_fields = self.env['product.packaging']._load_pos_data_fields(config_id)
+        packaging_fields = self.env['product.uom']._load_pos_data_fields(config_id)
         product_tmpl_attr_value_fields = self.env['product.template.attribute.value']._load_pos_data_fields(config_id)
         product_context = {**self.env.context, 'display_default_code': False}
         product = self.env['product.product'].search([
@@ -1872,18 +1834,18 @@ class PosSession(models.Model):
         packaging_params = {
             'search_params': {
                 'domain': domain,
-                'fields': ['name', 'barcode', 'product_id', 'qty'],
+                'fields': ['barcode', 'product_id', 'uom_id'],
             },
         }
         packaging_params['search_params']['domain'] = [['barcode', '=', barcode]]
-        packaging = self.env['product.packaging'].search(packaging_params['search_params']['domain'])
+        packaging = self.env['product.uom'].search(packaging_params['search_params']['domain'])
         product = packaging.product_id.with_context(product_context)
         condition = packaging and packaging.product_id
         return {
             'product.product': product.read(product_fields, load=False) if condition else [],
             'product.template.attribute.value': product.product_template_attribute_value_ids.read(product_tmpl_attr_value_fields, load=False) if condition else [],
             'product.template': product.product_tmpl_id.read(product_template_fields, load=False) if condition else [],
-            'product.packaging': packaging.read(product_packaging_fields, load=False) if condition else [],
+            'product.uom': packaging.read(packaging_fields, load=False) if condition else [],
         }
 
     def get_total_discount(self):
@@ -1934,5 +1896,15 @@ class ProcurementGroup(models.Model):
     def _run_scheduler_tasks(self, use_new_cursor=False, company_id=False):
         super(ProcurementGroup, self)._run_scheduler_tasks(use_new_cursor=use_new_cursor, company_id=company_id)
         self.env['pos.session']._alert_old_session()
+        if 'scheduler_task_done' in self._context:
+            task_done = self._context.get('scheduler_task_done', {'task_done': 0})['task_done'] + 1
+            self._context['scheduler_task_done']['task_done'] = task_done
+        else:
+            task_done = self._get_scheduler_tasks_to_do()
         if use_new_cursor:
+            self.env['ir.cron']._notify_progress(done=task_done, remaining=self._get_scheduler_tasks_to_do() - task_done)
             self.env.cr.commit()
+
+    @api.model
+    def _get_scheduler_tasks_to_do(self):
+        return super()._get_scheduler_tasks_to_do() + 1

@@ -45,18 +45,17 @@ export class ChatWindow extends Component {
 
     setup() {
         super.setup();
-        this.store = useState(useService("mail.store"));
+        this.store = useService("mail.store");
         this.messageEdition = useMessageEdition();
         this.messageHighlight = useMessageHighlight();
         this.messageToReplyTo = useMessageToReplyTo();
         this.state = useState({
-            actionsDisabled: false,
             actionsMenuOpened: false,
             jumpThreadPresent: 0,
             editingGuestName: false,
             editingName: false,
         });
-        this.ui = useState(useService("ui"));
+        this.ui = useService("ui");
         this.contentRef = useRef("content");
         this.threadActions = useThreadActions();
         this.actionsMenuButtonHover = useHover("actionsMenuButton");
@@ -136,7 +135,7 @@ export class ChatWindow extends Component {
     }
 
     onClickHeader() {
-        if (this.ui.isSmall || this.state.editingName || this.state.actionsDisabled) {
+        if (this.ui.isSmall || this.state.editingName || this.props.chatWindow.actionsDisabled) {
             return;
         }
         this.toggleFold();
@@ -144,15 +143,15 @@ export class ChatWindow extends Component {
 
     toggleFold() {
         const chatWindow = toRaw(this.props.chatWindow);
-        if (this.ui.isSmall || this.state.actionsMenuOpened) {
+        if (this.state.actionsMenuOpened) {
             return;
         }
         chatWindow.fold();
     }
 
-    async close(options) {
+    close(options) {
         const chatWindow = toRaw(this.props.chatWindow);
-        await chatWindow.close(options);
+        chatWindow.close(options);
     }
 
     get actionsMenuTitleText() {

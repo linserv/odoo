@@ -95,9 +95,6 @@
             'project/static/tests/project_models.js',
             'project/static/tests/**/*.test.js',
         ],
-        'web.qunit_suite_tests': [
-            'project/static/tests/tours/**/*',
-        ],
         'web.assets_tests': [
             'project/static/tests/tours/**/*',
         ],
@@ -195,7 +192,6 @@
             'web/static/src/views/form/button_box/*.scss',
 
             'bus/static/src/**/*.js',
-            ('remove', 'bus/static/src/components/**/*'),
 
             # To be able to launch tour js in project sharing
             'web_tour/static/src/tour_pointer/**/*',

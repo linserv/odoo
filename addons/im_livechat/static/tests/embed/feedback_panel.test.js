@@ -1,4 +1,3 @@
-import { waitNotifications } from "@bus/../tests/bus_test_helpers";
 import {
     defineLivechatModels,
     loadDefaultEmbedConfig,
@@ -18,9 +17,11 @@ import { describe, expect, test } from "@odoo/hoot";
 import {
     asyncStep,
     Command,
+    getService,
     mountWithCleanup,
     serverState,
     waitForSteps,
+    withUser,
 } from "@web/../tests/web_test_helpers";
 
 describe.current.tags("desktop");
@@ -58,6 +59,28 @@ test("Close without feedback", async () => {
     await waitForSteps(["/im_livechat/visitor_leave_session"]);
 });
 
+test("Last operator leaving ends the livechat", async () => {
+    await startServer();
+    await loadDefaultEmbedConfig();
+    const operatorUserId = serverState.userId;
+    await start({ authenticateAs: false });
+    await mountWithCleanup(LivechatButton);
+    await click(".o-livechat-LivechatButton");
+    await contains(".o-mail-ChatWindow");
+    await insertText(".o-mail-Composer-input", "Hello World!");
+    triggerHotkey("Enter");
+    await contains(".o-mail-Message-content", { text: "Hello World!" });
+    // simulate operator leaving
+    await withUser(operatorUserId, () =>
+        getService("orm").call("discuss.channel", "action_unfollow", [
+            [getService("im_livechat.livechat").thread.id],
+        ])
+    );
+    await contains("span", { text: "This livechat conversation has ended" });
+    await click("[title*='Close Chat Window']");
+    await contains("p", { text: "Did we correctly answer your question?" }); // shows immediately feedback
+});
+
 test("Feedback with rating and comment", async () => {
     await startServer();
     await loadDefaultEmbedConfig();
@@ -91,14 +114,13 @@ test("Feedback with rating and comment", async () => {
 test("Closing folded chat window should open it with feedback", async () => {
     await startServer();
     await loadDefaultEmbedConfig();
-    const env = await start({ authenticateAs: false });
+    await start({ authenticateAs: false });
     await mountWithCleanup(LivechatButton);
     await click(".o-livechat-LivechatButton");
     await insertText(".o-mail-Composer-input", "Hello World!");
     triggerHotkey("Enter");
     await contains(".o-mail-Message-content", { text: "Hello World!" });
     await click("[title='Fold']");
-    await waitNotifications([env, "discuss.Thread/fold_state"]);
     await click(".o-mail-ChatBubble");
     await click("[title*='Close Chat Window']");
     await click(".o-livechat-CloseConfirmation-leave");

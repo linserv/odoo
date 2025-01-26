@@ -3,7 +3,6 @@
 from odoo import models
 from odoo.http import request
 from odoo.tools import format_datetime, groupby
-from odoo.addons.portal.utils import get_portal_partner
 
 
 class MailMessage(models.Model):
@@ -120,8 +119,9 @@ class MailMessage(models.Model):
                                         for guest in reactions.guest_id
                                     ]
                                     + [
+                                        # sudo: res.partner - reading partners of reaction on accessible message is allowed
                                         {"id": partner.id, "name": partner.name, "type": "partner"}
-                                        for partner in reactions.partner_id
+                                        for partner in reactions.partner_id.sudo()
                                     ],
                         "message": message.id,
                     }
@@ -155,14 +155,3 @@ class MailMessage(models.Model):
             'video' in (attachment_values["mimetype"] or "")
             else attachment_values["mimetype"])
         return attachment_values
-
-    def _is_editable_in_portal(self, **kwargs):
-        self.ensure_one()
-        if self.model and self.res_id and self.env.user._is_public():
-            thread = request.env[self.model].browse(self.res_id)
-            partner = get_portal_partner(
-                thread, kwargs.get("hash"), kwargs.get("pid"), kwargs.get("token")
-            )
-            if partner and self.author_id == partner:
-                return True
-        return False

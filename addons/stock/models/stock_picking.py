@@ -524,6 +524,15 @@ class StockPickingType(models.Model):
             }]
             picking_type.kanban_dashboard_graph = json.dumps(graph_data)
 
+    def _get_code_report_name(self):
+        self.ensure_one()
+        code_names = {
+            'outgoing': _('Delivery Note'),
+            'incoming': _('Goods Receipt Note'),
+            'internal': _('Internal Move'),
+        }
+        return code_names.get(self.code)
+
 
 class StockPicking(models.Model):
     _name = 'stock.picking'
@@ -1054,6 +1063,17 @@ class StockPicking(models.Model):
                     'message': partner.picking_warn_msg
                 }}
 
+    @api.onchange('location_dest_id')
+    def _onchange_location_dest_id(self):
+        moves = self.move_ids_without_package
+        if any(not move._origin for move in moves):
+            # Because of an ORM limitation, the new SM defined in self.move_ids_without_package are not set in
+            # self.move_ids. Since the user edits the destination location, the ORM will check which SM must be
+            # recomputed (cf dependencies of SM._compute_location_dest_id). But, to do so, the ORM will look at
+            # self.move_ids, i.e.: it will not call the compute method for the new SM. We therefore have to
+            # manually trigger the compute method
+            self.env.add_to_compute(moves._fields['location_dest_id'], moves)
+
     @api.onchange('location_id')
     def _onchange_location_id(self):
         for move in self.move_ids.filtered(lambda m: m.move_orig_ids):
@@ -1344,7 +1364,7 @@ class StockPicking(models.Model):
         pickings_without_lots = self.browse()
         products_without_lots = self.env['product.product']
         pickings_without_moves = self.filtered(lambda p: not p.move_ids and not p.move_line_ids)
-        precision_digits = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        precision_digits = self.env['decimal.precision'].precision_get('Product Unit')
 
         no_quantities_done_ids = set()
         pickings_without_quantities = self.env['stock.picking']
@@ -1514,7 +1534,7 @@ class StockPicking(models.Model):
         return True
 
     def _check_backorder(self):
-        prec = self.env["decimal.precision"].precision_get("Product Unit of Measure")
+        prec = self.env["decimal.precision"].precision_get("Product Unit")
         backorder_pickings = self.browse()
         for picking in self:
             if picking.picking_type_id.create_backorder != 'ask':

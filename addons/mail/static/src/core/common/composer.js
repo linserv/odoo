@@ -100,12 +100,12 @@ export class Composer extends Component {
                     .join(" + "),
             })
         );
-        this.store = useState(useService("mail.store"));
+        this.store = useService("mail.store");
         this.attachmentUploader = useAttachmentUploader(
             this.thread ?? this.props.composer.message.thread,
             { composer: this.props.composer }
         );
-        this.ui = useState(useService("ui"));
+        this.ui = useService("ui");
         this.ref = useRef("textarea");
         this.fakeTextarea = useRef("fakeTextarea");
         this.inputContainerRef = useRef("input-container");
@@ -123,7 +123,8 @@ export class Composer extends Component {
                     isEventHandled(ev, "emoji.selectEmoji") ||
                     isEventHandled(ev, "Composer.onClickAddEmoji") ||
                     isEventHandled(ev, "composer.clickOnAddAttachment") ||
-                    isEventHandled(ev, "composer.selectSuggestion")
+                    isEventHandled(ev, "composer.selectSuggestion") ||
+                    isEventHandled(ev, "composer.clickInsertCannedResponse")
                 );
             },
         });
@@ -151,10 +152,15 @@ export class Composer extends Component {
             { capture: true }
         );
         if (this.props.dropzoneRef) {
-            useCustomDropzone(this.props.dropzoneRef, MailAttachmentDropzone, {
-                extraClass: "o-mail-Composer-dropzone",
-                onDrop: this.onDropFile,
-            }, () => this.allowUpload);
+            useCustomDropzone(
+                this.props.dropzoneRef,
+                MailAttachmentDropzone,
+                {
+                    extraClass: "o-mail-Composer-dropzone",
+                    onDrop: this.onDropFile,
+                },
+                () => this.allowUpload
+            );
         }
         if (this.props.messageEdition) {
             this.props.messageEdition.composerOfThread = this;
@@ -395,14 +401,21 @@ export class Composer extends Component {
             case "mail.canned.response":
                 return {
                     ...props,
-                    autoSelectFirst: false,
-                    hint: _t("Tab to select"),
                     optionTemplate: "mail.Composer.suggestionCannedResponse",
                     options: suggestions.map((suggestion) => ({
                         cannedResponse: suggestion,
                         source: suggestion.source,
                         label: suggestion.substitution,
                         classList: "o-mail-Composer-suggestion",
+                    })),
+                };
+            case "emoji":
+                return {
+                    ...props,
+                    optionTemplate: "mail.Composer.suggestionEmoji",
+                    options: suggestions.map((suggestion) => ({
+                        emoji: suggestion,
+                        label: suggestion.codepoints,
                     })),
                 };
             default:
@@ -493,14 +506,13 @@ export class Composer extends Component {
             );
             if (newPartners.length !== 0) {
                 const recipientEmails = [];
-                const recipientAdditionalValues = {};
                 newPartners.forEach((recipient) => {
                     recipientEmails.push(recipient.email);
-                    recipientAdditionalValues[recipient.email] = recipient.create_values || {};
                 });
                 const partners = await rpc("/mail/partner/from_email", {
+                    thread_model: this.thread.model,
+                    thread_id: this.thread.id,
                     emails: recipientEmails,
-                    additional_values: recipientAdditionalValues,
                 });
                 for (const index in partners) {
                     const partnerData = partners[index];
@@ -520,8 +532,9 @@ export class Composer extends Component {
             mentionedPartners: this.props.composer.mentionedPartners,
         });
         const signature = this.store.self.signature;
-        const default_body = await prettifyMessageContent(body, validMentions) +
-            ((this.props.composer.emailAddSignature && signature) ? ("<br>" + signature) : "");
+        const default_body =
+            (await prettifyMessageContent(body, validMentions)) +
+            (this.props.composer.emailAddSignature && signature ? "<br>" + signature : "");
         const context = {
             default_attachment_ids: attachmentIds,
             default_body,
@@ -535,7 +548,7 @@ export class Composer extends Component {
                           .map((recipient) => recipient.persona.id),
             default_res_ids: [this.thread.id],
             default_subtype_xmlid: this.props.type === "note" ? "mail.mt_note" : "mail.mt_comment",
-            mail_post_autofollow: this.thread.hasWriteAccess,
+            // Changed in 18.2+: finally get rid of autofollow, following should be done manually
         };
         const action = {
             name: this.props.type === "note" ? _t("Log note") : _t("Compose Email"),
@@ -562,7 +575,7 @@ export class Composer extends Component {
                     );
                     const editorIsEmpty = !editor || !editor.innerText.replace(/^\s*$/gm, "");
                     if (!editorIsEmpty) {
-                        this.saveContent();
+                        this.saveContent({ editor });
                         this.restoreContent();
                     }
                 } else {
@@ -694,6 +707,20 @@ export class Composer extends Component {
         this.suggestion?.clearRawMentions();
     }
 
+    onClickInsertCannedResponse(ev) {
+        markEventHandled(ev, "composer.clickInsertCannedResponse");
+        const composer = toRaw(this.props.composer);
+        const text = composer.text;
+        const firstPart = text.slice(0, composer.selection.start);
+        const secondPart = text.slice(composer.selection.end, text.length);
+        const toInsertPart = firstPart.length === 0 || firstPart.at(-1) === " " ? "::" : " ::";
+        composer.text = firstPart + toInsertPart + secondPart;
+        this.selection.moveCursor((firstPart + toInsertPart).length);
+        if (!this.ui.isSmall || !this.env.inChatter) {
+            composer.autofocus++;
+        }
+    }
+
     addEmoji(str) {
         const composer = toRaw(this.props.composer);
         const text = composer.text;
@@ -724,19 +751,19 @@ export class Composer extends Component {
         this.props.composer.isFocused = false;
     }
 
-    saveContent() {
+    /** @param {HTMLElement} [editor] if set, this is a save from full composer editor. */
+    saveContent({ editor = false } = {}) {
         const composer = toRaw(this.props.composer);
-        const editable = document.querySelector(".o_mail_composer_form_view .note-editable");
         const config = {};
-        if (editable) {
+        if (editor) {
             Object.assign(config, {
                 emailAddSignature: false,
-                text: editable.innerText.replace(/(\t|\n)+/g, "\n")
+                text: editor.innerText.replace(/(\t|\n)+/g, "\n"),
             });
         } else {
             Object.assign(config, {
                 emailAddSignature: true,
-                text: composer.text
+                text: composer.text,
             });
         }
         browser.localStorage.setItem(composer.localId, JSON.stringify(config));
@@ -752,6 +779,6 @@ export class Composer extends Component {
             }
         } catch {
             browser.localStorage.removeItem(composer.localId);
-        };
+        }
     }
 }

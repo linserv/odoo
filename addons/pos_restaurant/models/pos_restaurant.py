@@ -54,12 +54,12 @@ class RestaurantFloor(models.Model):
                         )
                     )
             for table in floor.table_ids:
-                # Verify if table number begin by old prefix
-                if table.table_number and str(table.table_number).startswith(str(self.floor_prefix)) and vals.get('floor_prefix'):
-                    table_number_wo_prefix = str(table.table_number)[len(str(self.floor_prefix)):]
+                # Verify if table number begin by old prefix if it is not 0
+                if (self.floor_prefix == 0 or (table.table_number and str(table.table_number).startswith(str(self.floor_prefix)))) and vals.get('floor_prefix') is not None:
+                    table_number_wo_prefix = str(table.table_number)[len(str(self.floor_prefix)):] if self.floor_prefix != 0 else str(table.table_number).zfill(2)
                     table.table_number = str(vals.get('floor_prefix')) + table_number_wo_prefix
 
-        return super(RestaurantFloor, self).write(vals)
+        return super().write(vals)
 
     def rename_floor(self, new_name):
         for floor in self:
@@ -143,7 +143,3 @@ class RestaurantTable(models.Model):
             error_msg = _("You cannot remove a table that is used in a PoS session, close the session(s) first.")
             if confs:
                 raise UserError(error_msg)
-
-    def update_tables(self, tables_by_id):
-        for table in self:
-            table.write(tables_by_id[str(table.id)])

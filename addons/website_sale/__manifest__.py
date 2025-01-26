@@ -90,6 +90,7 @@
 
             'website_sale/static/src/js/address.js',
             'website_sale/static/src/js/cart.js',
+            'website_sale/static/src/js/cart_service.js',
             'website_sale/static/src/js/checkout.js',
             'website_sale/static/src/js/payment_button.js',
             'website_sale/static/src/js/payment_form.js',
@@ -99,7 +100,6 @@
             'website_sale/static/src/xml/website_sale.xml',
             'website_sale/static/src/js/website_sale_offcanvas.js',
             'website_sale/static/src/js/website_sale_price_range_option.js',
-            'website_sale/static/src/js/website_sale_configurators.js',
             'website_sale/static/src/js/website_sale_utils.js',
             'website_sale/static/src/xml/website_sale_utils.xml',
             'website_sale/static/src/js/website_sale_recently_viewed.js',

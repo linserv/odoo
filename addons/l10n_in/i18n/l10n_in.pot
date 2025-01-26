@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.1alpha1+e\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-11-26 04:38+0000\n"
-"PO-Revision-Date: 2024-11-26 04:38+0000\n"
+"POT-Creation-Date: 2025-01-02 11:46+0000\n"
+"PO-Revision-Date: 2025-01-02 11:46+0000\n"
 "Last-Translator: \n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
@@ -79,7 +79,8 @@ msgstr ""
 #. module: l10n_in
 #. odoo-python
 #: code:addons/l10n_in/models/res_partner.py:0
-msgid "As per GSTN the country should be other than India, so it's recommended to"
+msgid ""
+"As per GSTN the country should be other than India, so it's recommended to"
 msgstr ""
 
 #. module: l10n_in
@@ -173,13 +174,15 @@ msgid "CGST (RC)"
 msgstr ""
 
 #. module: l10n_in
-#: model_terms:ir.ui.view,arch_db:l10n_in.l10n_in_report_invoice_document_inherit
-msgid "Cancelled"
+#. odoo-python
+#: code:addons/l10n_in/models/account_invoice.py:0
+msgid "Cancelled %(journal_name)s"
 msgstr ""
 
 #. module: l10n_in
-#: model_terms:ir.ui.view,arch_db:l10n_in.l10n_in_report_invoice_document_inherit
-msgid "Cancelled Credit Note"
+#. odoo-python
+#: code:addons/l10n_in/models/account_invoice.py:0
+msgid "Cancelled Proforma %(journal_name)s"
 msgstr ""
 
 #. module: l10n_in
@@ -261,11 +264,6 @@ msgid "Created on"
 msgstr ""
 
 #. module: l10n_in
-#: model_terms:ir.ui.view,arch_db:l10n_in.l10n_in_report_invoice_document_inherit
-msgid "Credit Note"
-msgstr ""
-
-#. module: l10n_in
 #: model:iap.service,unit_name:l10n_in.iap_service_l10n_in_edi
 msgid "Credits"
 msgstr ""
@@ -299,13 +297,15 @@ msgid "Display pan warning"
 msgstr ""
 
 #. module: l10n_in
-#: model_terms:ir.ui.view,arch_db:l10n_in.l10n_in_report_invoice_document_inherit
-msgid "Draft"
+#. odoo-python
+#: code:addons/l10n_in/models/account_invoice.py:0
+msgid "Draft %(journal_name)s"
 msgstr ""
 
 #. module: l10n_in
-#: model_terms:ir.ui.view,arch_db:l10n_in.l10n_in_report_invoice_document_inherit
-msgid "Draft Credit Note"
+#. odoo-python
+#: code:addons/l10n_in/models/account_invoice.py:0
+msgid "Draft Proforma %(journal_name)s"
 msgstr ""
 
 #. module: l10n_in
@@ -525,6 +525,11 @@ msgid "India Port Code"
 msgstr ""
 
 #. module: l10n_in
+#: model:res.country.group,name:l10n_in.inter_state_group
+msgid "India inter-state group"
+msgstr ""
+
+#. module: l10n_in
 #: model:ir.model.fields,field_description:l10n_in.field_res_config_settings__module_l10n_in_edi
 msgid "Indian Electronic Invoicing"
 msgstr ""
@@ -576,6 +581,12 @@ msgstr ""
 #. odoo-python
 #: code:addons/l10n_in/models/account_move_line.py:0
 msgid "Invalid HSN Code (%(hsn_code)s) in product line %(product_line)s"
+msgstr ""
+
+#. module: l10n_in
+#. odoo-python
+#: code:addons/l10n_in/models/account_invoice.py:0
+msgid "Invalid HSN/SAC Code digit"
 msgstr ""
 
 #. module: l10n_in
@@ -902,6 +913,12 @@ msgid "Products"
 msgstr ""
 
 #. module: l10n_in
+#. odoo-python
+#: code:addons/l10n_in/models/account_invoice.py:0
+msgid "Proforma %(journal_name)s"
+msgstr ""
+
+#. module: l10n_in
 #: model_terms:ir.ui.view,arch_db:l10n_in.l10n_in_report_invoice_document_inherit
 msgid "Quantity"
 msgstr ""
@@ -953,6 +970,23 @@ msgstr ""
 #. module: l10n_in
 #: model:account.account.tag,name:l10n_in.tax_tag_state_cess
 msgid "STATE CESS"
+msgstr ""
+
+#. module: l10n_in
+#. odoo-python
+#: code:addons/l10n_in/models/template_in.py:0
+msgid ""
+"SUPPLY MEANT FOR EXPORT/SUPPLY TO SEZ UNIT OR SEZ DEVELOPER FOR AUTHORISED "
+"OPERATIONS ON PAYMENT OF INTEGRATED TAX."
+msgstr ""
+
+#. module: l10n_in
+#. odoo-python
+#: code:addons/l10n_in/models/template_in.py:0
+msgid ""
+"SUPPLY MEANT FOR EXPORT/SUPPLY TO SEZ UNIT OR SEZ DEVELOPER FOR AUTHORISED "
+"OPERATIONS UNDER BOND OR LETTER OF UNDERTAKING WITHOUT PAYMENT OF INTEGRATED"
+" TAX."
 msgstr ""
 
 #. module: l10n_in
@@ -1069,16 +1103,6 @@ msgstr ""
 #. module: l10n_in
 #: model_terms:ir.ui.view,arch_db:l10n_in.res_config_settings_view_form_inherit_l10n_in
 msgid "Use this if setup with Reseller(E-Commerce)."
-msgstr ""
-
-#. module: l10n_in
-#: model_terms:ir.ui.view,arch_db:l10n_in.l10n_in_report_invoice_document_inherit
-msgid "Vendor Bill"
-msgstr ""
-
-#. module: l10n_in
-#: model_terms:ir.ui.view,arch_db:l10n_in.l10n_in_report_invoice_document_inherit
-msgid "Vendor Credit Note"
 msgstr ""
 
 #. module: l10n_in

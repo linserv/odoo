@@ -2627,6 +2627,7 @@ test(`Add filters and specific color`, async () => {
     expect.verifySteps([
         "get_views (event)",
         "has_access (event)",
+        "has_access (event)",
         "search_read (filter.partner) [partner_id]",
         "search_read (event) [display_name, start, stop, is_all_day, color, attendee_ids, type_id]",
     ]);
@@ -2931,6 +2932,69 @@ test(`Colors: dynamic filters with another color source`, async () => {
     expect(`.o_event[data-event-id="8"]`).toHaveClass("o_calendar_color_4");
     expect(`.o_event[data-event-id="9"]`).toHaveClass("o_calendar_color_4");
     expect(`.o_event[data-event-id="10"]`).toHaveClass("o_calendar_color_4");
+    await displayCalendarPanel();
+    expect(
+        `.o_calendar_filter[data-name="type_id"] .o_calendar_filter_item[data-value="1"]`
+    ).toHaveClass("o_cw_filter_color_1");
+    expect(
+        `.o_calendar_filter[data-name="type_id"] .o_calendar_filter_item[data-value="2"]`
+    ).toHaveClass("o_cw_filter_color_2");
+    expect(
+        `.o_calendar_filter[data-name="type_id"] .o_calendar_filter_item[data-value="3"]`
+    ).toHaveClass("o_cw_filter_color_4");
+});
+
+test(`Colors: dynamic filters with no color source`, async () => {
+    Event._records = [
+        {
+            id: 8,
+            user_id: 4,
+            name: "event 8",
+            start: "2016-12-11 09:00:00",
+            stop: "2016-12-11 10:00:00",
+            is_all_day: false,
+            attendee_ids: [1, 2, 3],
+            type_id: 3,
+        },
+        {
+            id: 9,
+            user_id: 4,
+            name: "event 9",
+            start: "2016-12-11 19:00:00",
+            stop: "2016-12-11 20:00:00",
+            is_all_day: false,
+            attendee_ids: [1, 2, 3],
+            type_id: 1,
+        },
+        {
+            id: 10,
+            user_id: 4,
+            name: "event 10",
+            start: "2016-12-11 12:00:00",
+            stop: "2016-12-11 13:00:00",
+            is_all_day: false,
+            attendee_ids: [1, 2, 3],
+            type_id: 2,
+        },
+    ];
+
+    onRpc("event.type", "search_read", () => {
+        expect.step("fetching event.type filter colors");
+    });
+    await mountView({
+        resModel: "event",
+        type: "calendar",
+        arch: `
+            <calendar date_start="start" date_stop="stop">
+                <field name="attendee_ids" write_model="filter.partner" write_field="partner_id"/>
+                <field name="type_id" filters="1" color="color"/>
+            </calendar>
+        `,
+    });
+    expect.verifySteps([]);
+
+    await toggleSectionFilter("attendee_ids");
+    expect.verifySteps(["fetching event.type filter colors"]);
     await displayCalendarPanel();
     expect(
         `.o_calendar_filter[data-name="type_id"] .o_calendar_filter_item[data-value="1"]`
@@ -5399,4 +5463,18 @@ test("calendar: check context is correclty sent to fetch data", async () => {
             </calendar>`,
         context: { active_test: true },
     });
+});
+
+test(`disable editing without write access rights`, async () => {
+    onRpc("has_access", ({ args }) => args[1] != 'write');
+    await mountView({
+        resModel: "event",
+        type: "calendar",
+        arch: `
+            <calendar date_start="start" date_stop="stop">
+                <field name="name"/>
+            </calendar>
+        `,
+    });
+    expect(`.fc-event-draggable`).toHaveCount(0, { message: "Record should not be draggable/editable" });
 });

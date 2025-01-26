@@ -15,10 +15,10 @@ publicWidget.registry.WebsiteSaleCheckout.include({
      * @param {Event} ev
      */
     async _onClickDeleteProduct(ev) {
-        await rpc('/shop/cart/update_json', {
+        await rpc('/shop/cart/update', {
+            line_id: parseInt(ev.target.dataset.lineId, 10),
             product_id: parseInt(ev.target.dataset.productId, 10),
-            set_qty: 0,
-            display: false,  // No need to return the rendered templates.
+            quantity: 0,
         });
         window.location.reload();  // Reload all cart values.
     },
@@ -45,7 +45,10 @@ publicWidget.registry.WebsiteSaleCheckout.include({
      *
      * @override method from `@website_sale/js/checkout`
      */
-    _canEnableMainButton() {
+    _isDeliveryMethodReady() {
+        if (this.dmRadios.length === 0) {  // If there are no delivery methods.
+            return this._super.apply(this, arguments);  // Skip override.
+        }
         const checkedRadio = this.el.querySelector('input[name="o_delivery_radio"]:checked');
         const deliveryContainer = this._getDeliveryMethodContainer(checkedRadio);
         const hasWarning = (

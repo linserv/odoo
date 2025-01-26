@@ -22,6 +22,7 @@ from odoo import tools
 from odoo.addons.base.models.ir_mail_server import IrMail_Server
 from odoo.addons.base.tests.common import MockSmtplibCase
 from odoo.addons.bus.models.bus import BusBus, json_dump
+from odoo.addons.mail.models import mail_thread
 from odoo.addons.mail.models.mail_mail import MailMail
 from odoo.addons.mail.models.mail_message import MailMessage
 from odoo.addons.mail.models.mail_notification import MailNotification
@@ -108,11 +109,13 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
              patch.object(IrMail_Server, 'send_email', autospec=True, wraps=IrMail_Server, side_effect=send_email_origin) as send_email_mocked, \
              patch.object(MailMail, 'create', autospec=True, wraps=MailMail, side_effect=_mail_mail_create) as mail_mail_create_mocked, \
              patch.object(MailMail, '_send', autospec=True, wraps=MailMail, side_effect=mail_private_send_origin) as mail_mail_private_send_mocked, \
-             patch.object(MailMail, 'unlink', autospec=True, wraps=MailMail, side_effect=_mail_mail_unlink):
+             patch.object(MailMail, 'unlink', autospec=True, wraps=MailMail, side_effect=_mail_mail_unlink), \
+             patch.object(mail_thread, 'push_to_end_point') as patched_push:
             self.build_email_mocked = build_email_mocked
             self.send_email_mocked = send_email_mocked
             self.mail_mail_create_mocked = mail_mail_create_mocked
             self.mail_mail_private_send_mocked = mail_mail_private_send_mocked
+            self.push_to_end_point_mocked = patched_push
             yield
 
     def _init_mail_mock(self):
@@ -263,7 +266,8 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
                                            reply_all=False, cc=False,
                                            force_email_from=False, force_return_path=False,
                                            extra=False, use_references=True, extra_references=False, use_in_reply_to=False,
-                                           debug_log=False):
+                                           debug_log=False,
+                                           target_model='mail.test.gateway'):
         """ Tool to simulate a reply, based on outgoing SMTP emails.
 
         :param list source_smtp_to_list: find outgoing SMTP email based on their
@@ -299,7 +303,8 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
                 force_email_from=force_email_from, force_email_to=replying_to,
                 force_return_path=force_return_path, cc=cc,
                 extra=extra, use_references=use_references, extra_references=extra_references, use_in_reply_to=use_in_reply_to,
-                debug_log=debug_log
+                debug_log=debug_log,
+                target_model=target_model,
             )
         return capture_messages
 
@@ -404,7 +409,7 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
                 f"From: {mail['email_from']} - To {mail['email_to']}"
                 for mail in self._mails
             )
-            raise AssertionError(f'sent mail not found for email_to {emails_to}\n{debug_info}')
+            raise AssertionError(f'sent mail not found for email_to {emails_to} from {email_from}\n{debug_info}')
 
         return sent_email
 
@@ -498,9 +503,11 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
                 f'From: {mail.author_id} ({mail.email_from}) - To: {sorted(mail.recipient_ids.ids)} (State: {mail.state})'
                 for mail in self._new_mails
             )
-            recipients_info = f'Missing: {[r.name for r in recipients if r.id not in filtered.recipient_ids.ids]}'
+            recipients_info = f'Missing: {[f"{r.name} ({r.id})" for r in recipients if r.id not in filtered.recipient_ids.ids]}'
+            author_info = f'{author.name} ({author.id})' if isinstance(author, self.env['res.partner'].__class__) else author
             raise AssertionError(
-                f'mail.mail not found for message {mail_message} / status {status} / recipients {sorted(recipients.ids)} / author {author} ({email_from})\n{recipients_info}\n{debug_info}'
+                f'mail.mail not found for message {mail_message} / status {status} / recipients {sorted(recipients.ids)} / '
+                f'author {author_info}, email_from ({email_from})\n{recipients_info}\n{debug_info}'
             )
         return mail
 
@@ -583,7 +590,22 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
             with self.subTest(fname=fname, expected_fvalue=expected_fvalue):
                 if fname == 'headers':
                     fvalue = literal_eval(mail[fname])
-                    self.assertDictEqual(fvalue, expected_fvalue)
+                    # specific use case for X-Msg-To-Add: it is a comma-separated list of
+                    # email addresses, order is not important
+                    if 'X-Msg-To-Add' in fvalue and 'X-Msg-To-Add' in expected_fvalue:
+                        msg_to_add = fvalue['X-Msg-To-Add']
+                        exp_msg_to_add = expected_fvalue['X-Msg-To-Add']
+                        self.assertEqual(
+                            sorted(email_split_and_format_normalize(msg_to_add)),
+                            sorted(email_split_and_format_normalize(exp_msg_to_add))
+                        )
+                        fvalue = dict(fvalue)
+                        fvalue.pop('X-Msg-To-Add')
+                        expected_fvalue = dict(expected_fvalue)
+                        expected_fvalue.pop('X-Msg-To-Add')
+                        self.assertDictEqual(fvalue, expected_fvalue)
+                    else:
+                        self.assertDictEqual(fvalue, expected_fvalue)
                 elif fname == 'attachments_info':
                     for attachment_info in expected_fvalue:
                         attachment = next((attach for attach in mail.attachment_ids if attach.name == attachment_info['name']), False)
@@ -732,10 +754,18 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
         call with a dictionary of expected values. """
         for fname, fvalue in fields_values.items():
             with self.subTest(fname=fname, fvalue=fvalue):
-                self.assertEqual(
-                    message[fname], fvalue,
-                    f'Message: expected {fvalue} for {fname}, got {message[fname]}',
-                )
+                # email_{cc, to} are lists, hence order is not important
+                if fname in {'incoming_email_cc', 'incoming_email_to'}:
+                    self.assertEqual(
+                        sorted(tools.mail.email_split_and_format_normalize(message[fname])),
+                        sorted(tools.mail.email_split_and_format_normalize(fvalue)),
+                        f'Message: expected {fvalue} for {fname}, got {message[fname]}',
+                    )
+                else:
+                    self.assertEqual(
+                        message[fname], fvalue,
+                        f'Message: expected {fvalue} for {fname}, got {message[fname]}',
+                    )
 
     def assertNoMail(self, recipients, mail_message=None, author=None):
         """ Check no mail.mail and email was generated during gateway mock. """
@@ -874,12 +904,60 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
                 )
 
         if 'headers' in expected:
+            # specific use case for X-Msg-To-Add: it is a comma-separated list of
+            # email addresses, order is not important
+            if 'X-Msg-To-Add' in sent_mail['headers'] and 'X-Msg-To-Add' in expected['headers']:
+                msg_to_add = sent_mail['headers']['X-Msg-To-Add']
+                exp_msg_to_add = expected['headers']['X-Msg-To-Add']
+                self.assertEqual(
+                    sorted(email_split_and_format_normalize(msg_to_add)),
+                    sorted(email_split_and_format_normalize(exp_msg_to_add))
+                )
             for key, value in expected['headers'].items():
+                if key == 'X-Msg-To-Add':
+                    continue
                 self.assertTrue(key in sent_mail['headers'], f'Missing key {key}')
                 found = sent_mail['headers'][key]
                 self.assertEqual(found, value,
                                  f'Header value for {key} invalid, found {found} instead of {value}')
         return sent_mail
+
+    # ------------------------------------------------------------
+    # PUSH ASSERTS
+    # ------------------------------------------------------------
+
+    def assertNoPushNotification(self):
+        """ Asserts no push notification """
+        self.push_to_end_point_mocked.assert_not_called()
+        self.assertEqual(self.env['mail.push'].search_count([]), 0)
+
+    def assertPushNotification(self, mail_push_count=0,
+                               endpoint=None, keys=None,
+                               title=None, title_content=None, body=None, body_content=None,
+                               options=None):
+        """ Asserts a single push notification (not really batch enabled currently) """
+        self.push_to_end_point_mocked.assert_called_once()
+        self.assertEqual(self.env['mail.push'].search_count([]), mail_push_count)
+        if endpoint:
+            self.assertEqual(self.push_to_end_point_mocked.call_args.kwargs['device']['endpoint'], endpoint)
+        if keys:
+            private, public = keys
+            self.assertIn(private, self.push_to_end_point_mocked.call_args.kwargs)
+            self.assertIn(public, self.push_to_end_point_mocked.call_args.kwargs)
+        payload_value = json.loads(self.push_to_end_point_mocked.call_args.kwargs['payload'])
+        if title_content:
+            self.assertIn(title_content, payload_value['title'])
+        elif title:
+            self.assertEqual(title, payload_value['title'])
+        if body_content:
+            self.assertIn(body_content, payload_value['options']['body'])
+        elif body:
+            self.assertEqual(body, payload_value['options']['body'])
+        if options:
+            payload_options = payload_value['options']
+            for key, val in options.items():
+                with self.subTest(key=key):
+                    self.assertEqual(payload_options[key], val)
 
 
 class MailCase(MockEmail):
@@ -1102,6 +1180,10 @@ class MailCase(MockEmail):
             if not notif.message:
                 return ""
             return f"{tuple(json.loads(notif.channel))},  # {json.loads(notif.message).get('type')}"
+
+        def notif_to_string(notif):
+            return f"{format_notif(notif)}\n{notif.message}"
+
         try:
             with self.mock_bus():
                 yield
@@ -1109,12 +1191,12 @@ class MailCase(MockEmail):
             if get_params:
                 channels, message_items = get_params()
             found_bus_notifs = self.assertBusNotifications(channels, message_items=message_items)
-            new_line = "\n"
+            new_lines = "\n\n"
             self.assertEqual(
                 self._new_bus_notifs,
                 found_bus_notifs,
-                f"\nExpected:\n{new_line.join(found_bus_notifs.mapped(format_notif))}"
-                f"\nResult:\n{new_line.join(self._new_bus_notifs.mapped(format_notif))}"
+                f"\n\nExpected:\n{new_lines[0].join(found_bus_notifs.mapped(format_notif))}"
+                f"\n\nResult:\n{new_lines.join(self._new_bus_notifs.mapped(notif_to_string))}",
             )
 
     @contextmanager
@@ -1168,6 +1250,7 @@ class MailCase(MockEmail):
               {
                 'check_send': whether outgoing stuff has to be checked;
                 'email': NOT SUPPORTED YET,
+                'email_to_recipients': propagated to 'assertMailMail';
                 'failure_reason': failure_reason on mail.notification;
                 'failure_type': 'failure_type' on mail.notification;
                 'is_read': 'is_read' on mail.notification;
@@ -1202,6 +1285,7 @@ class MailCase(MockEmail):
             # sanity check
             extra_keys = set(message_info.keys()) - {
                 'content',
+                'email_to_recipients',
                 'email_values',
                 'mail_mail_values',
                 'message_type',
@@ -1213,7 +1297,7 @@ class MailCase(MockEmail):
                 raise ValueError(f'Unsupported values: {extra_keys}')
 
             mbody, mtype = message_info.get('content', ''), message_info.get('message_type', 'comment')
-            msubtype = self.env.ref(message_info.get('subtype', 'mail.mt_comment'))
+            msubtype = message_info.get('message_values', {}).get('subtype_id', self.env.ref(message_info.get('subtype', 'mail.mt_comment')))
 
             # find message
             if messages:
@@ -1329,6 +1413,7 @@ class MailCase(MockEmail):
             # check emails that should be sent (hint: mail.mail per group, email par recipient)
             email_values = {
                 'body_content': mbody,
+                'email_from': message.email_from,
                 'references_content': message.message_id,
             }
             if message_info.get('email_values'):
@@ -1352,7 +1437,7 @@ class MailCase(MockEmail):
                     self.assertMailMail(
                         partners,
                         mail_status,
-                        author=message_info.get('mail_mail_values', {}).get('author_id') or message.author_id or message.email_from,
+                        author=message_info.get('mail_mail_values', {}).get('author_id') or message.author_id,
                         content=mbody,
                         email_to_recipients=group['email_to_recipients'] or None,
                         email_values=email_values,
@@ -1403,33 +1488,31 @@ class MailCase(MockEmail):
         """
         self.env.cr.precommit.run()  # trigger the creation of bus.bus records
         bus_notifs = self.env['bus.bus'].sudo().search([('channel', 'in', [json_dump(channel) for channel in channels])])
-        new_line = "\n"
+        new_lines = "\n\n"
 
         def notif_to_string(notif):
-            message = json.loads(notif.message)
-            payload = json_dump(message.get("payload"))
-            return f"{notif.channel}  # {message.get('type')} - {payload[0:120]}{'…' if len(payload) > 120 else ''}"
+            return f"{notif.channel}\n{notif.message}"
 
         self.assertEqual(
             bus_notifs.mapped("channel"),
             [json_dump(channel) for channel in channels],
-            f"\nExpected:\n{new_line.join([json_dump(channel) for channel in channels])}"
-            f"\nReturned:\n{new_line.join([notif_to_string(notif) for notif in bus_notifs])}",
+            f"\n\nExpected:\n{new_lines[0].join([json_dump(channel) for channel in channels])}"
+            f"\n\nReturned:\n{new_lines.join([notif_to_string(notif) for notif in bus_notifs])}",
         )
-        notif_messages = [n.message for n in bus_notifs]
         for expected in message_items or []:
-            for notification in notif_messages:
-                if json_dump(expected) == notification:
+            for notification in bus_notifs:
+                if json.loads(json_dump(expected)) == json.loads(notification.message):
                     break
             else:
-                matching_notifs = [m for m in notif_messages if json.loads(m).get("type") == expected.get("type")]
+                matching_notifs = [n for n in bus_notifs if json.loads(n.message).get("type") == expected.get("type")]
                 if len(matching_notifs) == 1:
-                    self.assertEqual(expected, json.loads(matching_notifs[0]))
+                    self.assertEqual(expected, json.loads(matching_notifs[0].message))
                 if not matching_notifs:
-                    matching_notifs = notif_messages
+                    matching_notifs = bus_notifs
                 raise AssertionError(
-                    "No notification was found with the expected value.\nExpected:\n%s\nReturned:\n%s"
-                    % (json_dump(expected), ",\n".join(matching_notifs))
+                    "No notification was found with the expected value.\n\n"
+                    f"Expected:\n{json_dump(expected)}\n\n"
+                    f"Returned:\n{new_lines.join([notif_to_string(notif) for notif in matching_notifs])}"
                 )
         if check_unique:
             self.assertEqual(len(bus_notifs), len(channels))
@@ -1813,6 +1896,7 @@ class MailCommon(common.TransactionCase, MailCase):
                 data.pop("rating_avg", None)
                 data.pop("rating_count", None)
             if "whatsapp.message" not in self.env:
+                data.pop("whatsapp_account_name", None)
                 data.pop("whatsapp_channel_valid_until", None)
                 data.pop("whatsapp_partner_id", None)
         return list(threads_data)

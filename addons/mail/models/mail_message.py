@@ -144,6 +144,9 @@ class MailMessage(models.Model):
     # recipients: include inactive partners (they may have been archived after
     # the message was sent, but they should remain visible in the relation)
     partner_ids = fields.Many2many('res.partner', string='Recipients', context={'active_test': False})
+    # email recipients of incoming emails: comma separated list of emails (not necessarily normalized)
+    incoming_email_to = fields.Text('Emails To')
+    incoming_email_cc = fields.Char('Emails Cc')
     # list of partner having a notification. Caution: list may change over time because of notif gc cron.
     # mainly usefull for testing
     notified_partner_ids = fields.Many2many(
@@ -565,27 +568,30 @@ class MailMessage(models.Model):
         ))
 
     @api.model
-    def _get_with_access(self, message_id, operation, **kwargs):
-        """Return the message with the given id if it exists and if the current
-        user can access it for the given operation."""
+    def _get_with_access(self, message_id, mode="read", **kwargs):
         message = self.browse(message_id).exists()
         if not message:
             return message
+
+        # sanity check on kwargs
+        allowed_params = self.env[message.sudo().model or 'mail.thread']._get_allowed_access_params()
+        if invalid := (set((kwargs or {}).keys()) - allowed_params):
+            _logger.warning("Invalid parameters to _get_with_access: %s", invalid)
 
         if self.env.user._is_public() and self.env["mail.guest"]._get_guest_from_context():
             # Don't check_access_rights for public user with a guest, as the rules are
             # incorrect due to historically having no reason to allow operations on messages to
             # public user before the introduction of guests. Even with ignoring the rights,
             # check_access_rule and its sub methods are already covering all the cases properly.
-            if not message.sudo(False)._get_forbidden_access(operation):
+            if not message.sudo(False)._get_forbidden_access(mode):
                 return message
         else:
-            if message.sudo(False).has_access(operation):
+            if message.sudo(False).has_access(mode):
                 return message
 
         if message.model and message.res_id:
-            mode = self.env[message.model]._get_mail_message_access([message.res_id], operation)
-            if self.env[message.model]._get_thread_with_access(message.res_id, mode, **kwargs):
+            thread_mode = self.env[message.model]._get_mail_message_access([message.res_id], mode)
+            if self.env[message.model]._get_thread_with_access(message.res_id, mode=thread_mode, **kwargs):
                 return message
 
         return self.browse()
@@ -932,7 +938,7 @@ class MailMessage(models.Model):
             # sudo: mail.message - reading reactions on accessible message is allowed
             Store.Many("reaction_ids", rename="reactions", sudo=True),
             # sudo: res.partner: reading limited data of recipients is acceptable
-            Store.Many("partner_ids", ["name", "write_date"], rename="recipients", sudo=True),
+            Store.Many("partner_ids", ["avatar_128", "name"], rename="recipients", sudo=True),
             "res_id",  # keep for iOS app
             "subject",
             # sudo: mail.message.subtype - reading description on accessible message is allowed
@@ -1081,10 +1087,10 @@ class MailMessage(models.Model):
             }
             # sudo: mail.message: access to author is allowed
             if guest_author := message.sudo().author_guest_id:
-                data["author"] = Store.One(guest_author, ["name", "write_date"])
+                data["author"] = Store.One(guest_author, ["avatar_128", "name"])
             # sudo: mail.message: access to author is allowed
             elif author := message.sudo().author_id:
-                data["author"] = Store.One(author, ["name", "is_company", "user", "write_date"])
+                data["author"] = Store.One(author, ["avatar_128", "name", "is_company", "user"])
             store.add(message, data)
 
     def _extras_to_store(self, store: Store, format_reply):
@@ -1153,39 +1159,6 @@ class MailMessage(models.Model):
     # TOOLS
     # ------------------------------------------------------
 
-    def _cleanup_side_records(self):
-        """ Clean related data: notifications, stars, ... to avoid lingering
-        notifications / unreachable counters with void messages notably. """
-        outdated_starred_partners = self.starred_partner_ids.sorted("id")
-        self.write({
-            'starred_partner_ids': [(5, 0, 0)],
-            'notification_ids': [(5, 0, 0)],
-        })
-        if outdated_starred_partners:
-            # sudo: bus.bus: reading non-sensitive last id
-            bus_last_id = self.env["bus.bus"].sudo()._bus_last_id()
-            self.env.cr.execute("""
-                SELECT res_partner_id, count(*)
-                  FROM mail_message_res_partner_starred_rel
-                 WHERE res_partner_id IN %s
-              GROUP BY res_partner_id
-              ORDER BY res_partner_id
-            """, [tuple(outdated_starred_partners.ids)])
-            star_count_by_partner_id = dict(self.env.cr.fetchall())
-            for partner in outdated_starred_partners:
-                partner._bus_send_store(
-                    Store().add_model_values(
-                        "mail.thread",
-                        {
-                            "counter": star_count_by_partner_id.get(partner.id, 0),
-                            "counter_bus_id": bus_last_id,
-                            "id": "starred",
-                            "messages": Store.Many(self, [], mode="DELETE"),
-                            "model": "mail.box",
-                        },
-                    )
-                )
-
     def _filter_empty(self):
         """ Return subset of "void" messages """
         return self.filtered(
@@ -1209,6 +1182,7 @@ class MailMessage(models.Model):
     @api.model
     def _get_reply_to(self, values):
         """ Return a specific reply_to for the document """
+        author_id = values.get('author_id')
         model = values.get('model', self._context.get('default_model'))
         res_id = values.get('res_id', self._context.get('default_res_id')) or False
         email_from = values.get('email_from')
@@ -1218,7 +1192,7 @@ class MailMessage(models.Model):
             records = self.env[model].browse([res_id])
         else:
             records = self.env[model] if model else self.env['mail.thread']
-        return records.sudo()._notify_get_reply_to(default=email_from)[res_id]
+        return records.sudo()._notify_get_reply_to(default=email_from, author_id=author_id)[res_id]
 
     @api.model
     def _get_message_id(self, values):

@@ -24,6 +24,7 @@ import traceback
 import typing
 import unicodedata
 import warnings
+import zlib
 from collections import defaultdict
 from collections.abc import Iterable, Iterator, Mapping, MutableMapping, MutableSet, Reversible
 from contextlib import ContextDecorator, contextmanager
@@ -1608,12 +1609,15 @@ def format_decimalized_amount(amount: float, currency=None) -> str:
     return "%s %s" % (formated_amount, currency.symbol or '')
 
 
-def format_amount(env: Environment, amount: float, currency, lang_code: str | None = None) -> str:
+def format_amount(env: Environment, amount: float, currency, lang_code: str | None = None, trailing_zeroes: bool = True) -> str:
     fmt = "%.{0}f".format(currency.decimal_places)
     lang = env['res.lang'].browse(get_lang(env, lang_code).id)
 
     formatted_amount = lang.format(fmt, currency.round(amount), grouping=True)\
         .replace(r' ', u'\N{NO-BREAK SPACE}').replace(r'-', u'-\N{ZERO WIDTH NO-BREAK SPACE}')
+
+    if not trailing_zeroes:
+        formatted_amount = re.sub(fr'{re.escape(lang.decimal_point)}?0+$', '', formatted_amount)
 
     pre = post = u''
     if currency.position == 'before':
@@ -1665,8 +1669,16 @@ class ReadonlyDict(Mapping[K, T], typing.Generic[K, T]):
     def __init__(self, data):
         self.__data = dict(data)
 
+    def __contains__(self, key: K):
+        return key in self.__data
+
     def __getitem__(self, key: K) -> T:
-        return self.__data[key]
+        try:
+            return self.__data[key]
+        except KeyError:
+            if hasattr(type(self), "__missing__"):
+                return self.__missing__(key)
+            raise
 
     def __len__(self):
         return len(self.__data)
@@ -1816,6 +1828,60 @@ def verify_hash_signed(env, scope, payload):
         message_values = json.loads(message)
         return message_values
     return None
+
+
+def limited_field_access_token(record, field_name, timestamp=None):
+    """Generate a token granting access to the given record and field_name from
+    the binary routes (/web/content or /web/image).
+
+    The validitiy of the token is determined by the timestamp parameter.
+    When it is not specified, a timestamp is automatically generated with a
+    validity of at least 14 days. For a given record and field_name, the
+    generated timestamp is deterministic within a 14-day period (even across
+    different days/months/years) to allow browser caching, and expires after
+    maximum 42 days to prevent infinite access. Different record/field
+    combinations expire at different times to prevent thundering herd problems.
+
+    :param record: the record to generate the token for
+    :type record: class:`odoo.models.Model`
+    :param field_name: the field name of record to generate the token for
+    :type field_name: str
+    :param timestamp: expiration timestamp of the token, or None to generate one
+    :type timestamp: int, optional
+    :return: the token, which includes the timestamp in hex format
+    :rtype: string
+    """
+    record.ensure_one()
+    if not timestamp:
+        unique_str = repr((record._name, record.id, field_name))
+        two_weeks = 1209600  # 2 * 7 * 24 * 60 * 60
+        start_of_period = int(time.time()) // two_weeks * two_weeks
+        adler32_max = 4294967295
+        jitter = two_weeks * zlib.adler32(unique_str.encode()) // adler32_max
+        timestamp = hex(start_of_period + 2 * two_weeks + jitter)
+    token = hmac(record.env(su=True), "binary", (record._name, record.id, field_name, timestamp))
+    return f"{token}o{timestamp}"
+
+
+def verify_limited_field_access_token(record, field_name, access_token):
+    """Verify the given access_token grants access to field_name of record.
+    In particular, the token must have the right format, must be valid for the
+    given record, and must not have expired.
+
+    :param record: the record to verify the token for
+    :type record: class:`odoo.models.Model`
+    :param field_name: the field name of record to verify the token for
+    :type field_name: str
+    :param access_token: the access token to verify
+    :type access_token: str
+    :return: whether the token is valid for the record/field_name combination at
+        the current date and time
+    :rtype: bool
+    """
+    *_, timestamp = access_token.rsplit("o", 1)
+    return consteq(
+        access_token, limited_field_access_token(record, field_name, timestamp)
+    ) and datetime.datetime.now() < datetime.datetime.fromtimestamp(int(timestamp, 16))
 
 
 ADDRESS_REGEX = re.compile(r'^(.*?)(\s[0-9][0-9\S]*)?(?: - (.+))?$', flags=re.DOTALL)

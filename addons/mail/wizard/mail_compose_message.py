@@ -8,7 +8,7 @@ import json
 
 from odoo import _, api, fields, models, Command, tools
 from odoo.exceptions import UserError, ValidationError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools.mail import is_html_empty, email_normalize, email_split_and_format
 from odoo.tools.misc import clean_context
 from odoo.addons.mail.tools.parser import parse_res_ids
@@ -116,6 +116,9 @@ class MailComposeMessage(models.TransientModel):
         string='Composition mode', default='comment')
     composition_batch = fields.Boolean(
         'Batch composition', compute='_compute_composition_batch')  # more than 1 record (raw source)
+    composition_comment_option = fields.Selection(
+        [('reply_all', 'Reply-All'), ('forward', 'Forward')],
+        string='Comment Options')  # mainly used for view in specific comment modes
     model = fields.Char('Related Document Model', compute='_compute_model', readonly=False, store=True)
     model_is_thread = fields.Boolean('Thread-Enabled', compute='_compute_model_is_thread')
     res_ids = fields.Text('Related Document IDs', compute='_compute_res_ids', readonly=False, store=True)
@@ -163,6 +166,7 @@ class MailComposeMessage(models.TransientModel):
         'res.partner', 'mail_compose_message_res_partner_rel',
         'wizard_id', 'partner_id', 'Additional Contacts',
         compute='_compute_partner_ids', readonly=False, store=True)
+    notified_bcc = fields.Char('Bcc', compute='_compute_notified_bcc', readonly=True, store=False)
     # sending
     auto_delete = fields.Boolean(
         'Delete Emails',
@@ -178,6 +182,9 @@ class MailComposeMessage(models.TransientModel):
     mail_server_id = fields.Many2one(
         'ir.mail_server', string='Outgoing mail server',
         compute='_compute_mail_server_id', readonly=False, store=True, compute_sudo=False)
+    notify_author = fields.Boolean(compute='_compute_notify_author', readonly=False, store=True)
+    notify_author_mention = fields.Boolean(compute='_compute_notify_author_mention', readonly=False, store=True)
+    notify_skip_followers = fields.Boolean(compute='_compute_notify_skip_followers', readonly=False, store=True)
     scheduled_date = fields.Char(
         'Scheduled Date',
         compute='_compute_scheduled_date', readonly=False, store=True, compute_sudo=False,
@@ -533,6 +540,31 @@ class MailComposeMessage(models.TransientModel):
             elif not composer.template_id:
                 composer.partner_ids = False
 
+    @api.depends('composition_batch', 'composition_mode', 'message_type',
+                 'model', 'partner_ids', 'res_ids', 'subtype_id')
+    def _compute_notified_bcc(self):
+        """ When being in monorecord comment mode, compute 'bcc' which are
+        followers that are going to be 'silently' notified by the message. """
+        post_composers = self.filtered(
+            lambda comp: comp.model and comp.composition_mode == 'comment' and not comp.composition_batch
+        )
+        (self - post_composers).notified_bcc = False
+        for composer in post_composers:
+            record = self.env[composer.model].browse(
+                composer._evaluate_res_ids()[:1]
+            )
+            recipients_data = self.env['mail.followers']._get_recipient_data(
+                record, composer.message_type, composer.subtype_id.id
+            )[record.id]
+            bcc = [
+                f'{pdata["name"]}'
+                for pid, pdata in recipients_data.items()
+                if (pid and pdata['active']
+                    and pid != self.env.user.partner_id.id
+                    and pdata['id'] not in composer.partner_ids.ids)
+            ]
+            composer.notified_bcc = ', '.join(bcc[:5])
+
     @api.depends('composition_mode', 'template_id')
     def _compute_auto_delete(self):
         """ Computation is coming either from template, either from composition
@@ -586,6 +618,27 @@ class MailComposeMessage(models.TransientModel):
                 composer.mail_server_id = composer.template_id.mail_server_id
             if not composer.template_id:
                 composer.mail_server_id = False
+
+    @api.depends('composition_mode')
+    def _compute_notify_author(self):
+        """ Used only in 'comment' mode, controls 'notify_author' notification
+        parameter """
+        self.filtered(lambda c: c.composition_mode != 'comment').notify_author = False
+
+    @api.depends('composition_mode')
+    def _compute_notify_author_mention(self):
+        """ Used only in 'comment' mode, controls 'notify_author_mention'
+        notification parameter. """
+        self.filtered(lambda c: c.composition_mode != 'comment').notify_author_mention = False
+
+    @api.depends('composition_mode', 'composition_comment_option')
+    def _compute_notify_skip_followers(self):
+        """ Used only in 'comment' mode, controls 'notify_skip_followers' notification
+        parameter. 'Reply-All' behavior triggers skipping followers. """
+        self.filtered(lambda c: c.composition_mode != 'comment').notify_skip_followers = False
+        self.filtered(
+            lambda c: c.composition_mode == 'comment' and c.composition_comment_option == 'forward'
+        ).notify_skip_followers = True
 
     @api.depends('composition_mode', 'model', 'res_ids', 'template_id')
     def _compute_scheduled_date(self):
@@ -657,6 +710,11 @@ class MailComposeMessage(models.TransientModel):
     # ------------------------------------------------------------
 
     def action_schedule_message(self):
+        self._action_schedule_message()
+        return {'type': 'ir.actions.act_window_close'}
+
+    def _action_schedule_message(self):
+        """ Create a 'scheduled message' to be posted automatically later. """
         # currently only allowed in mono-comment mode
         if any(wizard.composition_mode != 'comment' or wizard.composition_batch for wizard in self):
             raise UserError(_("A message can only be scheduled in monocomment mode"))
@@ -672,6 +730,7 @@ class MailComposeMessage(models.TransientModel):
                 'attachment_ids': post_values.pop('attachment_ids'),
                 'author_id': post_values.pop('author_id'),
                 'body': post_values.pop('body'),
+                'composition_comment_option': wizard.composition_comment_option,
                 'is_note': wizard.subtype_is_log,
                 'model': wizard.model,
                 'partner_ids': post_values.pop('partner_ids'),
@@ -681,10 +740,7 @@ class MailComposeMessage(models.TransientModel):
                 'subject': post_values.pop('subject'),
                 'notification_parameters': json.dumps(post_values),  # last to not include popped post_values
             })
-
-        self.env['mail.scheduled.message'].create(create_values)
-
-        return {'type': 'ir.actions.act_window_close'}
+        return self.env['mail.scheduled.message'].create(create_values)
 
     def action_send_mail(self):
         """ Used for action button that do not accept arguments. """
@@ -731,9 +787,8 @@ class MailComposeMessage(models.TransientModel):
         if self.composition_batch:
             # add context key to avoid subscribing the author
             ActiveModel = ActiveModel.with_context(
-                mail_create_nosubscribe=True,
+                mail_post_autofollow_author_skip=True,
             )
-
         messages = self.env['mail.message']
         for res_id, post_values in post_values_all.items():
             if ActiveModel._name == 'mail.thread':
@@ -970,6 +1025,12 @@ class MailComposeMessage(models.TransientModel):
                 record_alias_domain_id=self.record_alias_domain_id.id,
                 record_company_id=self.record_company_id.id,
             )
+            if self.notify_author:  # force only Truthy values, keeping context fallback
+                values['notify_author'] = self.notify_author
+            if self.notify_author_mention:  # force only Truthy values, keeping context fallback
+                values['notify_author_mention'] = self.notify_author_mention
+            if self.notify_skip_followers:  # force only Truthy values, no need to bloat with default Falsy
+                values['notify_skip_followers'] = self.notify_skip_followers
         return values
 
     def _prepare_mail_values_dynamic(self, res_ids):
@@ -1064,7 +1125,10 @@ class MailComposeMessage(models.TransientModel):
         # is coming from reply_to field to render.
         if not self.reply_to_force_new:
             # compute alias-based reply-to in batch
-            reply_to_values = RecordsModel.browse(res_ids)._notify_get_reply_to(default=False)
+            reply_to_values = RecordsModel.browse(res_ids)._notify_get_reply_to_batch(
+                defaults=emails_from,
+                author_ids={res_id: self.author_id.id for res_id in res_ids},
+            )
         if self.reply_to_force_new:
             reply_to_values = self._render_field('reply_to', res_ids)
 
@@ -1395,17 +1459,15 @@ class MailComposeMessage(models.TransientModel):
         :return: an Odoo domain (list of leaves) """
         self.ensure_one()
         if isinstance(self.res_domain, (str, bool)) and not self.res_domain:
-            return expression.FALSE_DOMAIN
+            return Domain.FALSE
         try:
             domain = self.res_domain
             if isinstance(self.res_domain, str):
                 domain = ast.literal_eval(domain)
 
-            expression.expression(
-                domain,
-                self.env[self.model],
-            )
-        except (ValueError, AssertionError) as e:
+            domain = Domain(domain)
+            domain.validate(self.env[self.model])
+        except ValueError as e:
             raise ValidationError(
                 _("Invalid domain “%(domain)s” (type “%(domain_type)s”)",
                     domain=self.res_domain,

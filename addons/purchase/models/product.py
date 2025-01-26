@@ -11,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
 
-    purchased_product_qty = fields.Float(compute='_compute_purchased_product_qty', string='Purchased', digits='Product Unit of Measure')
+    purchased_product_qty = fields.Float(compute='_compute_purchased_product_qty', string='Purchased', digits='Product Unit')
     purchase_method = fields.Selection([
         ('purchase', 'On ordered quantities'),
         ('receive', 'On received quantities'),
@@ -58,7 +58,7 @@ class ProductProduct(models.Model):
     _inherit = 'product.product'
 
     purchased_product_qty = fields.Float(compute='_compute_purchased_product_qty', string='Purchased',
-        digits='Product Unit of Measure')
+        digits='Product Unit')
 
     is_in_purchase_order = fields.Boolean(
         compute='_compute_is_in_purchase_order',
@@ -121,8 +121,7 @@ class ProductSupplierinfo(models.Model):
     def _onchange_partner_id(self):
         self.currency_id = self.partner_id.property_purchase_currency_id.id or self.env.company.currency_id.id
 
-
-class ProductPackaging(models.Model):
-    _inherit = 'product.packaging'
-
-    purchase = fields.Boolean("Purchase", default=True, help="If true, the packaging can be used for purchase orders")
+    def _get_filtered_supplier(self, company_id, product_id, params):
+        if params and 'order_id' in params and params['order_id'].company_id:
+            company_id = params['order_id'].company_id
+        return super()._get_filtered_supplier(company_id, product_id, params)

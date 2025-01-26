@@ -120,6 +120,10 @@ class EventMail(models.Model):
 
             scheduler.scheduled_date = date.replace(microsecond=0) + _INTERVALS[scheduler.interval_unit](sign * scheduler.interval_nbr) if date else False
 
+        next_schedule = self.filtered('scheduled_date').mapped('scheduled_date')
+        if next_schedule and (cron := self.env.ref('event.event_mail_scheduler', raise_if_not_found=False)):
+            cron._trigger(next_schedule)
+
     @api.depends('error_datetime', 'interval_type', 'mail_done')
     def _compute_mail_state(self):
         for scheduler in self:
@@ -447,7 +451,7 @@ class EventMail(models.Model):
             self.event_id.message_post(
                 body=body,
                 force_send=False,  # use email queue, especially it could be cause of error
-                notify_author=True,  # in case of event responsible creating attendees
+                notify_author_mention=True,  # in case of event responsible creating attendees
                 partner_ids=recipients.ids,
             )
             self.error_datetime = now

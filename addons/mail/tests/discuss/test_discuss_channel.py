@@ -6,6 +6,7 @@ from freezegun import freeze_time
 from unittest.mock import patch
 
 from odoo import Command, fields
+from odoo.tools.misc import limited_field_access_token
 from odoo.addons.mail.models.discuss.discuss_channel import channel_avatar, group_avatar
 from odoo.addons.mail.tests.common import mail_new_test_user
 from odoo.addons.mail.tests.common import MailCommon
@@ -130,6 +131,9 @@ class TestChannelInternals(MailCommon, HttpCase):
                                 ),
                                 "res.partner": self._filter_partners_fields(
                                     {
+                                        "avatar_128_access_token": limited_field_access_token(
+                                            self.env.user.partner_id, "avatar_128"
+                                        ),
                                         "id": self.env.user.partner_id.id,
                                         "isInternalUser": True,
                                         "is_company": False,
@@ -160,6 +164,9 @@ class TestChannelInternals(MailCommon, HttpCase):
                             "res.partner": self._filter_partners_fields(
                                 {
                                     "active": True,
+                                    "avatar_128_access_token": limited_field_access_token(
+                                        self.test_partner, "avatar_128"
+                                    ),
                                     "email": "test_customer@example.com",
                                     "id": self.test_partner.id,
                                     "im_status": "im_partner",
@@ -204,6 +211,9 @@ class TestChannelInternals(MailCommon, HttpCase):
                             "res.partner": self._filter_partners_fields(
                                 {
                                     "active": True,
+                                    "avatar_128_access_token": limited_field_access_token(
+                                        self.test_partner, "avatar_128"
+                                    ),
                                     "email": "test_customer@example.com",
                                     "id": self.test_partner.id,
                                     "im_status": "im_partner",
@@ -755,7 +765,8 @@ class TestChannelInternals(MailCommon, HttpCase):
             - OR we have access to the channel
         """
         self.authenticate(self.user_employee.login, self.user_employee.login)
-        self.assertEqual(self.make_jsonrpc_request("/mail/action", {"init_messaging": {}})["Store"]['starred']['counter'], 0)
+        data = self.make_jsonrpc_request("/mail/data", {"fetch_params": ["init_messaging"]})
+        self.assertEqual(data["Store"]["starred"]["counter"], 0)
         test_group = self.env['discuss.channel'].create({
             'name': 'Private Channel',
             'channel_type': 'group',
@@ -764,14 +775,17 @@ class TestChannelInternals(MailCommon, HttpCase):
 
         test_group_own_message = test_group.with_user(self.user_employee.id).message_post(body='TestingMessage')
         test_group_own_message.write({'starred_partner_ids': [(6, 0, self.partner_employee.ids)]})
-        self.assertEqual(self.make_jsonrpc_request("/mail/action", {"init_messaging": {}})["Store"]['starred']['counter'], 1)
+        data = self.make_jsonrpc_request("/mail/data", {"fetch_params": ["init_messaging"]})
+        self.assertEqual(data["Store"]["starred"]["counter"], 1)
 
         test_group_message = test_group.message_post(body='TestingMessage')
         test_group_message.write({'starred_partner_ids': [(6, 0, self.partner_employee.ids)]})
-        self.assertEqual(self.make_jsonrpc_request("/mail/action", {"init_messaging": {}})["Store"]['starred']['counter'], 2)
+        data = self.make_jsonrpc_request("/mail/data", {"fetch_params": ["init_messaging"]})
+        self.assertEqual(data["Store"]["starred"]["counter"], 2)
 
         test_group.write({'channel_partner_ids': False})
-        self.assertEqual(self.make_jsonrpc_request("/mail/action", {"init_messaging": {}})["Store"]['starred']['counter'], 1)
+        data = self.make_jsonrpc_request("/mail/data", {"fetch_params": ["init_messaging"]})
+        self.assertEqual(data["Store"]["starred"]["counter"], 1)
 
     def test_multi_company_chat(self):
         self.assertEqual(self.env.user.company_id, self.company_admin)

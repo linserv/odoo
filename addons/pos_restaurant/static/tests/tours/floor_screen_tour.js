@@ -176,11 +176,6 @@ registry.category("web_tour.tours").add("TableMergeUnmergeTour", {
             ProductScreen.clickPayButton(),
             PaymentScreen.clickPaymentMethod("Cash"),
             PaymentScreen.clickValidate(),
-            {
-                ...Dialog.confirm(),
-                content:
-                    "acknowledge printing error ( because we don't have printer in the test. )",
-            },
             ReceiptScreen.clickNextOrder(),
             Utils.negateStep(FloorScreen.isChildTable("105")),
 
@@ -270,7 +265,6 @@ registry.category("web_tour.tours").add("TableMergeUnmergeTour", {
             FloorScreen.isShown(),
             FloorScreen.clickTable("104"),
             inLeftSide(ProductScreen.orderLineHas("Coca-Cola", "1")),
-            inLeftSide(ProductScreen.orderLineHas("Minute Maid", "1")),
             Chrome.clickPlanButton(),
             FloorScreen.isShown(),
         ].flat(),

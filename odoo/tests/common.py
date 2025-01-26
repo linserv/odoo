@@ -243,21 +243,6 @@ class RecordCapturer:
         return self._after
 
 
-class MetaCase(type):
-    """ Metaclass of test case classes to assign default 'test_tags':
-        'standard', 'at_install' and the name of the module.
-    """
-    def __init__(cls, name, bases, attrs):
-        super(MetaCase, cls).__init__(name, bases, attrs)
-        # assign default test tags
-        if cls.__module__.startswith('odoo.addons.'):
-            if getattr(cls, 'test_tags', None) is None:
-                cls.test_tags = {'standard', 'at_install'}
-            cls.test_module = cls.__module__.split('.')[2]
-            cls.test_class = cls.__name__
-            cls.test_sequence = 0
-
-
 def _normalize_arch_for_assert(arch_string, parser_method="xml"):
     """Takes some xml and normalize it to make it comparable to other xml
     in particular, blank text is removed, and the output is pretty-printed
@@ -280,10 +265,20 @@ def _normalize_arch_for_assert(arch_string, parser_method="xml"):
 class BlockedRequest(requests.exceptions.ConnectionError):
     pass
 _super_send = requests.Session.send
-class BaseCase(case.TestCase, metaclass=MetaCase):
+class BaseCase(case.TestCase):
     """ Subclass of TestCase for Odoo-specific code. This class is abstract and
     expects self.registry, self.cr and self.uid to be initialized by subclasses.
     """
+    def __init_subclass__(cls):
+        """Assigns default test tags ``standard`` and ``at_install`` to test
+        cases not having them. Also sets a completely unnecessary
+        ``test_module`` attribute.
+        """
+        super().__init_subclass__()
+        if cls.__module__.startswith('odoo.addons.'):
+            if getattr(cls, 'test_tags', None) is None:
+                cls.test_tags = {'standard', 'at_install'}
+            cls.test_module = cls.__module__.split('.')[2]
 
     longMessage = True      # more verbose error message by default: https://www.odoo.com/r/Vmh
     warm = True             # False during warm-up phase (see :func:`warmup`)
@@ -950,6 +945,20 @@ class TransactionCase(BaseCase):
         self.cr.execute('SAVEPOINT test_%d' % self._savepoint_id)
         self.addCleanup(self.cr.execute, 'ROLLBACK TO SAVEPOINT test_%d' % self._savepoint_id)
 
+    @contextmanager
+    def enter_registry_test_mode(self):
+        """
+        Make so that all new cursors opened on this database registry reuse the
+        one currenly used by the tests. See ``Registry.enter_test_mode``.
+        """
+        env = self.env
+        registry = env.registry
+        registry.enter_test_mode(env.cr)
+        try:
+            yield
+        finally:
+            registry.leave_test_mode()
+
 
 class SingleTransactionCase(BaseCase):
     """ TestCase in which all test methods are run in the same transaction,
@@ -1048,7 +1057,6 @@ class ChromeBrowser:
 
         self.chrome, self.devtools_port = self._chrome_start(
             user_data_dir=self.user_data_dir,
-            window_size=test_case.browser_size,
             touch_enabled=test_case.touch_enabled,
             headless=headless,
             debug=debug,
@@ -1078,7 +1086,19 @@ class ChromeBrowser:
         self._websocket_send('Runtime.enable')
         self._logger.info('Chrome headless enable page notifications')
         self._websocket_send('Page.enable')
+        self._websocket_send('Page.setDownloadBehavior', params={
+            'behavior': 'deny',
+            'eventsEnabled': False,
+        })
         self._websocket_send('Emulation.setFocusEmulationEnabled', params={'enabled': True})
+        emulated_device = {
+            'mobile': False,
+            'width': None,
+            'height': None,
+            'deviceScaleFactor': 1,
+        }
+        emulated_device['width'], emulated_device['height'] = [int(size) for size in test_case.browser_size.split(",")]
+        self._websocket_request('Emulation.setDeviceMetricsOverride', params=emulated_device)
 
     @property
     def screencasts_frames_dir(self):
@@ -1160,7 +1180,7 @@ class ChromeBrowser:
     def _chrome_start(
             self,
             user_data_dir: str,
-            window_size: str, touch_enabled: bool,
+            touch_enabled: bool,
             headless=True,
             debug=False,
     ):
@@ -1189,7 +1209,6 @@ class ChromeBrowser:
             '--remote-debugging-address': HOST,
             '--remote-debugging-port': str(self.remote_debugging_port),
             '--user-data-dir': user_data_dir,
-            '--window-size': window_size,
             '--no-first-run': '',
             # FIXME: these next 2 flags are temporarily uncommented to allow client
             # code to manually run garbage collection. This is done as currently
@@ -1868,6 +1887,11 @@ class HttpCase(TransactionCase):
         # setup an url opener helper
         self.opener = Opener(self.cr)
 
+    @contextmanager
+    def enter_registry_test_mode(self):
+        _logger.warning("HTTPCase is already in test mode")
+        yield
+
     def parse_http_location(self, location):
         """ Parse a Location http header typically found in 201/3xx
         responses, return the corresponding Url object. The scheme/host
@@ -2232,7 +2256,7 @@ class freeze_time:
         self.time_to_freeze = time_to_freeze
 
     def __call__(self, func):
-        if isinstance(func, MetaCase):
+        if isinstance(func, type) and issubclass(func, case.TestCase):
             func.freeze_time = self.time_to_freeze
             return func
         else:

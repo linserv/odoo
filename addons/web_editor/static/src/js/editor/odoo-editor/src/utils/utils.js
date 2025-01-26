@@ -945,6 +945,7 @@ export function getDeepRange(editable, { range, sel, splitText, select, correctT
     // at the last position of the previous node instead.
     const endLeaf = firstLeaf(end);
     const beforeEnd = endLeaf.previousSibling;
+    const isInsideColumn = closestElement(end, '.o_text_columns')
     if (
         correctTripleClick &&
         !endOffset &&
@@ -953,7 +954,8 @@ export function getDeepRange(editable, { range, sel, splitText, select, correctT
             (beforeEnd.nodeType === Node.TEXT_NODE &&
                 !isVisibleTextNode(beforeEnd) &&
                 !isZWS(beforeEnd))) &&
-        !closestElement(endLeaf, 'table')
+        !closestElement(endLeaf, 'table') &&
+        !isInsideColumn
     ) {
         const previous = previousLeaf(endLeaf, editable, true);
         if (previous && closestElement(previous).isContentEditable) {
@@ -1668,7 +1670,7 @@ export function isUnbreakable(node) {
                 node.getAttribute('t-out') ||
                 node.getAttribute('t-raw')) ||
                 node.getAttribute('t-field')) ||
-        node.classList.contains('oe_unbreakable')
+        node.matches(".oe_unbreakable, a.btn, a[role='tab'], a[role='button']")
     );
 }
 
@@ -1826,6 +1828,18 @@ export function getColumnIndex(td) {
     }
     const tdSiblings = [...tdParent.children].filter(child => child.nodeName === 'TD' || child.nodeName === 'TH');
     return tdSiblings.findIndex(child => child === td);
+}
+
+/**
+ * Get all the cells of given table
+ * (excluding nested table cells).
+ *
+ * @param {HTMLTableElement} table
+ * @returns {Array<HTMLTableCellElement>}
+ */
+export function getTableCells(table) {
+    return [...table.querySelectorAll('td')]
+        .filter(td => closestElement(td, 'table') === table);
 }
 
 // This is a list of "paragraph-related elements", defined as elements that
@@ -2208,7 +2222,7 @@ export function isColorGradient(value) {
  */
 export function getFontSizeDisplayValue(sel, getCSSVariableValue, convertNumericToUnit) {
     const tagNameRelatedToFontSize = ["h1", "h2", "h3", "h4", "h5", "h6"];
-    const styleClassesRelatedToFontSize = ["display-1", "display-2", "display-3", "display-4"];
+    const styleClassesRelatedToFontSize = ["display-1", "display-2", "display-3", "display-4", "lead"];
     const closestStartContainerEl = closestElement(sel.getRangeAt(0).startContainer);
     const closestFontSizedEl = closestStartContainerEl.closest(`
         [style*='font-size'],
@@ -2243,11 +2257,7 @@ export function getFontSizeDisplayValue(sel, getCSSVariableValue, convertNumeric
         }
         remValue = parseFloat(getCSSVariableValue(`${fsName}-font-size`));
     }
-    // It's default font size (no font size class / style).
-    if (remValue === undefined) {
-        remValue = parseFloat(getCSSVariableValue("font-size-base"));
-    }
-    const pxValue = convertNumericToUnit(remValue, "rem", "px");
+    const pxValue = remValue && convertNumericToUnit(remValue, "rem", "px");
     return pxValue || parseFloat(getComputedStyle(closestStartContainerEl).fontSize);
 }
 

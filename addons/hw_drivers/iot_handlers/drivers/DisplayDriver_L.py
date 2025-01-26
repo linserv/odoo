@@ -2,6 +2,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import json
+import logging
 import os
 import requests
 import subprocess
@@ -15,6 +16,8 @@ from odoo.addons.hw_drivers.main import iot_devices
 from odoo.addons.hw_drivers.tools import helpers, wifi
 from odoo.addons.hw_drivers.tools.helpers import Orientation
 from odoo.tools.misc import file_path
+
+_logger = logging.getLogger(__name__)
 
 
 class DisplayDriver(Driver):
@@ -70,18 +73,22 @@ class DisplayDriver(Driver):
         browser_state = BrowserState.KIOSK if "/pos-self/" in self.url else BrowserState.FULLSCREEN
         self.browser.open_browser(self.url, browser_state)
 
-    def get_url_from_db(self):
-        server_url = helpers.get_odoo_server_url()
-        if server_url:
-            try:
-                response = requests.get(f"{server_url}/iot/box/{helpers.get_mac_address()}/display_url", timeout=5)
-                response.raise_for_status()
-                data = json.loads(response.content.decode())
-                return data.get(self.device_identifier)
-            except requests.exceptions.RequestException:
-                _logger.exception("Failed to get display URL from server")
-            except json.decoder.JSONDecodeError:
-                return response.content.decode('utf8')
+    @helpers.require_db
+    def get_url_from_db(self, server_url=None):
+        """Get the display URL provided by the connected database.
+
+        :param server_url: The URL of the connected database (provided by decorator).
+        :return: URL to display or None.
+        """
+        try:
+            response = requests.get(f"{server_url}/iot/box/{helpers.get_mac_address()}/display_url", timeout=5)
+            response.raise_for_status()
+            data = json.loads(response.content.decode())
+            return data.get(self.device_identifier)
+        except requests.exceptions.RequestException:
+            _logger.exception("Failed to get display URL from server")
+        except json.decoder.JSONDecodeError:
+            return response.content.decode('utf8')
 
     def _action_update_url(self, data):
         if self.device_identifier != 'distant_display':

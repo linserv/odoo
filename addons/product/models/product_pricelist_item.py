@@ -38,7 +38,7 @@ class ProductPricelistItem(models.Model):
     min_quantity = fields.Float(
         string="Min. Quantity",
         default=0,
-        digits='Product Unit of Measure',
+        digits='Product Unit',
         help="For the rule to apply, bought/sold quantity must be greater "
              "than or equal to the minimum quantity specified in this field.\n"
              "Expressed in the default unit of measure of the product.")
@@ -413,6 +413,14 @@ class ProductPricelistItem(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for values in vals_list:
+            if values.get('product_id') and not values.get('product_tmpl_id'):
+                # Deduce product template from product variant if not specified.
+                # Ensures that the pricelist rule is properly configured and displayed in the UX
+                # even in case of partial/incomplete data (mostly for imports).
+                values['product_tmpl_id'] = self.env['product.product'].browse(
+                    values.get('product_id')
+                ).product_tmpl_id.id
+
             if not values.get('applied_on'):
                 values['applied_on'] = (
                     '0_product_variant' if values.get('product_id') else

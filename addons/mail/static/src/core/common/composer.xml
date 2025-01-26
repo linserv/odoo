@@ -173,7 +173,7 @@
 <t t-name="mail.Composer.dropdownActions">
     <t t-foreach="partitionedActions.other" t-as="action" t-key="action.id">
         <DropdownItem tag="'button'" class="'btn rounded-0 d-flex align-items-center px-2 py-2 m-0'" onSelected="(ev) => action.onClick?.(ev)" attrs="{ 'name': action.id, 'data-hotkey': action.hotkey, 'disabled': action.disabledCondition or areAllActionsDisabled }">
-            <i class="ms-1" t-att-class="action.icon"/>
+            <i class="fa-fw" t-att-class="action.icon"/>
             <span class="mx-2" t-out="action.name"/>
         </DropdownItem>
     </t>
@@ -233,6 +233,14 @@
         </strong>
         <em class="text-600 text-truncate align-self-center" style="flex-basis: 20%;">
             <t t-esc="option.label"/>
+        </em>
+    </t>
+    <t t-name="mail.Composer.suggestionEmoji">
+        <strong class="px-2 align-self-center flex-shrink-1 fs-3">
+            <t t-esc="option.emoji.codepoints"/>
+        </strong>
+        <em class="text-600 text-truncate align-self-center">
+            <t t-esc="option.emoji.shortcodes.join(', ')"/>
         </em>
     </t>
 </templates>

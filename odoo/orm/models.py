@@ -33,10 +33,11 @@ import logging
 import operator
 import pytz
 import re
+import typing
 import uuid
 import warnings
 from collections import defaultdict, deque
-from collections.abc import MutableMapping, Callable
+from collections.abc import Callable, Mapping
 from inspect import getmembers
 from operator import attrgetter, itemgetter
 
@@ -77,7 +78,6 @@ from .utils import (
     READ_GROUP_ALL_TIME_GRANULARITY, READ_GROUP_TIME_GRANULARITY, READ_GROUP_NUMBER_GRANULARITY,
 )
 
-import typing
 if typing.TYPE_CHECKING:
     from collections.abc import Reversible, Sequence
     from .table_objects import TableObject
@@ -458,7 +458,7 @@ class BaseModel(metaclass=MetaModel):
     env: Environment
     id: IdType | typing.Literal[False]
     display_name: str | typing.Literal[False]
-    pool: Registry
+    pool: Registry  # instances are always registry classes
 
     _fields: dict[str, Field]
     _auto = False
@@ -1008,7 +1008,7 @@ class BaseModel(metaclass=MetaModel):
                         result.append(properties_field._dict_to_list(raw_properties, definition))
 
                 # FIXME: Far from optimal, it will fetch display_name for no reason
-                res_ids_per_model = properties_field._get_res_ids_per_model(self, result)
+                res_ids_per_model = properties_field._get_res_ids_per_model(self.env, result)
 
                 cache_properties[properties_fname] = record_map = {}
                 for properties, rec in zip(result, self):
@@ -1180,7 +1180,6 @@ class BaseModel(metaclass=MetaModel):
         sp = cr.savepoint(flush=False)
 
         fields = [fix_import_export_id_paths(f) for f in fields]
-        fg = self.fields_get()
 
         ids = []
         messages = []
@@ -3063,8 +3062,9 @@ class BaseModel(metaclass=MetaModel):
         else:
             value = None
         # Write value if non-NULL, except for booleans for which False means
-        # the same as NULL - this saves us an expensive query on large tables.
-        necessary = (value is not None) if field.type != 'boolean' else value
+        # the same as NULL - this saves us an expensive query on large tables,
+        # if the boolean is required we still write False to allow NOT NULL constraints.
+        necessary = (value is not None) if field.type != 'boolean' or field.required else value
         if necessary:
             _logger.debug("Table '%s': setting default value of new column %s to %r",
                           self._table, column_name, value)
@@ -4742,7 +4742,7 @@ class BaseModel(metaclass=MetaModel):
 
         # classify fields for each record
         data_list = []
-        determine_inverses = defaultdict(set)       # {inverse: fields}
+        determine_inverses = defaultdict(OrderedSet)       # {inverse: fields}
 
         for vals in new_vals_list:
             precomputed = vals.pop('__precomputed__', ())
@@ -4799,29 +4799,19 @@ class BaseModel(metaclass=MetaModel):
             for fields in determine_inverses.values():
                 # determine which records to inverse for those fields
                 inv_names = {field.name for field in fields}
-                rec_vals = [
-                    (data['record'], {
-                        name: data['inversed'][name]
-                        for name in inv_names
-                        if name in data['inversed']
+                inv_rec_ids = []
+                for data in data_list:
+                    if inv_names.isdisjoint(data['inversed']):
+                        continue
+                    record = data['record']
+                    record._update_cache({
+                        fname: value
+                        for fname, value in data['inversed'].items()
+                        if fname in inv_names and fname not in data['stored']
                     })
-                    for data in data_list
-                    if not inv_names.isdisjoint(data['inversed'])
-                ]
+                    inv_rec_ids.append(record.id)
 
-                # If a field is not stored, its inverse method will probably
-                # write on its dependencies, which will invalidate the field on
-                # all records. We therefore inverse the field record by record.
-                if all(field.store or field.company_dependent for field in fields):
-                    batches = [rec_vals]
-                else:
-                    batches = [[rec_data] for rec_data in rec_vals]
-
-                for batch in batches:
-                    for record, vals in batch:
-                        record._update_cache(vals)
-                    batch_recs = self.concat(*(record for record, vals in batch))
-                    next(iter(fields)).determine_inverse(batch_recs)
+                next(iter(fields)).determine_inverse(self.browse(inv_rec_ids))
 
         # check Python constraints for non-stored inversed fields
         for data in data_list:
@@ -5175,7 +5165,7 @@ class BaseModel(metaclass=MetaModel):
             if fname not in self or self._fields[fname].type != 'properties':
                 continue
             field_converter = self._fields[fname].convert_to_cache
-            to_write[fname] = dict(self[fname], **field_converter(values.pop(fname), self))
+            to_write[fname] = dict(self[fname], **field_converter(values.pop(fname), self, validate=False))
 
         self.write(values)
         if to_write:
@@ -6308,7 +6298,10 @@ class BaseModel(metaclass=MetaModel):
                         else:
                             stack.append({record.id for record in self if record[key] & value_companies.parent_ids})
                     else:
-                        stack.append(set(self.with_context(active_test=False).search([('id', 'in', self.ids), leaf], order='id')._ids))
+                        hierarchy_domain = [('id', 'in', self.ids), leaf]
+                        if self._active_name:
+                            hierarchy_domain.append((self._active_name, 'in', [True, False]))
+                        stack.append(set(self._search(hierarchy_domain)))
                     continue
 
                 # determine the field with the final type for values
@@ -6332,7 +6325,7 @@ class BaseModel(metaclass=MetaModel):
                 if comparator in ('any', 'not any') and isinstance(value, Query):
                     comparator = 'in' if comparator == 'any' else 'not in'
                     value = set(value)
-                if comparator in ('like', 'ilike', '=like', '=ilike', 'not ilike', 'not like'):
+                if comparator.endswith('like'):
                     if comparator.endswith('ilike'):
                         # ilike uses unaccent and lower-case comparison
                         # we may get something which is not a string
@@ -6363,7 +6356,7 @@ class BaseModel(metaclass=MetaModel):
                             yield '$'
                         # no need to match r'.*' in else because we only use .match()
 
-                    like_regex = re.compile("".join(build_like_regex(unaccent(value), comparator.startswith("="))))
+                    like_regex = re.compile("".join(build_like_regex(unaccent(value), '=' in comparator)))
                 falsy_value = field.falsy_value
                 if falsy_value is not None and comparator in ('=', '!=') and not value and falsy_value is not False:
                     comparator = 'in' if comparator == '=' else 'not in'
@@ -6425,7 +6418,7 @@ class BaseModel(metaclass=MetaModel):
                             ok = any(x is not False and x is not None and inequality(x, value) for x in data)
                         else:
                             ok = any(inequality(x or falsy_value, value) for x in data)
-                    elif comparator in ('like', 'ilike', '=like', '=ilike', 'not ilike', 'not like'):
+                    elif comparator.endswith('like'):
                         ok = any(like_regex.match(unaccent(x)) for x in data)
                         if comparator.startswith('not'):
                             ok = not ok
@@ -6552,7 +6545,7 @@ class BaseModel(metaclass=MetaModel):
             vals_list = []
             try:
                 for id_ in some_ids:
-                    record = model.browse(id_)
+                    record = model.browse((id_,))
                     vals_list.append({
                         f.name: f.convert_to_column_update(dirty_field_cache[f][id_], record)
                         for f, ids in dirty_field_ids.items()
@@ -7104,8 +7097,8 @@ collections.abc.Set.register(BaseModel)
 collections.abc.Sequence.register(BaseModel)
 
 
-class RecordCache(MutableMapping):
-    """ A mapping from field names to values, to read and update the cache of a record. """
+class RecordCache(Mapping[str, typing.Any]):
+    """ A mapping from field names to values, to read the cache of a record. """
     __slots__ = ['_record']
 
     def __init__(self, record):
@@ -7121,16 +7114,6 @@ class RecordCache(MutableMapping):
         """ Return the cached value of field ``name`` for `record`. """
         field = self._record._fields[name]
         return self._record.env.cache.get(self._record, field)
-
-    def __setitem__(self, name, value):
-        """ Assign the cached value of field ``name`` for ``record``. """
-        field = self._record._fields[name]
-        self._record.env.cache.set(self._record, field, value)
-
-    def __delitem__(self, name):
-        """ Remove the cached value of field ``name`` for ``record``. """
-        field = self._record._fields[name]
-        self._record.env.cache.remove(self._record, field)
 
     def __iter__(self):
         """ Iterate over the field names with a cached value. """

@@ -51,7 +51,7 @@ class StockQuant(models.Model):
         'product.template', string='Product Template',
         related='product_id.product_tmpl_id')
     product_uom_id = fields.Many2one(
-        'uom.uom', 'Unit of Measure',
+        'uom.uom', 'Unit',
         readonly=True, related='product_id.uom_id')
     is_favorite = fields.Boolean(related='product_tmpl_id.is_favorite')
     company_id = fields.Many2one(related='location_id.company_id', string='Company', store=True, readonly=True)
@@ -79,16 +79,16 @@ class StockQuant(models.Model):
     quantity = fields.Float(
         'Quantity',
         help='Quantity of products in this quant, in the default unit of measure of the product',
-        readonly=True, digits='Product Unit of Measure')
+        readonly=True, digits='Product Unit')
     reserved_quantity = fields.Float(
         'Reserved Quantity',
         default=0.0,
         help='Quantity of reserved products in this quant, in the default unit of measure of the product',
-        readonly=True, required=True, digits='Product Unit of Measure')
+        readonly=True, required=True, digits='Product Unit')
     available_quantity = fields.Float(
         'Available Quantity',
         help="On hand quantity which hasn't been reserved on a transfer, in the default unit of measure of the product",
-        compute='_compute_available_quantity', digits='Product Unit of Measure')
+        compute='_compute_available_quantity', digits='Product Unit')
     in_date = fields.Datetime('Incoming Date', readonly=True, required=True, default=fields.Datetime.now)
     tracking = fields.Selection(related='product_id.tracking', readonly=True)
     on_hand = fields.Boolean('On Hand', store=False, search='_search_on_hand')
@@ -96,22 +96,22 @@ class StockQuant(models.Model):
 
     # Inventory Fields
     inventory_quantity = fields.Float(
-        'Counted Quantity', digits='Product Unit of Measure',
+        'Counted Quantity', digits='Product Unit',
         help="The product's counted quantity.")
     inventory_quantity_auto_apply = fields.Float(
-        'Inventoried Quantity', digits='Product Unit of Measure',
+        'Inventoried Quantity', digits='Product Unit',
         compute='_compute_inventory_quantity_auto_apply',
         inverse='_set_inventory_quantity', groups='stock.group_stock_manager'
     )
     inventory_diff_quantity = fields.Float(
         'Difference', compute='_compute_inventory_diff_quantity', store=True,
         help="Indicates the gap between the product's theoretical quantity and its counted quantity.",
-        readonly=True, digits='Product Unit of Measure')
+        readonly=True, digits='Product Unit')
     inventory_date = fields.Date(
         'Scheduled Date', compute='_compute_inventory_date', store=True, readonly=False,
         help="Next date the On Hand Quantity should be counted.")
     last_count_date = fields.Date(compute='_compute_last_count_date', help='Last time the Quantity was Updated')
-    inventory_quantity_set = fields.Boolean(store=True, compute='_compute_inventory_quantity_set', readonly=False, default=False)
+    inventory_quantity_set = fields.Boolean(store=True, compute='_compute_inventory_quantity_set', readonly=False)
     is_outdated = fields.Boolean('Quantity has been moved since last count', compute='_compute_is_outdated', search='_search_is_outdated')
     user_id = fields.Many2one(
         'res.users', 'Assigned To', help="User assigned to do product count.",
@@ -183,10 +183,13 @@ class StockQuant(models.Model):
         )
         return super()._search(domain, *args, **kwargs)
 
-    @api.depends('inventory_quantity')
+    @api.depends('inventory_quantity', 'inventory_quantity_set')
     def _compute_inventory_diff_quantity(self):
         for quant in self:
-            quant.inventory_diff_quantity = quant.inventory_quantity - quant.quantity
+            if quant.inventory_quantity_set:
+                quant.inventory_diff_quantity = quant.inventory_quantity - quant.quantity
+            else:
+                quant.inventory_diff_quantity = 0
 
     @api.depends('inventory_quantity')
     def _compute_inventory_quantity_set(self):
@@ -301,6 +304,8 @@ class StockQuant(models.Model):
                     quant.inventory_date = fields.Date.today()
                 quants |= quant
             else:
+                if 'inventory_quantity' not in vals:
+                    vals['inventory_quantity_set'] = vals.get('inventory_quantity_set', False)
                 quant = super().create(vals)
                 _add_to_cache(quant)
                 quants |= quant
@@ -640,10 +645,11 @@ class StockQuant(models.Model):
     def _run_least_packages_removal_strategy_astar(self, domain, qty):
         # Fetch the available packages and contents
         query = self._where_calc(domain)
-        query_str, params = query.select('package_id', 'SUM(quantity - reserved_quantity) AS available_qty')
-        query_str += ' GROUP BY package_id HAVING SUM(quantity - reserved_quantity) > 0 ORDER BY available_qty DESC'
-        self._cr.execute(query_str, params)
-        qty_by_package = self._cr.fetchall()
+        query.groupby = SQL("package_id")
+        query.having = SQL("SUM(quantity - reserved_quantity) > 0")
+        query.order = SQL("available_qty DESC")
+        qty_by_package = self.env.execute_query(
+            query.select('package_id', 'SUM(quantity - reserved_quantity) AS available_qty'))
 
         # Items that do not belong to a package are added individually to the list, any empty packages get removed.
         pkg_found = False
@@ -838,7 +844,7 @@ class StockQuant(models.Model):
             else:
                 return sum([available_quantity for available_quantity in availaible_quantities.values() if float_compare(available_quantity, 0, precision_rounding=rounding) > 0])
 
-    def _get_reserve_quantity(self, product_id, location_id, quantity, product_packaging_id=None, uom_id=None, lot_id=None, package_id=None, owner_id=None, strict=False):
+    def _get_reserve_quantity(self, product_id, location_id, quantity, uom_id=None, lot_id=None, package_id=None, owner_id=None, strict=False):
         """ Get the quantity available to reserve for the set of quants
         sharing the combination of `product_id, location_id` if `strict` is set to False or sharing
         the *exact same characteristics* otherwise. If no quants are in self, `_gather` will do a search to fetch the quants
@@ -855,10 +861,6 @@ class StockQuant(models.Model):
 
         # avoid quants with negative qty to not lower available_qty
         available_quantity = quants._get_available_quantity(product_id, location_id, lot_id, package_id, owner_id, strict)
-
-        # do full packaging reservation when it's needed
-        if product_packaging_id and product_id.product_tmpl_id.categ_id.packaging_reserve_method == "full":
-            available_quantity = product_packaging_id._check_qty(available_quantity, product_id.uom_id, "DOWN")
 
         quantity = min(quantity, available_quantity)
 
@@ -1002,6 +1004,8 @@ class StockQuant(models.Model):
             ).lot_stock_id
 
     def _apply_inventory(self):
+        # Consider the inventory_quantity as set => recompute the inventory_diff_quantity if needed
+        self.inventory_quantity_set = True
         move_vals = []
         for quant in self:
             # Create and validate a move so that the quant matches its `inventory_quantity`.
@@ -1116,7 +1120,7 @@ class StockQuant(models.Model):
         this method is often called in batch and each unlink invalidate
         the cache. We defer the calls to unlink in this method.
         """
-        precision_digits = max(6, self.sudo().env.ref('product.decimal_product_uom').digits * 2)
+        precision_digits = max(6, self.sudo().env.ref('uom.decimal_product_uom').digits * 2)
         # Use a select instead of ORM search for UoM robustness.
         query = """SELECT id FROM stock_quant WHERE (round(quantity::numeric, %s) = 0 OR quantity IS NULL)
                                                      AND round(reserved_quantity::numeric, %s) = 0
@@ -1612,7 +1616,7 @@ class StockQuantPackage(models.Model):
 
     def _check_move_lines_map_quant(self, move_lines):
         """ This method checks that all product (quants) of self (package) are well present in the `move_line_ids`. """
-        precision_digits = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        precision_digits = self.env['decimal.precision'].precision_get('Product Unit')
 
         def _keys_groupby(record):
             return record.product_id, record.lot_id

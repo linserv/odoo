@@ -93,6 +93,8 @@ async function executeImport(data, shouldWait = false) {
     }
     if (data[3].skip + 1 < (data[3].has_headers ? totalRows - 1 : totalRows)) {
         res.nextrow = data[3].skip + data[3].limit;
+    } else {
+        res.nextrow = 0;
     }
     if (shouldWait) {
         // make sure the progress bar is shown
@@ -131,6 +133,14 @@ function parsePreview(opts) {
 
 function customParsePreview(opts, { fields, headers, rowCount, matches, preview }) {
     totalRows = rowCount;
+    const errorValues = ["#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A"];
+    const error = preview.flat().find((cell) => errorValues.includes(cell));
+    if (error) {
+        return {
+            preview: undefined,
+            error: `Invalid cell value: ${error}`,
+        };
+    }
 
     return Promise.resolve({
         advanced_mode: opts.advanced,
@@ -484,6 +494,101 @@ QUnit.module("Base Import Tests", (hooks) => {
             target,
             ".o_import_data_content tbody td:nth-child(3) .alert-info",
             "no comments are shown"
+        );
+    });
+
+    QUnit.test("Import view: preview error on loading second sheet", async function (assert) {
+        registerFakeHTTPService((route, params) => {
+            assert.strictEqual(route, "/base_import/set_file");
+            assert.strictEqual(
+                params.ufile[0].name,
+                "fake_file.xlsx",
+                "file is correctly uploaded to the server"
+            );
+        });
+
+        patchWithCleanup(browser, {
+            setTimeout: (fn) => fn(),
+        });
+
+        let currentSheet = "Template"; // Track the current sheet being parsed
+        await createImportAction({
+            "partner/get_import_templates": (route, args) => {
+                assert.step(route);
+                return Promise.resolve([]);
+            },
+            "base_import.import/parse_preview": (route, args) => {
+                assert.step(route);
+
+                // Determine preview data based on the selected sheet
+                const fakePreviewData =
+                    currentSheet === "Template"
+                        ? [
+                              ["Foo", "Deco addict", "Azure Interior", "Brandon Freeman"],
+                              ["Bar", "1", "1", "0"],
+                              ["Display name", "Azure Interior"],
+                          ]
+                        : [
+                              ["Foo", "Deco addict", "Azure Interior", "Brandon Freeman"],
+                              ["Bar", "1", "1", "0"],
+                              ["Display name", "#N/A"],
+                          ];
+
+                return customParsePreview(args[1], {
+                    fields: getFieldsTree(serverData),
+                    headers: args[1].has_headers ? fakePreviewData.map((col) => col[0]) : null,
+                    rowCount: fakePreviewData[0].length,
+                    matches: args[1].has_headers
+                        ? getMatches(
+                              serverData,
+                              fakePreviewData.map((col) => col[0])
+                          )
+                        : null,
+                    preview: args[1].has_headers
+                        ? fakePreviewData.map((col) => col.slice(1))
+                        : fakePreviewData,
+                });
+            },
+            "base_import.import/create": (route, args) => {
+                assert.step(route);
+                return Promise.resolve(11);
+            },
+        });
+
+        // Simulate uploading a file
+        const file = new File(["fake_file"], "fake_file.xlsx", { type: "text/plain" });
+        await editInput(target, ".o_control_panel_main_buttons input[type='file']", file);
+        assert.verifySteps([
+            "partner/get_import_templates",
+            "base_import.import/create",
+            "base_import.import/parse_preview",
+        ]);
+
+        // Check the initial state after parsing the first sheet
+        assert.containsOnce(
+            target,
+            ".o_import_action .o_import_data_sidepanel",
+            "side panel is visible"
+        );
+        assert.containsOnce(
+            target,
+            ".o_import_action .o_import_data_content",
+            "content panel is visible"
+        );
+
+        // Change to the second sheet
+        currentSheet = "Template 2"; // Update the current sheet
+        await editSelect(target, ".o_import_data_sidepanel [name=o_import_sheet]", "Template 2");
+        assert.verifySteps(
+            ["base_import.import/parse_preview"],
+            "parse_preview is triggered for second sheet"
+        );
+
+        // Verify the error for second sheet preview
+        assert.strictEqual(
+            target.querySelector(".o_import_data_content p").textContent,
+            ' Import preview failed due to: " Invalid cell value: #N/A ". ',
+            "preview error is displayed for second sheet"
         );
     });
 
@@ -1298,6 +1403,84 @@ QUnit.module("Base Import Tests", (hooks) => {
             await click(target.querySelector(".o_control_panel_main_buttons button:first-child"));
         }
     );
+
+    QUnit.test("Import view: batch import relational fields", async function (assert) {
+        let executeImportCount = 0;
+        registerFakeHTTPService();
+
+        patchWithCleanup(ImportAction.prototype, {
+            get isBatched() { // Make sure the UI displays the batched import options
+                return true;
+            },
+        });
+
+        await createImportAction({
+            "base_import.import/parse_preview": (route, args) => {
+                // Parse a file where all rows besides the first are used for relational data
+                return customParsePreview(args[1], {
+                    fields: [
+                        { id: "id", name: "id", string: "External ID", fields: [], type: "id" },
+                        {
+                            id: "display_name",
+                            name: "display_name",
+                            string: "Display Name",
+                            fields: [],
+                            type: "id",
+                        },
+                        {
+                            id: "many2many_field",
+                            name: "many2many_field",
+                            string: "Many2Many",
+                            fields: [
+                                {
+                                    id: "id",
+                                    name: "id",
+                                    string: "External ID",
+                                    fields: [],
+                                    type: "id",
+                                },
+                            ],
+                            type: "id",
+                        },
+                    ],
+                    headers: ["id", "display_name", "many2many_field/id"],
+                    rowCount: 6,
+                    matches: {
+                        0: ["id"],
+                        1: ["display_name"],
+                        2: ["many2many_field", "id"],
+                    },
+                    preview: [
+                        ["1"],
+                        ["Record Name"],
+                        ["1", "2", "3", "4", "5"],
+                    ],
+                });
+            },
+            "base_import.import/execute_import": async (route, args) => {
+                ++executeImportCount;
+                const res = await executeImport(args);
+                // Import batch limit doesn't apply to relational fields, so set `nextrow`
+                // to 0 to indicate all rows were imported on first call
+                res.nextrow = 0;
+                return res;
+            },
+        });
+
+        const file = new File(["fake_file"], "fake_file.xlsx", { type: "text/plain" });
+        await editInput(target, ".o_control_panel_main_buttons input[type='file']", file);
+
+        // Set batch limit to 1
+        await editInput(target, "input#o_import_batch_limit", 1);
+
+        await click(target.querySelector(".o_control_panel_main_buttons button:first-child"));
+        assert.strictEqual(
+            target.querySelector(".o_import_data_content .alert-info").textContent,
+            "Everything seems valid.",
+            "A message should indicate the import test was successful"
+        );
+        assert.strictEqual(executeImportCount, 1, "Execute import should finish in 1 step");
+    });
 
     QUnit.test("Import view: import errors with relational fields", async function (assert) {
         registerFakeHTTPService();

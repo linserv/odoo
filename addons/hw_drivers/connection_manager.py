@@ -33,6 +33,9 @@ class ConnectionManager(Thread):
             self.pairing_uuid = False
 
     def _connect_box(self):
+        if not helpers.get_ip() or (platform.system() == 'Linux' and wifi.is_access_point()):
+            return
+
         data = {
             'jsonrpc': 2.0,
             'params': {
@@ -59,7 +62,7 @@ class ConnectionManager(Thread):
         # Save DB URL and token
         helpers.save_conf_server(url, token, db_uuid, enterprise_code)
         # Notify the DB, so that the kanban view already shows the IoT Box
-        manager.send_alldevices()
+        manager.send_all_devices()
         # Restart to checkout the git branch, get a certificate, load the IoT handlers...
         helpers.odoo_restart(2)
 

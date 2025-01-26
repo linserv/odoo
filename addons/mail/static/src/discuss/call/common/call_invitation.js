@@ -9,7 +9,7 @@ export class CallInvitation extends Component {
     setup() {
         super.setup();
         this.rtc = useService("discuss.rtc");
-        this.ui = useState(useService("ui"));
+        this.ui = useService("ui");
         this.state = useState({ videoStream: null });
         this.videoRef = useRef("video");
         onWillUnmount(() => {
@@ -21,7 +21,7 @@ export class CallInvitation extends Component {
     }
 
     async onClickAccept(ev, { camera = false } = {}) {
-        this.props.thread.open();
+        this.props.thread.open({ focus: true });
         if (this.rtc.state.hasPendingRequest) {
             return;
         }
@@ -29,7 +29,7 @@ export class CallInvitation extends Component {
     }
 
     onClickAvatar(ev) {
-        this.props.thread.open();
+        this.props.thread.open({ focus: true });
     }
 
     get hasRtcSupport() {

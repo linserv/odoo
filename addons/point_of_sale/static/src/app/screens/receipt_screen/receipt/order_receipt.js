@@ -15,6 +15,10 @@ export class OrderReceipt extends Component {
     };
     static props = {
         order: Object,
+        basic_receipt: { type: Boolean, optional: true },
+    };
+    static defaultProps = {
+        basic_receipt: false,
     };
 
     get header() {
@@ -48,5 +52,9 @@ export class OrderReceipt extends Component {
 
     doesAnyOrderlineHaveTaxLabel() {
         return this.order.lines.some((line) => line.taxGroupLabels);
+    }
+
+    getPortalURL() {
+        return `${this.order.session._base_url}/pos/ticket`;
     }
 }

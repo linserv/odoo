@@ -1,7 +1,7 @@
 /* global waitForWebfonts */
 
 import { Mutex } from "@web/core/utils/concurrency";
-import { markRaw } from "@odoo/owl";
+import { markRaw, reactive } from "@odoo/owl";
 import { floatIsZero } from "@web/core/utils/numbers";
 import { renderToElement } from "@web/core/utils/render";
 import { registry } from "@web/core/registry";
@@ -38,6 +38,8 @@ import { fuzzyLookup } from "@web/core/utils/search";
 import { unaccent } from "@web/core/utils/strings";
 import { WithLazyGetterTrap } from "@point_of_sale/lazy_getter";
 
+const { DateTime } = luxon;
+
 export class PosStore extends WithLazyGetterTrap {
     loadingSkipButtonIsShown = false;
     mainScreen = { name: null, component: null };
@@ -58,7 +60,9 @@ export class PosStore extends WithLazyGetterTrap {
     ];
     constructor({ traps, env, deps }) {
         super({ traps });
-        this.ready = this.setup(env, deps).then(() => this);
+        const reactiveSelf = reactive(this);
+        reactiveSelf.ready = reactiveSelf.setup(env, deps).then(() => reactiveSelf);
+        return reactiveSelf;
     }
     // use setup instead of constructor because setup can be patched.
     async setup(
@@ -98,15 +102,17 @@ export class PosStore extends WithLazyGetterTrap {
         this.numpadMode = "quantity";
         this.mobile_pane = "right";
         this.ticket_screen_mobile_pane = "left";
-        this.productListView = window.localStorage.getItem("productListView") || "grid";
-
-        this.ticketScreenState = {
-            offsetByDomain: {},
-            totalCount: 0,
-        };
 
         this.loadingOrderState = false; // used to prevent orders fetched to be put in the update set during the reactive change
-
+        this.screenState = {
+            ticketSCreen: {
+                offsetByDomain: {},
+                totalCount: 0,
+            },
+            partnerList: {
+                offsetBySearch: {},
+            },
+        };
         // Handle offline mode
         // All of Set of ids
         this.pendingOrder = {
@@ -162,6 +168,23 @@ export class PosStore extends WithLazyGetterTrap {
 
     get defaultScreen() {
         return "ProductScreen";
+    }
+
+    get idleTimeout() {
+        return [
+            {
+                timeout: 300000, // 5 minutes
+                action: () =>
+                    this.mainScreen.component.name !== "PaymentScreen" &&
+                    this.showScreen("SaverScreen"),
+            },
+            {
+                timeout: 120000, // 2 minutes
+                action: () =>
+                    this.mainScreen.component.name === "LoginScreen" &&
+                    this.showScreen("SaverScreen"),
+            },
+        ];
     }
 
     async reloadData(fullReload = false) {
@@ -239,7 +262,122 @@ export class PosStore extends WithLazyGetterTrap {
     async initServerData() {
         await this.processServerData();
         this.onNotified = getOnNotified(this.bus, this.config.access_token);
+        this.onNotified("CLOSING_SESSION", this.closingSessionNotification.bind(this));
+        this.onNotified("SYNCHRONISATION", this.recordSynchronisation.bind(this));
         return await this.afterProcessServerData();
+    }
+
+    async closingSessionNotification(data) {
+        if (data.login_number === this.session.login_number) {
+            return;
+        }
+
+        try {
+            const paidOrderNotSynced = this.models["pos.order"].filter(
+                (order) => order.state === "paid" && order.id !== "number"
+            );
+            this.addPendingOrder(paidOrderNotSynced.map((o) => o.id));
+            await this.syncAllOrders({ throw: true });
+
+            this.dialog.add(AlertDialog, {
+                title: _t("Closing Session"),
+                body: _t("The session is being closed by another user. The page will be reloaded."),
+            });
+        } catch {
+            this.dialog.add(AlertDialog, {
+                title: _t("Error"),
+                body: _t(
+                    "An error occurred while closing the session. Unsynced orders will be available in the next session. The page will be reloaded."
+                ),
+            });
+        } finally {
+            const orders = this.models["pos.order"].filter((o) => typeof o.id !== "number");
+            for (const order of orders) {
+                if (!order.finalized) {
+                    order.state = "cancel";
+                }
+            }
+        }
+
+        setTimeout(() => {
+            window.location.reload();
+        }, 3000);
+    }
+
+    async recordSynchronisation(data) {
+        if (odoo.debug === "assets") {
+            console.info("Incoming synchronisation", data);
+            console.info("Login number", odoo.login_number, data.login_number);
+            console.info("Session Ids", odoo.pos_session_id, data.session_id);
+        }
+
+        if (data.login_number === odoo.login_number || data.session_id !== odoo.pos_session_id) {
+            return;
+        }
+
+        const records = await this.data.call("pos.config", "get_records", [
+            odoo.pos_config_id,
+            data["records"],
+        ]);
+
+        const missing = await this.data.missingRecursive(records);
+        const toRemove = {};
+        const toCreate = {};
+        const toUpdate = {};
+
+        for (const [model, records] of Object.entries(missing)) {
+            toCreate[model] = [];
+            toUpdate[model] = [];
+
+            for (const record of records) {
+                const existingRec = this.models[model].get(record.id);
+                if (existingRec) {
+                    if (model === "pos.order" && existingRec.state === "draft") {
+                        // Verify if some subrecords are deleted
+                        const children = ["lines", "payment_ids"];
+                        for (const child of children) {
+                            const existingChild = existingRec[child];
+                            const recordChild = record[child];
+
+                            if (existingChild.length !== recordChild.length) {
+                                // We only delete server records, the local one will be synced later
+                                const toDelete = existingChild.filter(
+                                    (c) => !recordChild.includes(c.id) && typeof c.id === "number"
+                                );
+
+                                if (toDelete.length) {
+                                    const childModel = toDelete[0].model.name;
+                                    toRemove[childModel] = toRemove[childModel] || [];
+                                    toRemove[childModel].push(...toDelete);
+                                }
+                            }
+                        }
+                    } else if (model === "pos.order") {
+                        continue;
+                    }
+
+                    toUpdate[model].push(record);
+                } else {
+                    toCreate[model].push(record);
+                }
+            }
+        }
+
+        this.models.loadData(toCreate, [], false);
+        this.models.loadData(toUpdate, [], false, true);
+
+        for (const [model, records] of Object.entries(toRemove)) {
+            this.models[model].deleteMany(records, { silent: true });
+        }
+
+        if (
+            this.getOrder()?.finalized &&
+            !["TipScreen", "ReceiptScreen", "PaymentScreen"].includes(
+                this.mainScreen.component.name
+            )
+        ) {
+            this.addNewOrder();
+        }
     }
 
     get session() {
@@ -256,6 +394,9 @@ export class PosStore extends WithLazyGetterTrap {
         this.currency = this.config.currency_id;
         this.pickingType = this.data.models["stock.picking.type"].getFirst();
         this.models = this.data.models;
+        this.screenState.partnerList.offsetBySearch = {
+            "": this.models["res.partner"].length,
+        };
         this.models["pos.session"].getFirst().login_number = parseInt(odoo.login_number);
 
         // Check cashier
@@ -378,16 +519,16 @@ export class PosStore extends WithLazyGetterTrap {
         this.setOrder(this.getOpenOrders().at(-1) || this.addNewOrder());
     }
 
-    async deleteOrders(orders, serverIds = []) {
+    async deleteOrders(orders, serverIds = [], ignoreChange = false) {
         const ids = new Set();
         for (const order of orders) {
             if (order && (await this._onBeforeDeleteOrder(order))) {
                 if (
+                    !ignoreChange &&
                     typeof order.id === "number" &&
-                    Object.keys(order.last_order_preparation_change).length > 0 &&
-                    !order.isTransferedOrder
+                    Object.keys(order.last_order_preparation_change).length > 0
                 ) {
-                    await this.sendOrderInPreparation(order, true);
+                    await this.sendOrderInPreparation(order, true, true);
                 }
 
                 const cancelled = this.removeOrder(order, true);
@@ -410,7 +551,7 @@ export class PosStore extends WithLazyGetterTrap {
         }
 
         if (ids.size > 0) {
-            await this.data.call("pos.order", "action_pos_order_cancel", [Array.from(ids)]);
+            await this.data.callRelated("pos.order", "action_pos_order_cancel", [Array.from(ids)]);
         }
 
         return true;
@@ -438,16 +579,12 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     async _loadMissingPricelistItems(products) {
-        if (!products.length) {
+        const validProducts = products.filter((product) => typeof product.id === "number");
+        if (!validProducts.length) {
             return;
         }
-
-        const product_tmpl_ids = products
-            .filter((p) => typeof p.id === "number")
-            .map((product) => product.product_tmpl_id.id);
-        const product_ids = products
-            .filter((p) => typeof p.id === "number")
-            .map((product) => product.id);
+        const product_tmpl_ids = validProducts.map((product) => product.raw.product_tmpl_id);
+        const product_ids = validProducts.map((product) => product.id);
         await this.data.callRelated("pos.session", "get_pos_ui_product_pricelist_item_by_product", [
             odoo.pos_session_id,
             product_tmpl_ids,
@@ -482,7 +619,7 @@ export class PosStore extends WithLazyGetterTrap {
     get productListViewMode() {
         const viewMode = this.productListView && this.ui.isSmall ? this.productListView : "grid";
         if (viewMode === "grid") {
-            return "d-grid gap-2";
+            return "d-grid gap-1 gap-lg-2";
         } else {
             return "";
         }
@@ -493,6 +630,17 @@ export class PosStore extends WithLazyGetterTrap {
             return "flex-column";
         } else {
             return "flex-row-reverse justify-content-between m-1";
+        }
+    }
+    getProductPriceFormatted(productTemplate) {
+        const formattedUnitPrice = this.env.utils.formatCurrency(
+            this.getProductPrice({ productTemplate })
+        );
+
+        if (productTemplate.to_weight) {
+            return `${formattedUnitPrice}/${productTemplate.uom_id.name}`;
+        } else {
+            return formattedUnitPrice;
         }
     }
     async openConfigurator(pTemplate) {
@@ -1093,7 +1241,7 @@ export class PosStore extends WithLazyGetterTrap {
     postSyncAllOrders(orders) {}
     async syncAllOrders(options = {}) {
         const { orderToCreate, orderToUpdate } = this.getPendingOrder();
-        let orders = [...orderToCreate, ...orderToUpdate];
+        let orders = options.orders || [...orderToCreate, ...orderToUpdate];
 
         // Filter out orders that are already being synced
         orders = orders.filter((order) => !this.syncingOrders.has(order.id));
@@ -1107,10 +1255,7 @@ export class PosStore extends WithLazyGetterTrap {
             const context = this.getSyncAllOrdersContext(orders, options);
             this.preSyncAllOrders(orders);
 
-            // Allow us to force the sync of the orders In the case of
-            // pos_restaurant is usefull to get unsynced orders
-            // for a specific table
-            if (orders.length === 0 && !context.force) {
+            if (orders.length === 0) {
                 return;
             }
 
@@ -1129,14 +1274,17 @@ export class PosStore extends WithLazyGetterTrap {
                 context,
             });
             const missingRecords = await this.data.missingRecursive(data);
-            const newData = this.models.loadData(missingRecords);
+            this.data.dispatchData(missingRecords);
+            const newData = this.models.loadData(missingRecords, [], false, true);
 
             for (const line of newData["pos.order.line"]) {
                 const refundedOrderLine = line.refunded_orderline_id;
 
-                if (refundedOrderLine) {
+                if (refundedOrderLine && ["paid", "done"].includes(line.order_id.state)) {
                     const order = refundedOrderLine.order_id;
-                    delete order.uiState.lineToRefund[refundedOrderLine.uuid];
+                    if (order) {
+                        delete order.uiState.lineToRefund[refundedOrderLine.uuid];
+                    }
                     refundedOrderLine.refunded_qty += Math.abs(line.qty);
                 }
             }
@@ -1172,9 +1320,6 @@ export class PosStore extends WithLazyGetterTrap {
         return this.pushOrderMutex.exec(() => this.syncAllOrders(order));
     }
 
-    setLoadingOrderState(bool) {
-        this.loadingOrderState = bool;
-    }
     async pay() {
         const currentOrder = this.getOrder();
 
@@ -1239,6 +1384,16 @@ export class PosStore extends WithLazyGetterTrap {
         const orderPriceWithoutTax = order.getTotalWithoutTax();
         const orderCost = order.getTotalCost();
         const orderMargin = orderPriceWithoutTax - orderCost;
+        const orderTaxTotalCurrency = this.env.utils.formatCurrency(
+            order.taxTotals.order_sign * order.taxTotals.tax_amount_currency
+        );
+        const orderPriceWithTaxCurrency = this.env.utils.formatCurrency(
+            order.taxTotals.order_sign * order.taxTotals.total_amount_currency
+        );
+        const taxAmount = this.env.utils.formatCurrency(
+            productInfo.all_prices.tax_details[0]?.amount || 0
+        );
+        const taxName = productInfo.all_prices.tax_details[0]?.name || "";
 
         const costCurrency = this.env.utils.formatCurrency(productTemplate.standard_price);
         const marginCurrency = this.env.utils.formatCurrency(margin);
@@ -1255,10 +1410,14 @@ export class PosStore extends WithLazyGetterTrap {
             costCurrency,
             marginCurrency,
             marginPercent,
+            taxAmount,
+            taxName,
             orderPriceWithoutTaxCurrency,
             orderCostCurrency,
             orderMarginCurrency,
             orderMarginPercent,
+            orderTaxTotalCurrency,
+            orderPriceWithTaxCurrency,
             productInfo,
         };
     }
@@ -1346,9 +1505,7 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     isProductQtyZero(qty) {
-        const dp = this.models["decimal.precision"].find(
-            (dp) => dp.name === "Product Unit of Measure"
-        );
+        const dp = this.models["decimal.precision"].find((dp) => dp.name === "Product Unit");
         return floatIsZero(qty, dp.digits);
     }
 
@@ -1396,6 +1553,7 @@ export class PosStore extends WithLazyGetterTrap {
             OrderReceipt,
             {
                 order,
+                basic_receipt: basic,
             },
             { webPrintFallback: true }
         );
@@ -1409,16 +1567,36 @@ export class PosStore extends WithLazyGetterTrap {
         return getOrderChanges(order, skipped, this.config.preparationCategories);
     }
     // Now the printer should work in PoS without restaurant
-    async sendOrderInPreparation(order, cancelled = false) {
+    async sendOrderInPreparation(order, cancelled = false, orderDone = false) {
         if (this.config.printerCategories.size) {
             try {
-                const orderChange = changesToOrder(
+                let reprint = false;
+                let orderChange = changesToOrder(
                     order,
                     false,
                     this.config.preparationCategories,
                     cancelled
                 );
-                this.printChanges(order, orderChange);
+
+                if (
+                    !orderChange.new.length &&
+                    !orderChange.cancelled.length &&
+                    !orderChange.noteUpdate.length &&
+                    !orderChange.internal_note &&
+                    !orderChange.general_customer_note &&
+                    order.uiState.lastPrint
+                ) {
+                    orderChange = order.uiState.lastPrint;
+                    reprint = true;
+                } else {
+                    order.uiState.lastPrint = orderChange;
+                }
+
+                if (reprint && orderDone) {
+                    return;
+                }
+
+                this.printChanges(order, orderChange, reprint);
             } catch (e) {
                 console.info("Failed in printing the changes in the order", e);
             }
@@ -1427,8 +1605,8 @@ export class PosStore extends WithLazyGetterTrap {
     async sendOrderInPreparationUpdateLastChange(o, cancelled = false) {
         this.addPendingOrder([o.id]);
         const uuid = o.uuid;
-        const orders = await this.syncAllOrders();
-        const order = orders.find((order) => order.uuid === uuid);
+        const orders = await this.syncAllOrders({ orders: [o] });
+        const order = orders?.find((order) => order.uuid === uuid);
 
         if (order) {
             await this.sendOrderInPreparation(order, cancelled);
@@ -1438,9 +1616,8 @@ export class PosStore extends WithLazyGetterTrap {
         }
     }
 
-    async printChanges(order, orderChange) {
+    async printChanges(order, orderChange, reprint = false) {
         const unsuccedPrints = [];
-        const lastChangedLines = order.last_order_preparation_change.lines;
         orderChange.new.sort((a, b) => {
             const sequenceA = a.pos_categ_sequence;
             const sequenceB = b.pos_categ_sequence;
@@ -1451,55 +1628,67 @@ export class PosStore extends WithLazyGetterTrap {
             return sequenceA - sequenceB;
         });
 
+        const orderData = {
+            reprint: reprint,
+            pos_reference: order.getName(),
+            config_name: order.config_id.name,
+            write_date: DateTime.fromSQL(order.write_date).toFormat("HH:mm"),
+            tracking_number: order.tracking_number,
+            preset_name: order.preset_id?.name || "",
+            employee_name: order.employee_id?.name || order.user_id?.name,
+            internal_note: order.internal_note,
+            general_customer_note: order.general_customer_note,
+            changes: {
+                title: "",
+                data: [],
+            },
+        };
+
         for (const printer of this.unwatched.printers) {
-            const changes = this._getPrintingCategoriesChanges(
+            const changes = this.filterChangeByCategories(
                 printer.config.product_categories_ids,
                 orderChange
             );
-            const toPrintArray = this.preparePrintingData(order, changes);
-            const diningModeUpdate = orderChange.modeUpdate;
-            if (diningModeUpdate || !Object.keys(lastChangedLines).length) {
-                // Prepare orderlines based on the dining mode update
-                const lines =
-                    diningModeUpdate && Object.keys(lastChangedLines).length
-                        ? lastChangedLines
-                        : order.lines;
 
-                // converting in format we need to show on xml
-                const orderlines = Object.entries(lines).map(([key, value]) => ({
-                    basic_name: diningModeUpdate ? value.basic_name : value.product_id.name,
-                    isCombo: diningModeUpdate ? value.isCombo : value.combo_item_id?.id,
-                    quantity: diningModeUpdate ? value.quantity : value.qty,
-                    note: value.note,
-                    attribute_value_ids: value.attribute_value_ids,
-                }));
+            if (changes.new.length) {
+                orderData.changes = {
+                    title: _t("NEW"),
+                    data: changes.new,
+                };
+                const result = await this.printOrderChanges(orderData, printer);
+                if (!result.successful) {
+                    unsuccedPrints.push(printer.name);
+                }
+            }
 
-                // Print detailed receipt
-                const printed = await this.printReceipts(
-                    order,
-                    printer,
-                    "New",
-                    orderlines,
-                    true,
-                    diningModeUpdate
-                );
-                if (!printed) {
-                    unsuccedPrints.push("Detailed Receipt");
+            if (changes.cancelled.length) {
+                orderData.changes = {
+                    title: _t("CANCELLED"),
+                    data: changes.cancelled,
+                };
+                const result = await this.printOrderChanges(orderData, printer);
+                if (!result.successful) {
+                    unsuccedPrints.push(printer.name);
                 }
-            } else {
-                // Print all receipts related to line changes
-                for (const [key, value] of Object.entries(toPrintArray)) {
-                    const printed = await this.printReceipts(order, printer, key, value, false);
-                    if (!printed) {
-                        unsuccedPrints.push(key);
-                    }
+            }
+
+            if (changes.noteUpdate.length) {
+                orderData.changes = {
+                    title: _t("NOTE UPDATE"),
+                    data: changes.noteUpdate,
+                };
+                const result = await this.printOrderChanges(orderData, printer);
+                if (!result.successful) {
+                    unsuccedPrints.push(printer.name);
                 }
-                // Print Order Note if changed
-                if (orderChange.generalNote) {
-                    const printed = await this.printReceipts(order, printer, "Message", []);
-                    if (!printed) {
-                        unsuccedPrints.push("General Message");
-                    }
+                orderData.changes.noteUpdate = [];
+            }
+
+            if (orderChange.internal_note || orderChange.general_customer_note) {
+                orderData.changes = {};
+                const result = await this.printOrderChanges(orderData, printer);
+                if (!result.successful) {
+                    unsuccedPrints.push(printer.name);
                 }
             }
         }
@@ -1514,62 +1703,14 @@ export class PosStore extends WithLazyGetterTrap {
         }
     }
 
-    async printReceipts(order, printer, title, lines, fullReceipt = false, diningModeUpdate) {
-        const time = order.write_date ? order.write_date?.toFormat("HH:mm") : false;
-        const printingChanges = {
-            table_name: order.table_id ? order.table_id.table_number : "",
-            config_name: order.config_id.name,
-            time: order.write_date ? time : "",
-            tracking_number: order.tracking_number,
-            orderMoode: order.preset_id?.name || "",
-            employee_name: order.employee_id?.name || order.user_id?.name,
-            order_note: order.internal_note,
-            diningModeUpdate: diningModeUpdate,
-        };
-
+    async printOrderChanges(data, printer) {
         const receipt = renderToElement("point_of_sale.OrderChangeReceipt", {
-            operational_title: title,
-            changes: printingChanges,
-            changedlines: lines,
-            fullReceipt: fullReceipt,
+            data: data,
         });
-        const result = await printer.printReceipt(receipt);
-        return result.successful;
+        return await printer.printReceipt(receipt);
     }
 
-    preparePrintingData(order, changes) {
-        const order_modifications = {};
-        const pdisChangedLines = order.last_order_preparation_change.lines;
-
-        if (changes["new"].length) {
-            order_modifications["New"] = changes["new"];
-        }
-        if (changes["noteUpdated"].length) {
-            order_modifications["Note"] = changes["noteUpdated"];
-        }
-        // Handle removed lines
-        if (changes["cancelled"].length) {
-            if (changes["new"].length) {
-                order_modifications["Cancelled"] = changes["cancelled"];
-            } else {
-                const allCancelled = changes["cancelled"].every((line) => {
-                    const pdisLine = pdisChangedLines[line.uuid + " - " + line.note];
-                    return !pdisLine || pdisLine.quantity <= line.quantity;
-                });
-                if (
-                    allCancelled &&
-                    Object.keys(pdisChangedLines).length == changes["cancelled"].length
-                ) {
-                    order_modifications["Cancel"] = changes["cancelled"];
-                } else {
-                    order_modifications["Cancelled"] = changes["cancelled"];
-                }
-            }
-        }
-        return order_modifications;
-    }
-
-    _getPrintingCategoriesChanges(categories, currentOrderChange) {
+    filterChangeByCategories(categories, currentOrderChange) {
         const filterFn = (change) => {
             const product = this.models["product.product"].get(change["product_id"]);
             const categoryIds = product.parentPosCategIds;
@@ -1584,7 +1725,7 @@ export class PosStore extends WithLazyGetterTrap {
         return {
             new: currentOrderChange["new"].filter(filterFn),
             cancelled: currentOrderChange["cancelled"].filter(filterFn),
-            noteUpdated: currentOrderChange["noteUpdated"].filter(filterFn),
+            noteUpdate: currentOrderChange["noteUpdate"].filter(filterFn),
         };
     }
 
@@ -1750,6 +1891,12 @@ export class PosStore extends WithLazyGetterTrap {
             }
 
             order.setPreset(preset);
+            if (preset.identification === "name" && !order.floating_order_name && !order.table_id) {
+                order.floating_order_name = order.getPartner()?.name;
+                if (!order.floating_order_name) {
+                    this.editFloatingOrderName(order);
+                }
+            }
 
             if (preset.use_timing && !order.preset_time) {
                 await this.syncPresetSlotAvaibility(preset);
@@ -1770,6 +1917,10 @@ export class PosStore extends WithLazyGetterTrap {
             // Compute locally if the server is not reachable
             preset.computeAvailabilities();
         }
+    }
+    // There for override to do something before adding partner to current order from partner list
+    setPartnerToCurrentOrder(partner) {
+        this.getOrder().setPartner(partner);
     }
     async selectPartner() {
         // FIXME, find order to refund when we are in the ticketscreen.
@@ -1792,11 +1943,7 @@ export class PosStore extends WithLazyGetterTrap {
             partner: currentPartner,
         });
 
-        if (payload) {
-            currentOrder.setPartner(payload);
-        } else {
-            currentOrder.setPartner(false);
-        }
+        this.setPartnerToCurrentOrder(payload || false);
 
         return payload;
     }
@@ -1836,6 +1983,38 @@ export class PosStore extends WithLazyGetterTrap {
             canCreateLots = true;
         }
 
+        const usedLotsQty = this.models["pos.pack.operation.lot"]
+            .filter(
+                (lot) =>
+                    lot.pos_order_line_id?.product_id?.id === product.id &&
+                    lot.pos_order_line_id?.order_id?.state === "draft"
+            )
+            .reduce((acc, lot) => {
+                if (!acc[lot.lot_name]) {
+                    acc[lot.lot_name] = { total: 0, currentOrderCount: 0 };
+                }
+                acc[lot.lot_name].total += lot.pos_order_line_id?.qty || 0;
+
+                if (lot.pos_order_line_id?.order_id?.id === this.selectedOrder.id) {
+                    acc[lot.lot_name].currentOrderCount += lot.pos_order_line_id?.qty || 0;
+                }
+                return acc;
+            }, {});
+
+        // Remove lot/serial names that are already used in draft orders
+        existingLots = existingLots.filter(
+            (lot) => lot.product_qty > (usedLotsQty[lot.name]?.total || 0)
+        );
+
+        // Check if the input lot/serial name is already used in another order
+        const isLotNameUsed = (itemValue) => {
+            const totalQty = existingLots.find((lt) => lt.name == itemValue)?.product_qty || 0;
+            const usedQty = usedLotsQty[itemValue]
+                ? usedLotsQty[itemValue].total - usedLotsQty[itemValue].currentOrderCount
+                : 0;
+            return usedQty ? usedQty >= totalQty : false;
+        };
+
         const existingLotsName = existingLots.map((l) => l.name);
         const payload = await makeAwaitable(this.dialog, EditListPopup, {
             title: _t("Lot/Serial Number(s) Required"),
@@ -1845,6 +2024,7 @@ export class PosStore extends WithLazyGetterTrap {
             options: existingLotsName,
             customInput: canCreateLots,
             uniqueValues: product.tracking === "serial",
+            isLotNameUsed: isLotNameUsed,
         });
         if (payload) {
             // Segregate the old and new packlot lines
@@ -1933,7 +2113,10 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     showSearchButton() {
-        return this.mainScreen.component === ProductScreen && this.mobile_pane === "right";
+        if (this.mainScreen.component === ProductScreen) {
+            return this.ui.isSmall ? this.mobile_pane === "right" : true;
+        }
+        return false;
     }
 
     doNotAllowRefundAndSales() {
@@ -1980,22 +2163,6 @@ export class PosStore extends WithLazyGetterTrap {
             {},
             QRPopup
         );
-    }
-
-    async onTicketButtonClick() {
-        if (!this.isTicketScreenShown) {
-            if (this.config.shouldLoadOrders) {
-                try {
-                    this.setLoadingOrderState(true);
-                    await this.getServerOrders();
-                } finally {
-                    this.setLoadingOrderState(false);
-                    this.showScreen("TicketScreen");
-                }
-            } else {
-                this.showScreen("TicketScreen");
-            }
-        }
     }
 
     get isTicketScreenShown() {
@@ -2060,7 +2227,7 @@ export class PosStore extends WithLazyGetterTrap {
                   if (b.is_favorite !== a.is_favorite) {
                       return b.is_favorite - a.is_favorite;
                   }
-                  return a.display_name.localeCompare(b.display_name);
+                  return a.name.localeCompare(b.name);
               });
     }
 

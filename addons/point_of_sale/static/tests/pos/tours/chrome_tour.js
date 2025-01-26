@@ -4,7 +4,6 @@ import * as Dialog from "@point_of_sale/../tests/generic_helpers/dialog_util";
 import * as PaymentScreen from "@point_of_sale/../tests/pos/tours/utils/payment_screen_util";
 import * as TicketScreen from "@point_of_sale/../tests/pos/tours/utils/ticket_screen_util";
 import * as Chrome from "@point_of_sale/../tests/pos/tours/utils/chrome_util";
-import * as Utils from "@point_of_sale/../tests/pos/tours/utils/common";
 import { registry } from "@web/core/registry";
 import { inLeftSide } from "@point_of_sale/../tests/pos/tours/utils/common";
 
@@ -96,8 +95,8 @@ registry.category("web_tour.tours").add("ChromeTour", {
             TicketScreen.deleteOrder("004"),
 
             // After deleting order 1 above, order 2 became
-            // the 2nd-row order and it has payment status
-            TicketScreen.nthRowContains(2, "Payment"),
+            // the 1st-row order and it has payment status
+            TicketScreen.nthRowContains(1, "Payment"),
             TicketScreen.deleteOrder("002"),
             Dialog.confirm(),
             Chrome.createFloatingOrder(),
@@ -141,19 +140,5 @@ registry.category("web_tour.tours").add("OrderModificationAfterValidationError",
 
             // Allow order changes after the error
             ProductScreen.clickDisplayedProduct("Test Product", true, "2"),
-        ].flat(),
-});
-
-registry.category("web_tour.tours").add("SearchMoreCustomer", {
-    checkDelay: 50,
-    steps: () =>
-        [
-            Chrome.startPoS(),
-            Dialog.confirm("Open Register"),
-            ProductScreen.clickPartnerButton(),
-            ProductScreen.inputCustomerSearchbar("1111"),
-            Utils.selectButton("Search more"),
-            ProductScreen.clickCustomer("BPartner"),
-            ProductScreen.isShown(),
         ].flat(),
 });

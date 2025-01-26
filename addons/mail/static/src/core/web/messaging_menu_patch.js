@@ -1,6 +1,6 @@
 import { MessagingMenu } from "@mail/core/public_web/messaging_menu";
 import { onExternalClick } from "@mail/utils/common/hooks";
-import { useEffect, useState } from "@odoo/owl";
+import { useEffect } from "@odoo/owl";
 
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
@@ -13,8 +13,8 @@ patch(MessagingMenu.prototype, {
     setup() {
         super.setup();
         this.action = useService("action");
-        this.pwa = useState(useService("pwa"));
-        this.notification = useState(useService("mail.notification.permission"));
+        this.pwa = useService("pwa");
+        this.notification = useService("mail.notification.permission");
         Object.assign(this.state, {
             searchOpen: false,
         });
@@ -131,7 +131,7 @@ patch(MessagingMenu.prototype, {
             // and the chat window does not look good.
             this.store.ChatWindow.get({ thread })?.close();
         } else {
-            thread.open({ fromMessagingMenu: true });
+            thread.open({ focus: true, fromMessagingMenu: true });
         }
         this.dropdown.close();
     },
@@ -176,7 +176,10 @@ patch(MessagingMenu.prototype, {
         return value;
     },
     get shouldAskPushPermission() {
-        return this.notification.permission === "prompt";
+        return (
+            this.notification.permission === "prompt" &&
+            !this.store.isNotificationPermissionDismissed
+        );
     },
     getFailureNotificationName(failure) {
         if (failure.type === "email") {

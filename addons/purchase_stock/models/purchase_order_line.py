@@ -97,10 +97,10 @@ class PurchaseOrderLine(models.Model):
         lines = self.filtered(lambda l: l.order_id.state == 'purchase'
                                         and not l.display_type)
 
-        if 'product_packaging_id' in values:
+        if 'product_uom_id' in values and values['product_uom_id'] != self.product_id.uom_id.id:
             self.move_ids.filtered(
                 lambda m: m.state not in ['cancel', 'done']
-            ).product_packaging_id = values['product_packaging_id']
+            ).product_uom = values['product_uom_id']
 
         previous_product_uom_qty = {line.id: line.product_uom_qty for line in lines}
         previous_product_qty = {line.id: line.product_qty for line in lines}
@@ -197,9 +197,9 @@ class PurchaseOrderLine(models.Model):
         order = self.order_id
         price_unit = self.price_unit
         price_unit_prec = self.env['decimal.precision'].precision_get('Product Price')
-        if self.taxes_id:
+        if self.tax_ids:
             qty = self.product_qty or 1
-            price_unit = self.taxes_id.compute_all(
+            price_unit = self.tax_ids.compute_all(
                 price_unit,
                 currency=self.order_id.currency_id,
                 quantity=qty,
@@ -209,7 +209,8 @@ class PurchaseOrderLine(models.Model):
             )['total_void']
             price_unit = price_unit / qty
         if self.product_uom_id.id != self.product_id.uom_id.id:
-            price_unit *= self.product_uom_id.factor / self.product_id.uom_id.factor
+            price_unit /= self.product_uom_id.factor
+            price_unit *= self.product_id.uom_id.factor
         if order.currency_id != order.company_id.currency_id:
             price_unit = order.currency_id._convert(
                 price_unit, order.company_id.currency_id, self.company_id, self.date_order or fields.Date.today(), round=False)
@@ -306,7 +307,6 @@ class PurchaseOrderLine(models.Model):
             'warehouse_id': self.order_id.picking_type_id.warehouse_id.id,
             'product_uom_qty': product_uom_qty,
             'product_uom': product_uom.id,
-            'product_packaging_id': self.product_packaging_id.id,
             'sequence': self.sequence,
         }
 

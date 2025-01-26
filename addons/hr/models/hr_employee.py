@@ -3,6 +3,8 @@
 
 import base64
 import re
+
+from collections import defaultdict
 from pytz import timezone, UTC
 from datetime import datetime, time
 from random import choice
@@ -11,6 +13,7 @@ from dateutil.relativedelta import relativedelta
 from markupsafe import Markup
 
 from odoo import api, fields, models, _
+from odoo.fields import Domain
 from odoo.exceptions import ValidationError, AccessError
 from odoo.osv import expression
 from odoo.tools import convert, format_date
@@ -333,6 +336,8 @@ class HrEmployee(models.Model):
         # cache, and interpreted as an access error
         self._check_private_fields(field_names)
         self.flush_model(field_names)
+        # HACK: suppress warning if domain is optimized for another model
+        domain = list(domain) if isinstance(domain, Domain) else domain
         public = self.env['hr.employee.public'].search_fetch(domain, field_names, offset, limit, order)
         employees = self.browse(public._ids)
         employees._copy_cache_from(public, field_names)
@@ -416,6 +421,8 @@ class HrEmployee(models.Model):
         if self.browse().has_access('read'):
             return super()._search(domain, offset, limit, order)
         try:
+            # HACK: suppress warning if domain is optimized for another model
+            domain = list(domain) if isinstance(domain, Domain) else domain
             ids = self.env['hr.employee.public']._search(domain, offset, limit, order)
         except ValueError:
             raise AccessError(_('You do not have access to this document.'))
@@ -645,8 +652,6 @@ class HrEmployee(models.Model):
             employee.barcode = '041'+"".join(choice(digits) for i in range(9))
 
     def _get_tz(self):
-        # Finds the first valid timezone in his tz, his work hours tz,
-        #  the company calendar tz or UTC and returns it as a string
         self.ensure_one()
         return self.tz or\
                self.resource_calendar_id.tz or\
@@ -658,6 +663,22 @@ class HrEmployee(models.Model):
         #  the company calendar tz or UTC
         # Returns a dict {employee_id: tz}
         return {emp.id: emp._get_tz() for emp in self}
+
+    def _get_calendar_tz_batch(self, dt=None):
+        """ Return a mapping { employee id : employee's effective schedule's (at dt) timezone }
+        """
+        if not dt:
+            calendars = self._get_calendars()
+            return {emp_id: calendar.tz for emp_id, calendar in calendars.items()}
+
+        employees_by_tz = self.grouped(lambda emp: emp._get_tz())
+
+        employee_timezones = {}
+        for tz, employee_ids in employees_by_tz.items():
+            date_at = timezone(tz).localize(dt).date()
+            calendars = self._get_calendars(date_at)
+            employee_timezones |= {emp_id: cal.tz for emp_id, cal in calendars.items()}
+        return employee_timezones
 
     def _employee_attendance_intervals(self, start, stop, lunch=False):
         self.ensure_one()

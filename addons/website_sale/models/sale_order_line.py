@@ -24,6 +24,14 @@ class SaleOrderLine(models.Model):
     def get_description_following_lines(self):
         return self.name.splitlines()[1:]
 
+    def _get_order_date(self):
+        self.ensure_one()
+        if self.order_id.website_id and self.state == 'draft':
+            # cart prices must always be computed based on the current time, not on the order
+            # creation date.
+            return fields.Datetime.now()
+        return super()._get_order_date()
+
     def _get_shop_warning(self, clear=True):
         self.ensure_one()
         warn = self.shop_warning
@@ -41,7 +49,7 @@ class SaleOrderLine(models.Model):
 
     def _get_displayed_quantity(self):
         rounded_uom_qty = round(self.product_uom_qty,
-                                self.env['decimal.precision'].precision_get('Product Unit of Measure'))
+                                self.env['decimal.precision'].precision_get('Product Unit'))
         return int(rounded_uom_qty) == rounded_uom_qty and int(rounded_uom_qty) or rounded_uom_qty
 
     def _show_in_cart(self):

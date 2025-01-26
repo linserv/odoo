@@ -39,8 +39,8 @@ class ProjectTask(models.Model):
     remaining_hours_percentage = fields.Float(compute='_compute_remaining_hours_percentage', search='_search_remaining_hours_percentage', export_string_translation=False)
     effective_hours = fields.Float("Time Spent", compute='_compute_effective_hours', compute_sudo=True, store=True)
     total_hours_spent = fields.Float("Total Time Spent", compute='_compute_total_hours_spent', store=True, help="Time spent on this task and its sub-tasks (and their own sub-tasks).")
-    progress = fields.Float("Progress", compute='_compute_progress_hours', store=True, aggregator="avg", export_string_translation=False)
-    overtime = fields.Float(compute='_compute_progress_hours', store=True, export_string_translation=False)
+    progress = fields.Float("Progress", compute='_compute_progress_hours', store=True, aggregator="avg")
+    overtime = fields.Float(compute='_compute_progress_hours', store=True)
     subtask_effective_hours = fields.Float("Time Spent on Sub-tasks", compute='_compute_subtask_effective_hours', recursive=True, store=True, help="Time spent on the sub-tasks (and their own sub-tasks) of this task.")
     timesheet_ids = fields.One2many('account.analytic.line', 'task_id', 'Timesheets', export_string_translation=False)
     encode_uom_in_days = fields.Boolean(compute='_compute_encode_uom_in_days', default=lambda self: self._uom_in_days(), export_string_translation=False)
@@ -246,14 +246,26 @@ class ProjectTask(models.Model):
             ['task_id'],
         )
         task_with_timesheets_ids = [task.id for task, in timesheet_data]
-        if task_with_timesheets_ids:
-            if len(task_with_timesheets_ids) > 1:
-                warning_msg = _("These tasks have some timesheet entries referencing them. Before removing these tasks, you have to remove these timesheet entries.")
-            else:
-                warning_msg = _("This task has some timesheet entries referencing it. Before removing this task, you have to remove these timesheet entries.")
-            raise RedirectWarning(
-                warning_msg, self.env.ref('hr_timesheet.timesheet_action_task').id,
-                _('See timesheet entries'), {'active_ids': task_with_timesheets_ids})
+        if not task_with_timesheets_ids:
+            return
+        # Fetch task IDs with timesheets that the user has read access.
+        inaccessible_task_ids = set(task_with_timesheets_ids) - set(
+            self.env['account.analytic.line'].search([
+                ('task_id', 'in', task_with_timesheets_ids)
+            ]).mapped('task_id.id')
+        )
+        if inaccessible_task_ids:
+            raise UserError(
+                _("This task can’t be deleted because it’s linked to timesheets. Please contact someone with higher access to remove the timesheets first, "
+                "and then you’ll be able to delete the task.")
+            )
+        if len(task_with_timesheets_ids) > 1:
+            warning_msg = _("These tasks have some timesheet entries referencing them. Before removing these tasks, you have to remove these timesheet entries.")
+        else:
+            warning_msg = _("This task has some timesheet entries referencing it. Before removing this task, you have to remove these timesheet entries.")
+        raise RedirectWarning(
+            warning_msg, self.env.ref('hr_timesheet.timesheet_action_task').id,
+            _('See timesheet entries'), {'active_ids': task_with_timesheets_ids})
 
     @api.model
     def _convert_hours_to_days(self, time):

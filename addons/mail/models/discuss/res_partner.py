@@ -82,20 +82,28 @@ class ResPartner(models.Model):
                 [("channel_ids", "in", channel.id)],
             ]
         )
-        partners = self._search_mention_suggestions(domain, limit)
+        extra_domain = expression.AND([
+            [('user_ids', '!=', False)],
+            [('user_ids.active', '=', True)],
+            [('partner_share', '=', False)]
+        ])
+        if channel.group_public_id.id:
+            extra_domain = expression.AND(
+                [
+                    extra_domain,
+                    [("user_ids.groups_id", "in", channel.group_public_id.id)],
+                ]
+            )
+        partners = self._search_mention_suggestions(domain, limit, extra_domain)
         members_domain = [("channel_id", "=", channel.id), ("partner_id", "in", partners.ids)]
         members = self.env["discuss.channel.member"].search(members_domain)
         member_fields = [
             Store.One("channel_id", [], as_thread=True, rename="thread"),
             *self.env["discuss.channel.member"]._to_store_persona([]),
         ]
-        return Store(members, member_fields).add(partners).get_result()
-
-    def _can_return_content(self, field_name=None, access_token=None):
-        if field_name == "avatar_128":
-            # access to the avatar is allowed if there is access to a channel
-            if self.env["discuss.channel"].search_count(
-                [("channel_member_ids", "any", [("partner_id", "=", self.id)])], limit=1
-            ):
-                return True
-        return super()._can_return_content(field_name, access_token)
+        store = Store(members, member_fields).add(partners)
+        store.add(channel, {"group_public_id": channel.group_public_id.id if channel.group_public_id else None})
+        if channel.group_public_id:
+            for p in partners:
+                store.add(p, {"groups_id": [("ADD", (channel.group_public_id & p.user_ids.groups_id).ids)]})
+        return store.get_result()

@@ -549,7 +549,6 @@ export class Record extends DataPoint {
             resIds: data.map((r) => r.id),
             orderBy: orderBys?.[fieldName] || defaultOrderBy || [],
             limit: limit || Number.MAX_SAFE_INTEGER,
-            companies: this.companies,
             context: {}, // will be set afterwards, see "_updateContext" in "_setEvalContext"
         };
         const options = {
@@ -1021,7 +1020,10 @@ export class Record extends DataPoint {
             const data = { jsonrpc: "2.0", method: "call", params };
             const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
             const succeeded = navigator.sendBeacon(route, blob);
-            if (!succeeded) {
+            if (succeeded) {
+                this._changes = markRaw({});
+                this.dirty = false;
+            } else {
                 this.model._closeUrgentSaveNotification = this.model.notification.add(
                     markup(
                         _t(

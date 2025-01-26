@@ -16,14 +16,15 @@ export class ReceiptScreen extends Component {
         super.setup();
         this.pos = usePos();
         useErrorHandlers();
-        this.ui = useState(useService("ui"));
+        this.ui = useService("ui");
         this.renderer = useService("renderer");
         this.notification = useService("notification");
         this.dialog = useService("dialog");
         this.currentOrder = this.pos.getOrder();
         const partner = this.currentOrder.getPartner();
+        const email = partner?.invoice_emails || partner?.email || "";
         this.state = useState({
-            email: partner?.email || "",
+            email: email,
             phone: partner?.mobile || "",
         });
         this.sendReceipt = useTrackedAsync(this._sendReceiptToCustomer.bind(this));
@@ -32,7 +33,10 @@ export class ReceiptScreen extends Component {
         onMounted(() => {
             const order = this.pos.getOrder();
             this.currentOrder.uiState.locked = true;
-            this.pos.sendOrderInPreparation(order);
+
+            if (!this.pos.config.module_pos_restaurant) {
+                this.pos.sendOrderInPreparation(order, false, true);
+            }
         });
     }
     actionSendReceiptOnEmail() {

@@ -5,6 +5,7 @@ from freezegun import freeze_time
 from unittest.mock import patch, PropertyMock
 
 from odoo import fields
+from odoo.tools.misc import limited_field_access_token
 from odoo.addons.im_livechat.tests.common import TestImLivechatCommon
 from odoo.addons.mail.tests.common import MailCommon
 from odoo.tests import new_test_user, tagged
@@ -19,7 +20,9 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
 
         for _i in range(5):
             discuss_channels = self._open_livechat_discuss_channel()
-            channel_operator_ids = [channel_info['operator']['id'] for channel_info in discuss_channels]
+            channel_operator_ids = [
+                channel_info["livechat_operator_id"]["id"] for channel_info in discuss_channels
+            ]
             self.assertTrue(all(partner_id in channel_operator_ids for partner_id in self.operators.mapped('partner_id').ids))
 
     def test_channel_get_livechat_visitor_info(self):
@@ -50,6 +53,7 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
             data["mail.guest"],
             [
                 {
+                    "avatar_128_access_token": limited_field_access_token(guest, "avatar_128"),
                     "id": guest.id,
                     "im_status": "offline",
                     "name": "Visitor",
@@ -62,6 +66,9 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
             self._filter_partners_fields(
                 {
                     "active": True,
+                    "avatar_128_access_token": limited_field_access_token(
+                        operator.partner_id, "avatar_128"
+                    ),
                     "country": False,
                     "id": operator.partner_id.id,
                     "is_public": False,
@@ -70,6 +77,9 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                 },
                 {
                     "active": False,
+                    "avatar_128_access_token": limited_field_access_token(
+                        self.partner_root, "avatar_128"
+                    ),
                     "id": self.user_root.partner_id.id,
                     "im_status": "bot",
                     "isInternalUser": True,
@@ -108,6 +118,9 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
             self._filter_partners_fields(
                 {
                     "active": True,
+                    "avatar_128_access_token": limited_field_access_token(
+                        operator.partner_id, "avatar_128"
+                    ),
                     "country": False,
                     "id": operator.partner_id.id,
                     "is_public": False,
@@ -116,6 +129,9 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                 },
                 {
                     "active": True,
+                    "avatar_128_access_token": limited_field_access_token(
+                        test_user.partner_id, "avatar_128"
+                    ),
                     "country": belgium.id,
                     "id": test_user.partner_id.id,
                     "isAdmin": False,
@@ -130,6 +146,9 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                 },
                 {
                     "active": False,
+                    "avatar_128_access_token": limited_field_access_token(
+                        self.partner_root, "avatar_128"
+                    ),
                     "email": "odoobot@example.com",
                     "id": self.user_root.partner_id.id,
                     "im_status": "bot",
@@ -186,7 +205,7 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
             ('partner_id', '=', operator.partner_id.id),
         ]
         operator_member = self.env['discuss.channel.member'].search(operator_member_domain)
-        self.assertEqual(channel_info['operator'], {
+        self.assertEqual(channel_info['livechat_operator_id'], {
             "id": operator.partner_id.id,
             "type": "partner",
         })
@@ -197,6 +216,9 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
             self._filter_partners_fields(
                 {
                     "active": True,
+                    "avatar_128_access_token": limited_field_access_token(
+                        operator.partner_id, "avatar_128"
+                    ),
                     "country": False,
                     "id": operator.partner_id.id,
                     "isAdmin": False,
@@ -211,6 +233,9 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                 },
                 {
                     "active": False,
+                    "avatar_128_access_token": limited_field_access_token(
+                        self.partner_root, "avatar_128"
+                    ),
                     "email": "odoobot@example.com",
                     "id": self.user_root.partner_id.id,
                     "im_status": "bot",
@@ -271,10 +296,8 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
         self.env["discuss.channel"].browse(channel_id).message_post(body="cc")
         self.assertTrue(member.is_pinned, "channel should be pinned for operator after visitor sent a message")
         self.authenticate(operator.login, self.password)
-        operator_channels = self.make_jsonrpc_request("/mail/data", {"channels_as_member": True})[
-            "discuss.channel"
-        ]
-        channel_ids = [channel["id"] for channel in operator_channels]
+        data = self.make_jsonrpc_request("/mail/data", {"fetch_params": ["channels_as_member"]})
+        channel_ids = [channel["id"] for channel in data["discuss.channel"]]
         self.assertIn(channel_id, channel_ids, "channel should be fetched by operator on new page")
 
     def test_read_channel_unpined_for_operator_after_one_day(self):
@@ -307,47 +330,3 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
         with freeze_time(fields.Datetime.to_string(fields.Datetime.now() + timedelta(days=1))):
             member_of_operator._gc_unpin_livechat_sessions()
         self.assertTrue(member_of_operator.is_pinned, "unread channel should not be unpinned after autovacuum")
-
-    def test_only_active_livechats_returned_by_init_messaging(self):
-        self.authenticate(None, None)
-        operator = new_test_user(self.env, login="John")
-        self.env["bus.presence"].create({"user_id": operator.id, "status": "online"})
-        livechat_channel = self.env["im_livechat.channel"].create(
-            {"name": "Customer Support", "user_ids": [operator.id]}
-        )
-        inactive_livechat = self.env["discuss.channel"].browse(
-            self.make_jsonrpc_request(
-                "/im_livechat/get_session",
-                {
-                    "anonymous_name": "Visitor",
-                    "channel_id": livechat_channel.id,
-                    "persisted": True,
-                },
-            )["discuss.channel"][0]["id"]
-        )
-        self.make_jsonrpc_request(
-            "/im_livechat/visitor_leave_session", {"channel_id": inactive_livechat.id}
-        )
-        guest = inactive_livechat.channel_member_ids.filtered(lambda m: m.guest_id).guest_id
-        non_livechat_channel = self.env['discuss.channel']._create_channel(name="General", group_id=None)
-        non_livechat_channel.add_members(guest_ids=guest.ids)
-        non_livechat_channel.channel_member_ids.fold_state = "open"
-        active_livechat = self.env["discuss.channel"].browse(
-            self.make_jsonrpc_request(
-                "/im_livechat/get_session",
-                {
-                    "anonymous_name": "Visitor",
-                    "channel_id": livechat_channel.id,
-                    "persisted": True,
-                },
-            )["discuss.channel"][0]["id"]
-        )
-        init_messaging_result = self.make_jsonrpc_request("/mail/action", {"init_messaging": {}})
-        self.assertEqual(len(init_messaging_result["discuss.channel"]), 2)
-        self.assertEqual(init_messaging_result["discuss.channel"][0]["channel_type"], "channel")
-        self.assertEqual(init_messaging_result["discuss.channel"][1]["channel_type"], "livechat")
-        init_messaging_result = self.make_jsonrpc_request("/mail/action", {"init_messaging": {
-            "channel_types": ["livechat"],
-        }})
-        self.assertEqual(len(init_messaging_result["discuss.channel"]), 1)
-        self.assertEqual(init_messaging_result["discuss.channel"][0]["id"], active_livechat.id)

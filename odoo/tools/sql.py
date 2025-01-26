@@ -152,6 +152,9 @@ class SQL:
     def __eq__(self, other):
         return isinstance(other, SQL) and self.__code == other.__code and self.__params == other.__params
 
+    def __hash__(self):
+        return hash((self.__code, self.__params))
+
     def __iter__(self):
         """ Yields ``self.code`` and ``self.params``. This was introduced for
         backward compatibility, as it enables to access the SQL and parameters
@@ -160,6 +163,7 @@ class SQL:
             sql = SQL(...)
             code, params = sql
         """
+        warnings.warn("Deprecated since 19.0, use code and params properties directly", DeprecationWarning)
         yield self.code
         yield self.params
 
@@ -546,13 +550,13 @@ def check_index_exist(cr, indexname):
 def index_definition(cr, indexname):
     """ Read the index definition from the database """
     cr.execute(SQL("""
-        SELECT COALESCE(d.description, idx.indexdef) AS def
+        SELECT idx.indexdef, d.description
         FROM pg_class c
         JOIN pg_indexes idx ON c.relname = idx.indexname
         LEFT JOIN pg_description d ON c.oid = d.objoid
         WHERE c.relname = %s AND c.relkind = 'i'
     """, indexname))
-    return cr.fetchone()[0] if cr.rowcount else None
+    return cr.fetchone() if cr.rowcount else (None, None)
 
 
 def create_index(
@@ -594,19 +598,22 @@ def add_index(cr, indexname, tablename, definition, *, unique: bool, comment='')
         definition = SQL(definition.replace('%', '%%'))
     else:
         definition = SQL(definition)
-    cr.execute(SQL(
+    query = SQL(
         "CREATE %sINDEX %s ON %s %s",
         SQL("UNIQUE ") if unique else SQL(),
         SQL.identifier(indexname),
         SQL.identifier(tablename),
         definition,
-    ))
-    if comment:
-        cr.execute(SQL(
-            "COMMENT ON INDEX %s IS %s",
-            SQL.identifier(indexname), comment,
-        ))
-    _schema.debug("Table %r: created index %r (%s)", tablename, indexname, definition.code)
+    )
+    query_comment = SQL(
+        "COMMENT ON INDEX %s IS %s",
+        SQL.identifier(indexname), comment,
+    ) if comment else None
+    with cr.savepoint(flush=False):
+        cr.execute(query, log_exceptions=False)
+        if query_comment:
+            cr.execute(query_comment, log_exceptions=False)
+        _schema.debug("Table %r: created index %r (%s)", tablename, indexname, definition.code)
 
 
 def create_unique_index(cr, indexname, tablename, expressions):

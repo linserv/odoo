@@ -4,6 +4,7 @@ import "@mail/discuss/core/common/thread_model_patch";
 
 import { patch } from "@web/core/utils/patch";
 import { SESSION_STATE } from "./livechat_service";
+import { _t } from "@web/core/l10n/translation";
 
 patch(Thread.prototype, {
     setup() {
@@ -11,7 +12,7 @@ patch(Thread.prototype, {
         this.chatbotTypingMessage = Record.one("mail.message", {
             compute() {
                 if (this.chatbot) {
-                    return { id: -0.1 - this.id, thread: this, author: this.operator };
+                    return { id: -0.1 - this.id, thread: this, author: this.livechat_operator_id };
                 }
             },
         });
@@ -23,20 +24,31 @@ patch(Thread.prototype, {
                         id: -0.2 - this.id,
                         body: livechatService.options.default_message,
                         thread: this,
-                        author: this.operator,
+                        author: this.livechat_operator_id,
                     };
                 }
             },
         });
         this.chatbot = Record.one("Chatbot");
+        this._startChatbot = Record.attr(false, {
+            compute() {
+                return (
+                    this.chatbot?.thread?.eq(
+                        this.store.env.services["im_livechat.livechat"].thread
+                    ) && this.isLoaded
+                );
+            },
+            onUpdate() {
+                if (this._startChatbot) {
+                    this.store.env.services["im_livechat.chatbot"].start();
+                }
+            },
+        });
         this.requested_by_operator = false;
     },
 
     get isLastMessageFromCustomer() {
-        if (this.channel_type !== "livechat") {
-            return super.isLastMessageFromCustomer;
-        }
-        return this.newestMessage?.isSelfAuthored;
+        return this.newestPersistentOfAllMessage?.isSelfAuthored;
     },
 
     get membersThatCanSeen() {
@@ -45,13 +57,15 @@ patch(Thread.prototype, {
 
     get avatarUrl() {
         if (this.channel_type === "livechat") {
-            return this.operator.avatarUrl;
+            return this.livechat_operator_id.avatarUrl;
         }
         return super.avatarUrl;
     },
     get displayName() {
-        if (this.channel_type === "livechat" && this.operator) {
-            return this.operator.user_livechat_username || this.operator.name;
+        if (this.channel_type === "livechat" && this.livechat_operator_id) {
+            return (
+                this.livechat_operator_id.user_livechat_username || this.livechat_operator_id.name
+            );
         }
         return super.displayName;
     },
@@ -80,5 +94,32 @@ patch(Thread.prototype, {
             return false;
         }
         return super.showUnreadBanner;
+    },
+
+    get composerDisabled() {
+        const step = this.chatbot?.currentStep;
+        return (
+            super.composerDisabled ||
+            (step &&
+                !step.operatorFound &&
+                (step.completed || !step.expectAnswer || step.answers.length > 0))
+        );
+    },
+
+    get composerDisabledText() {
+        const text = super.composerDisabledText;
+        if (text || !this.chatbot) {
+            return text;
+        }
+        if (this.chatbot.completed) {
+            return _t("This livechat conversation has ended");
+        }
+        if (
+            this.chatbot.currentStep?.type === "question_selection" &&
+            !this.chatbot.currentStep.completed
+        ) {
+            return _t("Select an option above");
+        }
+        return _t("Say something");
     },
 });

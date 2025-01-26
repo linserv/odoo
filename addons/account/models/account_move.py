@@ -19,6 +19,7 @@ from odoo.tools.sql import column_exists, create_column
 from odoo.addons.account.tools import format_structured_reference_iso
 from odoo.exceptions import UserError, ValidationError, AccessError, RedirectWarning
 from odoo.osv import expression
+from odoo.tools.misc import clean_context
 from odoo.tools import (
     date_utils,
     float_compare,
@@ -70,6 +71,9 @@ ALLOWED_MIMETYPES = {
     'application/vnd.oasis.opendocument.spreadsheet',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.oasis.opendocument.presentation',
 }
 
 EMPTY = object()
@@ -365,6 +369,8 @@ class AccountMove(models.Model):
         copy=False,
         store=True,
         compute='_compute_delivery_date',
+        precompute=True,
+        readonly=False,
     )
     show_delivery_date = fields.Boolean(compute='_compute_show_delivery_date')
     invoice_payment_term_id = fields.Many2one(
@@ -978,6 +984,7 @@ class AccountMove(models.Model):
     @api.depends('partner_id')
     def _compute_invoice_payment_term_id(self):
         for move in self:
+            move = move.with_company(move.company_id)
             if move.is_sale_document(include_receipts=True) and move.partner_id.property_payment_term_id:
                 move.invoice_payment_term_id = move.partner_id.property_payment_term_id
             elif move.is_purchase_document(include_receipts=True) and move.partner_id.property_supplier_payment_term_id:
@@ -1013,6 +1020,10 @@ class AccountMove(models.Model):
             )
             invoice.currency_id = currency
 
+    def _get_invoice_currency_rate_date(self):
+        self.ensure_one()
+        return self.invoice_date or fields.Date.context_today(self)
+
     @api.depends('currency_id', 'company_currency_id', 'company_id', 'invoice_date')
     def _compute_invoice_currency_rate(self):
         for move in self:
@@ -1022,7 +1033,7 @@ class AccountMove(models.Model):
                         from_currency=move.company_currency_id,
                         to_currency=move.currency_id,
                         company=move.company_id,
-                        date=move.invoice_date or fields.Date.context_today(move),
+                        date=move._get_invoice_currency_rate_date(),
                     )
                 else:
                     move.invoice_currency_rate = 1
@@ -2988,7 +2999,7 @@ class AccountMove(models.Model):
         if to_delete:
             self.env['account.move.line'].browse(to_delete).with_context(dynamic_unlink=True).unlink()
         if to_create:
-            self.env['account.move.line'].create([
+            self.env['account.move.line'].with_context(clean_context(self.env.context)).create([
                 {**key, **values, 'display_type': line_type}
                 for key, values in to_create.items()
             ])
@@ -3508,6 +3519,8 @@ class AccountMove(models.Model):
         last_month = int(self.company_id.fiscalyear_last_month)
         is_staggered_year = last_month != 12 or last_day != 31
         if is_staggered_year:
+            max_last_day = calendar.monthrange(self.date.year, last_month)[1]
+            last_day = min(last_day, max_last_day)
             if self.date > date(self.date.year, last_month, last_day):
                 year_part = "%s-%s" % (self.date.strftime('%y'), (self.date + relativedelta(years=1)).strftime('%y'))
             else:
@@ -3726,7 +3739,12 @@ class AccountMove(models.Model):
             price_untaxed = self.currency_id.round(
                 remaining_amount / (((1.0 - discount_percentage / 100.0) * (taxes.amount / 100.0)) + 1.0))
         else:
-            price_untaxed = taxes.with_context(force_price_include=True).compute_all(remaining_amount)['total_excluded']
+            tax_results = taxes.with_context(force_price_include=True).compute_all(remaining_amount)
+            price_untaxed = tax_results['total_excluded'] - sum(
+                tax_data['amount']
+                for tax_data in tax_results['taxes']
+                if tax_data['is_reverse_charge']
+            )
         return {'account_id': account_id, 'tax_ids': taxes.ids, 'price_unit': price_untaxed}
 
     @api.onchange('quick_edit_mode', 'journal_id', 'company_id')
@@ -4149,6 +4167,7 @@ class AccountMove(models.Model):
                 continue
 
             decoder = (current_invoice or current_invoice.new(self.default_get(['move_type', 'journal_id'])))._get_edi_decoder(file_data, new=new)
+            current_invoice.flush_recordset()
             if decoder or file_data['type'] in ('pdf', 'binary'):
                 try:
                     with self.env.cr.savepoint():
@@ -5157,11 +5176,11 @@ class AccountMove(models.Model):
 
         return report_action
 
-    def action_invoice_download_pdf(self):
+    def action_invoice_download_pdf(self, target = "download"):
         return {
             'type': 'ir.actions.act_url',
             'url': f'/account/download_invoice_documents/{",".join(map(str, self.ids))}/pdf',
-            'target': 'download',
+            'target': target,
         }
 
     def preview_invoice(self):
@@ -5957,35 +5976,34 @@ class AccountMove(models.Model):
             # Helper to know if the partner is an internal one.
             return partner == company.partner_id or (partner.user_ids and all(user._is_internal() for user in partner.user_ids))
 
-        extra_domain = False
-        if custom_values.get('company_id'):
-            extra_domain = ['|', ('company_id', '=', custom_values['company_id']), ('company_id', '=', False)]
+        def is_right_company(partner):
+            if custom_values.get('company_id'):
+                return partner.company_id in [False, custom_values['company_id']]
+            return True
 
         # Search for partners in copy.
         cc_mail_addresses = email_split(msg_dict.get('cc', ''))
-        followers = [partner for partner in self._mail_find_partner_from_emails(cc_mail_addresses, extra_domain=extra_domain) if partner]
+        followers = self._partner_find_from_emails_single(cc_mail_addresses, filter_found=is_right_company, no_create=True)
 
         # Search for partner that sent the mail.
         from_mail_addresses = email_split(msg_dict.get('from', ''))
-        senders = partners = [partner for partner in self._mail_find_partner_from_emails(from_mail_addresses, extra_domain=extra_domain) if partner]
+        senders = partners = self._partner_find_from_emails_single(from_mail_addresses, filter_found=is_right_company, no_create=True)
 
         # Search for partners using the user.
         if not senders:
             user_partners = self.env['res.users'].sudo().search(
                 [('email_normalized', 'in', from_mail_addresses)]
             ).mapped('partner_id')
-            senders = partners = list(self.env['res.partner'].search([('id', 'in', user_partners.ids)]))
+            senders = partners = self.env['res.partner'].search([('id', 'in', user_partners.ids)])
 
         if partners:
             # Check we are not in the case when an internal user forwarded the mail manually.
             if is_internal_partner(partners[0]):
                 # Search for partners in the mail's body.
                 body_mail_addresses = set(email_re.findall(msg_dict.get('body')))
-                partners = [
-                    partner
-                    for partner in self._mail_find_partner_from_emails(body_mail_addresses, extra_domain=extra_domain)
-                    if not is_internal_partner(partner) and partner.company_id.id in (False, company.id)
-                ]
+                partners = self._partner_find_from_emails_single(
+                    body_mail_addresses, filter_found=is_right_company, no_create=True
+                ).filtered(lambda p: not is_internal_partner(p))
         # Little hack: Inject the mail's subject in the body.
         if msg_dict.get('subject') and msg_dict.get('body'):
             msg_dict['body'] = Markup('<div><div><h3>%s</h3></div>%s</div>') % (msg_dict['subject'], msg_dict['body'])

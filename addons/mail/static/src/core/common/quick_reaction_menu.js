@@ -25,7 +25,7 @@ export class QuickReactionMenu extends Component {
 
     setup() {
         this.toggle = useRef("toggle");
-        this.store = useState(useService("mail.store"));
+        this.store = useService("mail.store");
         this.picker = useEmojiPicker(
             null,
             { onSelect: this.toggleReaction.bind(this), class: "overflow-hidden rounded-2" },
@@ -35,7 +35,7 @@ export class QuickReactionMenu extends Component {
             }
         );
         this.dropdown = useState(useDropdownState());
-        this.frequentEmojiService = useState(useService("web.frequent.emoji"));
+        this.frequentEmojiService = useService("web.frequent.emoji");
         this.state = useState({ emojiLoaded: Boolean(loader.loaded) });
         if (!loader.loaded) {
             loader.onEmojiLoaded(() => (this.state.emojiLoaded = true));
@@ -115,14 +115,8 @@ export class QuickReactionMenu extends Component {
             // Bypass nested dropdown behavior to allow initial focus.
             onEnabled: null,
             hotkeys: {
-                arrowright(index, items) {
-                    const target = index === items.length - 1 ? items[0] : items[index + 1];
-                    target.setActive();
-                },
-                arrowleft(index, items) {
-                    const target = index === 0 ? items.at(-1) : items[index - 1];
-                    target.setActive();
-                },
+                arrowright: (navigator) => navigator.next(),
+                arrowleft: (navigator) => navigator.previous(),
                 // Disable up and down navigation as it does not make sense for horizontal menu.
                 arrowdown: null,
                 arrowup: null,

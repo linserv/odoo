@@ -9,6 +9,7 @@ class ChatbotCase(MailCommon, common.HttpCase):
     @classmethod
     def setUpClass(cls):
         super(ChatbotCase, cls).setUpClass()
+        cls.maxDiff = None
 
         cls.chatbot_script = cls.env['chatbot.script'].create({
             'title': 'Testing Bot',
@@ -40,7 +41,7 @@ class ChatbotCase(MailCommon, common.HttpCase):
             cls.step_dispatch_operator,
             cls.step_dispatch_documentation,
         ] = cls.env['chatbot.script.answer'].sudo().create([{
-            'name': 'I want to buy the software',
+            'name': 'I\'d like to buy the software',
             'script_step_id': cls.step_dispatch.id,
         }, {
             'name': 'Pricing Question',

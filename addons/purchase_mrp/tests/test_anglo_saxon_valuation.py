@@ -105,14 +105,12 @@ class TestAngloSaxonValuationPurchaseMRP(AccountTestInvoicingCommon):
             'is_storable': True,
             'categ_id': self.avco_category.id,
             'uom_id': uom_litre.id,
-            'uom_po_id': uom_litre.id,
         } for name in ['01', '02']])
 
         kit = self.env['product.product'].create({
             'name': 'Super Kit',
             'type': 'consu',
             'uom_id': uom_unit.id,
-            'uom_po_id': uom_unit.id,
         })
 
         bom_kit = self.env['mrp.bom'].create({
@@ -134,7 +132,7 @@ class TestAngloSaxonValuationPurchaseMRP(AccountTestInvoicingCommon):
         with po_form.order_line.new() as pol_form:
             pol_form.product_id = kit
             pol_form.price_unit = 100
-            pol_form.taxes_id.clear()
+            pol_form.tax_ids.clear()
         po = po_form.save()
         po.button_confirm()
 

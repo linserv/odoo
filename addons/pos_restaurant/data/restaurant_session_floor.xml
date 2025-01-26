@@ -22,6 +22,7 @@
         <record id="pos_closed_session_3" model="pos.session" forcecreate="False">
             <field name="config_id" ref="pos_config_main_restaurant" />
             <field name="user_id" ref="base.user_admin" />
+            <field name="name">POS/DEMO/03</field>
             <field name="start_at" eval="(DateTime.today() + relativedelta(days=-1)).strftime('%Y-%m-%d %H:%M:%S')" />
             <field name="stop_at"
                 eval="(DateTime.today() + relativedelta(days=-1, hours=1)).strftime('%Y-%m-%d %H:%M:%S')" />
@@ -35,6 +36,7 @@
             <field name="amount_tax">0.0</field>
             <field name="amount_paid">14.0</field>
             <field name="amount_return">0.0</field>
+            <field name="preset_id" ref="pos_takein_preset"/>
         </record>
 
         <record id="pos_closed_orderline_3_1_1" model="pos.order.line" forcecreate="False">
@@ -69,6 +71,7 @@
             <field name="amount_tax">0.0</field>
             <field name="amount_paid">7.0</field>
             <field name="amount_return">0.0</field>
+            <field name="preset_id" ref="pos_takein_preset"/>
         </record>
 
         <record id="pos_closed_orderline_3_2_1" model="pos.order.line" forcecreate="False">
@@ -94,6 +97,7 @@
         <record id="pos_closed_session_4" model="pos.session" forcecreate="False">
             <field name="config_id" ref="pos_config_main_restaurant" />
             <field name="user_id" ref="base.user_admin" />
+            <field name="name">POS/DEMO/04</field>
             <field name="start_at" eval="(DateTime.today() + relativedelta(days=-1)).strftime('%Y-%m-%d %H:%M:%S')" />
             <field name="stop_at"
                 eval="(DateTime.today() + relativedelta(days=-1, hours=1)).strftime('%Y-%m-%d %H:%M:%S')" />
@@ -107,6 +111,7 @@
             <field name="amount_tax">0.0</field>
             <field name="amount_paid">6.7</field>
             <field name="amount_return">0.0</field>
+            <field name="preset_id" ref="pos_takein_preset"/>
         </record>
 
         <record id="pos_closed_orderline_4_1_1" model="pos.order.line" forcecreate="False">
@@ -141,6 +146,7 @@
             <field name="amount_tax">0.0</field>
             <field name="amount_paid">28.0</field>
             <field name="amount_return">0.0</field>
+            <field name="preset_id" ref="pos_takein_preset"/>
         </record>
 
         <record id="pos_closed_orderline_4_2_1" model="pos.order.line" forcecreate="False">
@@ -495,6 +501,7 @@
             <field name="partner_id" ref="customer_1" />
             <field name="table_id" ref="table_01" />
             <field name="customer_count">8</field>
+            <field name="preset_id" ref="pos_takein_preset"/>
         </record>
 
         <record id="pos_orderline_2" model="pos.order.line" forcecreate="False">
@@ -528,6 +535,7 @@
             <field name="partner_id" ref="customer_1" />
             <field name="table_id" ref="table_02" />
             <field name="customer_count">3</field>
+            <field name="preset_id" ref="pos_takein_preset"/>
         </record>
 
         <record id="pos_orderline_4" model="pos.order.line" forcecreate="False">
@@ -561,6 +569,7 @@
             <field name="partner_id" ref="customer_1" />
             <field name="table_id" ref="table_04" />
             <field name="customer_count">5</field>
+            <field name="preset_id" ref="pos_takein_preset"/>
         </record>
 
         <record id="pos_orderline_6" model="pos.order.line" forcecreate="False">
@@ -594,6 +603,7 @@
             <field name="partner_id" ref="customer_1" />
             <field name="table_id" ref="table_06" />
             <field name="customer_count">1</field>
+            <field name="preset_id" ref="pos_takein_preset"/>
         </record>
 
         <record id="pos_orderline_8" model="pos.order.line" forcecreate="False">

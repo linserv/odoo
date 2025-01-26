@@ -86,37 +86,19 @@ class MailTestTicket(models.Model):
         return super(MailTestTicket, self)._track_subtype(init_values)
 
     def _get_customer_information(self):
-        email_normalized_to_values = super()._get_customer_information()
+        email_keys_to_values = super()._get_customer_information()
 
-        for record in self.filtered('email_from'):
-            email_from_normalized = email_normalize(record.email_from)
-            if not email_from_normalized:  # do not fill Falsy with random data
+        for ticket in self:
+            email_key = email_normalize(ticket.email_from) or ticket.email_from
+            # do not fill Falsy with random data, unless monorecord (= always correct)
+            if not email_key and len(self) > 1:
                 continue
-            values = email_normalized_to_values.setdefault(email_from_normalized, {})
+            values = email_keys_to_values.setdefault(email_key, {})
             if not values.get('mobile'):
-                values['mobile'] = record.mobile_number
+                values['mobile'] = ticket.mobile_number
             if not values.get('phone'):
-                values['phone'] = record.phone_number
-        return email_normalized_to_values
-
-    def _message_get_suggested_recipients(self):
-        recipients = super()._message_get_suggested_recipients()
-        if self.customer_id:
-            self._message_add_suggested_recipient(
-                recipients,
-                partner=self.customer_id,
-                lang=None,
-                reason=_('Customer'),
-            )
-        elif self.email_from:
-            self._message_add_suggested_recipient(
-                recipients,
-                partner=None,
-                email=self.email_from,
-                lang=None,
-                reason=_('Customer Email'),
-            )
-        return recipients
+                values['phone'] = ticket.phone_number
+        return email_keys_to_values
 
 
 class MailTestTicketEl(models.Model):
@@ -153,13 +135,82 @@ class MailTestTicketMc(models.Model):
     company_id = fields.Many2one('res.company', 'Company', default=lambda self: self.env.company)
     container_id = fields.Many2one('mail.test.container.mc', tracking=True)
 
-    def _notify_get_reply_to(self, default=None):
+    def _get_customer_information(self):
+        email_keys_to_values = super()._get_customer_information()
+
+        for ticket in self:
+            email_key = email_normalize(ticket.email_from) or ticket.email_from
+            # do not fill Falsy with random data, unless monorecord (= always correct)
+            if not email_key and len(self) > 1:
+                continue
+            values = email_keys_to_values.setdefault(email_key, {})
+            if not values.get('company_id'):
+                values['company_id'] = ticket.company_id.id
+        return email_keys_to_values
+
+    def _notify_get_reply_to(self, default=None, author_id=False):
         # Override to use alias of the parent container
-        aliases = self.sudo().mapped('container_id')._notify_get_reply_to(default=default)
+        aliases = self.sudo().mapped('container_id')._notify_get_reply_to(default=default, author_id=author_id)
         res = {ticket.id: aliases.get(ticket.container_id.id) for ticket in self}
         leftover = self.filtered(lambda rec: not rec.container_id)
         if leftover:
-            res.update(super()._notify_get_reply_to(default=default))
+            res.update(super()._notify_get_reply_to(default=default, author_id=author_id))
+        return res
+
+
+class MailTestTicketPartner(models.Model):
+    """ Mail.test.ticket.mc, with complete partner support. More functional
+    and therefore done in a separate model to avoid breaking other tests. """
+    _description = 'MC ticket-like model with partner support'
+    _name = "mail.test.ticket.partner"
+    _inherit = [
+        'mail.test.ticket.mc',
+        'mail.thread.blacklist',
+    ]
+    _primary_email = 'email_from'
+
+    # fields to mimic stage-based tracing
+    state = fields.Selection(
+        [('new', 'New'), ('open', 'Open'), ('close', 'Close'),],
+        default='open', tracking=10)
+    state_template_id = fields.Many2one('mail.template')
+
+    def _message_post_after_hook(self, message, msg_vals):
+        if self.email_from and not self.customer_id:
+            # we consider that posting a message with a specified recipient (not a follower, a specific one)
+            # on a document without customer means that it was created through the chatter using
+            # suggested recipients. This heuristic allows to avoid ugly hacks in JS.
+            new_partner = message.partner_ids.filtered(
+                lambda partner: partner.email == self.email_from or (self.email_normalized and partner.email_normalized == self.email_normalized)
+            )
+            if new_partner:
+                if new_partner[0].email_normalized:
+                    email_domain = ('email_normalized', '=', new_partner[0].email_normalized)
+                else:
+                    email_domain = ('email_from', '=', new_partner[0].email)
+                self.search([
+                    ('customer_id', '=', False), email_domain,
+                ]).write({'customer_id': new_partner[0].id})
+        return super()._message_post_after_hook(message, msg_vals)
+
+    def _creation_subtype(self):
+        if self.state == 'new':
+            return self.env.ref('test_mail.st_mail_test_ticket_partner_new')
+        return super(MailTestTicket, self)._creation_subtype()
+
+    def _track_template(self, changes):
+        res = super()._track_template(changes)
+        record = self[0]
+        # acknowledgement-like email, like in project/helpdesk
+        if 'state' in changes and record.state == 'new' and record.state_template_id:
+            res['state'] = (
+                record.state_template_id,
+                {
+                    'auto_delete_keep_log': False,
+                    'subtype_id': self.env['ir.model.data']._xmlid_to_res_id('mail.mt_note'),
+                    'email_layout_xmlid': 'mail.mail_notification_light'
+                },
+            )
         return res
 
 

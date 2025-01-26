@@ -532,7 +532,7 @@ class CalendarEvent(models.Model):
         # get list of models ids and filter out None values directly
         model_ids = list(filter(None, {values.get('res_model_id', defaults.get('res_model_id')) for values in vals_list}))
         model_name = defaults.get('res_model')
-        valid_activity_model_ids = model_name and self.env[model_name].sudo().browse(model_ids).filtered(lambda m: 'activity_ids' in m).ids or []
+        valid_activity_model_ids = model_name and model_name not in self._get_activity_excluded_models() and self.env[model_name].sudo().browse(model_ids).filtered(lambda m: 'activity_ids' in m).ids or []
         if meeting_activity_type and not defaults.get('activity_ids'):
             for values in vals_list:
                 # created from calendar: try to create an activity on the related record
@@ -711,7 +711,7 @@ class CalendarEvent(models.Model):
         current_attendees = self.filtered('active').attendee_ids
         if 'partner_ids' in values:
             # we send to all partners and not only the new ones
-            (current_attendees - previous_attendees)._send_mail_to_attendees(
+            (current_attendees - previous_attendees)._notify_attendees(
                 self.env.ref('calendar.calendar_template_meeting_invitation', raise_if_not_found=False),
                 force_send=True,
             )
@@ -721,7 +721,7 @@ class CalendarEvent(models.Model):
             if start_date and start_date >= fields.Datetime.now():
                 (current_attendees & previous_attendees).with_context(
                     calendar_template_ignore_recurrence=not update_recurrence
-                )._send_mail_to_attendees(
+                )._notify_attendees(
                     self.env.ref('calendar.calendar_template_meeting_changedate', raise_if_not_found=False),
                     force_send=True,
                 )
@@ -957,9 +957,8 @@ class CalendarEvent(models.Model):
         return False
 
     def action_sendmail(self):
-        email = self.env.user.email
-        if email:
-            self.attendee_ids._send_mail_to_attendees(
+        if self.env.user.email:
+            self.attendee_ids._notify_attendees(
                 self.env.ref('calendar.calendar_template_meeting_invitation', raise_if_not_found=False),
             )
         return True
@@ -1381,6 +1380,16 @@ class CalendarEvent(models.Model):
     # ------------------------------------------------------------
     # TOOLS
     # ------------------------------------------------------------
+
+    @api.model
+    def _get_activity_excluded_models(self):
+        """
+        For some models, we don't want to automatically create activities when a calendar.event is created.
+        (This is the case notably for appointment.types)
+        This hook method allows to specify those models.
+        See calendar.event create method for details.
+        """
+        return []
 
     def _reset_attendees_status(self):
         """ Reset attendees status to pending and accept event for current user. """

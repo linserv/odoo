@@ -13,7 +13,6 @@ from odoo.addons.point_of_sale.tests.common_setup_methods import setup_product_c
 from datetime import date, timedelta
 from odoo.addons.point_of_sale.tests.common import archive_products
 from odoo.exceptions import UserError
-from odoo.addons.point_of_sale.models.pos_config import PosConfig
 
 _logger = logging.getLogger(__name__)
 
@@ -588,6 +587,7 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'pos_basic_order_01_multi_payment_and_change', login="pos_user")
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'pos_basic_order_02_decimal_order_quantity', login="pos_user")
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'pos_basic_order_03_tax_position', login="pos_user")
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'FloatingOrderTour', login="pos_user")
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'ProductScreenTour', login="pos_user")
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PaymentScreenTour', login="pos_user")
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'ReceiptScreenTour', login="pos_user")
@@ -759,6 +759,7 @@ class TestUi(TestPointOfSaleHttpCommon):
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PaymentScreenRoundingDown', login="pos_user")
+        self.env["pos.order"].search([]).write({'state': 'cancel'})
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PaymentScreenTotalDueWithOverPayment', login="pos_user")
 
     def test_rounding_half_up(self):
@@ -1046,30 +1047,39 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.main_pos_config.open_ui()
         self.start_pos_tour('chrome_without_cash_move_permission', login="accountman")
 
-    def test_09_pos_barcodes_scan_product_pacaging(self):
+    def test_09_pos_barcodes_scan_product_packaging(self):
+        pack_of_10 = self.env['uom.uom'].create({
+            'name': 'Pack of 10',
+            'relative_factor': 10,
+            'relative_uom_id': self.env.ref('uom.product_uom_unit').id,
+            'is_pos_groupable': True,
+        })
         product = self.env['product.product'].create({
             'name': 'Packaging Product',
             'available_in_pos': True,
             'list_price': 10,
             'taxes_id': False,
             'barcode': '12345601',
+            'uom_ids': [Command.link(pack_of_10.id)],
+        })
+        self.env['product.uom'].create({
+            'barcode': '12345610',
+            'product_id': product.id,
+            'uom_id': pack_of_10.id,
         })
 
-        self.env['product.packaging'].create({
-            'name': 'Product Packaging 10 Products',
-            'qty': 10,
-            'product_id': product.id,
-            'barcode': '12345610',
-        })
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'BarcodeScanningProductPackagingTour', login="pos_user")
 
     def test_GS1_pos_barcodes_scan(self):
         barcodes_gs1_nomenclature = self.env.ref("barcodes_gs1_nomenclature.default_gs1_nomenclature")
+        default_nomenclature_id = self.env.ref("barcodes.default_barcode_nomenclature")
         self.main_pos_config.company_id.write({
             'nomenclature_id': barcodes_gs1_nomenclature.id
         })
-
+        self.main_pos_config.write({
+            'fallback_nomenclature_id': default_nomenclature_id
+        })
         self.env['product.product'].create({
             'name': 'Product 1',
             'available_in_pos': True,
@@ -1352,7 +1362,6 @@ class TestUi(TestPointOfSaleHttpCommon):
             'taxes_id': False,
             'available_in_pos': True,
             'uom_id': self.env.ref('uom.product_uom_kgm').id,
-            'uom_po_id': self.env.ref('uom.product_uom_kgm').id
         })
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
@@ -1608,18 +1617,46 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'ProductSearchTour', login="pos_user")
 
-    def test_customer_search_more(self):
-        partner_test_a = self.env["res.partner"].create({"name": "APartner"})
-        self.env["res.partner"].create({"name": "BPartner", "zip": 1111})
+    def test_sort_orderlines_by_product_categoryies(self):
+        """ Test to ensure orderlines are added to the cart in the correct order based on their categories"""
+        self.pos_desk_misc_test.write({'sequence': 0})
+        self.pos_cat_chair_test.write({'sequence': 1})
 
-        def mocked_get_limited_partners_loading(self):
-            return [(partner_test_a.id,)]
+        self.product_1_categ_seq_1 = self.env['product.template'].create({
+            'name': 'Product_1 Category sequence 1',
+            'available_in_pos': True,
+            'list_price': 1.00,
+            'taxes_id': False,
+            'pos_categ_ids': [(4, self.pos_desk_misc_test.id)],
+        })
+        self.product_2_categ_seq_1 = self.env['product.template'].create({
+            'name': 'Product_2 Category sequence 1',
+            'available_in_pos': True,
+            'list_price': 2.00,
+            'taxes_id': False,
+            'pos_categ_ids': [(4, self.pos_desk_misc_test.id)],
+        })
+        self.product_11_categ_seq_2 = self.env['product.template'].create({
+            'name': 'Product_11 Category sequence 2',
+            'available_in_pos': True,
+            'list_price': 3.00,
+            'taxes_id': False,
+            'pos_categ_ids': [(4, self.pos_cat_chair_test.id)],
+        })
+        self.product_22_categ_seq_2 = self.env['product.template'].create({
+            'name': 'Product_22 Category sequence 2',
+            'available_in_pos': True,
+            'list_price': 4.00,
+            'taxes_id': False,
+            'pos_categ_ids': [(4, self.pos_cat_chair_test.id)],
+        })
+
+        self.main_pos_config.write({
+            'orderlines_sequence_in_cart_by_category': True,
+        })
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
-        with patch.object(PosConfig, 'get_limited_partners_loading', mocked_get_limited_partners_loading):
-            self.main_pos_config.with_user(self.pos_user).open_ui()
-            self.start_tour(f"/pos/ui?config_id={self.main_pos_config.id}", 'SearchMoreCustomer', login="pos_user")
-
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'SortOrderlinesByCategories', login="pos_user")
 
 # This class just runs the same tests as above but with mobile emulation
 class MobileTestUi(TestUi):

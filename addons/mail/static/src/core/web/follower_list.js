@@ -1,4 +1,4 @@
-import { Component, useState } from "@odoo/owl";
+import { Component } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { FollowerSubtypeDialog } from "./follower_subtype_dialog";
@@ -21,7 +21,7 @@ export class FollowerList extends Component {
     setup() {
         super.setup();
         this.action = useService("action");
-        this.store = useState(useService("mail.store"));
+        this.store = useService("mail.store");
         useVisible("load-more", (isVisible) => {
             if (isVisible) {
                 this.props.thread.loadMoreFollowers();
@@ -32,15 +32,16 @@ export class FollowerList extends Component {
     onClickAddFollowers() {
         const action = {
             type: "ir.actions.act_window",
-            res_model: "mail.wizard.invite",
+            res_model: "mail.followers.edit",
             view_mode: "form",
             views: [[false, "form"]],
             name: _t("Add followers to this document"),
             target: "new",
             context: {
                 default_res_model: this.props.thread.model,
-                default_res_id: this.props.thread.id,
+                default_res_ids: [this.props.thread.id],
                 dialog_size: "medium",
+                form_view_ref: "mail.mail_followers_list_edit_form",
             },
         };
         this.action.doAction(action, {

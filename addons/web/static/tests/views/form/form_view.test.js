@@ -5,6 +5,7 @@ import {
     hover,
     manuallyDispatchProgrammaticEvent,
     press,
+    queryAll,
     queryAllAttributes,
     queryAllTexts,
     queryFirst,
@@ -56,6 +57,7 @@ import {
 
 import { browser } from "@web/core/browser/browser";
 import { cookie } from "@web/core/browser/cookie";
+import { makeErrorFromResponse } from "@web/core/network/rpc";
 import { registry } from "@web/core/registry";
 import { SIZES } from "@web/core/ui/ui_service";
 import { useBus, useService } from "@web/core/utils/hooks";
@@ -1167,6 +1169,7 @@ test(`invisible fields are properly hidden`, async () => {
 
 test(`invisible, required and readonly using company evalContext`, async () => {
     Partner._records[0].int_field = 3;
+    cookie.set("cids", "3-1");
     serverState.companies = [
         {
             id: 1,
@@ -1193,7 +1196,6 @@ test(`invisible, required and readonly using company evalContext`, async () => {
             country_code: "AR",
         },
     ];
-    cookie.set("cids", "3-1");
 
     await mountView({
         resModel: "partner",
@@ -1609,73 +1611,6 @@ test(`autofocus on second notebook page`, async () => {
     });
     expect(`.o_notebook .nav .nav-item:eq(0) .nav-link`).not.toHaveClass("active");
     expect(`.o_notebook .nav .nav-item:eq(1) .nav-link`).toHaveClass("active");
-});
-
-test(`notebook page is changing when an anchor is clicked from another page`, async () => {
-    await mountWithCleanup(`
-        <div class="scrollable-view" style="overflow: auto; max-height: 400px;"/>
-    `);
-
-    await mountView(
-        {
-            resModel: "partner",
-            type: "form",
-            arch: `
-            <form>
-                <a class="outerLink2" href="#anchor2">TO ANCHOR 2 FROM OUTSIDE THE NOTEPAD</a>
-                <sheet>
-                    <notebook>
-                        <page string="Non scrollable page">
-                            <div id="anchor1">No scrollbar!</div>
-                            <a href="#anchor2" class="link2">TO ANCHOR 2</a>
-                        </page>
-                        <page string="Other scrollable page">
-                            <p style="font-size: large">
-                                Aliquam convallis sollicitudin purus. Praesent aliquam, enim at fermentum mollis,
-                                ligula massa adipiscing nisl, ac euismod nibh nisl eu lectus. Fusce vulputate sem
-                                at sapien. Vivamus leo. Aliquam euismod libero eu enim. Nulla nec felis sed leo
-                                placerat imperdiet. Aenean suscipit nulla in justo. Suspendisse cursus rutrum
-                                augue.
-                            </p>
-                            <p style="font-size: large">
-                                Aliquam convallis sollicitudin purus. Praesent aliquam, enim at fermentum mollis,
-                                ligula massa adipiscing nisl, ac euismod nibh nisl eu lectus. Fusce vulputate sem
-                                at sapien. Vivamus leo. Aliquam euismod libero eu enim. Nulla nec felis sed leo
-                                placerat imperdiet. Aenean suscipit nulla in justo. Suspendisse cursus rutrum
-                                augue.
-                            </p>
-                            <h2 id="anchor2">There is a scroll bar</h2>
-                            <a href="#anchor1" class="link1">TO ANCHOR 1</a>
-                            <p style="font-size: large">
-                                Aliquam convallis sollicitudin purus. Praesent aliquam, enim at fermentum mollis,
-                                ligula massa adipiscing nisl, ac euismod nibh nisl eu lectus. Fusce vulputate sem
-                                at sapien. Vivamus leo. Aliquam euismod libero eu enim. Nulla nec felis sed leo
-                                placerat imperdiet. Aenean suscipit nulla in justo. Suspendisse cursus rutrum
-                                augue.
-                            </p>
-                        </page>
-                    </notebook>
-                </sheet>
-            </form>
-        `,
-            resId: 1,
-        },
-        queryFirst`.scrollable-view`
-    );
-    expect(`.tab-pane.active #anchor1`).toHaveCount(1);
-    expect(`#anchor2`).toHaveCount(0);
-
-    await contains(`.link2`).click();
-    expect(`.tab-pane.active #anchor2`).toHaveCount(1);
-    expect(`#anchor2`).toBeVisible();
-
-    await contains(`.link1`).click();
-    expect(`.tab-pane.active #anchor1`).toHaveCount(1);
-    expect(`#anchor1`).toBeVisible();
-
-    await contains(`.outerLink2`).click();
-    expect(`.tab-pane.active #anchor2`).toHaveCount(1);
-    expect(`#anchor2`).toBeVisible();
 });
 
 test(`invisible attrs on group are re-evaluated on field change`, async () => {
@@ -10345,6 +10280,77 @@ test(`resequence list lines when discardable lines are present`, async () => {
     expect(`[name="foo"] input`).toHaveValue("2");
 });
 
+test("resequence list lines when previous resequencing crashed", async () => {
+    expect.errors(1);
+    let onChangeCount = 0;
+
+    Partner._onChanges = {
+        int_field: function (obj) {
+            if (obj.name === "first line") {
+                if (onChangeCount === 0) {
+                    onChangeCount += 1;
+
+                    expect.step("resequence onChange crash");
+                    throw makeErrorFromResponse({
+                        code: 200,
+                        message: "Odoo Server Error",
+                        data: {
+                            name: `odoo.exceptions.${"UserError"}`,
+                            debug: "traceback",
+                            arguments: [],
+                            context: {},
+                            message: "error",
+                        },
+                    });
+                } else {
+                    expect.step("resequence onChange ok");
+                }
+            }
+        },
+    };
+
+    Partner._views = {
+        list: `
+            <list editable="bottom">
+                <field name="int_field" widget="handle"/>
+                <field name="name" required="1"/>
+            </list>
+        `,
+    };
+
+    await mountView({
+        resModel: "partner",
+        type: "form",
+        arch: `<form><field name="foo"/><field name="child_ids"/></form>`,
+        resId: 1,
+    });
+
+    // Add two lines
+    await contains(`.o_field_x2many_list_row_add a`).click();
+
+    await contains(".o_data_cell [name='name'] input").edit("first line");
+    await animationFrame();
+
+    await contains(".o_selected_row input").edit("second line");
+    await contains(".o_form_button_save").click();
+    await animationFrame();
+
+    const getNames = () => [...queryAll(".o_list_char")].map((el) => el.textContent);
+    expect(getNames()).toEqual(["first line", "second line"]);
+    await contains("tbody.ui-sortable tr:nth-child(1) .o_handle_cell").dragAndDrop(
+        "tbody.ui-sortable tr:nth-child(2)"
+    );
+    await animationFrame();
+    expect(getNames()).toEqual(["first line", "second line"]);
+
+    await contains("tbody.ui-sortable tr:nth-child(1) .o_handle_cell").dragAndDrop(
+        "tbody.ui-sortable tr:nth-child(2)"
+    );
+    await animationFrame();
+    expect(getNames()).toEqual(["second line", "first line"]);
+    expect.verifySteps(["resequence onChange crash", "resequence onChange ok"]);
+});
+
 test(`reload company when creating records of model res.company`, async () => {
     mockService("action", {
         async doAction(actionRequest) {
@@ -12416,7 +12422,7 @@ test(`preserve current scroll position on form view while closing dialog`, async
 
     window.scrollTo({ top: 265, left: 0 });
     expect(window.scrollY).toBe(265, { message: "Should have scrolled 265 px vertically" });
-    expect(window.screenLeft).toBe(0, { message: "Should be 0 px from left as it is" });
+    expect(window.scrollX).toBe(0, { message: "Should be 0 px from left as it is" });
 
     // click on m2o field
     await contains(".o_field_many2one input").click();
@@ -12429,7 +12435,7 @@ test(`preserve current scroll position on form view while closing dialog`, async
     await contains(".modal .modal-header .oi-arrow-left").click();
 
     expect(window.scrollY).toBe(265, { message: "Should have scrolled 265 px vertically" });
-    expect(window.screenLeft).toBe(0, { message: "Should be 0 px from left as it is" });
+    expect(window.scrollX).toBe(0, { message: "Should be 0 px from left as it is" });
 });
 
 test.tags("mobile");

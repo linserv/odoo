@@ -12,13 +12,16 @@ patch(Store.prototype, {
         await livechatInitialized.ready;
         const livechatService = this.env.services["im_livechat.livechat"];
         if (livechatService.state === SESSION_STATE.PERSISTED) {
-            await super.initialize();
-            livechatService.thread ??= this.store.Thread.get({
-                id: livechatService.savedState?.store["discuss.channel"][0].id,
-                model: "discuss.channel",
-            });
-            if (!livechatService.thread) {
-                livechatService.leave({ notifyServer: false });
+            try {
+                await super.initialize();
+                livechatService.thread ??= this.store.Thread.get({
+                    id: livechatService.savedState?.store["discuss.channel"][0].id,
+                    model: "discuss.channel",
+                });
+            } finally {
+                if (!livechatService.thread) {
+                    livechatService.leave({ notifyServer: false });
+                }
             }
             return;
         }
@@ -27,10 +30,5 @@ patch(Store.prototype, {
             livechatService.thread = Thread[0];
         }
         this.isReady.resolve();
-    },
-    get initMessagingParams() {
-        const params = super.initMessagingParams;
-        params.init_messaging.channel_types = ["livechat"];
-        return params;
     },
 });

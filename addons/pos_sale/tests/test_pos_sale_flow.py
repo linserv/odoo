@@ -4,7 +4,7 @@ import odoo
 
 from odoo.addons.point_of_sale.tests.test_frontend import TestPointOfSaleHttpCommon
 from odoo.tests import Form
-from odoo import fields
+from odoo import fields, Command
 from odoo.tools import format_date
 
 @odoo.tests.tagged('post_install', '-at_install')
@@ -25,7 +25,6 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
             'is_storable': True,
             'available_in_pos': True,
             'uom_id': self.env.ref('uom.product_uom_gram').id,
-            'uom_po_id': self.env.ref('uom.product_uom_gram').id,
             'lst_price': 10.0,
         })
         self.location = self.env['stock.location'].create({
@@ -303,15 +302,8 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
 
     def test_pos_not_groupable_product(self):
         #Create a UoM Category that is not pos_groupable
-        uom_category = self.env['uom.category'].create({
-            'name': 'Test',
-            'is_pos_groupable': False,
-        })
         uom = self.env['uom.uom'].create({
             'name': 'Test',
-            'category_id': uom_category.id,
-            'uom_type': 'reference',
-            'rounding': 0.01
         })
         product_a = self.env['product.product'].create({
             'name': 'Product A',
@@ -319,7 +311,6 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
             'is_storable': True,
             'lst_price': 10.0,
             'uom_id': uom.id,
-            'uom_po_id': uom.id,
         })
         #create a sale order with product_a
         sale_order = self.env['sale.order'].create({
@@ -883,8 +874,18 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
         self.repair1.action_repair_start()
         self.repair1.action_repair_end()
         self.repair1.action_create_sale_order()
+        self.assertEqual(len(self.product_1.stock_move_ids.ids), 2, "There should be 2 stock moves for the product created by the repair order")
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PosRepairSettleOrder', login="pos_user")
+        self.assertEqual(len(self.product_1.stock_move_ids.ids), 2, "Paying for the order in PoS should not create new stock moves")
+
+    def test_pos_sale_warnings(self):
+        self.env['res.partner'].create([
+            {'name': 'Test Customer', 'sale_warn': 'warning', 'sale_warn_msg': 'Highly infectious disease'},
+            {'name': 'Test Customer 2', 'sale_warn': 'block', 'sale_warn_msg': 'Cannot afford our services'}
+        ])
+        self.main_pos_config.open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PosSaleWarning', login="accountman")
 
     def test_downpayment_invoice(self):
         """This test check that users that don't have the pos user group can invoice downpayments"""
@@ -968,3 +969,69 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
         pickings.move_ids.quantity = 1
         pickings.button_validate()
         self.assertEqual(sale_order.order_line[0].qty_delivered, 1)
+
+    def test_draft_pos_order_linked_sale_order(self):
+        """This test create an order and settle it in the PoS. It will let the PoS order in draft state.
+           As the order is still in draft state it shouldn't have impact on invoiced qty of the linked sale order.
+        """
+
+        product_a = self.env['product.product'].create({
+            'name': 'Product A',
+            'available_in_pos': True,
+            'is_storable': True,
+            'lst_price': 10.0,
+        })
+
+        sale_order = self.env['sale.order'].create({
+            'partner_id': self.env['res.partner'].create({'name': 'Test Partner BBB'}).id,
+            'order_line': [(0, 0, {
+                'product_id': product_a.id,
+                'name': product_a.name,
+                'product_uom_qty': 1,
+                'price_unit': product_a.lst_price,
+            })],
+        })
+        sale_order.action_confirm()
+        self.main_pos_config.open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PosSettleOrder5', login="accountman")
+        self.assertEqual(sale_order.order_line.qty_invoiced, 0)
+        self.assertEqual(sale_order.order_line.qty_delivered, 0)
+
+    def test_downpayment_with_fixed_taxed_product(self):
+        tax_1 = self.env['account.tax'].create({
+            'name': '10',
+            'amount_type': 'fixed',
+            'amount': 10,
+        })
+
+        product_a = self.env['product.product'].create({
+            'name': 'Product A',
+            'available_in_pos': True,
+            'lst_price': 100.0,
+            'taxes_id': [tax_1.id],
+        })
+
+        partner_test = self.env['res.partner'].create({'name': 'Test Partner'})
+
+        sale_order = self.env['sale.order'].create({
+            'partner_id': partner_test.id,
+            'order_line': [Command.create({
+                'product_id': product_a.id,
+                'name': product_a.name,
+                'product_uom_qty': 1,
+                'price_unit': product_a.lst_price,
+            })],
+        })
+        sale_order.action_confirm()
+
+        self.downpayment_product = self.env['product.product'].create({
+            'name': 'Down Payment',
+            'available_in_pos': True,
+            'type': 'service',
+            'taxes_id': [],
+        })
+        self.main_pos_config.write({
+            'down_payment_product_id': self.downpayment_product.id,
+        })
+        self.main_pos_config.open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PoSDownPaymentLinesPerFixedTax', login="accountman")

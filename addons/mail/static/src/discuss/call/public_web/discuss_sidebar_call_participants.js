@@ -20,8 +20,8 @@ export class DiscussSidebarCallParticipants extends Component {
 
     setup() {
         super.setup();
-        this.store = useState(useService("mail.store"));
-        this.rtc = useState(useService("discuss.rtc"));
+        this.store = useService("mail.store");
+        this.rtc = useService("discuss.rtc");
         this.hover = useHover(["root", "floating*"], {
             onHover: () => (this.floating.isOpen = true),
             onAway: () => (this.floating.isOpen = false),
@@ -75,11 +75,12 @@ export class DiscussSidebarCallParticipants extends Component {
     get sessions() {
         const sessions = [...this.props.thread.rtcSessions];
         return sessions.sort((s1, s2) => {
-            const persona1 = s1.channel_member_id.persona;
-            const persona2 = s2.channel_member_id.persona;
+            const persona1 = s1.channel_member_id?.persona;
+            const persona2 = s2.channel_member_id?.persona;
             return (
                 persona1?.name?.localeCompare(persona2?.name) ||
-                s1.channel_member_id.id - s2.channel_member_id.id
+                s1.channel_member_id?.id - s2.channel_member_id?.id ||
+                s1.id - s2.id
             );
         });
     }

@@ -338,7 +338,7 @@ test("Active category item should be visible even if the category is closed", as
     await contains(".o-mail-DiscussSidebarChannel", { text: "Visitor 11" });
 });
 
-test("Clicking on unpin button unpins the channel", async () => {
+test("Clicking on leave button leaves the channel", async () => {
     const pyEnv = await startServer();
     pyEnv["discuss.channel"].create({
         anonymous_name: "Visitor 11",
@@ -348,11 +348,14 @@ test("Clicking on unpin button unpins the channel", async () => {
         ],
         channel_type: "livechat",
         livechat_operator_id: serverState.partnerId,
+        create_uid: serverState.publicUserId,
     });
     await start();
     await openDiscuss();
-    await click(".o-mail-DiscussSidebarChannel [title='Unpin Conversation']");
-    await contains(".o_notification", { text: "You unpinned your conversation with Visitor 11" });
+    await contains(".o-mail-DiscussSidebarChannel", { text: "Visitor 11" });
+    await click(".o-mail-DiscussSidebarChannel [title='Leave Channel']");
+    await click("button:contains(Leave Conversation)");
+    await contains(".o-mail-DiscussSidebarChannel", { count: 0, text: "Visitor 11" });
 });
 
 test("Message unread counter", async () => {
@@ -396,7 +399,9 @@ test("unknown livechat can be displayed and interacted with", async () => {
             Command.create({ partner_id: partnerId, last_interest_dt: "2021-01-01 10:00:00" }),
         ],
         channel_type: "livechat",
+        livechat_active: true,
         livechat_operator_id: partnerId,
+        create_uid: serverState.publicUserId,
     });
     const env = await start();
     await openDiscuss();
@@ -412,9 +417,10 @@ test("unknown livechat can be displayed and interacted with", async () => {
     await waitNotifications([env, "discuss.channel/new_message"]);
     await click("button", { text: "Inbox" });
     await contains(".o-mail-DiscussSidebarChannel:not(.o-active)", { text: "Jane" });
-    await click("[title='Unpin Conversation']", {
+    await click("[title='Leave Channel']", {
         parent: [".o-mail-DiscussSidebarChannel", { text: "Jane" }],
     });
+    await click("button:contains('Leave Conversation')");
     await contains(".o-mail-DiscussSidebarCategory-livechat", { count: 0 });
     await contains(".o-mail-DiscussSidebarChannel", { count: 0 });
 });

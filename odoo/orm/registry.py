@@ -187,7 +187,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
         self.db_name = db_name
         self._db: Connection = odoo.sql_db.db_connect(db_name, readonly=False)
         self._db_readonly: Connection | None = None
-        if config['db_replica_host'] is not False or config['test_enable']:  # by default, only use readonly pool if we have a db_replica_host defined. Allows to have an empty replica host for testing
+        if config['db_replica_host'] or config['test_enable']:  # by default, only use readonly pool if we have a db_replica_host defined. Allows to have an empty replica host for testing
             self._db_readonly = odoo.sql_db.db_connect(db_name, readonly=True)
 
         # cursor for test mode; None means "normal" mode
@@ -195,9 +195,9 @@ class Registry(Mapping[str, type["BaseModel"]]):
         self.test_lock: threading.RLock | None = None
 
         # field dependencies
-        self.field_depends: Collector[Field, tuple[Field, ...]] = Collector()
-        self.field_depends_context: Collector[Field, tuple[str, ...]] = Collector()
-        self.field_inverses: Collector[Field, tuple[Field, ...]] = Collector()
+        self.field_depends: Collector[Field, Field] = Collector()
+        self.field_depends_context: Collector[Field, str] = Collector()
+        self.field_inverses: Collector[Field, Field] = Collector()
 
         # company dependent
         self.many2one_company_dependents: Collector[str, tuple[Field, ...]] = Collector()  # {model_name: (field1, field2, ...)}
@@ -695,8 +695,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
                     method = 'btree'
                     where = f'{column_expression} IS NOT NULL' if index == 'btree_not_null' else ''
                 try:
-                    with cr.savepoint(flush=False):
-                        sql.create_index(cr, indexname, tablename, [expression], method, where)
+                    sql.create_index(cr, indexname, tablename, [expression], method, where)
                 except psycopg2.OperationalError:
                     _schema.error("Unable to add index for %s", self)
 
@@ -970,6 +969,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
     @contextmanager
     def manage_changes(self):
         """ Context manager to signal/discard registry and cache invalidations. """
+        warnings.warn("Since 19.0, use signal_changes() and reset_changes() directly", DeprecationWarning)
         try:
             yield self
             self.signal_changes()

@@ -36,6 +36,7 @@ export class WebsiteVisitor extends models.ServerModel {
                 anonymous_name: visitor_name,
                 channel_member_ids: membersToAdd,
                 channel_type: "livechat",
+                livechat_active: true,
                 livechat_operator_id: serverState.partnerId,
             });
             if (!visitor.partner_id) {
@@ -45,11 +46,14 @@ export class WebsiteVisitor extends models.ServerModel {
                 });
             }
             const [partner] = ResPartner.read(serverState.partnerId);
+            const channel = DiscussChannel.browse(livechatId);
             // notify operator
             BusBus._sendone(
                 partner,
-                "website_livechat.send_chat_request",
-                new mailDataHelpers.Store(DiscussChannel.browse(livechatId)).get_result()
+                "mail.record/insert",
+                new mailDataHelpers.Store(channel)
+                    .add(channel, { open_chat_window: true })
+                    .get_result()
             );
         }
     }

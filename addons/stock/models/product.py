@@ -30,7 +30,7 @@ class ProductProduct(models.Model):
     stock_move_ids = fields.One2many('stock.move', 'product_id') # used to compute quantities
     qty_available = fields.Float(
         'Quantity On Hand', compute='_compute_quantities', search='_search_qty_available',
-        digits='Product Unit of Measure', compute_sudo=False,
+        digits='Product Unit', compute_sudo=False,
         help="Current quantity of products.\n"
              "In a context with a single Stock Location, this includes "
              "goods stored at this Location, or any of its children.\n"
@@ -43,7 +43,7 @@ class ProductProduct(models.Model):
              "with 'internal' type.")
     virtual_available = fields.Float(
         'Forecasted Quantity', compute='_compute_quantities', search='_search_virtual_available',
-        digits='Product Unit of Measure', compute_sudo=False,
+        digits='Product Unit', compute_sudo=False,
         help="Forecast quantity (computed as Quantity On Hand "
              "- Outgoing + Incoming)\n"
              "In a context with a single Stock Location, this includes "
@@ -55,7 +55,7 @@ class ProductProduct(models.Model):
              "with 'internal' type.")
     free_qty = fields.Float(
         'Free To Use Quantity ', compute='_compute_quantities', search='_search_free_qty',
-        digits='Product Unit of Measure', compute_sudo=False,
+        digits='Product Unit', compute_sudo=False,
         help="Forecast quantity (computed as Quantity On Hand "
              "- reserved quantity)\n"
              "In a context with a single Stock Location, this includes "
@@ -67,7 +67,7 @@ class ProductProduct(models.Model):
              "with 'internal' type.")
     incoming_qty = fields.Float(
         'Incoming', compute='_compute_quantities', search='_search_incoming_qty',
-        digits='Product Unit of Measure', compute_sudo=False,
+        digits='Product Unit', compute_sudo=False,
         help="Quantity of planned incoming products.\n"
              "In a context with a single Stock Location, this includes "
              "goods arriving to this Location, or any of its children.\n"
@@ -78,7 +78,7 @@ class ProductProduct(models.Model):
              "Location with 'internal' type.")
     outgoing_qty = fields.Float(
         'Outgoing', compute='_compute_quantities', search='_search_outgoing_qty',
-        digits='Product Unit of Measure', compute_sudo=False,
+        digits='Product Unit', compute_sudo=False,
         help="Quantity of planned outgoing products.\n"
              "In a context with a single Stock Location, this includes "
              "goods leaving this Location, or any of its children.\n"
@@ -276,10 +276,10 @@ class ProductProduct(models.Model):
         # We may receive a location or warehouse from the context, either by explicit
         # python code or by the use of dummy fields in the search view.
         # Normalize them into a list.
-        location = self.env.context.get('location')
+        location = self.env.context.get('location') or self.env.context.get('search_location')
         if location and not isinstance(location, list):
             location = [location]
-        warehouse = self.env.context.get('warehouse_id')
+        warehouse = self.env.context.get('warehouse_id') or self.env.context.get('search_warehouse')
         if warehouse and not isinstance(warehouse, list):
             warehouse = [warehouse]
         # filter by location and/or warehouse
@@ -453,8 +453,9 @@ class ProductProduct(models.Model):
     @api.model
     def fields_get(self, allfields=None, attributes=None):
         res = super().fields_get(allfields, attributes)
-        if self._context.get('location') and isinstance(self._context['location'], int):
-            location = self.env['stock.location'].browse(self._context['location'])
+        context_location = self._context.get('location') or self._context.get('search_location')
+        if context_location and isinstance(context_location, int):
+            location = self.env['stock.location'].browse(context_location)
             if location.usage == 'supplier':
                 if res.get('virtual_available'):
                     res['virtual_available']['string'] = _('Future Receipts')
@@ -703,16 +704,16 @@ class ProductTemplate(models.Model):
     description_pickingin = fields.Text('Description on Receptions', translate=True)
     qty_available = fields.Float(
         'Quantity On Hand', compute='_compute_quantities', search='_search_qty_available',
-        compute_sudo=False, digits='Product Unit of Measure')
+        compute_sudo=False, digits='Product Unit')
     virtual_available = fields.Float(
         'Forecasted Quantity', compute='_compute_quantities', search='_search_virtual_available',
-        compute_sudo=False, digits='Product Unit of Measure')
+        compute_sudo=False, digits='Product Unit')
     incoming_qty = fields.Float(
         'Incoming', compute='_compute_quantities', search='_search_incoming_qty',
-        compute_sudo=False, digits='Product Unit of Measure')
+        compute_sudo=False, digits='Product Unit')
     outgoing_qty = fields.Float(
         'Outgoing', compute='_compute_quantities', search='_search_outgoing_qty',
-        compute_sudo=False, digits='Product Unit of Measure')
+        compute_sudo=False, digits='Product Unit')
     # The goal of these fields is to be able to put some keys in context from search view in order
     # to influence computed field.
     location_id = fields.Many2one('stock.location', 'Location', store=False)
@@ -886,6 +887,23 @@ class ProductTemplate(models.Model):
             }
         return res
 
+    @api.onchange('uom_id')
+    def _onchange_uom_id(self):
+        moves = self.env['stock.move'].sudo().search_count(
+            [('product_id', 'in', self.with_context(active_test=False).product_variant_ids.ids)], limit=1
+        )
+        if moves:
+            return {
+                'warning': {
+                    'title': _('Warning!'),
+                    'message': _(
+                        'This product has been used in at least one inventory movement. '
+                        'It is not advised to change the Unit of Measure since it can lead to inconsistencies. '
+                        'The existing moves will not be recalculated with the new unit of measure.'
+                    )
+                }
+            }
+
     def write(self, vals):
         if 'company_id' in vals and vals['company_id']:
             products_changing_company = self.filtered(lambda product: product.company_id.id != vals['company_id'])
@@ -906,12 +924,6 @@ class ProductTemplate(models.Model):
                 if quant:
                     raise UserError(_("This product's company cannot be changed as long as there are quantities of it belonging to another company."))
 
-        if 'uom_id' in vals:
-            new_uom = self.env['uom.uom'].browse(vals['uom_id'])
-            updated = self.filtered(lambda template: template.uom_id != new_uom)
-            done_moves = self.env['stock.move'].sudo().search([('product_id', 'in', updated.with_context(active_test=False).mapped('product_variant_ids').ids)], limit=1)
-            if done_moves:
-                raise UserError(_("You cannot change the unit of measure as there are already stock moves for this product. If you want to change the unit of measure, you should rather archive this product and create a new one."))
         if 'is_storable' in vals and not vals['is_storable'] and sum(self.mapped('nbr_reordering_rules')) != 0:
             raise UserError(_('You still have some active reordering rules on this product. Please archive or delete them first.'))
         if any('is_storable' in vals and vals['is_storable'] != prod_tmpl.is_storable for prod_tmpl in self):
@@ -1096,27 +1108,19 @@ class ProductCategory(models.Model):
         return []
 
 
-class ProductPackaging(models.Model):
-    _inherit = "product.packaging"
-
-    package_type_id = fields.Many2one('stock.package.type', 'Package Type')
-    route_ids = fields.Many2many(
-        'stock.route', 'stock_route_packaging', 'packaging_id', 'route_id', 'Routes',
-        domain=[('packaging_selectable', '=', True)],
-        help="Depending on the modules installed, this will allow you to define the route of the product in this packaging: whether it will be bought, manufactured, replenished on order, etc.")
-
-
 class UomUom(models.Model):
     _inherit = 'uom.uom'
 
+    package_type_id = fields.Many2one('stock.package.type', string='Package Type')
+    route_ids = fields.Many2many(related='package_type_id.route_ids', string='Routes', help='Routes propagated from the package type')
+
     def write(self, values):
         # Users can not update the factor if open stock moves are based on it
-        if 'factor' in values or 'factor_inv' in values or 'category_id' in values:
+        keys_to_protect = {'factor', 'relative_factor', 'relative_uom_id'}
+        if any(key in values for key in keys_to_protect):
             changed = self.filtered(
-                lambda u: any(u[f] != values[f] if f in values else False
-                              for f in {'factor', 'factor_inv'})) + self.filtered(
-                lambda u: any(u[f].id != int(values[f]) if f in values else False
-                              for f in {'category_id'}))
+                lambda u: any(f in values and u[f] != values[f] for f in {'factor', 'relative_factor'}) or
+                          'relative_uom_id' in values and u.relative_uom_id.id != int(values['relative_uom_id']))
             if changed:
                 error_msg = _(
                     "You cannot change the ratio of this unit of measure"

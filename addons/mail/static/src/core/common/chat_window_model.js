@@ -1,5 +1,5 @@
 import { Record } from "@mail/core/common/record";
-import { rpc } from "@web/core/network/rpc";
+import { isMobileOS } from "@web/core/browser/feature_detection";
 
 /** @typedef {{ thread?: import("models").Thread }} ChatWindowData */
 
@@ -16,23 +16,14 @@ export class ChatWindow extends Record {
         return super.insert(...arguments);
     }
 
+    actionsDisabled = false;
     thread = Record.one("Thread");
     autofocus = 0;
     hidden = false;
     /** Whether the chat window was created from the messaging menu */
     fromMessagingMenu = false;
-    hubAsOpened = Record.one("ChatHub", {
-        /** @this {import("models").ChatWindow} */
-        onAdd() {
-            this.hubAsFolded = undefined;
-        },
-    });
-    hubAsFolded = Record.one("ChatHub", {
-        /** @this {import("models").ChatWindow} */
-        onAdd() {
-            this.hubAsOpened = undefined;
-        },
-    });
+    hubAsOpened = Record.one("ChatHub", { inverse: "opened" });
+    hubAsFolded = Record.one("ChatHub", { inverse: "folded" });
 
     get displayName() {
         return this.thread?.displayName;
@@ -42,18 +33,21 @@ export class ChatWindow extends Record {
         return Boolean(this.hubAsOpened);
     }
 
-    async close(options = {}) {
+    close(options = {}) {
         const { escape = false } = options;
+        options.notifyState ??= true;
         const chatHub = this.store.chatHub;
         const indexAsOpened = chatHub.opened.findIndex((w) => w.eq(this));
-        if (this.thread) {
-            this.thread.state = "closed";
+        this.store.chatHub.opened.delete(this);
+        this.store.chatHub.folded.delete(this);
+        if (options.notifyState) {
+            this.store.chatHub.save();
         }
-        await this._onClose(options);
-        this.delete();
         if (escape && indexAsOpened !== -1 && chatHub.opened.length > 0) {
             chatHub.opened[indexAsOpened === 0 ? 0 : indexAsOpened - 1].focus();
         }
+        this._onClose(options);
+        this.delete();
     }
 
     focus() {
@@ -61,54 +55,25 @@ export class ChatWindow extends Record {
     }
 
     fold() {
-        if (!this.thread) {
-            return this.close();
-        }
+        this.store.chatHub.opened.delete(this);
         this.store.chatHub.folded.delete(this);
         this.store.chatHub.folded.unshift(this);
-        this.thread.state = "folded";
-        this.notifyState();
+        this.store.chatHub.save();
     }
 
-    open({ notifyState = true } = {}) {
+    open({ focus = false, notifyState = true } = {}) {
+        this.store.chatHub.folded.delete(this);
         this.store.chatHub.opened.delete(this);
         this.store.chatHub.opened.unshift(this);
-        if (this.thread) {
-            this.thread.state = "open";
-            if (notifyState) {
-                this.notifyState();
-            }
-        }
-        this.focus();
-    }
-
-    notifyState() {
-        if (
-            this.store.env.services.ui.isSmall ||
-            this.thread?.isTransient ||
-            !this.thread?.hasSelfAsMember
-        ) {
-            return;
-        }
-        if (this.thread.model === "discuss.channel") {
-            this.thread.foldStateCount++;
-            return rpc(
-                "/discuss/channel/fold",
-                {
-                    channel_id: this.thread.id,
-                    state: this.thread.state,
-                    state_count: this.thread.foldStateCount,
-                },
-                { shadow: true }
-            );
-        }
-    }
-
-    async _onClose({ notifyState = true } = {}) {
         if (notifyState) {
-            this.notifyState();
+            this.store.chatHub.save();
+        }
+        if (focus && !isMobileOS()) {
+            this.focus();
         }
     }
+
+    _onClose() {}
 }
 
 ChatWindow.register();

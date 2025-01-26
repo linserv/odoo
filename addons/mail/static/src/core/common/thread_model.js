@@ -40,22 +40,6 @@ export class Thread extends Record {
     static insert(data) {
         return super.insert(...arguments);
     }
-    static new() {
-        const thread = super.new(...arguments);
-        Record.onChange(thread, ["state"], () => {
-            if (thread.state === "open" && !this.store.env.services.ui.isSmall) {
-                const cw = this.store.ChatWindow?.insert({ thread });
-                thread.store.chatHub.opened.delete(cw);
-                thread.store.chatHub.opened.unshift(cw);
-            }
-            if (thread.state === "folded") {
-                const cw = this.store.ChatWindow?.insert({ thread });
-                thread.store.chatHub.folded.delete(cw);
-                thread.store.chatHub.folded.unshift(cw);
-            }
-        });
-        return thread;
-    }
     static async getOrFetch(data) {
         return this.get(data);
     }
@@ -71,6 +55,7 @@ export class Thread extends Record {
     });
     /** @type {boolean} */
     areAttachmentsLoaded = false;
+    group_public_id = Record.one("res.groups");
     attachments = Record.many("ir.attachment", {
         /**
          * @param {import("models").Attachment} a1
@@ -89,6 +74,15 @@ export class Thread extends Record {
     get canUnpin() {
         return this.channel_type === "chat" && this.importantCounter === 0;
     }
+    close_chat_window = Record.attr(undefined, {
+        /** @this {import("models").Thread} */
+        onUpdate() {
+            if (this.close_chat_window) {
+                this.closeChatWindow();
+                this.close_chat_window = undefined;
+            }
+        },
+    });
     composer = Record.one("Composer", {
         compute: () => ({}),
         inverse: "thread",
@@ -101,11 +95,7 @@ export class Thread extends Record {
         },
     });
     get showCorrespondentCountry() {
-        return (
-            this.channel_type === "livechat" &&
-            this.operator?.eq(this.store.self) &&
-            Boolean(this.correspondentCountry)
-        );
+        return false;
     }
     counter = 0;
     counter_bus_id = 0;
@@ -208,8 +198,6 @@ export class Thread extends Record {
         inverse: "threadAsNeedaction",
         sort: (message1, message2) => message1.id - message2.id,
     });
-    /** @type {'open' | 'folded' | 'closed'} */
-    state;
     status = "new";
     /**
      * Stored scoll position of thread from top in ASC order.
@@ -360,7 +348,7 @@ export class Thread extends Record {
     newestMessage = Record.one("mail.message", {
         inverse: "threadAsNewest",
         compute() {
-            return this.messages.findLast((msg) => !msg.isEmpty);
+            return this.messages.at(-1);
         },
     });
 
@@ -384,12 +372,6 @@ export class Thread extends Record {
         },
     });
 
-    newestPersistentNotEmptyOfAllMessage = Record.one("mail.message", {
-        compute() {
-            return this.newestPersistentAllMessages.find((message) => !message.isEmpty);
-        },
-    });
-
     get oldestPersistentMessage() {
         return this.messages.find((msg) => Number.isInteger(msg.id));
     }
@@ -404,7 +386,7 @@ export class Thread extends Record {
     }
 
     get isEmpty() {
-        return !this.messages.some((message) => !message.isEmpty);
+        return this.messages.length === 0;
     }
 
     get nonEmptyMessages() {
@@ -442,12 +424,12 @@ export class Thread extends Record {
         try {
             const { data, messages } = await this.fetchMessagesData({ after, around, before });
             this.store.insert(data, { html: true });
-            this.isLoaded = true;
             return this.store["mail.message"].insert(messages.reverse());
         } catch (e) {
             this.hasLoadingFailed = true;
             throw e;
         } finally {
+            this.isLoaded = true;
             this.status = "ready";
         }
     }
@@ -601,7 +583,9 @@ export class Thread extends Record {
     }
 
     async leave() {
-        await this.store.env.services.orm.call("discuss.channel", "action_unfollow", [this.id]);
+        await this.store.env.services.orm.silent.call("discuss.channel", "action_unfollow", [
+            this.id,
+        ]);
     }
 
     /**
@@ -699,20 +683,20 @@ export class Thread extends Record {
     /** @param {Object} [options] */
     open(options) {}
 
-    openChatWindow({ fromMessagingMenu } = {}) {
+    openChatWindow({ focus = false, fromMessagingMenu } = {}) {
         const cw = this.store.ChatWindow.insert(
             assignDefined({ thread: this }, { fromMessagingMenu })
         );
-        this.store.chatHub.opened.delete(cw);
-        this.store.chatHub.opened.unshift(cw);
-        if (!isMobileOS()) {
-            cw.focus();
-        } else {
+        cw.open({ focus: focus });
+        if (isMobileOS()) {
             this.markAsRead();
         }
-        this.state = "open";
-        cw.notifyState();
         return cw;
+    }
+
+    closeChatWindow(options = {}) {
+        const chatWindow = this.store.ChatWindow.get({ thread: this });
+        chatWindow?.close({ notifyState: false, ...options });
     }
 
     pin() {

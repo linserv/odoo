@@ -32,6 +32,16 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             company_id=cls.company_data_2['company'].id,
             company_ids=[cls.company_data_2['company'].id, cls.env.company.id],
         )
+        # What's important here is that this user does not have access to read Sales data,
+        # but can still log time on a timesheet.
+        cls.user_employee_without_sales_access = mail_new_test_user(
+            cls.env,
+            name='Tyrion Lannister Employee',
+            login='tyrion',
+            email='tyrion@example.com',
+            notification_type='email',
+            groups='project.group_project_manager,hr_timesheet.group_hr_timesheet_user',
+        )
 
         cls.employee_user = cls.env['hr.employee'].create({
             'name': 'Employee User',
@@ -52,6 +62,12 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'name': 'Cersei Lannister',
             'user_id': cls.user_manager_company_B.id,
             'hourly_cost': 45,
+        })
+        
+        cls.employee_without_sales_access = cls.env['hr.employee'].create({
+            'name': 'Tyrion Lannister',
+            'user_id': cls.user_employee_without_sales_access.id,
+            'hourly_cost': 25,
         })
 
         # Account and project
@@ -105,7 +121,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'order',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-ORDERED1',
             'service_type': 'timesheet',
             'service_tracking': 'no',
@@ -120,7 +135,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'order',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-ORDERED2',
             'service_type': 'timesheet',
             'service_tracking': 'task_global_project',
@@ -135,7 +149,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'order',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-ORDERED3',
             'service_type': 'timesheet',
             'service_tracking': 'task_in_project',
@@ -150,7 +163,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'order',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-ORDERED4',
             'service_type': 'timesheet',
             'service_tracking': 'project_only',
@@ -165,7 +177,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'order',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-ORDERED4',
             'service_type': 'timesheet',
             'service_tracking': 'project_only',
@@ -183,7 +194,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'delivery',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-DELI1',
             'service_type': 'timesheet',
             'service_tracking': 'no',
@@ -198,7 +208,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'delivery',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-DELI2',
             'service_type': 'timesheet',
             'service_tracking': 'task_global_project',
@@ -213,7 +222,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'delivery',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-DELI3',
             'service_type': 'timesheet',
             'service_tracking': 'task_in_project',
@@ -228,7 +236,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'delivery',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-DELI4',
             'service_type': 'timesheet',
             'service_tracking': 'project_only',
@@ -243,7 +250,6 @@ class TestCommonSaleTimesheet(TestSaleProjectCommon):
             'type': 'service',
             'invoice_policy': 'delivery',
             'uom_id': cls.uom_hour.id,
-            'uom_po_id': cls.uom_hour.id,
             'default_code': 'SERV-DELI5',
             'service_type': 'timesheet',
             'service_tracking': 'project_only',

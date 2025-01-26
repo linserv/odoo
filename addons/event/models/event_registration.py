@@ -321,6 +321,7 @@ class EventRegistration(models.Model):
         async_scheduler = self.env['ir.config_parameter'].sudo().get_param('event.event_mail_async')
         if async_scheduler:
             self.env.ref('event.event_mail_scheduler')._trigger()
+            self.env.ref('mail.ir_cron_mail_scheduler_action')._trigger()
         else:
             # we could simply call _create_missing_mail_registrations and let cron do their job
             # but it currently leads to several delays. We therefore call execute until
@@ -358,22 +359,6 @@ class EventRegistration(models.Model):
             event_name=self.event_id.name,
             registration_id=self.id,
         )
-
-    def _message_get_suggested_recipients(self):
-        recipients = super()._message_get_suggested_recipients()
-        public_users = self.env['res.users'].sudo()
-        public_groups = self.env.ref("base.group_public", raise_if_not_found=False)
-        if public_groups:
-            public_users = public_groups.sudo().with_context(active_test=False).mapped("users")
-        try:
-            is_public = self.sudo().with_context(active_test=False).partner_id.user_ids in public_users if public_users else False
-            if self.partner_id and not is_public:
-                self._message_add_suggested_recipient(recipients, partner=self.partner_id, reason=_('Customer'))
-            elif self.email:
-                self._message_add_suggested_recipient(recipients, email=self.email, reason=_('Customer Email'))
-        except AccessError:     # no read access rights -> ignore suggested recipients
-            pass
-        return recipients
 
     def _message_get_default_recipients(self):
         # Prioritize registration email over partner_id, which may be shared when a single

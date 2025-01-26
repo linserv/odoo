@@ -12,7 +12,7 @@ import { ConnectionLostError, RPCError } from "@web/core/network/rpc";
 import { PaymentScreenPaymentLines } from "@point_of_sale/app/screens/payment_screen/payment_lines/payment_lines";
 import { PaymentScreenStatus } from "@point_of_sale/app/screens/payment_screen/payment_status/payment_status";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
-import { Component, useState, onMounted } from "@odoo/owl";
+import { Component, onMounted } from "@odoo/owl";
 import { Numpad, enhancedButtons } from "@point_of_sale/app/components/numpad/numpad";
 import { floatIsZero, roundPrecision } from "@web/core/utils/numbers";
 import { ask, makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
@@ -33,7 +33,7 @@ export class PaymentScreen extends Component {
 
     setup() {
         this.pos = usePos();
-        this.ui = useState(useService("ui"));
+        this.ui = useService("ui");
         this.dialog = useService("dialog");
         this.invoiceService = useService("account_move");
         this.notification = useService("notification");
@@ -362,8 +362,9 @@ export class PaymentScreen extends Component {
         }
 
         // 3. Post process.
-        if (syncOrderResult && syncOrderResult.length > 0 && this.currentOrder.waitForPushOrder()) {
-            await this.postPushOrderResolve(syncOrderResult.map((res) => res.id));
+        const postPushOrders = syncOrderResult.filter((order) => order.waitForPushOrder());
+        if (postPushOrders.length > 0) {
+            await this.postPushOrderResolve(postPushOrders.map((order) => order.id));
         }
 
         await this.afterOrderValidation(!!syncOrderResult && syncOrderResult.length > 0);
@@ -500,10 +501,10 @@ export class PaymentScreen extends Component {
             return false;
         }
 
-        if (this.currentOrder.preset_id?.identification === "address" && !partner?.name) {
+        if (!this.currentOrder.presetRequirementsFilled) {
             this.dialog.add(AlertDialog, {
                 title: _t("Customer required"),
-                body: _t("Please add a customer to the order."),
+                body: _t("Please add a valid customer to the order."),
             });
             return false;
         }
@@ -612,6 +613,7 @@ export class PaymentScreen extends Component {
         );
         if (isCancelSuccessful) {
             line.setPaymentStatus("retry");
+            this.pos.paymentTerminalInProgress = false;
         } else {
             line.setPaymentStatus("waitingCard");
         }

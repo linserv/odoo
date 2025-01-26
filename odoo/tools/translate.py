@@ -305,7 +305,7 @@ def serialize_xml(node):
     return etree.tostring(node, method='xml', encoding='unicode')
 
 
-MODIFIER_ATTRS = {"invisible", "readonly", "required", "column_invisible", "attrs", "states"}
+MODIFIER_ATTRS = {"invisible", "readonly", "required", "column_invisible", "attrs"}
 def xml_term_adapter(term_en):
     """
     Returns an `adapter(term)` function that will ensure the modifiers are copied
@@ -317,15 +317,13 @@ def xml_term_adapter(term_en):
     orig_node = parse_xml(f"<div>{term_en}</div>")
 
     def same_struct_iter(left, right):
-        if left.tag != right.tag:
+        if left.tag != right.tag or len(left) != len(right):
             raise ValueError("Non matching struct")
         yield left, right
         left_iter = left.iterchildren()
         right_iter = right.iterchildren()
         for lc, rc in zip(left_iter, right_iter):
             yield from same_struct_iter(lc, rc)
-        if next(left_iter, None) is not None or next(right_iter, None) is not None:
-            raise ValueError("Non matching struct")
 
     def adapter(term):
         new_node = parse_xml(f"<div>{term}</div>")
@@ -334,10 +332,10 @@ def xml_term_adapter(term_en):
                 removed_attrs = [k for k in new_n.attrib if k in MODIFIER_ATTRS and k not in orig_n.attrib]
                 for k in removed_attrs:
                     del new_n.attrib[k]
-                keep_attrs = {k: v for k, v in orig_n.attrib.items() if k in MODIFIER_ATTRS}
+                keep_attrs = {k: v for k, v in orig_n.attrib.items()}
                 new_n.attrib.update(keep_attrs)
         except ValueError:  # non-matching structure
-            return term
+            return None
 
         # remove tags <div> and </div> from result
         return serialize_xml(new_node)[5:-6]
@@ -1084,32 +1082,32 @@ def extract_spreadsheet_terms(fileobj, keywords, comment_tags, options):
     :return: an iterator over ``(lineno, funcname, message, comments)``
              tuples
     """
-    terms = []
+    terms = set()
     data = json.load(fileobj)
     for sheet in data.get('sheets', []):
         for cell in sheet['cells'].values():
             # 'cell' was an object in versions <saas-18.1
             content = cell if isinstance(cell, str) else cell.get('content', '')
             if content.startswith('='):
-                terms += extract_formula_terms(content)
+                terms.update(extract_formula_terms(content))
             else:
                 markdown_link = re.fullmatch(r'\[(.+)\]\(.+\)', content)
                 if markdown_link:
-                    terms.append(markdown_link[1])
+                    terms.add(markdown_link[1])
         for figure in sheet['figures']:
             if figure['tag'] == 'chart':
                 title = figure['data']['title']
                 if isinstance(title, str):
-                    terms.append(title)
+                    terms.add(title)
                 elif 'text' in title:
-                    terms.append(title['text'])
+                    terms.add(title['text'])
                 if 'axesDesign' in figure['data']:
-                    for axes in figure['data']['axesDesign'].values():
-                        terms.append(axes.get('title', {}).get('text', ''))
+                    terms.update(
+                        axes.get('title', {}).get('text', '') for axes in figure['data']['axesDesign'].values()
+                    )
                 if 'baselineDescr' in figure['data']:
-                    terms.append(figure['data']['baselineDescr'])
-    for global_filter in data.get('globalFilters', []):
-        terms.append(global_filter['label'])
+                    terms.add(figure['data']['baselineDescr'])
+    terms.update(global_filter['label'] for global_filter in data.get('globalFilters', []))
     return (
         (0, None, term, [])
         for term in terms
@@ -1357,7 +1355,7 @@ class TranslationModuleReader(TranslationReader):
             return module, fabsolutepath, frelativepath, display_path
         return None, None, None, None
 
-    def _babel_extract_terms(self, fname, path, root, extract_method="python", trans_type='code',
+    def _babel_extract_terms(self, fname, path, root, extract_method='odoo.tools.babel:extract_python', trans_type='code',
                                extra_comments=None, extract_keywords={'_': None}):
 
         module, fabsolutepath, _, display_path = self._verified_module_filepaths(fname, path, root)
@@ -1366,7 +1364,7 @@ class TranslationModuleReader(TranslationReader):
         extra_comments = extra_comments or []
         src_file = file_open(fabsolutepath, 'rb')
         options = {}
-        if extract_method == 'python':
+        if 'python' in extract_method:
             options['encoding'] = 'UTF-8'
             translations = code_translations.get_python_translations(module, self._lang)
         else:
@@ -1403,17 +1401,19 @@ class TranslationModuleReader(TranslationReader):
         self._path_list.append((config.root_path, False))
         _logger.debug("Scanning modules at paths: %s", self._path_list)
 
+        spreadsheet_files_regex = re.compile(r".*_dashboard(\.osheet)?\.json$")
+
         for (path, recursive) in self._path_list:
             _logger.debug("Scanning files of modules at %s", path)
             for root, _dummy, files in os.walk(path, followlinks=True):
                 for fname in fnmatch.filter(files, '*.py'):
-                    self._babel_extract_terms(fname, path, root, 'python',
+                    self._babel_extract_terms(fname, path, root, 'odoo.tools.babel:extract_python',
                                               extra_comments=[PYTHON_TRANSLATION_COMMENT],
                                               extract_keywords={'_': None, '_lt': None})
                 if fnmatch.fnmatch(root, '*/static/src*'):
                     # Javascript source files
                     for fname in fnmatch.filter(files, '*.js'):
-                        self._babel_extract_terms(fname, path, root, 'javascript',
+                        self._babel_extract_terms(fname, path, root, 'odoo.tools.babel:extract_javascript',
                                                   extra_comments=[JAVASCRIPT_TRANSLATION_COMMENT],
                                                   extract_keywords={'_t': None})
                     # QWeb template files
@@ -1421,7 +1421,7 @@ class TranslationModuleReader(TranslationReader):
                         self._babel_extract_terms(fname, path, root, 'odoo.tools.translate:babel_extract_qweb',
                                                   extra_comments=[JAVASCRIPT_TRANSLATION_COMMENT])
                 if fnmatch.fnmatch(root, '*/data/*'):
-                    for fname in fnmatch.filter(files, '*_dashboard.json'):
+                    for fname in filter(spreadsheet_files_regex.match, files):
                         self._babel_extract_terms(fname, path, root, 'odoo.tools.translate:extract_spreadsheet_terms',
                                                   extra_comments=[JAVASCRIPT_TRANSLATION_COMMENT])
                 if not recursive:

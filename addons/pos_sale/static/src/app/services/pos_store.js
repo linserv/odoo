@@ -227,9 +227,10 @@ patch(PosStore.prototype, {
             const total_price = group.reduce((total, line) => (total += line.price_total), 0);
             const ratio = total_price / sale_order.amount_total;
             const down_payment_line_price = total_down_payment * ratio;
+            const taxes_to_apply = group[0].tax_ids.filter((tax) => tax.amount_type !== "fixed");
             // We apply the taxes and keep the same price
             const new_price = computePriceForcePriceInclude(
-                group[0].tax_ids,
+                taxes_to_apply,
                 down_payment_line_price,
                 this.config.down_payment_product_id,
                 this.config._product_default_values,
@@ -242,7 +243,7 @@ patch(PosStore.prototype, {
                 product_tmpl_id: this.config.down_payment_product_id.product_tmpl_id,
                 price_unit: new_price,
                 sale_order_origin_id: sale_order,
-                tax_ids: [["link", ...group[0].tax_ids]],
+                tax_ids: [["link", ...taxes_to_apply]],
                 down_payment_details: sale_order.order_line
                     .filter(
                         (line) =>
@@ -269,5 +270,30 @@ patch(PosStore.prototype, {
         ) {
             this.numpadMode = "price";
         }
+    },
+    setPartnerToCurrentOrder(partner) {
+        if (["warning", "block"].includes(partner.sale_warn)) {
+            this.dialog.add(AlertDialog, {
+                title: _t("Warning for %s", partner.name),
+                body: partner.sale_warn_msg || "",
+            });
+        }
+        // removing partner if it is blocked
+        partner = partner?.sale_warn !== "block" ? partner : false;
+        super.setPartnerToCurrentOrder(partner);
+    },
+    addLineToCurrentOrder(vals, opt = {}, configure = true) {
+        const productTemplate = vals.product_tmpl_id;
+        if (["warning", "block"].includes(productTemplate.sale_line_warn)) {
+            this.dialog.add(AlertDialog, {
+                title: _t("Warning for %s", productTemplate.name),
+                body: productTemplate.sale_line_warn_msg || "",
+            });
+        }
+        // product is not added to the cart if it is blocked
+        if (productTemplate.sale_line_warn !== "block") {
+            return super.addLineToCurrentOrder(vals, opt, configure);
+        }
+        return false;
     },
 });

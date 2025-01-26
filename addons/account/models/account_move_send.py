@@ -277,6 +277,16 @@ class AccountMoveSend(models.AbstractModel):
             raise UserError(_("You can only Print & Send sales documents."))
 
     @api.model
+    def _check_invoice_report(self, moves, **custom_settings):
+        if ((
+                custom_settings.get('pdf_report')
+                and any(not move._is_action_report_available(custom_settings['pdf_report']) for move in moves)
+            )
+            or any(not self._get_default_pdf_report_id(move).is_invoice_report for move in moves)
+        ):
+            raise UserError(_("The sending of invoices is not set up properly, make sure the report used is set for invoices."))
+
+    @api.model
     def _format_error_text(self, error):
         """ Format the error that can be either a dict (complex format needed) or a string (simple format) into a
         regular string.
@@ -434,24 +444,17 @@ class AccountMoveSend(models.AbstractModel):
     @api.model
     def _send_mail(self, move, mail_template, **kwargs):
         """ Send the journal entry passed as parameter by mail. """
-        partner_ids = kwargs.get('partner_ids', [])
-        author_id = kwargs.pop('author_id')
-
-        new_message = move\
-            .with_context(
-                no_new_invoice=True,
-                mail_notify_author=author_id in partner_ids,
-            ).message_post(
-                message_type='comment',
-                **kwargs,
-                **{  # noqa: PIE804
-                    'email_layout_xmlid': self._get_mail_layout(),
-                    'email_add_signature': not mail_template,
-                    'mail_auto_delete': mail_template.auto_delete,
-                    'mail_server_id': mail_template.mail_server_id.id,
-                    'reply_to_force_new': False,
-                }
-            )
+        new_message = move.with_context(no_new_invoice=True).message_post(
+            message_type='comment',
+            **kwargs,
+            **{  # noqa: PIE804
+                'email_layout_xmlid': self._get_mail_layout(),
+                'email_add_signature': not mail_template,
+                'mail_auto_delete': mail_template.auto_delete,
+                'mail_server_id': mail_template.mail_server_id.id,
+                'reply_to_force_new': False,
+            }
+        )
 
         # Prevent duplicated attachments linked to the invoice.
         new_message.attachment_ids.invalidate_recordset(['res_id', 'res_model'], flush=False)
@@ -550,14 +553,21 @@ class AccountMoveSend(models.AbstractModel):
                 attachment = move_data['proforma_pdf_attachment']
                 mail_params['attachments'].append((attachment.name, attachment.raw))
 
+            # synchronize author / email_from, as account.move.send wizard computes
+            # a bit too much stuff
+            author_id = mail_params.pop('author_id', False)
             email_from = self._get_mail_default_field_value_from_template(mail_template, mail_lang, move, 'email_from')
+            if email_from or not author_id:
+                author_id, email_from = move._message_compute_author(email_from=email_from)
             model_description = move.with_context(lang=mail_lang).type_name
 
             self._send_mail(
                 move,
                 mail_template,
+                author_id=author_id,
                 subtype_id=subtype.id,
                 model_description=model_description,
+                notify_author_mention=True,
                 email_from=email_from,
                 **mail_params,
             )
@@ -675,8 +685,7 @@ class AccountMoveSend(models.AbstractModel):
         This is a security in case the method is called directly without going through the wizards.
         """
         self._check_move_constrains(moves)
-        assert all(self._get_default_pdf_report_id(move).is_invoice_report for move in moves)
-        assert all(move._is_action_report_available(custom_settings['pdf_report']) for move in moves) if custom_settings.get('pdf_report') else True
+        self._check_invoice_report(moves, **custom_settings)
         assert all(
             sending_method in dict(self.env['res.partner']._fields['invoice_sending_method'].selection)
             for sending_method in custom_settings.get('sending_methods', [])

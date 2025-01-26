@@ -5,6 +5,8 @@ import { parseFloat } from "@web/views/fields/parsers";
 import { formatFloat, roundDecimals, roundPrecision, floatIsZero } from "@web/core/utils/numbers";
 import { roundCurrency, formatCurrency } from "./utils/currency";
 import { _t } from "@web/core/l10n/translation";
+import { localization as l10n } from "@web/core/l10n/localization";
+
 import {
     getTaxesAfterFiscalPosition,
     getTaxesValues,
@@ -41,8 +43,8 @@ export class PosOrderline extends Base {
         if (options.code) {
             const code = options.code;
             const blockMerge = ["weight", "quantity", "discount"];
-            const product_packaging_by_barcode =
-                this.models["product.packaging"].getAllBy("barcode");
+            const product_packaging_by_barcode = this.models["product.uom"].getAllBy("barcode");
+            const uom_by_id = this.models["uom.uom"].getAllBy("id");
 
             if (blockMerge.includes(code.type)) {
                 this.setQuantity(code.value);
@@ -52,7 +54,9 @@ export class PosOrderline extends Base {
             }
 
             if (product_packaging_by_barcode[code.code]) {
-                this.setQuantity(product_packaging_by_barcode[code.code].qty);
+                this.setQuantity(
+                    uom_by_id[product_packaging_by_barcode[code.code].uom_id.id].factor
+                );
             }
         }
 
@@ -65,25 +69,36 @@ export class PosOrderline extends Base {
     }
 
     get quantityStr() {
-        let qtyStr = "";
+        let unitPart = "";
+        let decimalPart = "";
         const unit = this.product_id.uom_id;
+        const decimalPoint = l10n.decimalPoint;
 
         if (unit) {
             if (unit.rounding) {
                 const decimals = this.models["decimal.precision"].find(
-                    (dp) => dp.name === "Product Unit of Measure"
+                    (dp) => dp.name === "Product Unit"
                 ).digits;
-                qtyStr = formatFloat(this.qty, {
-                    digits: [69, decimals],
-                });
+
+                if (this.qty % 1 === 0) {
+                    unitPart = this.qty.toFixed(0);
+                } else {
+                    const formatted = formatFloat(this.qty, { digits: [69, decimals] });
+                    const parts = formatted.split(decimalPoint);
+                    unitPart = parts[0] + decimalPoint;
+                    decimalPart = parts[1] || "";
+                }
             } else {
-                qtyStr = this.qty.toFixed(0);
+                unitPart = this.qty.toFixed(0);
             }
         } else {
-            qtyStr = "" + this.qty;
+            unitPart = "" + this.qty;
         }
-
-        return qtyStr;
+        return {
+            qtyStr: unitPart + (decimalPart ? decimalPoint + decimalPart : ""),
+            unitPart: unitPart,
+            decimalPart: decimalPart,
+        };
     }
 
     get company() {
@@ -155,7 +170,7 @@ export class PosOrderline extends Base {
 
         // Remove those that needed to be removed.
         for (const lotLine of lotLinesToRemove) {
-            this.pack_lot_ids = this.pack_lot_ids.filter((pll) => pll.uuid !== lotLine.uuid);
+            this.pack_lot_ids = this.pack_lot_ids.filter((pll) => pll.id !== lotLine.id);
         }
 
         for (const newLotLine of newPackLotLines) {
@@ -240,7 +255,7 @@ export class PosOrderline extends Base {
         if (unit) {
             if (unit.rounding) {
                 const decimals = this.models["decimal.precision"].find(
-                    (dp) => dp.name === "Product Unit of Measure"
+                    (dp) => dp.name === "Product Unit"
                 ).digits;
                 const rounding = Math.max(unit.rounding, Math.pow(10, -decimals));
                 this.qty = roundPrecision(quant, rounding);
@@ -318,14 +333,18 @@ export class PosOrderline extends Base {
             // don't merge discounted orderlines
             this.getDiscount() === 0 &&
             floatIsZero(price - order_line_price - orderline.getPriceExtra(), this.currency) &&
-            !(
-                this.product_id.tracking === "lot" &&
-                (this.pickingType.use_create_lots || this.pickingType.use_existing_lots)
-            ) &&
+            !this.isLotTracked() &&
             this.full_product_name === orderline.full_product_name &&
             isSameCustomerNote &&
             !this.refunded_orderline_id &&
             !orderline.isPartOfCombo()
+        );
+    }
+
+    isLotTracked() {
+        return (
+            this.product_id.tracking === "lot" &&
+            (this.pickingType.use_create_lots || this.pickingType.use_existing_lots)
         );
     }
 

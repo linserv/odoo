@@ -1,6 +1,5 @@
 import { reactive } from "@odoo/owl";
 
-import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
 
 export class DiscussCoreCommon {
@@ -27,15 +26,6 @@ export class DiscussCoreCommon {
                 }),
             { once: true }
         );
-        this.busService.subscribe("discuss.channel/leave", (payload) => {
-            const { Thread } = this.store.insert(payload);
-            const [thread] = Thread;
-            if (thread.notifyOnLeave) {
-                this.notificationService.add(_t("You unsubscribed from %s.", thread.displayName), {
-                    type: "info",
-                });
-            }
-        });
         this.busService.subscribe("discuss.channel/delete", (payload, metadata) => {
             const thread = this.store.Thread.insert({
                 id: payload.id,
@@ -62,22 +52,6 @@ export class DiscussCoreCommon {
             );
             message.thread.messages.push(message);
             message.thread.transientMessages.push(message);
-        });
-        this.busService.subscribe("discuss.channel/unpin", (payload) => {
-            const thread = this.store.Thread.get({ model: "discuss.channel", id: payload.id });
-            if (thread) {
-                thread.is_pinned = false;
-                this.notificationService.add(
-                    thread.parent_channel_id
-                        ? _t(`You unpinned %(conversation_name)s`, {
-                              conversation_name: thread.displayName,
-                          })
-                        : _t(`You unpinned your conversation with %(user_name)s`, {
-                              user_name: thread.displayName,
-                          }),
-                    { type: "info" }
-                );
-            }
         });
         this.busService.subscribe("discuss.channel.member/fetched", (payload) => {
             const { channel_id, id, last_message_id, partner_id } = payload;
@@ -106,7 +80,7 @@ export class DiscussCoreCommon {
      * @param {{ notifId: number}} metadata
      */
     _handleNotificationChannelDelete(thread, metadata) {
-        thread.closeChatWindow();
+        thread.closeChatWindow({ force: true });
         thread.messages.splice(0, thread.messages.length);
         thread.delete();
     }

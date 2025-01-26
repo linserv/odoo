@@ -197,16 +197,22 @@ addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js
 !addons/im_livechat/**/*
 !addons/mail
 !addons/mail/**/*
+!addons/portal
+!addons/portal/**/*
 !addons/snailmail
 !addons/snailmail/**/*
 !addons/test_discuss_full
 !addons/test_discuss_full/**/*
+!addons/test_mail
+!addons/test_mail/**/*
 !addons/website_livechat
 !addons/website_livechat/**/*
 !approvals
 !approvals/**/*
 !test_discuss_full_enterprise
 !test_discuss_full_enterprise/**/*
+!test_mail_enterprise
+!test_mail_enterprise/**/*
 !whatsapp
 !whatsapp/**/*
 
@@ -297,8 +303,6 @@ addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js
 !addons/pos_self_order_sale/**/*
 !addons/pos_self_order_stripe
 !addons/pos_self_order_stripe/**/*
-!addons/pos_six
-!addons/pos_six/**/*
 !addons/pos_stripe
 !addons/pos_stripe/**/*
 !addons/spreadsheet_dashboard_pos_hr

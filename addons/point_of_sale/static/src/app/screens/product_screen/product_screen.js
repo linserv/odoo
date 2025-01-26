@@ -43,7 +43,7 @@ export class ProductScreen extends Component {
     setup() {
         super.setup();
         this.pos = usePos();
-        this.ui = useState(useService("ui"));
+        this.ui = useService("ui");
         this.dialog = useService("dialog");
         this.notification = useService("notification");
         this.numberBuffer = useService("number_buffer");
@@ -107,7 +107,7 @@ export class ProductScreen extends Component {
                     return acc;
                 }, {});
             },
-            () => [this.currentOrder.totalQuantity]
+            () => [this.currentOrder, this.currentOrder.totalQuantity]
         );
     }
 
@@ -139,16 +139,12 @@ export class ProductScreen extends Component {
         ]).map((button) => ({
             ...button,
             class: `
-                ${defaultLastRowValues.includes(button.value) ? "border-0" : ""}
+                ${defaultLastRowValues.includes(button.value) ? "" : ""}
                 ${colorClassMap[button.value] || ""}
                 ${this.pos.numpadMode === button.value ? "active" : ""}
-                ${button.value === "quantity" ? "numpad-qty rounded-0 rounded-top mb-0" : ""}
-                ${button.value === "price" ? "numpad-price rounded-0 rounded-bottom mt-0" : ""}
-                ${
-                    button.value === "discount"
-                        ? "numpad-discount my-0 rounded-0 border-top border-bottom"
-                        : ""
-                }
+                ${button.value === "quantity" ? "numpad-qty rounded-0" : ""}
+                ${button.value === "price" ? "numpad-price rounded-0" : ""}
+                ${button.value === "discount" ? "numpad-discount rounded-0" : ""}
             `,
         }));
     }
@@ -177,7 +173,7 @@ export class ProductScreen extends Component {
         let product = this.pos.models["product.product"].getBy("barcode", code.base_code);
 
         if (!product) {
-            const productPackaging = this.pos.models["product.packaging"].getBy(
+            const productPackaging = this.pos.models["product.uom"].getBy(
                 "barcode",
                 code.base_code
             );
@@ -227,7 +223,7 @@ export class ProductScreen extends Component {
         const partner = await this._getPartnerByBarcode(code);
         if (partner) {
             if (this.currentOrder.getPartner() !== partner) {
-                this.currentOrder.setPartner(partner);
+                this.pos.setPartnerToCurrentOrder(partner);
             }
             return;
         }

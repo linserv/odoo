@@ -13,6 +13,7 @@ import { pick } from "@web/core/utils/objects";
 import { debounce } from "@web/core/utils/timing";
 import { loadBundle, loadJS } from "@web/core/assets";
 import { memoize } from "@web/core/utils/functions";
+import { url } from "@web/core/utils/urls";
 import { callActionsRegistry } from "./call_actions";
 
 /**
@@ -359,7 +360,7 @@ export class Rtc extends Record {
         this.state.pttReleaseTimeout = browser.setTimeout(() => {
             this.setTalking(false);
             if (!this.selfSession?.isMute) {
-                this.soundEffectsService.play("ptt-release", { volume: 0.3 });
+                this.soundEffectsService.play("ptt-release");
             }
         }, Math.max(this.store.settings.voice_active_duration || 0, duration));
     }
@@ -374,7 +375,7 @@ export class Rtc extends Record {
         }
         browser.clearTimeout(this.state.pttReleaseTimeout);
         if (!this.selfSession.isTalking && !this.selfSession.isMute) {
-            this.soundEffectsService.play("ptt-press", { volume: 0.3 });
+            this.soundEffectsService.play("ptt-press");
         }
         this.setTalking(true);
     }
@@ -468,15 +469,22 @@ export class Rtc extends Record {
      * @param {import("models").Thread} channel
      * @param {Object} [initialState={}]
      * @param {boolean} [initialState.audio]
+     * @param {{ exit: () => {} }} [initialState.fullscreen] if set, the call view is using fullscreen.
+     *   Providing fullscreen object allows to exit on call leave.
      * @param {boolean} [initialState.camera]
      */
-    async toggleCall(channel, { audio = true, camera } = {}) {
-        await loadJS("/mail/static/lib/selfie_segmentation/selfie_segmentation.js");
+    async toggleCall(channel, { audio = true, fullscreen, camera } = {}) {
+        await Promise.resolve(() =>
+            loadJS(url("/mail/static/lib/selfie_segmentation/selfie_segmentation.js")).catch(
+                () => {}
+            )
+        );
         if (this.state.hasPendingRequest) {
             return;
         }
         const isActiveCall = channel.eq(this.state.channel);
         if (this.state.channel) {
+            fullscreen?.exit();
             await this.leaveCall(this.state.channel);
         }
         if (!isActiveCall) {
@@ -650,6 +658,13 @@ export class Rtc extends Record {
                     const session = this.store["discuss.channel.rtc.session"].get(Number(id));
                     if (!session) {
                         return;
+                    }
+                    if (
+                        this.state.channel.activeRtcSession === session &&
+                        session.is_screen_sharing_on &&
+                        !info.isScreenSharingOn
+                    ) {
+                        this.state.channel.activeRtcSession = undefined;
                     }
                     // `isRaisingHand` is turned into the Date `raisingHand`
                     this.setRemoteRaiseHand(session, info.isRaisingHand);
@@ -921,6 +936,8 @@ export class Rtc extends Record {
         this.state.screenTrack?.stop();
         closeStream(this.state.sourceCameraStream);
         this.state.sourceCameraStream = null;
+        closeStream(this.state.sourceScreenStream);
+        this.state.sourceScreenStream = null;
         if (this.blurManager) {
             this.blurManager.close();
             this.blurManager = undefined;
@@ -1336,6 +1353,12 @@ export class Rtc extends Record {
                 closeStream(session.videoStreams.get(type));
             }
             session.videoStreams.delete(type);
+            if (
+                this.selfSession.videoStreams.size === 0 &&
+                this.selfSession.eq(this.state.channel.activeRtcSession)
+            ) {
+                this.state.channel.activeRtcSession = undefined;
+            }
         } else {
             if (cleanup) {
                 for (const stream of session.videoStreams.values()) {
@@ -1459,7 +1482,7 @@ export const rtcService = {
                 if (!rtc.selfSession) {
                     return;
                 }
-                if (rtc.serverInfo?.url === serverInfo?.url) {
+                if (rtc.serverInfo?.channelUUID === serverInfo.channelUUID) {
                     // no reason to swap if the server is the same, if at some point we want to force a swap
                     // there should be an explicit flag in the event payload.
                     return;

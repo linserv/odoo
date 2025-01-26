@@ -16,6 +16,7 @@
         'data/digest_data.xml',
         'data/pos_note_data.xml',
         'data/point_of_sale_tour.xml',
+        'data/mail_template_data.xml',
         'wizard/pos_details.xml',
         'wizard/pos_payment.xml',
         'wizard/pos_close_session_wizard.xml',
@@ -195,7 +196,6 @@
             'web/static/src/webclient/actions/**/*',
             ('remove', 'web/static/src/webclient/actions/reports/layout_assets/**/*'),
             ('remove', 'web/static/src/webclient/actions/**/*css'),
-            'web/static/src/webclient/company_service.js',
             'point_of_sale/static/src/customer_display/customer_display_adapter.js',
         ],
         'point_of_sale.base_tests': [

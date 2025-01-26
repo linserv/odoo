@@ -29,6 +29,11 @@ const StorePatch = {
         this.starred = Record.one("Thread");
         this.history = Record.one("Thread");
     },
+    async initialize() {
+        this.fetchStoreData("failures");
+        this.fetchStoreData("systray_get_activities");
+        await super.initialize(...arguments);
+    },
     onStarted() {
         super.onStarted(...arguments);
         this.inbox = {
@@ -55,13 +60,6 @@ const StorePatch = {
             // BroadcastChannel API is not supported (e.g. Safari < 15.4), so disabling it.
             this.activityBroadcastChannel = null;
         }
-    },
-    get initMessagingParams() {
-        return {
-            ...super.initMessagingParams,
-            failures: true,
-            systray_get_activities: true,
-        };
     },
     onUpdateActivityGroups() {},
     async scheduleActivity(resModel, resIds, defaultActivityTypeId = undefined) {
@@ -117,5 +115,24 @@ const StorePatch = {
         this.store.starred.messages = [];
         await this.env.services.orm.call("mail.message", "unstar_all");
     },
+    handleClickOnLink(ev, thread) {
+        const model = ev.target.dataset.oeModel;
+        const id = Number(ev.target.dataset.oeId);
+        const isLinkHandledBySuper = super.handleClickOnLink(...arguments);
+        if (!isLinkHandledBySuper && ev.target.tagName === "A" && id && model) {
+            ev.preventDefault();
+            Promise.resolve(
+                this.env.services.action.doAction({
+                    type: "ir.actions.act_window",
+                    res_model: model,
+                    views: [[false, "form"]],
+                    res_id: id,
+                })
+            ).then(() => this.onLinkFollowed(thread));
+            return true;
+        }
+        return false;
+    },
+    onLinkFollowed(fromThread) {},
 };
 patch(Store.prototype, StorePatch);

@@ -30,8 +30,7 @@ class ProductTemplate(models.Model):
         company_uom = self.env.company.timesheet_encode_uom_id
         for record in self:
             if not record.uom_id or record.uom_id != uom_unit or\
-               product_uom_hour.factor == record.uom_id.factor or\
-               record.uom_id.category_id not in [product_uom_hour.category_id, uom_unit.category_id]:
+               product_uom_hour.factor == record.uom_id.factor:
                 record.service_upsell_threshold_ratio = False
                 continue
             else:
@@ -60,7 +59,6 @@ class ProductTemplate(models.Model):
                 record.uom_id = record._origin.uom_id
             else:
                 record.uom_id = self.default_get(['uom_id']).get('uom_id')
-            record.uom_po_id = record.uom_id
 
     def _get_service_to_general_map(self):
         return {
@@ -93,13 +91,12 @@ class ProductTemplate(models.Model):
     def _unlink_except_master_data(self):
         time_product = self.env.ref('sale_timesheet.time_product')
         if time_product.product_tmpl_id in self:
-            raise ValidationError(_('The %s product is required by the Timesheets app and cannot be archived nor deleted.', time_product.name))
+            raise ValidationError(_('The %s product is required by the Timesheets app and cannot be archived, deleted nor linked to a company.', time_product.name))
 
     def write(self, vals):
-        # timesheet product can't be archived
-        test_mode = getattr(threading.current_thread(), 'testing', False) or self.env.registry.in_test_mode()
-        if not test_mode and 'active' in vals and not vals['active']:
+        # timesheet product can't be deleted, archived or linked to a company
+        if ('active' in vals and not vals['active']) or ('company_id' in vals and vals['company_id']):
             time_product = self.env.ref('sale_timesheet.time_product')
             if time_product.product_tmpl_id in self:
-                raise ValidationError(_('The %s product is required by the Timesheets app and cannot be archived nor deleted.', time_product.name))
+                raise ValidationError(_('The %s product is required by the Timesheets app and cannot be archived, deleted nor linked to a company.', time_product.name))
         return super().write(vals)

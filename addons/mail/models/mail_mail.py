@@ -57,6 +57,9 @@ class MailMail(models.Model):
     is_notification = fields.Boolean('Notification Email', help='Mail has been created to notify people of an existing mail.message')
     # recipients: include inactive partners (they may have been archived after
     # the message was sent, but they should remain visible in the relation)
+    # note that email_{cc,to} are different from mail.message fields as mail.mail
+    # are also used for outgoing emails sharing the same mail_message_id but with
+    # different recipients
     email_to = fields.Text('To', help='Message recipients (emails)')
     email_cc = fields.Char('Cc', help='Carbon copy message recipients')
     recipient_ids = fields.Many2many('res.partner', string='To (Partners)',
@@ -121,24 +124,6 @@ class MailMail(models.Model):
 
     def _search_body_content(self, operator, value):
         return [('body_html', operator, value)]
-
-    @api.model
-    def fields_get(self, *args, **kwargs):
-        # related selection will fetch translations from DB
-        # selections added in stable won't be in DB -> add them on the related model if not already added
-        message_type_field = self.env['mail.message']._fields['message_type']
-        if 'auto_comment' not in {value for value, name in message_type_field.get_description(self.env)['selection']}:
-            self._fields_get_message_type_update_selection(message_type_field.selection)
-        return super().fields_get(*args, **kwargs)
-
-    def _fields_get_message_type_update_selection(self, selection):
-        """Update the field selection for message type on mail.message to match the runtime values.
-
-        DO NOT USE it is only there for a stable fix and should not be used for any reason other than hotfixing.
-        """
-        self.env['ir.model.fields'].invalidate_model(['selection_ids'])
-        self.env['ir.model.fields.selection'].sudo()._update_selection('mail.message', 'message_type', selection)
-        self.env.registry.clear_cache()
 
     @api.model_create_multi
     def create(self, values_list):

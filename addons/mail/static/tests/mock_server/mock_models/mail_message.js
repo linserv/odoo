@@ -218,12 +218,12 @@ export class MailMessage extends models.ServerModel {
             if (message.author_guest_id) {
                 data.author = mailDataHelpers.Store.one(
                     MailGuest.browse(message.author_guest_id),
-                    makeKwArgs({ fields: ["name", "write_date"] })
+                    makeKwArgs({ fields: ["avatar_128", "name"] })
                 );
             } else if (message.author_id) {
                 data.author = mailDataHelpers.Store.one(
                     ResPartner.browse(message.author_id),
-                    makeKwArgs({ fields: ["name", "is_company", "user", "write_date"] })
+                    makeKwArgs({ fields: ["avatar_128", "is_company", "name", "user"] })
                 );
             }
             store.add(this.browse(message.id), data);
@@ -517,40 +517,5 @@ export class MailMessage extends models.ServerModel {
                 ),
             });
         }
-    }
-
-    _cleanup_side_records([id]) {
-        /** @type {import("mock_models").BusBus} */
-        const BusBus = this.env["bus.bus"];
-        /** @type {import("mock_models").MailMessage} */
-        const MailMessage = this.env["mail.message"];
-        /** @type {import("mock_models").ResPartner} */
-        const ResPartner = this.env["res.partner"];
-
-        const [message] = this.browse(id);
-        const outdatedStarredPartners = ResPartner.browse(message.starred_partner_ids);
-        this.write([message.id], { starred_partner_ids: [Command.clear()] });
-        if (outdatedStarredPartners.length === 0) {
-            return;
-        }
-        const notifications = [];
-        for (const partner of outdatedStarredPartners) {
-            notifications.push([
-                partner,
-                "mail.record/insert",
-                new mailDataHelpers.Store("mail.thread", {
-                    counter: MailMessage.search([["starred_partner_ids", "in", partner.id]]).length,
-                    counter_bus_id: this.env["bus.bus"].lastBusNotificationId,
-                    id: "starred",
-                    messages: mailDataHelpers.Store.many(
-                        MailMessage.browse(message.id),
-                        "DELETE",
-                        makeKwArgs({ only_id: true })
-                    ),
-                    model: "mail.box",
-                }).get_result(),
-            ]);
-        }
-        BusBus._sendmany(notifications);
     }
 }

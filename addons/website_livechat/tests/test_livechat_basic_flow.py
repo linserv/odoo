@@ -98,14 +98,17 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
         self.authenticate(self.operator.login, 'ideboulonate')
 
         # Retrieve channels information, visitor info should be there
-        params = {"channels_as_member": True}
-        init_messaging = self.make_jsonrpc_request(f"{self.livechat_base_url}/mail/data", params=params)
+        init_messaging = self.make_jsonrpc_request(
+            f"{self.livechat_base_url}/mail/data", {"fetch_params": ["channels_as_member"]}
+        )
         livechat_info = next(c for c in init_messaging["discuss.channel"] if c["id"] == channel.id)
         self.assertIn('visitor', livechat_info)
 
         # Remove access to visitors and try again, visitors info shouldn't be included
         self.operator.groups_id -= self.group_livechat_user
-        init_messaging = self.make_jsonrpc_request(f"{self.livechat_base_url}/mail/data", params=params)
+        init_messaging = self.make_jsonrpc_request(
+            f"{self.livechat_base_url}/mail/data", {"fetch_params": ["channels_as_member"]}
+        )
         livechat_info = next(c for c in init_messaging["discuss.channel"] if c["id"] == channel.id)
         self.assertNotIn('visitor', livechat_info)
 
@@ -146,3 +149,12 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
 
     def test_user_known_after_reload(self):
         self.start_tour('/', 'website_livechat_user_known_after_reload')
+
+
+@tests.tagged('post_install', '-at_install')
+class TestLivechatBasicFlowHttpCaseMobile(HttpCaseWithUserDemo, TestLivechatCommon):
+    browser_size = '375x667'
+    touch_enabled = True
+
+    def test_mobile_user_interaction(self):
+        self.start_tour('/', 'im_livechat_request_chat_and_send_message', login=None)

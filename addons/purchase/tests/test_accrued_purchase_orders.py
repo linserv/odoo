@@ -38,7 +38,7 @@ class TestAccruedPurchaseOrders(AccountTestInvoicingCommon):
                     'product_qty': 10.0,
                     'product_uom_id': cls.product_a.uom_id.id,
                     'price_unit': cls.product_a.list_price,
-                    'taxes_id': False,
+                    'tax_ids': False,
                     'analytic_distribution': {
                         cls.analytic_account_a.id : 80.0,
                         cls.analytic_account_b.id : 20.0,
@@ -50,7 +50,7 @@ class TestAccruedPurchaseOrders(AccountTestInvoicingCommon):
                     'product_qty': 10.0,
                     'product_uom_id': cls.product_b.uom_id.id,
                     'price_unit': cls.product_b.list_price,
-                    'taxes_id': False,
+                    'tax_ids': False,
                     'analytic_distribution': {
                         cls.analytic_account_b.id : 100.0,
                     },
@@ -98,7 +98,10 @@ class TestAccruedPurchaseOrders(AccountTestInvoicingCommon):
         self.purchase_order.order_line.qty_received = 5
         # set currency != company currency
         self.purchase_order.currency_id = self.other_currency
-        self.assertRecordValues(self.env['account.move'].search(self.wizard.create_entries()['domain']).line_ids, [
+        moves = self.env['account.move'].search(self.wizard.create_entries()['domain'])
+        for move in moves:
+            self.assertEqual(move.currency_id, self.purchase_order.currency_id)
+        self.assertRecordValues(moves.line_ids, [
             # reverse move lines
             {'account_id': self.account_expense.id, 'debit': 0, 'credit': 5000 / 2, 'amount_currency': -5000},
             {'account_id': self.alt_exp_account.id, 'debit': 0, 'credit': 1000 / 2, 'amount_currency': -1000},
@@ -130,7 +133,7 @@ class TestAccruedPurchaseOrders(AccountTestInvoicingCommon):
             'type_tax_use': 'purchase',
             'price_include_override': 'tax_included',
         })
-        self.purchase_order.order_line.taxes_id = tax_10_included
+        self.purchase_order.order_line.tax_ids = tax_10_included
         self.purchase_order.order_line.qty_received = 5
         self.assertRecordValues(self.env['account.move'].search(self.wizard.create_entries()['domain']).line_ids, [
             # reverse move lines

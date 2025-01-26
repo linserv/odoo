@@ -8,6 +8,7 @@ import { useDropdownState } from "@web/core/dropdown/dropdown_hooks";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { ChatBubble } from "./chat_bubble";
+import { isMobileOS } from "@web/core/browser/feature_detection";
 
 export class ChatHub extends Component {
     static components = { ChatBubble, ChatWindow, Dropdown };
@@ -20,9 +21,9 @@ export class ChatHub extends Component {
 
     setup() {
         super.setup();
-        this.store = useState(useService("mail.store"));
-        this.ui = useState(useService("ui"));
-        this.busMonitoring = useState(useService("bus.monitoring_service"));
+        this.store = useService("mail.store");
+        this.ui = useService("ui");
+        this.busMonitoring = useService("bus.monitoring_service");
         this.bubblesHover = useHover("bubbles");
         this.moreHover = useHover(["more-button", "more-menu*"], {
             onHover: () => (this.more.isOpen = true),
@@ -48,6 +49,10 @@ export class ChatHub extends Component {
         });
     }
 
+    get isMobileOS() {
+        return isMobileOS();
+    }
+
     onResize() {
         this.chatHub.onRecompute();
     }
@@ -70,7 +75,7 @@ export class ChatHub extends Component {
     }
 
     get isShown() {
-        return !this.ui.isSmall;
+        return true;
     }
 
     expand() {

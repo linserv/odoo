@@ -13,6 +13,11 @@ from odoo.tests.common import tagged
 @tagged('post_install', '-at_install')
 class TestPurchaseRequisition(TestPurchaseRequisitionCommon):
 
+    @classmethod
+    def setUpClass(cls):
+        super(TestPurchaseRequisition, cls).setUpClass()
+        cls.env['res.currency.rate'].search([]).unlink()
+
     def test_00_purchase_requisition_users(self):
         self.assertTrue(self.user_purchase_requisition_manager, 'Manager Should be created')
         self.assertTrue(self.user_purchase_requisition_user, 'User Should be created')
@@ -121,7 +126,7 @@ class TestPurchaseRequisition(TestPurchaseRequisitionCommon):
         # create an empty blanket order
         line1 = (0, 0, {
             'product_id': product2.id,
-            'product_uom_id': product2.uom_po_id.id,
+            'product_uom_id': product2.uom_id.id,
             'price_unit': 41,
             'product_qty': 10,
         })
@@ -321,7 +326,7 @@ class TestPurchaseRequisition(TestPurchaseRequisitionCommon):
         # create an empty blanket order
         line1 = (0, 0, {
             'product_id': self.product_13.id,
-            'product_uom_id': self.product_13.uom_po_id.id,
+            'product_uom_id': self.product_13.uom_id.id,
             'price_unit': 41,
             'product_qty': 10,
         })
@@ -551,7 +556,7 @@ class TestPurchaseRequisition(TestPurchaseRequisitionCommon):
         alt_po_wizard = alt_po_wizard_form.save()
         alt_po_id = alt_po_wizard.action_create_alternative()['res_id']
         alt_po = self.env['purchase.order'].browse(alt_po_id)
-        self.assertEqual(orig_po.order_line.taxes_id, alt_po.order_line.taxes_id)
+        self.assertEqual(orig_po.order_line.tax_ids, alt_po.order_line.tax_ids)
 
     def test_alternative_purchase_order_merge(self):
         group_purchase_alternatives = self.env.ref('purchase_requisition.group_purchase_alternatives')

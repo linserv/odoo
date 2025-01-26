@@ -47,7 +47,6 @@ def load_data(env: Environment, idref, mode: str, kind: str, package: Node) -> b
     :returns: Whether a file was loaded
     :rtype: bool
     """
-    env = env(context=dict(env.context, install_mode=True))
 
     def _get_files_of_kind(kind: str) -> list[str]:
         if kind == 'demo':
@@ -329,6 +328,7 @@ def load_module_graph(
                 if hasattr(package, kind):
                     delattr(package, kind)
             module.env.flush_all()
+            module.env.cr.commit()
 
         extra_queries = odoo.sql_db.sql_counter - module_extra_query_count - test_queries
         extras = []

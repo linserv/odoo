@@ -204,6 +204,20 @@ class PosConfig(models.Model):
     orderlines_sequence_in_cart_by_category = fields.Boolean(string="Order cart by category's sequence", default=False,
         help="When active, orderlines will be sorted based on product category and sequence in the product screen's order cart.")
     last_data_change = fields.Datetime(string='Last Write Date', readonly=True, compute='_compute_local_data_integrity', store=True)
+    fallback_nomenclature_id = fields.Many2one('barcode.nomenclature', string="Fallback Nomenclature")
+
+    def dispatch_record_ids(self, session_id, records, login_number):
+        self._notify('SYNCHRONISATION', {
+            'records': records,
+            'session_id': session_id,
+            'login_number': login_number
+        })
+
+    def get_records(self, data):
+        records = {}
+        for model, ids in data.items():
+            records[model] = self.env[model].browse(ids).read(self.env[model]._load_pos_data_fields(self.id), load=False)
+        return records
 
     @api.model
     def _load_pos_data_domain(self, data):
@@ -688,7 +702,7 @@ class PosConfig(models.Model):
         except (TypeError, ValueError, OverflowError):
             return default_limit
 
-    def get_limited_partners_loading(self):
+    def get_limited_partners_loading(self, offset=0):
         return self.env.execute_query(SQL("""
             WITH pm AS
             (
@@ -705,8 +719,8 @@ class PosConfig(models.Model):
                 partner.company_id=%s OR partner.company_id IS NULL
             )
             ORDER BY  COALESCE(pm.order_count, 0) DESC,
-                      NAME limit %s;
-        """, self.company_id.id, 100))
+                      NAME limit %s offset %s;
+        """, self.company_id.id, 100, offset))
 
     def action_pos_config_modal_edit(self):
         return {
@@ -758,13 +772,23 @@ class PosConfig(models.Model):
     def _create_cash_payment_method(self, cash_journal_vals=None):
         if cash_journal_vals is None:
             cash_journal_vals = {}
-
-        cash_journal = self.env['account.journal'].create({
+        journal_vals = {
             'name': _('Cash'),
             'type': 'cash',
             'company_id': self.env.company.id,
             **cash_journal_vals,
-        })
+        }
+
+        default_cash_account = self.env['account.account'].search([
+            ('account_type', '=', 'asset_cash'),
+            ('name', '=', 'Cash'),
+            ('company_ids', 'in', self.env.company.root_id.id)
+        ], limit=1)
+
+        if default_cash_account:
+            journal_vals['default_account_id'] = default_cash_account.id
+
+        cash_journal = self.env['account.journal'].create(journal_vals)
         return self.env['pos.payment.method'].create({
             'name': _('Cash'),
             'journal_id': cash_journal.id,
@@ -850,7 +874,7 @@ class PosConfig(models.Model):
             'point_of_sale.pos_category_lower',
             'point_of_sale.pos_category_others'
         ])
-        journal, payment_methods_ids = self._create_journal_and_payment_methods(cash_journal_vals={'name': 'Cash Clothes Shop', 'show_on_dashboard': False})
+        journal, payment_methods_ids = self._create_journal_and_payment_methods(cash_journal_vals={'name': _("Cash Clothes Shop"), 'show_on_dashboard': False})
         config = self.env['pos.config'].create([{
             'name': _('Clothes Shop'),
             'company_id': self.env.company.id,
@@ -871,7 +895,7 @@ class PosConfig(models.Model):
         if not self.env.ref(ref_name, raise_if_not_found=False):
             convert.convert_file(self.env, 'point_of_sale', 'data/scenarios/bakery_data.xml', None, mode='init', noupdate=True, kind='data')
 
-        journal, payment_methods_ids = self._create_journal_and_payment_methods(cash_journal_vals={'name': 'Cash Bakery', 'show_on_dashboard': False})
+        journal, payment_methods_ids = self._create_journal_and_payment_methods(cash_journal_vals={'name': _("Cash Bakery"), 'show_on_dashboard': False})
         bakery_categories = self.get_record_by_ref([
             'point_of_sale.pos_category_breads',
             'point_of_sale.pos_category_pastries',
@@ -898,7 +922,7 @@ class PosConfig(models.Model):
 
         journal, payment_methods_ids = self._create_journal_and_payment_methods(
             cash_ref='point_of_sale.cash_payment_method_furniture',
-            cash_journal_vals={'name': 'Cash Furn. Shop', 'show_on_dashboard': False},
+            cash_journal_vals={'name': _("Cash Furn. Shop"), 'show_on_dashboard': False},
         )
         furniture_categories = self.get_record_by_ref([
             'point_of_sale.pos_category_miscellaneous',
@@ -950,3 +974,7 @@ class PosConfig(models.Model):
         pos_restaurant_module = self.env['ir.module.module'].search([('name', '=', 'pos_restaurant')])
         pos_restaurant_module.button_immediate_install()
         return {'installed_with_demo': pos_restaurant_module.demo}
+
+    def _get_available_pricelists(self):
+        self.ensure_one()
+        return self.available_pricelist_ids if self.use_pricelist else self.pricelist_id

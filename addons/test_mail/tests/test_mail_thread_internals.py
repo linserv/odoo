@@ -1,12 +1,9 @@
-# -*- coding: utf-8 -*-
-# Part of Odoo. See LICENSE file for full copyright and licensing details.
-
 from markupsafe import Markup
 from unittest.mock import patch
 from unittest.mock import DEFAULT
 import base64
 
-from odoo import exceptions
+from odoo import exceptions, tools
 from odoo.addons.mail.tests.common import MailCommon
 from odoo.addons.test_mail.models.test_mail_models import MailTestSimple
 from odoo.addons.test_mail.tests.common import TestRecipients
@@ -15,12 +12,13 @@ from odoo.tests import Form, tagged, users
 from odoo.tools import mute_logger
 
 
-@tagged('mail_thread', 'mail_tools')
+@tagged('mail_thread', 'mail_thread_api', 'mail_tools')
 class TestAPI(MailCommon, TestRecipients):
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls.user_portal = cls._create_portal_user()
         cls.test_partner = cls.env['res.partner'].create({
             'email': '"Test External" <test.external@example.com>',
             'mobile': '+32455001122',
@@ -46,11 +44,18 @@ class TestAPI(MailCommon, TestRecipients):
                 'mobile_number': '+32455000001',
                 'name': 'Wrong email',
             }, {
+                'email_from': 'wrong',
+                'mobile_number': False,
+                'name': 'Duplicate Wrong email',
+            }, {
                 'email_from': False,
                 'name': 'Falsy email',
             }, {
                 'email_from': f'"Other Name" <{cls.test_partner.email_normalized}>',
                 'name': 'Test Partner Email',
+            }, {
+                'customer_id': cls.user_public.partner_id.id,
+                'name': 'Publicly Created',
             },
         ])
 
@@ -127,63 +132,73 @@ class TestAPI(MailCommon, TestRecipients):
 
     @users('employee')
     def test_mail_partner_find_from_emails(self):
-        """ Test '_mail_find_partner_from_emails'. Multi mode is mainly targeting
+        """ Test '_partner_find_from_emails'. Multi mode is mainly targeting
         finding or creating partners based on record information or message
         history. """
         existing_partners = self.env['res.partner'].sudo().search([])
         tickets = self.ticket_records.with_user(self.env.user)
-        self.assertEqual(len(tickets), 6)
-        res = tickets._mail_find_partner_from_emails(
-            [ticket.email_from for ticket in tickets],
-            force_create=True,
-        )
+        self.assertEqual(len(tickets), 8)
+        res = tickets._partner_find_from_emails({ticket: [ticket.email_from] for ticket in tickets}, no_create=False)
         self.assertEqual(len(tickets), len(res))
 
         # fetch partners that should have been created
         new = self.env['res.partner'].search([('email_normalized', '=', 'paulette@test.example.com')])
-        self.assertEqual(len(new), 2, 'FIXME: created twice because does not check for duplicated when creating')
-        # self.assertEqual(len(new), 1, 'Should have created once the customer, even if found in various duplicates')
+        self.assertEqual(len(new), 1, 'Should have created once the customer, even if found in various duplicates')
         self.assertNotIn(new, existing_partners)
         new_wrong = self.env['res.partner'].search([('email', '=', 'wrong')])
-        self.assertFalse(new_wrong)
-        # self.assertEqual(len(new_wrong), 1, 'Should have created once the wrong email')
-        # self.assertNotIn(new, new_wrong)
+        self.assertEqual(len(new_wrong), 1, 'Should have created once the wrong email')
+        self.assertNotIn(new, new_wrong)
         new_multi = self.env['res.partner'].search([('email_normalized', '=', 'multi@test.example.com')])
         self.assertEqual(len(new_multi), 1, 'Should have created a based for multi email, using the first found email')
         self.assertNotIn(new, new_multi)
 
         # assert results: found / create partners and their values (if applies)
         record_customer_values = {
-            # 'company_id': self.user_employee.company_id,  # FIXME: does not respect customer info propagation
+            'company_id': self.user_employee.company_id,
             'email': 'paulette@test.example.com',
-            # 'mobile': '+32455998877',
+            'mobile': '+32455998877',
             'name': 'Paulette Vachette',
-            # 'phone': 'wrong',
+            'phone': 'wrong',
         }
         expected_all = [
-            (new[1], [record_customer_values]),  # FIXME: duplicate, wrong name, ...
-            (new[0], [{'email': 'paulette@test.example.com', 'name': 'Maybe Paulette'}]),  # FIXME: duplicate, wrong name, ...
+            (new, [record_customer_values]),
+            (new, [record_customer_values]),
             (new_multi, [{  # not the actual record customer hence no mobile / phone, see _get_customer_information
-                # 'company_id': self.user_employee.company_id,
+                'company_id': self.user_employee.company_id,
                 'email': 'multi@test.example.com',
                 'mobile': False,
                 'name': 'Multi Customer',
                 'phone': False,
             }]),
-            (new_wrong, [{'name': 'wrong', 'email': 'wrong', 'company_id': self.env['res.company']}]),
-            (self.env['res.partner'], [{}]),
+            (new_wrong, [{  # invalid email but can be fixed afterwards -> matches a potential customer
+                'company_id': self.user_employee.company_id,
+                'email': 'wrong',
+                'name': 'wrong',
+                'mobile': '+32455000001',
+                'phone': False,
+            }]),
+            (new_wrong, [{  # invalid email but can be fixed afterwards -> matches a potential customer
+                'company_id': self.user_employee.company_id,
+                'email': 'wrong',
+                'name': 'wrong',
+                'mobile': '+32455000001',
+                'phone': False,
+            }]),
+            (self.env['res.partner'], []),
             (self.test_partner, [{}]),
+            (self.env['res.partner'], []),
         ]
-        for partners, (exp_partners, exp_values_list) in zip(res, expected_all):
-            with self.subTest(ticket_name=exp_partners.name):
-                self.assertEqual(partners, exp_partners)
-                for partner, exp_values in zip(partners, exp_values_list):
+        for ticket, (exp_partners, exp_values_list) in zip(tickets, expected_all):
+            partners = res[ticket.id]
+            with self.subTest(ticket_name=ticket.name):
+                self.assertEqual(partners, exp_partners, f'Found {partners.name} instead of {exp_partners.name}')
+                for partner, exp_values in zip(partners, exp_values_list, strict=True):
                     for fname, fvalue in exp_values.items():
                         self.assertEqual(partners[fname], fvalue)
 
     @users('employee')
     def test_mail_partner_find_from_emails_ordering(self):
-        """ Test '_mail_find_partner_from_emails' on a single record, to test notably
+        """ Test '_partner_find_from_emails' on a single record, to test notably
         ordering and filtering. """
         self.user_employee.write({'company_ids': [(4, self.company_2.id)]})
         # create a mess, mix of portal / internal users + customer, to test ordering
@@ -230,16 +245,14 @@ class TestAPI(MailCommon, TestRecipients):
             (self.env['res.partner'], self.env['res.partner'], self.env['res.partner']),
             # one result, easy yay
             (dupe_partners[3], self.env['res.partner'], dupe_partners[3]),
-            # various partners: should be id ASC FIXME
-            # (dupe_partners[1] + dupe_partners[3], self.env['res.partner'], dupe_partners[1]),
-            (dupe_partners[1] + dupe_partners[3], self.env['res.partner'], dupe_partners[3]),  # complete_name asc -> remove me when fixed
+            # various partners: should be id ASC, not name-based
+            (dupe_partners[1] + dupe_partners[3], self.env['res.partner'], dupe_partners[1]),
             # involving matching company check: matching company wins
             (dupe_partners, self.env['res.partner'], dupe_partners[2]),
             # users > partner
             (portal_user.partner_id + dupe_partners, self.env['res.partner'], portal_user.partner_id),
-            # internal user > any other user FIXME not correctly computed
-            # (portal_user.partner_id + internal_user.partner_id + dupe_partners, self.env['res.partner'], internal_user.partner_id),
-            (portal_user.partner_id + internal_user.partner_id + dupe_partners, self.env['res.partner'], portal_user.partner_id),  # internal user > any other user -> remove me when fixed
+            # internal user > any other user
+            (portal_user.partner_id + internal_user.partner_id + dupe_partners, self.env['res.partner'], internal_user.partner_id),
             # follower > any other thing
             (internal_user.partner_id + dupe_partners, dupe_partners[0], dupe_partners[0]),
         ]:
@@ -250,15 +263,13 @@ class TestAPI(MailCommon, TestRecipients):
                 self.ticket_record.message_subscribe(followers.ids)
 
                 ticket = self.ticket_record.with_user(self.env.user)
-                res = ticket._mail_find_partner_from_emails(
-                    [ticket.email_from, 'test.ordering@test.example.com'],
-                    force_create=False,
-                    records=ticket,
-                )
+                partners = ticket._partner_find_from_emails(
+                    {ticket: [ticket.email_from, 'test.ordering@test.example.com']},
+                    no_create=True,
+                )[ticket.id]
 
-                # new - linked to record: not existing, hence not found
-                self.assertFalse(res[0])
-                self.assertEqual(res[1], expected, f'Found {res[1].name} instead of {expected.name}')
+                # should find just one partner, the other one is not linked to any partner
+                self.assertEqual(partners, expected, f'Found {partners.name} instead of {expected.name}')
 
                 all_partners.active = True
                 (portal_user + internal_user).active = True
@@ -269,29 +280,43 @@ class TestAPI(MailCommon, TestRecipients):
         """ On a given record, give several emails and check it is effectively
         based on record information. """
         ticket = self.ticket_record.with_user(self.env.user)
-        res = ticket._mail_find_partner_from_emails(
-            [
+        partners = ticket._partner_find_from_emails(
+            {ticket: [
                 'raoul@test.example.com',
                 ticket.email_from,
                 self.test_partner.email,
-            ],
-            force_create=True,
-        )
+            ]},
+            no_create=False,
+        )[ticket.id]
 
         # new - extra email
-        other = res[0]
-        # self.assertEqual(other.company_id, self.user_employee.company_id)
+        other = partners[0]
+        self.assertEqual(other.company_id, self.user_employee.company_id)
         self.assertEqual(other.email, "raoul@test.example.com")
         self.assertFalse(other.mobile)
         self.assertEqual(other.name, "raoul@test.example.com")
         # new - linked to record
-        customer = res[1]
-        # self.assertEqual(customer.company_id, self.user_employee.company_id)
+        customer = partners[1]
+        self.assertEqual(customer.company_id, self.user_employee.company_id)
         self.assertEqual(customer.email, "paulette@test.example.com")
-        # self.assertEqual(customer.mobile, "+32455998877", "Should come from record, see '_get_customer_information'")
+        self.assertEqual(customer.mobile, "+32455998877", "Should come from record, see '_get_customer_information'")
         self.assertEqual(customer.name, "Paulette Vachette")
         # found
-        self.assertEqual(res[2], self.test_partner)
+        self.assertEqual(partners[2], self.test_partner)
+
+    @users('employee')
+    def test_mail_partner_find_from_emails_tweaks(self):
+        """ Misc tweaks of '_partner_find_from_emails' """
+        ticket = self.ticket_record.with_user(self.env.user)
+        partner = ticket._partner_find_from_emails_single(
+            [ticket.email_from],
+            additional_values={'paulette@test.example.com': {'name': 'Forced Name', 'company_id': False}},
+            no_create=False)
+        self.assertFalse(partner.company_id, 'Forced by additional values')
+        self.assertEqual(partner.email, 'paulette@test.example.com')
+        self.assertEqual(partner.mobile, '+32455998877')
+        self.assertEqual(partner.name, 'Forced Name', 'Forced by additional values')
+        self.assertEqual(partner.phone, 'wrong')
 
     @users('employee')
     def test_message_get_default_recipients(self):
@@ -331,7 +356,8 @@ class TestAPI(MailCommon, TestRecipients):
         # test default computation of recipients
         self.env.invalidate_all()
         with self.assertQueryCount(20):
-            defaults = test_records._message_get_default_recipients()
+            defaults_withcc = test_records.with_context(mail_recipients_include_cc=True)._message_get_default_recipients()
+            defaults_withoutcc = test_records.with_context(mail_recipients_include_cc=False)._message_get_default_recipients()
         for record, expected in zip(test_records, [
             {
                 # customer_id first for partner_ids; partner > email
@@ -354,15 +380,16 @@ class TestAPI(MailCommon, TestRecipients):
             }, {  # public user should not be proposed
                 'email_cc': '', 'email_to': '', 'partner_ids': [],
             },
-        ]):
+        ], strict=True):
             with self.subTest(name=record.name):
-                self.assertEqual(defaults[record.id], expected)
+                self.assertEqual(defaults_withcc[record.id], expected)
+                self.assertEqual(defaults_withoutcc[record.id], dict(expected, email_cc=''))
 
         # test default computation of recipients with email prioritized
         with patch.object(type(self.env["mail.test.recipients"]), "_mail_defaults_to_email", True):
             self.assertEqual(
                 test_records[1]._message_get_default_recipients()[test_records[1].id],
-                {'email_cc': '"CC" <email.cc@test.example.com>', 'email_to': '"Forced" <forced@test.example.com>', 'partner_ids': []},
+                {'email_cc': '', 'email_to': '"Forced" <forced@test.example.com>', 'partner_ids': []},
                 'Mail: prioritize email should not return partner if email is found'
             )
             self.assertEqual(
@@ -376,21 +403,23 @@ class TestAPI(MailCommon, TestRecipients):
         """ Test default creation values returned for suggested recipient. """
         ticket = self.ticket_record.with_user(self.env.user)
         ticket.message_unsubscribe(ticket.user_id.partner_id.ids)
-        suggestions = ticket._message_get_suggested_recipients()
+        suggestions = ticket._message_get_suggested_recipients(no_create=True)
         self.assertEqual(len(suggestions), 2)
         for suggestion, expected in zip(suggestions, [{
+            'create_values': {},
             'email': self.user_employee.email_normalized,
-            'lang': None,
             'name': self.user_employee.name,
             'partner_id': self.partner_employee.id,
-            'reason': 'Responsible',
         }, {
-            'create_values': {'mobile': '+32455998877', 'phone': 'wrong'},
-            'email': '"Paulette Vachette" <paulette@test.example.com>',
-            'lang': None,
-            'name': '"Paulette Vachette" <paulette@test.example.com>',
-            'reason': 'Customer Email',
-        }]):
+            'create_values': {
+                'company_id': self.env.user.company_id.id,
+                'mobile': '+32455998877',
+                'phone': 'wrong',
+            },
+            'email': 'paulette@test.example.com',
+            'name': 'Paulette Vachette',
+            'partner_id': False,
+        }], strict=True):
             self.assertDictEqual(suggestion, expected)
 
         # existing partner not linked -> should propose it
@@ -407,18 +436,164 @@ class TestAPI(MailCommon, TestRecipients):
         })
         for ticket in ticket_partner_email + ticket_partner:
             with self.subTest(ticket=ticket.name):
-                suggestions = ticket_partner_email._message_get_suggested_recipients()
+                suggestions = ticket_partner_email._message_get_suggested_recipients(no_create=True)
                 self.assertEqual(len(suggestions), 1)
                 self.assertDictEqual(
                     suggestions[0],
                     {
+                        'create_values': {},
                         'email': self.test_partner.email_normalized,
-                        'lang': None,
                         'name': self.test_partner.name,
                         'partner_id': self.test_partner.id,
-                        'reason': 'Customer Email',
                     }
                 )
+
+        # do not propose public partners
+        ticket_public = self.env['mail.test.ticket.mc'].create({'customer_id': self.user_public.partner_id.id})
+        self.assertFalse(ticket_public._message_get_suggested_recipients(no_create=True))
+
+    @users("employee")
+    def test_message_get_suggested_recipients_conversation(self):
+        """ Test suggested recipients in a conversation based on discussion
+        history: email_{cc/to} of previous messages, ... """
+        test_cc_tuples = [
+            ('Test Record Cc', 'test.record.cc@test.example.com'),
+            ('Test Msg Cc', 'test.msg.cc@test.example.com'),
+            ('Test Msg Cc 2', 'test.msg.cc.2@test.example.com'),
+        ]
+        test_to_tuples = [
+            ('Test Msg To', 'test.msg.to@test.example.com'),
+            ('Test Msg To 2', 'test.msg.to.2@test.example.com'),
+        ]
+        test_emails = [x[1] for x in test_cc_tuples + test_to_tuples]
+        self.assertFalse(self.env['res.partner'].search([('email_normalized', 'in', test_emails)]))
+
+        test_record = self.env['mail.test.recipients'].create({
+            'email_cc': tools.mail.formataddr(test_cc_tuples[0]),
+            'name': 'Test Recipients',
+        })
+        messages = self.env['mail.message']
+        for user, post_values in [
+            (self.user_root, {
+                'author_id': self.user_portal.partner_id.id,
+                'body': 'First incoming email',
+                'email_from': self.user_portal.email_formatted,
+                'incoming_email_cc': tools.mail.formataddr(test_cc_tuples[1]),
+                'incoming_email_to': tools.mail.formataddr(test_to_tuples[0]),
+                'message_type': 'email',
+            }),
+            (self.user_root, {
+                'body': 'Some automated email',
+                'message_type': 'email_outgoing',
+                'partner_ids': self.user_portal.partner_id.ids,
+            }),
+            (self.user_employee, {
+                'body': 'Salesman reply by email',
+                'incoming_email_cc': tools.mail.formataddr(test_cc_tuples[2]),
+                'incoming_email_to': tools.mail.formataddr(test_to_tuples[1]),
+                'message_type': 'email',
+            }),
+        ]:
+            messages += test_record.with_user(user).message_post(**post_values)
+        self.assertEqual(test_record.message_partner_ids, self.user_employee.partner_id)
+
+        recipients = test_record._message_get_suggested_recipients(reply_message=messages[0], no_create=True)
+        for recipient, expected in zip(recipients, [
+            {  # partner first: author of message
+                'create_values': {},
+                'email': self.user_portal.email_normalized,
+                'name': self.user_portal.name,
+                'partner_id': self.user_portal.partner_id.id,
+            }, {  # override of model for email_cc
+                'create_values': {},
+                'email': test_cc_tuples[0][1],
+                'name': test_cc_tuples[0][0],
+                'partner_id': False,
+            }, {  # replying message to
+                'create_values': {},
+                'email': test_to_tuples[0][1],
+                'name': test_to_tuples[0][0],
+                'partner_id': False,
+            }, {  # replying message  cc
+                'create_values': {},
+                'email': test_cc_tuples[1][1],
+                'name': test_cc_tuples[1][0],
+                'partner_id': False,
+            },
+        ], strict=True):
+            with self.subTest():
+                self.assertDictEqual(recipient, expected)
+
+        recipients = test_record._message_get_suggested_recipients(reply_message=messages[1], no_create=True)
+        for recipient, expected in zip(recipients, [
+            {  # partner first: recipient of message
+                'create_values': {},
+                'email': self.user_portal.email_normalized,
+                'name': self.user_portal.name,
+                'partner_id': self.user_portal.partner_id.id,
+            }, {  # override of model for email_cc
+                'create_values': {},
+                'email': test_cc_tuples[0][1],
+                'name': test_cc_tuples[0][0],
+                'partner_id': False,
+            },  # and not author, as it is odoobot's email
+        ], strict=True):
+            with self.subTest():
+                self.assertDictEqual(recipient, expected)
+
+        # discussion: should be last message
+        recipients = test_record._message_get_suggested_recipients(reply_discussion=True, no_create=True)
+        for recipient, expected in zip(recipients, [
+            {  # override of model for email_cc
+                'create_values': {},
+                'email': test_cc_tuples[0][1],
+                'name': test_cc_tuples[0][0],
+                'partner_id': False,
+            }, {  # replying message to
+                'create_values': {},
+                'email': test_to_tuples[1][1],
+                'name': test_to_tuples[1][0],
+                'partner_id': False,
+            }, {  # replying message  cc
+                'create_values': {},
+                'email': test_cc_tuples[2][1],
+                'name': test_cc_tuples[2][0],
+                'partner_id': False,
+            },  # and not author as he is already follower
+        ], strict=True):
+            with self.subTest():
+                self.assertDictEqual(recipient, expected)
+
+        # check with partner creation
+        recipients = test_record._message_get_suggested_recipients(reply_message=messages[0], no_create=False)
+        new_partners = self.env['res.partner'].search([('email_normalized', 'in', test_emails)], order='id ASC')
+        self.assertEqual(len(new_partners), 3, 'Find or create should have created 3 partners, one / email')
+        new_to, new_cc_0, new_cc_1 = new_partners
+        for recipient, expected in zip(recipients, [
+            {  # partner first: author of message
+                'create_values': {},
+                'email': self.user_portal.email_normalized,
+                'name': self.user_portal.name,
+                'partner_id': self.user_portal.partner_id.id,
+            }, {  # override of model for email_cc
+                'email': test_cc_tuples[0][1],
+                'name': test_cc_tuples[0][0],
+                'partner_id': new_to.id,
+                'create_values': {},
+            }, {  # replying message to
+                'email': test_to_tuples[0][1],
+                'name': test_to_tuples[0][0],
+                'partner_id': new_cc_0.id,
+                'create_values': {},
+            }, {  # replying message  cc
+                'email': test_cc_tuples[1][1],
+                'name': test_cc_tuples[1][0],
+                'partner_id': new_cc_1.id,
+                'create_values': {},
+            },
+        ], strict=True):
+            with self.subTest():
+                self.assertDictEqual(recipient, expected)
 
     @mute_logger('openerp.addons.mail.models.mail_mail')
     @users('employee')
@@ -443,9 +618,7 @@ class TestAPI(MailCommon, TestRecipients):
         self.assertEqual(message.subtype_id, self.env.ref('mail.mt_note'))
 
         # clear the content when having attachments should show edit label
-        ticket_record._message_update_content(
-            message, "",
-        )
+        ticket_record._message_update_content(message, "",)
         self.assertEqual(message.attachment_ids, attachments)
         self.assertEqual(message.body, Markup('<span class="o-mail-Message-edited"></span>'))
         # update the content with new attachments
@@ -481,14 +654,10 @@ class TestAPI(MailCommon, TestRecipients):
             message_type="comment",
             subtype_id=self.env.ref('mail.mt_comment').id,
         )
-        ticket_record._message_update_content(
-            message, "<p>New Body 1</p>"
-        )
+        ticket_record._message_update_content(message, "<p>New Body 1</p>")
 
         message.sudo().write({'subtype_id': self.env.ref('mail.mt_note')})
-        ticket_record._message_update_content(
-            message, "<p>New Body 2</p>"
-        )
+        ticket_record._message_update_content(message, "<p>New Body 2</p>")
 
         # cannot edit notifications
         for message_type in ['notification', 'user_notification', 'email', 'email_outgoing', 'auto_comment']:
@@ -509,23 +678,37 @@ class TestChatterTweaks(MailCommon, TestRecipients):
 
     def test_post_no_subscribe_author(self):
         original = self.test_record.message_follower_ids
-        self.test_record.with_user(self.user_employee).with_context({'mail_create_nosubscribe': True}).message_post(
+        self.test_record.with_user(self.user_employee).with_context({'mail_post_autofollow_author_skip': True}).message_post(
             body='Test Body', message_type='comment', subtype_xmlid='mail.mt_comment')
         self.assertEqual(self.test_record.message_follower_ids.mapped('partner_id'), original.mapped('partner_id'))
 
     @mute_logger('odoo.addons.mail.models.mail_mail')
     def test_post_no_subscribe_recipients(self):
         original = self.test_record.message_follower_ids
-        self.test_record.with_user(self.user_employee).with_context({'mail_create_nosubscribe': True}).message_post(
+        self.test_record.with_user(self.user_employee).with_context({'mail_post_autofollow_author_skip': True}).message_post(
             body='Test Body', message_type='comment', subtype_xmlid='mail.mt_comment', partner_ids=[self.partner_1.id, self.partner_2.id])
         self.assertEqual(self.test_record.message_follower_ids.mapped('partner_id'), original.mapped('partner_id'))
 
     @mute_logger('odoo.addons.mail.models.mail_mail')
     def test_post_subscribe_recipients(self):
         original = self.test_record.message_follower_ids
-        self.test_record.with_user(self.user_employee).with_context({'mail_create_nosubscribe': True, 'mail_post_autofollow': True}).message_post(
+        self.test_record.with_user(self.user_employee).with_context({'mail_post_autofollow_author_skip': True, 'mail_post_autofollow': True}).message_post(
             body='Test Body', message_type='comment', subtype_xmlid='mail.mt_comment', partner_ids=[self.partner_1.id, self.partner_2.id])
         self.assertEqual(self.test_record.message_follower_ids.mapped('partner_id'), original.mapped('partner_id') | self.partner_1 | self.partner_2)
+
+        # check _mail_thread_customer class attribute
+        new_record = self.env['mail.test.thread.customer'].create({
+            'customer_id': self.partner_1.id,
+        })
+        self.assertFalse(new_record.message_partner_ids)
+        msg = new_record.with_user(self.user_employee).with_context(mail_post_autofollow_author_skip=True).message_post(
+            body='Test Body', message_type='comment',
+            partner_ids=(self.partner_1 + self.partner_2).ids,
+            subtype_id=self.env.ref('mail.mt_comment').id,
+        )
+        self.assertEqual(msg.notified_partner_ids, self.partner_1 + self.partner_2)
+        self.assertEqual(new_record.message_partner_ids, self.partner_1,
+                         'Customer was found and added as follower automatically when pinged')
 
     @mute_logger('odoo.addons.mail.models.mail_mail')
     def test_chatter_context_cleaning(self):
@@ -674,76 +857,8 @@ class TestDiscuss(MailCommon, TestRecipients):
                 partner_ids=[self.user_employee.partner_id.id])
         message.with_user(self.user_employee).set_message_done()
         self.assertMailNotifications(message, [{'notif': [{'partner': self.partner_employee, 'type': 'inbox', 'is_read': True}]}])
-        # TDE TODO: it seems bus notifications could be checked
 
-    def test_set_star(self):
-        msg = self.test_record.with_user(self.user_admin).message_post(body='My Body', subject='1')
-        msg_emp = self.env['mail.message'].with_user(self.user_employee).browse(msg.id)
-
-        # Admin set as starred
-        msg.toggle_message_starred()
-        self.assertTrue(msg.starred)
-
-        # Employee set as starred
-        msg_emp.toggle_message_starred()
-        self.assertTrue(msg_emp.starred)
-
-        # Do: Admin unstars msg
-        msg.toggle_message_starred()
-        self.assertFalse(msg.starred)
-        self.assertTrue(msg_emp.starred)
-
-    def test_delete_starred_message(self):
-        msg = self.test_record.message_post(body="Hello!", message_type="comment")
-        msg_2 = self.test_record.message_post(body="Goodbye!", message_type="comment")
-        msg.with_user(self.user_admin).toggle_message_starred()
-        msg.with_user(self.user_employee).toggle_message_starred()
-        msg_2.with_user(self.user_employee).toggle_message_starred()
-        self.assertIn(self.partner_admin, msg.starred_partner_ids)
-        self.assertIn(self.partner_employee, msg.starred_partner_ids)
-        self._reset_bus()
-        bus_last_id = self.env["bus.bus"].sudo()._bus_last_id()
-        self.test_record._message_update_content(message=msg, body="")
-        self.assertFalse(msg.starred)
-        self.assertBusNotifications(
-            [
-                (self.cr.dbname, "res.partner", self.partner_admin.id),
-                (self.cr.dbname, "res.partner", self.partner_employee.id),
-            ],
-            [
-                {
-                    "type": "mail.record/insert",
-                    "payload": {
-                        "mail.thread": self._filter_threads_fields(
-                            {
-                                "counter": 1,
-                                "counter_bus_id": bus_last_id,
-                                "id": "starred",
-                                "messages": [["DELETE", [msg.id]]],
-                                "model": "mail.box",
-                            }
-                        ),
-                    },
-                },
-                {
-                    "type": "mail.record/insert",
-                    "payload": {
-                        "mail.thread": self._filter_threads_fields(
-                            {
-                                "counter": 0,
-                                "counter_bus_id": bus_last_id,
-                                "id": "starred",
-                                "messages": [["DELETE", [msg.id]]],
-                                "model": "mail.box",
-                            }
-                        ),
-                    },
-                },
-            ],
-            check_unique=False,
-        )
-
-    def test_inbox_message_fetch_needaction(self):
+    def test_message_fetch_needaction(self):
         user1 = self.env['res.users'].create({'login': 'user1', 'name': 'User 1'})
         user1.notification_type = 'inbox'
         user2 = self.env['res.users'].create({'login': 'user2', 'name': 'User 2'})
@@ -764,6 +879,28 @@ class TestDiscuss(MailCommon, TestRecipients):
         self.assertEqual(res["messages"][0].id, message2.id)
         res = self.env['mail.message'].with_user(user2)._message_fetch(domain=[['needaction', '=', True]])
         self.assertEqual(len(res["messages"]), 2)
+
+    @users("employee")
+    def test_unlink_notification_message(self):
+        message = self.test_record.with_user(self.user_admin).message_notify(
+            body='test',
+            partner_ids=[self.partner_2.id],
+        )
+        self.assertEqual(len(message), 1, "Test message should have been posted")
+        self.test_record.unlink()
+        self.assertFalse(message.exists(), "Test message should have been deleted")
+
+
+@tagged('mail_thread')
+class TestNotification(MailCommon):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.test_record = cls.env['mail.test.simple'].create({
+            'name': 'Test',
+            'email_from': 'ignasse@example.com'
+        })
 
     def test_notification_has_error_filter(self):
         """Ensure message_has_error filter is only returning threads for which
@@ -792,19 +929,6 @@ class TestDiscuss(MailCommon, TestRecipients):
         # and the failure from employee's message should not be taken into account for admin
         threads_admin = self.test_record.with_user(self.user_admin).search([('message_has_error', '=', True)])
         self.assertEqual(len(threads_admin), 0)
-
-    @users("employee")
-    def test_unlink_notification_message(self):
-        channel = self.env['discuss.channel'].create({'name': 'testChannel'})
-        channel.with_user(self.user_admin).message_notify(
-            body='test',
-            partner_ids=[self.partner_2.id],
-        )
-        channel_message = self.env['mail.message'].sudo().search([('model', '=', 'discuss.channel'), ('res_id', 'in', channel.ids)])
-        self.assertEqual(len(channel_message), 1, "Test message should have been posted")
-        channel.sudo().unlink()
-        remaining_message = channel_message.exists()
-        self.assertEqual(len(remaining_message), 0, "Test message should have been deleted")
 
 
 @tagged('mail_thread', 'mail_nothread')
@@ -900,7 +1024,10 @@ class TestNoThread(MailCommon, TestRecipients):
                 with self.assertPostNotifications([{
                         'content': 'Hello Paulo',
                         'email_values': {
-                            'reply_to': self.company_admin.catchall_formatted,
+                            'reply_to': tools.mail.formataddr((
+                                self.partner_employee.name,
+                                self.company_admin.catchall_email,
+                            )),
                         },
                         'message_type': 'user_notification',
                         'notif': [{
@@ -972,7 +1099,7 @@ class TestNoThread(MailCommon, TestRecipients):
             _, messages = composer._action_send_mail()
 
         self.assertEqual(len(messages), 2)
-        for record, message in zip(test_records, messages):
+        for record, message in zip(test_records, messages, strict=True):
             self.assertEqual(
                 sorted(message.mapped('attachment_ids.name')),
                 sorted(['AttFileName_00.txt', 'AttFileName_01.txt',
@@ -987,7 +1114,10 @@ class TestNoThread(MailCommon, TestRecipients):
         with self.assertPostNotifications([{
                 'content': 'Hello Paulo',
                 'email_values': {
-                    'reply_to': self.company_admin.catchall_formatted,
+                    'reply_to': tools.mail.formataddr((
+                        self.partner_employee.name,
+                        self.company_admin.catchall_email,
+                    )),
                     'subject': 'Test Notify',
                 },
                 'message_type': 'user_notification',

@@ -5,9 +5,10 @@ import { Dialog } from "@web/core/dialog/dialog";
 import { PartnerLine } from "@point_of_sale/app/screens/partner_list/partner_line/partner_line";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { Input } from "@point_of_sale/app/components/inputs/input/input";
-import { Component, useState } from "@odoo/owl";
+import { Component, useEffect, useRef, useState } from "@odoo/owl";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
 import { unaccent } from "@web/core/utils/strings";
+import { debounce } from "@web/core/utils/timing";
 
 export class PartnerList extends Component {
     static components = { PartnerLine, Dialog, Input };
@@ -23,16 +24,51 @@ export class PartnerList extends Component {
 
     setup() {
         this.pos = usePos();
-        this.ui = useState(useService("ui"));
+        this.ui = useService("ui");
         this.notification = useService("notification");
         this.dialog = useService("dialog");
-
+        this.list = useRef("partner-list");
         this.state = useState({
-            query: null,
-            previousQuery: "",
-            currentOffset: 0,
+            initialPartners: this.pos.models["res.partner"].getAll(),
+            loadedPartners: [],
+            query: "",
+            loading: false,
         });
-        useHotkey("enter", () => this.onEnter());
+        this.loadedPartnerIds = new Set(this.state.initialPartners.map((p) => p.id));
+        useHotkey("enter", () => this.onEnter(), {
+            bypassEditableProtection: true,
+        });
+        this.onScroll = debounce(this.onScroll.bind(this), 200);
+
+        useEffect(
+            () => {
+                if (!this.list || !this.list.el) {
+                    return;
+                }
+
+                const scrollMethod = this.onScroll.bind(this);
+                this.list.el.addEventListener("scroll", scrollMethod);
+                return () => {
+                    this.list.el.removeEventListener("scroll", scrollMethod);
+                };
+            },
+            () => [this.list]
+        );
+    }
+    get globalState() {
+        return this.pos.screenState.partnerList;
+    }
+    onScroll(ev) {
+        if (this.state.loading || !this.list || !this.list.el) {
+            return;
+        }
+        const height = this.list.el.offsetHeight;
+        const scrollTop = this.list.el.scrollTop;
+        const scrollHeight = this.list.el.scrollHeight;
+
+        if (scrollTop + height >= scrollHeight * 0.8) {
+            this.getNewPartners();
+        }
     }
     async editPartner(p = false) {
         const partner = await this.pos.editPartner(p);
@@ -74,9 +110,8 @@ export class PartnerList extends Component {
         this.props.resolve({ confirmed: true, payload: this.state.selectedPartner });
         this.pos.closeTempScreen();
     }
-    getPartners() {
+    getPartners(partners) {
         const searchWord = unaccent((this.state.query || "").trim(), false);
-        const partners = this.pos.models["res.partner"].getAll();
         const exactMatches = partners.filter((partner) => partner.exactMatch(searchWord));
 
         if (exactMatches.length > 0) {
@@ -90,6 +125,8 @@ export class PartnerList extends Component {
                   .toSorted((a, b) =>
                       this.props.partner?.id === a.id
                           ? -1
+                          : this.props.partner?.id === b.id
+                          ? 1
                           : (a.name || "").localeCompare(b.name || "")
                   );
 
@@ -103,22 +140,15 @@ export class PartnerList extends Component {
         this.props.close();
     }
     async searchPartner() {
-        if (this.state.previousQuery != this.state.query) {
-            this.state.currentOffset = 0;
-        }
         const partner = await this.getNewPartners();
-
-        if (this.state.previousQuery == this.state.query) {
-            this.state.currentOffset += partner.length;
-        } else {
-            this.state.previousQuery = this.state.query;
-            this.state.currentOffset = partner.length;
-        }
         return partner;
     }
     async getNewPartners() {
         let domain = [];
-        const limit = 30;
+        const offset = this.globalState.offsetBySearch[this.state.query] || 0;
+        if (offset > this.loadedPartnerIds.size) {
+            return [];
+        }
         if (this.state.query) {
             const search_fields = [
                 "name",
@@ -131,6 +161,7 @@ export class PartnerList extends Component {
                 "city",
                 "state_id",
                 "country_id",
+                "vat",
             ];
             domain = [
                 ...Array(search_fields.length - 1).fill("|"),
@@ -138,11 +169,30 @@ export class PartnerList extends Component {
             ];
         }
 
-        const result = await this.pos.data.searchRead("res.partner", domain, [], {
-            limit: limit,
-            offset: this.state.currentOffset,
-        });
+        try {
+            this.state.loading = true;
 
-        return result;
+            const result = await this.pos.data.callRelated("res.partner", "get_new_partner", [
+                this.pos.config.id,
+                domain,
+                offset,
+            ]);
+
+            this.globalState.offsetBySearch[this.state.query] =
+                offset + (result["res.partner"].length || 100);
+
+            for (const partner of result["res.partner"]) {
+                if (!this.loadedPartnerIds.has(partner.id)) {
+                    this.loadedPartnerIds.add(partner.id);
+                    this.state.loadedPartners.push(partner);
+                }
+            }
+
+            return result["res.partner"];
+        } catch {
+            return [];
+        } finally {
+            this.state.loading = false;
+        }
     }
 }

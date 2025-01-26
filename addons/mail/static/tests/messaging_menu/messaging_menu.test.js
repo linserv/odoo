@@ -96,6 +96,18 @@ test("rendering with chat push notification default permissions", async () => {
     await contains(".o-mail-NotificationItem", { text: "Turn on notifications" });
 });
 
+test("can quickly dismiss 'Turn on notification' suggestion", async () => {
+    patchBrowserNotification("default");
+    await start();
+    await contains(".o-mail-MessagingMenu-counter", { text: "1" });
+    await click(".o_menu_systray i[aria-label='Messages']");
+    await contains(".o-mail-NotificationItem");
+    await contains(".o-mail-NotificationItem", { text: "Turn on notifications" });
+    await click(".o-mail-NotificationItem:contains(Turn on notifications) [title='Dismiss']");
+    await contains(".o-mail-NotificationItem", { text: "Turn on notifications", count: 0 });
+    await contains(".o-mail-MessagingMenu-counter", { count: 0 });
+});
+
 test("rendering with chat push notification permissions denied", async () => {
     patchBrowserNotification("denied");
     await start();
@@ -978,7 +990,7 @@ test("chat should show unread counter on receiving new messages", async () => {
     await contains(".o-mail-NotificationItem .badge", { text: "1" });
 });
 
-test("preview for channel should show latest non-deleted message", async () => {
+test("preview for channel shows deleted message preview when this is most recent", async () => {
     const pyEnv = await startServer();
     const partnerId = pyEnv["res.partner"].create({ name: "Partner1" });
     const channelId = pyEnv["discuss.channel"].create({ name: "Test" });
@@ -1005,7 +1017,9 @@ test("preview for channel should show latest non-deleted message", async () => {
         body: "",
         attachment_ids: [],
     });
-    await contains(".o-mail-NotificationItem-text", { text: "Partner1: message-1" });
+    await contains(".o-mail-NotificationItem-text", {
+        text: "Partner1: This message has been removed",
+    });
 });
 
 test("failure notifications are shown before channel preview", async () => {
@@ -1078,7 +1092,7 @@ test("can open messaging menu even if messaging is not initialized", async () =>
     await startServer();
     const def = new Deferred();
     onRpcBefore("/mail/data", async (args) => {
-        if (args.init_messaging) {
+        if (args.fetch_params.includes("init_messaging")) {
             await def;
         }
     });
@@ -1093,12 +1107,12 @@ test("can open messaging menu even if channels are not fetched", async () => {
     pyEnv["discuss.channel"].create({ name: "General" });
     const def = new Deferred();
     onRpcBefore("/mail/action", async (args) => {
-        if (args.channels_as_member) {
+        if (args.fetch_params.includes("channels_as_member")) {
             await def;
         }
     });
     onRpcBefore("/mail/data", async (args) => {
-        if (args.channels_as_member) {
+        if (args.fetch_params.includes("channels_as_member")) {
             await def;
         }
     });

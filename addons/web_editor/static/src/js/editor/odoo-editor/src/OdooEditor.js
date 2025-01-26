@@ -82,6 +82,7 @@ import {
     ZERO_WIDTH_CHARS_REGEX,
     getAdjacentCharacter,
     isLinkEligibleForZwnbsp,
+    getTableCells,
 } from './utils/utils.js';
 import { editorCommands } from './commands/commands.js';
 import { Powerbox } from './powerbox/Powerbox.js';
@@ -113,6 +114,7 @@ const IS_KEYBOARD_EVENT_LEFT_ARROW = ev => ev.key === 'ArrowLeft' && !(ev.ctrlKe
 const IS_KEYBOARD_EVENT_RIGHT_ARROW = ev => ev.key === 'ArrowRight' && !(ev.ctrlKey || ev.metaKey);
 const IS_KEYBOARD_EVENT_UP_ARROW = ev => ev.key === 'ArrowUp' && !(ev.ctrlKey || ev.metaKey);
 const IS_KEYBOARD_EVENT_DOWN_ARROW = ev => ev.key === 'ArrowDown' && !(ev.ctrlKey || ev.metaKey);
+const IS_SHIFT_ARROW = ev => ev.shiftKey && ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].some(key => ev.key === key) && !ev.metaKey;
 
 const CLIPBOARD_BLACKLISTS = {
     unwrap: ['.Apple-interchange-newline', 'DIV'], // These elements' children will be unwrapped.
@@ -798,6 +800,7 @@ export class OdooEditor extends EventTarget {
                         handle = null;
                         const fontSize = parseInt(fontSizeInput.value);
                         if (fontSize > 0) {
+                            getDeepRange(this.editable, { correctTripleClick: true, select: true });
                             if (!this.isSelectionInEditable()) {
                                 this.historyResetLatestComputedSelection(true);
                             }
@@ -2142,6 +2145,33 @@ export class OdooEditor extends EventTarget {
                 restore(); // Make sure to make <br>s visible if needed.
             }
         }
+
+        // we get the `columnsContainer` (.o_text_columns) in case the user added columns and is deleting them 
+        const columnsContainers = [];
+        const fullRange = this.document.getSelection().getRangeAt(0);
+        const selectionCommonAncestor = fullRange.commonAncestorContainer;
+        if (selectionCommonAncestor.nodeType === Node.ELEMENT_NODE) {
+            const rows = selectionCommonAncestor.classList.contains("row")
+                ? [selectionCommonAncestor]
+                : selectionCommonAncestor.getElementsByClassName("row");
+            for (const row of rows) {
+                if (
+                    row &&
+                    row.parentElement &&
+                    row.parentElement.classList.contains("o_text_columns")
+                ) {
+                    const firstColumnNode = firstLeaf(row);
+                    const lastColumnNode = lastLeaf(row);
+                    if (
+                        fullRange.isPointInRange(firstColumnNode, 0) &&
+                        fullRange.isPointInRange(lastColumnNode, 0)
+                    ) {
+                        columnsContainers.push(row.parentElement);
+                    }
+                }
+            }
+        }
+
         if (!this.editable.childElementCount) {
             // Ensure the editable has content.
             const p = document.createElement('p');
@@ -2185,7 +2215,17 @@ export class OdooEditor extends EventTarget {
         const endBlock = closestBlock(end);
         const [firstLeafOfStartBlock, lastLeafOfEndBlock] = [firstLeaf(startBlock), lastLeaf(endBlock)];
         const startLink = closestElement(range.startContainer, 'a');
-        if (sel && !sel.isCollapsed && !range.startOffset && !range.startContainer.previousSibling && !startLink) {
+        const rangeStartSameAsColumnsStart =
+            columnsContainers.length &&
+            firstLeaf(range.startContainer) === firstLeaf(columnsContainers[0]);
+        if (
+            sel &&
+            !sel.isCollapsed &&
+            !range.startOffset &&
+            !range.startContainer.previousSibling &&
+            !startLink &&
+            !rangeStartSameAsColumnsStart // if the start is same as columns start we don't add `zws`
+        ) {
             // Insert a zero-width space before the selection if the selection
             // is non-collapsed and at the beginning of its parent, so said
             // parent will have content after extraction. This ensures that the
@@ -2224,11 +2264,56 @@ export class OdooEditor extends EventTarget {
             ...boundariesOut(end).slice(2, 4),
             { allowReenter: false, label: 'deleteRange' });
 
+        // handle the case when we select the columns (all) and only the columns
+        // we adjust the selection to cover the whole columnsContainers
+        if (columnsContainers.length) {
+            const firstColumnContainer = columnsContainers[0];
+            const lastColumnContainer = columnsContainers[columnsContainers.length - 1];
+            const startsWithColumn = firstLeaf(range.startContainer) === firstLeaf(firstColumnContainer);
+            const endsWithColumn = lastLeaf(range.endContainer) === lastLeaf(lastColumnContainer);
+            if (startsWithColumn) {
+                range.setStart(firstColumnContainer, 0);
+            }
+            if (endsWithColumn) {
+                range.setEnd(lastColumnContainer, lastColumnContainer.childNodes.length);
+            }
+        }
+
         // Let the DOM split and delete the range.
         const contents = range.extractContents();
 
-        setSelection(start, nodeSize(start));
+        // if our selection is at exactly the start and end of `columnsContainer`
+        // all its content will be removed but the parent will remain so we remove it manually
+        for (const columnsContainer of columnsContainers) {
+            if (!columnsContainer.hasChildNodes()) {
+                columnsContainer.remove();
+            }
+        }
+
         const startLi = closestElement(start, 'li');
+        const endLi = closestElement(end, 'li');
+        let isBlockRemovable = false;
+        if (
+            startLi &&
+            endLi &&
+            (!startLi.textContent || isZWS(startLi)) &&
+            getListMode(startLi.parentElement) !== getListMode(endLi.parentElement)
+        ) {
+            const isNested = closestElement(startLi, '.oe-nested')
+            const nodeToRemove = isNested ? isNested : startLi.parentNode;
+            endLi.parentElement.prepend(startLi);
+            isEmptyBlock(nodeToRemove) && nodeToRemove.remove();
+            if (endLi.textContent && start.parentElement) {
+                start = start.parentElement;
+                start.removeChild(start.firstChild);
+                isBlockRemovable = true;
+                setSelection(endLi, 0);
+            } else {
+                setSelection(startLi, nodeSize(startLi));
+            }
+        } else {
+            setSelection(start, nodeSize(start));
+        }
         // Uncheck a list item with empty text in multi-list selection.
         if (startLi && startLi.classList.contains('o_checked') &&
             ['\u200B', ''].includes(startLi.textContent) && closestElement(end, 'li') !== startLi) {
@@ -2245,7 +2330,7 @@ export class OdooEditor extends EventTarget {
         const isRemovableInvisible = node =>
             !isVisible(node) && !isZWS(node) && !isUnremovable(node);
         const endIsStart = end === start;
-        while (end && isRemovableInvisible(end) && !end.contains(range.endContainer)) {
+        while (end && isRemovableInvisible(end) && (!end.contains(range.endContainer) || end === range.endContainer)) {
             const parent = end.parentNode;
             end.remove();
             end = parent;
@@ -2253,7 +2338,8 @@ export class OdooEditor extends EventTarget {
         // Same with the start container
         while (
             start &&
-            !isBlock(start) && isRemovableInvisible(start) &&
+            (!isBlock(start) || isBlockRemovable) &&
+            isRemovableInvisible(start) &&
             !(endIsStart && start.contains(range.startContainer))
         ) {
             const parent = start.parentNode;
@@ -2271,10 +2357,12 @@ export class OdooEditor extends EventTarget {
         }
         fillEmpty(closestBlock(range.endContainer));
         range = getDeepRange(this.editable, { sel });
-        let joinWith = range.endContainer;
-        const rightLeaf = rightLeafOnlyNotBlockPath(joinWith).next().value;
-        if (rightLeaf && rightLeaf.nodeValue === ' ') {
-            joinWith = rightLeaf;
+        let joinWith = !isBlockRemovable && range.endContainer;
+        if (joinWith) {
+            const rightLeaf = rightLeafOnlyNotBlockPath(joinWith).next().value;
+            if (rightLeaf && rightLeaf.nodeValue === ' ') {
+                joinWith = rightLeaf;
+            }
         }
         // Rejoin blocks that extractContents may have split in two.
         while (
@@ -2319,8 +2407,14 @@ export class OdooEditor extends EventTarget {
             // zws if still needed.
             const el = closestElement(insertedZws);
             const next = insertedZws.nextSibling;
+            const isLineBreak = el && el.previousElementSibling && el.previousElementSibling.tagName === 'BR';
             insertedZws.remove();
             el && fillEmpty(el);
+            if (isLineBreak) {
+                // If there was already a line-break BR just before
+                // el that was removed in fillEmpty, add it back.
+                el.before(this.document.createElement('BR'));
+            }
             setSelection(next, 0);
         }
         if (joinWith) {
@@ -2611,6 +2705,128 @@ export class OdooEditor extends EventTarget {
     // ================
 
     /**
+     * Sets selection in table to make cell selection
+     * rectangular when pressing shift + arrow key.
+     *
+     * @private
+     * @param {KeyboardEvent} ev
+     */
+    _setSelectionInTable(ev) {
+        const selection = this.document.getSelection();
+        const startTable = closestElement(selection.anchorNode, 'table');
+        const endTable = closestElement(selection.focusNode, 'table');
+        if (!(startTable || endTable)) {
+            return;
+        }
+        if (selection.rangeCount > 1) {
+            // Handle multiple ranges in firefox.
+            const startRange = getDeepRange(this.editable, {
+                range: selection.getRangeAt(0),
+                correctTripleClick: selection.anchorNode && selection.anchorNode.nodeName === 'TR'
+            });
+            const endRange = getDeepRange(this.editable, {
+                range: selection.getRangeAt(selection.rangeCount - 1),
+                correctTripleClick: selection.anchorNode && selection.anchorNode.nodeName === 'TR'
+            });
+            const range = this.document.createRange();
+            range.setStart(startRange.startContainer, 0);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            selection.extend(endRange.startContainer, 0);
+        } else {
+            getDeepRange(this.editable, { select: true });
+        }
+        if (startTable !== endTable) {
+            // Deselect the table if it was fully selected.
+            if (endTable) {
+                const direction = getCursorDirection(selection.anchorNode, selection.anchorOffset, selection.focusNode, selection.focusOffset);
+                const deselectingBackward = ['ArrowLeft', 'ArrowUp'].includes(ev.key) && direction === DIRECTIONS.RIGHT;
+                const deselectingForward = ['ArrowRight', 'ArrowDown'].includes(ev.key) && direction === DIRECTIONS.LEFT;
+                if (deselectingBackward) {
+                    const prevElement = endTable.previousElementSibling;
+                    if (prevElement) {
+                        setSelection(selection.anchorNode, selection.anchorOffset, prevElement, nodeSize(prevElement));
+                        ev.preventDefault();
+                    }
+                }
+                else if (deselectingForward) {
+                    const nextElement = endTable.nextElementSibling;
+                    if (nextElement) {
+                        setSelection(selection.anchorNode, selection.anchorOffset, nextElement, 0);
+                        ev.preventDefault();
+                    }
+                }
+            }
+            return;
+        }
+        const [startTd, endTd] = [closestElement(selection.anchorNode, 'td'), closestElement(selection.focusNode, 'td')];
+        // Handle selection for the single cell.
+        if (startTd === endTd && !startTd.classList.contains('o_selected_td')) {
+            this._setSingleCellSelection(ev, selection, startTd);
+            return;
+        }
+        const endCellPosition = { x: getRowIndex(endTd), y: getColumnIndex(endTd) };
+        const tds = [...startTable.rows].map((row) => [...row.cells]);
+        let targetTd, targetNode;
+        switch (ev.key) {
+            case 'ArrowUp': {
+                if (endCellPosition.x > 0) {
+                    targetTd = tds[endCellPosition.x - 1][endCellPosition.y];
+                } else {
+                    targetNode = previousLeaf(startTable, this.editable);
+                }
+                break;
+            }
+            case 'ArrowDown': {
+                if (endCellPosition.x < tds.length - 1) {
+                    targetTd = tds[endCellPosition.x + 1][endCellPosition.y];
+                } else {
+                    targetNode = nextLeaf(startTable, this.editable);
+                }
+                break;
+            }
+            case 'ArrowRight': {
+                if (endCellPosition.y < tds[0].length - 1) {
+                    targetTd = tds[endCellPosition.x][endCellPosition.y + 1];
+                }
+                break;
+            }
+            case 'ArrowLeft': {
+                if (endCellPosition.y > 0) {
+                    targetTd = tds[endCellPosition.x][endCellPosition.y - 1];
+                }
+                break;
+            }
+        }
+        if (targetTd || startTd) {
+            setSelection(selection.anchorNode, selection.anchorOffset, targetTd || targetNode, 0);
+        }
+        ev.preventDefault();
+    }
+    _setSingleCellSelection(ev = undefined, sel, td) {
+        const range = sel.rangeCount && sel.getRangeAt(0);
+        const { focusNode, focusOffset } = sel;
+        // Do not prevent default when there is a text in cell.
+        if (focusNode.nodeType === Node.TEXT_NODE) {
+            const textNodes = descendants(td).filter(node => node.nodeType === Node.TEXT_NODE);
+            const lastTextChild = textNodes.pop();
+            const firstTextChild = textNodes.shift();
+            const isAtTextBoundary = {
+                ArrowRight: nodeSize(focusNode) === focusOffset && focusNode === lastTextChild,
+                ArrowLeft: focusOffset === 0 && focusNode === firstTextChild,
+                ArrowUp: focusNode === firstTextChild,
+                ArrowDown: focusNode === lastTextChild,
+            };
+            if (isAtTextBoundary[ev.key]) {
+                ev.preventDefault();
+                this._selectTableCells(range);
+            }
+        } else {
+            ev.preventDefault();
+            this._selectTableCells(range); // If cell is empty then select it.
+        }
+    }
+    /**
      * Handle the selection of table cells rectangularly (as opposed to line by
      * line from left to right then top to bottom). If such a special selection
      * was indeed applied, return true (and false otherwise).
@@ -2626,6 +2842,8 @@ export class OdooEditor extends EventTarget {
         if (anchorNode && !ancestors(anchorNode).includes(this.editable)) {
             return false;
         }
+        const selectSingleCell  = (this._currentKeyPress?.isShiftKey && this._wasTableSelected) || this.keepCellSelected;
+        delete this._wasTableSelected;
         const traversedNodes = getTraversedNodes(this.editable);
         if (this._isResizingTable || !traversedNodes.some(node => !!closestElement(node, 'td') && !isProtected(node))) {
             return false;
@@ -2663,11 +2881,12 @@ export class OdooEditor extends EventTarget {
         // Get the top table ancestors at range bounds.
         const startTable = ancestors(range.startContainer, this.editable).filter(node => node.nodeName === 'TABLE').pop();
         const endTable = ancestors(range.endContainer, this.editable).filter(node => node.nodeName === 'TABLE').pop();
-        if ((startTd !== endTd || this.keepCellSelected) && startTable === endTable) {
+        if ((startTd !== endTd || selectSingleCell) && startTable === endTable) {
             if (!isProtected(startTable)) {
                 // The selection goes through at least two different cells ->
                 // select cells. Select single cell if cell is selected through
-                // double click.
+                // double click or selection goes from two cells to one using
+                // shift + arrow key.
                 this._selectTableCells(range);
                 appliedCustomSelection = true;
             }
@@ -2680,11 +2899,24 @@ export class OdooEditor extends EventTarget {
                     .map((node) => closestElement(node, "table"))
                     .filter((node) => !isProtected(node))
             );
+            const endSelectionTable = closestElement(selection.focusNode, 'table');
+            const endSelectionTableTds = endSelectionTable && getTableCells(endSelectionTable);
+            const traversedTds = new Set(traversedNodes.map(node => closestElement(node, 'td')));
+            const isTableFullySelected = endSelectionTableTds?.every(td => traversedTds.has(td));
+            if (endSelectionTable && !isTableFullySelected) {
+                // Make sure all the cells are traversed in actual selection
+                // when selecting full table. If not, they will be selected
+                // forcefully and _handleSelectionInTable will be called again.
+                const direction = getCursorDirection(selection.anchorNode, selection.anchorOffset, selection.focusNode, selection.focusOffset);
+                const targetTd = direction === DIRECTIONS.RIGHT ? endSelectionTableTds.pop() : endSelectionTableTds.shift();
+                setSelection(selection.anchorNode, selection.anchorOffset, targetTd, direction === DIRECTIONS.RIGHT ? nodeSize(targetTd) : 0);
+                return;
+            }
             for (const table of traversedTables) {
                 // Don't apply several nested levels of selection.
                 if (table && !ancestors(table, this.editable).some(node => [...traversedTables].includes(node))) {
                     table.classList.toggle('o_selected_table', true);
-                    for (const td of [...table.querySelectorAll('td')].filter(td => closestElement(td, 'table') === table)) {
+                    for (const td of getTableCells(table)) {
                         td.classList.toggle('o_selected_td', true);
                     }
                     appliedCustomSelection = true;
@@ -2734,7 +2966,7 @@ export class OdooEditor extends EventTarget {
         const alreadyHadSelection = table.classList.contains('o_selected_table');
         this.deselectTable(); // Undo previous selection.
         table.classList.toggle('o_selected_table', true);
-        const columns = [...table.querySelectorAll('td')].filter(td => closestElement(td, 'table') === table);
+        const columns = getTableCells(table);
         const startCol = [range.startContainer, ...ancestors(range.startContainer, this.editable)]
             .find(node => node.nodeName === 'TD' && closestElement(node, 'table') === table) || columns[0];
         const endCol = [range.endContainer, ...ancestors(range.endContainer, this.editable)]
@@ -3369,6 +3601,9 @@ export class OdooEditor extends EventTarget {
         this.toolbar.classList.toggle('d-none', false);
         this.toolbar.style.maxWidth = window.innerWidth - OFFSET * 2 + 'px';
         const sel = this.document.getSelection();
+        if (!sel.rangeCount) {
+            return;
+        }
         const range = sel.getRangeAt(0);
         const isSelForward =
             sel.anchorNode === range.startContainer && sel.anchorOffset === range.startOffset;
@@ -4075,7 +4310,7 @@ export class OdooEditor extends EventTarget {
         }
         this.keyboardType =
             ev.key === 'Unidentified' ? KEYBOARD_TYPES.VIRTUAL : KEYBOARD_TYPES.PHYSICAL;
-        this._currentKeyPress = ev.key;
+        this._currentKeyPress = { key: ev.key, isShiftKey: ev.shiftKey };
         // If the pressed key has a printed representation, the returned value
         // is a non-empty Unicode character string containing the printable
         // representation of the key. In this case, call `deleteRange` before
@@ -4085,6 +4320,9 @@ export class OdooEditor extends EventTarget {
             if (selection && !selection.isCollapsed && this.isSelectionInEditable(selection)) {
                 this.deleteRange(selection);
             }
+        }
+        if (IS_SHIFT_ARROW(ev)) {
+            this._setSelectionInTable(ev);
         }
         if (ev.key === 'Backspace') {
             // backspace
@@ -4346,7 +4584,6 @@ export class OdooEditor extends EventTarget {
      */
     _onSelectionChange() {
         const currentKeyPress = this._currentKeyPress;
-        delete this._currentKeyPress;
         const selection = this.document.getSelection();
         if (!selection) {
             // Because the `selectionchange` event is async, the selection can
@@ -4354,6 +4591,8 @@ export class OdooEditor extends EventTarget {
             // selection was moved and the moment the event is triggered.
             return;
         }
+        this._wasTableSelected = hasTableSelection(this.editable);
+        this.deselectTable();
         const anchorNode = selection.anchorNode;
         // Correct cursor if at editable root.
         if (
@@ -4361,16 +4600,13 @@ export class OdooEditor extends EventTarget {
             anchorNode === this.editable &&
             !this.options.allowInlineAtRoot
         ) {
-            this._fixSelectionOnEditableRoot(selection, currentKeyPress);
+            this._fixSelectionOnEditableRoot(selection, currentKeyPress?.key);
             // The _onSelectionChange handler is going to be triggered again.
             return;
         }
         let appliedCustomSelection = false;
         if (selection.rangeCount && selection.getRangeAt(0)) {
             appliedCustomSelection = this._handleSelectionInTable();
-            if (!appliedCustomSelection) {
-                this.deselectTable();
-            }
         }
         const isSelectionInEditable = this.isSelectionInEditable(selection);
         if (!appliedCustomSelection) {
@@ -4790,6 +5026,7 @@ export class OdooEditor extends EventTarget {
     }
 
     _onMouseDown(ev) {
+        delete this._currentKeyPress;
         this._currentMouseState = ev.type;
         this._lastMouseClickPosition = [ev.x, ev.y];
 
@@ -4810,6 +5047,14 @@ export class OdooEditor extends EventTarget {
         delete this.keepCellSelected;
         // Ignore any changes that might have happened before this point.
         this.observer.takeRecords();
+
+        if (!selection.isCollapsed) {
+            const range = selection.getRangeAt(0);
+            const rangeContentChildNodes = range.cloneContents().childNodes;
+            if (rangeContentChildNodes.length === 1 && rangeContentChildNodes[0].nodeName === 'BR') {
+                setSelection(selection.anchorNode, 0, selection.anchorNode, 0);
+            }
+        }
 
         const node = ev.target;
         // handle checkbox lists
@@ -4978,6 +5223,7 @@ export class OdooEditor extends EventTarget {
     }
 
     _onMousemove(ev) {
+        delete this._currentKeyPress;
         if (this._currentMouseState === 'mousedown' && !this._isResizingTable) {
             this._handleSelectionInTable(ev);
         }

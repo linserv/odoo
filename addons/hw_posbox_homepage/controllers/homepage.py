@@ -3,7 +3,6 @@
 import json
 import logging
 import netifaces
-import os
 import platform
 import requests
 import subprocess
@@ -12,6 +11,7 @@ import time
 
 from itertools import groupby
 from pathlib import Path
+
 from odoo import http
 from odoo.addons.hw_drivers.tools import helpers, wifi
 from odoo.addons.hw_drivers.main import iot_devices
@@ -101,7 +101,7 @@ class IotBoxOwlHomePage(http.Controller):
     @http.route('/hw_posbox_homepage/wifi_clear', auth='none', type='http', cors='*')
     def clear_wifi_configuration(self):
         helpers.update_conf({'wifi_ssid': '', 'wifi_password': ''})
-        wifi.disconnect(forget_network=True)
+        wifi.disconnect()
         return json.dumps({
             'status': 'success',
             'message': 'Successfully disconnected from wifi',
@@ -128,20 +128,17 @@ class IotBoxOwlHomePage(http.Controller):
         network_interfaces = []
         if platform.system() == 'Linux':
             ssid = wifi.get_current() or wifi.get_access_point_ssid()
-            interfaces = netifaces.interfaces()
-            for iface_id in interfaces:
-                if 'wlan' in iface_id or 'eth' in iface_id:
-                    is_wifi = 'wlan' in iface_id
-                    iface_obj = netifaces.ifaddresses(iface_id)
-                    ifconfigs = iface_obj.get(netifaces.AF_INET, [])
-                    for conf in ifconfigs:
-                        if conf.get('addr'):
-                            network_interfaces.append({
-                                'id': iface_id,
-                                'is_wifi': is_wifi,
-                                'ssid': ssid if is_wifi else None,
-                                'ip': conf.get('addr'),
-                            })
+            for iface_id in netifaces.interfaces():
+                if iface_id == 'lo':
+                    continue  # Skip loopback interface (127.0.0.1)
+
+                is_wifi = 'wlan' in iface_id
+                network_interfaces.extend([{
+                    'id': iface_id,
+                    'is_wifi': is_wifi,
+                    'ssid': ssid if is_wifi else None,
+                    'ip': conf.get('addr', 'No Internet'),
+                } for conf in netifaces.ifaddresses(iface_id).get(netifaces.AF_INET, [])])
 
         is_certificate_ok, certificate_details = helpers.get_certificate_status()
 
@@ -153,11 +150,11 @@ class IotBoxOwlHomePage(http.Controller):
         } for device in iot_devices.values()]
         device_type_key = lambda device: device['type']
         grouped_devices = {
-            device_type: list(devices) for device_type, devices in groupby(sorted(devices, key=device_type_key), device_type_key)
+            device_type: list(devices)
+            for device_type, devices in groupby(sorted(devices, key=device_type_key), device_type_key)
         }
 
-        terminal_id = helpers.get_conf('six_payment_terminal')
-        six_terminal = terminal_id or 'Not Configured'
+        six_terminal = helpers.get_conf('six_payment_terminal') or 'Not Configured'
 
         return json.dumps({
             'db_uuid': helpers.get_conf('db_uuid'),
@@ -279,18 +276,23 @@ class IotBoxOwlHomePage(http.Controller):
 
     @http.route('/hw_posbox_homepage/update_wifi', auth="none", type="jsonrpc", methods=['POST'], cors='*')
     def update_wifi(self, essid, password):
-        if wifi.connect(essid, password):
+        if wifi.reconnect(essid, password, force_update=True):
             helpers.update_conf({'wifi_ssid': essid, 'wifi_password': password})
-        server = helpers.get_odoo_server_url()
+            server = helpers.get_odoo_server_url()
 
-        res_payload = {
-            'status': 'success',
-            'message': 'Connecting to ' + essid,
-            'server': {
-                'url': server or 'http://' + helpers.get_ip() + ':8069',
-                'message': 'Redirect to Odoo Server' if server else 'Redirect to IoT Box'
+            res_payload = {
+                'status': 'success',
+                'message': 'Connecting to ' + essid,
+                'server': {
+                    'url': server or 'http://' + helpers.get_ip() + ':8069',
+                    'message': 'Redirect to Odoo Server' if server else 'Redirect to IoT Box'
+                }
             }
-        }
+        else:
+            res_payload = {
+                'status': 'error',
+                'message': 'Failed to connect to ' + essid,
+            }
 
         return res_payload
 

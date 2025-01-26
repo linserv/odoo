@@ -36,7 +36,7 @@ class AccountMoveLine(models.Model):
                         move_to_reinvoice |= move_line
 
         # insert the sale line in the create values of the analytic entries
-        if move_to_reinvoice.filtered(lambda aml: not aml.move_id.reversed_entry_id):  # only if the move line is not a reversal one
+        if move_to_reinvoice.filtered(lambda aml: not aml.move_id.reversed_entry_id and aml.product_id):  # only if the move line is not a reversal one
             map_sale_line_per_move = move_to_reinvoice._sale_create_reinvoice_sale_line()
             for values in values_list:
                 sale_line = map_sale_line_per_move.get(values.get('move_line_id'))
@@ -52,7 +52,7 @@ class AccountMoveLine(models.Model):
         self.ensure_one()
         if self.sale_line_ids:
             return False
-        uom_precision_digits = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        uom_precision_digits = self.env['decimal.precision'].precision_get('Product Unit')
         return float_compare(self.credit or 0.0, self.debit or 0.0, precision_digits=uom_precision_digits) != 1 and self.product_id.expense_policy not in [False, 'no']
 
     def _sale_create_reinvoice_sale_line(self):
@@ -187,7 +187,7 @@ class AccountMoveLine(models.Model):
                 date=order.date_order,
             )
 
-        uom_precision_digits = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        uom_precision_digits = self.env['decimal.precision'].precision_get('Product Unit')
         if float_is_zero(unit_amount, precision_digits=uom_precision_digits):
             return 0.0
 

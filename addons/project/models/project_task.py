@@ -122,7 +122,7 @@ class ProjectTask(models.Model):
 
     @api.model
     def _default_user_ids(self):
-        return self.env.context.keys() & {'default_personal_stage_type_ids', 'default_personal_stage_type_id'} and self.env.user
+        return self.env.user.ids if any(key in self.env.context for key in ('default_personal_stage_type_ids', 'default_personal_stage_type_id')) else ()
 
     @api.model
     def _default_company_id(self):
@@ -133,7 +133,7 @@ class ProjectTask(models.Model):
     @api.model
     def _read_group_stage_ids(self, stages, domain):
         search_domain = [('id', 'in', stages.ids)]
-        if 'default_project_id' in self.env.context and not self._context.get('subtask_action'):
+        if 'default_project_id' in self.env.context and not self._context.get('subtask_action') and 'project_kanban' in self.env.context:
             search_domain = ['|', ('project_ids', '=', self.env.context['default_project_id'])] + search_domain
 
         stage_ids = stages.sudo()._search(search_domain, order=stages._order)
@@ -214,6 +214,8 @@ class ProjectTask(models.Model):
         compute='_compute_partner_phone', inverse='_inverse_partner_phone',
         string="Contact Number", readonly=False, store=True, copy=False
     )
+    # Need this field to check there is no email loops when Odoo reply automatically
+    email_from = fields.Char('Email From')
     email_cc = fields.Char(help='Email addresses that were in the CC of the incoming emails from this task and that are not currently linked to an existing customer.')
     company_id = fields.Many2one('res.company', string='Company', compute='_compute_company_id', store=True, readonly=False, recursive=True, copy=True, default=_default_company_id)
     color = fields.Integer(string='Color Index', export_string_translation=False)
@@ -306,7 +308,7 @@ class ProjectTask(models.Model):
 
     _recurring_task_has_no_parent = models.Constraint(
         'CHECK (NOT (recurring_task IS TRUE AND parent_id IS NOT NULL))',
-        'A subtask cannot be recurrent.',
+        'You cannot convert this task into a sub-task because it is recurrent.',
     )
     _private_task_has_no_parent = models.Constraint(
         'CHECK (NOT (project_id IS NULL AND parent_id IS NOT NULL))',
@@ -968,7 +970,7 @@ class ProjectTask(models.Model):
         if project_id:
             project = self.env['project.project'].browse(project_id)
             if 'company_id' in default_fields and 'default_project_id' not in self.env.context:
-                vals['company_id'] = project.sudo().company_id
+                vals['company_id'] = project.sudo().company_id.id
         elif 'default_user_ids' not in self.env.context and 'user_ids' in default_fields:
             user_ids = vals.get('user_ids', [])
             user_ids.append(Command.link(self.env.user.id))
@@ -1280,6 +1282,8 @@ class ProjectTask(models.Model):
                         if not project_link:
                             project_link = link_per_project_id[task.project_id.id] = task.project_id._get_html_link(title=task.project_id.display_name)
                         project_link_per_task_id[task.id] = project_link
+        if vals.get('parent_id') is False:
+            vals['display_in_project'] = True
         result = super().write(vals)
         if portal_can_write:
             super(ProjectTask, self_no_sudo).write(vals_no_sudo)
@@ -1330,6 +1334,7 @@ class ProjectTask(models.Model):
                     body=body,
                     partner_ids=partner_ids,
                     email_layout_xmlid='mail.mail_notification_layout',
+                    notify_author_mention=False,
                     record_name=task.display_name,
                )
         return result
@@ -1472,6 +1477,7 @@ class ProjectTask(models.Model):
         return render_context
 
     def _send_email_notify_to_cc(self, partners_to_notify):
+        # TDE TODO: this should be removed with email-like recipients management
         self.ensure_one()
         template_id = self.env['ir.model.data']._xmlid_to_res_id('project.task_invitation_follower', raise_if_not_found=False)
         if not template_id:
@@ -1627,13 +1633,13 @@ class ProjectTask(models.Model):
 
         return groups
 
-    def _notify_get_reply_to(self, default=None):
+    def _notify_get_reply_to(self, default=None, author_id=False):
         # Override to set alias of tasks to their project if any
-        aliases = self.sudo().mapped('project_id')._notify_get_reply_to(default=default)
+        aliases = self.sudo().mapped('project_id')._notify_get_reply_to(default=default, author_id=author_id)
         res = {task.id: aliases.get(task.project_id.id) for task in self}
         leftover = self.filtered(lambda rec: not rec.project_id)
         if leftover:
-            res.update(super(ProjectTask, leftover)._notify_get_reply_to(default=default))
+            res.update(super(ProjectTask, leftover)._notify_get_reply_to(default=default, author_id=author_id))
         return res
 
     def _ensure_personal_stages(self):
@@ -1645,12 +1651,6 @@ class ProjectTask(models.Model):
                 self.with_context(lang=user.lang)._get_default_personal_stage_create_vals(user.id)
             )
 
-    def task_email_split(self, msg):
-        email_list = tools.email_split((msg.get('to') or '') + ',' + (msg.get('cc') or ''))
-        # check left-part is not already an alias
-        aliases = self.mapped('project_id.alias_name')
-        return [x for x in email_list if x.split('@')[0] not in aliases]
-
     @api.model
     def message_new(self, msg, custom_values=None):
         # remove default author when going through the mail gateway. Indeed we
@@ -1659,15 +1659,12 @@ class ProjectTask(models.Model):
         # found.
         create_context = dict(self.env.context or {})
         create_context['default_user_ids'] = False
-        create_context['mail_notify_author'] = True  # Allows sending stage updates to the author
         if custom_values is None:
             custom_values = {}
-        # Auto create partner if not existant when the task is created from email
+        # Auto create partner if not existent when the task is created from email
         if not msg.get('author_id') and msg.get('email_from'):
-            msg['author_id'] = self.env['res.partner'].create({
-                'email': msg['email_from'],
-                'name': msg['email_from'],
-            }).id
+            author = self.env['mail.thread']._partner_find_from_emails_single([msg['email_from']], no_create=False)
+            msg['author_id'] = author.id
 
         defaults = {
             'name': msg.get('subject') or _("No Subject"),
@@ -1677,23 +1674,15 @@ class ProjectTask(models.Model):
         defaults.update(custom_values)
 
         task = super(ProjectTask, self.with_context(create_context)).message_new(msg, custom_values=defaults)
-        email_list = task.task_email_split(msg)
-        partner_ids = [p.id for p in self.env['mail.thread']._mail_find_partner_from_emails(email_list, records=task, force_create=False) if p]
-        task.message_subscribe(partner_ids)
+        partners = task._partner_find_from_emails_single(tools.email_split((msg.get('to') or '') + ',' + (msg.get('cc') or '')), no_create=True)
+        task.message_subscribe(partners.ids)
         return task
 
     def message_update(self, msg, update_vals=None):
-        email_list = self.task_email_split(msg)
-        partner_ids = [p.id for p in self.env['mail.thread']._mail_find_partner_from_emails(email_list, records=self, force_create=False) if p]
-        self.message_subscribe(partner_ids)
+        for task in self:
+            partners = task._partner_find_from_emails_single(tools.email_split((msg.get('to') or '') + ',' + (msg.get('cc') or '')), no_create=True)
+            task.message_subscribe(partners.ids)
         return super().message_update(msg, update_vals=update_vals)
-
-    def _message_get_suggested_recipients(self):
-        recipients = super()._message_get_suggested_recipients()
-        if self.partner_id:
-            reason = _('Customer Email') if self.partner_id.email else _('Customer')
-            self._message_add_suggested_recipient(recipients, partner=self.partner_id, reason=reason)
-        return recipients
 
     def _notify_by_email_get_headers(self, headers=None):
         headers = super()._notify_by_email_get_headers(headers=headers)
@@ -2028,13 +2017,17 @@ class ProjectTask(models.Model):
             task.subtask_completion_percentage = task.subtask_count and task.closed_subtask_count / task.subtask_count
 
     @api.model
-    def _get_thread_with_access(self, thread_id, mode="read", **kwargs):
-        if project_sharing_id := kwargs.get("project_sharing_id"):
+    def _get_allowed_access_params(self):
+        return super()._get_allowed_access_params() | {'project_sharing_id'}
+
+    @api.model
+    def _get_thread_with_access(self, thread_id, project_sharing_id=None, token=None, **kwargs):
+        if project_sharing_id:
             if token := ProjectSharingChatter._check_project_access_and_get_token(
-                self, project_sharing_id, self._name, thread_id, kwargs.get("token")
+                self, project_sharing_id, self._name, thread_id, token
             ):
-                kwargs["token"] = token
-        return super()._get_thread_with_access(thread_id, mode, **kwargs)
+                token = token
+        return super()._get_thread_with_access(thread_id, project_sharing_id=project_sharing_id, token=token, **kwargs)
 
     def get_mention_suggestions(self, search, limit=8):
         """Return the 'limit'-first followers of the given task or followers of its project matching
