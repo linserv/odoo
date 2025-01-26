@@ -2308,7 +2308,7 @@ export class OdooEditor extends EventTarget {
         const isRemovableInvisible = node =>
             !isVisible(node) && !isZWS(node) && !isUnremovable(node);
         const endIsStart = end === start;
-        while (end && isRemovableInvisible(end) && !end.contains(range.endContainer)) {
+        while (end && isRemovableInvisible(end) && (!end.contains(range.endContainer) || end === range.endContainer)) {
             const parent = end.parentNode;
             end.remove();
             end = parent;
@@ -2385,8 +2385,14 @@ export class OdooEditor extends EventTarget {
             // zws if still needed.
             const el = closestElement(insertedZws);
             const next = insertedZws.nextSibling;
+            const isLineBreak = el && el.previousElementSibling && el.previousElementSibling.tagName === 'BR';
             insertedZws.remove();
             el && fillEmpty(el);
+            if (isLineBreak) {
+                // If there was already a line-break BR just before
+                // el that was removed in fillEmpty, add it back.
+                el.before(this.document.createElement('BR'));
+            }
             setSelection(next, 0);
         }
         if (joinWith) {
@@ -3417,6 +3423,9 @@ export class OdooEditor extends EventTarget {
         this.toolbar.classList.toggle('d-none', false);
         this.toolbar.style.maxWidth = window.innerWidth - OFFSET * 2 + 'px';
         const sel = this.document.getSelection();
+        if (!sel.rangeCount) {
+            return;
+        }
         const range = sel.getRangeAt(0);
         const isSelForward =
             sel.anchorNode === range.startContainer && sel.anchorOffset === range.startOffset;
@@ -4643,6 +4652,16 @@ export class OdooEditor extends EventTarget {
         for (const el of element.querySelectorAll('*[class=""]')) {
             el.removeAttribute('class');
         }
+
+        // Fix t-field inline nodes to use div as root instead.
+        for (const el of element.querySelectorAll('b[data-oe-field][data-oe-type="html"]')) {
+            const blockEl = this.document.createElement('div');
+            for (const attr of el.attributes) {
+                blockEl.setAttribute(attr.name, attr.value);
+            }
+            blockEl.replaceChildren(...el.childNodes);
+            el.replaceWith(blockEl);
+        }
     }
     /**
      * Handle the hint preview for the Powerbox.
@@ -4818,6 +4837,16 @@ export class OdooEditor extends EventTarget {
 
         // Ignore any changes that might have happened before this point.
         this.observer.takeRecords();
+
+        // Reset selection when editable is empty.
+        const selection = this.document.getSelection();
+        if (!selection.isCollapsed) {
+            const range = selection.getRangeAt(0);
+            const rangeContentChildNodes = range.cloneContents().childNodes;
+            if (rangeContentChildNodes.length === 1 && rangeContentChildNodes[0].nodeName === 'BR') {
+                setSelection(selection.anchorNode, 0, selection.anchorNode, 0);
+            }
+        }
 
         const node = ev.target;
         // handle checkbox lists

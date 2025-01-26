@@ -6,7 +6,7 @@
 # Wil Odoo, 2024
 # Yazi Tian, 2024
 # 湘子 南 <1360857908@qq.com>, 2024
-# Chloe Wang, 2024
+# Chloe Wang, 2025
 # 
 msgid ""
 msgstr ""
@@ -14,7 +14,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2024-08-13 10:27+0000\n"
 "PO-Revision-Date: 2024-02-07 08:49+0000\n"
-"Last-Translator: Chloe Wang, 2024\n"
+"Last-Translator: Chloe Wang, 2025\n"
 "Language-Team: Chinese (China) (https://app.transifex.com/odoo/teams/41243/zh_CN/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -75,13 +75,6 @@ msgstr "来自 Viva 钱包的消息: %s"
 #. module: pos_viva_wallet
 #. odoo-python
 #: code:addons/pos_viva_wallet/models/pos_payment_method.py:0
-#, python-format
-msgid "Not receive Bearer Token"
-msgstr "未接收不记名令牌"
-
-#. module: pos_viva_wallet
-#. odoo-python
-#: code:addons/pos_viva_wallet/models/pos_payment_method.py:0
 #: code:addons/pos_viva_wallet/models/pos_payment_method.py:0
 #, python-format
 msgid "Only 'group_pos_user' are allowed to fetch token from Viva Wallet"
@@ -133,6 +126,15 @@ msgstr "我们和Viva Wallet之间存在一些问题，请稍后再试。%s"
 #, python-format
 msgid "There are some issues between us and Viva Wallet, try again later.%s)"
 msgstr "我们和Viva Wallet之间存在一些问题，请稍后再试。%s)"
+
+#. module: pos_viva_wallet
+#. odoo-python
+#: code:addons/pos_viva_wallet/models/pos_payment_method.py:0
+#, python-format
+msgid ""
+"Unable to retrieve Viva Wallet Bearer Token: Please verify that the Client "
+"ID and Client Secret are correct"
+msgstr "无法检索 Viva 钱包不记名令牌：请确认客户 ID 和客户密钥正确无误"
 
 #. module: pos_viva_wallet
 #: model:ir.model.fields,help:pos_viva_wallet.field_pos_payment_method__viva_wallet_api_key
