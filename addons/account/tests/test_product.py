@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import unittest
+
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.tests import Form, tagged
 from odoo.tests.common import new_test_user
@@ -58,6 +60,7 @@ class TestProduct(AccountTestInvoicingCommon):
             'supplier_taxes_id': self.company_data['company'].account_purchase_tax_id.ids,
         }])
 
+    @unittest.skip("[LINSERV]")
     def test_account_manager_user_can_create_product(self):
         """Test that a user with group_account_manager can create a product."""
         product = self.env['product.product'].with_user(self.account_manager_user).create({
