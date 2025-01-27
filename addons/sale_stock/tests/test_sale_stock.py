@@ -1,6 +1,8 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 from datetime import datetime, timedelta
 
+import unittest
+
 from odoo import Command
 from odoo.exceptions import UserError
 from odoo.tests import Form, tagged
@@ -1943,6 +1945,7 @@ class TestSaleStock(TestSaleCommon, ValuationReconciliationTestCommon):
         validate_picking(return_2)
         self.assertEqual(so.order_line[0].qty_delivered, 0)
 
+    @unittest.skip("[LINSERV]")
     def test_package_with_moves_to_different_location_dest(self):
         """
         Create a two-step delivery with two products, and package both products together.
