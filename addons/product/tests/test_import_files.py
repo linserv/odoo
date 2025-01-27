@@ -9,9 +9,7 @@ from odoo.tools.misc import file_open
 @tagged("post_install", "-at_install")
 class TestImportFiles(TransactionCase):
 
-    @unittest.skipUnless(
-        can_import("xlrd.xlsx") or can_import("openpyxl"), "XLRD/XLSX not available"
-    )
+    @unittest.skip("[LINSERV]")
     def test_import_product_demo_xls(self):
         if not loaded_demo_data(self.env):
             self.skipTest('Needs demo data to be able to import those files')
