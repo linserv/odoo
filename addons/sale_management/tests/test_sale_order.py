@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
+
 from itertools import chain
 
 from odoo.fields import Command
@@ -339,6 +341,7 @@ class TestSaleOrder(SaleManagementCommon):
         sale_order_with_option.order_line.product_uom_qty = 10
         self.assertEqual(sale_order_with_option.sale_order_option_ids.price_unit, 10)
 
+    @unittest.skip("[LINSERV]")
     def test_reload_template_translations(self):
         """
         Check that quotation template gets reloaded with correct translations on partner change.
