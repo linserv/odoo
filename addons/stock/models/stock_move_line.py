@@ -713,10 +713,13 @@ class StockMoveLine(models.Model):
 
     def _prepare_new_lot_vals(self):
         self.ensure_one()
-        return {
+        vals =  {
             'name': self.lot_name,
             'product_id': self.product_id.id,
         }
+        if self.product_id.company_id and self.company_id in (self.product_id.company_id.all_child_ids | self.product_id.company_id):
+            vals['company_id'] = self.company_id.id
+        return vals
 
     def _create_and_assign_production_lot(self):
         """ Creates and assign new production lots for move lines."""
@@ -735,7 +738,7 @@ class StockMoveLine(models.Model):
         lots = self.env['stock.lot'].create(lot_vals)
         for key, mls in key_to_mls.items():
             lot = lots[key_to_index[key]].with_prefetch(lots._ids)   # With prefetch to reconstruct the ones broke by accessing by index
-            mls.write({'lot_id': lot.id})
+            mls.with_prefetch(self._prefetch_ids).write({'lot_id': lot.id})
 
     def _log_message(self, record, move, template, vals):
         data = vals.copy()

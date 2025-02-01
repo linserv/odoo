@@ -2530,7 +2530,11 @@ class AccountMove(models.Model):
         return self.currency_id == currency \
             and self.move_type in ('out_invoice', 'out_receipt', 'in_invoice', 'in_receipt') \
             and self.invoice_payment_term_id.early_discount \
-            and (not reference_date or reference_date <= self.invoice_payment_term_id._get_last_discount_date(self.invoice_date)) \
+            and (
+                not reference_date
+                or not self.invoice_date
+                or reference_date <= self.invoice_payment_term_id._get_last_discount_date(self.invoice_date)
+            ) \
             and not (payment_terms.matched_debit_ids + payment_terms.matched_credit_ids)
 
     # -------------------------------------------------------------------------
@@ -3094,6 +3098,7 @@ class AccountMove(models.Model):
         fields = fields or self._get_default_read_fields()
         return super().read(fields, load)
 
+    @api.model
     def search_read(self, domain=None, fields=None, offset=0, limit=None, order=None, **read_kwargs):
         fields = fields or self._get_default_read_fields()
         return super().search_read(domain, fields, offset, limit, order, **read_kwargs)
@@ -4205,6 +4210,11 @@ class AccountMove(models.Model):
     # BUSINESS METHODS
     # -------------------------------------------------------------------------
 
+    def _prepare_tax_lines_for_taxes_computation(self, tax_amls, round_from_tax_lines):
+        if round_from_tax_lines:
+            return [self._prepare_tax_line_for_taxes_computation(x) for x in tax_amls]
+        return []
+
     def _prepare_invoice_aggregated_taxes(
         self,
         filter_invl_to_apply=None,
@@ -4237,10 +4247,7 @@ class AccountMove(models.Model):
         base_amls = self.line_ids.filtered(lambda x: x.display_type == 'product' and (not filter_invl_to_apply or filter_invl_to_apply(x)))
         base_lines = [self._prepare_product_base_line_for_taxes_computation(x) for x in base_amls]
         tax_amls = self.line_ids.filtered(lambda x: x.display_type == 'tax')
-        if round_from_tax_lines:
-            tax_lines = [self._prepare_tax_line_for_taxes_computation(x) for x in tax_amls]
-        else:
-            tax_lines = []
+        tax_lines = self._prepare_tax_lines_for_taxes_computation(tax_amls, round_from_tax_lines)
         AccountTax._add_tax_details_in_base_lines(base_lines, self.company_id)
         if postfix_function:
             postfix_function(base_lines)
@@ -4587,9 +4594,8 @@ class AccountMove(models.Model):
                 'in_receipt': _('Draft Purchase Receipt'),
                 'entry': _('Draft Entry'),
             }[self.move_type]
-            name += ' '
         if self.name and self.name != '/':
-            name += self.name
+            name = f"{name} {self.name}".strip()
             if self.env.context.get('input_full_display_name'):
                 if self.partner_id:
                     name += f', {self.partner_id.name}'
@@ -5151,6 +5157,7 @@ class AccountMove(models.Model):
         return action
 
     def action_send_and_print(self):
+        self.env['account.move.send']._check_move_constrains(self)
         return {
             'name': _("Send"),
             'type': 'ir.actions.act_window',
@@ -5831,7 +5838,7 @@ class AccountMove(models.Model):
     def _get_invoice_proforma_pdf_report_filename(self):
         """ Get the filename of the generated proforma PDF invoice report. """
         self.ensure_one()
-        return f"{self.name.replace('/', '_')}_proforma.pdf"
+        return f"{self._get_move_display_name().replace(' ', '_').replace('/', '_')}_proforma.pdf"
 
     def _prepare_edi_vals_to_export(self):
         ''' The purpose of this helper is to prepare values in order to export an invoice through the EDI system.
@@ -6133,17 +6140,16 @@ class AccountMove(models.Model):
         )
         record = render_context['record']
         subtitles = [f"{record.name} - {record.partner_id.name}" if record.partner_id else record.name]
-        if (
-            self.invoice_date_due
-            and self.is_invoice(include_receipts=True)
-            and self.payment_state not in ('in_payment', 'paid')
-        ):
-            subtitles.append(_('%(amount)s due\N{NO-BREAK SPACE}%(date)s',
-                           amount=format_amount(self.env, self.amount_total, self.currency_id, lang_code=render_context.get('lang')),
-                           date=format_date(self.env, self.invoice_date_due, lang_code=render_context.get('lang'))
-                          ))
-        else:
-            subtitles.append(format_amount(self.env, self.amount_total, self.currency_id, lang_code=render_context.get('lang')))
+        if self.is_invoice(include_receipts=True):
+            # Only show the amount in emails for non-miscellaneous moves. It might confuse recipients otherwise.
+            if self.invoice_date_due and self.payment_state not in ('in_payment', 'paid'):
+                subtitles.append(_(
+                    '%(amount)s due\N{NO-BREAK SPACE}%(date)s',
+                    amount=format_amount(self.env, self.amount_total, self.currency_id, lang_code=render_context.get('lang')),
+                    date=format_date(self.env, self.invoice_date_due, lang_code=render_context.get('lang')),
+                ))
+            else:
+                subtitles.append(format_amount(self.env, self.amount_total, self.currency_id, lang_code=render_context.get('lang')))
         render_context['subtitles'] = subtitles
         return render_context
 

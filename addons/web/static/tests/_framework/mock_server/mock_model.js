@@ -157,7 +157,7 @@ const applyDefaults = ({ _fields }, record, context) => {
             continue;
         }
         if (fieldName === "create_uid") {
-            record.create_uid = MockServer.current.env.uid;
+            record.create_uid = MockServer.env.uid;
             continue;
         }
         const fieldDef = _fields[fieldName];
@@ -2584,6 +2584,28 @@ export class Model extends Array {
         const groups = this.read_group(kwargs);
         const allGroups = this.read_group(domain, ["display_name"], groupby, makeKwArgs({ lazy }));
         return { groups, length: allGroups.length };
+    }
+
+    /**
+     * @param {MaybeIterable<number>} idOrIds
+     * @param {Record<string, any>} specification
+     * @param {string} fieldName
+     * @param {number} offset
+     */
+    web_resequence(idOrIds, specification, fieldName, offset) {
+        const kwargs = getKwArgs(arguments, "ids", "field_name", "offset", "specification");
+        ({ ids: idOrIds, field_name: fieldName, offset = 0, specification } = kwargs);
+
+        if (!(fieldName in this._fields)) {
+            return [];
+        }
+
+        const ids = ensureArray(idOrIds);
+        for (const [index, id] of ids.entries()) {
+            this.write(id, { [fieldName]: offset + index });
+        }
+
+        return this.web_read(ids, specification);
     }
 
     /**

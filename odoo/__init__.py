@@ -22,9 +22,6 @@ assert sys.version_info > MIN_PY_VERSION, f"Outdated python version detected, Od
 # ----------------------------------------------------------
 # Shortcuts
 # ----------------------------------------------------------
-# The hard-coded super-user id (a.k.a. administrator, or root user).
-SUPERUSER_ID = 1
-
 
 def registry(database_name=None):
     """
@@ -34,6 +31,7 @@ def registry(database_name=None):
     """
     import warnings  # noqa: PLC0415
     warnings.warn("Since 18.0: call odoo.modules.registry.Registry directly", DeprecationWarning, stacklevel=2)
+    from . import modules  # noqa: PLC0415
     if database_name is None:
         import threading
         database_name = threading.current_thread().dbname
@@ -47,26 +45,12 @@ def registry(database_name=None):
 from . import _monkeypatches
 _monkeypatches.patch_all()
 
+# ----------------------------------------------------------
+# Export admin user constant
+from .orm.utils import SUPERUSER_ID
 
 # ----------------------------------------------------------
-# Imports
+# Imports of directly exposed variables
 # ----------------------------------------------------------
-from . import upgrade  # this namespace must be imported first
-from . import addons
-from . import loglevels
-from . import modules
-from . import netsvc
-from . import osv
-from . import release
-from . import service
-from . import sql_db
-from . import tools
-
-# ----------------------------------------------------------
-# Model classes, fields, api decorators, and translations
-# ----------------------------------------------------------
-from . import models
-from . import fields
-from . import api
 from odoo.tools.translate import _, _lt
 from odoo.fields import Command

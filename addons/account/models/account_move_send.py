@@ -444,7 +444,10 @@ class AccountMoveSend(models.AbstractModel):
     @api.model
     def _send_mail(self, move, mail_template, **kwargs):
         """ Send the journal entry passed as parameter by mail. """
-        new_message = move.with_context(no_new_invoice=True).message_post(
+        new_message = move.with_context(
+            email_notification_allow_footer=True,
+            no_new_invoice=True,
+        ).message_post(
             message_type='comment',
             **kwargs,
             **{  # noqa: PIE804
@@ -577,7 +580,7 @@ class AccountMoveSend(models.AbstractModel):
         """ Helper to know if we can commit the current transaction or not.
         :return: True if commit is accepted, False otherwise.
         """
-        return not modules.module.current_test
+        return not (tools.config['test_enable'] or modules.module.current_test)
 
     @api.model
     def _call_web_service_before_invoice_pdf_render(self, invoices_data):
