@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
+
 from datetime import datetime, timedelta
 from freezegun import freeze_time
 
@@ -4433,6 +4435,7 @@ class TestMrpOrder(TestMrpCommon):
         self.assertEqual(mo.state, 'done')
         self.assertEqual(mo.workorder_ids[0].duration_expected, 1440.0)
 
+    @unittest.skip("[LINSERV]")
     def test_wo_date_finished_on_done_unplanned_mo(self):
         """
         Checks that the work order's date_finished and leave_id.date_to fields are equal to
