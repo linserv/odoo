@@ -873,11 +873,11 @@ if env.context.get('old_values', None):  # on write
         })
 
         # first run, check we have a field set
+        # this does not happen using the UI where the trigger is forced to be set
         self.assertFalse(automation.last_run)
         with self.assertLogs('odoo.addons.base_automation', 'WARNING') as capture:
             self.env["base.automation"]._cron_process_time_based_actions(auto_commit=False)
         self.assertRegex(capture.output[0], r"Missing date trigger")
-        self.assertFalse(automation.last_run)
         automation.trg_date_id = model.field_id.filtered(lambda f: f.name == 'date_automation_last')
 
         # normal run
@@ -1013,6 +1013,19 @@ if env.context.get('old_values', None):  # on write
             "name": "free your mind",
         })
         self.assertEqual(thread_test.message_follower_ids.partner_id, user.partner_id)
+
+    def test_cannot_have_actions_with_warnings(self):
+        with self.assertRaises(ValidationError) as e:
+            create_automation(
+                self,
+                model_id=self.env['ir.model']._get('ir.actions.server').id,
+                trigger='on_time',
+                _actions={
+                    'state': 'webhook',
+                    'webhook_field_ids': [self.env['ir.model.fields']._get('ir.actions.server', 'code').id],
+                },
+            )
+        self.assertEqual(e.exception.args[0], "Following child actions have warnings: Send Webhook Notification")
 
 
 @common.tagged('post_install', '-at_install')
@@ -1469,6 +1482,18 @@ class TestCompute(common.TransactionCase):
         # check that the automation has been run once
         partner_count = self.env['res.partner'].search_count([('name', '=', 'Test Partner Automation')])
         self.assertEqual(partner_count, 1, "Only one partner should have been created")
+
+    def test_00_form_save_update_related_model_id(self):
+        with Form(self.env['ir.actions.server'], view="base.view_server_action_form") as f:
+            f.name = "Test Action"
+            f.model_id = self.env["ir.model"]._get("res.partner")
+            f.state = "object_write"
+            f.update_path = "user_id"
+            f.evaluation_type = "value"
+            f.resource_ref = "res.users,2"
+
+        res_users_model = self.env["ir.model"]._get("res.users")
+        self.assertEqual(f.update_related_model_id, res_users_model)
 
 
 @common.tagged("post_install", "-at_install")

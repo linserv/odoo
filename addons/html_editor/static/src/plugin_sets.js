@@ -1,3 +1,4 @@
+import { BaseContainerPlugin } from "./core/base_container_plugin";
 import { ClipboardPlugin } from "./core/clipboard_plugin";
 import { CommentPlugin } from "./core/comment_plugin";
 import { DeletePlugin } from "./core/delete_plugin";
@@ -23,6 +24,7 @@ import { EmojiPlugin } from "./main/emoji_plugin";
 import { ColorPlugin } from "./main/font/color_plugin";
 import { FeffPlugin } from "./main/feff_plugin";
 import { FontPlugin } from "./main/font/font_plugin";
+import { FontFamilyPlugin } from "./main/font/font_family_plugin";
 import { HintPlugin } from "./main/hint_plugin";
 import { InlineCodePlugin } from "./main/inline_code";
 import { LinkPastePlugin } from "./main/link/link_paste_plugin";
@@ -99,6 +101,7 @@ import { QWebPlugin } from "./others/qweb_plugin";
  */
 
 export const CORE_PLUGINS = [
+    BaseContainerPlugin,
     ClipboardPlugin,
     CommentPlugin,
     DeletePlugin,
@@ -138,6 +141,7 @@ export const MAIN_PLUGINS = [
     TabulationPlugin,
     ToolbarPlugin,
     FontPlugin, // note: if before ListPlugin, there are a few split tests that fails
+    FontFamilyPlugin,
     YoutubePlugin,
     IconPlugin,
     ImagePlugin,

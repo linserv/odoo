@@ -1668,7 +1668,7 @@ class AccountMove(models.Model):
             else:
                 move.invoice_filter_type_domain = False
 
-    @api.depends('commercial_partner_id')
+    @api.depends('commercial_partner_id', 'company_id')
     def _compute_bank_partner_id(self):
         for move in self:
             if move.is_inbound():
@@ -5190,6 +5190,10 @@ class AccountMove(models.Model):
             'target': target,
         }
 
+    def action_print_pdf(self):
+        self.ensure_one()
+        return self.env.ref('account.account_invoices').report_action(self.id)
+
     def preview_invoice(self):
         self.ensure_one()
         return {
@@ -5475,7 +5479,7 @@ class AccountMove(models.Model):
         model_reports = self.env['ir.actions.report'].search(domain)
 
         available_reports = model_reports.filtered(
-            lambda model_template: len(self.filtered_domain(ast.literal_eval(model_template.domain))) == len(self)
+            lambda model_template: len(self.filtered_domain(ast.literal_eval(model_template.domain or '[]'))) == len(self)
         )
 
         return available_reports
@@ -5486,7 +5490,7 @@ class AccountMove(models.Model):
         self.ensure_one()
 
         if available_report := action_report.filtered(lambda available_report: not (is_invoice_report^available_report.is_invoice_report)):
-            return bool(self.filtered_domain(ast.literal_eval(available_report.domain)))
+            return bool(self.filtered_domain(ast.literal_eval(available_report.domain or '[]')))
 
         return False
 

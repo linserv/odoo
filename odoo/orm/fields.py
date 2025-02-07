@@ -42,7 +42,7 @@ def resolve_mro(model, name, predicate):
         classes are ignored.
     """
     result = []
-    for cls in model._model_classes:
+    for cls in model._model_classes__:
         value = cls.__dict__.get(name, SENTINEL)
         if value is SENTINEL:
             continue
@@ -128,12 +128,11 @@ class Field(typing.Generic[T]):
     :param bool store: whether the field is stored in database
         (default:``True``, ``False`` for computed fields)
 
-    :param str aggregator: aggregate function used by :meth:`~odoo.models.Model.read_group`
-        when grouping on this field.
+    :param str aggregator: default aggregate function used by the webclient
+        on this field when using "Group By" feature.
 
-        Supported aggregate functions are:
+        Supported aggregators are:
 
-        * ``array_agg`` : values, including nulls, concatenated into an array
         * ``count`` : number of rows
         * ``count_distinct`` : number of distinct rows
         * ``bool_and`` : true if all values are true, otherwise false
@@ -143,9 +142,9 @@ class Field(typing.Generic[T]):
         * ``avg`` : the average (arithmetic mean) of all values
         * ``sum`` : sum of all values
 
-    :param str group_expand: function used to expand read_group results when grouping on
-        the current field. For selection fields, ``group_expand=True`` automatically
-        expands groups for all selection keys.
+    :param str group_expand: function used to expand results when grouping on the
+        current field for kanban/list/gantt views. For selection fields,
+        ``group_expand=True`` automatically expands groups for all selection keys.
 
         .. code-block:: python
 
@@ -166,7 +165,7 @@ class Field(typing.Generic[T]):
     :param bool precompute: whether the field should be computed before record insertion
         in database.  Should be used to specify manually some fields as precompute=True
         when the field can be computed before record insertion.
-        (e.g. avoid statistics fields based on search/read_group), many2one
+        (e.g. avoid statistics fields based on search/_read_group), many2one
         linking to the previous record, ... (default: `False`)
 
         .. warning::
@@ -263,7 +262,7 @@ class Field(typing.Generic[T]):
 
     related_field = None                # corresponding related field
     aggregator = None                   # operator for aggregating values
-    group_expand = None                 # name of method to expand groups in read_group()
+    group_expand = None                 # name of method to expand groups in formatted_read_group()
     falsy_value_label = None            # value to display when the field is not set (webclient attr)
     prefetch = True                     # the prefetch group (False means no group)
 
@@ -352,7 +351,7 @@ class Field(typing.Generic[T]):
         assert '_models' not in globals() or isinstance(owner, _models.MetaModel)
         self.model_name = owner._name
         self.name = name
-        if getattr(owner, 'pool', None) is None:  # models.is_definition_class(owner)
+        if getattr(owner, 'pool', None) is None:  # models.is_model_definition(owner)
             # only for fields on definition classes, not registry classes
             self._module = owner._module
             owner._field_definitions.append(self)
@@ -360,7 +359,7 @@ class Field(typing.Generic[T]):
         if not self.args.get('related'):
             self._direct = True
         if self._direct or self._toplevel:
-            self._setup_attrs(owner, name)
+            self._setup_attrs__(owner, name)
             if self._toplevel:
                 # free memory, self.args and self._base_fields are no longer useful
                 self.__dict__.pop('args', None)
@@ -447,7 +446,7 @@ class Field(typing.Generic[T]):
 
         return attrs
 
-    def _setup_attrs(self, model_class, name):
+    def _setup_attrs__(self, model_class, name):
         """ Initialize the field parameter attributes. """
         attrs = self._get_attrs(model_class, name)
 
@@ -1603,6 +1602,9 @@ class Field(typing.Generic[T]):
         """ Return a domain representing a condition on ``self``. """
         return determine(self.search, records, operator, value)
 
+    def determine_group_expand(self, records, values, domain):
+        """ Return a domain representing a condition on ``self``. """
+        return determine(self.group_expand, records, values, domain)
 
 def apply_required(model, field_name):
     """ Set a NOT NULL constraint on the given field, if necessary. """
