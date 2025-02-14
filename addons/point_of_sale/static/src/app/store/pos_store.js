@@ -1051,7 +1051,7 @@ export class PosStore extends Reactive {
      * @returns {name: string, id: int, role: string}
      */
     get_cashier() {
-        this.user.role = this.user._raw.role;
+        this.user.role = this.user.raw.role;
         return this.user;
     }
     get_cashier_user_id() {
@@ -1269,7 +1269,7 @@ export class PosStore extends Reactive {
                 context,
             });
             const missingRecords = await this.data.missingRecursive(data);
-            const newData = this.models.loadData(missingRecords, [], false, true);
+            const newData = this.models.loadData(missingRecords, [], false);
 
             for (const line of newData["pos.order.line"]) {
                 const refundedOrderLine = line.refunded_orderline_id;
@@ -1586,8 +1586,13 @@ export class PosStore extends Reactive {
         if (name === "ProductScreen") {
             this.get_order()?.deselect_orderline();
         }
-        this.previousScreen = this.mainScreen.component?.name;
         const component = registry.category("pos_screens").get(name);
+        if (
+            (component.updatePreviousScreen ?? true) &&
+            (this.mainScreen.component?.updatePreviousScreen ?? true)
+        ) {
+            this.previousScreen = this.mainScreen.component?.name;
+        }
         this.mainScreen = { component, props };
         // Save the screen to the order so that it is shown again when the order is selected.
         if (component.storeOnOrder ?? true) {
@@ -1653,7 +1658,6 @@ export class PosStore extends Reactive {
 
     async printChanges(order, orderChange) {
         const unsuccedPrints = [];
-        const lastChangedLines = order.last_order_preparation_change.lines;
         orderChange.new.sort((a, b) => {
             const sequenceA = a.pos_categ_sequence;
             const sequenceB = b.pos_categ_sequence;
@@ -1669,8 +1673,9 @@ export class PosStore extends Reactive {
                 printer.config.product_categories_ids,
                 orderChange
             );
+            const anyChangesToPrint = Object.values(changes).some((change) => change.length);
             const diningModeUpdate = orderChange.modeUpdate;
-            if (diningModeUpdate || !Object.keys(lastChangedLines).length) {
+            if (diningModeUpdate || anyChangesToPrint) {
                 const printed = await this.printReceipts(
                     order,
                     printer,
@@ -1711,7 +1716,7 @@ export class PosStore extends Reactive {
         }
     }
 
-    async printReceipts(order, printer, title, lines, fullReceipt = false, diningModeUpdate) {
+    async getRenderedReceipt(order, title, lines, fullReceipt = false, diningModeUpdate) {
         let time;
         if (order.write_date) {
             time = order.write_date?.split(" ")[1].split(":");
@@ -1735,6 +1740,18 @@ export class PosStore extends Reactive {
             changedlines: lines,
             fullReceipt: fullReceipt,
         });
+
+        return receipt;
+    }
+
+    async printReceipts(order, printer, title, lines, fullReceipt = false, diningModeUpdate) {
+        const receipt = await this.getRenderedReceipt(
+            order,
+            title,
+            lines,
+            fullReceipt,
+            diningModeUpdate
+        );
         const result = await printer.printReceipt(receipt);
         return result.successful;
     }
