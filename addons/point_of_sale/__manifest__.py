@@ -81,6 +81,9 @@
             'point_of_sale/static/src/backend/many2one_with_placeholder_field/*',
             'point_of_sale/static/src/backend/many2many_placeholder_list_view/*',
         ],
+        "web.assets_web_dark": [
+            'point_of_sale/static/src/scss/pos_dashboard.dark.scss',
+        ],
         'web.assets_tests': [
             'barcodes/static/tests/legacy/helpers.js',
             'point_of_sale/static/tests/pos/tours/**/*',
@@ -89,6 +92,7 @@
         ],
         'web.assets_unit_tests': [
             # for the related_models.test.js
+            'point_of_sale/static/src/app/models/utils/recursive_serialization.js',
             'point_of_sale/static/src/app/models/related_models.js',
             # for the data_service.test.js
             'point_of_sale/static/src/app/models/utils/indexed_db.js',
@@ -114,13 +118,10 @@
         'point_of_sale.base_app': [
             ("include", "web._assets_helpers"),
             ("include", "web._assets_backend_helpers"),
-            ("include", "web._assets_primary_variables"),
             "web/static/src/scss/pre_variables.scss",
-            "web/static/lib/bootstrap/scss/_functions.scss",
             "web/static/lib/bootstrap/scss/_variables.scss",
             'web/static/lib/bootstrap/scss/_variables-dark.scss',
             'web/static/lib/bootstrap/scss/_maps.scss',
-            ("include", "web._assets_bootstrap"),
             ("include", "web._assets_bootstrap_backend"),
             ('include', 'web._assets_core'),
             ("remove", "web/static/src/core/browser/router.js"),
@@ -209,6 +210,9 @@
         'point_of_sale.assets_prod': [
             ('include', 'point_of_sale._assets_pos'),
             'point_of_sale/static/src/app/main.js',
+        ],
+        'point_of_sale.assets_prod_dark': [
+            ('include', 'point_of_sale.assets_prod'),
         ],
         'point_of_sale.customer_display_assets': [
             ('include', 'point_of_sale.base_app'),

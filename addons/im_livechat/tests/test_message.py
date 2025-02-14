@@ -58,7 +58,7 @@ class TestImLivechatMessage(HttpCase, MailCommon):
     @users('emp')
     def test_message_to_store(self):
         im_livechat_channel = self.env['im_livechat.channel'].sudo().create({'name': 'support', 'user_ids': [Command.link(self.users[0].id)]})
-        self.env['bus.presence'].create({'user_id': self.users[0].id, 'status': 'online'})  # make available for livechat (ignore leave)
+        self.env["mail.presence"]._update_presence(self.users[0])
         self.authenticate(self.users[1].login, self.password)
         channel_livechat_1 = self.env["discuss.channel"].browse(
             self.make_jsonrpc_request(
@@ -99,6 +99,8 @@ class TestImLivechatMessage(HttpCase, MailCommon):
                         "create_date": fields.Datetime.to_string(message.create_date),
                         "id": message.id,
                         "default_subject": "test1 Ernest Employee",
+                        "incoming_email_cc": False,
+                        "incoming_email_to": False,
                         "is_discussion": False,
                         "is_note": True,
                         "link_preview_ids": [],
@@ -162,8 +164,7 @@ class TestImLivechatMessage(HttpCase, MailCommon):
         notifications are sent."""
         livechat_channel_vals = {"name": "support", "user_ids": [Command.link(self.users[0].id)]}
         im_livechat_channel = self.env["im_livechat.channel"].sudo().create(livechat_channel_vals)
-        # make available for livechat (ignore leave)
-        self.env["bus.presence"].create({"user_id": self.users[0].id, "status": "online"})
+        self.env["mail.presence"]._update_presence(self.users[0])
         self.authenticate(self.env.user.login, self.env.user.login)
         channel = self.env["discuss.channel"].browse(
             self.make_jsonrpc_request(
@@ -209,6 +210,8 @@ class TestImLivechatMessage(HttpCase, MailCommon):
                                         "date": fields.Datetime.to_string(message.date),
                                         "default_subject": "Chell Gladys Ernest Employee",
                                         "id": message.id,
+                                        "incoming_email_cc": False,
+                                        "incoming_email_to": False,
                                         "is_discussion": True,
                                         "is_note": False,
                                         "link_preview_ids": [],

@@ -10,6 +10,7 @@ export class ContentExpandablePlugin extends Plugin {
     resources = {
         clean_for_save_handlers: ({ root }) => this.cleanForSave(root),
         delete_backward_overrides: this.deleteBackward.bind(this),
+        move_node_blacklist_selectors: ".o_mail_reply_container, .o_mail_reply_container *",
     };
 
     setup() {
@@ -70,6 +71,7 @@ export class ContentExpandablePlugin extends Plugin {
         for (const subEl of ele.querySelectorAll(":scope > .o_mail_reply_content")) {
             subEl.classList.toggle("d-none");
         }
+        closestElement(ev.target, ".o-mail-Message-viewMore-container")?.remove();
     }
 
     cleanForSave(root) {

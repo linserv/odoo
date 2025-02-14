@@ -80,7 +80,7 @@ class PosOrder(models.Model):
                 })
 
         pos_order = False
-        combo_child_uuids_by_parent_uuid = self._prepare_combo_line_uuids(order)
+        record_uuid_mapping = order.pop('relations_uuid_mapping', {})
 
         if not existing_order:
             pos_order = self.create({
@@ -99,35 +99,21 @@ class PosOrder(models.Model):
 
             pos_order.write(order)
 
-        pos_order._link_combo_items(combo_child_uuids_by_parent_uuid)
+        for model_name, mapping in record_uuid_mapping.items():
+            owner_records = self.env[model_name].search([('uuid', 'in', mapping.keys())])
+            for uuid, fields in mapping.items():
+                for name, uuids in fields.items():
+                    params = self.env[model_name]._fields[name]
+                    if params.type in ['one2many', 'many2many']:
+                        records = self.env[params.comodel_name].search([('uuid', 'in', uuids)])
+                        owner_records.filtered(lambda r: r.uuid == uuid).write({name: [Command.link(r.id) for r in records]})
+                    else:
+                        record = self.env[params.comodel_name].search([('uuid', '=', uuids)])
+                        owner_records.filtered(lambda r: r.uuid == uuid).write({name: record.id})
+
         self = self.with_company(pos_order.company_id)
         self._process_payment_lines(order, pos_order, pos_session, draft)
         return pos_order._process_saved_order(draft)
-
-    def _prepare_combo_line_uuids(self, order_vals):
-        acc = {}
-        lines = [line[2] for line in order_vals['lines'] if line[0] in [0, 1]]
-
-        for line in lines:
-            if combo_line_ids := line.get('combo_line_ids'):
-                if line['uuid'] in acc:
-                    acc[line['uuid']].append([l['uuid'] for l in lines if l.get('id') in combo_line_ids])
-                else:
-                    acc[line['uuid']] = [l['uuid'] for l in lines if l.get('id') in combo_line_ids]
-
-            line['combo_line_ids'] = False
-            line['combo_parent_id'] = False
-
-        return acc
-
-    def _link_combo_items(self, combo_child_uuids_by_parent_uuid):
-        self.ensure_one()
-
-        for parent_uuid, child_uuids in combo_child_uuids_by_parent_uuid.items():
-            parent_line = self.lines.filtered(lambda line: line.uuid == parent_uuid)
-            if not parent_line:
-                continue
-            parent_line.combo_line_ids = [(6, 0, self.lines.filtered(lambda line: line.uuid in child_uuids).ids)]
 
     def _process_saved_order(self, draft):
         self.ensure_one()
@@ -1049,8 +1035,11 @@ class PosOrder(models.Model):
             order_log_name = self._get_order_log_representation(order)
             _logger.debug("PoS synchronisation #%d processing order %s order full data: %s", sync_token, order_log_name, pformat(order))
 
-            if len(self._get_refunded_orders(order)) > 1:
+            refunded_orders = self._get_refunded_orders(order)
+            if len(refunded_orders) > 1:
                 raise ValidationError(_('You can only refund products from the same order.'))
+            elif len(refunded_orders) == 1:
+                order_ids.append(refunded_orders[0].id)
 
             existing_order = self._get_open_order(order)
             if existing_order and existing_order.state == 'draft':
@@ -1062,6 +1051,7 @@ class PosOrder(models.Model):
             else:
                 # In theory, this situation is unintended
                 # In practice it can happen when "Tip later" option is used
+                order_ids.append(existing_order.id)
                 _logger.info("PoS synchronisation #%d order %s sync ignored for existing PoS order %s (state: %s)", sync_token, order_log_name, existing_order, existing_order.state)
 
         # Sometime pos_orders_ids can be empty.
@@ -1070,20 +1060,24 @@ class PosOrder(models.Model):
 
         for order in pos_order_ids:
             order._ensure_access_token()
-
-        # If the previous session is closed, the order will get a new session_id due to _get_valid_session in _process_order
-        is_new_session = any(order.get('session_id') not in session_ids for order in orders)
-        refunded_lines = pos_order_ids.lines.mapped('refunded_orderline_id')
-        lines = pos_order_ids.lines + refunded_lines
+            if not self.env.context.get('preparation'):
+                order.config_id.notify_synchronisation(order.config_id.current_session_id.id, self.env.context.get('login_number', 0))
 
         _logger.info("PoS synchronisation #%d finished", sync_token)
+        return pos_order_ids.read_pos_data(orders, config_id)
+
+    def read_pos_data(self, data, config_id):
+        # If the previous session is closed, the order will get a new session_id due to _get_valid_session in _process_order
+        session_ids = set({order.get('session_id') for order in data})
+        is_new_session = any(order.get('session_id') not in session_ids for order in data)
+
         return {
-            'pos.order': pos_order_ids.read(pos_order_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
-            'pos.session': pos_order_ids.session_id._load_pos_data({}) if config_id and is_new_session else [],
-            'pos.payment': pos_order_ids.payment_ids.read(pos_order_ids.payment_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
-            'pos.order.line': lines.read(pos_order_ids.lines._load_pos_data_fields(config_id), load=False) if config_id else [],
-            'pos.pack.operation.lot': pos_order_ids.lines.pack_lot_ids.read(pos_order_ids.lines.pack_lot_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
-            "product.attribute.custom.value": pos_order_ids.lines.custom_attribute_value_ids.read(pos_order_ids.lines.custom_attribute_value_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
+            'pos.order': self.read(self._load_pos_data_fields(config_id), load=False) if config_id else [],
+            'pos.session': self.session_id._load_pos_data({})['data'] if config_id and is_new_session else [],
+            'pos.payment': self.payment_ids.read(self.payment_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
+            'pos.order.line': self.lines.read(self.lines._load_pos_data_fields(config_id), load=False) if config_id else [],
+            'pos.pack.operation.lot': self.lines.pack_lot_ids.read(self.lines.pack_lot_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
+            "product.attribute.custom.value": self.lines.custom_attribute_value_ids.read(self.lines.custom_attribute_value_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
         }
 
     @api.model
@@ -1312,7 +1306,6 @@ class PosOrderLine(models.Model):
 
     company_id = fields.Many2one('res.company', string='Company', related="order_id.company_id", store=True)
     name = fields.Char(string='Line No', required=True, copy=False)
-    skip_change = fields.Boolean('Skip line when sending ticket to kitchen printers.')
     notice = fields.Char(string='Discount Notice')
     product_id = fields.Many2one('product.product', string='Product', domain=[('sale_ok', '=', True)], required=True, change_default=True)
     attribute_value_ids = fields.Many2many('product.template.attribute.value', string="Selected Attributes")
@@ -1364,7 +1357,7 @@ class PosOrderLine(models.Model):
     @api.model
     def _load_pos_data_fields(self, config_id):
         return [
-            'qty', 'attribute_value_ids', 'custom_attribute_value_ids', 'price_unit', 'skip_change', 'uuid', 'price_subtotal', 'price_subtotal_incl', 'order_id', 'note', 'price_type',
+            'qty', 'attribute_value_ids', 'custom_attribute_value_ids', 'price_unit', 'uuid', 'price_subtotal', 'price_subtotal_incl', 'order_id', 'note', 'price_type',
             'product_id', 'discount', 'tax_ids', 'pack_lot_ids', 'customer_note', 'refunded_qty', 'price_extra', 'full_product_name', 'refunded_orderline_id', 'combo_parent_id', 'combo_line_ids', 'combo_item_id', 'refund_orderline_ids'
         ]
 

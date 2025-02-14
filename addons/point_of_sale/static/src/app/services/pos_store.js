@@ -34,10 +34,11 @@ import { CashMovePopup } from "@point_of_sale/app/components/popups/cash_move_po
 import { ClosePosPopup } from "@point_of_sale/app/components/popups/closing_popup/closing_popup";
 import { SelectionPopup } from "../components/popups/selection_popup/selection_popup";
 import { user } from "@web/core/user";
-import { fuzzyLookup } from "@web/core/utils/search";
 import { unaccent } from "@web/core/utils/strings";
 import { WithLazyGetterTrap } from "@point_of_sale/lazy_getter";
 import { debounce } from "@web/core/utils/timing";
+import DevicesSynchronisation from "../utils/devices_synchronisation";
+import { deserializeDateTime } from "@web/core/l10n/dates";
 
 const { DateTime } = luxon;
 
@@ -128,7 +129,6 @@ export class PosStore extends WithLazyGetterTrap {
         this.selectedPartner = null;
         this.selectedCategory = null;
         this.searchProductWord = "";
-        this.mainProductVariant = {};
         this.ready = new Promise((resolve) => {
             this.markReady = resolve;
         });
@@ -263,7 +263,6 @@ export class PosStore extends WithLazyGetterTrap {
     async initServerData() {
         await this.processServerData();
         this.data.connectWebSocket("CLOSING_SESSION", this.closingSessionNotification.bind(this));
-        this.data.connectWebSocket("SYNCHRONISATION", this.recordSynchronisation.bind(this));
         return await this.afterProcessServerData();
     }
 
@@ -304,84 +303,12 @@ export class PosStore extends WithLazyGetterTrap {
         }, 3000);
     }
 
-    async recordSynchronisation(data) {
-        if (odoo.debug === "assets") {
-            console.info("Incoming synchronisation", data);
-            console.info("Login number", odoo.login_number, data.login_number);
-            console.info("Session Ids", odoo.pos_session_id, data.session_id);
-        }
-
-        if (data.login_number === odoo.login_number || data.session_id !== odoo.pos_session_id) {
-            return;
-        }
-
-        const records = await this.data.call("pos.config", "get_records", [
-            odoo.pos_config_id,
-            data["records"],
-        ]);
-
-        const missing = await this.data.missingRecursive(records);
-        const toRemove = {};
-        const toCreate = {};
-        const toUpdate = {};
-
-        for (const [model, records] of Object.entries(missing)) {
-            toCreate[model] = [];
-            toUpdate[model] = [];
-
-            for (const record of records) {
-                const existingRec = this.models[model].get(record.id);
-                if (existingRec) {
-                    if (model === "pos.order" && existingRec.state === "draft") {
-                        // Verify if some subrecords are deleted
-                        const children = ["lines", "payment_ids"];
-                        for (const child of children) {
-                            const existingChild = existingRec[child];
-                            const recordChild = record[child];
-
-                            if (existingChild.length !== recordChild.length) {
-                                // We only delete server records, the local one will be synced later
-                                const toDelete = existingChild.filter(
-                                    (c) => !recordChild.includes(c.id) && typeof c.id === "number"
-                                );
-
-                                if (toDelete.length) {
-                                    const childModel = toDelete[0].model.name;
-                                    toRemove[childModel] = toRemove[childModel] || [];
-                                    toRemove[childModel].push(...toDelete);
-                                }
-                            }
-                        }
-                    } else if (model === "pos.order") {
-                        continue;
-                    }
-
-                    toUpdate[model].push(record);
-                } else {
-                    toCreate[model].push(record);
-                }
-            }
-        }
-
-        this.models.loadData(toCreate, [], false);
-        this.models.loadData(toUpdate, [], false, true);
-
-        for (const [model, records] of Object.entries(toRemove)) {
-            this.models[model].deleteMany(records, { silent: true });
-        }
-
-        if (
-            this.getOrder()?.finalized &&
-            !["TipScreen", "ReceiptScreen", "PaymentScreen"].includes(
-                this.mainScreen.component.name
-            )
-        ) {
-            this.addNewOrder();
-        }
-    }
-
     get session() {
         return this.data.models["pos.session"].get(odoo.pos_session_id);
+    }
+
+    get company() {
+        return this.data.models["res.company"].getFirst();
     }
 
     async processServerData() {
@@ -389,7 +316,6 @@ export class PosStore extends WithLazyGetterTrap {
         // and should not change during the session, so we can
         // safely take the first element.this.models
         this.config = this.data.models["pos.config"].getFirst();
-        this.company = this.data.models["res.company"].getFirst();
         this.user = this.data.models["res.users"].getFirst();
         this.currency = this.config.currency_id;
         this.pickingType = this.data.models["stock.picking.type"].getFirst();
@@ -398,6 +324,16 @@ export class PosStore extends WithLazyGetterTrap {
             "": this.models["res.partner"].length,
         };
         this.models["pos.session"].getFirst().login_number = parseInt(odoo.login_number);
+
+        const models = Object.keys(this.models);
+        const dynamicModels = this.data.opts.dynamicModels;
+        const staticModels = models.filter((model) => !dynamicModels.includes(model));
+        const deviceSync = new DevicesSynchronisation(dynamicModels, staticModels, this);
+
+        this.deviceSync = deviceSync;
+        this.data.deviceSync = deviceSync;
+
+        await this.deviceSync.readDataFromServer();
 
         // Check cashier
         this.checkPreviousLoggedCashier();
@@ -489,7 +425,6 @@ export class PosStore extends WithLazyGetterTrap {
 
             for (let i = 0; i < nbrProduct - 1; i++) {
                 products[i].available_in_pos = false;
-                this.mainProductVariant[products[i].id] = products[nbrProduct - 1];
             }
         }
     }
@@ -528,7 +463,7 @@ export class PosStore extends WithLazyGetterTrap {
                     typeof order.id === "number" &&
                     Object.keys(order.last_order_preparation_change).length > 0
                 ) {
-                    await this.sendOrderInPreparation(order, true, true);
+                    await this.sendOrderInPreparation(order, { cancelled: true, orderDone: true });
                 }
 
                 const cancelled = this.removeOrder(order, false);
@@ -1239,6 +1174,7 @@ export class PosStore extends WithLazyGetterTrap {
         return {
             config_id: this.config.id,
             login_number: odoo.login_number,
+            ...(options.context || {}),
         };
     }
 
@@ -1280,7 +1216,6 @@ export class PosStore extends WithLazyGetterTrap {
                 context,
             });
             const missingRecords = await this.data.missingRecursive(data);
-            this.data.dispatchData(missingRecords);
             const newData = this.models.loadData(missingRecords, [], false, true);
 
             for (const line of newData["pos.order.line"]) {
@@ -1313,7 +1248,6 @@ export class PosStore extends WithLazyGetterTrap {
             if (options.throw) {
                 throw error;
             }
-
             console.warn("Offline mode active, order will be synced later");
             return error;
         } finally {
@@ -1541,8 +1475,13 @@ export class PosStore extends WithLazyGetterTrap {
         if (name === "ProductScreen") {
             this.getOrder()?.deselectOrderline();
         }
-        this.previousScreen = this.mainScreen.component?.name;
         const component = registry.category("pos_screens").get(name);
+        if (
+            (component.updatePreviousScreen ?? true) &&
+            (this.mainScreen.component?.updatePreviousScreen ?? true)
+        ) {
+            this.previousScreen = this.mainScreen.component?.name;
+        }
         this.mainScreen = { component, props };
         // Save the screen to the order so that it is shown again when the order is selected.
         if (component.storeOnOrder ?? true) {
@@ -1573,19 +1512,18 @@ export class PosStore extends WithLazyGetterTrap {
         }
         return true;
     }
-    getOrderChanges(skipped = false, order = this.getOrder()) {
-        return getOrderChanges(order, skipped, this.config.preparationCategories);
+    getOrderChanges(order = this.getOrder()) {
+        return getOrderChanges(order, this.config.preparationCategories);
     }
     // Now the printer should work in PoS without restaurant
-    async sendOrderInPreparation(order, cancelled = false, orderDone = false) {
-        if (this.config.printerCategories.size) {
+    async sendOrderInPreparation(order, opts = {}) {
+        if (this.config.printerCategories.size && !opts.byPassPrint) {
             try {
                 let reprint = false;
                 let orderChange = changesToOrder(
                     order,
-                    false,
                     this.config.preparationCategories,
-                    cancelled
+                    opts.cancelled
                 );
 
                 if (
@@ -1602,7 +1540,7 @@ export class PosStore extends WithLazyGetterTrap {
                     order.uiState.lastPrint = orderChange;
                 }
 
-                if (reprint && orderDone) {
+                if (reprint && opts.orderDone) {
                     return;
                 }
 
@@ -1611,24 +1549,14 @@ export class PosStore extends WithLazyGetterTrap {
                 console.info("Failed in printing the changes in the order", e);
             }
         }
+        order.updateLastOrderChange();
     }
     async sendOrderInPreparationUpdateLastChange(o, cancelled = false) {
-        // Always display a "ConnectionLostError" when the user tries to send an order to the kitchen while offline
         if (this.data.network.offline) {
             this.data.network.warningTriggered = false;
             throw new ConnectionLostError();
         }
-        this.addPendingOrder([o.id]);
-        const uuid = o.uuid;
-        const orders = await this.syncAllOrders({ orders: [o] });
-        const order = orders?.find((order) => order.uuid === uuid);
-
-        if (order) {
-            await this.sendOrderInPreparation(order, cancelled);
-            order.updateLastOrderChange();
-            this.addPendingOrder([order.id]);
-            await this.syncAllOrders();
-        }
+        await this.sendOrderInPreparation(o, { cancelled });
     }
 
     async printChanges(order, orderChange, reprint = false) {
@@ -1849,6 +1777,10 @@ export class PosStore extends WithLazyGetterTrap {
             }
         );
     }
+    async loadSampleData() {
+        await this.data.call("pos.config", "load_demo_data", [[this.config.id]]);
+        await this.reloadData(true);
+    }
     async allowProductCreation() {
         return await user.hasGroup("base.group_system");
     }
@@ -1934,13 +1866,20 @@ export class PosStore extends WithLazyGetterTrap {
             }
         }
     }
+    orderUsageUTCtoLocal(data) {
+        const result = {};
+        for (const [datetime, usage] of Object.entries(data)) {
+            const dt = deserializeDateTime(datetime);
+            const formattedDt = dt.toFormat("yyyy-MM-dd HH:mm:ss");
+            result[formattedDt] = usage;
+        }
+        return result;
+    }
     async syncPresetSlotAvaibility(preset) {
         try {
-            const presetAvailabilities = await this.data.call("pos.preset", "get_available_slots", [
-                preset.id,
-            ]);
-
-            preset.computeAvailabilities(presetAvailabilities);
+            const result = await this.data.call("pos.preset", "get_available_slots", [preset.id]);
+            const localUsage = this.orderUsageUTCtoLocal(result.usage_utc);
+            preset.computeAvailabilities(localUsage);
         } catch {
             // Compute locally if the server is not reachable
             preset.computeAvailabilities();
@@ -2205,28 +2144,13 @@ export class PosStore extends WithLazyGetterTrap {
         return this.config.proxy_ip;
     }
 
-    addMainProductsToDisplay(products) {
-        const uniqueProductsMap = new Map();
-        for (const product of products) {
-            if (product.id in this.mainProductVariant) {
-                const mainProduct = this.mainProductVariant[product.id];
-                uniqueProductsMap.set(mainProduct.id, mainProduct);
-            } else {
-                uniqueProductsMap.set(product.id, product);
-            }
-        }
-        return Array.from(uniqueProductsMap.values());
-    }
-
     get productsToDisplay() {
         const searchWord = this.searchProductWord.trim();
         const allProducts = this.models["product.template"].getAll();
         let list = [];
 
         if (searchWord !== "") {
-            list = this.addMainProductsToDisplay(
-                this.getProductsBySearchWord(searchWord, allProducts)
-            );
+            list = this.getProductsBySearchWord(searchWord, allProducts);
         } else if (this.selectedCategory?.id) {
             list = this.selectedCategory.associatedProducts;
         } else {
@@ -2260,17 +2184,18 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     getProductsBySearchWord(searchWord, products) {
-        const exactMatches = products.filter((product) => product.exactMatch(searchWord));
+        const words = searchWord.toLowerCase();
+        const exactMatches = products.filter((product) => product.exactMatch(words));
 
-        if (exactMatches.length > 0 && searchWord.length > 2) {
+        if (exactMatches.length > 0 && words.length > 2) {
             return exactMatches;
         }
 
-        const fuzzyMatches = fuzzyLookup(unaccent(searchWord, false), products, (product) =>
-            unaccent(product.searchString, false)
+        const matches = products.filter((p) =>
+            unaccent(p.searchString, false).toLowerCase().includes(words)
         );
 
-        return Array.from(new Set([...exactMatches, ...fuzzyMatches]));
+        return Array.from(new Set([...exactMatches, ...matches]));
     }
 
     getPaymentMethodDisplayText(pm, order) {

@@ -3462,6 +3462,38 @@ class TestMrpOrder(TestMrpCommon):
         self.assertEqual(mo_backorder.workorder_ids[1].date_start, datetime(2023, 3, 1, 12, 0))
         self.assertEqual(mo_backorder.workorder_ids[2].date_start, datetime(2023, 3, 1, 12, 45))
 
+    @freeze_time('2023-03-01 12:00')
+    def test_all_workorders_planned(self):
+        """
+            Test, when writing to a confirmed MO, that all workorders that are expected to be planned are planned.
+        """
+        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+
+        mo_form = Form(self.env['mrp.production'])
+        mo_form.product_id = self.product_8
+        with mo_form.workorder_ids.new() as workorder:
+            workorder.name = "OP1"
+            workorder.workcenter_id = self.workcenter_2
+        with mo_form.workorder_ids.new() as workorder:
+            workorder.name = "OP2"
+            workorder.workcenter_id = self.workcenter_2
+        mo = mo_form.save()
+        mo.action_confirm()
+
+        mo.workorder_ids[1].button_start()
+        mo.workorder_ids[1].button_finish()
+
+        self.assertTrue(mo.workorder_ids[1].date_start)
+
+        with Form(mo) as mo_form:
+            with mo_form.workorder_ids.new() as workorder:
+                workorder.name = "OP3"
+                workorder.workcenter_id = self.workcenter_2
+            mo = mo_form.save()
+
+        self.assertTrue(mo.workorder_ids[0].date_start)
+        self.assertTrue(mo.workorder_ids[2].date_start)
+
     def test_compute_product_id(self):
         """
             Tests the creation of a production order automatically sets the product when the bom is provided,
@@ -5040,8 +5072,8 @@ class TestMrpOrder(TestMrpCommon):
 
         production.button_mark_done()
 
-        self.assertEqual(production.workorder_ids[0].date_finished, production.date_finished)
-        self.assertEqual(production.workorder_ids[0].leave_id.date_to, production.date_finished)
+        self.assertAlmostEqual(production.workorder_ids[0].date_finished, production.date_finished, delta=timedelta(seconds=2))
+        self.assertAlmostEqual(production.workorder_ids[0].leave_id.date_to, production.date_finished, delta=timedelta(seconds=2))
 
     def test_child_mo_after_qty_parent_mo_update(self):
         """
@@ -5097,9 +5129,36 @@ class TestMrpOrder(TestMrpCommon):
     def test_workcenter_with_resource_calendar_from_another_company(self):
         """Test that only the resource calendars from the same
         company as the work center can be set."""
-        resource_calendar = self.env['resource.calendar'].search([('company_id', 'not in', [self.workcenter_1.company_id.id, False])], limit=1)
+        new_company = self.env['res.company'].create({'name': "new company"})
+        resource_calendar = self.env['resource.calendar'].create({
+            'name': 'Default Calendar',
+            'company_id': new_company.id,
+            'hours_per_day': 24,
+        })
         with self.assertRaises(UserError):
             self.workcenter_1.resource_calendar_id, = resource_calendar
+
+    def test_workorder_without_product(self):
+        mo_form = Form(self.env['mrp.production'])
+
+        with mo_form.workorder_ids.new() as wo:
+            wo.name = "Cutting"
+            wo.workcenter_id = self.workcenter_1
+
+        mo_form.product_id = self.product_1
+        mo_form.product_qty = 1.0
+        mo = mo_form.save()
+
+        self.assertFalse(mo.workorder_ids)
+
+        with mo_form.workorder_ids.new() as wo:
+            wo.name = "Cutting"
+            wo.workcenter_id = self.workcenter_1
+        mo = mo_form.save()
+
+        self.assertTrue(mo.workorder_ids)
+        self.assertEqual(len(mo.workorder_ids), 1)
+        self.assertEqual(mo.product_id, wo.product_id)
 
 @tagged('-at_install', 'post_install')
 class TestTourMrpOrder(HttpCase):

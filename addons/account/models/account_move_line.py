@@ -1,5 +1,5 @@
 from collections import defaultdict
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from datetime import date
 import logging
 import re
@@ -844,7 +844,7 @@ class AccountMoveLine(models.Model):
     @api.depends('product_id', 'product_uom_id')
     def _compute_tax_ids(self):
         for line in self:
-            if line.display_type in ('line_section', 'line_note', 'payment_term'):
+            if line.display_type in ('line_section', 'line_note', 'payment_term') or line.is_imported:
                 continue
             # /!\ Don't remove existing taxes if there is no explicit taxes set on the account.
             if line.product_id or (line.display_type != 'discount' and (line.account_id.tax_ids or not line.tax_ids)):
@@ -1183,12 +1183,6 @@ class AccountMoveLine(models.Model):
             if account in (journal.default_account_id, journal.suspense_account_id):
                 continue
 
-            is_account_control_ok = not journal.account_control_ids or account in journal.account_control_ids
-
-            if not is_account_control_ok:
-                raise UserError(_("You cannot use this account (%s) in this journal, check the section 'Control-Access' under "
-                                  "tab 'Advanced Settings' on the related journal.", account.display_name))
-
     @api.constrains('account_id', 'tax_ids', 'tax_line_id', 'reconciled')
     def _check_off_balance(self):
         for line in self:
@@ -1308,6 +1302,8 @@ class AccountMoveLine(models.Model):
     # -------------------------------------------------------------------------
     # CRUD/ORM
     # -------------------------------------------------------------------------
+
+    @api.model
     def check_field_access_rights(self, operation, field_names):
         result = super().check_field_access_rights(operation, field_names)
         if not field_names:
@@ -1433,11 +1429,10 @@ class AccountMoveLine(models.Model):
         before = existing()
         yield
         after = existing()
-        protected = container.get('protected', {})
         for line in after:
             if (
                 (changed('amount_currency') or changed('currency_rate') or changed('move_type'))
-                and 'balance' not in protected.get(line, {})
+                and not self.env.is_protected(self._fields['balance'], line)
                 and (not changed('balance') or (line not in before and not line.balance))
             ):
                 balance = line.company_id.currency_id.round(line.amount_currency / line.currency_rate)
@@ -1455,11 +1450,12 @@ class AccountMoveLine(models.Model):
         container = {'records': self}
         move_container = {'records': moves}
         with moves._check_balanced(move_container),\
+             ExitStack() as exit_stack,\
              moves._sync_dynamic_lines(move_container),\
              self._sync_invoice(container):
             lines = super().create([self._sanitize_vals(vals) for vals in vals_list])
+            exit_stack.enter_context(self.env.protecting([protected for vals, line in zip(vals_list, lines) for protected in self.env['account.move']._get_protected_vals(vals, line)]))
             container['records'] = lines
-            container['protected'] = {line: set(vals.keys()) for line, vals in zip(lines, vals_list)}
 
         lines._check_tax_lock_date()
 
@@ -1527,8 +1523,9 @@ class AccountMoveLine(models.Model):
 
         move_container = {'records': self.move_id}
         with self.move_id._check_balanced(move_container),\
+             self.env.protecting(self.env['account.move']._get_protected_vals(vals, self)),\
              self.move_id._sync_dynamic_lines(move_container),\
-             self._sync_invoice({'records': self, 'protected': {line: set(vals.keys()) for line in self}}):
+             self._sync_invoice({'records': self}):
             self = line_to_write
             if not self:
                 return True
@@ -1569,7 +1566,6 @@ class AccountMoveLine(models.Model):
                                 body=msg,
                                 tracking_value_ids=tracking_value_ids
                             )
-
 
         return result
 

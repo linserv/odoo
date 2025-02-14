@@ -2629,6 +2629,15 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
             'amount_untaxed' : self.move_vals['amount_untaxed'],
         })
 
+    def test_out_invoice_switch_out_refund_3(self):
+        # Test to check that when switching from out_invoice to out_refund the fiscal position is kept
+        move = self.init_invoice('out_invoice')
+        move.fiscal_position_id = self.fiscal_pos_a.id
+
+        move.action_switch_move_type()
+
+        self.assertEqual(move.fiscal_position_id, self.fiscal_pos_a)
+        
     def test_out_invoice_reverse_move_tags(self):
         country = self.env.ref('base.us')
         tags = self.env['account.account.tag'].create([{
@@ -3662,6 +3671,47 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
         ]
         self.assertRecordValues(caba_move.line_ids, expected_values)
 
+    def test_out_invoice_caba_on_payment(self):
+        self.env.company.tax_exigibility = True
+        tax_waiting_account = self.env['account.account'].create({
+            'name': 'TAX_WAIT',
+            'code': 'TWAIT',
+            'account_type': 'liability_current',
+            'reconcile': True,
+        })
+        caba_tax = self.env['account.tax'].create({
+            'name': 'cash basis 10%',
+            'type_tax_use': 'sale',
+            'amount': 10,
+            'tax_exigibility': 'on_payment',
+            'cash_basis_transition_account_id': tax_waiting_account.id,
+        })
+        caba_tax.invoice_repartition_line_ids.account_id.reconcile = True
+        invoice = self.env['account.move'].create({
+            'move_type': 'out_invoice',
+            'partner_id': self.partner_a.id,
+            'invoice_line_ids': [
+                Command.create({
+                    'price_unit': 1000.0,
+                    'tax_ids': [Command.set(caba_tax.ids)],
+                })
+            ],
+        })
+        invoice.invoice_line_ids.tax_ids = caba_tax
+        invoice.action_post()
+        credit_note = invoice._reverse_moves()
+        credit_note.action_post()
+        receivable_lines = (invoice + credit_note).line_ids.filtered(lambda l: l.account_id == self.partner_a.property_account_receivable_id)
+        invoice_receivable_matching, refund_receivable_matching = receivable_lines.mapped('matching_number')
+        self.assertEqual(invoice_receivable_matching, refund_receivable_matching)
+        # The tax account should be reconciled with the CABA entries if they exist
+        # But ideally, they shouldn't exist since no cash was involved.
+        tax_lines = (invoice + credit_note).line_ids.filtered(lambda l: l.account_id == tax_waiting_account)
+        invoice_tax_matching, refund_tax_matching = tax_lines.mapped('matching_number')
+        self.assertNotEqual(invoice_tax_matching, refund_tax_matching)
+        self.assertTrue(all([invoice_tax_matching, refund_tax_matching, invoice_receivable_matching, refund_receivable_matching]))
+
+
     def test_tax_grid_remove_tax(self):
         # Add a tag to tax_sale_a
         tax_line_tag = self.env['account.account.tag'].create({
@@ -4071,46 +4121,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
         self.assertRecordValues(invoice.line_ids.filtered(lambda l: l.display_type == 'payment_term'), [
             {'account_id': receivable_account.id, 'tax_ids': []},
         ])
-
-    def test_invoice_journal_account_check_constraints(self):
-        """
-        Test account-journal constraint check is working as expected in a complex write operation
-        Setup:
-          - journal_a accepts account_a but not account_b
-          - journal_b accepts account_b but not account_a
-        We expect that constraints are checked as usual when creating/writing records, and in particular
-        changing account and journal at the same time should work
-        """
-
-        account_a = self.company_data['default_account_revenue'].copy()
-        journal_a = self.company_data['default_journal_sale'].copy({'default_account_id': account_a.id})
-        account_b = account_a.copy()
-        journal_b = journal_a.copy({'default_account_id': account_b.id})
-        journal_a.account_control_ids = account_a | self.company_data['default_account_tax_sale'] | self.company_data['default_account_receivable']
-        journal_b.account_control_ids = account_b | self.company_data['default_account_tax_sale'] | self.company_data['default_account_receivable']
-
-        # Should not raise
-        invoice = self.env['account.move'].with_context(default_move_type='out_invoice').create({
-            'journal_id': journal_a.id,
-            'partner_id': self.partner_a.id,
-            'invoice_line_ids': [
-                Command.create({
-                    'name': 'My super product.',
-                    'quantity': 1.0,
-                    'price_unit': 750.0,
-                    'account_id': account_a.id,
-                })
-            ]
-        })
-
-        # Should not raise
-        invoice.write({'journal_id': journal_b.id, 'invoice_line_ids': [Command.update(invoice.invoice_line_ids.id, {'account_id': account_b.id})]})
-
-        with self.assertRaises(UserError), self.cr.savepoint():
-            invoice.write({'journal_id': journal_a.id})
-        with self.assertRaises(UserError), self.cr.savepoint():
-            # we want to test the update of both records in the same write operation
-            invoice.write({'invoice_line_ids': [Command.update(invoice.invoice_line_ids.id, {'account_id': account_a.id})]})
 
     def test_discount_allocation_account_on_invoice(self):
         # Ensure two aml of display_type 'discount' are correctly created when setting an account for discounts in the settings

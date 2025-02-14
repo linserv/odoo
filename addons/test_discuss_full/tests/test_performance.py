@@ -217,7 +217,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
         self.channel_group_1 = Channel._create_group((self.users[0] + self.users[12]).partner_id.ids)
         # create livechats
         self.im_livechat_channel = self.env['im_livechat.channel'].sudo().create({'name': 'support', 'user_ids': [Command.link(self.users[0].id)]})
-        self.env['bus.presence'].create({'user_id': self.users[0].id, 'status': 'online'})  # make available for livechat (ignore leave)
+        self.env['mail.presence']._update_presence(self.users[0])
         self.authenticate('test1', self.password)
         self.channel_livechat_1 = Channel.browse(
             self.make_jsonrpc_request(
@@ -1251,6 +1251,8 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "default_subject": "general",
                 "email_from": '"Ernest Employee" <e.e@example.com>',
                 "id": last_message.id,
+                "incoming_email_cc": False,
+                "incoming_email_to": False,
                 "is_discussion": False,
                 "is_note": True,
                 "link_preview_ids": [],
@@ -1287,6 +1289,8 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "default_subject": "public channel 1",
                 "email_from": '"test2" <test2@example.com>',
                 "id": last_message.id,
+                "incoming_email_cc": False,
+                "incoming_email_to": False,
                 "is_discussion": False,
                 "is_note": True,
                 "link_preview_ids": [],
@@ -1323,6 +1327,8 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "default_subject": "public channel 2",
                 "email_from": '"Ernest Employee" <e.e@example.com>',
                 "id": last_message.id,
+                "incoming_email_cc": False,
+                "incoming_email_to": False,
                 "is_discussion": True,
                 "is_note": False,
                 "link_preview_ids": [],
@@ -1355,6 +1361,8 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "default_subject": "group restricted channel 1",
                 "email_from": '"Ernest Employee" <e.e@example.com>',
                 "id": last_message.id,
+                "incoming_email_cc": False,
+                "incoming_email_to": False,
                 "is_discussion": True,
                 "is_note": False,
                 "link_preview_ids": [],
@@ -1387,6 +1395,8 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "default_subject": "group restricted channel 2",
                 "email_from": '"Ernest Employee" <e.e@example.com>',
                 "id": last_message.id,
+                "incoming_email_cc": False,
+                "incoming_email_to": False,
                 "is_discussion": True,
                 "is_note": False,
                 "link_preview_ids": [],
@@ -1418,6 +1428,8 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "date": date,
                 "default_subject": "test1 Ernest Employee",
                 "id": last_message.id,
+                "incoming_email_cc": False,
+                "incoming_email_to": False,
                 "is_discussion": False,
                 "is_note": True,
                 "link_preview_ids": [],
@@ -1450,6 +1462,8 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "default_subject": "anon 2 Ernest Employee",
                 "email_from": False,
                 "id": last_message.id,
+                "incoming_email_cc": False,
+                "incoming_email_to": False,
                 "is_discussion": False,
                 "is_note": True,
                 "link_preview_ids": [],

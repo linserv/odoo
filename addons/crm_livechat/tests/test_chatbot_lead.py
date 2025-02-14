@@ -2,7 +2,7 @@
 
 from odoo import Command
 from odoo.addons.crm_livechat.tests import chatbot_common
-from odoo.tests.common import new_test_user, tagged
+from odoo.tests.common import tagged
 
 
 @tagged("post_install", "-at_install")
@@ -35,7 +35,7 @@ class CrmChatbotCase(chatbot_common.CrmChatbotCase):
         self.assertFalse(not_available_lead.user_id)
         self.assertEqual(discuss_channel.livechat_operator_id, chatbot_partner)
         # sales team member is available
-        self.env["bus.presence"].create({"user_id": self.user_employee.id, "status": "online"})
+        self.env["mail.presence"]._update_presence(self.user_employee)
         discuss_channel = self._play_session_with_lead()
         assigned_lead = self.env["crm.lead"].sudo().search([], limit=1, order="id desc")
         self.assertEqual(assigned_lead.user_id, self.user_employee)
@@ -151,7 +151,6 @@ class CrmChatbotCase(chatbot_common.CrmChatbotCase):
         self.start_tour(
             f"/im_livechat/support/{livechat_channel.id}", "crm_livechat.create_lead_from_chatbot"
         )
-        lead = self.env["crm.lead"].search([("channel_id", "=", livechat_channel.channel_ids.id)])
+        lead = self.env["crm.lead"].search([("origin_channel_id", "=", livechat_channel.channel_ids.id)])
         self.assertEqual(lead.name, "I'd like to know more about the CRM application.")
-        self.assertTrue(lead.channel_id)
-        self.assertTrue(lead.channel_id.has_crm_lead)
+        self.assertTrue(lead.origin_channel_id.has_crm_lead)

@@ -364,6 +364,16 @@ describe("Simple text", () => {
                 contentAfter: '<div>2a<span class="a">bx[]</span>e<br>f</div>',
             });
         });
+
+        test("should paste a text when content contains line breaks", async () => {
+            await testEditor({
+                contentBefore: "<div>[abc]</div>",
+                stepFunction: async (editor) => {
+                    pasteText(editor, "ab\ncd");
+                },
+                contentAfter: "<div>ab</div><div>cd[]</div>",
+            });
+        });
     });
 });
 
@@ -2546,6 +2556,10 @@ describe("link", () => {
             expect(cleanLinkArtifacts(getContent(el))).toBe(
                 `<p>abc <a href="${url}">${url}</a> def[]</p>`
             );
+            undo(editor);
+            expect(cleanLinkArtifacts(getContent(el))).toBe(
+                `<p placeholder='Type "/" for commands' class="o-we-hint">[]</p>`
+            );
         });
 
         test("should paste and transform image URL among text (collapsed)", async () => {
@@ -2576,6 +2590,10 @@ describe("link", () => {
             expect(cleanLinkArtifacts(getContent(el))).toBe(
                 `<p><a href="${url}">${url}</a> <a href="${videoUrl}">${videoUrl}</a> <a href="${imgUrl}">${imgUrl}</a>[]</p>`
             );
+            undo(editor);
+            expect(cleanLinkArtifacts(getContent(el))).toBe(
+                `<p placeholder='Type "/" for commands' class="o-we-hint">[]</p>`
+            );
         });
 
         test("should paste and transform multiple URLs (collapsed) (2)", async () => {
@@ -2585,6 +2603,10 @@ describe("link", () => {
             expect(".o-we-powerbox").toHaveCount(0);
             expect(cleanLinkArtifacts(getContent(el))).toBe(
                 `<p><a href="${url}">${url}</a> abc <a href="${videoUrl}">${videoUrl}</a> def <a href="${imgUrl}">${imgUrl}</a>[]</p>`
+            );
+            undo(editor);
+            expect(cleanLinkArtifacts(getContent(el))).toBe(
+                `<p placeholder='Type "/" for commands' class="o-we-hint">[]</p>`
             );
         });
 
