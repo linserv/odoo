@@ -934,7 +934,7 @@ class PosSession(models.Model):
             # revert the accounts because account.payment doesn't accept negative amount.
             outstanding_account, destination_account = destination_account, outstanding_account
 
-        account_payment = self.env['account.payment'].with_context({"pos_payment": True}).create({
+        account_payment = self.env['account.payment'].with_context(pos_payment=True).create({
             'amount': abs(amounts['amount']),
             'journal_id': payment_method.journal_id.id,
             'force_outstanding_account_id': outstanding_account.id,
@@ -1501,7 +1501,7 @@ class PosSession(models.Model):
         }
     
     def _get_captured_payments_domain(self):
-        return [('session_id', '=', self.id), ('pos_order_id.state', 'in', ['paid', 'invoiced'])]
+        return [('session_id', 'in', self.ids), ('pos_order_id.state', 'in', ['done', 'paid', 'invoiced'])]
 
     def open_frontend_cb(self):
         """Open the pos interface with config_id as an extra argument.
