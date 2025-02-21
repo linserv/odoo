@@ -1,19 +1,17 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from collections import defaultdict
-import time
-import re
 import logging
+import re
+import time
 
-from psycopg2 import errors as pgerrors
+from collections import defaultdict
 
-from odoo import api, fields, models, _
+from odoo import _, api, fields, models
+from odoo.exceptions import LockError, UserError, ValidationError
 from odoo.osv import expression
-from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT, mute_logger
-from odoo.exceptions import ValidationError, UserError
-from odoo.addons.base.models.res_partner import WARNING_MESSAGE, WARNING_HELP
-from odoo.tools import SQL, unique
+from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT, SQL, mute_logger, unique
+
+from odoo.addons.base.models.res_partner import WARNING_HELP, WARNING_MESSAGE
 from odoo.addons.base_vat.models.res_partner import _ref_vat
 
 _logger = logging.getLogger(__name__)
@@ -792,22 +790,15 @@ class ResPartner(models.Model):
             raise UserError(_("The partner cannot be deleted because it is used in Accounting"))
 
     def _increase_rank(self, field, n=1):
-        if self.ids and field in ['customer_rank', 'supplier_rank']:
-            try:
-                with self.env.cr.savepoint(flush=False), mute_logger('odoo.sql_db'):
-                    self.env.execute_query(SQL("""
-                        SELECT %(field)s FROM res_partner WHERE ID IN %(partner_ids)s FOR NO KEY UPDATE NOWAIT;
-                        UPDATE res_partner SET %(field)s = %(field)s + %(n)s
-                        WHERE id IN %(partner_ids)s
-                        """,
-                        field=SQL.identifier(field),
-                        partner_ids=tuple(self.ids),
-                        n=n,
-                    ))
-                    self.invalidate_recordset([field])
-                    self.modified([field])
-            except (pgerrors.LockNotAvailable, pgerrors.SerializationFailure):
-                _logger.debug('Another transaction already locked partner rows. Cannot update partner ranks.')
+        assert isinstance(n, int) and field in ('customer_rank', 'supplier_rank')
+        try:
+            self.lock_for_update(allow_referencing=True)
+        except LockError:
+            _logger.debug('Another transaction already locked partner rows. Cannot update partner ranks.')
+            return
+        records = self.sudo()
+        for record in records:
+            record[field] += n
 
     @api.model
     def _run_vat_test(self, vat_number, default_country, partner_is_company=True):
@@ -838,6 +829,14 @@ class ResPartner(models.Model):
         """
         return ""
 
+    def _get_frontend_writable_fields(self):
+        frontend_writable_fields = super()._get_frontend_writable_fields()
+        frontend_writable_fields.update({'invoice_sending_method', 'invoice_edi_format'})
+
+        return frontend_writable_fields
+
+    # TODO accounting/JCO, seems strange that this address validation logic is only there for pos, and
+    # not for standard address management on portal/ecommerce
     @api.model
     def get_partner_localisation_fields_required_to_invoice(self, country_id):
         """ Returns the list of fields that needs to be filled when creating an invoice for the selected country.

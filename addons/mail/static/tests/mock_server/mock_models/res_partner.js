@@ -1,6 +1,12 @@
 import { mailDataHelpers } from "@mail/../tests/mock_server/mail_mock_server";
 
-import { fields, getKwArgs, makeKwArgs, webModels } from "@web/../tests/web_test_helpers";
+import {
+    fields,
+    getKwArgs,
+    makeKwArgs,
+    webModels,
+    serverState,
+} from "@web/../tests/web_test_helpers";
 import { DEFAULT_MAIL_SEARCH_ID, DEFAULT_MAIL_VIEW_ID } from "./constants";
 
 /** @typedef {import("@web/../tests/web_test_helpers").ModelRecord} ModelRecord */
@@ -116,7 +122,7 @@ export class ResPartner extends webModels.ResPartner {
         const parent_channel = this.browse(channel.parent_channel_id);
         const allowed_group = parent_channel?.group_public_id ?? channel.group_public_id;
         if (allowed_group) {
-            extraDomain.push(["groups_id", "in", allowed_group]);
+            extraDomain.push(["group_ids", "in", allowed_group]);
         }
         const baseDomain = search
             ? ["|", ["name", "ilike", searchLower], ["email", "ilike", searchLower]]
@@ -148,7 +154,7 @@ export class ResPartner extends webModels.ResPartner {
         for (const partnerId of partners) {
             const data = {
                 name: users[partnerId]?.name,
-                groups_id: users[partnerId]?.groups_id.includes(allowed_group)
+                group_ids: users[partnerId]?.group_ids.includes(allowed_group)
                     ? allowed_group
                     : undefined,
             };
@@ -158,6 +164,9 @@ export class ResPartner extends webModels.ResPartner {
     }
 
     compute_im_status(partner) {
+        if (partner.id === serverState.odoobotId) {
+            return "bot";
+        }
         return partner.im_status;
     }
     /**

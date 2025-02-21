@@ -47,7 +47,7 @@ import psycopg2.errors
 import psycopg2.extensions
 from psycopg2.extras import Json
 
-from odoo.exceptions import AccessError, MissingError, ValidationError, UserError
+from odoo.exceptions import AccessError, LockError, MissingError, ValidationError, UserError
 from odoo.tools import (
     clean_context, config, date_utils,
     DEFAULT_SERVER_DATE_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT, format_list,
@@ -1102,7 +1102,9 @@ class BaseModel(metaclass=MetaModel):
             # Get all following rows which have relational values attached to
             # the current record (no non-relational values)
             record_span = itertools.takewhile(
-                only_o2m_values, itertools.islice(data, index + 1, None))
+                only_o2m_values,
+                (data[j] for j in range(index + 1, len(data))),
+            )
             # stitch record row back on for relational fields
             record_span = list(itertools.chain([row], record_span))
 
@@ -1448,12 +1450,16 @@ class BaseModel(metaclass=MetaModel):
 
     @api.model
     @api.readonly
-    def name_search(self, name='', args=None, operator='ilike', limit=100) -> list[tuple[int, str]]:
-        """ name_search(name='', args=None, operator='ilike', limit=100)
-
-        Search for records that have a display name matching the given
+    def name_search(
+        self,
+        name: str = '',
+        domain: DomainType | None = None,
+        operator: str = 'ilike',
+        limit: int = 100,
+    ) -> list[tuple[int, str]]:
+        """Search for records that have a display name matching the given
         ``name`` pattern when compared with the given ``operator``, while also
-        matching the optional search domain (``args``).
+        matching the optional search domain (``domain``).
 
         This is used for example to provide suggestions based on a partial
         value for a relational field. Should usually behave as the reverse of
@@ -1464,15 +1470,14 @@ class BaseModel(metaclass=MetaModel):
         the resulting search.
 
         :param str name: the name pattern to match
-        :param list args: optional search domain (see :meth:`~.search` for
-                          syntax), specifying further restrictions
+        :param list domain: optional search domain (see :meth:`~.search` for
+                            syntax), specifying further restrictions
         :param str operator: domain operator for matching ``name``, such as
                              ``'like'`` or ``'='``.
         :param int limit: optional max number of records to return
-        :rtype: list
         :return: list of pairs ``(id, display_name)`` for all matching records.
         """
-        domain = Domain('display_name', operator, name) & Domain(args or [])
+        domain = Domain('display_name', operator, name) & Domain(domain or Domain.TRUE)
         records = self.search_fetch(domain, ['display_name'], limit=limit)
         return [(record.id, record.display_name) for record in records.sudo()]
 
@@ -1911,7 +1916,7 @@ class BaseModel(metaclass=MetaModel):
 
         if field.relational:
             # groups is a recordset; determine order on groups's model
-            groups = self.env[field.comodel_name].browse([value.id for value in values])
+            groups = self.env[field.comodel_name].browse(value.id for value in values)
             values = group_expand(self, groups, domain).sudo()
             if read_group_order == groupby + ' desc':
                 values.browse(reversed(values._ids))
@@ -1953,7 +1958,7 @@ class BaseModel(metaclass=MetaModel):
         # add folding information if present
         if field.relational and groups._fold_name in groups._fields:
             fold = {group.id: group[groups._fold_name]
-                    for group in groups.browse([key for key in result if key])}
+                    for group in groups.browse(key for key in result if key)}
             for key, line in result.items():
                 line['__fold'] = fold.get(key, False)
 
@@ -3632,22 +3637,22 @@ class BaseModel(metaclass=MetaModel):
                     ))
                     continue
                 for name in regular_fields:
-                    corecord = record.sudo()[name]
-                    if corecord:
-                        domain = corecord._check_company_domain(companies) # pylint: disable=0601
-                        if domain and not corecord.with_context(active_test=False).filtered_domain(domain):
-                            inconsistencies.append((record, name, corecord))
+                    corecords = record.sudo()[name]
+                    if corecords:
+                        domain = corecords._check_company_domain(companies) # pylint: disable=0601
+                        if domain and corecords != corecords.with_context(active_test=False).filtered_domain(domain):
+                            inconsistencies.append((record, name, corecords))
             # The second part of the check (for property / company-dependent fields) verifies that the records
             # linked via those relation fields are compatible with the company that owns the property value, i.e.
             # the company for which the value is being assigned, i.e:
             #      `self.property_account_payable_id.company_id == self.env.company
             company = self.env.company
             for name in property_fields:
-                corecord = record.sudo()[name]
-                if corecord:
-                    domain = corecord._check_company_domain(company)
-                    if domain and not corecord.with_context(active_test=False).filtered_domain(domain):
-                        inconsistencies.append((record, name, corecord))
+                corecords = record.sudo()[name]
+                if corecords:
+                    domain = corecords._check_company_domain(company)
+                    if domain and corecords != corecords.with_context(active_test=False).filtered_domain(domain):
+                        inconsistencies.append((record, name, corecords))
 
         if inconsistencies:
             lines = [_("Incompatible companies on records:")]
@@ -5155,9 +5160,37 @@ class BaseModel(metaclass=MetaModel):
             return self
         query = Query(self.env, self._table, self._table_sql)
         query.add_where(SQL("%s IN %s", SQL.identifier(self._table, 'id'), tuple(ids)))
-        self.env.cr.execute(query.select())
-        valid_ids = set([r[0] for r in self._cr.fetchall()] + new_ids)
+        real_ids = (id_ for [id_] in self.env.execute_query(query.select()))
+        valid_ids = {*real_ids, *new_ids}
         return self.browse(i for i in self._ids if i in valid_ids)
+
+    @api.private
+    def lock_for_update(self, *, allow_referencing: bool = False) -> None:
+        """ Grab an exclusive write-lock to the rows with the given ids.
+
+        This avoids blocking processing on the records due to concurrent
+        modifications. If all records couldn't be locked, a `LockError`
+        exception is raised.
+
+        :param allow_referencing: Acquire a row lock which allows for other
+            transactions to reference this record. Use only when modifying
+            values that are not identifiers.
+        :raises: ``LockError`` when some records could not be locked
+        """
+        ids = {id_ for id_ in self._ids if id_}
+        if not ids:
+            return
+        query = Query(self.env, self._table, self._table_sql)
+        query.add_where(SQL("%s IN %s", SQL.identifier(self._table, 'id'), tuple(ids)))
+        # Use SKIP LOCKED instead of NOWAIT because the later aborts the
+        # transaction and we do not want to use SAVEPOINTS.
+        if allow_referencing:
+            lock_sql = SQL("FOR NO KEY UPDATE SKIP LOCKED")
+        else:
+            lock_sql = SQL("FOR UPDATE SKIP LOCKED")
+        rows = self.env.execute_query(SQL("%s %s", query.select(), lock_sql))
+        if len(rows) != len(ids):
+            raise LockError(self.env._("Cannot grab a lock on records"))
 
     def _has_cycle(self, field_name=None) -> bool:
         """
@@ -5555,7 +5588,7 @@ class BaseModel(metaclass=MetaModel):
         return self.with_context(allowed_company_ids=allowed_company_ids)
 
     @api.private
-    def with_context(self, *args, **kwargs) -> Self:
+    def with_context(self, ctx: dict[str, typing.Any] | None = None, /, **kwargs) -> Self:
         """ with_context([context][, **overrides]) -> Model
 
         Returns a new version of this recordset attached to an extended
@@ -5575,23 +5608,22 @@ class BaseModel(metaclass=MetaModel):
 
             The returned recordset has the same prefetch object as ``self``.
         """  # noqa: RST210
-        if (args and 'force_company' in args[0]) or 'force_company' in kwargs:
-            _logger.warning(
-                "Context key 'force_company' is no longer supported. "
+        context = dict(ctx if ctx is not None else self.env.context, **kwargs)
+        if 'force_company' in context:
+            warnings.warn(
+                "Since 19.0, context key 'force_company' is no longer supported. "
                 "Use with_company(company) instead.",
-                stack_info=True,
+                DeprecationWarning,
             )
-        if (args and 'company' in args[0]) or 'company' in kwargs:
-            _logger.warning(
+        if 'company' in context:
+            warnings.warn(
                 "Context key 'company' is not recommended, because "
                 "of its special meaning in @depends_context.",
-                stack_info=True,
             )
-        context = dict(args[0] if args else self._context, **kwargs)
-        if 'allowed_company_ids' not in context and 'allowed_company_ids' in self._context:
+        if 'allowed_company_ids' not in context and 'allowed_company_ids' in self.env.context:
             # Force 'allowed_company_ids' to be kept when context is overridden
             # without 'allowed_company_ids'
-            context['allowed_company_ids'] = self._context['allowed_company_ids']
+            context['allowed_company_ids'] = self.env.context['allowed_company_ids']
         return self.with_env(self.env(context=context))
 
     @api.private
@@ -6121,24 +6153,45 @@ class BaseModel(metaclass=MetaModel):
 
     def __iter__(self) -> typing.Iterator[Self]:
         """ Return an iterator over ``self``. """
-        if len(self._ids) > PREFETCH_MAX and self._prefetch_ids is self._ids:
-            for ids in split_every(PREFETCH_MAX, self._ids):
-                for id_ in ids:
-                    yield self.__class__(self.env, (id_,), ids)
+        ids = self._ids
+        size = len(ids)
+        if size <= 1:
+            # detect and handle small recordsets (single `1f`)
+            # early return if no records and avoid allocation if we have a one
+            if size == 1:
+                yield self
+            return
+        cls = self.__class__
+        env = self.env
+        prefetch_ids = self._prefetch_ids
+        if size > PREFETCH_MAX and prefetch_ids is ids:
+            for sub_ids in split_every(PREFETCH_MAX, ids):
+                for id_ in sub_ids:
+                    yield cls(env, (id_,), sub_ids)
         else:
-            for id_ in self._ids:
-                yield self.__class__(self.env, (id_,), self._prefetch_ids)
+            for id_ in ids:
+                yield cls(env, (id_,), prefetch_ids)
 
     def __reversed__(self) -> typing.Iterator[Self]:
         """ Return an reversed iterator over ``self``. """
-        if len(self._ids) > PREFETCH_MAX and self._prefetch_ids is self._ids:
-            for ids in split_every(PREFETCH_MAX, reversed(self._ids)):
-                for id_ in ids:
-                    yield self.__class__(self.env, (id_,), ids)
-        elif self._ids:
-            prefetch_ids = ReversedIterable(self._prefetch_ids)
-            for id_ in reversed(self._ids):
-                yield self.__class__(self.env, (id_,), prefetch_ids)
+        # same as __iter__ but reversed
+        ids = self._ids
+        size = len(ids)
+        if size <= 1:
+            if size == 1:
+                yield self
+            return
+        cls = self.__class__
+        env = self.env
+        prefetch_ids = self._prefetch_ids
+        if size > PREFETCH_MAX and prefetch_ids is ids:
+            for sub_ids in split_every(PREFETCH_MAX, reversed(ids)):
+                for id_ in sub_ids:
+                    yield cls(env, (id_,), sub_ids)
+        else:
+            prefetch_ids = ReversedIterable(prefetch_ids)
+            for id_ in reversed(ids):
+                yield cls(env, (id_,), prefetch_ids)
 
     def __contains__(self, item):
         """ Test whether ``item`` (record or field name) is an element of ``self``.
@@ -6182,7 +6235,7 @@ class BaseModel(metaclass=MetaModel):
             if self._name != other._name:
                 raise TypeError(f"inconsistent models in: {self} - {other}")
             other_ids = set(other._ids)
-            return self.browse([id for id in self._ids if id not in other_ids])
+            return self.browse(id_ for id_ in self._ids if id_ not in other_ids)
         except AttributeError:
             raise TypeError(f"unsupported operand types in: {self} - {other!r}")
 
@@ -6194,7 +6247,7 @@ class BaseModel(metaclass=MetaModel):
             if self._name != other._name:
                 raise TypeError(f"inconsistent models in: {self} & {other}")
             other_ids = set(other._ids)
-            return self.browse(OrderedSet(id for id in self._ids if id in other_ids))
+            return self.browse(OrderedSet(id_ for id_ in self._ids if id_ in other_ids))
         except AttributeError:
             raise TypeError(f"unsupported operand types in: {self} & {other!r}")
 

@@ -374,7 +374,7 @@
                         <filter string="Matching" name="group_by_matching" domain="[]" context="{'group_by': 'matching_number'}"/>
                     </group>
                     <searchpanel class="account_root w-auto">
-                        <field name="account_root_id" icon="fa-filter" groupby="account_id" limit="0"/>
+                        <field name="account_root_id" icon="fa-filter" groupby="account_id" limit="false"/>
                     </searchpanel>
                 </search>
             </field>
@@ -412,7 +412,6 @@
                     <field name="move_type" column_invisible="True"/>
                     <field name="is_same_currency" column_invisible="True"/>
                     <field name="is_account_reconcile" column_invisible="True"/>
-                    <field name="currency_id" groups="!base.group_multi_currency" column_invisible="True"/>
                     <field name="parent_state" column_invisible="True"/>
                     <groupby name="partner_id">
                         <button name="edit" type="edit" icon="fa-edit" title="Edit"/>
@@ -1159,7 +1158,7 @@
                                                options="{'product_field': 'product_id', 'account_field': 'account_id', 'amount_field': 'price_subtotal'}"
                                                business_domain_compute="parent.move_type in ['out_invoice', 'out_refund', 'out_receipt'] and 'invoice' or parent.move_type in ['in_invoice', 'in_refund', 'in_receipt'] and 'bill' or 'general'"/>
                                         <field name="quantity" optional="show"/>
-                                        <field name="product_uom_id" groups="uom.group_uom" optional="show" width="92px" options="{'no_create': True}" widget="many2one_uom"/>
+                                        <field name="product_uom_id" groups="uom.group_uom" optional="show" width="92px" options="{'no_create': True, 'quantity_field': 'quantity'}" widget="many2one_uom"/>
                                         <!-- /l10n_in_edi.test_edi_json -->
                                         <!-- required for @api.onchange('product_id') -->
                                         <field name="product_uom_id" column_invisible="True"/>
@@ -1170,6 +1169,10 @@
                                                context="{'append_type_to_tax_name': not parent.invoice_filter_type_domain, 'active_test': True}"
                                                options="{'no_create': True}"
                                                optional="show"/>
+                                        <field name="deductible_amount"
+                                               column_invisible="parent.move_type not in ['in_invoice', 'in_refund']"
+                                               string="Professional %"
+                                               optional="hide"/>
                                         <field name="price_subtotal"
                                                column_invisible="parent.move_type not in ['in_invoice', 'in_refund', 'in_receipt'] and parent.company_price_include == 'tax_included'"
                                                string="Amount"/>
@@ -1721,7 +1724,7 @@
         <record id="action_automatic_entry_change_account" model="ir.actions.server">
             <field name="name">Move to Account</field>
             <field name="model_id" ref="account.model_account_move_line"/>
-            <field name="groups_id" eval="[(4, ref('account.group_account_user'))]"/>
+            <field name="group_ids" eval="[(4, ref('account.group_account_user'))]"/>
             <field name="binding_model_id" ref="account.model_account_move_line"/>
             <field name="state">code</field>
             <field name="code">action = records.action_automatic_entry('change_account')</field>
@@ -1730,7 +1733,7 @@
         <record id="action_automatic_entry_change_period" model="ir.actions.server">
             <field name="name">Change Period</field>
             <field name="model_id" ref="account.model_account_move_line"/>
-            <field name="groups_id" eval="[(4, ref('account.group_account_user'))]"/>
+            <field name="group_ids" eval="[(4, ref('account.group_account_user'))]"/>
             <field name="binding_model_id" ref="account.model_account_move_line"/>
             <field name="state">code</field>
             <field name="code">action = records.action_automatic_entry('change_period')</field>
@@ -2015,7 +2018,7 @@
         <record model="ir.actions.server" id="action_move_switch_move_type">
             <field name="name">Switch into invoice/credit note</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="groups_id" eval="[(4, ref('account.group_account_invoice'))]"/>
+            <field name="group_ids" eval="[(4, ref('account.group_account_invoice'))]"/>
             <field name="binding_model_id" ref="account.model_account_move" />
             <field name="state">code</field>
             <field name="binding_view_types">form</field>
@@ -2028,7 +2031,7 @@ if records:
         <record model="ir.actions.server" id="action_move_force_register_payment">
             <field name="name">Pay</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="groups_id" eval="[(4, ref('account.group_account_invoice'))]"/>
+            <field name="group_ids" eval="[(4, ref('account.group_account_invoice'))]"/>
             <field name="binding_model_id" ref="account.model_account_move" />
             <field name="state">code</field>
             <field name="binding_view_types">form</field>
@@ -2041,7 +2044,7 @@ if records:
         <record model="ir.actions.server" id="action_move_block_payment">
             <field name="name">(Un)Block Payment</field>
             <field name="model_id" ref="account.model_account_move"/>
-            <field name="groups_id" eval="[(4, ref('account.group_account_invoice'))]"/>
+            <field name="group_ids" eval="[(4, ref('account.group_account_invoice'))]"/>
             <field name="binding_model_id" ref="account.model_account_move" />
             <field name="state">code</field>
             <field name="binding_view_types">form</field>

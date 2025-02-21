@@ -144,7 +144,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
         self.users = self.env['res.users'].create([
             {
                 'email': 'e.e@example.com',
-                'groups_id': [Command.link(self.group_user.id)],
+                'group_ids': [Command.link(self.group_user.id)],
                 'login': 'emp',
                 'name': 'Ernest Employee',
                 'notification_type': 'inbox',
@@ -227,7 +227,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                     "channel_id": self.im_livechat_channel.id,
                     "previous_operator_id": self.users[0].partner_id.id,
                 },
-            )["discuss.channel"][0]["id"]
+            )["channel_id"]
         )
         self.channel_livechat_1.with_user(self.users[1]).message_post(body="test")
         self.authenticate(None, None)
@@ -243,7 +243,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                         "channel_id": self.im_livechat_channel.id,
                         "previous_operator_id": self.users[0].partner_id.id,
                     },
-                )["discuss.channel"][0]["id"]
+                )["channel_id"]
             )
         self.guest = self.channel_livechat_2.channel_member_ids.guest_id.sudo()
         self.make_jsonrpc_request("/mail/message/post", {
@@ -591,7 +591,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "livechat_active": False,
                 "livechat_operator_id": False,
                 "livechatChannel": False,
-                "member_count": len(self.group_user.users),
+                "member_count": len(self.group_user.all_user_ids),
                 "message_needaction_counter_bus_id": bus_last_id,
                 "message_needaction_counter": 0,
                 "mute_until_dt": False,
@@ -1616,6 +1616,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 ),
                 "country": self.env.ref("base.in").id,
                 "id": user.partner_id.id,
+                "im_status": "offline",
                 "isInternalUser": True,
                 "is_company": False,
                 "is_public": False,

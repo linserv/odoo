@@ -15,7 +15,10 @@ class LivechatChatbotScriptController(http.Controller):
             return None
         chatbot_language = chatbot._get_chatbot_language()
         message = discuss_channel.with_context(lang=chatbot_language)._chatbot_restart(chatbot)
-        return Store(message, for_current_user=True).get_result()
+        return {
+            "message_id": message.id,
+            "store_data": Store(message, for_current_user=True).get_result(),
+        }
 
     @http.route("/chatbot/answer/save", type="jsonrpc", auth="public")
     @add_guest_to_context
@@ -59,6 +62,8 @@ class LivechatChatbotScriptController(http.Controller):
                 next_step = chatbot.script_step_ids[:1]
 
         if not next_step:
+            # sudo - discuss.channel: marking the channel as closed as part of the chat bot flow
+            discuss_channel.sudo().livechat_active = False
             return None
         # sudo: discuss.channel - updating current step on the channel is allowed
         discuss_channel.sudo().chatbot_current_step_id = next_step.id

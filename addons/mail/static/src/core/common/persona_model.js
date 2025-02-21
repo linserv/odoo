@@ -3,6 +3,8 @@ import { imageUrl } from "@web/core/utils/urls";
 import { rpc } from "@web/core/network/rpc";
 import { debounce } from "@web/core/utils/timing";
 
+const { DateTime } = luxon;
+
 /**
  * @typedef {'offline' | 'bot' | 'online' | 'away' | 'im_partner' | undefined} ImStatus
  * @typedef Data
@@ -42,7 +44,7 @@ export class Persona extends Record {
     /** @type {boolean | undefined} */
     is_company;
     /** @type {string} */
-    landlineNumber;
+    phone;
     debouncedSetImStatus;
     storeAsTrackedImStatus = Record.one("Store", {
         /** @this {import("models").Persona} */
@@ -88,6 +90,8 @@ export class Persona extends Record {
             }
         },
     });
+    /** @type {luxon.DateTime} */
+    last_poll = Record.attr(undefined, { type: "datetime" });
     /** @type {boolean} */
     is_public;
     /** @type {'email' | 'inbox'} */
@@ -96,14 +100,7 @@ export class Persona extends Record {
     isInternalUser = false;
     /** @type {luxon.DateTime} */
     write_date = Record.attr(undefined, { type: "datetime" });
-    groups_id = Record.many("res.groups", { inverse: "personas" });
-
-    /**
-     * @returns {boolean}
-     */
-    get hasPhoneNumber() {
-        return Boolean(this.landlineNumber);
-    }
+    group_ids = Record.many("res.groups", { inverse: "personas" });
 
     get emailWithoutDomain() {
         return this.email.substring(0, this.email.lastIndexOf("@"));
@@ -148,6 +145,9 @@ export class Persona extends Record {
     }
 
     updateImStatus(newStatus) {
+        if (newStatus === "offline") {
+            this.last_poll = DateTime.now();
+        }
         this.im_status = newStatus;
     }
 }

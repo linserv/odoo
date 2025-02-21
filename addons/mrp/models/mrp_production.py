@@ -202,7 +202,7 @@ class MrpProduction(models.Model):
         help='Technical field to check when we can reserve quantities')
     user_id = fields.Many2one(
         'res.users', 'Responsible', default=lambda self: self.env.user,
-        domain=lambda self: [('groups_id', 'in', self.env.ref('mrp.group_mrp_user').id)])
+        domain=lambda self: [('all_group_ids', 'in', self.env.ref('mrp.group_mrp_user').id)])
     company_id = fields.Many2one(
         'res.company', 'Company', default=lambda self: self.env.company,
         index=True, required=True)
@@ -1355,7 +1355,7 @@ class MrpProduction(models.Model):
     def set_qty_producing(self):
         # This method is used to call `_set_lot_producing` when the onchange doesn't apply.
         self.ensure_one()
-        self._set_qty_producing()
+        self._set_qty_producing(False)
 
     def _set_lot_producing(self):
         self.ensure_one()
@@ -1432,7 +1432,7 @@ class MrpProduction(models.Model):
         self.ensure_one()
         self._set_lot_producing()
         if self.product_id.tracking == 'serial':
-            self._set_qty_producing()
+            self._set_qty_producing(False)
         if self.picking_type_id.auto_print_generated_mrp_lot:
             return self._autoprint_generated_lot(self.lot_producing_id)
 

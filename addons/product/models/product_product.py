@@ -590,14 +590,14 @@ class ProductProduct(models.Model):
         return combine(domains)
 
     @api.model
-    def name_search(self, name='', args=None, operator='ilike', limit=100):
+    def name_search(self, name='', domain=None, operator='ilike', limit=100):
         if not name:
-            return super().name_search(name, args, operator, limit)
+            return super().name_search(name, domain, operator, limit)
         # search progressively by the most specific attributes
         positive_operators = ['=', 'ilike', '=ilike', 'like', '=like']
         is_positive = operator not in expression.NEGATIVE_TERM_OPERATORS
         products = self.browse()
-        domain = args or []
+        domain = domain or []
         if operator in positive_operators:
             products = self.search_fetch(expression.AND([domain, [('default_code', '=', name)]]), ['display_name'], limit=limit) \
                 or self.search_fetch(expression.AND([domain, [('barcode', '=', name)]]), ['display_name'], limit=limit)
@@ -645,6 +645,8 @@ class ProductProduct(models.Model):
 
     @api.readonly
     def action_open_label_layout(self):
+        if any(product.type == 'service' for product in self):
+            raise ValidationError(_('Labels cannot be printed for products of service type'))
         action = self.env['ir.actions.act_window']._for_xml_id('product.action_open_label_layout')
         action['context'] = {'default_product_ids': self.ids}
         return action

@@ -38,6 +38,7 @@ export class CalendarArchParser {
         let isTimeHidden = false;
         let formViewId = false;
         let showDatePicker = true;
+        let monthOverflow = true;
         const popoverFieldNodes = {};
         const filtersInfo = {};
 
@@ -116,6 +117,9 @@ export class CalendarArchParser {
                     if (node.hasAttribute("show_date_picker")) {
                         showDatePicker = exprToBoolean(node.getAttribute("show_date_picker"));
                     }
+                    if (node.hasAttribute("month_overflow")) {
+                        monthOverflow = exprToBoolean(node.getAttribute("month_overflow"));
+                    }
 
                     break;
                 }
@@ -151,6 +155,7 @@ export class CalendarArchParser {
                                 resModel: field.relation,
                                 writeFieldName: null,
                                 writeResModel: null,
+                                context: fieldInfo.context || "{}",
                             };
                             filterInfo = filtersInfo[fieldName];
                         }
@@ -203,6 +208,7 @@ export class CalendarArchParser {
             quickCreateViewId,
             isDateHidden,
             isTimeHidden,
+            monthOverflow,
             popoverFieldNodes,
             scale,
             scales,

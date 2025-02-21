@@ -116,7 +116,7 @@ class StockQuant(models.Model):
     is_outdated = fields.Boolean('Quantity has been moved since last count', compute='_compute_is_outdated', search='_search_is_outdated')
     user_id = fields.Many2one(
         'res.users', 'Assigned To', help="User assigned to do product count.",
-        domain=lambda self: [('groups_id', 'in', self.env.ref('stock.group_stock_user').id)])
+        domain=lambda self: [('all_group_ids', 'in', self.env.ref('stock.group_stock_user').id)])
 
     @api.depends('quantity', 'reserved_quantity')
     def _compute_available_quantity(self):
@@ -1049,11 +1049,12 @@ class StockQuant(models.Model):
 
         quant = None
         if quants:
-            # see _acquire_one_job for explanations
-            self._cr.execute("SELECT id FROM stock_quant WHERE id IN %s ORDER BY lot_id LIMIT 1 FOR NO KEY UPDATE SKIP LOCKED", [tuple(quants.ids)])
-            stock_quant_result = self._cr.fetchone()
-            if stock_quant_result:
-                quant = self.browse(stock_quant_result[0])
+            # quants are already ordered in _gather
+            # lock the first available, see _acquire_one_job for explanations
+            select = quants._as_query(ordered=True).select()
+            select = SQL("%s LIMIT 1 FOR NO KEY UPDATE SKIP LOCKED", select)
+            for [quant_id] in self.env.execute_query(select):
+                quant = self.browse(quant_id)
 
         if quant:
             vals = {'in_date': in_date}
@@ -1539,10 +1540,11 @@ class StockQuantPackage(models.Model):
         for package in self:
             package.location_id = False
             package.company_id = False
-            if package.quant_ids:
-                package.location_id = package.quant_ids[0].location_id
-                if all(q.company_id == package.quant_ids[0].company_id for q in package.quant_ids):
-                    package.company_id = package.quant_ids[0].company_id
+            quants = package.quant_ids.filtered(lambda q: float_compare(q.quantity, 0, precision_rounding=q.product_uom_id.rounding) > 0)
+            if quants:
+                package.location_id = quants[0].location_id
+                if all(q.company_id == quants[0].company_id for q in package.quant_ids):
+                    package.company_id = quants[0].company_id
 
     @api.depends('quant_ids.owner_id')
     def _compute_owner_id(self):

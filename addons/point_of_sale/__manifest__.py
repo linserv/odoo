@@ -21,6 +21,8 @@
         'wizard/pos_payment.xml',
         'wizard/pos_close_session_wizard.xml',
         'wizard/pos_daily_sales_reports.xml',
+        'wizard/pos_confirmation_wizard.xml',
+        'wizard/pos_make_invoice.xml',
         'views/pos_assets_index.xml',
         'views/point_of_sale_report.xml',
         'views/point_of_sale_view.xml',
@@ -101,6 +103,7 @@
             'point_of_sale/static/src/proxy_trap.js',
             'point_of_sale/static/src/lazy_getter.js',
             'point_of_sale/static/src/app/services/data_service.js',
+            'point_of_sale/static/src/app/utils/numbers.js',
 
             'point_of_sale/static/src/app/utils/html-to-image.js',
             'point_of_sale/static/src/app/services/render_service.js',

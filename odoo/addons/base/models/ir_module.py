@@ -86,6 +86,7 @@ class IrModuleCategory(models.Model):
     parent_id = fields.Many2one('ir.module.category', string='Parent Application', index=True)
     child_ids = fields.One2many('ir.module.category', 'parent_id', string='Child Applications')
     module_ids = fields.One2many('ir.module.module', 'category_id', string='Modules')
+    group_ids = fields.One2many('res.groups', 'category_id', string='Group set')
     description = fields.Text(string='Description', translate=True)
     sequence = fields.Integer(string='Sequence')
     visible = fields.Boolean(string='Visible', default=True)
@@ -567,7 +568,7 @@ class IrModuleModule(models.Model):
             # This is done because the installation/uninstallation/upgrade can modify a currently
             # running cron job and prevent it from finishing, and since the ir_cron table is locked
             # during execution, the lock won't be released until timeout.
-            self._cr.execute("SELECT * FROM ir_cron FOR UPDATE NOWAIT")
+            self.env.cr.execute("SELECT FROM ir_cron FOR UPDATE NOWAIT")
         except psycopg2.OperationalError:
             raise UserError(_("Odoo is currently processing a scheduled action.\n"
                               "Module operations are not possible at this time, "

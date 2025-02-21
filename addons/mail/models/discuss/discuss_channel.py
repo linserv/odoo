@@ -430,14 +430,14 @@ class DiscussChannel(models.Model):
         """ Return new members per channel ID """
         return dict(
             (channel.id,
-             ((channel.group_ids.users.partner_id.filtered(lambda p: p.active) - channel.channel_partner_ids).ids))
+             ((channel.group_ids.all_user_ids.partner_id.filtered(lambda p: p.active) - channel.channel_partner_ids).ids))
                 for channel in self
             )
 
     def action_unfollow(self):
         self._action_unfollow(self.env.user.partner_id)
 
-    def _action_unfollow(self, partner=None, guest=None):
+    def _action_unfollow(self, partner=None, guest=None, post_leave_message=True):
         self.ensure_one()
         self.message_unsubscribe(partner.ids)
         custom_store = Store(
@@ -452,13 +452,14 @@ class DiscussChannel(models.Model):
         if not member:
             (partner or guest)._bus_send_store(custom_store)
             return
-        notification = Markup('<div class="o_mail_notification">%s</div>') % _(
-            "left the channel"
-        )
-        # sudo: mail.message - post as sudo since the user just unsubscribed from the channel
-        member.channel_id.sudo().message_post(
-            body=notification, subtype_xmlid="mail.mt_comment", author_id=partner.id
-        )
+        if post_leave_message:
+            notification = Markup('<div class="o_mail_notification">%s</div>') % _(
+                "left the channel"
+            )
+            # sudo: mail.message - post as sudo since the user just unsubscribed from the channel
+            member.channel_id.sudo().message_post(
+                body=notification, subtype_xmlid="mail.mt_comment", author_id=partner.id
+            )
         # send custom store after message_post to avoid is_pinned reset to True
         member._bus_send_store(custom_store)
         member.unlink()
@@ -1347,7 +1348,8 @@ class DiscussChannel(models.Model):
             "%(new_line)sType %(bold_start)s@username%(bold_end)s to mention someone, and grab their attention."
             "%(new_line)sType %(bold_start)s#channel%(bold_end)s to mention a channel."
             "%(new_line)sType %(bold_start)s/command%(bold_end)s to execute a command."
-            "%(new_line)sType %(bold_start)s:shortcut%(bold_end)s to insert a canned response in your message.",
+            "%(new_line)sType %(bold_start)s::shortcut%(bold_end)s to insert a canned response in your message."
+            "%(new_line)sType %(bold_start)s:emoji:%(bold_end)s to insert an emoji in your message.",
             bold_start=Markup("<b>"),
             bold_end=Markup("</b>"),
             new_line=Markup("<br>"),

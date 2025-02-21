@@ -388,7 +388,7 @@ class TestMrpOrder(TestMrpCommon):
     def test_update_quantity_4(self):
         """ Workcenter 1 has 10' start time and 5' stop time """
         # Required for `workerorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         bom = self.env['mrp.bom'].create({
             'product_id': self.product_6.id,
             'product_tmpl_id': self.product_6.product_tmpl_id.id,
@@ -454,7 +454,7 @@ class TestMrpOrder(TestMrpCommon):
     def test_qty_producing(self):
         """Qty producing should be the qty remain to produce, instead of 0"""
         # Required for `workerorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         bom = self.env['mrp.bom'].create({
             'product_id': self.product_6.id,
             'product_tmpl_id': self.product_6.product_tmpl_id.id,
@@ -1022,7 +1022,7 @@ class TestMrpOrder(TestMrpCommon):
         Check qty producing update and moves finished values.
         """
         # Required for `byproduct_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_byproducts')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_byproducts')
         dozen = self.env.ref('uom.product_uom_dozen')
         self.byproduct1 = self.env['product.product'].create({
             'name': 'Byproduct 1',
@@ -1643,7 +1643,7 @@ class TestMrpOrder(TestMrpCommon):
             update the qty_producing and mark their respective operations from Consume
             In Operation as done directly through the WO record
         """
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_byproducts')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_byproducts')
         demo = self.env['product.product'].create({
             'name': 'DEMO'
         })
@@ -2074,7 +2074,7 @@ class TestMrpOrder(TestMrpCommon):
         # Despite the purpose of this test is to use multi uom
         # tests the production choose the right uoms on all models without
         # having the uom fields in the interface views
-        self.env.user.groups_id -= self.env.ref('uom.group_uom')
+        self.env.user.group_ids -= self.env.ref('uom.group_uom')
         for component in [consumable_component, storable_component]:
             bom = self.env['mrp.bom'].create({
                 'product_tmpl_id': product.product_tmpl_id.id,
@@ -2703,7 +2703,7 @@ class TestMrpOrder(TestMrpCommon):
         """
         # First production, the default is 60 and there is 0 productions of that operation
         # Required for `workorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         production_form = Form(self.env['mrp.production'])
         production_form.bom_id = self.bom_4
         production = production_form.save()
@@ -2751,7 +2751,7 @@ class TestMrpOrder(TestMrpCommon):
         the two are equivalent (1 done with capacity 2 in 10mn = 2 done with capacity 2 in 10mn)
         """
         # Required for `workorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         production_form = Form(self.env['mrp.production'])
         production_form.bom_id = self.bom_5
         production = production_form.save()
@@ -2804,7 +2804,7 @@ class TestMrpOrder(TestMrpCommon):
         ...
         """
         # Required for `workorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         production_form = Form(self.env['mrp.production'])
         production_form.bom_id = self.bom_6
         production = production_form.save()
@@ -3135,7 +3135,7 @@ class TestMrpOrder(TestMrpCommon):
             Check that the work order is started only once when clicking the start button several times.
         """
         # Required for `workorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         production_form = Form(self.env['mrp.production'])
         production_form.bom_id = self.bom_2
         production_form.product_qty = 1
@@ -3245,7 +3245,7 @@ class TestMrpOrder(TestMrpCommon):
         WO should be postponed.
         """
         # Required for `workorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         mos = self.env['mrp.production']
         for _ in range(2):
             mo_form = Form(self.env['mrp.production'])
@@ -3277,7 +3277,7 @@ class TestMrpOrder(TestMrpCommon):
         WO should be postponed.
         """
         # Required for `workorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         mos = self.env['mrp.production']
         for _ in range(2):
             mo_form = Form(self.env['mrp.production'])
@@ -3324,7 +3324,7 @@ class TestMrpOrder(TestMrpCommon):
         """
 
         # Required for `workorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
 
         mos = self.env['mrp.production']
         for _ in range(2):
@@ -3467,7 +3467,7 @@ class TestMrpOrder(TestMrpCommon):
         """
             Test, when writing to a confirmed MO, that all workorders that are expected to be planned are planned.
         """
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
 
         mo_form = Form(self.env['mrp.production'])
         mo_form.product_id = self.product_8
@@ -3611,7 +3611,7 @@ class TestMrpOrder(TestMrpCommon):
         """
         Test that the operation type set on the bom is set in the manufacturing order
         when selecting the BoM"""
-        self.env.user.groups_id += self.env.ref("stock.group_adv_location")
+        self.env.user.group_ids += self.env.ref("stock.group_adv_location")
         picking_type = self.env['stock.picking.type'].create({
             'name': 'new_picking_type',
             'code': 'internal',
@@ -3730,7 +3730,7 @@ class TestMrpOrder(TestMrpCommon):
         """ Test that the duraction expected is correctly computed when specific capacities are defined on the workcenter.
         """
         # Required for `workorder_ids` to be visible in the view
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         self.workcenter_2.update({
             'time_start': 10,
             'time_stop': 20,
@@ -4681,7 +4681,7 @@ class TestMrpOrder(TestMrpCommon):
 
     def _prepare_report_values(self, qty_final=5, qty_base_1=4, qty_base_2=1, mto=False, bom_2=False, extra_component=False, extra_operation=False):
         grp_multi_step_rule = self.env.ref('stock.group_adv_location')
-        self.env.user.write({'groups_id': [(3, grp_multi_step_rule.id)]})
+        self.env.user.write({'group_ids': [(3, grp_multi_step_rule.id)]})
         manufacture_route = self.env.ref('mrp.route_warehouse0_manufacture')
         routes = [Command.link(manufacture_route.id)]
         if mto:
@@ -4931,7 +4931,7 @@ class TestMrpOrder(TestMrpCommon):
         # Change the BoM UoM to be Dozens instead of Units
         self.bom_4.product_uom_id = self.uom_dozen
 
-        self.env.user.groups_id += self.env.ref('mrp.group_mrp_routings')
+        self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
         production_form = Form(self.env['mrp.production'])
         production_form.bom_id = self.bom_4
         production = production_form.save()
@@ -5159,6 +5159,29 @@ class TestMrpOrder(TestMrpCommon):
         self.assertTrue(mo.workorder_ids)
         self.assertEqual(len(mo.workorder_ids), 1)
         self.assertEqual(mo.product_id, wo.product_id)
+
+    def test_mo_modify_date_with_manuf_lead_time(self):
+        """ A direct write on MrpProduction.date_start should result in that exact date value being
+        written to the MO.
+        """
+        finished_product = self.env['product.product'].create({'name': 'finished product'})
+        finished_bom_id = self.env['mrp.bom'].create({
+            'produce_delay': 17,
+            'product_id': finished_product.id,
+            'product_tmpl_id': finished_product.product_tmpl_id.id,
+            'product_uom_id': self.uom_unit.id,
+            'product_qty': 1.0,
+            'bom_line_ids': [(0, 0, {'product_id': self.product.id, 'product_qty': 1})],
+        })
+        mo = self.env['mrp.production'].create({'bom_id': finished_bom_id.id})
+        mo.action_confirm()
+        original_start_date = mo.date_start
+        with Form(mo) as production_form:
+            production_form.date_start = fields.Date.today() - timedelta(days=10)
+        self.assertEqual(mo.date_start.date(), original_start_date.date() - timedelta(days=10))
+        with Form(mo) as production_form:
+            production_form.date_start = original_start_date
+        self.assertEqual(mo.date_start, original_start_date)
 
 @tagged('-at_install', 'post_install')
 class TestTourMrpOrder(HttpCase):

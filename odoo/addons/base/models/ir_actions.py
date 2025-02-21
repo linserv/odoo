@@ -4,7 +4,9 @@
 import odoo
 from odoo import api, fields, models, tools, _, Command
 from odoo.exceptions import MissingError, ValidationError, AccessError, UserError
+from odoo.fields import Domain
 from odoo.tools import frozendict
+from odoo.tools.misc import unquote
 from odoo.tools.safe_eval import safe_eval, test_python_expr
 from odoo.tools.float_utils import float_compare
 from odoo.http import request
@@ -166,7 +168,7 @@ class IrActionsActions(models.Model):
             actions = []
             for action in all_actions:
                 action = dict(action)
-                groups = action.pop('groups_id', None)
+                groups = action.pop('group_ids', None)
                 if groups and not any(self.env.user.has_group(ext_id) for ext_id in groups):
                     # the user may not perform this action
                     continue
@@ -202,14 +204,14 @@ class IrActionsActions(models.Model):
             try:
                 action = self.env[action_model].sudo().browse(action_id)
                 fields = ['name', 'binding_view_types', 'binding_invisible']
-                for field in ('groups_id', 'res_model', 'sequence', 'domain'):
+                for field in ('group_ids', 'res_model', 'sequence', 'domain'):
                     if field in action._fields:
                         fields.append(field)
                 action = action.read(fields)[0]
-                if action.get('groups_id'):
+                if action.get('group_ids'):
                     # transform the list of ids into a list of xml ids
-                    groups = self.env['res.groups'].browse(action['groups_id'])
-                    action['groups_id'] = list(groups._ensure_xml_id().values())
+                    groups = self.env['res.groups'].browse(action['group_ids'])
+                    action['group_ids'] = list(groups._ensure_xml_id().values())
                 if 'domain' in action and not action.get('domain'):
                     action.pop('domain')
                 result[binding_type].append(frozendict(action))
@@ -327,7 +329,7 @@ class IrActionsAct_Window(models.Model):
                                "when displaying the result of an action, federating view mode, views and " \
                                "reference view. The result is returned as an ordered list of pairs (view_id,view_mode).")
     limit = fields.Integer(default=80, help='Default limit for the list view')
-    groups_id = fields.Many2many('res.groups', 'ir_act_window_group_rel',
+    group_ids = fields.Many2many('res.groups', 'ir_act_window_group_rel',
                                  'act_id', 'gid', string='Groups')
     search_view_id = fields.Many2one('ir.ui.view', string='Search View Ref.')
     embedded_action_ids = fields.One2many('ir.embedded.actions', compute="_compute_embedded_actions")
@@ -380,7 +382,7 @@ class IrActionsAct_Window(models.Model):
 
     def _get_readable_fields(self):
         return super()._get_readable_fields() | {
-            "context", "mobile_view_mode", "domain", "filter", "groups_id", "limit",
+            "context", "mobile_view_mode", "domain", "filter", "group_ids", "limit",
             "res_id", "res_model", "search_view_id", "target", "view_id", "view_mode", "views", "embedded_action_ids",
             # this is used by frontend, with the document layout wizard before send and print
             "close_on_report_download",
@@ -509,7 +511,7 @@ class IrActionsServer(models.Model):
     _description = 'Server Actions'
     _table = 'ir_act_server'
     _inherit = ['ir.actions.actions']
-    _order = 'sequence,name'
+    _order = 'sequence,name,id'
     _allow_sudo_commands = False
 
     DEFAULT_PYTHON_CODE = """# Available variables:
@@ -538,7 +540,8 @@ class IrActionsServer(models.Model):
                 return field_name
         return ''
 
-    name = fields.Char(required=True)
+    name = fields.Char(compute='_compute_name', store=True, readonly=False)
+    automated_name = fields.Char(compute='_compute_name', store=True)
     type = fields.Char(default='ir.actions.server')
     usage = fields.Selection([
         ('ir_actions_server', 'Server Action'),
@@ -549,7 +552,7 @@ class IrActionsServer(models.Model):
         ('object_create', 'Create Record'),
         ('code', 'Execute Code'),
         ('webhook', 'Send Webhook Notification'),
-        ('multi', 'Execute Existing Actions')], string='Type',
+        ('multi', 'Multi Actions')], string='Type',
         default='object_write', required=True, copy=True,
         help="Type of server action. The following values are available:\n"
              "- 'Update a Record': update the values of a record\n"
@@ -560,7 +563,7 @@ class IrActionsServer(models.Model):
              "- 'Create Record': create a new record with new values\n"
              "- 'Execute Code': a block of Python code that will be executed\n"
              "- 'Send Webhook Notification': send a POST request to an external system, also known as a Webhook\n"
-             "- 'Execute Existing Actions': define an action that triggers several other server actions\n")
+             "- 'Multi Actions': define an action that triggers several other server actions\n")
     # Generic
     sequence = fields.Integer(default=5,
                               help="When dealing with multiple actions, the execution order is "
@@ -576,7 +579,8 @@ class IrActionsServer(models.Model):
                        help="Write Python code that the action will execute. Some variables are "
                             "available for use; help about python expression is given in the help tab.")
     # Multi
-    child_ids = fields.Many2many('ir.actions.server', 'rel_server_actions', 'server_id', 'action_id',
+    parent_id = fields.Many2one('ir.actions.server', string='Parent Action', ondelete='cascade')
+    child_ids = fields.One2many('ir.actions.server', 'parent_id', copy=True, domain=lambda self: str(self._get_children_domain()),
                                  string='Child Actions', help='Child server actions that will be executed. Note that the last return returned action value will be used as global return value.')
     # Create
     crud_model_id = fields.Many2one(
@@ -588,7 +592,7 @@ class IrActionsServer(models.Model):
         'ir.model.fields', string='Link Field',
         compute='_compute_link_field_id', readonly=False, store=True,
         help="Specify a field used to link the newly created record on the record used by the server action.")
-    groups_id = fields.Many2many('res.groups', 'ir_act_server_group_rel',
+    group_ids = fields.Many2many('res.groups', 'ir_act_server_group_rel',
                                  'act_id', 'gid', string='Allowed Groups', help='Groups that can execute the server action. Leave empty to allow everybody.')
 
     update_field_id = fields.Many2one('ir.model.fields', string='Field to Update', ondelete='cascade', compute='_compute_crud_relations', store=True, readonly=False)
@@ -633,13 +637,25 @@ class IrActionsServer(models.Model):
                                               "The name of the action that triggered the webhook is always sent as '_name'.")
     webhook_sample_payload = fields.Text(string='Sample Payload', compute='_compute_webhook_sample_payload')
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if parent_id := vals.get('parent_id'):
+                parent = self.browse(parent_id)
+                vals['model_id'] = parent.model_id.id
+                vals['group_ids'] = parent.group_ids.ids
+        return super().create(vals_list)
+
     @api.model
     def _warning_depends(self):
         return [
-            'model_id',
             'state',
-            'child_ids.model_id',
+            'model_id',
+            'group_ids',
+            'parent_id',
             'child_ids.warning',
+            'child_ids.model_id',
+            'child_ids.group_ids',
             'update_path',
             'webhook_field_ids'
         ]
@@ -652,6 +668,11 @@ class IrActionsServer(models.Model):
             warnings.append(_("Following child actions should have the same model (%(model)s): %(children)s",
                               model=self.model_id.name,
                               children=', '.join(children_with_different_model.mapped('name'))))
+
+        if self.group_ids and (children_with_different_groups := self.child_ids.filtered(lambda a: a.group_ids != self.group_ids)):
+            warnings.append(_("Following child actions should have the same groups (%(groups)s): %(children)s",
+                              groups=', '.join(self.group_ids.mapped('name')),
+                              children=', '.join(children_with_different_groups.mapped('name'))))
 
         if (children_with_warnings := self.child_ids.filtered('warning')):
             warnings.append(_("Following child actions have warnings: %(children)s", children=', '.join(children_with_warnings.mapped('name'))))
@@ -683,6 +704,58 @@ class IrActionsServer(models.Model):
                 action.warning = "\n\n".join(warnings)
             else:
                 action.warning = False
+
+    @api.model
+    def _get_children_domain(self):
+        domain = Domain([
+            ("model_id", "=", unquote("model_id")),
+            ("parent_id", "=", False),
+            ("id", "!=", unquote("id")),
+        ])
+        return domain
+
+    def _generate_action_name(self):
+        self.ensure_one()
+        match self.state:
+            case 'object_write':
+                _field_chain, field_chain_str = self._get_relation_chain("update_path")
+                if self.evaluation_type == 'value':
+                    return _("Update %(field_chain_str)s", field_chain_str=field_chain_str)
+                else:
+                    return _("Compute %(field_chain_str)s", field_chain_str=field_chain_str)
+            case 'object_create':
+                return _(
+                    "Create %(model_name)s with name %(value)s",
+                    model_name=self.crud_model_id.name,
+                    value=self.value
+                )
+            case _:
+                return dict(self._fields["state"]._description_selection(self.env)).get(
+                    self.state, ""
+                )
+
+    def _name_depends(self):
+        return [
+            "state",
+            "update_field_id",
+            "crud_model_id",
+            "value",
+            "evaluation_type",
+        ]
+
+    @api.depends(lambda self: self._name_depends())
+    def _compute_name(self):
+        for action in self:
+            was_automated = action.name == action.automated_name
+            action.automated_name = action._generate_action_name()
+            if was_automated:
+                action.name = action.automated_name
+
+    @api.onchange('name')
+    def _onchange_name(self):
+        if not self.name:
+            self.automated_name = self._generate_action_name()
+            self.name = self.automated_name
 
     @api.depends('state')
     def _compute_available_model_ids(self):
@@ -794,9 +867,9 @@ class IrActionsServer(models.Model):
             if msg:
                 raise ValidationError(msg)
 
-    @api.constrains('child_ids')
+    @api.constrains('parent_id', 'child_ids')
     def _check_children(self):
-        if self._has_cycle('child_ids'):
+        if self._has_cycle():
             raise ValidationError(_('Recursion found in child server actions'))
 
         if (children_with_warnings := self.child_ids.filtered('warning')):
@@ -804,7 +877,7 @@ class IrActionsServer(models.Model):
 
     def _get_readable_fields(self):
         return super()._get_readable_fields() | {
-            "groups_id", "model_name",
+            "group_ids", "model_name",
         }
 
     def _get_runner(self):
@@ -982,9 +1055,9 @@ class IrActionsServer(models.Model):
         """
         res = False
         for action in self.sudo():
-            action_groups = action.groups_id
+            action_groups = action.group_ids
             if action_groups:
-                if not (action_groups & self.env.user.groups_id):
+                if not (action_groups & self.env.user.all_group_ids):
                     raise AccessError(_("You don't have enough access rights to run this action."))
             else:
                 model_name = action.model_id.model

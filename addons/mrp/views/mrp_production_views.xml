@@ -45,7 +45,7 @@
                     <header>
                         <button name="button_plan" type="object" string="Plan"/>
                         <button name="action_assign"  type="object" string="Check availability"/>
-                        <button name="action_cancel" type="object" string="Cancel"/>
+                        <button name="action_cancel" type="object" string="Cancel" confirm="Are you sure you want to cancel these manufacturing orders?"/>
                     </header>
                     <field name="company_id" column_invisible="True"/>
                     <field name="priority" optional="show" widget="priority" nolabel="1"/>
@@ -94,7 +94,7 @@
             <field name="name">Split</field>
             <field name="model_id" ref="mrp.model_mrp_production"/>
             <field name="binding_model_id" ref="mrp.model_mrp_production"/>
-            <field name="binding_view_types">list,form</field>
+            <field name="binding_view_types">list,kanban,form</field>
             <field name="state">code</field>
             <field name="code">action = records.action_split()</field>
         </record>
@@ -103,7 +103,7 @@
             <field name="name">Labels</field>
             <field name="model_id" ref="mrp.model_mrp_production"/>
             <field name="binding_model_id" ref="mrp.model_mrp_production"/>
-            <field name="binding_view_types">list,form</field>
+            <field name="binding_view_types">list,kanban,form</field>
             <field name="binding_type">report</field>
             <field name="state">code</field>
             <field name="code">
@@ -149,7 +149,7 @@
             <field name="name">Plan based on Components Availability</field>
             <field name="model_id" ref="mrp.model_mrp_production"/>
             <field name="binding_model_id" ref="mrp.model_mrp_production"/>
-            <field name="binding_view_types">list,form</field>
+            <field name="binding_view_types">list,kanban,form</field>
             <field name="state">code</field>
             <field name="code">action = records.action_plan_with_components_availability()</field>
         </record>
@@ -158,7 +158,7 @@
             <field name="name">Merge</field>
             <field name="model_id" ref="mrp.model_mrp_production"/>
             <field name="binding_model_id" ref="mrp.model_mrp_production"/>
-            <field name="binding_view_types">list</field>
+            <field name="binding_view_types">list,kanban</field>
             <field name="state">code</field>
             <field name="code">action = records.action_merge()</field>
         </record>
@@ -167,7 +167,7 @@
             <field name="name">Mark as Done</field>
             <field name="model_id" ref="mrp.model_mrp_production"/>
             <field name="binding_model_id" ref="mrp.model_mrp_production"/>
-            <field name="binding_view_types">list</field>
+            <field name="binding_view_types">list,kanban</field>
             <field name="state">code</field>
             <field name="code">
             if records:
@@ -302,7 +302,7 @@
                                 </button>
                                 <label for="product_uom_id" string="" class="oe_inline"/>
                                 <field name="product_uom_id" groups="!uom.group_uom" invisible="1"/>
-                                <field name="product_uom_id" options="{'no_open': True, 'no_create': True}" groups="uom.group_uom" widget="many2one_uom" readonly="state != 'draft'" class="flex-grow-0" style="width:auto!important"/>
+                                <field name="product_uom_id" options="{'no_open': True, 'no_create': True, 'quantity_field': 'product_qty'}" groups="uom.group_uom" widget="many2one_uom" readonly="state != 'draft'" class="flex-grow-0" style="width:auto!important"/>
                                 <span class='fw-bold text-nowrap'>To Produce</span>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart" invisible="forecasted_issue"/>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart" invisible="not forecasted_issue" class="text-danger"/>
@@ -382,7 +382,7 @@
                                     and `quantity_done` is not within the finished move views,
                                     (byproduct moves are a subset of finished moves)
                                     the `quantity_done` of byproducts is not updated correctly with the onchange
-                                    Another solution is to add `self.env.user.groups_id += self.env.ref('mrp.group_mrp_byproducts')`
+                                    Another solution is to add `self.env.user.group_ids += self.env.ref('mrp.group_mrp_byproducts')`
                                     to the test `test_00_mrp_byproduct`, which could makes sense as it's a test testing the byproducts features,
                                     for which you should have the byproducts group to have access to,
                                     but it seemed better to keep the feature working even if you do not see the byproducts features with your user.
@@ -725,7 +725,7 @@
             <field name="name">Unreserve</field>
             <field name="model_id" ref="mrp.model_mrp_production"/>
             <field name="binding_model_id" ref="mrp.model_mrp_production"/>
-            <field name="binding_view_types">list</field>
+            <field name="binding_view_types">list,kanban</field>
             <field name="state">code</field>
             <field name="code">
             if records:

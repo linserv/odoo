@@ -146,7 +146,7 @@ export class LinkPlugin extends Plugin {
                 title: _t("Link"),
                 description: _t("Add a link"),
                 icon: "fa-link",
-                run: ({ link } = {}) => this.openLinkTools(link),
+                run: ({ link, type} = {}) => this.openLinkTools(link, type),
             },
             {
                 id: "removeLinkFromSelection",
@@ -199,6 +199,7 @@ export class LinkPlugin extends Plugin {
                 description: _t("Add a button"),
                 categoryId: "navigation",
                 commandId: "openLinkTools",
+                commandParams: { type: "primary" },
             },
         ],
 
@@ -337,7 +338,7 @@ export class LinkPlugin extends Plugin {
      *
      * @param {HTMLElement} [linkElement]
      */
-    openLinkTools(linkElement) {
+    openLinkTools(linkElement, type) {
         this.closeLinkTools();
         if (!this.isLinkAllowedOnSelection()) {
             return this.services.notification.add(
@@ -349,6 +350,7 @@ export class LinkPlugin extends Plugin {
         let cursorsToRestore = this.dependencies.selection.preserveSelection();
         const commonAncestor = closestElement(selection.commonAncestorContainer);
         linkElement = linkElement || findInSelection(selection, "a");
+        this.type = type;
         if (
             linkElement &&
             (!linkElement.contains(selection.anchorNode) ||
@@ -459,6 +461,7 @@ export class LinkPlugin extends Plugin {
                 !this.linkInDocument || !this.linkInDocument.classList.contains("o_link_readonly"),
             canUpload: !this.config.disableFile,
             onUpload: this.config.onAttachmentChange,
+            type: this.type || "",
         };
         this.overlay.open({ props });
     }
@@ -697,12 +700,34 @@ export class LinkPlugin extends Plugin {
     }
 
     onBeforeInput(ev) {
-        if (
-            ev.inputType === "insertParagraph" ||
-            ev.inputType === "insertLineBreak" ||
-            (ev.inputType === "insertText" && ev.data === " ")
-        ) {
-            this.handleAutomaticLinkInsertion();
+        if (ev.inputType === "insertParagraph" || ev.inputType === "insertLineBreak") {
+            const nodeForSelectionRestore = this.handleAutomaticLinkInsertion();
+            if (nodeForSelectionRestore) {
+                this.dependencies.selection.setCursorStart(nodeForSelectionRestore);
+                this.dependencies.history.addStep();
+            }
+        }
+        if (ev.inputType === "insertText" && ev.data === " ") {
+            const nodeForSelectionRestore = this.handleAutomaticLinkInsertion();
+            if (nodeForSelectionRestore) {
+                // Since we manually insert a space here, we will be adding a history step
+                // after link creation with selection at the end of the link and another
+                // after inserting the space. So first undo will remove the space, and the
+                // second will undo the link creation.
+                this.dependencies.selection.setSelection({
+                    anchorNode: nodeForSelectionRestore,
+                    anchorOffset: 0,
+                });
+                this.dependencies.history.addStep();
+                nodeForSelectionRestore.textContent =
+                    "\u00A0" + nodeForSelectionRestore.textContent;
+                this.dependencies.selection.setSelection({
+                    anchorNode: nodeForSelectionRestore,
+                    anchorOffset: 1,
+                });
+                this.dependencies.history.addStep();
+                ev.preventDefault();
+            }
         }
     }
     /**
@@ -740,8 +765,7 @@ export class LinkPlugin extends Plugin {
                 const textNodeToReplace = selection.anchorNode.splitText(startOffset);
                 textNodeToReplace.splitText(match[0].length);
                 selection.anchorNode.parentElement.replaceChild(link, textNodeToReplace);
-                this.dependencies.selection.setCursorStart(nodeForSelectionRestore);
-                this.dependencies.history.addStep();
+                return nodeForSelectionRestore;
             }
         }
     }

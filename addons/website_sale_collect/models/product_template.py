@@ -15,13 +15,14 @@ class ProductTemplate(models.Model):
         res = super()._get_additionnal_combination_info(
             product_or_template, quantity, date, website
         )
+        order_sudo = request.cart
         if (
             bool(website.sudo().in_store_dm_id)  # Click & Collect is enabled.
+            and len(order_sudo.carrier_id.warehouse_ids) > 1
             and product_or_template.is_product_variant
             and product_or_template.is_storable
         ):
             res['show_click_and_collect_availability'] = True
-            order_sudo = request.cart
             if (
                 order_sudo
                 and order_sudo.carrier_id.delivery_type == 'in_store'
@@ -34,7 +35,7 @@ class ProductTemplate(models.Model):
                 res['in_store_stock'] = utils.format_product_stock_values(
                     product_or_template.sudo(),
                     free_qty=website.sudo()._get_max_in_store_product_available_qty(
-                        product_or_template
+                        product_or_template.sudo()
                     )
                 )
         return res

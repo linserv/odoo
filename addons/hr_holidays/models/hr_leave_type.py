@@ -64,7 +64,7 @@ class HrLeaveType(models.Model):
     country_code = fields.Char(related='country_id.code', depends=['country_id'], readonly=True)
     responsible_ids = fields.Many2many(
         'res.users', 'hr_leave_type_res_users_rel', 'hr_leave_type_id', 'res_users_id', string='Notified Time Off Officer',
-        domain=lambda self: [('groups_id', 'in', self.env.ref('hr_holidays.group_hr_holidays_user').id),
+        domain=lambda self: [('all_group_ids', 'in', self.env.ref('hr_holidays.group_hr_holidays_user').id),
                              ('share', '=', False),
                              ('company_ids', 'in', self.env.company.id)],
         help="Choose the Time Off Officers who will be notified to approve allocation or Time Off Request. If empty, nobody will be notified")
@@ -642,7 +642,7 @@ class HrLeaveType(models.Model):
             carryover_policy = accrual_plan_level.action_with_unused_accruals if accrual_plan_level else False
             carryover_date = False
             if carryover_policy in ['maximum', 'lost']:
-                carryover_date = allocation._get_carryover_date(target_date)
+                carryover_date = allocation.sudo()._get_carryover_date(target_date)
                 # If carry over date == target date, then add 1 year to carry over date.
                 # Rational: for example if carry over date = 01/01 this year and target date = 01/01 this year,
                 # then any accrued days on 01/01 this year will have their carry over date 01/01 next year

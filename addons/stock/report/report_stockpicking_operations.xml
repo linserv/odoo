@@ -63,6 +63,10 @@
                                     <div t-else=""
                                         t-field="o.picking_type_id.warehouse_id.name"/>
                                     </div>
+                                <div t-if="o.picking_type_id.code == 'internal' and o.partner_id" class="col" name="div_contact">
+                                    <strong>Contact</strong>
+                                    <div t-field="o.partner_id" class="m-0"/>
+                                </div>
                                 <div name="div_state">
                                     <strong>Status:</strong>
                                     <p t-field="o.state">Draft</p>
@@ -176,8 +180,8 @@
                                                 <td class="text-end">
                                                     <span t-out="format_number(line.quantity)">3.00</span>
                                                     <span t-field="line.product_uom_id" groups="uom.group_uom">units</span>
-                                                    <span t-if="line.move_id.product_packaging_id">
-                                                        (<span t-field="line.product_packaging_qty" t-options='{"widget": "integer"}'/> <span t-field="line.move_id.product_packaging_id.name"/>)
+                                                    <span t-if="line.move_id.packaging_uom_id">
+                                                        (<span t-field="line.product_packaging_qty" t-options='{"widget": "integer"}'/> <span t-field="line.move_id.packaging_uom_id.name"/>)
                                                     </span>
                                                 </td>
                                                 <td class="text-start" t-if="from_col_exists" groups="stock.group_stock_multi_locations">

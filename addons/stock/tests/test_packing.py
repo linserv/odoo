@@ -453,9 +453,9 @@ class TestPacking(TestPackingCommon):
         grp_multi_loc = self.env.ref('stock.group_stock_multi_locations')
         grp_multi_step_rule = self.env.ref('stock.group_adv_location')
         grp_pack = self.env.ref('stock.group_tracking_lot')
-        self.env.user.write({'groups_id': [(3, grp_multi_loc.id)]})
-        self.env.user.write({'groups_id': [(3, grp_multi_step_rule.id)]})
-        self.env.user.write({'groups_id': [(3, grp_pack.id)]})
+        self.env.user.write({'group_ids': [(3, grp_multi_loc.id)]})
+        self.env.user.write({'group_ids': [(3, grp_multi_step_rule.id)]})
+        self.env.user.write({'group_ids': [(3, grp_pack.id)]})
         self.warehouse.reception_steps = 'two_steps'
         # Settings of receipt.
         self.warehouse.in_type_id.show_entire_packs = True
@@ -549,7 +549,7 @@ class TestPacking(TestPackingCommon):
         internal_form = Form(picking)
         # The test specifically removes the ability to see the location fields
         # grp_multi_loc = self.env.ref('stock.group_stock_multi_locations')
-        # self.env.user.write({'groups_id': [(3, grp_multi_loc.id)]})
+        # self.env.user.write({'group_ids': [(3, grp_multi_loc.id)]})
         # Hence, `internal_form.location_id` shouldn't be changed
         with internal_form.package_level_ids.new() as pack_line:
             pack_line.package_id = receipt_package.package_id
@@ -590,9 +590,9 @@ class TestPacking(TestPackingCommon):
         grp_multi_loc = self.env.ref('stock.group_stock_multi_locations')
         grp_multi_step_rule = self.env.ref('stock.group_adv_location')
         grp_pack = self.env.ref('stock.group_tracking_lot')
-        self.env.user.write({'groups_id': [(3, grp_multi_loc.id)]})
-        self.env.user.write({'groups_id': [(3, grp_multi_step_rule.id)]})
-        self.env.user.write({'groups_id': [(3, grp_pack.id)]})
+        self.env.user.write({'group_ids': [(3, grp_multi_loc.id)]})
+        self.env.user.write({'group_ids': [(3, grp_multi_step_rule.id)]})
+        self.env.user.write({'group_ids': [(3, grp_pack.id)]})
         self.warehouse.reception_steps = 'two_steps'
         # Settings of receipt.
         self.warehouse.in_type_id.show_entire_packs = True
@@ -693,7 +693,7 @@ class TestPacking(TestPackingCommon):
         internal_form = Form(picking)
         # The test specifically removes the ability to see the location fields
         # grp_multi_loc = self.env.ref('stock.group_stock_multi_locations')
-        # self.env.user.write({'groups_id': [(3, grp_multi_loc.id)]})
+        # self.env.user.write({'group_ids': [(3, grp_multi_loc.id)]})
         # Hence, `internal_form.location_id` shouldn't be changed
         with internal_form.package_level_ids.new() as pack_line:
             pack_line.package_id = receipt_package.package_id
@@ -1070,9 +1070,9 @@ class TestPacking(TestPackingCommon):
         warehouse = self.stock_location.warehouse_id
         warehouse.reception_steps = "two_steps"
         self.productA.weight = 1.0
-        self.env.user.write({'groups_id': [(4, self.env.ref('stock.group_stock_multi_locations').id)]})
+        self.env.user.write({'group_ids': [(4, self.env.ref('stock.group_stock_multi_locations').id)]})
         # Required for `result_package_id` to be visible in the view
-        self.env.user.write({'groups_id': [(4, self.env.ref('stock.group_tracking_lot').id)]})
+        self.env.user.write({'group_ids': [(4, self.env.ref('stock.group_tracking_lot').id)]})
 
         package_type = self.env['stock.package.type'].create({
             'name': "Super Pallet",
@@ -1173,9 +1173,9 @@ class TestPacking(TestPackingCommon):
         warehouse.reception_steps = "two_steps"
         self.productA.weight = 1.0
         self.productB.weight = 1.0
-        self.env.user.write({'groups_id': [(4, self.env.ref('stock.group_stock_multi_locations').id)]})
+        self.env.user.write({'group_ids': [(4, self.env.ref('stock.group_stock_multi_locations').id)]})
         # Required for `result_package_id` to be visible in the view
-        self.env.user.write({'groups_id': [(4, self.env.ref('stock.group_tracking_lot').id)]})
+        self.env.user.write({'group_ids': [(4, self.env.ref('stock.group_tracking_lot').id)]})
 
         package_type = self.env['stock.package.type'].create({
             'name': "Super Pallet",
@@ -1869,8 +1869,7 @@ class TestPacking(TestPackingCommon):
         already being reserved by an other picking.
         """
         pack = self.env['stock.quant.package'].create({'name': 'The pack to pick'})
-        self.env['stock.quant']._update_available_quantity(self.productA, self.stock_location, 10.0, package_id=pack)
-        destination_locations = self.env['stock.location'].create([
+        locations = self.env['stock.location'].create([
             {
                 'name': 'Depot 1',
                 'usage': 'internal',
@@ -1881,16 +1880,22 @@ class TestPacking(TestPackingCommon):
                 'usage': 'internal',
                 'location_id': self.warehouse.view_location_id.id,
             },
+            {
+                'name': 'Starting Depot',
+                'usage': 'internal',
+                'location_id': self.warehouse.view_location_id.id,
+            },
         ])
+        self.env['stock.quant']._update_available_quantity(self.productA, locations[-1], 10.0, package_id=pack)
         pickings = self.env['stock.picking'].create([
             {
                 'picking_type_id': self.warehouse.int_type_id.id,
-                'location_id': self.stock_location.id,
-                'location_dest_id': destination_locations[i].id,
+                'location_id': locations[-1].id,
+                'location_dest_id': locations[i].id,
                 'move_ids': [Command.create({
                     'name': self.productA.name,
                     'location_id':  self.stock_location.id,
-                    'location_dest_id': destination_locations[i].id,
+                    'location_dest_id': locations[i].id,
                     'product_id': self.productA.id,
                     'product_uom': self.productA.uom_id.id,
                     'product_uom_qty': 10,
@@ -1902,15 +1907,35 @@ class TestPacking(TestPackingCommon):
             pickings[i].move_ids.move_line_ids = [Command.create({
                 'product_id': self.productA.id,
                 'product_uom_id': self.productA.uom_id.id,
-                'location_id': self.stock_location.id,
-                'location_dest_id': destination_locations[i].id,
+                'location_id': locations[-1].id,
+                'location_dest_id': locations[i].id,
                 'quantity': 10.0,
                 'package_id': pack.id,
                 'result_package_id': pack.id,
-                'picked': True,
+                'picked': True, # to simulate barcode flows
             })]
-        pickings[0].button_validate()
-        self.assertEqual(pickings[0].state, 'done')
+        pickings[1].button_validate()
+        self.assertEqual(pickings[1].state, 'done')
+        # check that the package is in Depot 2 and can be moved from there
+        self.assertEqual(pack.location_id, pickings[1].location_dest_id)
+        delivery = self.env['stock.picking'].create({
+            'picking_type_id': self.warehouse.out_type_id.id,
+            'location_id': locations[1].id,
+            'location_dest_id': self.customer_location.id,
+            'move_ids': [Command.create({
+                'name': self.productA.name,
+                'location_id': locations[1].id,
+                'location_dest_id': self.customer_location.id,
+                'product_id': self.productA.id,
+                'product_uom': self.productA.uom_id.id,
+                'product_uom_qty': 10,
+            })],
+        })
+        delivery.action_confirm()
+        delivery.button_validate()
+        self.assertEqual(delivery.state, 'done')
+        # check that the package is now in the Customer location
+        self.assertEqual(pack.location_id, delivery.location_dest_id)
 
 
 @odoo.tests.tagged('post_install', '-at_install')

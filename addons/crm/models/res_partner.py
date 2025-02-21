@@ -36,7 +36,7 @@ class ResPartner(models.Model):
 
     def _compute_opportunity_count(self):
         self.opportunity_count = 0
-        if not self.env.user._has_group('sales_team.group_sale_salesman'):
+        if not self.env.user.has_group('sales_team.group_sale_salesman'):
             return
 
         # retrieve all children partners and prefetch 'parent_id' on them
@@ -61,7 +61,13 @@ class ResPartner(models.Model):
         This function returns an action that displays the opportunities from partner.
         '''
         action = self.env['ir.actions.act_window']._for_xml_id('crm.crm_lead_opportunities')
-        action['context'] = {}
+        action['context'] = {
+            'search_default_filter_won': 1,
+            'search_default_filter_ongoing': 1,
+            'search_default_filter_lost': 1
+        }
+        # we want the list view first
+        action['views'] = sorted(action['views'], key=lambda view: view[1] != 'list')
         if self.is_company:
             action['domain'] = [('partner_id.commercial_partner_id', '=', self.id)]
         else:

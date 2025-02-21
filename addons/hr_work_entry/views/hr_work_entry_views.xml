@@ -36,11 +36,12 @@
                 date_start="date_start"
                 date_stop="date_stop"
                 mode="month"
+                month_overflow="0"
                 quick_create="0"
                 color="color"
                 event_limit="5">
                 <!-- Sidebar favorites filters -->
-                <field name="employee_id" write_model="hr.user.work.entry.employee" write_field="employee_id" avatar_field="avatar_128" widget="many2one_avatar_employee"/>
+                <field name="employee_id" write_model="hr.user.work.entry.employee" write_field="employee_id" filter_field="is_checked" avatar_field="avatar_128" widget="many2one_avatar_employee"/>
                 <field name="state"/>
             </calendar>
         </field>

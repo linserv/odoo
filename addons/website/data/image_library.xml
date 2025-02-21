@@ -469,6 +469,24 @@
     <field name="type">url</field>
     <field name="url">/website/static/src/img/snippets_demo/s_banner_3.jpg</field>
 </record>
+<record id="website.s_carousel_cards_default_image_1" model="ir.attachment">
+    <field name="public" eval="True"/>
+    <field name="name">s_carousel_cards_default_image_1.jpg</field>
+    <field name="type">url</field>
+    <field name="url">/website/static/src/img/snippets_demo/s_carousel_1.jpg</field>
+</record>
+<record id="website.s_carousel_cards_default_image_2" model="ir.attachment">
+    <field name="public" eval="True"/>
+    <field name="name">s_carousel_cards_default_image_2.jpg</field>
+    <field name="type">url</field>
+    <field name="url">/website/static/src/img/snippets_demo/s_carousel_2.jpg</field>
+</record>
+<record id="website.s_carousel_cards_default_image_3" model="ir.attachment">
+    <field name="public" eval="True"/>
+    <field name="name">s_carousel_cards_default_image_3.jpg</field>
+    <field name="type">url</field>
+    <field name="url">/website/static/src/img/snippets_demo/s_carousel_3.jpg</field>
+</record>
 <record id="website.s_picture_default_image" model="ir.attachment">
     <field name="public" eval="True"/>
     <field name="name">s_picture_default_image.jpg</field>
@@ -1068,6 +1086,30 @@
     <field name="name">s_website_form_cover_default_image.jpg</field>
     <field name="type">url</field>
     <field name="url">/web/image/website.s_cover_default_image</field>
+</record>
+<record id="website.s_timeline_images_default_image_1" model="ir.attachment">
+    <field name="public" eval="True"/>
+    <field name="name">s_timeline_images_default_image_1.jpg</field>
+    <field name="type">url</field>
+    <field name="url">/web/image/website.s_carousel_default_image_2</field>
+</record>
+<record id="website.s_timeline_images_default_image_2" model="ir.attachment">
+    <field name="public" eval="True"/>
+    <field name="name">s_timeline_images_default_image_2.jpg</field>
+    <field name="type">url</field>
+    <field name="url">/web/image/website.s_carousel_default_image_3</field>
+</record>
+<record id="website.s_split_intro_default_image" model="ir.attachment">
+    <field name="public" eval="True"/>
+    <field name="name">s_split_intro_default_image.jpg</field>
+    <field name="type">url</field>
+    <field name="url">/website/static/src/img/snippets_demo/s_split_intro_default_image.jpg</field>
+</record>
+<record id="website.s_form_aside_default_image" model="ir.attachment">
+    <field name="public" eval="True"/>
+    <field name="name">s_form_aside_default_image.jpg</field>
+    <field name="type">url</field>
+    <field name="url">/web/image/website.s_empowerment_default_image</field>
 </record>
 
 </odoo>

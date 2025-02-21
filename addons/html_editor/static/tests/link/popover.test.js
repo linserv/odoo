@@ -264,7 +264,7 @@ describe("Link creation", () => {
             await insertText(editor, "http://google.co.in");
             await insertText(editor, " ");
             expect(cleanLinkArtifacts(getContent(el))).toBe(
-                '<p><a href="http://google.co.in">http://google.co.in</a> []</p>'
+                '<p><a href="http://google.co.in">http://google.co.in</a>&nbsp;[]</p>'
             );
         });
         test("typing valid URL without protocol + space should convert to https link", async () => {
@@ -272,7 +272,7 @@ describe("Link creation", () => {
             await insertText(editor, "google.com");
             await insertText(editor, " ");
             expect(cleanLinkArtifacts(getContent(el))).toBe(
-                '<p><a href="https://google.com">google.com</a> []</p>'
+                '<p><a href="https://google.com">google.com</a>&nbsp;[]</p>'
             );
         });
         test("typing valid http URL + space should convert to http link", async () => {
@@ -280,7 +280,7 @@ describe("Link creation", () => {
             await insertText(editor, "http://google.com");
             await insertText(editor, " ");
             expect(cleanLinkArtifacts(getContent(el))).toBe(
-                '<p><a href="http://google.com">http://google.com</a> []</p>'
+                '<p><a href="http://google.com">http://google.com</a>&nbsp;[]</p>'
             );
         });
         test("typing invalid URL + space should not convert to link", async () => {
@@ -357,6 +357,17 @@ describe("Link creation", () => {
 
             await contains(".o-we-linkpopover input.o_we_href_input_link").fill("#");
             expect(cleanLinkArtifacts(getContent(el))).toBe('<p><a href="#">#[]</a></p>');
+        });
+        test("Should be able to insert button on empty p", async () => {
+            const { editor, el } = await setupEditor("<p>[]</p>");
+            await insertText(editor, "/button");
+            await animationFrame();
+            await click(".o-we-command-name:first");
+
+            await contains(".o-we-linkpopover input.o_we_href_input_link").fill("#");
+            expect(cleanLinkArtifacts(getContent(el))).toBe(
+                '<p><a href="#" class="btn btn-fill-primary">#[]</a></p>'
+            );
         });
         test("Should keep http protocol on valid http url", async () => {
             const { editor, el } = await setupEditor("<p>[]</p>");
