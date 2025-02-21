@@ -10,7 +10,7 @@
 # Martin Trigaux, 2023
 # Arnis Putniņš <arnis@allegro.lv>, 2023
 # Will Sensors, 2024
-# ievaputnina <ievai.putninai@gmail.com>, 2024
+# ievaputnina <ievai.putninai@gmail.com>, 2025
 # Armīns Jeltajevs <armins.jeltajevs@gmail.com>, 2025
 # 
 msgid ""
@@ -142,7 +142,7 @@ msgstr "%(person)s on %(leave_type)s: %(duration).2f stundas on %(date)s"
 #: code:addons/hr_holidays/models/hr_leave.py:0
 #, python-format
 msgid "%(person)s: %(duration).2f days (%(start)s)"
-msgstr ""
+msgstr "%(person)s: %(duration).2f dienas (%(start)s)"
 
 #. module: hr_holidays
 #. odoo-python
@@ -4659,7 +4659,7 @@ msgstr ""
 #: code:addons/hr_holidays/static/src/dashboard/time_off_card.xml:0
 #, python-format
 msgid "available"
-msgstr ""
+msgstr "pieejams"
 
 #. module: hr_holidays
 #: model:ir.ui.menu,name:hr_holidays.menu_hr_available_holidays_report_tree

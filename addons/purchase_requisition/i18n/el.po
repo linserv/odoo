@@ -9,6 +9,8 @@
 # Kostas Goutoudis <goutoudis@gmail.com>, 2024
 # Maria Chalepiadou, 2025
 # Gerasimos Kanelatos, 2025
+# Charalampos Loukas, 2025
+# Christos Paraschos, 2025
 # Anastasia Mimou, 2025
 # 
 msgid ""
@@ -43,7 +45,7 @@ msgstr ""
 #. module: purchase_requisition
 #: model_terms:ir.ui.view,arch_db:purchase_requisition.report_purchaserequisition_document
 msgid "2023-08-15"
-msgstr ""
+msgstr "2023-08-15"
 
 #. module: purchase_requisition
 #: model_terms:ir.ui.view,arch_db:purchase_requisition.report_purchaserequisition_document
@@ -53,7 +55,7 @@ msgstr ""
 #. module: purchase_requisition
 #: model_terms:ir.ui.view,arch_db:purchase_requisition.report_purchaserequisition_document
 msgid "2023-09-15"
-msgstr ""
+msgstr "15/09/2023"
 
 #. module: purchase_requisition
 #: model_terms:ir.ui.view,arch_db:purchase_requisition.report_purchaserequisition_document
@@ -1199,7 +1201,7 @@ msgstr ""
 #. module: purchase_requisition
 #: model:ir.model,name:purchase_requisition.model_purchase_requisition_create_alternative
 msgid "Wizard to preset values for alternative PO"
-msgstr ""
+msgstr "Οδηγός για προκαθορισμένες τιμές για εναλλακτική Παραγγελία Αγοράς"
 
 #. module: purchase_requisition
 #. odoo-python
