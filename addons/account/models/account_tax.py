@@ -1089,6 +1089,11 @@ class AccountTax(models.Model):
                 base = manual_tax_amounts[str(tax.id)]['base_amount_currency']
             else:
                 total_tax_amount = sum(taxes_data[other_tax.id]['tax_amount'] for other_tax in tax_data['batch'])
+                total_tax_amount += sum(
+                    reverse_charge_taxes_data[other_tax.id]['tax_amount']
+                    for other_tax in taxes_data[tax.id]['batch']
+                    if other_tax.has_negative_factor
+                )
                 base = raw_base + tax_data['extra_base_for_base']
                 if tax_data['price_include'] and special_mode in (False, 'total_included'):
                     base -= total_tax_amount
@@ -1722,7 +1727,7 @@ class AccountTax(models.Model):
             'analytic_distribution': (
                 base_line_grouping_key['analytic_distribution']
                 if tax.analytic or not tax_rep.use_in_tax_closing
-                else {}
+                else False
             ),
             'account_id': tax_rep_data['account'].id or base_line_grouping_key['account_id'],
             'tax_ids': [Command.set(tax_rep_data['taxes'].ids)],
