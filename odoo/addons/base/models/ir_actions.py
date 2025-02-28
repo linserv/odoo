@@ -76,10 +76,6 @@ class IrActionsActions(models.Model):
                                      ('report', 'Report')],
                                     required=True, default='action')
     binding_view_types = fields.Char(default='list,form')
-    binding_invisible = fields.Char(
-        string="Invisible attribute",
-        help="Python expression, when evaluated as true, the action isn't shown in the action menu.",
-    )
 
     @api.constrains('path')
     def _check_path(self):
@@ -203,7 +199,7 @@ class IrActionsActions(models.Model):
         for action_id, action_model, binding_type in cr.fetchall():
             try:
                 action = self.env[action_model].sudo().browse(action_id)
-                fields = ['name', 'binding_view_types', 'binding_invisible']
+                fields = ['name', 'binding_view_types']
                 for field in ('group_ids', 'res_model', 'sequence', 'domain'):
                     if field in action._fields:
                         fields.append(field)
@@ -883,26 +879,11 @@ class IrActionsServer(models.Model):
     def _get_runner(self):
         multi = True
         t = self.env.registry[self._name]
-        fn = getattr(t, f'_run_action_{self.state}_multi', None)\
-          or getattr(t, f'run_action_{self.state}_multi', None)
+        fn = getattr(t, f'_run_action_{self.state}_multi', None)
         if not fn:
             multi = False
-            fn = getattr(t, f'_run_action_{self.state}', None)\
-              or getattr(t, f'run_action_{self.state}', None)
-        if fn and fn.__name__.startswith('run_action_'):
-            fn = partial(fn, self)
+            fn = getattr(t, f'_run_action_{self.state}', None)
         return fn, multi
-
-    def _register_hook(self):
-        super()._register_hook()
-
-        for cls in self.env.registry[self._name].mro():
-            for symbol in vars(cls).keys():
-                if symbol.startswith('run_action_'):
-                    _logger.warning(
-                        "RPC-public action methods are deprecated, found %r (in class %s.%s)",
-                        symbol, cls.__module__, cls.__name__
-                    )
 
     def create_action(self):
         """ Create a contextual action for each server action. """
@@ -1101,7 +1082,7 @@ class IrActionsServer(models.Model):
                 for active_id in active_ids:
                     # run context dedicated to a particular active_id
                     run_self = action.with_context(active_ids=[active_id], active_id=active_id)
-                    eval_context["env"].context = run_self._context
+                    eval_context['env'] = eval_context['env'](context=run_self.env.context)
                     res = runner(run_self, eval_context=eval_context)
             else:
                 _logger.warning(

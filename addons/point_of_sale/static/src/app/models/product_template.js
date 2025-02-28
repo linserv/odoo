@@ -244,7 +244,7 @@ export class ProductTemplate extends Base {
     }
 
     get searchString() {
-        const fields = ["display_name"];
+        const fields = ["display_name", "default_code"];
         return fields
             .map((field) => this[field] || "")
             .filter(Boolean)
@@ -252,10 +252,11 @@ export class ProductTemplate extends Base {
     }
 
     exactMatch(searchWord) {
-        const fields = ["barcode", "default_code"];
+        const fields = ["barcode"];
         const variantMatch = this.product_variant_ids.some(
             (variant) =>
                 (variant.default_code && variant.default_code.toLowerCase() == searchWord) ||
+                (variant.barcode && variant.barcode.toLowerCase() == searchWord) ||
                 variant.product_template_variant_value_ids.some((vv) =>
                     vv.name.toLowerCase().includes(searchWord)
                 )

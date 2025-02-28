@@ -83,6 +83,7 @@ import {
     getAdjacentCharacter,
     isLinkEligibleForZwnbsp,
     getTableCells,
+    isZwnbsp,
 } from './utils/utils.js';
 import { editorCommands } from './commands/commands.js';
 import { Powerbox } from './powerbox/Powerbox.js';
@@ -4300,6 +4301,7 @@ export class OdooEditor extends EventTarget {
      * @private
      */
     _onKeyDown(ev) {
+        delete this._isNavigatingByMouse;
         const selection = this.document.getSelection();
         if (selection.anchorNode && isProtected(selection.anchorNode)) {
             return;
@@ -4597,8 +4599,48 @@ export class OdooEditor extends EventTarget {
             return;
         }
         this._wasTableSelected = hasTableSelection(this.editable);
-        this.deselectTable();
+        const startTd = closestElement(selection.anchorNode, '.o_selected_td');
+        const endTd = closestElement(selection.focusNode, '.o_selected_td');
+        if (!(startTd && startTd === endTd) || currentKeyPress) {
+            // Prevent deselecting single cell unless selection changes
+            // through keyboard.
+            this.deselectTable();
+        }
         const anchorNode = selection.anchorNode;
+        const isSelectionInEditable = this.isSelectionInEditable(selection);
+        if (this._isNavigatingByMouse && selection.isCollapsed && isSelectionInEditable) {
+            delete this._isNavigatingByMouse;
+            const { startContainer, startOffset, endContainer, endOffset } = getDeepRange(this.editable);
+            const linkElement = closestElement(startContainer, "a");
+            if (
+                linkElement &&
+                linkElement.textContent.startsWith("\uFEFF") &&
+                linkElement.textContent.endsWith("\uFEFF")
+            ) {
+                const linkDescendants = descendants(linkElement);
+
+                // Check if the cursor is positioned at the begining of link.
+                const isCursorAtStartOfLink = isZwnbsp(startContainer)
+                    ? linkDescendants.indexOf(startContainer) === 0
+                    : startContainer.nodeType === Node.TEXT_NODE &&
+                    linkDescendants.indexOf(startContainer) === 1 &&
+                    startOffset === 0;
+
+                // Check if the cursor is positioned at the end of link.
+                const isCursorAtEndOfLink = isZwnbsp(endContainer)
+                    ? linkDescendants.indexOf(endContainer) === linkDescendants.length - 1
+                    : endContainer.nodeType === Node.TEXT_NODE &&
+                    linkDescendants.indexOf(endContainer) === linkDescendants.length - 2 &&
+                    endOffset === nodeSize(endContainer);
+
+                // Handle selection movement.
+                if (isCursorAtStartOfLink || isCursorAtEndOfLink) {
+                    const block = closestBlock(linkElement);
+                    const linkIndex = [...block.childNodes].indexOf(linkElement);
+                    setSelection(block, isCursorAtStartOfLink ? linkIndex - 1 : linkIndex + 2);
+                }
+            }
+        }
         // Correct cursor if at editable root.
         if (
             selection.isCollapsed &&
@@ -4609,12 +4651,10 @@ export class OdooEditor extends EventTarget {
             // The _onSelectionChange handler is going to be triggered again.
             return;
         }
-        let appliedCustomSelection = false;
         if (selection.rangeCount && selection.getRangeAt(0)) {
-            appliedCustomSelection = this._handleSelectionInTable();
+            this._handleSelectionInTable();
         }
-        const isSelectionInEditable = this.isSelectionInEditable(selection);
-        if (!appliedCustomSelection) {
+        if (!hasTableSelection(this.editable)) {
             this._updateToolbar(!selection.isCollapsed && isSelectionInEditable);
         }
         if (!isSelectionInEditable) {
@@ -5043,6 +5083,7 @@ export class OdooEditor extends EventTarget {
     _onMouseDown(ev) {
         delete this._currentKeyPress;
         this._currentMouseState = ev.type;
+        this._isNavigatingByMouse = true;
         this._lastMouseClickPosition = [ev.x, ev.y];
 
         if (this.canActivateContentEditable) {

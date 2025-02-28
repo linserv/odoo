@@ -1050,11 +1050,8 @@ class StockQuant(models.Model):
         quant = None
         if quants:
             # quants are already ordered in _gather
-            # lock the first available, see _acquire_one_job for explanations
-            select = quants._as_query(ordered=True).select()
-            select = SQL("%s LIMIT 1 FOR NO KEY UPDATE SKIP LOCKED", select)
-            for [quant_id] in self.env.execute_query(select):
-                quant = self.browse(quant_id)
+            # lock the first available
+            quant = quants.try_lock_for_update(allow_referencing=True, limit=1)
 
         if quant:
             vals = {'in_date': in_date}
@@ -1248,7 +1245,7 @@ class StockQuant(models.Model):
         return self
 
     @api.model
-    def _get_quants_action(self, domain=None, extend=False):
+    def _get_quants_action(self, extend=False):
         """ Returns an action to open (non-inventory adjustment) quant view.
         Depending of the context (user have right to be inventory mode or not),
         the list view will be editable or readonly.
@@ -1261,23 +1258,8 @@ class StockQuant(models.Model):
         ctx = dict(self.env.context or {})
         ctx['inventory_report_mode'] = True
         ctx.pop('group_by', None)
-        action = {
-            'name': _('Locations'),
-            'view_mode': 'list,form',
-            'res_model': 'stock.quant',
-            'type': 'ir.actions.act_window',
-            'context': ctx,
-            'domain': domain or [],
-            'help': """
-                <p class="o_view_nocontent_empty_folder">{}</p>
-                <p>{}</p>
-                """.format(_('No Stock On Hand'),
-                           _('This analysis gives you an overview of the current stock level of your products.')),
-        }
 
-        target_action = self.env.ref('stock.dashboard_open_quants', False)
-        if target_action:
-            action['id'] = target_action.id
+        action = self.env['ir.actions.act_window']._for_xml_id('stock.stock_quant_action')
 
         form_view = self.env.ref('stock.view_stock_quant_form_editable').id
         if self.env.context.get('inventory_mode') and self.env.user.has_group('stock.group_stock_manager'):
@@ -1289,6 +1271,7 @@ class StockQuant(models.Model):
                 (action['view_id'], 'list'),
                 (form_view, 'form'),
             ],
+            'context': ctx,
         })
         if extend:
             action.update({
@@ -1300,6 +1283,8 @@ class StockQuant(models.Model):
                     (self.env.ref('stock.stock_quant_view_graph').id, 'graph'),
                 ],
             })
+        # It's mainly define in the server action in order to call _get_quants_action when using the url
+        action['path'] = "stock-locations"
         return action
 
     def _get_gs1_barcode(self, gs1_quantity_rules_ai_by_uom=False):

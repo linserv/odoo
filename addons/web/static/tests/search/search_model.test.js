@@ -495,6 +495,7 @@ test("parsing a searchpanel field select one", async () => {
             activeValueId: false,
             color: null,
             description: "res.company",
+            depth: 0,
             empty: false,
             enableCounters: false,
             expand: false,
@@ -1038,34 +1039,6 @@ test("filter tags with invisible attribute", async () => {
             </search>
         `,
         context: { abc: true },
-    });
-    const filters = model
-        .getSearchItems((item) => ["filter", "dateFilter"].includes(item.type))
-        .map((item) => item.name);
-    expect(filters).toEqual(["filter2"]);
-});
-
-test("field tags with invisible attribute - evalContext", async () => {
-    const model = await createSearchModel({
-        searchViewArch: `
-            <search>
-                <field name="foo" invisible="companies.active_id"/>
-                <field name="bar" invisible="companies.active_id == 2"/>
-            </search>
-        `,
-    });
-    const fields = model.getSearchItems((f) => f.type === "field").map((item) => item.fieldName);
-    expect(fields).toEqual(["bar"]);
-});
-
-test("filter tags with invisible attribute - evalContext", async () => {
-    const model = await createSearchModel({
-        searchViewArch: `
-            <search>
-                <filter name="filter1" string="Invisible ABC" domain="[]" invisible="companies.active_id"/>
-                <filter name="filter2" string="Invisible DEF" domain="[]" invisible="companies.active_id == 2"/>
-            </search>
-        `,
     });
     const filters = model
         .getSearchItems((item) => ["filter", "dateFilter"].includes(item.type))

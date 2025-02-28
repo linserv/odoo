@@ -680,7 +680,7 @@ test("channel preview: basic rendering", async () => {
     });
     pyEnv["mail.message"].create({
         author_id: partnerId,
-        body: "<p>test</p>",
+        body: "<p>test<br/>hi</p>",
         model: "discuss.channel",
         res_id: channelId,
     });
@@ -689,7 +689,7 @@ test("channel preview: basic rendering", async () => {
     await contains(".o-mail-NotificationItem");
     await contains(".o-mail-NotificationItem img");
     await contains(".o-mail-NotificationItem-name", { text: "General" });
-    await contains(".o-mail-NotificationItem-text", { text: "Demo: test" });
+    await contains(".o-mail-NotificationItem-text", { text: "Demo: test hi" });
 });
 
 test("chat preview should not display correspondent name in body", async () => {
@@ -918,6 +918,135 @@ test("preview should display last needaction message preview even if there is a 
     await click(".o_menu_systray i[aria-label='Messages']");
     await contains(".o-mail-NotificationItem-text", {
         text: "Stranger: I am the oldest but needaction",
+    });
+});
+
+test("Attachment-only message preview shows file type icon", async () => {
+    const pyEnv = await startServer();
+    const partners = pyEnv["res.partner"].create([
+        { name: "Partner1" },
+        { name: "Partner2" },
+        { name: "Partner3" },
+        { name: "Partner4" },
+        { name: "Partner5" },
+    ]);
+    const channelIds = pyEnv["discuss.channel"].create([
+        { name: "Channel1" },
+        { name: "Channel2" },
+        { name: "Channel3" },
+        { name: "Channel4" },
+        { name: "Channel5" },
+    ]);
+    const attachments = [
+        {
+            mimetype: "audio/mpeg",
+            name: "voicemessage",
+            icon: "fa-microphone",
+            text: "Voice Message",
+            voice_ids: [Command.create({ display_name: "voicemessage" })],
+        },
+        { mimetype: "video/mp4", name: "Video.mp4", icon: "fa-video-camera", text: "Video.mp4" },
+        { mimetype: "application/pdf", name: "File.pdf", icon: "fa-file", text: "File.pdf" },
+        { mimetype: "image/jpeg", name: "Image.jpeg", icon: "fa-picture-o", text: "Image.jpeg" },
+        { mimetype: "audio/mpeg", name: "Audio.mp3", icon: "fa-headphones", text: "Audio.mp3" },
+    ];
+
+    pyEnv["mail.message"].create(
+        attachments.map((attachment, i) => ({
+            attachment_ids: [
+                Command.create({
+                    mimetype: attachment.mimetype,
+                    name: attachment.name,
+                    res_id: channelIds[i],
+                    res_model: "discuss.channel",
+                    voice_ids: attachment.voice_ids || [],
+                }),
+            ],
+            author_id: partners[i],
+            body: "",
+            model: "discuss.channel",
+            res_id: channelIds[i],
+        }))
+    );
+    await start();
+    await click(".o_menu_systray i[aria-label='Messages']");
+    await contains(".o-mail-NotificationItem:eq(0) i.fa-microphone");
+    await contains(".o-mail-NotificationItem:eq(0)", { text: "Partner1: Voice Message" });
+    await contains(".o-mail-NotificationItem:eq(1) i.fa-video-camera");
+    await contains(".o-mail-NotificationItem:eq(1)", { text: "Partner2: Video.mp4" });
+    await contains(".o-mail-NotificationItem:eq(2) i.fa-file");
+    await contains(".o-mail-NotificationItem:eq(2)", { text: "Partner3: File.pdf" });
+    await contains(".o-mail-NotificationItem:eq(3) i.fa-picture-o");
+    await contains(".o-mail-NotificationItem:eq(3)", { text: "Partner4: Image.jpeg" });
+    await contains(".o-mail-NotificationItem:eq(4) i.fa-headphones");
+    await contains(".o-mail-NotificationItem:eq(4)", { text: "Partner5: Audio.mp3" });
+});
+
+test("Attachment-only message preview shows file names (2 files)", async () => {
+    const pyEnv = await startServer();
+    const partner1 = pyEnv["res.partner"].create({ name: "Partner" });
+    const channel1 = pyEnv["discuss.channel"].create({ name: "test" });
+    pyEnv["mail.message"].create({
+        attachment_ids: [
+            Command.create({
+                mimetype: "application/pdf",
+                name: "File.pdf",
+                res_id: channel1,
+                res_model: "discuss.channel",
+            }),
+            Command.create({
+                mimetype: "image/jpeg",
+                name: "Image.jpeg",
+                res_id: channel1,
+                res_model: "discuss.channel",
+            }),
+        ],
+        author_id: partner1,
+        body: "",
+        model: "discuss.channel",
+        res_id: channel1,
+    });
+    await start();
+    await click(".o_menu_systray i[aria-label='Messages']");
+    await contains(".o-mail-NotificationItem-text", {
+        text: "Partner: File.pdf and Image.jpeg",
+    });
+});
+
+test("Attachment-only message preview shows file names (3 files)", async () => {
+    const pyEnv = await startServer();
+    const partner1 = pyEnv["res.partner"].create({ name: "Partner" });
+    const channel1 = pyEnv["discuss.channel"].create({ name: "test" });
+    pyEnv["mail.message"].create({
+        attachment_ids: [
+            Command.create({
+                mimetype: "application/pdf",
+                name: "File.pdf",
+                res_id: channel1,
+                res_model: "discuss.channel",
+            }),
+            Command.create({
+                mimetype: "image/jpeg",
+                name: "Image.jpeg",
+                res_id: channel1,
+                res_model: "discuss.channel",
+            }),
+            Command.create({
+                mimetype: "video/mp4",
+                name: "Video.mp4",
+                res_id: channel1,
+                res_model: "discuss.channel",
+            }),
+        ],
+        author_id: partner1,
+        body: "",
+        model: "discuss.channel",
+        res_id: channel1,
+    });
+    await start();
+    await click(".o_menu_systray i[aria-label='Messages']");
+    await contains(".o-mail-NotificationItem-text", {
+        text: "Partner: File.pdf and 2 other attachments",
     });
 });
 

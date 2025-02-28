@@ -38,6 +38,7 @@ import { WithLazyGetterTrap } from "@point_of_sale/lazy_getter";
 import { debounce } from "@web/core/utils/timing";
 import DevicesSynchronisation from "../utils/devices_synchronisation";
 import { deserializeDateTime } from "@web/core/l10n/dates";
+import { openCustomerDisplay } from "@point_of_sale/customer_display/utils";
 
 const { DateTime } = luxon;
 
@@ -149,6 +150,7 @@ export class PosStore extends WithLazyGetterTrap {
         }
         this.closeOtherTabs();
         this.syncAllOrdersDebounced = debounce(this.syncAllOrders, 100);
+        this._searchTriggered = false;
     }
 
     get firstScreen() {
@@ -548,6 +550,14 @@ export class PosStore extends WithLazyGetterTrap {
 
         this.markReady();
         this.showScreen(this.firstScreen);
+        await this.deviceSync.readDataFromServer();
+        if (this.config.customer_display_type !== "none") {
+            openCustomerDisplay(
+                this.getDisplayDeviceIP(),
+                this.config.access_token,
+                this.config.id
+            );
+        }
     }
 
     get productListViewMode() {
@@ -1995,7 +2005,7 @@ export class PosStore extends WithLazyGetterTrap {
 
         const existingLotsName = existingLots.map((l) => l.name);
         const payload = await makeAwaitable(this.dialog, EditListPopup, {
-            title: _t("Lot/Serial Number(s) Required"),
+            title: _t("Lot/Serial number(s) required for"),
             name: product.display_name,
             isSingleItem: isAllowOnlyOneLot,
             array: packLotLinesToEdit,
@@ -2161,11 +2171,21 @@ export class PosStore extends WithLazyGetterTrap {
         let list = [];
 
         if (searchWord !== "") {
-            list = this.getProductsBySearchWord(searchWord, allProducts);
-        } else if (this.selectedCategory?.id) {
-            list = this.selectedCategory.associatedProducts;
+            if (!this._searchTriggered) {
+                this.setSelectedCategory(0);
+                this._searchTriggered = true;
+            }
+            list = this.getProductsBySearchWord(
+                searchWord,
+                this.selectedCategory?.id ? this.selectedCategory.associatedProducts : allProducts
+            );
         } else {
-            list = allProducts;
+            this._searchTriggered = false;
+            if (this.selectedCategory?.id) {
+                list = this.selectedCategory.associatedProducts;
+            } else {
+                list = allProducts;
+            }
         }
 
         if (!list || list.length === 0) {

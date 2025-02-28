@@ -56,7 +56,6 @@ import {
 } from "@web/../tests/web_test_helpers";
 
 import { browser } from "@web/core/browser/browser";
-import { cookie } from "@web/core/browser/cookie";
 import { makeErrorFromResponse } from "@web/core/network/rpc";
 import { registry } from "@web/core/registry";
 import { SIZES } from "@web/core/ui/ui_service";
@@ -1165,58 +1164,6 @@ test(`invisible fields are properly hidden`, async () => {
     expect(`label:contains(Foo)`).toHaveCount(0);
     expect(`.o_field_widget[name=foo]`).toHaveCount(0);
     expect(`.o_field_widget[name=float_field]`).toHaveCount(0);
-    expect(`.o_field_widget[name="child_ids"]`).toHaveCount(0);
-});
-
-test(`invisible, required and readonly using company evalContext`, async () => {
-    Partner._records[0].int_field = 3;
-    cookie.set("cids", "3-1");
-    serverState.companies = [
-        {
-            id: 1,
-            name: "Company 1",
-            sequence: 1,
-            parent_id: false,
-            child_ids: [],
-            country_code: "BE",
-        },
-        {
-            id: 2,
-            name: "Company 2",
-            sequence: 2,
-            parent_id: false,
-            child_ids: [],
-            country_code: "PE",
-        },
-        {
-            id: 3,
-            name: "Company 3",
-            sequence: 3,
-            parent_id: false,
-            child_ids: [],
-            country_code: "AR",
-        },
-    ];
-
-    await mountView({
-        resModel: "partner",
-        type: "form",
-        arch: `
-            <form>
-                <sheet>
-                    <field name="int_field" invisible="1"/>
-                    <group>
-                        <field name="foo" required="companies.has(companies.active_ids, 'country_code', 'BE')"/>
-                    </group>
-                    <field name="name" readonly="companies.has(companies.active_id, 'country_code', 'AR')"/>
-                    <field name="child_ids" invisible="not companies.has(int_field, 'country_code', 'PE')"/>
-                </sheet>
-            </form>
-        `,
-        resId: 1,
-    });
-    expect(`.o_field_widget[name=foo]`).toHaveClass("o_required_modifier");
-    expect(`.o_field_widget[name=name]`).toHaveClass("o_readonly_modifier");
     expect(`.o_field_widget[name="child_ids"]`).toHaveCount(0);
 });
 
@@ -6543,12 +6490,12 @@ test(`onchanges on date(time) fields`, async () => {
         resId: 1,
     });
     expect(`.o_field_widget[name=date] input`).toHaveValue("01/25/2017");
-    expect(`.o_field_widget[name=datetime] input`).toHaveValue("12/12/2016 12:55:05");
+    expect(`.o_field_widget[name=datetime] input`).toHaveValue("12/12/2016 12:55");
 
     // trigger the onchange
     await contains(`.o_field_widget[name="foo"] input`).edit("coucou");
     expect(`.o_field_widget[name=date] input`).toHaveValue("12/12/2021");
-    expect(`.o_field_widget[name=datetime] input`).toHaveValue("12/12/2021 12:55:05");
+    expect(`.o_field_widget[name=datetime] input`).toHaveValue("12/12/2021 12:55");
 });
 
 test(`onchanges are not sent for invalid values`, async () => {
@@ -8316,10 +8263,19 @@ test(`default_order on x2many embedded view`, async () => {
         "My little Foo Value",
     ]);
 
-    // client-side sort on edit
+    // no client-side sort after edit
     await contains(`.o_data_row:eq(1) .o_data_cell:eq(0)`).click();
     await contains(`.modal .o_field_widget[name=foo] input`).edit("zzz");
     await contains(`.modal-footer .o_form_button_save`).click();
+    expect(queryAllTexts`.o_data_row .o_data_cell:nth-child(2)`).toEqual([
+        "zop",
+        "zzz",
+        "xop",
+        "My little Foo Value",
+    ]);
+
+    // server-side sort post save
+    await contains(`.o_form_button_save`).click();
     expect(queryAllTexts`.o_data_row .o_data_cell:nth-child(2)`).toEqual([
         "zzz",
         "zop",

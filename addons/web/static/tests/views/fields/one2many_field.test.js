@@ -876,7 +876,7 @@ test("one2many with date and datetime", async () => {
         resId: 1,
     });
     expect("td:eq(0)").toHaveText("01/25/2017");
-    expect("td:eq(1)").toHaveText("12/12/2016 12:55:05");
+    expect("td:eq(1)").toHaveText("12/12/2016 12:55");
 });
 
 test("rendering with embedded one2many", async () => {
@@ -9688,7 +9688,7 @@ test("one2many with extra field from server not in form", async () => {
     // Redo asserts in RO mode after saving
     expect(".o_data_row").toHaveCount(1);
     cells = queryAll(".o_data_cell");
-    expect(cells[0]).toHaveText("04/05/2018 13:00:00");
+    expect(cells[0]).toHaveText("04/05/2018 13:00");
     expect(cells[1]).toHaveText("michelangelo");
 });
 
@@ -13320,4 +13320,58 @@ test("one2many kanban: add button kanban's card only with no control", async () 
     expect("[name='control'] .o_x2m_control_panel .o-kanban-button-new").toHaveCount(0);
     expect("[name='control'] .o_kanban_renderer .o-kanban-button-new").toHaveCount(0);
     expect("[name='control'] .myCustomClass").toHaveText("Add Custom");
+});
+
+test("edit o2m with default_order on a field not in view", async () => {
+    Partner._records[0].turtles = [1, 2, 3];
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        arch: `
+            <form>
+                <field name="turtles">
+                    <list default_order="turtle_int">
+                        <field name="turtle_foo"/>
+                        <field name="turtle_bar"/>
+                    </list>
+                    <form>
+                        <field name="turtle_foo"/>
+                    </form>
+                </field>
+            </form>`,
+        resId: 1,
+    });
+    expect(queryAllTexts(".o_data_cell.o_list_char")).toEqual(["yop", "blip", "kawa"]);
+
+    await contains(".o_data_row:eq(1) .o_data_cell").click();
+    await contains(".modal .o_field_widget[name=turtle_foo] input").edit("blip2");
+    await contains(".modal-footer .o_form_button_save").click();
+    expect(queryAllTexts(".o_data_cell.o_list_char")).toEqual(["yop", "blip2", "kawa"]);
+});
+
+test("edit o2m with default_order on a field not in view (2)", async () => {
+    Partner._records[0].turtles = [1, 2, 3];
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        arch: `
+            <form>
+                <field name="turtles">
+                    <list default_order="turtle_foo,turtle_int">
+                        <field name="turtle_foo"/>
+                        <field name="turtle_bar"/>
+                    </list>
+                    <form>
+                        <field name="turtle_foo"/>
+                    </form>
+                </field>
+            </form>`,
+        resId: 1,
+    });
+    expect(queryAllTexts(".o_data_cell.o_list_char")).toEqual(["blip", "kawa", "yop"]);
+
+    await contains(".o_data_row:eq(1) .o_data_cell").click();
+    await contains(".modal .o_field_widget[name=turtle_foo] input").edit("kawa2");
+    await contains(".modal-footer .o_form_button_save").click();
+    expect(queryAllTexts(".o_data_cell.o_list_char")).toEqual(["blip", "kawa2", "yop"]);
 });

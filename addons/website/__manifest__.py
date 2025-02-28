@@ -160,6 +160,7 @@
         'views/snippets/s_website_form_overlay.xml',
         'views/snippets/s_title_form.xml',
         'views/snippets/s_searchbar.xml',
+        'views/snippets/s_inline_text.xml',
         'views/snippets/s_button.xml',
         'views/snippets/s_freegrid.xml',
         'views/snippets/s_card_offset.xml',
@@ -516,5 +517,6 @@
             '5': ['s_text_block_h1', 's_text_block', 's_image_gallery', 's_picture'],
         },
     },
+    'author': 'Odoo S.A.',
     'license': 'LGPL-3',
 }

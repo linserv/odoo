@@ -5,39 +5,26 @@ import {
     htmlToTextContentInline,
     prettifyMessageContent,
 } from "@mail/utils/common/format";
-import { rpc } from "@web/core/network/rpc";
+import { createDocumentFragmentFromContent } from "@mail/utils/common/html";
 
 import { browser } from "@web/core/browser/browser";
-import { _t } from "@web/core/l10n/translation";
-import { user } from "@web/core/user";
-import { url } from "@web/core/utils/urls";
 import { stateToUrl } from "@web/core/browser/router";
+import { _t } from "@web/core/l10n/translation";
+import { rpc } from "@web/core/network/rpc";
+import { user } from "@web/core/user";
+import { createElementWithContent } from "@web/core/utils/html";
+import { url } from "@web/core/utils/urls";
 
 const { DateTime } = luxon;
 export class Message extends Record {
     static _name = "mail.message";
     static id = "id";
-    /** @type {Object.<number, import("models").Message>} */
-    static records = {};
-    /** @returns {import("models").Message} */
-    static get(data) {
-        return super.get(data);
-    }
-    /**
-     * @template T
-     * @param {T} data
-     * @returns {T extends any[] ? import("models").Message[] : import("models").Message}
-     */
-    static insert(data) {
-        return super.insert(...arguments);
-    }
 
     /** @param {Object} data */
     update(data) {
         super.update(data);
         if (this.isNotification && !this.notificationType) {
-            const parser = new DOMParser();
-            const htmlBody = parser.parseFromString(this.body, "text/html");
+            const htmlBody = createDocumentFragmentFromContent(this.body);
             this.notificationType = htmlBody.querySelector(".o_mail_notification")?.dataset.oeType;
         }
     }
@@ -54,11 +41,9 @@ export class Message extends Record {
     edited = Record.attr(false, {
         compute() {
             return Boolean(
-                new DOMParser()
-                    .parseFromString(this.body, "text/html")
-                    // ".o-mail-Message-edited" is the class added by the mail.thread in _message_update_content
-                    // when the message is edited
-                    .querySelector(".o-mail-Message-edited")
+                // ".o-mail-Message-edited" is the class added by the mail.thread in _message_update_content
+                // when the message is edited
+                createDocumentFragmentFromContent(this.body).querySelector(".o-mail-Message-edited")
             );
         },
     });
@@ -67,8 +52,7 @@ export class Message extends Record {
             if (this.isBodyEmpty) {
                 return false;
             }
-            const div = document.createElement("div");
-            div.innerHTML = this.body;
+            const div = createElementWithContent("div", this.body);
             return Boolean(div.querySelector("a:not([data-oe-model])"));
         },
     });
@@ -120,9 +104,7 @@ export class Message extends Record {
     scheduledDatetime = Record.attr(undefined, { type: "datetime" });
     onlyEmojis = Record.attr(false, {
         compute() {
-            const div = document.createElement("div");
-            div.innerHTML = this.body;
-            const bodyWithoutTags = div.textContent;
+            const bodyWithoutTags = createElementWithContent("div", this.body).textContent;
             const withoutEmojis = bodyWithoutTags.replace(EMOJI_REGEX, "");
             return (
                 bodyWithoutTags.length > 0 &&
@@ -376,6 +358,53 @@ export class Message extends Record {
         );
     }
 
+    get hasOnlyAttachments() {
+        return this.isBodyEmpty && this.attachment_ids.length > 0;
+    }
+
+    get previewText() {
+        if (!this.hasOnlyAttachments) {
+            return this.inlineBody || this.subtype_description;
+        }
+        const { attachment_ids: attachments } = this;
+        if (!attachments || attachments.length === 0) {
+            return "";
+        }
+        switch (attachments.length) {
+            case 1:
+                return attachments[0].previewName;
+            case 2:
+                return _t("%(file1)s and %(file2)s", {
+                    file1: attachments[0].previewName,
+                    file2: attachments[1].previewName,
+                    count: attachments.length - 1,
+                });
+            default:
+                return _t("%(file1)s and %(count)s other attachments", {
+                    file1: attachments[0].previewName,
+                    count: attachments.length - 1,
+                });
+        }
+    }
+
+    get previewIcon() {
+        const { attachment_ids: attachments } = this;
+        if (!attachments || attachments.length === 0) {
+            return "";
+        }
+        const firstAttachment = attachments[0];
+        switch (true) {
+            case firstAttachment.isImage:
+                return "fa-picture-o";
+            case firstAttachment.mimetype === "audio/mpeg":
+                return firstAttachment.voice ? "fa-microphone" : "fa-headphones";
+            case firstAttachment.isVideo:
+                return "fa-video-camera";
+            default:
+                return "fa-file";
+        }
+    }
+
     /** @param {import("models").Thread} thread the thread where the message is shown */
     canAddReaction(thread) {
         return Boolean(!this.is_transient && this.thread && !this.thread.isTransient);
@@ -421,7 +450,7 @@ export class Message extends Record {
             attachment_tokens: attachments
                 .concat(this.attachment_ids)
                 .map((attachment) => attachment.access_token),
-            body: await prettifyMessageContent(body, validMentions),
+            body: await prettifyMessageContent(body, { validMentions }),
             message_id: this.id,
             partner_ids: validMentions?.partners?.map((partner) => partner.id),
             ...this.thread.rpcParams,

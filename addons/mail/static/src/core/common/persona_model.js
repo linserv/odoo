@@ -3,6 +3,8 @@ import { imageUrl } from "@web/core/utils/urls";
 import { rpc } from "@web/core/network/rpc";
 import { debounce } from "@web/core/utils/timing";
 
+const TRANSPARENT_AVATAR =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAQAAABpN6lAAAAAqElEQVR42u3QMQEAAAwCoNm/9GJ4CBHIjYsAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBAgQIAAAQIECBDQ9+KgAIHd5IbMAAAAAElFTkSuQmCC";
 const { DateTime } = luxon;
 
 /**
@@ -17,16 +19,6 @@ const { DateTime } = luxon;
 
 export class Persona extends Record {
     static id = AND("type", "id");
-    /** @type {Object.<number, import("models").Persona>} */
-    static records = {};
-    /** @returns {import("models").Persona} */
-    static get(data) {
-        return super.get(data);
-    }
-    /** @returns {import("models").Persona|import("models").Persona[]} */
-    static insert(data) {
-        return super.insert(...arguments);
-    }
     static new() {
         const record = super.new(...arguments);
         record.debouncedSetImStatus = debounce(
@@ -46,6 +38,8 @@ export class Persona extends Record {
     /** @type {string} */
     phone;
     debouncedSetImStatus;
+    /** @type {ReturnType<import("@odoo/owl").markup>|string|undefined} */
+    signature = Record.attr(undefined, { html: true });
     storeAsTrackedImStatus = Record.one("Store", {
         /** @this {import("models").Persona} */
         compute() {
@@ -118,6 +112,9 @@ export class Persona extends Record {
             });
         }
         if (this.type === "guest") {
+            if (this.id === -1) {
+                return TRANSPARENT_AVATAR;
+            }
             return imageUrl("mail.guest", this.id, "avatar_128", {
                 ...accessTokenParam,
                 unique: this.write_date,

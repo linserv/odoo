@@ -102,6 +102,10 @@ class AccountMove(models.Model):
         return self.journal_id.sequence_override_regex or super()._sequence_yearly_regex
 
     @property
+    def _sequence_year_range_regex(self):
+        return self.journal_id.sequence_override_regex or super()._sequence_year_range_regex
+
+    @property
     def _sequence_fixed_regex(self):
         return self.journal_id.sequence_override_regex or super()._sequence_fixed_regex
 
@@ -2617,7 +2621,7 @@ class AccountMove(models.Model):
                 or not self.invoice_date
                 or reference_date <= self.invoice_payment_term_id._get_last_discount_date(self.invoice_date)
             ) \
-            and not (payment_terms.matched_debit_ids + payment_terms.matched_credit_ids)
+            and not (payment_terms.sudo().matched_debit_ids + payment_terms.sudo().matched_credit_ids)
 
     # -------------------------------------------------------------------------
     # BUSINESS MODELS SYNCHRONIZATION
@@ -3461,7 +3465,7 @@ class AccountMove(models.Model):
             # Disallow modifying readonly fields on a posted move
             move_state = vals.get('state', move.state)
             unmodifiable_fields = (
-                'invoice_line_ids', 'line_ids', 'invoice_date', 'date', 'partner_id', 'partner_bank_id',
+                'invoice_line_ids', 'line_ids', 'invoice_date', 'date', 'partner_id',
                 'invoice_payment_term_id', 'currency_id', 'fiscal_position_id', 'invoice_cash_rounding_id')
             readonly_fields = [val for val in vals if val in unmodifiable_fields]
             if not self._context.get('skip_readonly_check') and move_state == "posted" and readonly_fields:
@@ -5628,6 +5632,7 @@ class AccountMove(models.Model):
         if any(move.state != 'draft' for move in self):
             raise UserError(_("Only draft journal entries can be cancelled."))
 
+        self.payment_ids.state = "canceled"
         self.write({'auto_post': 'no', 'state': 'cancel'})
 
     def action_toggle_block_payment(self):
@@ -6267,8 +6272,9 @@ class AccountMove(models.Model):
     @api.model
     def message_new(self, msg_dict, custom_values=None):
         # EXTENDS mail mail.thread
+        custom_values = custom_values or {}
         # Add custom behavior when receiving a new invoice through the mail's gateway.
-        if (custom_values or {}).get('move_type', 'entry') not in ('out_invoice', 'in_invoice', 'entry'):
+        if custom_values.get('move_type', 'entry') not in ('out_invoice', 'in_invoice', 'entry'):
             return super().message_new(msg_dict, custom_values=custom_values)
 
         self = self.with_context(skip_is_manually_modified=True)  # noqa: PLW0642
@@ -6317,7 +6323,7 @@ class AccountMove(models.Model):
             'invoice_source_email': from_mail_addresses[0],
             'partner_id': partners and partners[0].id or False,
         }
-        move_ctx = self.with_context(default_move_type=custom_values['move_type'], default_journal_id=custom_values['journal_id'])
+        move_ctx = self.with_context(default_move_type=custom_values.get('move_type', 'entry'), default_journal_id=custom_values.get('journal_id'))
         move = super(AccountMove, move_ctx).message_new(msg_dict, custom_values=values)
         move._compute_name()  # because the name is given, we need to recompute in case it is the first invoice of the journal
 
@@ -6566,4 +6572,4 @@ class AccountMove(models.Model):
 
         :returns: True if commit is acceptable, False otherwise.
         """
-        return not tools.config['test_enable'] and not modules.module.current_test
+        return not modules.module.current_test

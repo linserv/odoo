@@ -196,7 +196,7 @@ export class SearchModel extends EventBus {
     async load(config) {
         const { resModel } = config;
         if (!resModel) {
-            throw Error(`SearchPanel config should have a "resModel" key`);
+            throw Error(`SearchModel config should have a "resModel" key`);
         }
         this.resModel = resModel;
 
@@ -397,7 +397,7 @@ export class SearchModel extends EventBus {
     }
 
     get domainEvalContext() {
-        return Object.assign({}, this.globalContext, user.evalContext);
+        return Object.assign({}, this.globalContext, user.context);
     }
 
     get facets() {

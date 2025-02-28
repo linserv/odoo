@@ -1,6 +1,5 @@
 import { Plugin } from "../plugin";
-import { isBlock } from "../utils/blocks";
-import { hasAnyNodesColor } from "@html_editor/utils/color";
+import { closestBlock, isBlock } from "../utils/blocks";
 import { cleanTextNode, splitTextNode, unwrapContents } from "../utils/dom";
 import {
     areSimilarElements,
@@ -11,6 +10,7 @@ import {
     isVisibleTextNode,
     isZwnbsp,
     isZWS,
+    previousLeaf,
 } from "../utils/dom_info";
 import { childNodes, closestElement, descendants, selectElements } from "../utils/dom_traversal";
 import { FONT_SIZE_CLASSES, formatsSpecs } from "../utils/formatting";
@@ -19,6 +19,7 @@ import { prepareUpdate } from "@html_editor/utils/dom_state";
 import { _t } from "@web/core/l10n/translation";
 import { callbacksForCursorUpdate } from "@html_editor/utils/selection";
 import { withSequence } from "@html_editor/utils/resource";
+import { isFakeLineBreak } from "../utils/dom_state";
 
 const allWhitespaceRegex = /^[\s\u200b]*$/;
 
@@ -192,9 +193,6 @@ export class FormatPlugin extends Plugin {
         );
     }
 
-    // @todo: issues:
-    // - the calls to hasAnyColor should probably be replaced by calls to predicates
-    //   registered as resources (e.g. by the ColorPlugin).
     hasAnyFormat(traversedNodes) {
         for (const format of Object.keys(formatsSpecs)) {
             if (
@@ -204,9 +202,8 @@ export class FormatPlugin extends Plugin {
                 return true;
             }
         }
-        return (
-            hasAnyNodesColor(traversedNodes, "color") ||
-            hasAnyNodesColor(traversedNodes, "backgroundColor")
+        return traversedNodes.some((node) =>
+            this.getResource("has_format_predicates").some((predicate) => predicate(node))
         );
     }
 
@@ -246,7 +243,9 @@ export class FormatPlugin extends Plugin {
                 .filter(
                     (n) =>
                         ((isTextNode(n) && (isVisibleTextNode(n) || isZWS(n))) ||
-                            n.nodeName === "BR") &&
+                            (n.nodeName === "BR" &&
+                                (isFakeLineBreak(n) ||
+                                    previousLeaf(n, closestBlock(n))?.nodeName === "BR"))) &&
                         isContentEditable(n)
                 )
         );

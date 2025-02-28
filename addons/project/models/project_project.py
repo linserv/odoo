@@ -9,11 +9,13 @@ from odoo.addons.mail.tools.discuss import Store
 from odoo.addons.rating.models import rating_data
 from odoo.exceptions import UserError
 from odoo.osv.expression import AND
-from odoo.tools import get_lang, SQL
+from odoo.tools import get_lang, SQL, LazyTranslate
 from odoo.tools.misc import unquote
 from odoo.tools.translate import _
 from .project_update import STATUS_COLOR
 from .project_task import CLOSED_STATES
+
+_lt = LazyTranslate(__name__)
 
 
 class ProjectProject(models.Model):
@@ -108,7 +110,7 @@ class ProjectProject(models.Model):
     task_ids = fields.One2many('project.task', 'project_id', string='Tasks', export_string_translation=False,
                                domain=lambda self: [('is_closed', '=', False)])
     color = fields.Integer(string='Color Index', export_string_translation=False)
-    user_id = fields.Many2one('res.users', string='Project Manager', default=lambda self: self.env.user, tracking=True)
+    user_id = fields.Many2one('res.users', string='Project Manager', default=lambda self: self.env.user, tracking=True, falsy_value_label=_lt("👤 Unassigned"))
     alias_id = fields.Many2one(help="Internal email associated with this project. Incoming emails are automatically synchronized "
                                     "with Tasks (or optionally Issues if the Issue Tracker module is installed).")
     privacy_visibility = fields.Selection([
@@ -480,11 +482,15 @@ class ProjectProject(models.Model):
                 # The project's company_id must be the same as the stage's company_id
                 if stage.company_id:
                     for vals in vals_list:
+                        if vals.get('stage_id'):
+                            continue
                         vals['company_id'] = stage.company_id.id
             else:
                 companies_ids = [vals.get('company_id', False) for vals in vals_list] + [False]
                 stages = self.env['project.project.stage'].search([('company_id', 'in', companies_ids)])
                 for vals in vals_list:
+                    if vals.get('stage_id'):
+                        continue
                     # Pick the stage with the lowest sequence with no company or project's company
                     stage_domain = [False] if 'company_id' not in vals else [False, vals.get('company_id')]
                     stage = stages.filtered(lambda s: s.company_id.id in stage_domain)[:1]

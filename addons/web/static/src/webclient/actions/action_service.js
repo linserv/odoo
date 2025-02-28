@@ -28,8 +28,9 @@ import {
     status,
 } from "@odoo/owl";
 import { downloadReport, getReportUrl } from "./reports/utils";
-import { omit, pick, shallowEqual } from "@web/core/utils/objects";
 import { zip } from "@web/core/utils/arrays";
+import { isHtmlEmpty } from "@web/core/utils/html";
+import { omit, pick, shallowEqual } from "@web/core/utils/objects";
 import { session } from "@web/session";
 import { exprToBoolean } from "@web/core/utils/strings";
 
@@ -72,6 +73,7 @@ const actionRegistry = registry.category("actions");
  * @property {ViewType} [viewType]
  * @property {"replaceCurrentAction" | "replacePreviousAction"} [stackPosition]
  * @property {number} [index]
+ * @property {boolean} [newWindow]
  */
 
 export async function clearUncommittedChanges(env) {
@@ -399,12 +401,10 @@ export function makeActionManager(env, router = _router) {
         const domain = action.domain || [];
         action.domain =
             typeof domain === "string"
-                ? evaluateExpr(domain, Object.assign({}, user.evalContext, action.context))
+                ? evaluateExpr(domain, Object.assign({}, user.context, action.context))
                 : domain;
         if (action.help) {
-            const htmlHelp = document.createElement("div");
-            htmlHelp.innerHTML = action.help;
-            if (!htmlHelp.innerText.trim()) {
+            if (isHtmlEmpty(action.help)) {
                 delete action.help;
             }
         }

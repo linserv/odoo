@@ -1098,9 +1098,19 @@ class Field(typing.Generic[T]):
             # _init_column may delay computations in post-init phase
             @model.pool.post_init
             def add_not_null():
-                # flush values before adding NOT NULL constraint
-                model.flush_model([self.name])
-                model.pool.post_constraint(apply_required, model, self.name)
+                # At the time this function is called, the model's _fields may have been reset, although
+                # the model's class is still the same. Retrieve the field to see whether the NOT NULL
+                # constraint still applies.
+                field = model._fields[self.name]
+                if not field.required or not field.store:
+                    return
+                # Flush values before adding NOT NULL constraint.
+                model.flush_model([field.name])
+                model.pool.post_constraint(
+                    model.env.cr,
+                    lambda cr: sql.set_not_null(cr, model._table, field.name),
+                    key=f"add_not_null:{model._table}:{field.name}",
+                )
 
         elif not self.required and has_notnull:
             sql.drop_not_null(model._cr, model._table, self.name)
@@ -1160,6 +1170,7 @@ class Field(typing.Generic[T]):
             # ('null'::jsonb)::text == 'null'
             # ('null'::jsonb->>0)::text IS NULL
             return SQL('(%s->>0)::%s', sql_field, SQL(self._column_type[1]))
+
         return sql_field
 
     def property_to_sql(self, field_sql: SQL, property_name: str, model: BaseModel, alias: str, query: Query) -> SQL:
@@ -1409,9 +1420,21 @@ class Field(typing.Generic[T]):
             value = env.cache.get(record, self)
 
         elif self.store and record._origin and not (self.compute and self.readonly):
-            # new record with origin: fetch from origin
-            value = self.convert_to_cache(record._origin[self.name], record, validate=False)
-            value = env.cache.patch_and_set(record, self, value)
+            # new record with origin: fetch from origin, and assign the
+            # records to prefetch in cache (which is necessary for
+            # relational fields to "map" prefetching ids to their value)
+            recs = self._in_cache_without(record, PREFETCH_MAX)
+            try:
+                for rec in recs:
+                    if (rec_origin := rec._origin):
+                        value = self.convert_to_cache(rec_origin[self.name], rec, validate=False)
+                        env.cache.patch_and_set(rec, self, value)
+                value = env.cache.get(record, self)
+            except (AccessError, MissingError):
+                if len(recs) == 1:
+                    raise
+                value = self.convert_to_cache(record._origin[self.name], record, validate=False)
+                value = env.cache.patch_and_set(record, self, value)
 
         elif self.compute: #pylint: disable=using-constant-test
             # non-stored field or new record without origin: compute
@@ -1605,15 +1628,6 @@ class Field(typing.Generic[T]):
     def determine_group_expand(self, records, values, domain):
         """ Return a domain representing a condition on ``self``. """
         return determine(self.group_expand, records, values, domain)
-
-def apply_required(model, field_name):
-    """ Set a NOT NULL constraint on the given field, if necessary. """
-    # At the time this function is called, the model's _fields may have been reset, although
-    # the model's class is still the same. Retrieve the field to see whether the NOT NULL
-    # constraint still applies
-    field = model._fields[field_name]
-    if field.store and field.required:
-        sql.set_not_null(model.env.cr, model._table, field_name)
 
 
 # forward-reference to models because we have this last cyclic dependency

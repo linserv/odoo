@@ -635,7 +635,7 @@ test(`check the avatar of the attendee in the calendar filter panel`, async () =
         type: "calendar",
         arch: `
             <calendar date_start="start" date_stop="stop">
-                <field name="attendee_ids" write_model="filter.partner" write_field="partner_id"/>
+                <field name="attendee_ids" write_model="filter.partner" write_field="partner_id" avatar_field="avatar_128"/>
             </calendar>
         `,
     });
@@ -1720,14 +1720,14 @@ test(`create event with timezone in week mode with formViewDialog`, async () => 
     await selectTimeRange("2016-12-13 08:00:00", "2016-12-13 10:00:00");
     await contains(`.o-calendar-quick-create--input`).edit("new event", { confirm: false });
     await contains(`.o-calendar-quick-create--edit-btn`).click();
-    expect(`.o_field_widget[name='start'] input`).toHaveValue("12/13/2016 08:00:00");
+    expect(`.o_field_widget[name='start'] input`).toHaveValue("12/13/2016 08:00");
 
     // Set is_all_day to true in formViewDialog
     await contains(`.modal .o_field_boolean[name='is_all_day'] input`).click();
     expect(`.o_field_widget[name='start_date'] input`).toHaveValue("12/13/2016");
 
     await contains(`.modal .o_field_boolean[name='is_all_day'] input`).click();
-    expect(`.o_field_widget[name='start'] input`).toHaveValue("12/13/2016 02:00:00");
+    expect(`.o_field_widget[name='start'] input`).toHaveValue("12/13/2016 02:00");
 
     // use datepicker to enter a date: 12/13/2016 08:00:00
     await contains(`.o_field_widget[name="start"] input`).click();
@@ -2618,8 +2618,6 @@ test(`Add filters and specific color`, async () => {
     });
     expect.verifySteps([
         "get_views (event)",
-        "has_access (event)",
-        "has_access (event)",
         "search_read (filter.partner) [partner_id]",
         "search_read (event) [display_name, start, stop, is_all_day, color, attendee_ids, type_id]",
     ]);
@@ -3463,22 +3461,22 @@ test(`timezone does not affect drag and drop on desktop`, async () => {
 
     await clickEvent(1);
     expect(`.o_event[data-event-id="1"]`).toHaveText("08:00\nevent 1");
-    expect(`.o_field_widget[name="start"]`).toHaveText("12/09/2016 08:00:00");
+    expect(`.o_field_widget[name="start"]`).toHaveText("12/09/2016 08:00");
 
     await clickEvent(6);
     expect(`.o_event[data-event-id="6"]`).toHaveText("16:00\nevent 6");
-    expect(`.o_field_widget[name="start"]`).toHaveText("12/16/2016 16:00:00");
+    expect(`.o_field_widget[name="start"]`).toHaveText("12/16/2016 16:00");
 
     await closeCwPopOver();
     await moveEventToDate(6, "2016-11-27");
     await clickEvent(6);
     expect(`.o_event[data-event-id="6"]`).toHaveText("16:00\nevent 6");
-    expect(`.o_field_widget[name="start"]`).toHaveText("11/27/2016 16:00:00");
+    expect(`.o_field_widget[name="start"]`).toHaveText("11/27/2016 16:00");
     expect.verifySteps(["write"]);
 
     await clickEvent(1);
     expect(`.o_event[data-event-id="1"]`).toHaveText("08:00\nevent 1");
-    expect(`.o_field_widget[name="start"]`).toHaveText("12/09/2016 08:00:00");
+    expect(`.o_field_widget[name="start"]`).toHaveText("12/09/2016 08:00");
 });
 // TODO JUM
 test.tags("mobile").skip(`timezone does not affect drag and drop on mobile`, async () => {
@@ -3687,11 +3685,11 @@ test(`drag and drop on month mode with all_day mapping`, async () => {
 
     // use datepicker to enter a date: 12/20/2016 07:00:00
     await contains(`.o_field_widget[name="start"] input`).click();
-    await contains(`.o_time_picker_select:eq(0)`).select("7");
+    await selectHourOnPicker("7:00");
 
     // use datepicker to enter a date: 12/20/2016 19:00:00
     await contains(`.o_field_widget[name="stop"] input`).click();
-    await contains(`.o_time_picker_select:eq(0)`).select("19");
+    await selectHourOnPicker("19:00");
     await contains(`.modal .o_form_button_save`).click();
     await moveEventToDate(8, "2016-12-19");
     await clickEvent(8);
@@ -5260,8 +5258,8 @@ test("update time while drag and drop on month mode", async () => {
     await clickEvent(8);
     await contains(".o_cw_popover_edit").click();
 
-    expect(".o_field_widget[name='start'] input").toHaveValue("12/26/2016 08:00:00");
-    expect(".o_field_widget[name='stop'] input").toHaveValue("12/29/2016 10:00:00");
+    expect(".o_field_widget[name='start'] input").toHaveValue("12/26/2016 08:00");
+    expect(".o_field_widget[name='stop'] input").toHaveValue("12/29/2016 10:00");
 });
 
 test("html field on calendar shouldn't have a tooltip", async () => {
@@ -5556,12 +5554,11 @@ test("calendar: check context is correclty sent to fetch data", async () => {
 });
 
 test(`disable editing without write access rights`, async () => {
-    onRpc("has_access", ({ args }) => args[1] != "write");
     await mountView({
         resModel: "event",
         type: "calendar",
         arch: `
-            <calendar date_start="start" date_stop="stop">
+            <calendar date_start="start" date_stop="stop" edit="0">
                 <field name="name"/>
             </calendar>
         `,

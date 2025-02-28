@@ -1100,7 +1100,7 @@ export class MockServer {
                     case "hour_number":
                         return date.hour;
                     case "day_of_week":
-                        return date.weekday;
+                        return date.weekday % 7; // (0 = Sunday, 6 = Saturday)
                     case "day_of_month":
                         return date.day;
                     case "day_of_year":

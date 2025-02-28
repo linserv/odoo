@@ -44,6 +44,9 @@ patch(Thread.prototype, {
                         chatWindow.fold();
                     }
                 }
+                if (this.store.env.services["multi_tab"].isOnMainTab()) {
+                    this.store.env.services["mail.sound_effects"].play("new-message");
+                }
             }
             this.store.env.services["mail.out_of_focus"].notify(message, this);
         }
@@ -101,7 +104,7 @@ patch(Thread.prototype, {
             router.replaceState({ active_id: undefined });
         }
         if (this.model === "discuss.channel" && this.is_pinned) {
-            return this.store.env.services.orm.silent.call(
+            await this.store.env.services.orm.silent.call(
                 "discuss.channel",
                 "channel_pin",
                 [this.id],
@@ -109,8 +112,9 @@ patch(Thread.prototype, {
             );
         }
     },
-    askLeaveConfirmation(body) {
-        return new Promise((resolve) => {
+    /** @param {string} body */
+    async askLeaveConfirmation(body) {
+        await new Promise((resolve) => {
             this.store.env.services.dialog.add(ConfirmationDialog, {
                 body: body,
                 confirmLabel: _t("Leave Conversation"),

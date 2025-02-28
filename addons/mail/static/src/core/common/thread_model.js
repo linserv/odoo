@@ -18,12 +18,6 @@ import { isMobileOS } from "@web/core/browser/feature_detection";
 
 export class Thread extends Record {
     static id = AND("model", "id");
-    /** @type {Object.<string, import("models").Thread>} */
-    static records = {};
-    /** @returns {import("models").Thread} */
-    static get(data) {
-        return super.get(data);
-    }
     /**
      * @param {string} localId
      * @returns {string}
@@ -34,10 +28,6 @@ export class Thread extends Record {
         }
         // Transform "Thread,<model> AND <id>" to "<model>_<id>""
         return localId.split(",").slice(1).join("_").replace(" AND ", "_");
-    }
-    /** @returns {import("models").Thread|import("models").Thread[]} */
-    static insert(data) {
-        return super.insert(...arguments);
     }
     static async getOrFetch(data, fieldNames = []) {
         let thread = this.get(data);
@@ -810,13 +800,12 @@ export class Thread extends Record {
             if (parentId) {
                 tmpData.parentMessage = this.store["mail.message"].get(parentId);
             }
-            const prettyContent = await prettifyMessageContent(
-                body,
-                this.store.getMentionsFromText(body, {
+            const prettyContent = await prettifyMessageContent(body, {
+                validMentions: this.store.getMentionsFromText(body, {
                     mentionedChannels,
                     mentionedPartners,
-                })
-            );
+                }),
+            });
             tmpMsg = this.store["mail.message"].insert(
                 {
                     ...tmpData,
