@@ -322,7 +322,7 @@ msgid ""
 "Counterpart journal items for all incoming stock moves will be posted in this account, unless there is a specific valuation account\n"
 "                set on the source location. This is the default value for all products in this category. It can also directly be set on each product."
 msgstr ""
-"全ての入荷在庫移動の相手仕訳項目は、移動元に特定の評価勘定が設定されていない限り、この勘定に計上されます。\n"
+"全ての入荷在庫移動の相手仕訳明細は、移動元に特定の評価勘定が設定されていない限り、この勘定に計上されます。\n"
 "　　　　これは、このカテゴリの全プロダクトのデフォルト値です。各プロダクトに直接設定することもできます。"
 
 #. module: stock_account
@@ -441,7 +441,7 @@ msgstr "チェックを入れた場合、評価はロット/シリアル番号�
 #. module: stock_account
 #: model_terms:ir.ui.view,arch_db:stock_account.view_inventory_valuation_search
 msgid "Incoming"
-msgstr "入荷"
+msgstr "入荷予定"
 
 #. module: stock_account
 #: model:ir.model,name:stock_account.model_stock_location
@@ -485,7 +485,7 @@ msgstr "仕訳"
 #. module: stock_account
 #: model:ir.model,name:stock_account.model_account_move_line
 msgid "Journal Item"
-msgstr "仕訳項目"
+msgstr "仕訳明細"
 
 #. module: stock_account
 #: model:ir.model.fields,field_description:stock_account.field_res_config_settings__module_stock_landed_costs
@@ -721,7 +721,7 @@ msgstr "残数量"
 #. module: stock_account
 #: model:ir.model.fields,field_description:stock_account.field_stock_valuation_layer__remaining_value
 msgid "Remaining Value"
-msgstr "残額"
+msgstr "残在庫価値"
 
 #. module: stock_account
 #: model:ir.model,name:stock_account.model_stock_return_picking_line
@@ -973,7 +973,7 @@ msgstr "残数量合計"
 #: model_terms:ir.ui.view,arch_db:stock_account.stock_valuation_layer_report_tree
 #: model_terms:ir.ui.view,arch_db:stock_account.stock_valuation_layer_tree
 msgid "Total Remaining Value"
-msgstr "残価合計"
+msgstr "残在庫価値合計"
 
 #. module: stock_account
 #: model:ir.model.fields,field_description:stock_account.field_product_product__total_value

@@ -5,8 +5,8 @@
 # Translators:
 # Martin Trigaux, 2024
 # Wil Odoo, 2024
-# Erwin van der Ploeg <erwin@odooexperts.nl>, 2025
 # Manon Rondou, 2025
+# Erwin van der Ploeg <erwin@odooexperts.nl>, 2025
 # 
 msgid ""
 msgstr ""
@@ -14,7 +14,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-01-27 13:02+0000\n"
 "PO-Revision-Date: 2024-09-25 09:42+0000\n"
-"Last-Translator: Manon Rondou, 2025\n"
+"Last-Translator: Erwin van der Ploeg <erwin@odooexperts.nl>, 2025\n"
 "Language-Team: Dutch (https://app.transifex.com/odoo/teams/41243/nl/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -4503,7 +4503,7 @@ msgstr "Waarschuwing voorraadaanpassing"
 #. odoo-python
 #: code:addons/stock/models/stock_quant.py:0
 msgid "Inventory Adjustments"
-msgstr "Voorraadaanpassingen"
+msgstr "Aanpassingen voorraad"
 
 #. module: stock
 #: model_terms:ir.ui.view,arch_db:stock.report_inventory
@@ -10806,11 +10806,10 @@ msgstr "Wanneer product aankomt in"
 msgid ""
 "When products are needed in <b>%(destination)s</b>, <br> "
 "<b>%(operation)s</b> are created from <b>%(source_location)s</b> to fulfill "
-"the need."
+"the need. %(suffix)s"
 msgstr ""
-"Wanneer producten nodig zijn in "
-"<b>%(destination)s</b><br><b>%(operation)s</b> worden gemaakt van "
-"<b>%(source_location)s</b> om aan de behoefte te voldoen."
+"Wanneer producten nodig zijn in <b>%(destination)s</b>, worden er \n"
+"<br><b>%(operation)s</b> gemaakt vanuit <b>%(source_location)s</b> om aan de behoefte te voldoen. %(suffix)s"
 
 #. module: stock
 #. odoo-python

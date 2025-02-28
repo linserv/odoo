@@ -509,7 +509,7 @@ class AccountMoveLine(models.Model):
                 values.append(product.display_name)
                 if product.description_purchase:
                     values.append(product.description_purchase)
-            return '\n'.join(values)
+            return '\n'.join(values) if values else False
 
         term_by_move = (self.move_id.line_ids | self).filtered(lambda l: l.display_type == 'payment_term').sorted(lambda l: l.date_maturity or date.max).grouped('move_id')
         for line in self.filtered(lambda l: l.move_id.inalterable_hash is False):
@@ -519,11 +519,12 @@ class AccountMoveLine(models.Model):
                 if line.move_id.payment_reference and line.move_id.ref and line.move_id.payment_reference != line.move_id.ref:
                     name = f'{line.move_id.ref} - {line.move_id.payment_reference}'
                 else:
-                    name = line.move_id.payment_reference or ''
+                    name = line.move_id.payment_reference or False
 
                 if n_terms > 1:
                     index = term_lines._ids.index(line.id) if line in term_lines else len(term_lines)
-                    name = _('%(name)s installment #%(number)s', name=name, number=index + 1).lstrip()
+
+                    name = _('%(name)s installment #%(number)s', name=name if name else '', number=index + 1).lstrip()
                 if n_terms > 1 or not line.name or line._origin.name == line._origin.move_id.payment_reference or (
                     line._origin.move_id.payment_reference and line._origin.move_id.ref
                     and line._origin.name == f'{line._origin.move_id.ref} - {line._origin.move_id.payment_reference}'
@@ -1691,7 +1692,7 @@ class AccountMoveLine(models.Model):
             names.append(move_name)
         if move_ref and move_ref != '/':
             names.append(f"({move_ref})")
-        if line_name and line_name != move_name and line_name != '/':
+        if line_name and line_name not in ['/', move_name, f"{move_ref} - {move_name}"]:
             names.append(line_name)
         name = ' '.join(names)
         return name or _('Draft Entry')

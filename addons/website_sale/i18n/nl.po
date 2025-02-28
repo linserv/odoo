@@ -2218,6 +2218,13 @@ msgid "Fill in your address"
 msgstr "Vul je adres in"
 
 #. module: website_sale
+#. odoo-python
+#: code:addons/website_sale/models/product_template.py:0
+msgid ""
+"Final price may vary based on selection. Tax will be calculated at checkout."
+msgstr ""
+
+#. module: website_sale
 #: model:ir.model.fields,field_description:website_sale.field_website__fiscal_position_id
 msgid "Fiscal Position"
 msgstr "Fiscale positie"
@@ -2910,7 +2917,7 @@ msgstr "Nieuw!"
 #. odoo-python
 #: code:addons/website_sale/models/website.py:0
 msgid "Newest Arrivals"
-msgstr "Nieuwste aankomsten"
+msgstr "Nieuw binnen"
 
 #. module: website_sale
 #: model:website.snippet.filter,name:website_sale.dynamic_filter_newest_products

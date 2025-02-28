@@ -2,6 +2,7 @@ import { Plugin } from "../plugin";
 import { closestBlock, isBlock } from "../utils/blocks";
 import {
     isAllowedContent,
+    isButton,
     isContentEditable,
     isEditorTab,
     isEmpty,
@@ -14,11 +15,12 @@ import {
     isTextNode,
     isVisibleTextNode,
     isWhitespace,
+    isZwnbsp,
     isZWS,
     nextLeaf,
     previousLeaf,
 } from "../utils/dom_info";
-import { getState, isFakeLineBreak, prepareUpdate } from "../utils/dom_state";
+import { getState, isFakeLineBreak, observeMutations, prepareUpdate } from "../utils/dom_state";
 import {
     childNodes,
     closestElement,
@@ -41,6 +43,7 @@ import {
 import { CTYPES } from "../utils/content_types";
 import { withSequence } from "@html_editor/utils/resource";
 import { compareListTypes } from "@html_editor/main/list/utils";
+import { hasTouch, isBrowserChrome } from "@web/core/browser/feature_detection";
 
 /**
  * @typedef {Object} RangeLike
@@ -85,6 +88,8 @@ export class DeletePlugin extends Plugin {
             withSequence(5, this.onBeforeInputInsertText.bind(this)),
             this.onBeforeInputDelete.bind(this),
         ],
+        input_handlers: (ev) => this.onAndroidChromeInput?.(ev),
+        selectionchange_handlers: withSequence(5, () => this.onAndroidChromeSelectionChange?.()),
         /** Overrides */
         delete_backward_overrides: withSequence(30, this.deleteBackwardUnmergeable.bind(this)),
         delete_backward_word_overrides: withSequence(20, this.deleteBackwardUnmergeable.bind(this)),
@@ -1026,6 +1031,11 @@ export class DeletePlugin extends Plugin {
             // TODO ABD: add test
             return true;
         }
+        const isZwnbspLinkPad = (node) =>
+            isButton(node.previousSibling) || isButton(node.nextSibling);
+        if (isZwnbsp(textNode) && isZwnbspLinkPad(textNode)) {
+            return true;
+        }
         // ZWS and ZWNBSP are invisible.
         if (["\u200B", "\uFEFF"].includes(char)) {
             return false;
@@ -1158,8 +1168,11 @@ export class DeletePlugin extends Plugin {
         };
         const argsForDelete = handledInputTypes[ev.inputType];
         if (argsForDelete) {
-            ev.preventDefault();
             this.delete(...argsForDelete);
+            ev.preventDefault();
+            if (isBrowserChrome() && hasTouch()) {
+                this.preventDefaultDeleteAndroidChrome(ev);
+            }
         }
     }
 
@@ -1171,6 +1184,39 @@ export class DeletePlugin extends Plugin {
             }
             // Default behavior: insert text and trigger input event
         }
+    }
+
+    /**
+     * Beforeinput event of type deleteContentBackward cannot be default
+     * prevented in Android Chrome. So we need to revert:
+     * - eventual mutations between beforeinput and input events
+     * - eventual selection change after input event
+     *
+     * @param {InputEvent} beforeInputEvent
+     */
+    preventDefaultDeleteAndroidChrome(beforeInputEvent) {
+        const restoreDOM = this.dependencies.history.makeSavePoint();
+        this.onAndroidChromeInput = (ev) => {
+            if (ev.inputType !== beforeInputEvent.inputType) {
+                return;
+            }
+            // Revert DOM changes that occurred between beforeinput and input.
+            restoreDOM();
+
+            // Revert selection changes after input event, within the same tick.
+            // If further mutations occurred, consider selection change legit
+            // (e.g. dictionary input) and do not revert it.
+            const { restore: restoreSelection } = this.dependencies.selection.preserveSelection();
+            const observerOptions = { childList: true, subtree: true, characterData: true };
+            const getMutationRecords = observeMutations(this.editable, observerOptions);
+            this.onAndroidChromeSelectionChange = () => {
+                const shouldRevertSelectionChanges = !getMutationRecords().length;
+                if (shouldRevertSelectionChanges) {
+                    restoreSelection();
+                }
+            };
+            setTimeout(() => delete this.onAndroidChromeSelectionChange);
+        };
     }
 
     // ======== AD-HOC STUFF ========

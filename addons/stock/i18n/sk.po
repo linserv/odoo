@@ -8984,6 +8984,10 @@ msgid ""
 "            On the operation type you could e.g. specify if packing is needed by default,\n"
 "            if it should show the customer."
 msgstr ""
+"Systém typov operácií umožňuje priradiť každej operácii so zásobami \n"
+"           špecifický typ, ktorý zodpovedajúcim spôsobom zmení jej zobrazenie.\n"
+"           Na type operácie môžete napr. určiť, či je predvolene potrebné balenie,\n"
+"           či sa má zobrazovať zákazník."
 
 #. module: stock
 #: model:ir.model.fields,help:stock.field_stock_move__location_dest_id
@@ -9408,7 +9412,7 @@ msgstr "Do"
 #. module: stock
 #: model_terms:ir.ui.view,arch_db:stock.quant_search_view
 msgid "To Apply"
-msgstr ""
+msgstr "K aplikácii"
 
 #. module: stock
 #: model:ir.model.fields,field_description:stock.field_stock_backorder_confirmation_line__to_backorder
@@ -10405,7 +10409,7 @@ msgstr ""
 msgid ""
 "When products are needed in <b>%(destination)s</b>, <br> "
 "<b>%(operation)s</b> are created from <b>%(source_location)s</b> to fulfill "
-"the need."
+"the need. %(suffix)s"
 msgstr ""
 
 #. module: stock

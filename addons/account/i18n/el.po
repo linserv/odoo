@@ -20,13 +20,13 @@
 # Martin Trigaux, 2024
 # George Tarasidis <george_tarasidis@yahoo.com>, 2024
 # Leonidas Chiotis, 2025
-# Maria Chalepiadou, 2025
 # Charalampos Loukas, 2025
-# Larissa Manderfeld, 2025
 # Iasonas Polydoros <j.polydoros@dileanity.com>, 2025
 # Kostas Goutoudis <goutoudis@gmail.com>, 2025
-# Anastasia Mimou, 2025
 # Agapi Psyllou, 2025
+# Larissa Manderfeld, 2025
+# Anastasia Mimou, 2025
+# Maria Chalepiadou, 2025
 # Gerasimos Kanelatos, 2025
 # 
 msgid ""
@@ -255,6 +255,8 @@ msgstr "%s (Αντίγραφο)"
 #: code:addons/account/models/account_account.py:0
 #: code:addons/account/models/account_journal.py:0
 #: code:addons/account/models/account_reconcile_model.py:0
+#: code:addons/account/models/account_payment_term.py:0
+#, python-format
 msgid "%s (copy)"
 msgstr "%s (αντίγραφο)"
 
@@ -474,7 +476,7 @@ msgstr ""
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.report_statement
 msgid "2023-08-15"
-msgstr ""
+msgstr "2023-08-15"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.report_statement
@@ -735,7 +737,7 @@ msgstr ""
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.account_move_line_view_kanban
 msgid "<i class=\"fa fa-clock-o\" aria-label=\"Date\" role=\"img\" title=\"Date\"/>"
-msgstr ""
+msgstr "<i class=\"fa fa-clock-o\" aria-label=\"Date\" role=\"img\" title=\"Date\"/>"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.portal_invoice_page
@@ -1192,7 +1194,7 @@ msgstr "<span>Nέο</span>"
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.account_journal_dashboard_kanban_view
 msgid "<span>Operations</span>"
-msgstr "<span>Λειτουργίες</span>"
+msgstr "<span>Ενέργειες</span>"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.bill_preview
@@ -1377,6 +1379,9 @@ msgid ""
 "                journals. This feature provides an easy way to follow up cash\n"
 "                payments on a daily basis."
 msgstr ""
+"Ένα Ταμειακό Σύστημα σας επιτρέπει να διαχειρίζεστε τις εισπράξεις μετρητών \n"
+"στα ημερολόγιά σας. Αυτή η δυνατότητα προσφέρει έναν εύκολο τρόπο για να παρακολουθείτε τις \n"
+"πληρωμές μετρητών καθημερινά."
 
 #. module: account
 #: model:ir.model.constraint,message:account.constraint_account_journal_group_uniq_name
@@ -1396,7 +1401,7 @@ msgstr ""
 #. odoo-python
 #: code:addons/account/models/res_partner_bank.py:0
 msgid "A bank account can belong to only one journal."
-msgstr ""
+msgstr "Ένας τραπεζικός λογαριασμός μπορεί να ανήκει μόνο σε ένα ημερολόγιο."
 
 #. module: account
 #: model_terms:ir.actions.act_window,help:account.action_bank_statement_tree
@@ -1405,6 +1410,9 @@ msgid ""
 "                occurring over a given period of time on a bank account. You\n"
 "                should receive this periodically from your bank."
 msgstr ""
+"Μια τραπεζική κατάσταση είναι μια περίληψη όλων των χρηματοοικονομικών συναλλαγών \n"
+"που πραγματοποιούνται σε μια συγκεκριμένη χρονική περίοδο σε έναν τραπεζικό λογαριασμό. Θα \n"
+"πρέπει να την λαμβάνετε περιοδικά από την τράπεζά σας."
 
 #. module: account
 #: model_terms:ir.actions.act_window,help:account.action_credit_statement_tree
@@ -1418,7 +1426,7 @@ msgstr ""
 #. odoo-python
 #: code:addons/account/models/partner.py:0
 msgid "A fiscal position with a foreign VAT already exists in this region."
-msgstr ""
+msgstr "Υπάρχει ήδη μια φορολογική θέση με ξένο ΦΠΑ σε αυτή την περιοχή."
 
 #. module: account
 #: model_terms:ir.actions.act_window,help:account.action_move_journal_line
@@ -1443,12 +1451,16 @@ msgstr ""
 #: code:addons/account/models/account_report.py:0
 msgid "A line cannot have both children and a groupby value (line '%s')."
 msgstr ""
+"Μια γραμμή δεν μπορεί να συνδυάζει παιδιά και τιμή groupby ταυτόχρονα.(line "
+"'%s')."
 
 #. module: account
 #. odoo-python
 #: code:addons/account/models/account_move.py:0
 msgid "A line of this move is using a deprecated account, you cannot post it."
 msgstr ""
+"Αυτή η κίνηση περιλαμβάνει τη χρήση ενός λογαριασμού που δεν υποστηρίζεται "
+"πια, επομένως δεν μπορείτε να το αναρτήσετε."
 
 #. module: account
 #. odoo-python
@@ -1460,6 +1472,8 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:account.report_invoice_document
 msgid "A note, whose content usually applies to the section or product above."
 msgstr ""
+"Μια σημείωση, η οποία συνήθως σχετίζεται με την ενότητα ή το προϊόν που "
+"αναφέρεται παραπάνω."
 
 #. module: account
 #. odoo-python
@@ -1520,23 +1534,31 @@ msgstr ""
 #: code:addons/account/models/account_bank_statement.py:0
 msgid "A statement should only contain lines from the same journal."
 msgstr ""
+"Μια δήλωση πρέπει να περιέχει αποκλειστικά γραμμές από το ίδιο "
+"σημειωματάριο."
 
 #. module: account
 #: model:ir.model.constraint,message:account.constraint_account_account_tag_name_uniq
 msgid ""
 "A tag with the same name and applicability already exists in this country."
 msgstr ""
+"Στη συγκεκριμένη χώρα, υπάρχει ήδη μια ετικέτα που φέρει το ίδιο όνομα και "
+"έχει την ίδια εφαρμογή."
 
 #. module: account
 #: model:ir.model.constraint,message:account.constraint_account_fiscal_position_tax_tax_src_dest_uniq
 msgid "A tax fiscal position could be defined only one time on same taxes."
 msgstr ""
+"Μια φορολογική κατάσταση μπορεί να οριστεί μόνο μία φορά για τους ίδιους "
+"φόρους."
 
 #. module: account
 #. odoo-python
 #: code:addons/account/models/account_move_line.py:0
 msgid "A temporary number can not be used in a real matching"
 msgstr ""
+"Ένας προσωρινός αριθμός δεν μπορεί να χρησιμοποιηθεί σε μια πραγματική "
+"αντιστοίχιση."
 
 #. module: account
 #: model:res.groups,name:account.group_warning_account
@@ -1580,7 +1602,7 @@ msgstr "Ομάδες Πρόσβασης"
 #: model:ir.model.fields,field_description:account.field_account_journal__access_warning
 #: model:ir.model.fields,field_description:account.field_account_move__access_warning
 msgid "Access warning"
-msgstr ""
+msgstr "Προειδοποίηση πρόσβασης"
 
 #. module: account
 #. odoo-python
@@ -3557,7 +3579,7 @@ msgstr ""
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.res_config_settings_view_form
 msgid "Batch Payments"
-msgstr ""
+msgstr "Μαζικές Πληρωμές"
 
 #. module: account
 #. odoo-javascript
@@ -7516,7 +7538,7 @@ msgstr ""
 #. odoo-python
 #: code:addons/account/models/account_journal.py:0
 msgid "Generated Documents"
-msgstr ""
+msgstr "Δημιουργήθηκαν Έγγραφα"
 
 #. module: account
 #. odoo-python
@@ -7572,7 +7594,7 @@ msgstr "Καλός Οφειλέτης"
 #: model:ir.model.fields.selection,name:account.selection__account_tax__tax_scope__consu
 #: model_terms:ir.ui.view,arch_db:account.view_account_tax_search
 msgid "Goods"
-msgstr ""
+msgstr "Εμπορεύματα"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_account__group_id
@@ -7764,7 +7786,7 @@ msgstr ""
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_report__filter_hide_0_lines
 msgid "Hide lines at 0"
-msgstr ""
+msgstr "Απόκρυψη γραμμών στο 0"
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_secure_entries_wizard__max_hash_date
@@ -8620,7 +8642,7 @@ msgstr ""
 #. module: account
 #: model:ir.model.fields,field_description:account.field_res_config_settings__module_account_payment
 msgid "Invoice Online Payment"
-msgstr ""
+msgstr "Online Πληρωμή Τιμολογίου"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_bank_statement_line__invoice_outstanding_credits_debits_widget
@@ -8644,12 +8666,6 @@ msgstr ""
 #: model:ir.model.fields,field_description:account.field_account_invoice_report__state
 msgid "Invoice Status"
 msgstr "Κατάσταση τιμολογίου"
-
-#. module: account
-#: model:ir.model.fields,field_description:account.field_res_partner__invoice_template_pdf_report_id
-#: model:ir.model.fields,field_description:account.field_res_users__invoice_template_pdf_report_id
-msgid "Invoice Template Pdf Report"
-msgstr ""
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_bank_statement_line__tax_totals
@@ -8733,6 +8749,8 @@ msgstr ""
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_move_send_wizard__pdf_report_id
+#: model:ir.model.fields,field_description:account.field_res_partner__invoice_template_pdf_report_id
+#: model:ir.model.fields,field_description:account.field_res_users__invoice_template_pdf_report_id
 msgid "Invoice template"
 msgstr ""
 
@@ -10341,7 +10359,7 @@ msgstr ""
 #. module: account
 #: model:ir.model.fields,help:account.field_account_payment__amount_signed
 msgid "Negative value of amount field if payment_type is outbound"
-msgstr ""
+msgstr "Αρνητική τιμή του πεδίου ποσού εάν ο τύπος πληρωμής είναι εξερχόμενος"
 
 #. module: account
 #. odoo-python
@@ -10846,7 +10864,7 @@ msgstr ""
 #. module: account
 #: model:ir.model,name:account.model_onboarding_onboarding_step
 msgid "Onboarding Step"
-msgstr ""
+msgstr "Βήμα Εγγραφής"
 
 #. module: account
 #. odoo-javascript
@@ -10883,7 +10901,7 @@ msgstr ""
 #. module: account
 #: model:ir.ui.menu,name:account.root_payment_menu
 msgid "Online Payments"
-msgstr ""
+msgstr "Online Πληρωμές"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_report__only_tax_exigible
@@ -13775,15 +13793,6 @@ msgstr ""
 
 #. module: account
 #. odoo-python
-#: code:addons/account/models/account_move_send.py:0
-msgid ""
-"Some invoice(s) already have a generated pdf. The existing pdf will be used "
-"for sending. If you want to regenerate them, please delete the attachment "
-"from the invoice."
-msgstr ""
-
-#. module: account
-#. odoo-python
 #: code:addons/account/models/account_journal.py:0
 msgid ""
 "Some journal items already exist in this journal but with other accounts "
@@ -13981,7 +13990,7 @@ msgstr ""
 #. module: account
 #: model:onboarding.onboarding.step,done_text:account.onboarding_onboarding_step_sales_tax
 msgid "Step Completed!"
-msgstr ""
+msgstr "Βήμα Ολοκληρωμένο!"
 
 #. module: account
 #: model:onboarding.onboarding.step,done_text:account.onboarding_onboarding_step_fiscal_year
