@@ -4,8 +4,9 @@
 # 
 # Translators:
 # Friederike Fasterling-Nesselbosch, 2024
-# Martin Trigaux, 2024
 # Wil Odoo, 2025
+# Martin Trigaux, 2025
+# Tiffany Chang, 2025
 # Larissa Manderfeld, 2025
 # 
 msgid ""
@@ -6138,7 +6139,7 @@ msgid ""
 "Set to true the full range input has to be display by default, even if "
 "empty."
 msgstr ""
-"Wenn Sie diese Option auf wahr setzen, wird standardmäßig der gesamte "
+"Wenn Sie diese Option auf Wahr setzen, wird standardmäßig der gesamte "
 "Eingabebereich angezeigt, auch wenn er leer ist."
 
 #. module: web
@@ -6146,7 +6147,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
 msgid "Set to true to display days, months (and hours) with unpadded numbers"
 msgstr ""
-"Auf True setzen, um Tage, Monate (und Stunden) mit Zahlen ohne Toleranz "
+"Auf Wahr setzen, um Tage, Monate (und Stunden) mit Zahlen ohne Toleranz "
 "anzuzeigen"
 
 #. module: web

@@ -10873,7 +10873,7 @@ msgid ""
 "When set to True the destination location of the stock.move will be the "
 "rule.Otherwise, it takes it from the picking type."
 msgstr ""
-"Wenn diese Option auf True gesetzt ist, ist der Zielort der stock.move die "
+"Wenn diese Option auf Wahr gesetzt ist, ist der Zielort der stock.move die "
 "Regel, andernfalls wird sie vom Kommissioniertyp übernommen."
 
 #. module: stock
