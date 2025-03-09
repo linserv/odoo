@@ -1631,7 +1631,7 @@ msgstr "停用（以訪客身份購買）"
 #: code:addons/website_sale/static/src/xml/website_sale_reorder_modal.xml:0
 #, python-format
 msgid "Discard"
-msgstr "取消"
+msgstr "捨棄"
 
 #. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.res_config_settings_view_form
@@ -2672,6 +2672,13 @@ msgstr "付款代碼(token)"
 #: model:ir.ui.menu,name:website_sale.menu_ecommerce_payment_transactions
 msgid "Payment Transactions"
 msgstr "付款交易"
+
+#. module: website_sale
+#. odoo-python
+#: code:addons/website_sale/controllers/main.py:0
+#, python-format
+msgid "Payment is already being processed."
+msgstr ""
 
 #. module: website_sale
 #. odoo-javascript
@@ -3766,6 +3773,13 @@ msgstr "存取權杖(token)無效。"
 msgid ""
 "The amount will be displayed strikethroughed on the eCommerce product page"
 msgstr "電子商務產品頁顯示金額時，會畫上刪除線"
+
+#. module: website_sale
+#. odoo-python
+#: code:addons/website_sale/controllers/main.py:0
+#, python-format
+msgid "The cart has already been paid. Please refresh the page."
+msgstr ""
 
 #. module: website_sale
 #. odoo-python
