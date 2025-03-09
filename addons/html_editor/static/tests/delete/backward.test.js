@@ -495,6 +495,13 @@ describe("Selection collapsed", () => {
                 contentAfter: `<p>abcd[]</p>`,
             });
         });
+        test("should delete only the button", async () => {
+            await testEditor({
+                contentBefore: `<p>a<a class="btn" href="#">[]</a></p>`,
+                stepFunction: deleteBackward,
+                contentAfter: `<p>a[]</p>`,
+            });
+        });
     });
 
     describe("Line breaks", () => {
@@ -1599,7 +1606,7 @@ describe("Selection not collapsed", () => {
         expect(getContent(el)).toBe("<h1>[abc]</h1><p>def</p>");
         deleteBackward(editor);
         expect(getContent(el)).toBe(
-            '<h1 placeholder="Heading 1" class="o-we-hint">[]<br></h1><p>def</p>'
+            '<h1 o-we-hint-text="Heading 1" class="o-we-hint">[]<br></h1><p>def</p>'
         );
     });
 
@@ -1614,7 +1621,7 @@ describe("Selection not collapsed", () => {
         expect(getContent(el)).toBe("<h1>[abc]</h1><p><br></p><p>def</p>");
         deleteBackward(editor);
         expect(getContent(el)).toBe(
-            '<h1 placeholder="Heading 1" class="o-we-hint">[]<br></h1><p><br></p><p>def</p>'
+            '<h1 o-we-hint-text="Heading 1" class="o-we-hint">[]<br></h1><p><br></p><p>def</p>'
         );
     });
 

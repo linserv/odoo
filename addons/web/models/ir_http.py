@@ -131,20 +131,13 @@ class IrHttp(models.AbstractModel):
             },
             'test_mode': config['test_enable'],
             'view_info': self.env['ir.ui.view'].get_view_info(),
+            'groups': {
+                'base.group_allow_export': user.has_group('base.group_allow_export') if session_uid else False,
+            },
         }
         if request.session.debug:
             session_info['bundle_params']['debug'] = request.session.debug
         if is_internal_user:
-            # the following is only useful in the context of a webclient bootstrapping
-            # but is still included in some other calls (e.g. '/web/session/authenticate')
-            # to avoid access errors and unnecessary information, it is only included for users
-            # with access to the backend ('internal'-type users)
-            menus = self.env['ir.ui.menu'].with_context(lang=request.session.context['lang']).load_menus(request.session.debug)
-            ordered_menus = {str(k): v for k, v in menus.items()}
-            menu_json_utf8 = json.dumps(ordered_menus, sort_keys=True).encode()
-            session_info['cache_hashes'].update({
-                "load_menus": hashlib.sha512(menu_json_utf8).hexdigest()[:64], # sha512/256
-            })
             # We need sudo since a user may not have access to ancestor companies
             # We use `_get_company_ids` because it is cached and we sudo it because env.user return a sudo user.
             user_companies = self.env['res.company'].browse(user._get_company_ids()).sudo()

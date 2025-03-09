@@ -4,7 +4,7 @@ import { tick } from "@odoo/hoot-mock";
 import { setupEditor, testEditor } from "../_helpers/editor";
 import { unformat } from "../_helpers/format";
 import { getContent } from "../_helpers/selection";
-import { dispatchClean } from "../_helpers/dispatch";
+import { cleanHints } from "../_helpers/dispatch";
 import { MAIN_PLUGINS } from "@html_editor/plugin_sets";
 import { addStep } from "../_helpers/user_actions";
 import { Plugin } from "@html_editor/plugin";
@@ -290,6 +290,7 @@ describe("collapsed selection", () => {
         editor.shared.dom.insert(
             parseHTML(editor.document, `<p data-oe-protected="true">in</p>`).firstElementChild
         );
+        cleanHints(editor);
         expect(getContent(editor.editable, { sortAttrs: true })).toBe(
             `<p contenteditable="false" data-oe-protected="true">in</p><p>[]<br></p>`
         );
@@ -327,7 +328,7 @@ describe("collapsed selection", () => {
         const { el, editor } = await setupEditor(`<p>[]<br></p>`);
         editor.shared.dom.insert(parseHTML(editor.document, `<div class="oe_unbreakable">a</div>`));
         editor.shared.history.addStep();
-        dispatchClean(editor);
+        cleanHints(editor);
         expect(getContent(el)).toBe(`<div class="oe_unbreakable">a</div><p>[]<br></p>`);
     });
 
@@ -335,7 +336,7 @@ describe("collapsed selection", () => {
         const { el, editor } = await setupEditor(`<p>b[]</p>`);
         editor.shared.dom.insert(parseHTML(editor.document, `<div class="oe_unbreakable">a</div>`));
         editor.shared.history.addStep();
-        dispatchClean(editor);
+        cleanHints(editor);
         expect(getContent(el)).toBe(`<p>b</p><div class="oe_unbreakable">a</div><p>[]<br></p>`);
     });
 
@@ -542,7 +543,10 @@ describe("not collapsed selection", () => {
                         <tr><td>gh</td><td>ij</td></tr>
                     </tbody></table>`
             ),
-            stepFunction: (editor) => {
+            stepFunction: async (editor) => {
+                // Table selection happens on selectionchange event which is
+                // fired in the next tick.
+                await tick();
                 editor.shared.dom.insert(span("TEST"));
                 editor.shared.history.addStep();
             },

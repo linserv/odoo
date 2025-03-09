@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "@odoo/owl";
+import { onWillUnmount, useEffect, useRef } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { deepMerge } from "@web/core/utils/objects";
 import { scrollTo } from "@web/core/utils/scrolling";
@@ -87,7 +87,7 @@ class NavigationItem {
     }
 }
 
-class Navigator {
+export class Navigator {
     /**@type {NavigationItem|undefined}*/
     activeItem = undefined;
 
@@ -193,10 +193,11 @@ class Navigator {
             const callback = isFunction ? hotkeyInfo : hotkeyInfo.callback;
             const isAvailable = hotkeyInfo?.isAvailable ?? (() => true);
             const bypassEditableProtection = hotkeyInfo?.bypassEditableProtection ?? false;
+            const allowRepeat = "allowRepeat" in hotkeyInfo ? hotkeyInfo.allowRepeat : true;
 
             this._hotkeyRemoves.push(
                 this._hotkeyService.add(hotkey, () => callback(this), {
-                    allowRepeat: true,
+                    allowRepeat,
                     isAvailable: () => isAvailable(this),
                     bypassEditableProtection,
                 })
@@ -347,6 +348,7 @@ class Navigator {
  * @param {hotkeyHandler} callback
  * @param {Function} isAvailable
  * @param {boolean} bypassEditableProtection
+ * @param {boolean} [allowRepeat=true]
  */
 
 /**
@@ -390,6 +392,7 @@ export function useNavigation(containerRef, options = {}) {
         },
         () => [containerRef.el]
     );
+    onWillUnmount(() => navigator._disable());
 
     return {
         enable: () => navigator._enable(),

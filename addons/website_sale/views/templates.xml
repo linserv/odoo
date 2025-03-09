@@ -804,7 +804,7 @@
                                         <div t-if="a.display_type == 'color'" class="pt-1 pb-3">
                                             <t t-call="website_sale.o_wsale_offcanvas_color_attribute"/>
                                         </div>
-                                        <div t-elif="a.display_type in ('radio', 'pills', 'select')"
+                                        <div t-else=""
                                              class="list-group list-group-flush">
                                             <div t-foreach="a.value_ids" t-as="v" class="list-group-item border-0 ps-0 pb-0">
                                                 <div class="form-check mb-1">
@@ -1270,7 +1270,7 @@
 
     <!-- /shop/product page -->
     <template id="base_unit_price" name="Product Base unit price">
-        (<span class="o_base_unit_price" t-esc="combination_info['base_unit_price']" t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"/>
+        (<span class="o_base_unit_price" t-esc="base_unit_price" t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"/>
          / <span class="oe_custom_base_unit" t-field="product.base_unit_name"/>)
     </template>
 
@@ -1370,9 +1370,11 @@
                                 <div class="js_product js_main_product mb-3">
                                     <div>
                                         <t t-call="website_sale.product_price"/>
-                                        <small t-if="'base_unit_price' in combination_info"
-                                               class="ms-1 text-muted o_base_unit_price_wrapper d-none" groups="website_sale.group_show_uom_price">
-                                            <t t-call='website_sale.base_unit_price'/>
+                                        <small t-if="combination_info.get('base_unit_price')"
+                                               class="ms-1 text-muted o_base_unit_price_wrapper d-none">
+                                            <t t-call="website_sale.base_unit_price">
+                                                <t t-set="base_unit_price" t-value="combination_info['base_unit_price']"/>
+                                            </t>
                                         </small>
                                     </div>
                                     <t name="variant_info">
@@ -2033,13 +2035,14 @@
                             </t>
                             <t t-set="product_price" t-value="line._get_cart_display_price()"/>
                             <t t-call="website_sale.cart_product_price"/>
-                            <small t-if="not line._is_not_sellable_line() and line.product_id.base_unit_price"
-                                   class="cart_product_base_unit_price d-block text-muted"
-                                   groups="website_sale.group_show_uom_price">
-                                <t t-call='website_sale.base_unit_price'>
-                                    <t t-set='product' t-value='line.product_id'/>
-                                    <t t-set='combination_info'
-                                       t-value="{'base_unit_price': product._get_base_unit_price(product_price/line.product_uom_qty)}"/>
+                            <small
+                                t-if="not line._is_not_sellable_line() and line.env['res.groups']._is_feature_enabled('website_sale.group_show_uom_price') and line.product_id.base_unit_price"
+                                class="cart_product_base_unit_price d-block text-muted"
+                            >
+                                <t t-call="website_sale.base_unit_price">
+                                    <t t-set="product" t-value="line.product_id"/>
+                                    <t t-set="base_unit_price"
+                                       t-value="product._get_base_unit_price(product_price/line.product_uom_qty)"/>
                                 </t>
                             </small>
                         </div>
@@ -2164,17 +2167,24 @@
                             <span class="d-md-none fa fa-shopping-cart"/>
                             <span class="d-none d-md-inline">Add to cart</span>
                         </a>
-                        <div class="mb-0 h-6 fw-bold text-end d-flex"
-                             name="website_sale_suggested_product_price">
-                            <t t-set="combination_info"
-                               t-value="product._get_combination_info_variant()"/>
-                            <del t-attf-class="text-muted mr8 {{'' if combination_info['has_discounted_price'] else 'd-none'}}"
-                                 t-esc="combination_info['list_price']"
-                                 t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"
-                                 style="white-space: nowrap;"/>
-                            <span t-esc="combination_info['price']"
-                                  t-options="{'widget': 'monetary','display_currency': website.currency_id}"
-                                  style="white-space: nowrap;"/>
+                        <div
+                            class="mb-0 h-6 fw-bold text-end d-flex"
+                            name="suggested_product_price_container"
+                        >
+                            <t t-set="combination_info" t-value="product._get_combination_info_variant()"/>
+                            <del
+                                name="suggested_product_list_price"
+                                t-attf-class="text-muted mr8 {{'' if combination_info['has_discounted_price'] else 'd-none'}}"
+                                t-esc="combination_info['list_price']"
+                                t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"
+                                style="white-space: nowrap;"
+                            />
+                            <span
+                                name="suggested_product_price"
+                                t-esc="combination_info['price']"
+                                t-options="{'widget': 'monetary','display_currency': website.currency_id}"
+                                style="white-space: nowrap;"
+                            />
                         </div>
                     </div>
                 </div>

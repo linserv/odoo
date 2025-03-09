@@ -4,6 +4,7 @@ import {
     click,
     hover,
     manuallyDispatchProgrammaticEvent,
+    middleClick,
     press,
     queryAll,
     queryAllAttributes,
@@ -8286,8 +8287,8 @@ test(`default_order on x2many embedded view`, async () => {
 
 test.tags("desktop");
 test(`action context is used when evaluating domains`, async () => {
-    onRpc("name_search", ({ kwargs }) => {
-        expect.step("name_search");
+    onRpc("web_name_search", ({ kwargs }) => {
+        expect.step("web_name_search");
         expect(kwargs.domain[0]).toEqual(["id", "in", [45, 46, 47]]);
     });
     await mountView({
@@ -8302,7 +8303,7 @@ test(`action context is used when evaluating domains`, async () => {
         context: { product_ids: [45, 46, 47] },
     });
     await contains(`.o_field_widget[name="parent_id"] input`).click();
-    expect.verifySteps(["name_search"]);
+    expect.verifySteps(["web_name_search"]);
 });
 
 test(`form rendering with groups with col/colspan`, async () => {
@@ -8992,8 +8993,8 @@ test(`context is correctly passed after save & new in FormViewDialog`, async () 
         list: `<list><field name="display_name"/></list>`,
     };
 
-    onRpc("name_search", ({ kwargs }) => {
-        expect.step("name_search");
+    onRpc("web_name_search", ({ kwargs }) => {
+        expect.step("web_name_search");
         expect(kwargs.context.color).toBe(4);
     });
     await mountView({
@@ -9007,14 +9008,14 @@ test(`context is correctly passed after save & new in FormViewDialog`, async () 
 
     // set a value on the m2o and click save & new
     await contains(`.o_field_many2one[name="partner_type_id"] input`).click();
-    expect.verifySteps(["name_search"]);
+    expect.verifySteps(["web_name_search"]);
 
     await contains(`.dropdown .dropdown-item:contains(gold)`).click();
     await contains(`.modal-footer .o_form_button_save_new`).click();
 
     // set a value on the m2o
     await contains(`.o_field_many2one[name="partner_type_id"] input`).click();
-    expect.verifySteps(["name_search"]);
+    expect.verifySteps(["web_name_search"]);
 
     await contains(`.dropdown .dropdown-item:contains(silver)`).click();
     await contains(`.modal-footer .o_form_button_save`).click();
@@ -9323,6 +9324,39 @@ test(`Can switch to form view on inline tree`, async () => {
 
     await contains(`td.o_list_record_open_form_view`).click();
     expect.verifySteps(["doAction"]);
+});
+
+test(`x2many field, open form view in new window`, async () => {
+    mockService("action", {
+        doAction(params, options) {
+            if (options?.newWindow) {
+                expect.step("opened in a new window");
+                return;
+            }
+            super.doAction(params);
+        },
+        loadState() {},
+    });
+    Partner._records[0].child_ids = [2];
+    await mountView({
+        resModel: "partner",
+        type: "form",
+        arch: `
+            <form>
+                <field name="child_ids">
+                    <list editable="top" open_form_view="1">
+                        <field name="foo"/>
+                    </list>
+                </field>
+            </form>
+        `,
+        resId: 1,
+    });
+    expect(`td.o_list_record_open_form_view`).toHaveCount(1);
+
+    await middleClick("td.o_list_record_open_form_view");
+    await animationFrame();
+    expect.verifySteps(["opened in a new window"]);
 });
 
 test(`can toggle column in x2many in sub form view`, async () => {
@@ -10074,11 +10108,15 @@ test(`"bare" buttons in template should not trigger button click`, async () => {
 test(`form view with inline list view with optional fields and local storage mock`, async () => {
     patchWithCleanup(browser.localStorage, {
         getItem(key) {
-            expect.step(`getItem ${key}`);
+            if (["optional_fields", "debug_open_view"].some((word) => key.startsWith(word))) {
+                expect.step(`getItem ${key}`);
+            }
             return super.getItem(key);
         },
         setItem(key, value) {
-            expect.step(`setItem ${key} to ${value}`);
+            if (["optional_fields", "debug_open_view"].some((word) => key.startsWith(word))) {
+                expect.step(`setItem ${key} to ${value}`);
+            }
             return super.setItem(key, value);
         },
     });
@@ -10101,8 +10139,6 @@ test(`form view with inline list view with optional fields and local storage moc
 
     const localStorageKey = "partner,form,123456789,child_ids,list,bar,foo";
     expect.verifySteps([
-        "getItem web.emoji.frequent",
-        "getItem pwaService.installationState",
         `getItem optional_fields,${localStorageKey}`,
         `getItem debug_open_view,${localStorageKey}`,
     ]);
@@ -10131,11 +10167,15 @@ test.tags("desktop");
 test(`form view with list_view_ref with optional fields and local storage mock`, async () => {
     patchWithCleanup(browser.localStorage, {
         getItem(key) {
-            expect.step(`getItem ${key}`);
+            if (["optional_fields", "debug_open_view"].some((word) => key.startsWith(word))) {
+                expect.step(`getItem ${key}`);
+            }
             return super.getItem(key);
         },
         setItem(key, value) {
-            expect.step(`setItem ${key} to ${value}`);
+            if (["optional_fields", "debug_open_view"].some((word) => key.startsWith(word))) {
+                expect.step(`setItem ${key} to ${value}`);
+            }
             return super.setItem(key, value);
         },
     });
@@ -10166,8 +10206,6 @@ test(`form view with list_view_ref with optional fields and local storage mock`,
 
     const localStorageKey = "partner,form,123456789,child_ids,list,bar,foo";
     expect.verifySteps([
-        "getItem web.emoji.frequent",
-        "getItem pwaService.installationState",
         `getItem optional_fields,${localStorageKey}`,
         `getItem debug_open_view,${localStorageKey}`,
     ]);
@@ -10424,6 +10462,33 @@ test(`company_dependent field in form view, not in multi company group`, async (
     expect(`.o-tooltip .o-tooltip--help`).toHaveText("this is a tooltip");
 });
 
+test(`no 'oh snap' error when clicking on a save button`, async () => {
+    expect.errors(1);
+
+    onRpc("web_save", () => {
+        throw makeServerError({ message: "Some business message" });
+    });
+    onRpc(({ method }) => expect.step(method));
+    await mountView({
+        resModel: "partner",
+        type: "form",
+        arch: `
+            <form>
+                <button name="do_it" type="object" string="Do it"/>
+                <field name="name"/>
+            </form>
+        `,
+    });
+    expect.verifySteps(["get_views", "onchange"]);
+
+    await contains(`.o_form_button_save`).click();
+    await animationFrame();
+    expect.verifyErrors(["Some business message"]);
+    expect.verifySteps(["web_save"]);
+    expect(`.o_error_dialog`).toHaveCount(1);
+    expect(`.o_form_error_dialog`).toHaveCount(0);
+});
+
 test(`no 'oh snap' error when clicking on a view button`, async () => {
     expect.errors(1);
 
@@ -10447,7 +10512,7 @@ test(`no 'oh snap' error when clicking on a view button`, async () => {
     await animationFrame();
     expect.verifyErrors(["Some business message"]);
     expect.verifySteps(["web_save"]);
-    expect(`.modal`).toHaveCount(1);
+    expect(`.o_error_dialog`).toHaveCount(1);
     expect(`.o_form_error_dialog`).toHaveCount(0);
 });
 
@@ -10485,6 +10550,7 @@ test(`no 'oh snap' error in form view in dialog`, async () => {
     await animationFrame();
     expect(`.modal`).toHaveCount(2);
     expect(`.o_error_dialog`).toHaveCount(1);
+    expect(`.o_form_error_dialog`).toHaveCount(0);
 });
 
 test(`field "length" with value 0: can apply onchange`, async () => {

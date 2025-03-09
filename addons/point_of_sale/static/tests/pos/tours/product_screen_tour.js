@@ -425,14 +425,14 @@ registry.category("web_tour.tours").add("PosCategoriesOrder", {
             },
             ProductScreen.productIsDisplayed("Product in AAB and AAX", 0),
             {
-                trigger: '.category-button:eq(2) > span:contains("AAX")',
+                trigger: '.category-button:eq(-1) > span:contains("AAX")',
             },
             {
-                trigger: '.category-button:eq(2) > span:contains("AAX")',
+                trigger: '.category-button:eq(-1) > span:contains("AAX")',
                 run: "click",
             },
             {
-                trigger: '.category-button:eq(3) > span:contains("AAY")',
+                trigger: '.category-button:eq(-1) > span:contains("AAY")',
             },
         ].flat(),
 });
@@ -533,5 +533,19 @@ registry.category("web_tour.tours").add("CustomerPopupTour", {
             negateStep(PartnerList.checkCustomerShown("Z partner to scroll")),
             PartnerList.scrollBottom(),
             ProductScreen.clickCustomer("Z partner to scroll"),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_pricelist_multi_items_different_qty_thresholds", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+
+            ProductScreen.clickDisplayedProduct("tpmcapi product"),
+            ProductScreen.clickDisplayedProduct("tpmcapi product"),
+            ProductScreen.clickDisplayedProduct("tpmcapi product"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.totalIs("30"),
         ].flat(),
 });

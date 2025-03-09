@@ -120,7 +120,7 @@ class DiscussChannel(models.Model):
             raise ValidationError(
                 _(
                     "Cannot create %(channels)s: initial message should belong to parent channel.",
-                    channels=format_list(self.env, failing_channels.mapped("name")),
+                    channels=failing_channels.mapped("name"),
                 )
             )
 
@@ -138,7 +138,7 @@ class DiscussChannel(models.Model):
             raise ValidationError(
                 _(
                     "Cannot create %(channels)s: parent should not be a sub-channel and should be of type 'channel' or 'group'. The sub-channel should have the same type as the parent.",
-                    channels=format_list(self.env, failing_channels.mapped("name")),
+                    channels=failing_channels.mapped("name"),
                 ),
             )
 
@@ -353,7 +353,7 @@ class DiscussChannel(models.Model):
             raise UserError(
                 _(
                     "Cannot change initial message nor parent channel of: %(channels)s.",
-                    channels=format_list(self.env, self.mapped("name")),
+                    channels=self.mapped("name"),
                 )
             )
         if "group_public_id" in vals:
@@ -361,7 +361,7 @@ class DiscussChannel(models.Model):
                 raise UserError(
                     self.env._(
                         "Cannot change authorized group of sub-channel: %(channels)s.",
-                        channels=format_list(self.env, failing_channels.mapped("name")),
+                        channels=failing_channels.mapped("name"),
                     )
                 )
         def get_vals(channel):
@@ -1229,7 +1229,7 @@ class DiscussChannel(models.Model):
                 "channel_member_ids": [Command.create({"partner_id": self.env.user.partner_id.id})],
                 "channel_type": self.channel_type,
                 "from_message_id": message.id,
-                "name": name or (message.body.striptags()[:30] if message else _("New Thread")),
+                "name": name or (message.body.striptags()[:30] if message.body else _("New Thread")),
                 "parent_channel_id": self.id,
             }
         )
