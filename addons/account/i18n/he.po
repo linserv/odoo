@@ -5,7 +5,6 @@
 # Translators:
 # yacov mosbacher <ymosba@gmail.com>, 2023
 # Mor Kir <morki@013.net.il>, 2023
-# Lilach Gilliam <lilach@apprcase.com>, 2023
 # Zvika Rap <zvikara@gmail.com>, 2023
 # yizhaq agronov <yizhaq@gmail.com>, 2023
 # Fishfur A Banter <fishfurbanter@gmail.com>, 2023
@@ -15,7 +14,6 @@
 # Moshe Flam <pashute@gmail.com>, 2023
 # Adi Sharashov <Adi@laylinetech.com>, 2023
 # david danilov, 2023
-# Sagi Ahiel, 2023
 # yotam katzuni, 2023
 # Yihya Hugirat <hugirat@gmail.com>, 2023
 # ExcaliberX <excaliberx@gmail.com>, 2023
@@ -28,7 +26,6 @@
 # MichaelHadar, 2024
 # Roy Sayag, 2024
 # Orel Nahmany, 2024
-# ZVI BLONDER <ZVIBLONDER@gmail.com>, 2024
 # Lilach Gilliam <lilach.gilliam@gmail.com>, 2024
 # Ha Ketem <haketem@gmail.com>, 2024
 # Uri Segman, 2024
@@ -36,7 +33,10 @@
 # Mendi Soudry, 2024
 # Yoram Lavi, 2024
 # Eyal arkush, 2025
+# ZVI BLONDER <ZVIBLONDER@gmail.com>, 2025
+# Lilach Gilliam <lilach@apprcase.com>, 2025
 # yael terner, 2025
+# Sagi Ahiel, 2025
 # or balmas, 2025
 # 
 msgid ""
@@ -99,6 +99,17 @@ msgstr "# חשבוניות לקוח מותאמות"
 #: model:ir.model.fields,field_description:account.field_account_payment__reconciled_statement_lines_count
 msgid "# Reconciled Statement Lines"
 msgstr "מספר שורות שהותאמו"
+
+#. module: account
+#: model:ir.model.fields,field_description:account.field_res_partner__supplier_invoice_count
+#: model:ir.model.fields,field_description:account.field_res_users__supplier_invoice_count
+msgid "# Vendor Bills"
+msgstr "מס' חשבונית ספק "
+
+#. module: account
+#: model:ir.model.fields,field_description:account.field_account_chart_template__code_digits
+msgid "# of Digits"
+msgstr "# ספרות"
 
 #. module: account
 #. odoo-python
@@ -1221,7 +1232,7 @@ msgstr "<strong>יתרה סגירה</strong>"
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.report_invoice_document
 msgid "<strong>Incoterm:</strong><br/>"
-msgstr ""
+msgstr "<strong>הכנסות:</strong><br/>"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.bill_preview
@@ -3354,7 +3365,7 @@ msgstr "חשבוניות לתשלום"
 #. module: account
 #: model:account.account,name:account.1_to_receive_pay
 msgid "Bills to receive"
-msgstr ""
+msgstr "חשבוניות לקבל"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_report_column__blank_if_zero
@@ -3857,7 +3868,7 @@ msgstr "לוח חשבונות"
 #. module: account
 #: model:onboarding.onboarding.step,done_text:account.onboarding_onboarding_step_chart_of_accounts
 msgid "Chart of accounts set!"
-msgstr ""
+msgstr "הוגדר לוח חשבונות!"
 
 #. module: account
 #. odoo-python
@@ -6113,7 +6124,7 @@ msgstr "ריק"
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_move_send__enable_download
 msgid "Enable Download"
-msgstr ""
+msgstr "אפשר הורדה"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.res_config_settings_view_form
@@ -6123,7 +6134,7 @@ msgstr ""
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_move_send__enable_send_mail
 msgid "Enable Send Mail"
-msgstr ""
+msgstr "אפשר שליחת מייל"
 
 #. module: account
 #: model:ir.model.fields,help:account.field_res_company__account_use_credit_limit
@@ -9123,7 +9134,7 @@ msgstr "מטבע ראשי של החברה שלך"
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_accrued_orders_wizard
 msgid "Make Accrual Entries"
-msgstr "בצע הזנות צבירה"
+msgstr "בצע פקודות צבירה"
 
 #. module: account
 #: model:ir.ui.menu,name:account.account_management_menu
@@ -9961,7 +9972,7 @@ msgstr "מספר הודעות עם שגיאת משלוח"
 msgid ""
 "Number of months in the past to consider entries from when applying this "
 "model."
-msgstr "מספר החודשים בעבר שיש לשקול ערכים מהם בעת החלת מודל זה."
+msgstr "מספר החודשים בעבר שיש לשקול תנועות מהם בעת החלת מודל זה."
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_report_external_value__value
@@ -11635,6 +11646,11 @@ msgid "Reconciliation Parts"
 msgstr "חלקי התאמה"
 
 #. module: account
+#: model_terms:ir.actions.act_window,help:account.res_partner_action_supplier_bills
+msgid "Record a new vendor bill"
+msgstr "רשום חשבונית ספק חדש"
+
+#. module: account
 #. odoo-python
 #: code:addons/account/models/account_tax.py:0
 #, python-format
@@ -12537,7 +12553,7 @@ msgstr "שלח חשבוניות ללקוחות שלך תוך זמן קצר עם 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.portal_invoice_page
 msgid "Send message"
-msgstr "שלח הודעה"
+msgstr "שלח הודעה חיצונית"
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_journal__alias_id
@@ -12562,7 +12578,7 @@ msgstr "שלח קבלה בדוא\"ל"
 #. module: account
 #: model:ir.actions.act_window,name:account.account_send_payment_receipt_by_email_action_multi
 msgid "Send receipts by email"
-msgstr "שלח קבלות במייל"
+msgstr "שלח קבלות בדוא\"ל"
 
 #. module: account
 #. odoo-javascript
@@ -12623,12 +12639,12 @@ msgstr "נשלח אוטומטית ללקוח כשלוחצים על \"שליחת 
 #. module: account
 #: model:mail.template,description:account.email_template_edi_credit_note
 msgid "Sent to customers with the credit note in attachment"
-msgstr "נשלח ללקוחות עם חוב רשום בצרופה"
+msgstr "נשלח ללקוחות עם חוב רשום בקובץ מצורף"
 
 #. module: account
 #: model:mail.template,description:account.email_template_edi_invoice
 msgid "Sent to customers with their invoices in attachment"
-msgstr "נשלח ללקוחות עם דרישות תשלום בצרופה"
+msgstr "נשלח ללקוחות עם דרישות תשלום בקובץ מצורף"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_res_company__account_discount_expense_allocation_id
@@ -14234,7 +14250,7 @@ msgstr ""
 #, python-format
 msgid ""
 "The move could not be posted for the following reason: %(error_message)s"
-msgstr "לא היה ניתן לפרסם את התנועה הזאת מהסיבה הבאה:"
+msgstr "לא היה ניתן לפרסם את התנועה הזאת מהסיבה הבאה:%(error_message)s"
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_journal__alias_name
@@ -15881,9 +15897,11 @@ msgstr "חשבונית ספק נוצרה"
 #. odoo-python
 #: code:addons/account/models/account_analytic_account.py:0
 #: code:addons/account/models/chart_template.py:0
+#: model:ir.actions.act_window,name:account.res_partner_action_supplier_bills
 #: model:account.journal,name:account.1_purchase
 #: model:ir.model.fields.selection,name:account.selection__res_company__quick_edit_mode__in_invoices
 #: model_terms:ir.ui.view,arch_db:account.account_analytic_account_view_form_inherit
+#: model_terms:ir.ui.view,arch_db:account.partner_view_buttons
 #: model_terms:ir.ui.view,arch_db:account.res_config_settings_view_form
 #: model_terms:ir.ui.view,arch_db:account.res_partner_view_search
 #, python-format
@@ -15949,6 +15967,15 @@ msgstr "ספק:"
 #: model_terms:ir.ui.view,arch_db:account.view_partner_bank_search_inherit
 msgid "Vendors"
 msgstr "ספקים"
+
+#. module: account
+#: model_terms:ir.actions.act_window,help:account.res_partner_action_supplier_bills
+msgid ""
+"Vendors bills can be pre-generated based on purchase\n"
+"                orders or receipts. This allows you to control bills\n"
+"                you receive from your vendor according to the draft\n"
+"                document in Odoo."
+msgstr ""
 
 #. module: account
 #. odoo-javascript
@@ -16576,6 +16603,13 @@ msgstr ""
 msgid ""
 "You cannot delete this report (%s), it is used by the accounting PDF "
 "generation engine."
+msgstr ""
+
+#. module: account
+#. odoo-python
+#: code:addons/account/models/account_account.py:0
+#, python-format
+msgid "You cannot deprecate an account that is used in a tax distribution."
 msgstr ""
 
 #. module: account

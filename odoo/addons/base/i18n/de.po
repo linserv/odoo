@@ -7,6 +7,7 @@
 # Leon Grill <leg@odoo.com>, 2023
 # Martin Trigaux, 2024
 # Wil Odoo, 2025
+# Tiffany Chang, 2025
 # Larissa Manderfeld, 2025
 # 
 msgid ""
@@ -2978,7 +2979,7 @@ msgid ""
 msgstr ""
 "\n"
 "Automatisches Einstellen von Produktbildern auf der Grundlage des Barcodes\n"
-" =====================================================\n"
+"=====================================================\n"
 "\n"
 "Dieses Modul integriert mit der API von Google Custom Search, um Produktbilder auf Grundlage von Barcodes\n"
 "festzulegen.\n"
@@ -24293,8 +24294,8 @@ msgid ""
 "         "
 msgstr ""
 "Wenn diese Ansicht abgeleitet wurde,\n"
-"* Wenn wahr, erweitert diese Ansicht immer die übergeordnete Ansicht\n"
-"* Wenn falsch, wird die übergeordnete Ansicht nicht erweitert, kann aber bei Bedarf wieder aktiviert werden\n"
+"* Wenn Wahr, erweitert diese Ansicht immer die übergeordnete Ansicht\n"
+"* Wenn Falsch, wird die übergeordnete Ansicht nicht erweitert, kann aber bei Bedarf wieder aktiviert werden\n"
 "             "
 
 #. module: base
@@ -30876,7 +30877,7 @@ msgid ""
 "(<xpath/>) are applied, and the result is used as if it were this view's\n"
 "actual arch.\n"
 msgstr ""
-"Trifft nur zu, wenn diese Sicht eine andere ableitet (inherit_id ist nicht Null/Leer).\n"
+"Trifft nur zu, wenn diese Sicht eine andere ableitet (inherit_id ist nicht Falsch/Null).\n"
 "\n"
 "* Bei Erweiterung (Standard), wenn diese Sicht angefordert wird, wird die naheliegendste Hauptsicht (über inherit_id) gesucht und dieses Modell auf alle mit diesem Modell aus der Hauptsicht ableitenden Sichten angewendet.\n"
 "* Bei primär, wird die naheliegendste Hauptsicht vollständig aufgelöst (selbst wenn diese ein von diesem abweichendes Modell verwendet), dann werden die Vererbungselemente (<xpath/>) aufgerufen und das Ergebnis wird verwendet, als wäre es der tatsächliche Inhalt dieser Sicht.\n"

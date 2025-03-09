@@ -131,7 +131,7 @@ msgstr ""
 #: model:loyalty.reward,description:loyalty.10_percent_coupon_reward
 #: model:loyalty.reward,description:loyalty.10_percent_with_code_reward
 msgid "10% on your order"
-msgstr "10% על ההמזנה שלך"
+msgstr "10% על ההזמנה שלך"
 
 #. module: loyalty
 #: model_terms:ir.ui.view,arch_db:loyalty.gift_card_report
@@ -996,7 +996,7 @@ msgstr "עוקבים (לקוחות/ספקים)"
 #. module: loyalty
 #: model:ir.model.fields,field_description:loyalty.field_loyalty_generate_wizard__mode
 msgid "For"
-msgstr ""
+msgstr "בשביל"
 
 #. module: loyalty
 #. odoo-python
@@ -1303,7 +1303,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:loyalty.res_partner_form
 #, python-format
 msgid "Loyalty Cards"
-msgstr ""
+msgstr "מועדון לקוחות"
 
 #. module: loyalty
 #: model:ir.model,name:loyalty.model_loyalty_mail
