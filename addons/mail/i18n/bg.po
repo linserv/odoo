@@ -23,9 +23,9 @@
 # Maria Boyadjieva <marabo2000@gmail.com>, 2024
 # Margarita Katzeva, 2024
 # Petko Karamotchev, 2025
-# Veselina Slavkova, 2025
 # margarita.katzeva, 2025
 # Milena Georgieva, 2025
+# Veselina Slavkova, 2025
 # Martin Dinovski, 2025
 # 
 msgid ""
@@ -240,7 +240,7 @@ msgstr "%s създадено"
 #. odoo-javascript
 #: code:addons/mail/static/src/core/web/activity_list_popover_item.js:0
 msgid "%s days overdue"
-msgstr ""
+msgstr "%s просрочени дни"
 
 #. module: mail
 #. odoo-javascript
@@ -3146,7 +3146,7 @@ msgstr "Модел на документ"
 #. module: mail
 #: model:ir.model.fields,field_description:mail.field_mail_activity__res_name
 msgid "Document Name"
-msgstr ""
+msgstr "Име на документа "
 
 #. module: mail
 #: model_terms:ir.ui.view,arch_db:mail.message_activity_assigned
@@ -3248,7 +3248,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/mail/static/src/core/web/activity_list_popover_item.js:0
 msgid "Due in %s days"
-msgstr ""
+msgstr "Срок на плащане %s дни"
 
 #. module: mail
 #. odoo-javascript
@@ -4216,7 +4216,7 @@ msgstr "Гости"
 #. module: mail
 #: model:ir.model,name:mail.model_ir_http
 msgid "HTTP Routing"
-msgstr ""
+msgstr "HTTP Маршрутизиране"
 
 #. module: mail
 #: model:ir.model.fields.selection,name:mail.selection__res_users__notification_type__email
@@ -10961,7 +10961,7 @@ msgstr "от"
 #. odoo-javascript
 #: code:addons/mail/static/src/discuss/call/common/call_context_menu.xml:0
 msgid "camera"
-msgstr ""
+msgstr "камера"
 
 #. module: mail
 #: model_terms:ir.ui.view,arch_db:mail.mail_bounce_catchall
@@ -11493,7 +11493,7 @@ msgstr ""
 #: model:ir.model.fields.selection,name:mail.selection__mail_activity_plan_template__delay_unit__weeks
 #: model:ir.model.fields.selection,name:mail.selection__mail_activity_type__delay_unit__weeks
 msgid "weeks"
-msgstr ""
+msgstr "седмици"
 
 #. module: mail
 #. odoo-python
