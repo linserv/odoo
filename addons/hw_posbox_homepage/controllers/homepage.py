@@ -13,7 +13,7 @@ from itertools import groupby
 from pathlib import Path
 
 from odoo import http
-from odoo.addons.hw_drivers.tools import helpers, wifi
+from odoo.addons.hw_drivers.tools import helpers, route, wifi
 from odoo.addons.hw_drivers.main import iot_devices
 from odoo.addons.hw_drivers.connection_manager import connection_manager
 from odoo.tools.misc import file_path
@@ -147,7 +147,8 @@ class IotBoxOwlHomePage(http.Controller):
             'name': device.device_name,
             'value': str(device.data['value']),
             'type': device.device_type,
-            'identifier': device.device_identifier
+            'identifier': device.device_identifier,
+            'connection': device.device_connection,
         } for device in iot_devices.values()]
         device_type_key = lambda device: device['type']
         grouped_devices = {
@@ -186,12 +187,6 @@ class IotBoxOwlHomePage(http.Controller):
         return json.dumps({
             'currentWiFi': wifi.get_current(),
             'availableWiFi': wifi.get_available_ssids(),
-        })
-
-    @http.route('/hw_posbox_homepage/generate_password', auth="none", type="http", cors='*')
-    def generate_password(self):
-        return json.dumps({
-            'password': helpers.generate_password(),
         })
 
     @http.route('/hw_posbox_homepage/version_info', auth="none", type="http", cors='*')
@@ -302,6 +297,13 @@ class IotBoxOwlHomePage(http.Controller):
             }
 
         return res_payload
+
+    @route.protect
+    @http.route('/hw_posbox_homepage/generate_password', auth="none", type="jsonrpc", methods=["POST"], cors='*')
+    def generate_password(self):
+        return {
+            'password': helpers.generate_password(),
+        }
 
     @http.route('/hw_posbox_homepage/enable_ngrok', auth="none", type="jsonrpc", methods=['POST'], cors='*')
     def enable_remote_connection(self, auth_token):

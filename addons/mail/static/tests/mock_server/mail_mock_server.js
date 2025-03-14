@@ -14,6 +14,7 @@ import { serializeDateTime } from "@web/core/l10n/dates";
 import { registry } from "@web/core/registry";
 import { groupBy } from "@web/core/utils/arrays";
 
+const mockRpcRegistry = registry.category("mock_rpc");
 export const DISCUSS_ACTION_ID = 104;
 
 /**
@@ -93,13 +94,13 @@ export function registerRoute(route, handler) {
             return res;
         }
         const response = handler.call(this, request);
-        res = await beforeCallableHandler.after?.(response);
+        res = await beforeCallableHandler?.after?.(response);
         if (res !== undefined) {
             return res;
         }
         return response;
     };
-    registry.category("mock_rpc").add(route, beforeCallableHandler);
+    mockRpcRegistry.add(route, beforeCallableHandler);
 }
 
 // RPC handlers
@@ -544,13 +545,15 @@ async function discuss_inbox_messages(request) {
     };
 }
 
-registerRoute("/mail/link_preview", mail_link_preview);
+registerRoute("/mail/link_preview$", mail_link_preview);
 /** @type {RouteCallback} */
 async function mail_link_preview(request) {
     /** @type {import("mock_models").BusBus} */
     const BusBus = this.env["bus.bus"];
     /** @type {import("mock_models").MailLinkPreview} */
     const MailLinkPreview = this.env["mail.link.preview"];
+    /** @type {import("mock_models").MailLinkPreviewMessage} */
+    const MailMessageLinkPreview = this.env["mail.message.link.preview"];
     /** @type {import("mock_models").MailMessage} */
     const MailMessage = this.env["mail.message"];
 
@@ -558,45 +561,47 @@ async function mail_link_preview(request) {
     const [message] = MailMessage.search_read([["id", "=", message_id]]);
     if (message.body.includes("https://make-link-preview.com")) {
         const linkPreviewId = MailLinkPreview.create({
-            message_id: message.id,
             og_description: "test description",
             og_title: "Article title",
             og_type: "article",
             source_url: "https://make-link-preview.com",
         });
+        MailMessageLinkPreview.create({
+            message_id: message.id,
+            link_preview_id: linkPreviewId,
+        });
         BusBus._sendone(
             MailMessage._bus_notification_target(message_id),
             "mail.record/insert",
-            new mailDataHelpers.Store(MailLinkPreview.browse(linkPreviewId)).get_result()
+            new mailDataHelpers.Store(MailMessage.browse(message_id)).get_result()
         );
     }
 }
 
-registerRoute("/mail/link_preview/hide", mail_link_preview_hide);
+registerRoute("/mail/link_preview/hide$", mail_link_preview_hide);
 /** @type {RouteCallback} */
 async function mail_link_preview_hide(request) {
     /** @type {import("mock_models").BusBus} */
     const BusBus = this.env["bus.bus"];
-    /** @type {import("mock_models").MailLinkPreview} */
-    const MailLinkPreview = this.env["mail.link.preview"];
+    /** @type {import("mock_models").MailMessageLinkPreview} */
+    const MailMessageLinkPreview = this.env["mail.message.link.preview"];
     /** @type {import("mock_models").MailMessage} */
     const MailMessage = this.env["mail.message"];
 
-    const { link_preview_ids } = await parseRequestParams(request);
-    for (const linkPreview of MailLinkPreview.browse(link_preview_ids)) {
+    const { message_link_preview_ids } = await parseRequestParams(request);
+    const messageLinkPreviews = MailMessageLinkPreview.browse(
+        MailMessageLinkPreview.search([["id", "in", message_link_preview_ids]])
+    );
+    for (const messageLinkPreview of messageLinkPreviews) {
+        messageLinkPreview.is_hidden = true;
         BusBus._sendone(
-            MailMessage._bus_notification_target(linkPreview.message_id),
+            MailMessage._bus_notification_target(messageLinkPreview.message_id),
             "mail.record/insert",
-            new mailDataHelpers.Store(MailMessage.browse(linkPreview.message_id), {
-                link_preview_ids: mailDataHelpers.Store.many(
-                    MailLinkPreview.browse(linkPreview.id),
-                    "DELETE",
-                    makeKwArgs({ only_id: true })
-                ),
-            }).get_result()
+            new mailDataHelpers.Store(
+                MailMessage.browse(messageLinkPreview.message_id)
+            ).get_result()
         );
     }
-    return { link_preview_ids };
 }
 
 registerRoute("/mail/message/post", mail_message_post);
@@ -959,7 +964,11 @@ async function mail_thread_subscribe(request) {
 async function processRequest(request) {
     const store = new mailDataHelpers.Store();
     const args = await parseRequestParams(request);
-    for (const fetchParam of args.fetch_params) {
+    let fetchParams = args.fetch_params;
+    if (args.method === "lazy_session_info") {
+        fetchParams = ["failures", "systray_get_activities", "init_messaging"];
+    }
+    for (const fetchParam of fetchParams) {
         const [name, params] =
             typeof fetchParam === "string" || fetchParam instanceof String
                 ? [fetchParam, undefined]
@@ -1390,6 +1399,12 @@ class Store {
         return record.id;
     }
 }
+
+registerRoute("/web/dataset/call_kw/ir.http/lazy_session_info", async function (request) {
+    return {
+        store_data: (await processRequest.call(this, request)).get_result(),
+    };
+});
 
 export const mailDataHelpers = {
     _process_request_for_all,

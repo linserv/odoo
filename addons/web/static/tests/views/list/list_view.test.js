@@ -1,4 +1,4 @@
-import { describe, expect, getFixture, test } from "@odoo/hoot";
+import { expect, getFixture, test } from "@odoo/hoot";
 import {
     clear,
     click,
@@ -88,8 +88,6 @@ import { Many2XAutocomplete } from "@web/views/fields/relational_utils";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 import { ListController } from "@web/views/list/list_controller";
 import { WebClient } from "@web/webclient/webclient";
-
-describe.current.tags("desktop");
 
 const { ResCompany, ResPartner, ResUsers } = webModels;
 
@@ -1629,6 +1627,7 @@ test(`multi_edit: clicking on a readonly field switches the focus to the next ed
     expect(`.o_field_widget[name=foo] input`).toBeFocused();
 });
 
+test.tags("desktop");
 test(`save a record with an required field computed by another`, async () => {
     Foo._onChanges = {
         foo(record) {
@@ -2372,6 +2371,7 @@ test(`enabling archive in list when groupby m2m field`, async () => {
     });
 });
 
+test.tags("desktop");
 test(`enabling archive in list when groupby m2m field and multi selecting the same record`, async () => {
     onRpc("has_group", () => false);
     onRpc("action_archive", ({ args }) => {
@@ -2449,6 +2449,7 @@ test(`enabling duplicate in list when groupby m2m field`, async () => {
     });
 });
 
+test.tags("desktop");
 test(`enabling duplicate in list when groupby m2m field and multi selecting the same record`, async () => {
     onRpc("has_group", () => false);
     onRpc("copy", ({ args }) => {
@@ -2526,6 +2527,7 @@ test(`enabling delete in list when groupby m2m field`, async () => {
     });
 });
 
+test.tags("desktop");
 test(`enabling delete in list when groupby m2m field and multi selecting the same record`, async () => {
     onRpc("has_group", () => false);
     onRpc("unlink", ({ args }) => {
@@ -2611,6 +2613,7 @@ test(`enabling unarchive in list when groupby m2m field`, async () => {
     });
 });
 
+test.tags("desktop");
 test(`enabling unarchive in list when groupby m2m field and multi selecting the same record`, async () => {
     onRpc("has_group", () => false);
     onRpc("action_unarchive", ({ args }) => {
@@ -2742,6 +2745,7 @@ test(`editing a record should change same record in other groups when grouped by
     expect(queryAllTexts(`.o_list_char`)).toEqual(["xyz", "blip", "blip", "xyz", "blip"]);
 });
 
+test.tags("desktop");
 test(`selecting the same record on different groups and editing it when grouping by m2m field`, async () => {
     onRpc("write", ({ args }) => {
         expect.step("write");
@@ -5173,8 +5177,6 @@ test(`custom delete confirmation dialog`, async () => {
 });
 
 test(`deleting record which throws UserError should close confirmation dialog`, async () => {
-    expect.errors(1);
-
     onRpc("unlink", () => {
         throw makeServerError({ message: "Odoo Server Error" });
     });
@@ -5192,9 +5194,12 @@ test(`deleting record which throws UserError should close confirmation dialog`, 
     await toggleMenuItem("Delete");
     expect(`.modal`).toHaveCount(1, { message: "should have open the confirmation dialog" });
 
+    expect.errors(1);
+
     await contains(`.modal footer button.btn-primary`).click();
-    await waitFor(".modal");
-    expect(`.modal .modal-title`).toHaveText("Invalid Operation");
+    await waitFor(".modal .modal-title:contains(Invalid Operation)");
+
+    expect.verifyErrors(["Odoo Server Error"]);
 });
 
 test.tags("desktop");
@@ -5313,6 +5318,13 @@ test(`duplicate all records`, async () => {
     await selectAllRecords();
     await contains(`.o_cp_action_menus .dropdown-toggle`).click();
     await toggleMenuItem("Duplicate");
+
+    // A confirmation dialog should appear when duplicating multiple records.
+    expect(`.modal`).toHaveCount(1);
+    expect(`.modal-body`).toHaveText(
+        "Are you sure that you want to duplicate all the selected records?"
+    );
+    await contains(`.modal footer button.btn-primary`).click();
 
     // Final state: there should be 8 records
     expect(`tbody tr`).toHaveCount(8, { message: "should have 8 rows" });
@@ -11295,8 +11307,6 @@ test(`editable list view: many2one with readonly modifier`, async () => {
 
 test.tags("desktop");
 test(`editable list view: multi edition server error handling`, async () => {
-    expect.errors(1);
-
     onRpc("write", () => {
         throw makeServerError();
     });
@@ -11315,8 +11325,11 @@ test(`editable list view: multi edition server error handling`, async () => {
     await contains(`.o_data_row:eq(0) .o_data_cell:eq(0)`).click();
     await contains(`.o_selected_row [name=foo] input`).edit("abc");
     await contains(`.o_list_view`).click();
+
+    expect.errors(1);
     await contains(`.modal .btn-primary`).click();
-    // Server error: if there was a crash manager, there would be an open error at this point...
+    expect.verifyErrors(["RPC_ERROR"]);
+
     expect(`.o_data_row:eq(0) .o_data_cell`).toHaveText("yop", {
         message: "first cell should have discarded any change",
     });
@@ -11710,6 +11723,7 @@ test(`editable list with fields with readonly modifier`, async () => {
     expect(`.o_selected_row .o_field_many2one input`).toBeFocused();
 });
 
+test.tags("desktop");
 test(`editable form alongside html field: click out to unselect the row`, async () => {
     Bar._fields.name = fields.Char();
 
@@ -14470,6 +14484,7 @@ test(`list view with optional fields and async rendering`, async () => {
     expect(`.o-dropdown--menu input:checked`).toHaveCount(1);
 });
 
+test.tags("desktop");
 test(`change the viewType of the current action`, async () => {
     defineActions([
         {
@@ -15883,8 +15898,6 @@ test(`view widget with options in list view`, async () => {
 });
 
 test(`edit a record then select another record with a throw error when saving`, async () => {
-    expect.errors(1);
-
     onRpc("web_save", () => {
         throw makeServerError({ message: "Can't write" });
     });
@@ -15898,8 +15911,10 @@ test(`edit a record then select another record with a throw error when saving`, 
     await contains(`[name=foo] input`).edit("plop", { confirm: false });
     expect(`[name=foo] input`).toHaveCount(1);
 
+    expect.errors(1);
     await contains(`.o_data_cell:eq(0)`).click();
     await animationFrame();
+    expect.verifyErrors(["RPC_ERROR"]);
     expect(`.o_error_dialog`).toHaveCount(1);
 
     await contains(`.o_error_dialog .btn-primary.o-default-button`).click();
@@ -17494,7 +17509,8 @@ test("two pages, go page 2, record deleted meanwhile (grouped case)", async () =
     expect(".o_group_header .o_pager").toHaveCount(0);
 });
 
-test.tags("desktop")("select records range with shift click on several page", async () => {
+test.tags("desktop");
+test("select records range with shift click on several page", async () => {
     await mountView({
         resModel: "foo",
         type: "list",

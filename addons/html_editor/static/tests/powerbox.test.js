@@ -40,10 +40,21 @@ test("should open the Powerbox on type `/`", async () => {
     expect(".o-we-powerbox").toHaveCount(1);
 });
 
-test.tags("iframe");
-test("in iframe: should open the Powerbox on type `/`", async () => {
+test.tags("iframe", "desktop");
+test("in iframe, desktop: should open the Powerbox on type `/`", async () => {
     const { el, editor } = await setupEditor("<p>ab[]</p>", { props: { iframe: true } });
     expect("iframe").toHaveCount(1);
+    expect(".o-we-powerbox").toHaveCount(0);
+    expect(getContent(el)).toBe("<p>ab[]</p>");
+    await insertText(editor, "/");
+    await animationFrame();
+    expect(".o-we-powerbox").toHaveCount(1);
+});
+
+test.tags("iframe", "mobile");
+test("in iframe, mobile: should open the Powerbox on type `/`", async () => {
+    const { el, editor } = await setupEditor("<p>ab[]</p>", { props: { iframe: true } });
+    expect("iframe").toHaveCount(2);
     expect(".o-we-powerbox").toHaveCount(0);
     expect(getContent(el)).toBe("<p>ab[]</p>");
     await insertText(editor, "/");
@@ -88,9 +99,9 @@ describe("search", () => {
         expect(commandNames(el).length).toBe(28);
         expect(".o-we-category").toHaveCount(8);
         expect(queryAllTexts(".o-we-category")).toEqual([
+            "FORMAT",
             "STRUCTURE",
             "BANNER",
-            "FORMAT",
             "MEDIA",
             "NAVIGATION",
             "WIDGET",
@@ -732,7 +743,7 @@ test("select command with 'mouseenter' after scroll -- doc in iframe", async () 
 
     await hover(".o-we-command-name:eq(3)");
     await animationFrame();
-    expect(".active .o-we-command-name").toHaveText("4 columns");
+    expect(".active .o-we-command-name").toHaveText("Text");
 });
 
 test("click on a command", async () => {
@@ -779,10 +790,10 @@ test.todo("add plugins with the same powerboxCategory should crash", async () =>
             config: { Plugins: [...MAIN_PLUGINS, Plugin1, Plugin2] },
         })
     ).rejects.toThrow();
-    expect(["Duplicate category id: test"]).toVerifyErrors();
-    expect([
+    expect.verifyErrors(["Duplicate category id: test"]);
+    expect.verifySteps([
         "[Owl] Unhandled error. Destroying the root component",
         "[Owl] Unhandled error. Destroying the root component",
         "[Owl] Unhandled error. Destroying the root component",
-    ]).toVerifySteps();
+    ]);
 });

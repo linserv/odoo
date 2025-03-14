@@ -26,7 +26,6 @@ import {
     defineActions,
     defineModels,
     defineParams,
-    defineStyle,
     fields,
     getMockEnv,
     getService,
@@ -275,13 +274,6 @@ beforeEach(() => {
     });
     patchWithCleanup(CalendarYearRenderer.prototype, patchFullCalendarOptions());
     patchWithCleanup(CalendarCommonRenderer.prototype, patchFullCalendarOptions());
-
-    // Disable action swiper transitions
-    defineStyle(/* css */ `
-        .o_actionswiper_target_container {
-            transition: none !important;
-        }
-    `);
 });
 
 onRpc("has_group", () => true);
@@ -3478,8 +3470,9 @@ test(`timezone does not affect drag and drop on desktop`, async () => {
     expect(`.o_event[data-event-id="1"]`).toHaveText("08:00\nevent 1");
     expect(`.o_field_widget[name="start"]`).toHaveText("12/09/2016 08:00");
 });
-// TODO JUM
-test.tags("mobile").skip(`timezone does not affect drag and drop on mobile`, async () => {
+
+test.tags("mobile");
+test(`timezone does not affect drag and drop on mobile`, async () => {
     mockTimeZone(-40);
     patchWithCleanup(CalendarRenderer.prototype, {
         get actionSwiperProps() {
@@ -3504,26 +3497,27 @@ test.tags("mobile").skip(`timezone does not affect drag and drop on mobile`, asy
             </calendar>
         `,
     });
+
     await clickEvent(1);
-    expect(`.o_event[data-event-id="1"]`).toHaveText("08:00event 1");
-    expect(`.o_field_widget[name="start"]`).toHaveText("12/09/2016 08:00:00");
+    expect(`.o_event[data-event-id="1"]`).toHaveText("event 1");
+    expect(`.o_field_widget[name="start"]`).toHaveText("12/09/2016 08:00");
     await closeCwPopOver();
 
     await clickEvent(6);
-    expect(`.o_event[data-event-id="6"]`).toHaveText("16:00event 6");
-    expect(`.o_field_widget[name="start"]`).toHaveText("12/16/2016 16:00:00");
+    expect(`.o_event[data-event-id="6"]`).toHaveText("event 6");
+    expect(`.o_field_widget[name="start"]`).toHaveText("12/16/2016 16:00");
     await closeCwPopOver();
 
     await moveEventToDate(6, "2016-11-27");
     await clickEvent(6);
-    expect(`.o_event[data-event-id="6"]`).toHaveText("16:00event 6");
-    expect(`.o_field_widget[name="start"]`).toHaveText("11/27/2016 16:00:00");
+    expect(`.o_event[data-event-id="6"]`).toHaveText("event 6");
+    expect(`.o_field_widget[name="start"]`).toHaveText("11/27/2016 16:00");
     await closeCwPopOver();
     expect.verifySteps(["write"]);
 
     await clickEvent(1);
-    expect(`.o_event[data-event-id="1"]`).toHaveText("08:00event 1");
-    expect(`.o_field_widget[name="start"]`).toHaveText("12/09/2016 08:00:00");
+    expect(`.o_event[data-event-id="1"]`).toHaveText("event 1");
+    expect(`.o_field_widget[name="start"]`).toHaveText("12/09/2016 08:00");
 });
 
 test.tags("desktop");
@@ -5608,4 +5602,45 @@ test(`calendar renderer is rendered once after search refresh`, async () => {
     expect.verifySteps(["rendered"]);
     await validateSearch();
     expect.verifySteps(["rendered"]);
+});
+
+test.tags("desktop");
+test(`calendar with filters and count aggregate`, async () => {
+    await mountView({
+        resModel: "event",
+        type: "calendar",
+        arch: `
+            <calendar date_start="start" date_stop="stop" aggregate="id:count">
+                <field name="attendee_ids" write_model="filter.partner" write_field="partner_id" filter_field="is_checked"/>
+            </calendar>
+        `,
+    });
+
+    expect(queryAllTexts(".o_calendar_filter_item span")).toEqual(["partner 1", "2", "partner 2"]);
+});
+
+test.tags("desktop");
+test(`calendar with dynamic filters and sum aggregate`, async () => {
+    Event._fields.revenue = fields.Float();
+    Event._records[0].revenue = 1200;
+    Event._records[1].revenue = 350;
+    Event._records[2].revenue = 800;
+    Event._records[3].revenue = 3000;
+    Event._records[4].revenue = 1900;
+    await mountView({
+        resModel: "event",
+        type: "calendar",
+        arch: `
+            <calendar date_start="start" date_stop="stop" aggregate="revenue:sum">
+                <field name="partner_id" filters="1"/>
+            </calendar>
+        `,
+    });
+
+    expect(queryAllTexts(".o_calendar_filter_item span")).toEqual([
+        "partner 1",
+        "4,550",
+        "partner 4",
+        "2,700",
+    ]);
 });

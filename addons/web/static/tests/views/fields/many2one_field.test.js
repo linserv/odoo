@@ -927,7 +927,7 @@ test("empty many2one field", async () => {
     await contains(".o_field_many2one[name='trululu'] input").edit("abc", { confirm: false });
     await runAllTimers();
 
-    expect(".dropdown-menu li.o_m2o_dropdown_option").toHaveCount(2);
+    expect(".dropdown-menu li.o_m2o_dropdown_option").toHaveCount(3);
     expect(".dropdown-menu li.o_m2o_start_typing").toHaveCount(0);
 });
 
@@ -2492,8 +2492,7 @@ test("failing quick create on a many2one because ValidationError", async () => {
 });
 
 test("failing quick create on a many2one", async () => {
-    expect.assertions(2);
-    expect.errors(1);
+    expect.assertions(3);
     Product._views = {
         form: '<form><field name="name" /></form>',
     };
@@ -2509,8 +2508,10 @@ test("failing quick create on a many2one", async () => {
 
     await contains(".o_field_widget[name='product_id'] input").edit("abcd", { confirm: false });
     await runAllTimers();
+    expect.errors(1);
     await contains(".o_field_widget[name='product_id'] .dropdown-item").click();
     await animationFrame(); // wait for the error service
+    expect.verifyErrors(["RPC_ERROR"]);
     expect(".o_error_dialog").toHaveCount(1);
     expect(".modal .o_form_view").toHaveCount(0);
 });
@@ -2571,8 +2572,10 @@ test("slow create on a many2one", async () => {
     });
     await contains(".o_field_many2one input").edit("new product", { confirm: false });
     await runAllTimers();
+    await press("arrowdown");
     await press("tab");
     await animationFrame();
+
 
     expect(".modal").toHaveCount(1);
     // cancel the many2one creation with Discard button
@@ -2583,6 +2586,7 @@ test("slow create on a many2one", async () => {
     // cancel the many2one creation with Close button
     await contains(".o_field_many2one input").edit("new product", { confirm: false });
     await runAllTimers();
+    await press("arrowdown");
     await press("tab");
     await animationFrame();
 
@@ -2598,6 +2602,7 @@ test("slow create on a many2one", async () => {
 
     await contains(".o_field_many2one input").edit("new product", { confirm: false });
     await runAllTimers();
+    await press("arrowdown");
     await press("tab");
     await animationFrame();
     expect(".modal").toHaveCount(1);
@@ -2608,6 +2613,7 @@ test("slow create on a many2one", async () => {
     // confirm the many2one creation
     await contains(".o_field_many2one input").edit("new product", { confirm: false });
     await runAllTimers();
+    await press("arrowdown");
     await press("tab");
     await animationFrame();
 
@@ -2647,6 +2653,7 @@ test("no_create option on a many2one", async () => {
 
     await contains(".o_field_many2one input").edit("new partner", { confirm: false });
     await runAllTimers();
+    await press("arrowdown");
     await press("tab");
 
     expect(".modal").toHaveCount(0);
@@ -2667,6 +2674,7 @@ test("no_create option on a many2one when can_create is absent", async () => {
     });
     await contains(".o_field_many2one input").edit("new partner", { confirm: false });
     await runAllTimers();
+    await press("arrowdown");
     await press("tab");
 
     expect(".modal").toHaveCount(0);
@@ -2687,8 +2695,11 @@ test("no_quick_create option on a many2one when can_create is absent", async () 
     });
     await contains(".o_field_many2one input").edit("new partner", { confirm: false });
     await runAllTimers();
-    expect(".ui-autocomplete .o_m2o_dropdown_option").toHaveCount(1);
-    expect(".ui-autocomplete .o_m2o_dropdown_option").toHaveClass(
+    expect(".ui-autocomplete .o_m2o_dropdown_option").toHaveCount(2);
+    expect(".ui-autocomplete .o_m2o_dropdown_option:eq(0)").toHaveClass(
+        "o_m2o_dropdown_option_search_more"
+    );
+    expect(".ui-autocomplete .o_m2o_dropdown_option:eq(1)").toHaveClass(
         "o_m2o_dropdown_option_create_edit"
     );
 });
@@ -2914,6 +2925,7 @@ test("pressing ENTER on a 'no_quick_create' many2one should open a M2ODialog", a
         confirm: false,
     });
     await runAllTimers();
+    await press("arrowdown");
     await press("Enter");
     await animationFrame();
     expect(".modal").toHaveCount(1);
@@ -3891,4 +3903,53 @@ test("many2one search with false as name", async () => {
     expect(".o_field_many2one[name='trululu'] .dropdown-menu a.dropdown-item:eq(0)").toHaveText(
         "Unnamed"
     );
+});
+
+test.tags("desktop");
+test("search typeahead", async () => {
+    onRpc("web_name_search", () => expect.step("web_name_search"));
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        arch: `<form><field name="trululu" options="{ 'search_threshold': 3 }"/></form>`,
+    });
+
+    await contains(".o_field_widget[name=trululu] input").click();
+    await runAllTimers();
+    expect.verifySteps([]);
+    expect(queryAllTexts(`.o-autocomplete.dropdown li`)).toEqual([
+        "Search More...",
+        "Start typing 3 characters",
+    ]);
+
+    await contains(".o_field_widget[name=trululu] input").edit("r", { confirm: false });
+    await runAllTimers();
+    expect.verifySteps([]);
+    expect(queryAllTexts(`.o-autocomplete.dropdown li`)).toEqual([
+        "Create \"r\"",
+        "Search More...",
+        "Create and edit...",
+        "Start typing 3 characters",
+    ]);
+
+    await contains(".o_field_widget[name=trululu] input").edit("re", { confirm: false });
+    await runAllTimers();
+    expect.verifySteps([]);
+    expect(queryAllTexts(`.o-autocomplete.dropdown li`)).toEqual([
+        "Create \"re\"",
+        "Search More...",
+        "Create and edit...",
+        "Start typing 3 characters",
+    ]);
+
+    await contains(".o_field_widget[name=trululu] input").edit("rec", { confirm: false });
+    await runAllTimers();
+    expect.verifySteps(["web_name_search"]);
+    expect(queryAllTexts(`.o-autocomplete.dropdown li`)).toEqual([
+        "first record",
+        "second record",
+        "Create \"rec\"",
+        "Search More...",
+        "Create and edit...",
+    ]);
 });

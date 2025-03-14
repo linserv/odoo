@@ -1,4 +1,5 @@
 import { waitUntilSubscribe } from "@bus/../tests/bus_test_helpers";
+import { expirableStorage } from "@im_livechat/core/common/expirable_storage";
 import {
     defineLivechatModels,
     loadDefaultEmbedConfig,
@@ -6,8 +7,8 @@ import {
 import {
     click,
     contains,
-    focus,
     insertText,
+    setupChatHub,
     start,
     startServer,
     triggerHotkey,
@@ -42,12 +43,22 @@ test("new message from operator displays unread counter", async () => {
         livechat_channel_id: livechatChannelId,
         livechat_operator_id: serverState.partnerId,
     });
+    expirableStorage.setItem(
+        "im_livechat.saved_state",
+        JSON.stringify({
+            store: { "discuss.channel": [{ id: channelId }] },
+            persisted: true,
+            livechatUserId: serverState.publicUserId,
+        })
+    );
+    setupChatHub({ opened: [channelId] });
     onRpc(["/mail/action", "/mail/data"], async (request) => {
         const { params } = await request.json();
-        if (params.fetch_params.includes("init_messaging")) {
+        if (JSON.stringify(params.fetch_params).includes("init_livechat")) {
             asyncStep(`${new URL(request.url).pathname} - ${JSON.stringify(params)}`);
         }
     });
+    onRpc("/discuss/channel/messages", () => asyncStep("/discuss/channel/message"));
     const userId = serverState.userId;
     await start({
         authenticateAs: { ...pyEnv["mail.guest"].read(guestId)[0], _name: "mail.guest" },
@@ -55,10 +66,8 @@ test("new message from operator displays unread counter", async () => {
     await waitForSteps([
         `/mail/action - ${JSON.stringify({
             fetch_params: [
-                "failures", // called because mail/core/web is loaded in qunit bundle
-                "systray_get_activities", // called because mail/core/web is loaded in qunit bundle
-                "init_messaging",
                 ["init_livechat", livechatChannelId],
+                ["discuss.channel", [channelId]],
             ],
             context: {
                 lang: "en",
@@ -67,9 +76,10 @@ test("new message from operator displays unread counter", async () => {
                 allowed_company_ids: [1],
             },
         })}`,
+        "/discuss/channel/message",
     ]);
     // send after init_messaging because bus subscription is done after init_messaging
-    withUser(userId, () =>
+    await withUser(userId, () =>
         rpc("/mail/message/post", {
             post_data: { body: "Are you there?", message_type: "comment" },
             thread_id: channelId,
@@ -85,20 +95,13 @@ test("focus on unread livechat marks it as read", async () => {
     const livechatChannelId = await loadDefaultEmbedConfig();
     onRpc(["/mail/action", "/mail/data"], async (request) => {
         const { params } = await request.json();
-        if (params.fetch_params.includes("init_messaging")) {
-            asyncStep(`${new URL(request.url).pathname} - ${JSON.stringify(params)}`);
-        }
+        asyncStep(`${new URL(request.url).pathname} - ${JSON.stringify(params)}`);
     });
     const userId = serverState.userId;
     await start({ authenticateAs: false });
     await waitForSteps([
         `/mail/action - ${JSON.stringify({
-            fetch_params: [
-                "failures", // called because mail/core/web is loaded in qunit bundle
-                "systray_get_activities", // called because mail/core/web is loaded in qunit bundle
-                "init_messaging",
-                ["init_livechat", livechatChannelId],
-            ],
+            fetch_params: [["init_livechat", livechatChannelId]],
             context: { lang: "en", tz: "taht", uid: serverState.userId, allowed_company_ids: [1] },
         })}`,
     ]);
@@ -117,21 +120,6 @@ test("focus on unread livechat marks it as read", async () => {
             pyEnv["discuss.channel.member"].search([["guest_id", "=", pyEnv.cookie.get("dgid")]]),
         ],
     ]);
-    await waitForSteps([
-        `/mail/data - ${JSON.stringify({
-            fetch_params: [
-                "failures", // called because mail/core/web is loaded in qunit bundle
-                "systray_get_activities", // called because mail/core/web is loaded in qunit bundle
-                "init_messaging",
-            ],
-            context: {
-                lang: "en",
-                tz: "taht",
-                uid: serverState.userId,
-                allowed_company_ids: [1],
-            },
-        })}`,
-    ]);
     queryFirst(".o-mail-Composer-input").blur();
     // send after init_messaging because bus subscription is done after init_messaging
     await withUser(userId, () =>
@@ -143,6 +131,6 @@ test("focus on unread livechat marks it as read", async () => {
     );
     await contains(".o-mail-ChatWindow-counter", { text: "1" });
     await contains(".o-mail-Message", { text: "Are you there?" });
-    await focus(".o-mail-Composer-input");
+    await click(".o-mail-Composer-input");
     await contains(".o-mail-ChatWindow-counter", { count: 0 });
 });

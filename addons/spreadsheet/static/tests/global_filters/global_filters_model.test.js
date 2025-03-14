@@ -4,7 +4,11 @@ import { animationFrame, mockDate, mockTimeZone } from "@odoo/hoot-mock";
 
 import { DispatchResult, Model, helpers, tokenize } from "@odoo/o-spreadsheet";
 import { Domain } from "@web/core/domain";
-import { defineSpreadsheetModels, getBasicPivotArch } from "@spreadsheet/../tests/helpers/data";
+import {
+    defineSpreadsheetModels,
+    getBasicPivotArch,
+    getBasicServerData,
+} from "@spreadsheet/../tests/helpers/data";
 import {
     createModelWithDataSource,
     createModelFromGrid,
@@ -1975,7 +1979,15 @@ test("Can set a value to a date filter from the SET_MANY_GLOBAL_FILTER_VALUE com
 
 test("getFiltersMatchingPivot return correctly matching filter according to cell formula", async function () {
     mockDate("2022-07-14 00:00:00");
+    const serverData = getBasicServerData();
+    serverData.models.partner.records = [
+        {
+            id: 10000,
+            product_id: false,
+        },
+    ];
     const { model } = await createSpreadsheetWithPivot({
+        serverData,
         arch: /*xml*/ `
                 <pivot>
                     <field name="product_id" type="row"/>
@@ -2002,7 +2014,6 @@ test("getFiltersMatchingPivot return correctly matching filter according to cell
             type: "date",
             label: "date filter 1",
             rangeType: "fixedPeriod",
-            defaultValue: "this_month",
         },
         {
             pivot: { "PIVOT#1": { chain: "date", type: "date" } },
@@ -2012,6 +2023,11 @@ test("getFiltersMatchingPivot return correctly matching filter according to cell
     expect(relationalFilters1).toEqual([{ filterId: "42", value: [37] }]);
     const relationalFilters2 = getFiltersMatchingPivot(model, '=PIVOT.HEADER(1,"product_id","41")');
     expect(relationalFilters2).toEqual([{ filterId: "42", value: [41] }]);
+    const relationalFiltersWithNoneValue = getFiltersMatchingPivot(
+        model,
+        '=PIVOT.HEADER(1,"#product_id",1)'
+    );
+    expect(relationalFiltersWithNoneValue).toEqual([{ filterId: "42", value: undefined }]);
     const dateFilters1 = getFiltersMatchingPivot(model, '=PIVOT.HEADER(1,"date:month","08/2016")');
     expect(dateFilters1).toEqual([{ filterId: "43", value: { yearOffset: -6, period: "august" } }]);
     const dateFilters2 = getFiltersMatchingPivot(model, '=PIVOT.HEADER(1,"date:year","2016")');
@@ -2562,5 +2578,69 @@ test("Updating the list domain should keep the global filter domain", async () =
     computedDomain = new Domain(model.getters.getListComputedDomain("1"));
     expect(computedDomain.toString()).toBe(
         `["&", ("date", ">=", "2022-01-01"), ("date", "<=", "2022-12-31")]`
+    );
+});
+
+test("Can add a boolean filter", async () => {
+    const model = new Model();
+    const filter = {
+        id: "42",
+        label: "test",
+        type: "boolean",
+        defaultValue: [],
+    };
+    model.dispatch("ADD_GLOBAL_FILTER", { filter });
+    model.dispatch("SET_GLOBAL_FILTER_VALUE", { id: "42", value: [true] });
+    expect(model.getters.getGlobalFilterValue("42")).toEqual([true]);
+});
+
+test("Add a boolean filter with a default value", async () => {
+    const model = new Model();
+    const filter = {
+        id: "42",
+        label: "test",
+        type: "boolean",
+        defaultValue: [true],
+    };
+    model.dispatch("ADD_GLOBAL_FILTER", { filter });
+    expect(model.getters.getGlobalFilterValue("42")).toEqual([true]);
+});
+
+test("Can set a boolean filter with both true and false", async () => {
+    const model = new Model();
+    const filter = {
+        id: "42",
+        label: "test",
+        type: "boolean",
+        defaultValue: [],
+    };
+    model.dispatch("ADD_GLOBAL_FILTER", { filter });
+    model.dispatch("SET_GLOBAL_FILTER_VALUE", { id: "42", value: [true, false] });
+    expect(model.getters.getGlobalFilterValue("42")).toEqual([true, false]);
+});
+
+test("Check boolean filter domain", async () => {
+    const model = new Model();
+    const filter = {
+        id: "42",
+        label: "test",
+        type: "boolean",
+        defaultValue: [],
+    };
+    model.dispatch("ADD_GLOBAL_FILTER", { filter });
+    model.dispatch("SET_GLOBAL_FILTER_VALUE", { id: "42", value: [] });
+    const fieldMatching = { chain: "active", type: "boolean" };
+    expect(model.getters.getGlobalFilterDomain("42", fieldMatching).toString()).toEqual("[]");
+    model.dispatch("SET_GLOBAL_FILTER_VALUE", { id: "42", value: [true] });
+    expect(model.getters.getGlobalFilterDomain("42", fieldMatching).toString()).toEqual(
+        `[("active", "=", True)]`
+    );
+    model.dispatch("SET_GLOBAL_FILTER_VALUE", { id: "42", value: [false] });
+    expect(model.getters.getGlobalFilterDomain("42", fieldMatching).toString()).toEqual(
+        `[("active", "=", False)]`
+    );
+    model.dispatch("SET_GLOBAL_FILTER_VALUE", { id: "42", value: [true, false] });
+    expect(model.getters.getGlobalFilterDomain("42", fieldMatching).toString()).toEqual(
+        `[("active", "in", [True, False])]`
     );
 });
