@@ -570,7 +570,7 @@ class MrpProduction(models.Model):
             elif any(production.move_raw_ids.mapped('picked')):
                 production.state = 'progress'
 
-    @api.depends('bom_id', 'product_id', 'product_qty', 'product_uom_id')
+    @api.depends('bom_id', 'product_id', 'product_qty', 'product_uom_id', 'never_product_template_attribute_value_ids')
     def _compute_workorder_ids(self):
         for production in self:
             if production.state != 'draft':
@@ -598,7 +598,11 @@ class MrpProduction(models.Model):
                     if not (bom.operation_ids and (not bom_data['parent_line'] or bom_data['parent_line'].bom_id.operation_ids != bom.operation_ids)):
                         continue
                     for operation in bom.operation_ids:
-                        if operation._skip_operation_line(bom_data['product']):
+                        if operation._skip_operation_line(bom_data['product'], production.never_product_template_attribute_value_ids):
+                            workorder = production.workorder_ids.filtered(lambda wo: wo.operation_id == operation and wo.operation_id.bom_id == bom)
+                            if workorder:
+                                # If for some reason a non-relevant workorder is still there, e.g. after a change in never_product_template_attribute_value_ids
+                                workorders_list += [Command.delete(workorder.id)]
                             continue
                         workorders_values += [{
                             'name': operation.name,
@@ -770,7 +774,7 @@ class MrpProduction(models.Model):
             else:
                 production.move_raw_ids = [Command.delete(move.id) for move in production.move_raw_ids.filtered(lambda m: m.bom_line_id)]
 
-    @api.depends('product_id', 'bom_id', 'product_qty', 'product_uom_id', 'location_dest_id', 'date_finished', 'move_dest_ids')
+    @api.depends('product_id', 'bom_id', 'product_qty', 'product_uom_id', 'location_dest_id', 'date_finished', 'move_dest_ids', 'never_product_template_attribute_value_ids')
     def _compute_move_finished_ids(self):
         for production in self:
             if production.state != 'draft':
@@ -837,7 +841,8 @@ class MrpProduction(models.Model):
         if self.state in ['draft', 'cancel'] or (self.state == 'done' and self.is_locked):
             return
         productions_bypass_qty_producting = self.filtered(lambda p: p.lot_producing_id and p.product_tracking == 'lot' and p._origin and p._origin.qty_producing == p.qty_producing)
-        (self - productions_bypass_qty_producting)._set_qty_producing(False)
+        # sudo needed for portal users
+        (self - productions_bypass_qty_producting).sudo()._set_qty_producing(False)
 
     @api.onchange('lot_producing_id')
     def _onchange_lot_producing(self):
@@ -1153,7 +1158,7 @@ class MrpProduction(models.Model):
             finished_move_values['location_final_id'] = self.location_final_id.id
             moves.append(finished_move_values)
             for byproduct in production.bom_id.byproduct_ids:
-                if byproduct._skip_byproduct_line(production.product_id):
+                if byproduct._skip_byproduct_line(production.product_id, production.never_product_template_attribute_value_ids):
                     continue
                 product_uom_factor = production.product_uom_id._compute_quantity(production.product_qty, production.bom_id.product_uom_id)
                 qty = byproduct.product_qty * (product_uom_factor / production.bom_id.product_qty)
@@ -1860,6 +1865,8 @@ class MrpProduction(models.Model):
         new_moves_vals = []
         moves = []
         move_to_backorder_moves = {}
+        # unlink all unregistered move lines linked a move containing an effictive registration
+        (self.move_raw_ids | self.move_finished_ids).filtered(lambda m: m.picked and not m.additional).move_line_ids.filtered(lambda ml: not ml.picked).unlink()
         for production in self:
             for move in production.move_raw_ids | production.move_finished_ids:
                 if move.additional:

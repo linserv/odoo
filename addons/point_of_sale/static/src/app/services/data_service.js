@@ -101,7 +101,10 @@ export class PosData extends Reactive {
         // This method initializes indexedDB with all models loaded into the PoS. The default key is ID.
         // But some models have another key configured in data_service_options.js. These models are
         // generally those that can be created in the frontend.
-        const models = Object.keys(relations).map((model) => {
+        const allModelNames = Array.from(
+            new Set([...Object.keys(relations), ...Object.keys(this.opts.databaseTable)])
+        );
+        const models = allModelNames.map((model) => {
             const key = this.opts.databaseTable[model]?.key || "id";
             return [key, model];
         });
@@ -497,8 +500,11 @@ export class PosData extends Reactive {
                 const results = this.models.loadData(data);
                 result = results[model];
             } else if (type === "write") {
-                const baseData = Object.assign(this.baseData[model][ids[0]], values);
-                this.synchronizeServerDataInIndexedDB({ [model]: [baseData] });
+                const recordBaseData = this.baseData[model][ids[0]];
+                if (recordBaseData) {
+                    Object.assign(recordBaseData, values);
+                    this.synchronizeServerDataInIndexedDB({ [model]: [recordBaseData] });
+                }
             }
 
             return result;

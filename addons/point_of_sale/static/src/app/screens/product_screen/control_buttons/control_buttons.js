@@ -2,15 +2,23 @@ import { Component, xml } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { Dialog } from "@web/core/dialog/dialog";
 import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
-import { NoteButton } from "@point_of_sale/app/screens/product_screen/control_buttons/note_button/note_button";
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
+import {
+    NoteButton,
+    InternalNoteButton,
+} from "@point_of_sale/app/screens/product_screen/control_buttons/orderline_note_button/orderline_note_button";
 import { _t } from "@web/core/l10n/translation";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { SelectPartnerButton } from "@point_of_sale/app/screens/product_screen/control_buttons/select_partner_button/select_partner_button";
+import { ProductInfoPopup } from "@point_of_sale/app/components/popups/product_info_popup/product_info_popup";
 
 export class ControlButtons extends Component {
     static template = "point_of_sale.ControlButtons";
-    static components = { NoteButton, SelectPartnerButton };
+    static components = {
+        NoteButton,
+        SelectPartnerButton,
+        InternalNoteButton,
+    };
     static props = {
         showRemainingButtons: { type: Boolean, optional: true },
         onClickMore: { type: Function, optional: true },
@@ -120,14 +128,27 @@ export class ControlButtons extends Component {
             },
         });
     }
-    internalNoteLabel(order) {
-        return order ? _t("General Note") : _t("Note");
-    }
 
     get buttonClass() {
         return this.props.showRemainingButtons
             ? "btn btn-secondary btn-lg py-5"
             : "btn btn-secondary btn-lg lh-lg";
+    }
+
+    displayProductInfoBtn() {
+        const selectedOrderLine = this.currentOrder?.getSelectedOrderline();
+        return (
+            selectedOrderLine &&
+            selectedOrderLine.product_id.product_tmpl_id &&
+            !this.pos
+                .getExcludedProductIds()
+                .includes(selectedOrderLine.product_id.product_tmpl_id.id)
+        );
+    }
+
+    async onProductInfoClick(productTemplate) {
+        const info = await this.pos.getProductInfo(productTemplate, 1);
+        this.dialog.add(ProductInfoPopup, { info: info, productTemplate: productTemplate });
     }
 }
 

@@ -45,7 +45,6 @@
                         <div class="oe_title">
                             <label for="name"/>
                             <field name="name_placeholder" invisible="1" force_save="1"/>
-                            <field name="type" invisible="1"/>
                             <h1><field name="name" options="{'placeholder_field': 'name_placeholder'}" required="not type"/></h1>
                         </div>
                         <group>
@@ -178,6 +177,10 @@
                                     <group string="Payment Communications" invisible="type != 'sale'">
                                         <field name="invoice_reference_type"/>
                                         <field name="invoice_reference_model" invisible="invoice_reference_type == 'none'"/>
+                                    </group>
+                                    <group string="Incoming E-Invoice Notifications" invisible="type != 'purchase'">
+                                        <field name="notify_on_incoming_einvoice"/>
+                                        <field name="incoming_einvoice_notification_email" invisible="not notify_on_incoming_einvoice" required="True"/>
                                     </group>
                                 </group>
                             </page>

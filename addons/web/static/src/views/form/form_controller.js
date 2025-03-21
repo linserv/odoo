@@ -1,9 +1,6 @@
 import { _t } from "@web/core/l10n/translation";
 import { hasTouch } from "@web/core/browser/feature_detection";
-import {
-    deleteConfirmationMessage,
-    ConfirmationDialog,
-} from "@web/core/confirmation_dialog/confirmation_dialog";
+import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { makeContext } from "@web/core/context";
 import { useDebugCategory } from "@web/core/debug/debug_context";
 import { registry } from "@web/core/registry";
@@ -24,6 +21,7 @@ import { Field } from "@web/views/fields/field";
 import { useModel } from "@web/model/model";
 import { addFieldDependencies, extractFieldsFromArchInfo } from "@web/model/relational_model/utils";
 import { useViewCompiler } from "@web/views/view_compiler";
+import { useDeleteRecords } from "@web/views/view_hook";
 import { Widget } from "@web/views/widgets/widget";
 import { STATIC_ACTIONS_GROUP_NUMBER } from "@web/search/action_menus/action_menus";
 
@@ -31,7 +29,6 @@ import { ButtonBox } from "./button_box/button_box";
 import { FormCompiler } from "./form_compiler";
 import { FormErrorDialog } from "./form_error_dialog/form_error_dialog";
 import { FormStatusIndicator } from "./form_status_indicator/form_status_indicator";
-import { StatusBarDropdownItems } from "./status_bar_dropdown_items/status_bar_dropdown_items";
 import { FormCogMenu } from "./form_cog_menu/form_cog_menu";
 
 import {
@@ -133,7 +130,6 @@ export class FormController extends Component {
         ViewButton,
         Field,
         CogMenu: FormCogMenu,
-        StatusBarDropdownItems,
         Widget,
     };
 
@@ -219,7 +215,11 @@ export class FormController extends Component {
 
         onError((error) => {
             const suggestedCompany = error.cause?.data?.context?.suggested_company;
-            if (error.cause?.data?.name === "odoo.exceptions.AccessError" && suggestedCompany) {
+            if (
+                error.cause?.data?.name === "odoo.exceptions.AccessError" &&
+                suggestedCompany &&
+                !this.env.inDialog
+            ) {
                 this.env.pushStateBeforeReload();
                 const activeCompanyIds = user.activeCompanies.map((c) => c.id);
                 activeCompanyIds.push(suggestedCompany.id);
@@ -250,16 +250,6 @@ export class FormController extends Component {
                 { isSubView: true }
             );
             this.buttonBoxTemplate = buttonBoxTemplates.ButtonBox;
-        }
-
-        const xmlDocHeader = this.archInfo.xmlDoc.querySelector("header");
-        if (xmlDocHeader) {
-            const { StatusBarDropdownItems } = useViewCompiler(
-                this.props.Compiler || FormCompiler,
-                { StatusBarDropdownItems: xmlDocHeader },
-                { isSubView: true, asDropdownItems: true }
-            );
-            this.statusBarDropdownItemsTemplate = StatusBarDropdownItems;
         }
 
         this.rootRef = useRef("root");
@@ -331,6 +321,8 @@ export class FormController extends Component {
         if (this.env.inDialog) {
             useFormViewInDialog();
         }
+
+        this.deleteRecordsWithConfirmation = useDeleteRecords(this.model);
     }
 
     get cogMenuProps() {
@@ -414,6 +406,7 @@ export class FormController extends Component {
         const proceed = await new Promise((resolve) => {
             this.model.dialog.add(FormErrorDialog, {
                 message: error.data.message,
+                data: error.data,
                 onDiscard: () => {
                     discard();
                     resolve(true);
@@ -573,22 +566,17 @@ export class FormController extends Component {
 
     get deleteConfirmationDialogProps() {
         return {
-            title: _t("Bye-bye, record!"),
-            body: deleteConfirmationMessage,
             confirm: async () => {
                 await this.model.root.delete();
                 if (!this.model.root.resId) {
                     this.env.config.historyBack();
                 }
             },
-            confirmLabel: _t("Delete"),
-            cancel: () => {},
-            cancelLabel: _t("No, keep it"),
         };
     }
 
     async deleteRecord() {
-        this.dialogService.add(ConfirmationDialog, this.deleteConfirmationDialogProps);
+        this.deleteRecordsWithConfirmation(this.deleteConfirmationDialogProps, [this.model.root]);
     }
 
     async beforeExecuteActionButton(clickParams) {

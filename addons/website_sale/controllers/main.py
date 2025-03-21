@@ -24,7 +24,10 @@ from odoo.addons.sale.controllers import portal as sale_portal
 from odoo.addons.web_editor.tools import get_video_thumbnail
 from odoo.addons.website.controllers.main import QueryURL
 from odoo.addons.website.models.ir_http import sitemap_qs2dom
-from odoo.addons.website_sale.models.website import PRICELIST_SESSION_CACHE_KEY
+from odoo.addons.website_sale.models.website import (
+    PRICELIST_SESSION_CACHE_KEY,
+    PRICELIST_SELECTED_SESSION_CACHE_KEY,
+)
 
 
 class TableCompute:
@@ -783,6 +786,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
         else:
             # Reset the pricelist if empty promo code is given
             request.session.pop(PRICELIST_SESSION_CACHE_KEY, None)
+            request.session.pop(PRICELIST_SELECTED_SESSION_CACHE_KEY, None)
             request.pricelist = lazy(request.website._get_and_cache_current_pricelist)
 
             if order_sudo := request.cart:
@@ -801,6 +805,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             return
 
         request.session[PRICELIST_SESSION_CACHE_KEY] = pricelist.id
+        request.session[PRICELIST_SELECTED_SESSION_CACHE_KEY] = pricelist.id
         request.pricelist = pricelist.sudo()
 
         if order_sudo := request.cart:
@@ -1182,7 +1187,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
                 use_delivery_as_billing=False,
                 order_sudo=order_sudo,
             )
-            with request.env.protecting(['pricelist_id'], order_sudo):
+            with request.env.protecting([order_sudo._fields['pricelist_id']], order_sudo):
                 order_sudo.partner_id = new_partner_sudo
 
             # Add the new partner as follower of the cart

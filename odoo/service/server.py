@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 from collections import deque
+import contextlib
 from io import BytesIO
 
 import psutil
@@ -561,6 +562,7 @@ class ThreadedServer(CommonServer):
             conn = sql_db.db_connect('postgres')
             with contextlib.closing(conn.cursor()) as cr:
                 _run_cron(cr)
+                cr._cnx.close()
             _logger.info('cron%d max age (%ss) reached, releasing connection.', number, config['limit_time_worker_cron'])
 
     def cron_spawn(self):
@@ -1335,6 +1337,7 @@ class WorkerCron(Worker):
 
     def stop(self):
         super().stop()
+        self.dbcursor._cnx.close()
         self.dbcursor.close()
 
 #----------------------------------------------------------
@@ -1396,7 +1399,7 @@ def preload_registries(dbnames):
                     with registry.cursor() as cr:
                         env = api.Environment(cr, api.SUPERUSER_ID, {})
                         env['ir.qweb']._pregenerate_assets_bundles()
-                result = loader.run_suite(post_install_suite)
+                result = loader.run_suite(post_install_suite, global_report=registry._assertion_report)
                 registry._assertion_report.update(result)
                 _logger.info("%d post-tests in %.2fs, %s queries",
                              registry._assertion_report.testsRun - tests_before,

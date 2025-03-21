@@ -16,7 +16,6 @@ import {
 import { ActionpadWidget } from "@point_of_sale/app/screens/product_screen/action_pad/action_pad";
 import { Orderline } from "@point_of_sale/app/components/orderline/orderline";
 import { OrderSummary } from "@point_of_sale/app/screens/product_screen/order_summary/order_summary";
-import { ProductInfoPopup } from "@point_of_sale/app/components/popups/product_info_popup/product_info_popup";
 import { ProductCard } from "@point_of_sale/app/components/product_card/product_card";
 import {
     ControlButtons,
@@ -169,7 +168,10 @@ export class ProductScreen extends Component {
         return this.env.utils.formatCurrency(this.currentOrder?.getTotalWithTax() ?? 0);
     }
     get items() {
-        return this.currentOrder.lines?.reduce((items, line) => items + line.qty, 0) ?? 0;
+        return this.env.utils.formatProductQty(
+            this.currentOrder.lines?.reduce((items, line) => items + line.qty, 0) ?? 0,
+            false
+        );
     }
     getProductName(product) {
         return product.name;
@@ -371,11 +373,6 @@ export class ProductScreen extends Component {
                 productTemplate: product,
             });
         }
-    }
-
-    async onProductInfoClick(productTemplate) {
-        const info = await this.pos.getProductInfo(productTemplate, 1);
-        this.dialog.add(ProductInfoPopup, { info: info, productTemplate: productTemplate });
     }
 }
 

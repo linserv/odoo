@@ -52,9 +52,17 @@ messageActionsRegistry
         onClick: (component) => {
             const message = toRaw(component.props.message);
             const thread = toRaw(component.props.thread);
-            component.props.messageToReplyTo.toggle(thread, message);
+            if (message.eq(thread.composer.replyToMessage)) {
+                thread.composer.replyToMessage = undefined;
+            } else {
+                thread.composer.replyToMessage = message;
+            }
         },
-        sequence: (component) => (component.props.thread?.eq(component.store.inbox) ? 55 : 20),
+        sequence: (component) =>
+            component.props.thread?.eq(component.store.inbox) ||
+            component.props.message.isSelfAuthored
+                ? 55
+                : 20,
     })
     .add("toggle-star", {
         condition: (component) => component.props.message.canToggleStar,
@@ -95,7 +103,7 @@ messageActionsRegistry
             component.props.messageEdition.enterEditMode(component.props.message);
             component.optionsDropdown?.close();
         },
-        sequence: 80,
+        sequence: (component) => (component.props.message.isSelfAuthored ? 20 : 55),
     })
     .add("delete", {
         condition: (component) => component.props.message.editable,

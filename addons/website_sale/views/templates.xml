@@ -1440,7 +1440,7 @@
                             <t t-call="website_sale.product_accordion"/>
                             <div
                                 id="contact_us_wrapper"
-                                t-attf-class="{{'d-flex' if combination_info['prevent_zero_price_sale'] else 'd-none'}} oe_structure oe_structure_solo #{_div_classes}"
+                                t-attf-class="{{'d-flex' if combination_info['prevent_zero_price_sale'] else 'd-none'}} oe_structure oe_structure_solo mb-1 #{_div_classes}"
                             >
                                 <section
                                     class="s_text_block"
@@ -2080,13 +2080,14 @@
                  }"
             />
             <div class="ms-3">
-                <a t-att-href="combo_item_line.product_id.website_url">
-                    <h6 class="d-inline align-top h6 fw-bold">
-                        <span t-out="combo_item_line._get_displayed_quantity()"/>
-                        x
-                        <span t-out="combo_item_line.name_short"/>
-                    </h6>
-                </a>
+                <t t-if="combo_item_line.product_id.website_published">
+                    <a t-att-href="combo_item_line.product_id.website_url">
+                        <t t-call="website_sale.cart_item_line_heading" />
+                    </a>
+                </t>
+                <t t-else="">
+                    <t t-call="website_sale.cart_item_line_heading" />
+                </t>
                 <t
                     t-set="description_lines"
                     t-value="combo_item_line.get_description_following_lines()"
@@ -2098,6 +2099,14 @@
                 </div>
             </div>
         </div>
+    </template>
+
+    <template id="cart_item_line_heading">
+        <h6 class="d-inline align-top h6 fw-bold">
+            <span t-out="combo_item_line._get_displayed_quantity()"/>
+            x
+            <span t-out="combo_item_line.name_short"/>
+        </h6>
     </template>
 
     <template id="cart_product_price">
@@ -2969,22 +2978,7 @@
 
     <template id="website_sale.shop_product_image">
         <div
-            t-if="'video_url' in product_image"
-            t-att-data-oe-model="product_image._name"
-            t-att-data-oe-id="product_image.id"
-            t-att-class="image_classes + ' ratio ratio-16x9'"
-        >
-            <div class="media_iframe_video">
-                <div class="css_editable_mode_display"/>
-                <div class="media_iframe_video_size" contenteditable="false"/>
-                <iframe
-                    t-att-src="product_image.video_url"
-                    allowfullscreen="allowfullscreen">
-                </iframe>
-            </div>
-        </div>
-        <div
-            t-elif="product_image._name == 'product.image' and product_image.embed_code"
+            t-if="product_image._name == 'product.image' and product_image.embed_code"
             t-att-class="image_classes + ' ratio ratio-16x9'"
         >
             <t t-out="product_image.embed_code"/>

@@ -1,5 +1,6 @@
 import { DateSection } from "@mail/core/common/date_section";
 import { Message } from "@mail/core/common/message";
+import { NotificationMessage } from "./notification_message";
 import { Record } from "@mail/core/common/record";
 import { useMessageEdition, useVisible } from "@mail/utils/common/hooks";
 
@@ -33,7 +34,6 @@ const PRESENT_MESSAGE_THRESHOLD = 10;
  * @property {number} [jumpPresent=0]
  * @property {number} [jumpToNewMessage=0]
  * @property {import("@mail/utils/common/hooks").MessageEdition} [messageEdition]
- * @property {import("@mail/utils/common/hooks").MessageToReplyTo} [messageToReplyTo]
  * @property {"asc"|"desc"} [order="asc"]
  * @property {import("models").Thread} thread
  * @property {string} [searchTerm]
@@ -41,7 +41,7 @@ const PRESENT_MESSAGE_THRESHOLD = 10;
  * @extends {Component<Props, Env>}
  */
 export class Thread extends Component {
-    static components = { Message, Transition, DateSection };
+    static components = { Message, NotificationMessage, Transition, DateSection };
     static props = [
         "showDates?",
         "isInChatWindow?",
@@ -49,7 +49,6 @@ export class Thread extends Component {
         "jumpToNewMessage?",
         "thread",
         "messageEdition?",
-        "messageToReplyTo?",
         "order?",
         "scrollRef?",
         "showEmptyMessage?",

@@ -38,9 +38,9 @@ import { url } from "@web/core/utils/urls";
 import { useMessageActions } from "./message_actions";
 import { cookie } from "@web/core/browser/cookie";
 import { rpc } from "@web/core/network/rpc";
-import { escape } from "@web/core/utils/strings";
 import { MessageActionMenuMobile } from "./message_action_menu_mobile";
 import { discussComponentRegistry } from "./discuss_component_registry";
+import { NotificationMessage } from "./notification_message";
 
 /**
  * @typedef {Object} Props
@@ -48,7 +48,6 @@ import { discussComponentRegistry } from "./discuss_component_registry";
  * @property {boolean} [highlighted]
  * @property {function} [onParentMessageClick]
  * @property {import("models").Message} message
- * @property {import("@mail/utils/common/hooks").MessageToReplyTo} [messageToReplyTo]
  * @property {boolean} [squashed]
  * @property {import("models").Thread} [thread]
  * @property {ReturnType<import('@mail/core/common/message_search_hook').useMessageSearch>} [messageSearch]
@@ -72,6 +71,7 @@ export class Message extends Component {
         MessageReactions,
         Popover: MessageNotificationPopover,
         RelativeTime,
+        NotificationMessage,
     };
     static defaultProps = {
         hasActions: true,
@@ -86,7 +86,6 @@ export class Message extends Component {
         "onParentMessageClick?",
         "message",
         "messageEdition?",
-        "messageToReplyTo?",
         "previousMessage?",
         "squashed?",
         "thread?",
@@ -99,7 +98,6 @@ export class Message extends Component {
 
     setup() {
         super.setup();
-        this.escape = escape;
         this.popover = usePopover(this.constructor.components.Popover, { position: "top" });
         this.state = useState({
             isEditing: false,
@@ -169,9 +167,9 @@ export class Message extends Component {
                     const bodyEl = createElementWithContent(
                         "span",
                         this.state.showTranslation
-                            ? this.message.translationValue
-                            : this.props.messageSearch?.highlight(this.message.body) ??
-                                  this.message.body
+                            ? this.message.richTranslationValue
+                            : this.props.messageSearch?.highlight(this.message.richBody) ??
+                                  this.message.richBody
                     );
                     this.prepareMessageBody(bodyEl);
                     this.shadowRoot.appendChild(bodyEl);
@@ -182,9 +180,9 @@ export class Message extends Component {
             },
             () => [
                 this.state.showTranslation,
-                this.message.translationValue,
+                this.message.richTranslationValue,
                 this.props.messageSearch?.searchTerm,
-                this.message.body,
+                this.message.richBody,
             ]
         );
         useEffect(
@@ -193,7 +191,7 @@ export class Message extends Component {
                     this.prepareMessageBody(this.messageBody.el);
                 }
             },
-            () => [this.state.isEditing, this.message.body]
+            () => [this.state.isEditing, this.message.richBody]
         );
     }
 
@@ -203,21 +201,15 @@ export class Message extends Component {
             "o-card p-2 mt-2 border border-secondary": this.props.asCard,
             "pt-1": !this.props.asCard,
             "o-selfAuthored": this.message.isSelfAuthored && !this.env.messageCard,
-            "o-selected": this.props.messageToReplyTo?.isSelected(
-                this.props.thread,
-                this.props.message
-            ),
+            "o-selected": this.props.thread?.composer.replyToMessage?.eq(this.props.message),
             "o-squashed": this.props.squashed,
             "mt-1":
                 !this.props.squashed &&
                 this.props.thread &&
                 !this.env.messageCard &&
                 !this.props.asCard,
-            "px-2": this.props.isInChatWindow,
-            "opacity-50": this.props.messageToReplyTo?.isNotSelected(
-                this.props.thread,
-                this.props.message
-            ),
+            "px-1": this.props.isInChatWindow,
+            "opacity-50": this.props.thread?.composer.replyToMessage?.notEq(this.props.message),
             "o-actionMenuMobileOpen": this.state.actionMenuMobileOpen,
             "o-editing": this.state.isEditing,
         };
@@ -228,13 +220,6 @@ export class Message extends Component {
             o_object_fit_contain: this.props.message.author?.is_company,
             o_object_fit_cover: !this.props.message.author?.is_company,
         };
-    }
-
-    get authorName() {
-        if (this.message.author) {
-            return this.message.author.name;
-        }
-        return this.message.email_from;
     }
 
     get authorAvatarUrl() {
@@ -263,7 +248,7 @@ export class Message extends Component {
 
     /** Max amount of quick actions, including "..." */
     get quickActionCount() {
-        return this.env.inChatter ? 3 : this.env.inChatWindow ? 2 : 4;
+        return this.env.inChatWindow ? 2 : 4;
     }
 
     get showSubtypeDescription() {
@@ -381,25 +366,6 @@ export class Message extends Component {
         }
     }
 
-    /**
-     * @param {MouseEvent} ev
-     */
-    async onClickNotificationMessage(ev) {
-        this.store.handleClickOnLink(ev, this.props.thread);
-        const { oeType, oeId } = ev.target.dataset;
-        if (oeType === "highlight") {
-            await this.env.messageHighlight?.highlightMessage(
-                this.store["mail.message"].insert({
-                    id: Number(oeId),
-                    res_id: this.props.thread.id,
-                    model: this.props.thread.model,
-                    thread: this.props.thread,
-                }),
-                this.props.thread
-            );
-        }
-    }
-
     /** @param {HTMLElement} bodyEl */
     prepareMessageBody(bodyEl) {
         if (!bodyEl) {
@@ -465,7 +431,6 @@ export class Message extends Component {
                 thread: this.props.thread,
                 isFirstMessage: this.props.isFirstMessage,
                 messageEdition: this.props.messageEdition,
-                messageToReplyTo: this.props.messageToReplyTo,
                 openReactionMenu: () => this.openReactionMenu(),
                 state: this.state,
             },

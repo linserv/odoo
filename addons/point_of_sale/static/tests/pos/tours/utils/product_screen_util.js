@@ -107,13 +107,7 @@ export function clickDisplayedProduct(
     return step;
 }
 export function clickInfoProduct(name) {
-    return [
-        {
-            content: `click product '${name}'`,
-            trigger: `article.product:contains("${name}") .product-information-tag`,
-            run: "click",
-        },
-    ];
+    return [...clickDisplayedProduct(name), ...inLeftSide(clickControlButton("Info"))];
 }
 export function clickOrderline(productName, quantity = "1") {
     return [
@@ -700,9 +694,10 @@ export function verifyOrderlineSequence(products) {
     }));
 }
 
-export function checkExtraPrice(amount) {
+export function checkProductExtraPrice(productName, extraAmount) {
     return {
-        trigger: `.price-tag.py-1:contains(${amount})`,
+        content: `'${productName}' should have '${extraAmount}' extra price`,
+        trigger: `article.product:has(.product-name:contains("${productName}")):has(.price-extra:contains("${extraAmount}"))`,
     };
 }
 
