@@ -3655,25 +3655,36 @@ class TestMrpOrder(TestMrpCommon):
         """
         Test that when changing the operation type, the name of the MO should be changed too
         """
+        stock_location_1 = self.env.ref('stock.stock_location_stock')
+        stock_location_2 = stock_location_1.copy()
         picking_type_1 = self.env['stock.picking.type'].create({
             'name': 'new_picking_type_1',
             'code': 'mrp_operation',
             'sequence_code': 'PT1',
-            'default_location_src_id': self.stock_location_components.id,
-            'default_location_dest_id': self.env.ref('stock.stock_location_stock').id,
+            'default_location_src_id': stock_location_1.id,
+            'default_location_dest_id': stock_location_1.id,
             'warehouse_id': self.warehouse_1.id,
         })
         picking_type_2 = picking_type_1.copy({
             'name': 'new_picking_type_2',
-            'sequence_code': 'PT2'
+            'sequence_code': 'PT2',
+            'default_location_src_id': stock_location_2.id,
+            'default_location_dest_id': stock_location_2.id,
         })
+        self.env['stock.quant']._update_available_quantity(self.product_2, stock_location_2, 1)
         mo_form = Form(self.env['mrp.production'])
-        mo_form.product_id = self.product_1
+        mo_form.product_id = self.product_4
         mo_form.picking_type_id = picking_type_1
         mo = mo_form.save()
+        mo.action_confirm()
+        move = mo.move_raw_ids[0]
         self.assertEqual(mo.name, "BWH/PT1/00001")
+        self.assertEqual(move.location_id, stock_location_1)
+        self.assertEqual(move.quantity, 0.0)
         mo.picking_type_id = picking_type_2
         self.assertEqual(mo.name, "BWH/PT2/00001")
+        self.assertEqual(move.location_id, stock_location_2)
+        self.assertEqual(move.quantity, 1.0)
         mo.picking_type_id = picking_type_1
         self.assertEqual(mo.name, "BWH/PT1/00002")
         mo.picking_type_id = picking_type_1
@@ -5089,6 +5100,31 @@ class TestMrpOrder(TestMrpCommon):
         with Form(mo) as production_form:
             production_form.date_start = original_start_date
         self.assertEqual(mo.date_start, original_start_date)
+
+    def test_json_popover_with_workorder_dependence(self):
+        """
+        Check that json_popover is correctly computed for workorders with dependencies
+        """
+        bom = self.env['mrp.bom'].create({
+            'product_tmpl_id': self.product.product_tmpl_id.id,
+            'product_qty': 1,
+            'type': 'normal',
+            'allow_operation_dependencies': True,
+            'operation_ids': [
+                Command.create({'name': 'Super op 1', 'workcenter_id': self.workcenter_2.id, 'sequence': 1}),
+                Command.create({'name': 'Super op 2', 'workcenter_id': self.workcenter_2.id, 'sequence': 2}),
+                Command.create({'name': 'Super op 3', 'workcenter_id': self.workcenter_2.id, 'sequence': 2}),
+            ]
+        })
+        bom.operation_ids[-1].blocked_by_operation_ids = bom.operation_ids[:2]
+        mo = self.env['mrp.production'].create({'bom_id': bom.id})
+        mo.action_confirm()
+        date_start = fields.Date.today()
+        date_finished = fields.Date.today() + timedelta(days=5)
+        wos_to_set = mo.workorder_ids - mo.workorder_ids[1]
+        wos_to_set.write({ 'date_start': date_start, 'date_finished': date_finished })
+        self.assertTrue(mo.workorder_ids[-1].show_json_popover)
+
 
 @tagged('-at_install', 'post_install')
 class TestTourMrpOrder(HttpCase):
