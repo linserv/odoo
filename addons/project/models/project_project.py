@@ -69,9 +69,9 @@ class ProjectProject(models.Model):
 
     @api.model
     def _search_is_favorite(self, operator, value):
-        if operator not in ['=', '!='] or not isinstance(value, bool):
-            raise NotImplementedError(_('Operation not supported'))
-        return [('favorite_user_ids', 'in' if (operator == '=') == value else 'not in', self.env.uid)]
+        if operator != 'in':
+            return NotImplemented
+        return [('favorite_user_ids', 'in', [self.env.uid])]
 
     def _compute_is_favorite(self):
         for project in self:
@@ -88,7 +88,7 @@ class ProjectProject(models.Model):
     description = fields.Html(help="Description to provide more information and context about this project")
     active = fields.Boolean(default=True, copy=False, export_string_translation=False)
     sequence = fields.Integer(default=10, export_string_translation=False)
-    partner_id = fields.Many2one('res.partner', string='Customer', auto_join=True, tracking=True, domain="['|', ('company_id', '=?', company_id), ('company_id', '=', False)]")
+    partner_id = fields.Many2one('res.partner', string='Customer', auto_join=True, tracking=True, domain="['|', ('company_id', '=?', company_id), ('company_id', '=', False)]", index='btree_not_null')
     company_id = fields.Many2one('res.company', string='Company', compute="_compute_company_id", inverse="_inverse_company_id", store=True, readonly=False)
     currency_id = fields.Many2one('res.currency', compute="_compute_currency_id", string="Currency", readonly=True, export_string_translation=False)
     analytic_account_balance = fields.Monetary(related="account_id.balance")
@@ -321,10 +321,8 @@ class ProjectProject(models.Model):
 
     @api.model
     def _search_is_milestone_exceeded(self, operator, value):
-        if not isinstance(value, bool):
-            raise ValueError(_('Invalid value: %s', value))
-        if operator not in ['=', '!=']:
-            raise ValueError(_('Invalid operator: %s', operator))
+        if operator != 'in':
+            return NotImplemented
 
         sql = SQL("""(
             SELECT P.id
@@ -334,11 +332,7 @@ class ProjectProject(models.Model):
                AND P.allow_milestones IS true
                AND M.deadline <= CAST(now() AS date)
         )""")
-        if (operator == '=' and value is True) or (operator == '!=' and value is False):
-            operator_new = 'in'
-        else:
-            operator_new = 'not in'
-        return [('id', operator_new, sql)]
+        return [('id', 'any', sql)]
 
     @api.depends('collaborator_ids', 'privacy_visibility')
     def _compute_collaborator_count(self):

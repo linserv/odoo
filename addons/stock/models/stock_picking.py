@@ -41,6 +41,7 @@ class StockPickingType(models.Model):
     code = fields.Selection([('incoming', 'Receipt'), ('outgoing', 'Delivery'), ('internal', 'Internal Transfer')], 'Type of Operation', default='incoming', required=True)
     return_picking_type_id = fields.Many2one(
         'stock.picking.type', 'Operation Type for Returns',
+        index='btree_not_null',
         check_company=True)
     show_entire_packs = fields.Boolean('Move Entire Packages', help="If ticked, you will be able to select entire packages to move")
     warehouse_id = fields.Many2one(
@@ -218,9 +219,9 @@ class StockPickingType(models.Model):
 
     @api.model
     def _search_is_favorite(self, operator, value):
-        if operator not in ['=', '!='] or not isinstance(value, bool):
-            raise NotImplementedError(_('Operation not supported'))
-        return [('favorite_user_ids', 'in' if (operator == '=') == value else 'not in', self.env.uid)]
+        if operator != 'in':
+            return NotImplemented
+        return [('favorite_user_ids', 'in', [self.env.uid])]
 
     def _compute_is_favorite(self):
         for picking_type in self:
@@ -299,9 +300,16 @@ class StockPickingType(models.Model):
     @api.model
     def _search_display_name(self, operator, value):
         # Try to reverse the `display_name` structure
+        if operator == 'in':
+            return expression.OR(self._search_display_name('=', v) for v in value)
+        if operator == 'not in':
+            return NotImplemented
         parts = isinstance(value, str) and value.split(': ')
         if parts and len(parts) == 2:
             return ['&', ('warehouse_id.name', operator, parts[0]), ('name', operator, parts[1])]
+        if operator == '=':
+            operator = 'in'
+            value = [value]
         return super()._search_display_name(operator, value)
 
     @api.depends('code')
@@ -735,12 +743,12 @@ class StockPicking(models.Model):
             picking.has_deadline_issue = picking.date_deadline and picking.date_deadline < picking.scheduled_date or False
 
     def _search_date_category(self, operator, value):
-        if operator != '=':
-            raise NotImplementedError(_('Operation not supported'))
-        search_domain = self.date_category_to_domain(value)
-        return expression.AND([
-            [('scheduled_date', operator, value)] for operator, value in search_domain
-        ])
+        if operator != 'in':
+            return NotImplemented
+        return expression.OR(
+            self.date_category_to_domain('scheduled_date', item)
+            for item in value
+        )
 
     @api.depends('move_ids.delay_alert_date')
     def _compute_delay_alert_date(self):
@@ -965,18 +973,12 @@ class StockPicking(models.Model):
                 continue
             picking = picking.with_company(picking.company_id)
             if picking.picking_type_id:
-                # To be removed in 17.3+, as default location src/dest are now required.
-                location_dest, location_src = self.env['stock.warehouse']._get_partner_locations()
-                if picking.picking_type_id.default_location_src_id:
-                    location_src = picking.picking_type_id.default_location_src_id
+                location_src = picking.picking_type_id.default_location_src_id
                 if location_src.usage == 'supplier' and picking.partner_id:
                     location_src = picking.partner_id.property_stock_supplier
-
-                if picking.picking_type_id.default_location_dest_id:
-                    location_dest = picking.picking_type_id.default_location_dest_id
+                location_dest = picking.picking_type_id.default_location_dest_id
                 if location_dest.usage == 'customer' and picking.partner_id:
                     location_dest = picking.partner_id.property_stock_customer
-
                 picking.location_id = location_src.id
                 picking.location_dest_id = location_dest.id
 
@@ -994,17 +996,28 @@ class StockPicking(models.Model):
         self.show_next_pickings = len(self._get_next_transfers()) != 0
 
     def _search_products_availability_state(self, operator, value):
+        if operator != 'in':
+            return NotImplemented
+
+        invalid_states = ('done', 'cancel', 'draft')
+        if False in value:
+            return ['|', ('state', 'in', invalid_states), *self._search_products_availability_state('in', value - {False})]
+        value = set(self._fields['products_availability_state'].get_values(self.env)) & value
+        if not value:
+            return expression.FALSE_DOMAIN
+
         def _get_comparison_date(move):
             return move.picking_id.scheduled_date
 
-        if not value:
-            raise UserError(_('Search not supported without a value.'))
+        def _filter_picking_moves(picking):
+            try:
+                return picking.move_ids._match_searched_availability(operator, value, _get_comparison_date)
+            except UserError:
+                # invalid value for search
+                return False
 
-        selected_picking_ids = []
-        for picking in self.env['stock.picking'].search([('state', 'not in', ('done', 'cancel', 'draft'))]):
-            if picking.move_ids._match_searched_availability(operator, value, _get_comparison_date):
-                selected_picking_ids.append(picking.id)
-        return [('id', 'in', selected_picking_ids)]
+        pickings = self.env['stock.picking'].search([('state', 'not in', invalid_states)], order='id').filtered(_filter_picking_moves)
+        return [('id', 'in', pickings.ids)]
 
     def _get_show_allocation(self, picking_type_id):
         """ Helper method for computing "show_allocation" value.
@@ -1147,6 +1160,8 @@ class StockPicking(models.Model):
             for picking in self:
                 if picking.picking_type_id != picking_type:
                     picking.name = picking_type.sequence_id.next_by_id()
+                    vals['location_id'] = picking_type.default_location_src_id.id
+                    vals['location_dest_id'] = picking_type.default_location_dest_id.id
         res = super().write(vals)
         if vals.get('signature'):
             for picking in self:
@@ -1172,11 +1187,8 @@ class StockPicking(models.Model):
         return super().unlink()
 
     def do_print_picking(self):
-        picking_operations_report = self.env.ref('stock.action_report_picking',raise_if_not_found=False)
-        if not picking_operations_report:
-            raise UserError(_("The Picking Operations report has been deleted so you cannot print at this time unless the report is restored."))
         self.write({'printed': True})
-        return picking_operations_report.report_action(self)
+        return self.env.ref('stock.action_report_picking').report_action(self)
 
     def should_print_delivery_address(self):
         self.ensure_one()
@@ -1842,7 +1854,7 @@ class StockPicking(models.Model):
         return date_category
 
     @api.model
-    def date_category_to_domain(self, date_category):
+    def date_category_to_domain(self, field_name, date_category):
         """
         Given a date category, returns a list of tuples of operator and value
         that can be used in a domain to filter records based on their scheduled date.
@@ -1876,12 +1888,12 @@ class StockPicking(models.Model):
         start_day_3 = start_today + timedelta(days=3)
 
         date_category_to_search_domain = {
-            "before": [("<", start_yesterday)],
-            "yesterday": [(">=", start_yesterday), ("<", start_today)],
-            "today": [(">=", start_today), ("<", start_day_1)],
-            "day_1": [(">=", start_day_1), ("<", start_day_2)],
-            "day_2": [(">=", start_day_2), ("<", start_day_3)],
-            "after": [(">=", start_day_3)],
+            "before": [(field_name, "<", start_yesterday)],
+            "yesterday": [(field_name, ">=", start_yesterday), (field_name, "<", start_today)],
+            "today": [(field_name, ">=", start_today), (field_name, "<", start_day_1)],
+            "day_1": [(field_name, ">=", start_day_1), (field_name, "<", start_day_2)],
+            "day_2": [(field_name, ">=", start_day_2), (field_name, "<", start_day_3)],
+            "after": [(field_name, ">=", start_day_3)],
         }
 
         return date_category_to_search_domain.get(date_category)

@@ -16,6 +16,7 @@ import os
 from textwrap import shorten
 
 from odoo import api, fields, models, _, Command, SUPERUSER_ID, modules, tools
+from odoo.fields import Domain
 from odoo.tools.sql import column_exists, create_column
 from odoo.addons.account.tools import format_structured_reference_iso
 from odoo.exceptions import UserError, ValidationError, AccessError, RedirectWarning
@@ -433,6 +434,7 @@ class AccountMove(models.Model):
              "otherwise a Partner bank account number.",
         check_company=True,
         tracking=True,
+        index='btree_not_null',
         ondelete='restrict',
     )
     fiscal_position_id = fields.Many2one(
@@ -748,6 +750,7 @@ class AccountMove(models.Model):
     _journal_id_company_id_idx = models.Index('(journal_id, company_id, date)')
     # used in <account.journal>._query_has_sequence_holes
     _made_gaps = models.Index('(journal_id, state, payment_state, move_type, date) WHERE (made_sequence_gap IS TRUE)')
+    _duplicate_bills_idx = models.Index("(ref) WHERE (move_type IN ('in_invoice', 'in_refund'))")
 
     def _auto_init(self):
         super()._auto_init()
@@ -820,7 +823,8 @@ class AccountMove(models.Model):
     def _compute_hide_post_button(self):
         for record in self:
             record.hide_post_button = record.state != 'draft' \
-                or record.auto_post != 'no' and record.date > fields.Date.context_today(record)
+                or record.auto_post != 'no' and \
+                record.date and record.date > fields.Date.context_today(record)
 
     @api.depends('journal_id')
     def _compute_company_id(self):
@@ -951,11 +955,10 @@ class AccountMove(models.Model):
             move.secured = bool(move.inalterable_hash)
 
     def _search_secured(self, operator, value):
-        if operator not in ['=', '!='] or value not in [True, False]:
-            raise UserError(_('Operation not supported'))
-
-        want_secured = (operator == '=') == value
-        return [('inalterable_hash', '!=' if want_secured else '=', False)]
+        if operator != 'in':
+            return NotImplemented
+        assert list(value) == [True]
+        return [('inalterable_hash', '!=', False)]
 
     @api.depends('line_ids.account_id.account_type')
     def _compute_always_tax_exigible(self):
@@ -1759,7 +1762,7 @@ class AccountMove(models.Model):
             else:
                 move.invoice_filter_type_domain = False
 
-    @api.depends('commercial_partner_id', 'company_id')
+    @api.depends('commercial_partner_id', 'company_id', 'move_type')
     def _compute_bank_partner_id(self):
         for move in self:
             if move.is_inbound():
@@ -1969,6 +1972,7 @@ class AccountMove(models.Model):
         if in_moves:
             in_moves_sql_condition = SQL("""
                 move.move_type in ('in_invoice', 'in_refund')
+                AND duplicate_move.move_type in ('in_invoice', 'in_refund')
                 AND (
                    move.ref = duplicate_move.ref
                    AND (
@@ -2152,8 +2156,8 @@ class AccountMove(models.Model):
             move.next_payment_date = min([line.payment_date for line in move.line_ids.filtered(lambda l: l.payment_date and not l.reconciled)], default=False)
 
     def _search_next_payment_date(self, operator, value):
-        if operator not in ('=', '<', '<='):
-            raise UserError(self.env._('Operation not supported'))
+        if operator not in ('in', '<', '<='):
+            return NotImplemented
         return [('line_ids', 'any', [('reconciled', '=', False), ('payment_date', operator, value)])]
 
     # -------------------------------------------------------------------------
@@ -5421,18 +5425,19 @@ class AccountMove(models.Model):
             move.name = False
             move.write({
                 'move_type': new_move_type,
-                'partner_bank_id': False,
                 'currency_id': move.currency_id.id,
                 'fiscal_position_id': move.fiscal_position_id.id,
             })
             if move.amount_total < 0:
-                move.write({
-                    'line_ids': [
-                        Command.update(line.id, {'quantity': -line.quantity})
-                        for line in move.line_ids
-                        if line.display_type == 'product'
-                    ]
-                })
+                line_ids_commands = []
+                for line in move.line_ids:
+                    if line.display_type != 'product':
+                        continue
+                    line_ids_commands.append(Command.update(line.id, {
+                        'quantity': -line.quantity,
+                        'extra_tax_data': self.env['account.tax']._reverse_quantity_base_line_extra_tax_data(line.extra_tax_data),
+                    }))
+                move.write({'line_ids': line_ids_commands})
 
     def action_register_payment(self):
         if any(m.state != 'posted' for m in self):

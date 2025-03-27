@@ -37,7 +37,7 @@ import { unaccent } from "@web/core/utils/strings";
 import { WithLazyGetterTrap } from "@point_of_sale/lazy_getter";
 import { debounce } from "@web/core/utils/timing";
 import DevicesSynchronisation from "../utils/devices_synchronisation";
-import { deserializeDateTime } from "@web/core/l10n/dates";
+import { deserializeDateTime, formatDate } from "@web/core/l10n/dates";
 import { openCustomerDisplay } from "@point_of_sale/customer_display/utils";
 
 const { DateTime } = luxon;
@@ -53,6 +53,7 @@ export class PosStore extends WithLazyGetterTrap {
         "hardware_proxy",
         "ui",
         "pos_data",
+        "pos_scale",
         "dialog",
         "notification",
         "printer",
@@ -79,6 +80,7 @@ export class PosStore extends WithLazyGetterTrap {
             printer,
             bus_service,
             pos_data,
+            pos_scale,
             action,
             alert,
         }
@@ -131,11 +133,7 @@ export class PosStore extends WithLazyGetterTrap {
         this.ready = new Promise((resolve) => {
             this.markReady = resolve;
         });
-        this.isScaleScreenVisible = false;
-        this.scaleData = null;
-        this.scaleWeight = 0;
-        this.scaleTare = 0;
-        this.totalPriceOnScale = 0;
+        this.scale = pos_scale;
 
         this.orderCounter = new Counter(0);
 
@@ -349,7 +347,7 @@ export class PosStore extends WithLazyGetterTrap {
         // Create printer with hardware proxy, this will override related model data
         this.unwatched.printers = [];
         for (const relPrinter of this.models["pos.printer"].getAll()) {
-            const printer = relPrinter.serialize();
+            const printer = relPrinter.raw;
             const HWPrinter = this.createPrinter(printer);
 
             HWPrinter.config = printer;
@@ -505,11 +503,7 @@ export class PosStore extends WithLazyGetterTrap {
             return;
         }
 
-        let products = this.models[data.model].readMany(data.ids);
-        if (data.model === "product.template") {
-            products = products.flatMap((p) => p.product_variant_ids);
-        }
-
+        const products = this.models["product.product"].readMany(data.ids);
         this._loadMissingPricelistItems(products);
     }
 
@@ -863,25 +857,18 @@ export class PosStore extends WithLazyGetterTrap {
         // This actions cannot be handled inside pos_order.js or pos_order_line.js
         if (values.product_tmpl_id.to_weight && this.config.iface_electronic_scale && configure) {
             if (values.product_tmpl_id.isScaleAvailable) {
-                this.isScaleScreenVisible = true;
-                this.scaleData = {
-                    productName: values?.product_id?.display_name,
-                    uomName: values.product_tmpl_id.uom_id?.name,
-                    uomRounding: values.product_tmpl_id.uom_id?.rounding,
-                    productPrice: this.getProductPrice(values.product_id),
-                };
-                const weight = await makeAwaitable(
-                    this.env.services.dialog,
-                    ScaleScreen,
-                    this.scaleData
+                const decimalAccuracy = this.models["decimal.precision"].find(
+                    (dp) => dp.name === "Product Unit"
+                ).digits;
+                this.scale.setProduct(
+                    values.product_id,
+                    decimalAccuracy,
+                    this.getProductPrice(values.product_id)
                 );
+                const weight = await makeAwaitable(this.env.services.dialog, ScaleScreen);
                 if (weight) {
                     values.qty = weight;
                 }
-                this.isScaleScreenVisible = false;
-                this.scaleWeight = 0;
-                this.scaleTare = 0;
-                this.totalPriceOnScale = 0;
             } else {
                 await values.product_tmpl_id._onScaleNotAvailable();
             }
@@ -984,12 +971,6 @@ export class PosStore extends WithLazyGetterTrap {
             this.selectedCategory = this.models["pos.category"].get(categoryId);
         }
     }
-    setScaleWeight(weight) {
-        this.scaleWeight = weight;
-    }
-    setScaleTare(tare) {
-        this.scaleTare = tare;
-    }
 
     /**
      * Remove the order passed in params from the list of orders
@@ -1016,7 +997,9 @@ export class PosStore extends WithLazyGetterTrap {
      * @returns {name: string, id: int, role: string}
      */
     getCashier() {
-        this.user.role = this.user._raw.role;
+        if (!this.user.role) {
+            this.user.role = this.user.raw.role;
+        }
         return this.user;
     }
     getCashierUserId() {
@@ -1024,6 +1007,9 @@ export class PosStore extends WithLazyGetterTrap {
     }
     cashierHasPriceControlRights() {
         return !this.config.restrict_price_control || this.getCashier()._role == "manager";
+    }
+    get showCashMoveButton() {
+        return Boolean(this.config.cash_control && this.session._has_cash_move_perm);
     }
     createNewOrder(data = {}) {
         const fiscalPosition = this.models["account.fiscal.position"].find(
@@ -1204,7 +1190,9 @@ export class PosStore extends WithLazyGetterTrap {
         let orders = options.orders || [...orderToCreate, ...orderToUpdate];
 
         // Filter out orders that are already being synced
-        orders = orders.filter((order) => !this.syncingOrders.has(order.id));
+        orders = orders.filter(
+            (order) => !this.syncingOrders.has(order.id) && (order.isDirty() || options.force)
+        );
 
         try {
             const orderIdsToDelete = this.getOrderIdsToDelete();
@@ -1227,14 +1215,12 @@ export class PosStore extends WithLazyGetterTrap {
                 order.recomputeOrderData();
             }
 
-            const serializedOrder = orders.map((order) =>
-                order.serialize({ orm: true, clear: true })
-            );
+            const serializedOrder = orders.map((order) => order.serializeForORM());
             const data = await this.data.call("pos.order", "sync_from_ui", [serializedOrder], {
                 context,
             });
             const missingRecords = await this.data.missingRecursive(data);
-            const newData = this.models.loadData(missingRecords, [], false, true);
+            const newData = this.models.loadConnectedData(missingRecords);
 
             for (const line of newData["pos.order.line"]) {
                 const refundedOrderLine = line.refunded_orderline_id;
@@ -2020,6 +2006,10 @@ export class PosStore extends WithLazyGetterTrap {
         };
 
         const existingLotsName = existingLots.map((l) => l.name);
+        if (!packLotLinesToEdit.length && existingLotsName.length === 1) {
+            // If there's only one existing lot/serial number, automatically assign it to the order line
+            return { newPackLotLines: [{ lot_name: existingLotsName[0] }] };
+        }
         const payload = await makeAwaitable(this.dialog, EditListPopup, {
             title: _t("Lot/Serial number(s) required for"),
             name: product.display_name,
@@ -2216,7 +2206,6 @@ export class PosStore extends WithLazyGetterTrap {
         if (!list || list.length === 0) {
             return [];
         }
-
         const excludedProductIds = this.getExcludedProductIds();
 
         list = list
@@ -2261,6 +2250,17 @@ export class PosStore extends WithLazyGetterTrap {
         } else {
             return `${pm.name} (${fmtAmount})`;
         }
+    }
+    getDate(date) {
+        const todayTs = DateTime.now().startOf("day").ts;
+        if (date.startOf("day").ts === todayTs) {
+            return _t("Today");
+        } else {
+            return formatDate(date);
+        }
+    }
+    getTime(date) {
+        return date.toFormat("hh:mm");
     }
 }
 

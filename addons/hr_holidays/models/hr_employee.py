@@ -127,6 +127,10 @@ class HrEmployee(models.Model):
             ('resource_calendar_id', '=', self.resource_calendar_id.id),
         ]
 
+        if self.job_id:
+            domain += [
+                ('job_ids', 'in', [False] + self.job_id.ids),
+            ]
         if self.department_id:
             domain += [
                 '|',
@@ -346,4 +350,7 @@ class HrEmployee(models.Model):
         return (allocations_leaves_consumed, to_recheck_leaves_per_leave_type)
 
     def _get_hours_per_day(self, date_from):
-        return self._get_calendars(date_from)[self.id].hours_per_day
+        ''' Return 24H to handle the case of Fully Flexible (ones without a working calendar)'''
+        self.ensure_one()
+        calendars = self._get_calendars(date_from)
+        return calendars[self.id].hours_per_day if calendars[self.id] else 24

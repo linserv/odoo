@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import api, fields, models, _
@@ -27,7 +26,7 @@ class EventEventTicket(models.Model):
     event_type_id = fields.Many2one(ondelete='set null', required=False)
     event_id = fields.Many2one(
         'event.event', string="Event",
-        ondelete='cascade', required=True)
+        ondelete='cascade', required=True, index=True)
     company_id = fields.Many2one('res.company', related='event_id.company_id')
     # sale
     start_sale_datetime = fields.Datetime(string="Registration Start")
@@ -123,9 +122,12 @@ class EventEventTicket(models.Model):
         sold_out_tickets = []
         for ticket in self:
             if ticket.seats_max and ticket.seats_available < minimal_availability:
-                sold_out_tickets.append((_(
+                sold_out_tickets.append(_(
                     '- the ticket "%(ticket_name)s" (%(event_name)s): Missing %(nb_too_many)i seats.',
-                    ticket_name=ticket.name, event_name=ticket.event_id.name, nb_too_many=-ticket.seats_available)))
+                    ticket_name=ticket.name,
+                    event_name=ticket.event_id.name,
+                    nb_too_many=minimal_availability - ticket.seats_available,
+                ))
         if sold_out_tickets:
             raise ValidationError(_('There are not enough seats available for:')
                                   + '\n%s\n' % '\n'.join(sold_out_tickets))

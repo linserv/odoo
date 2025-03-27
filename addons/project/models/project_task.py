@@ -210,7 +210,7 @@ class ProjectTask(models.Model):
         help="The current user's personal task stage.", domain="[('user_id', '=', uid)]",
         group_expand='_read_group_personal_stage_type_ids')
     partner_id = fields.Many2one('res.partner',
-        string='Customer', recursive=True, tracking=True, compute='_compute_partner_id', store=True, readonly=False,
+        string='Customer', recursive=True, tracking=True, compute='_compute_partner_id', store=True, readonly=False, index='btree_not_null',
         domain="['|', ('company_id', '=?', company_id), ('company_id', '=', False)]", )
     partner_phone = fields.Char(
         compute='_compute_partner_phone', inverse='_inverse_partner_phone',
@@ -283,7 +283,7 @@ class ProjectTask(models.Model):
     # recurrence fields
     recurring_task = fields.Boolean(string="Recurrent")
     recurring_count = fields.Integer(string="Tasks in Recurrence", compute='_compute_recurring_count')
-    recurrence_id = fields.Many2one('project.task.recurrence', copy=False)
+    recurrence_id = fields.Many2one('project.task.recurrence', copy=False, index='btree_not_null')
     repeat_interval = fields.Integer(string='Repeat Every', default=1, compute='_compute_repeat', compute_sudo=True, readonly=False)
     repeat_unit = fields.Selection([
         ('day', 'Days'),
@@ -381,21 +381,13 @@ class ProjectTask(models.Model):
             task.is_closed = task.state in CLOSED_STATES
 
     def _search_is_closed(self, operator, value):
-        if operator not in ('=', '!=') or not isinstance(value, bool):
-            raise NotImplementedError(_(
-                "The search does not support operator %(operator)s or value %(value)s.",
-                operator=operator,
-                value=value,
-            ))
-        if (operator == '!=' and value) or (operator == '=' and not value):
+        if operator == 'in':
+            searched_states = list(CLOSED_STATES.keys())
+        elif operator == 'not in':
             searched_states = self.OPEN_STATES
         else:
-            searched_states = list(CLOSED_STATES.keys())
-        domain = [
-            ('state', 'in', searched_states)
-        ]
-        return domain
-
+            return NotImplemented
+        return [('state', 'in', searched_states)]
 
     @property
     def OPEN_STATES(self):
@@ -692,8 +684,8 @@ class ProjectTask(models.Model):
             task.portal_user_names = format_list(self.env, task.user_ids.mapped('name'))
 
     def _search_portal_user_names(self, operator, value):
-        if operator != 'ilike' and not isinstance(value, str):
-            raise ValidationError(_('Not Implemented.'))
+        if operator != 'ilike' or not isinstance(value, str):
+            return NotImplemented
 
         sql = SQL("""(
             SELECT task_user.task_id
@@ -1448,22 +1440,15 @@ class ProjectTask(models.Model):
             task.has_late_and_unreached_milestone = task.allow_milestones and task.milestone_id.id in late_milestones
 
     def _search_has_late_and_unreached_milestone(self, operator, value):
-        if operator not in ('=', '!=') or not isinstance(value, bool):
-            raise NotImplementedError(_(
-                "The search does not support operator %(operator)s or value %(value)s.",
-                operator=operator,
-                value=value,
-            ))
-        domain = [
+        if operator != 'in':
+            return NotImplemented
+        return [
             ('allow_milestones', '=', True),
-            ('milestone_id', '!=', False),
-            ('milestone_id.is_reached', '=', False),
-            ('milestone_id.deadline', '!=', False), ('milestone_id.deadline', '<', fields.Date.today())
+            ('milestone_id', 'any', [
+                ('is_reached', '=', False),
+                ('deadline', '<', fields.Date.today()),
+            ]),
         ]
-        if (operator == '!=' and value) or (operator == '=' and not value):
-            domain.insert(0, expression.NOT_OPERATOR)
-            domain = expression.distribute_not(domain)
-        return domain
 
     # ---------------------------------------------------
     # Mail gateway
@@ -1475,8 +1460,17 @@ class ProjectTask(models.Model):
             message, msg_vals=msg_vals, model_description=model_description,
             force_email_company=force_email_company, force_email_lang=force_email_lang
         )
-        if self.stage_id:
-            render_context['subtitles'].append(_('Stage: %s', self.stage_id.name))
+        project_name = self.project_id.sudo().name
+        stage_name = self.stage_id.name
+        subtitles = ""
+        if project_name and stage_name:
+            subtitles = _('Project: %(project_name)s, Stage: %(stage_name)s', project_name=project_name, stage_name=stage_name)
+        elif project_name:
+            subtitles = _('Project: %(project_name)s', project_name=project_name)
+        elif stage_name:
+            subtitles = _('Stage: %(stage_name)s', stage_name=stage_name)
+        if subtitles:
+            render_context['subtitles'].append(subtitles)
         return render_context
 
     def _send_email_notify_to_cc(self, partners_to_notify):

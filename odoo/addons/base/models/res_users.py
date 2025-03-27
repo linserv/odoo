@@ -510,8 +510,8 @@ class ResUsers(models.Model):
 
     def _has_field_access(self, field, operation):
         return super()._has_field_access(field, operation) or (
-            self == self.env.user
-            and operation == 'read'
+            operation == 'read'
+            and self._origin == self.env.user
             and field.name in self.SELF_READABLE_FIELDS
         )
 
@@ -610,8 +610,10 @@ class ResUsers(models.Model):
     @api.model
     def _search_display_name(self, operator, value):
         domain = super()._search_display_name(operator, value)
-        if operator in ('=', 'ilike') and value:
-            name_domain = [('login', '=', value)]
+        if operator in ('in', 'ilike') and value:
+            name_domain = [('login', 'in', [value] if isinstance(value, str) else value)]
+            # avoid searching both by login and name because they reside in two different tables
+            # doing so prevents from using indexes and introduces a performance issue
             if users := self.search(name_domain):
                 domain = [('id', 'in', users.ids)]
         return domain

@@ -418,7 +418,7 @@ class IrActionsAct_WindowView(models.Model):
     sequence = fields.Integer()
     view_id = fields.Many2one('ir.ui.view', string='View')
     view_mode = fields.Selection(VIEW_TYPES, string='View Type', required=True)
-    act_window_id = fields.Many2one('ir.actions.act_window', string='Action', ondelete='cascade')
+    act_window_id = fields.Many2one('ir.actions.act_window', string='Action', ondelete='cascade', index='btree_not_null')
     multi = fields.Boolean(string='On Multiple Doc.', help="If set to true, the action will not be displayed on the right toolbar of a form view.")
 
 
@@ -573,7 +573,7 @@ class IrActionsServer(models.Model):
                        help="Write Python code that the action will execute. Some variables are "
                             "available for use; help about python expression is given in the help tab.")
     # Multi
-    parent_id = fields.Many2one('ir.actions.server', string='Parent Action', ondelete='cascade')
+    parent_id = fields.Many2one('ir.actions.server', string='Parent Action', index=True, ondelete='cascade')
     child_ids = fields.One2many('ir.actions.server', 'parent_id', copy=True, domain=lambda self: str(self._get_children_domain()),
                                  string='Child Actions', help='Child server actions that will be executed. Note that the last return returned action value will be used as global return value.')
     # Create
@@ -1094,7 +1094,7 @@ class IrActionsServer(models.Model):
     @api.depends('evaluation_type', 'update_field_id')
     def _compute_value_field_to_show(self):  # check if value_field_to_show can be removed and use ttype in xml view instead
         for action in self:
-            if action.update_field_id.ttype in ('many2one', 'many2many'):
+            if action.update_field_id.ttype in ('one2many', 'many2one', 'many2many'):
                 action.value_field_to_show = 'resource_ref'
             elif action.update_field_id.ttype == 'selection':
                 action.value_field_to_show = 'selection_value'
@@ -1125,7 +1125,7 @@ class IrActionsServer(models.Model):
             expr = action.value
             if action.evaluation_type == 'equation':
                 expr = safe_eval(action.value, eval_context)
-            elif action.update_field_id.ttype == 'many2many':
+            elif action.update_field_id.ttype in ['one2many', 'many2many']:
                 operation = action.update_m2m_operation
                 if operation == 'add':
                     expr = [Command.link(int(action.value))]

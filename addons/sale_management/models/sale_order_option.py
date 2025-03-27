@@ -18,7 +18,7 @@ class SaleOrderOption(models.Model):
         required=True,
         domain=lambda self: self._product_id_domain())
     line_id = fields.Many2one(
-        comodel_name='sale.order.line', ondelete='set null', copy=False)
+        comodel_name='sale.order.line', ondelete='set null', copy=False, index='btree_not_null')
     sequence = fields.Integer(
         string='Sequence', help="Gives the sequence order when displaying a list of optional products.")
 
@@ -131,9 +131,9 @@ class SaleOrderOption(models.Model):
             option.is_present = bool(option.order_id.order_line.filtered(lambda l: l.product_id == option.product_id))
 
     def _search_is_present(self, operator, value):
-        if (operator, value) in [('=', True), ('!=', False)]:
-            return [('line_id', '=', False)]
-        return [('line_id', '!=', False)]
+        if operator not in ('in', 'not in'):
+            return NotImplemented
+        return [('line_id', operator, [False])]
 
     @api.model
     def _product_id_domain(self):

@@ -5,6 +5,7 @@ import random
 import re
 
 from odoo import api, Command, fields, models, _
+from odoo.exceptions import AccessError
 from odoo.addons.bus.websocket import WebsocketConnectionHandler
 from odoo.addons.mail.tools.discuss import Store
 
@@ -170,12 +171,16 @@ class Im_LivechatChannel(models.Model):
     # --------------------------
     def action_join(self):
         self.ensure_one()
-        self.user_ids = [Command.link(self.env.user.id)]
+        if not self.env.user.has_group("im_livechat.im_livechat_group_user"):
+            raise AccessError(_("Only Live Chat operators can join Live Chat channels"))
+        # sudo: im_livechat.channel - operators can join channels
+        self.sudo().user_ids = [Command.link(self.env.user.id)]
         self.env.user._bus_send_store(self, ["are_you_inside", "name"])
 
     def action_quit(self):
         self.ensure_one()
-        self.user_ids = [Command.unlink(self.env.user.id)]
+        # sudo: im_livechat.channel - users can leave channels
+        self.sudo().user_ids = [Command.unlink(self.env.user.id)]
         self.env.user._bus_send_store(self, ["are_you_inside", "name"])
 
     def action_view_rating(self):
@@ -452,7 +457,7 @@ class Im_LivechatChannelRule(models.Model):
         required=True,
         default="always",
     )
-    channel_id = fields.Many2one('im_livechat.channel', 'Channel',
+    channel_id = fields.Many2one('im_livechat.channel', 'Channel', index='btree_not_null',
         help="The channel of the rule")
     country_ids = fields.Many2many('res.country', 'im_livechat_channel_country_rel', 'channel_id', 'country_id', 'Country',
         help="The rule will only be applied for these countries. Example: if you select 'Belgium' and 'United States' and that you set the action to 'Hide', the chat button will be hidden on the specified URL from the visitors located in these 2 countries. This feature requires GeoIP installed on your server.")

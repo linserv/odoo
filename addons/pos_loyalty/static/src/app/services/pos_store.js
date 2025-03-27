@@ -40,7 +40,7 @@ patch(PosStore.prototype, {
                     this.updateOrder(order);
                 }
             }),
-            [this.data.models.records["pos.order"]]
+            [this.data.models["pos.order"].records]
         );
     },
     async updateOrder(order) {
@@ -124,7 +124,8 @@ patch(PosStore.prototype, {
      */
     async updatePrograms() {
         const order = this.getOrder();
-        if (!order) {
+        // 'order.delivery_provider_id' check is used for UrbanPiper orders (as loyalty points and rewards are not allowed for UrbanPiper orders)
+        if (!order || order.delivery_provider_id) {
             return;
         }
         const changesPerProgram = {};
@@ -539,8 +540,7 @@ patch(PosStore.prototype, {
         this.partnerId2CouponIds = {};
 
         this.computeDiscountProductIdsForAllRewards({
-            model: "product.product",
-            ids: Array.from(this.data.models.records["product.product"].keys()),
+            ids: this.data.models["product.product"].getAllIds(),
         });
 
         this.models["product.product"].addEventListener(
@@ -560,7 +560,7 @@ patch(PosStore.prototype, {
     },
 
     computeDiscountProductIdsForAllRewards(data) {
-        const products = this.models[data.model].readMany(data.ids);
+        const products = this.models["product.product"].readMany(data.ids);
         for (const reward of this.models["loyalty.reward"].getAll()) {
             this.computeDiscountProductIds(reward, products);
         }
@@ -591,7 +591,7 @@ patch(PosStore.prototype, {
 
         try {
             reward.all_discount_product_ids = [
-                ["link", ...products.filter((p) => domain.contains(p.serialize()))],
+                ["link", ...products.filter((p) => domain.contains(p.raw))],
             ];
         } catch (error) {
             if (!(error instanceof InvalidDomainError || error instanceof TypeError)) {

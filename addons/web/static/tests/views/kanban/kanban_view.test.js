@@ -5123,12 +5123,18 @@ test("kanban view with default_group_by", async () => {
     onRpc("web_read_group", ({ kwargs }) => {
         readGroupCount++;
         switch (readGroupCount) {
-            case 1:
-                return expect(kwargs.groupby).toEqual(["bar"]);
-            case 2:
-                return expect(kwargs.groupby).toEqual(["product_id"]);
-            case 3:
-                return expect(kwargs.groupby).toEqual(["bar"]);
+            case 1: {
+                expect(kwargs.groupby).toEqual(["bar"]);
+                break;
+            }
+            case 2: {
+                expect(kwargs.groupby).toEqual(["product_id"]);
+                break;
+            }
+            case 3: {
+                expect(kwargs.groupby).toEqual(["bar"]);
+                break;
+            }
         }
     });
     await mountView({
@@ -10312,13 +10318,13 @@ test("open file explorer if no cover image", async () => {
     await setInputFiles([]);
     await animationFrame();
 
-    expect(`.o_file_input input`).not.toBeEnabled({
+    expect(`.o_dialog .o_file_input input`).not.toBeEnabled({
         message: "the upload button should be disabled on upload",
     });
     uploadedPromise.resolve();
     await animationFrame();
 
-    expect(`.o_file_input input`).toBeEnabled({
+    expect(`.o_dialog .o_file_input input`).toBeEnabled({
         message: "the upload button should be enabled for upload",
     });
 });
@@ -12057,7 +12063,7 @@ test("fieldDependencies support for fields", async () => {
 test("fieldDependencies support for fields: dependence on a relational field", async () => {
     const customField = {
         component: class CustomField extends Component {
-            static template = xml`<span t-esc="props.record.data.product_id[1]"/>`;
+            static template = xml`<span t-esc="props.record.data.product_id.display_name"/>`;
             static props = ["*"];
         },
         fieldDependencies: [{ name: "product_id", type: "many2one", relation: "product" }],

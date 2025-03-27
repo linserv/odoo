@@ -219,7 +219,8 @@ class DiscussChannel(models.Model):
             channel.is_member = bool(channel.self_member_id)
 
     def _search_is_member(self, operator, operand):
-        is_in = (operator == '=' and operand) or (operator == '!=' and not operand)
+        if operator != 'in':
+            return NotImplemented
         # Separate query to fetch candidate channels because the sub-select that _search would
         # generate leads psql query plan to take bad decisions. When candidate ids are explicitly
         # given it doesn't need to make (incorrect) guess, at the cost of one extra but fast query.
@@ -234,7 +235,7 @@ class DiscussChannel(models.Model):
             channels = current_partner.sudo().channel_ids
         else:
             channels = self.env["discuss.channel"]
-        return [('id', "in" if is_in else "not in", channels.ids)]
+        return [('id', 'in', channels.ids)]
 
     @api.depends_context("uid", "guest")
     @api.depends("channel_member_ids")
@@ -454,7 +455,7 @@ class DiscussChannel(models.Model):
             (partner or guest)._bus_send_store(custom_store)
             return
         if post_leave_message:
-            notification = Markup('<div class="o_mail_notification">%s</div>') % _(
+            notification = Markup('<div class="o_mail_notification" data-oe-type="channel-left">%s</div>') % _(
                 "left the channel"
             )
             # sudo: mail.message - post as sudo since the user just unsubscribed from the channel
@@ -519,7 +520,7 @@ class DiscussChannel(models.Model):
                         else _("invited %s to the channel", member._get_html_link(for_persona=True))
                     )
                     member.channel_id.message_post(
-                        body=Markup('<div class="o_mail_notification">%s</div>') % notification,
+                        body=Markup('<div class="o_mail_notification" data-oe-type="channel-joined">%s</div>') % notification,
                         message_type="notification",
                         subtype_xmlid="mail.mt_comment",
                     )
@@ -924,8 +925,9 @@ class DiscussChannel(models.Model):
                         "name": guest_name,
                         "timezone": timezone,
                     }
-                ).sudo(False)
+                )
                 guest._set_auth_cookie()
+                guest = guest.sudo(False)
                 self = self.with_context(guest=guest)
             self.add_members(guest_ids=guest.ids, post_joined_message=post_joined_message)
         return self.env.user.partner_id if not guest else self.env["res.partner"], guest
@@ -1003,7 +1005,7 @@ class DiscussChannel(models.Model):
             "member_count",
             "name",
             Store.One("parent_channel_id"),
-            Store.Many("rtc_session_ids", mode="ADD", extra=True, rename="rtcSessions"),
+            Store.Many("rtc_session_ids", mode="ADD", extra=True, rename="rtcSessions", sudo=True),
             "uuid",
         ]
         if for_current_user:

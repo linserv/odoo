@@ -69,6 +69,9 @@ patch(PosOrder.prototype, {
         // Always start with invalid coupons so that coupon for this
         // order is properly assigned. @see _checkMissingCoupons
         this.invalidCoupons = true;
+    },
+    initState() {
+        super.initState();
         this.uiState = {
             ...this.uiState,
             disabledRewards: this.uiState.disabledRewards || new Set(),
@@ -93,8 +96,8 @@ patch(PosOrder.prototype, {
             }
         }
     },
-    setupState(vals) {
-        super.setupState(...arguments);
+    restoreState(vals) {
+        super.restoreState(...arguments);
         this.uiState.disabledRewards = new Set(vals?.disabledRewards || []);
     },
     serializeState() {
@@ -910,7 +913,9 @@ patch(PosOrder.prototype, {
             if (!line.getQuantity()) {
                 continue;
             }
-            const taxKey = line.tax_ids.map((t) => t.id);
+            const taxKey = ["ewallet", "gift_card"].includes(reward.program_id.program_type)
+                ? line.tax_ids.map((t) => t.id)
+                : line.tax_ids.filter((t) => t.amount_type !== "fixed").map((t) => t.id);
             discountable += line.getPriceWithTax();
             if (!discountablePerTax[taxKey]) {
                 discountablePerTax[taxKey] = 0;

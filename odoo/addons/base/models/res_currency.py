@@ -2,6 +2,7 @@
 
 import logging
 import math
+from collections.abc import Iterable
 
 from odoo import api, fields, models, tools
 from odoo.exceptions import UserError, ValidationError
@@ -368,7 +369,7 @@ class ResCurrencyRate(models.Model):
         aggregator="avg",
         help="The rate of the currency to the currency of rate 1 ",
     )
-    currency_id = fields.Many2one('res.currency', string='Currency', readonly=True, required=True, ondelete="cascade")
+    currency_id = fields.Many2one('res.currency', string='Currency', readonly=True, required=True, index=True, ondelete="cascade")
     company_id = fields.Many2one('res.company', string='Company',
                                  default=lambda self: self.env.company.root_id)
 
@@ -474,7 +475,10 @@ class ResCurrencyRate(models.Model):
 
     @api.model
     def _search_display_name(self, operator, value):
-        value = parse_date(self.env, value)
+        if isinstance(value, Iterable) and not isinstance(value, str):
+            value = [parse_date(self.env, v) for v in value]
+        else:
+            value = parse_date(self.env, value)
         return super()._search_display_name(operator, value)
 
     @api.model

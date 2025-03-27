@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import logging
+import json
 from datetime import datetime
 from markupsafe import Markup
 from itertools import groupby
@@ -191,10 +192,10 @@ class PosOrder(models.Model):
     @api.model
     def _get_invoice_lines_values(self, line_values, pos_line, move_type):
         # correct quantity sign based on move type and if line is refund.
-        is_refund = line_values.get('is_refund', False)
+        is_refund_order = pos_line.order_id.amount_total < 0.0
         qty_sign = -1 if (
-            (move_type == 'out_invoice' and is_refund)
-            or (move_type == 'out_refund' and not is_refund)
+            (move_type == 'out_invoice' and is_refund_order)
+            or (move_type == 'out_refund' and not is_refund_order)
         ) else 1
 
         return {
@@ -205,6 +206,7 @@ class PosOrder(models.Model):
             'name': line_values['name'],
             'tax_ids': [(6, 0, line_values['tax_ids'].ids)],
             'product_uom_id': line_values['uom_id'].id,
+            'extra_tax_data': self.env['account.tax']._export_base_line_extra_tax_data(line_values),
         }
 
     def _prepare_invoice_lines(self, move_type):
@@ -1386,16 +1388,18 @@ class PosOrderLine(models.Model):
     full_product_name = fields.Char('Full Product Name')
     customer_note = fields.Char('Customer Note')
     refund_orderline_ids = fields.One2many('pos.order.line', 'refunded_orderline_id', 'Refund Order Lines', help='Orderlines in this field are the lines that refunded this orderline.')
-    refunded_orderline_id = fields.Many2one('pos.order.line', 'Refunded Order Line', help='If this orderline is a refund, then the refunded orderline is specified in this field.')
+    refunded_orderline_id = fields.Many2one('pos.order.line', 'Refunded Order Line', index='btree_not_null', help='If this orderline is a refund, then the refunded orderline is specified in this field.')
     refunded_qty = fields.Float('Refunded Quantity', compute='_compute_refund_qty', help='Number of items refunded in this orderline.')
     uuid = fields.Char(string='Uuid', readonly=True, default=lambda self: str(uuid4()), copy=False)
     note = fields.Char('Product Note')
 
-    combo_parent_id = fields.Many2one('pos.order.line', string='Combo Parent') # FIXME rename to parent_line_id
+    combo_parent_id = fields.Many2one('pos.order.line', string='Combo Parent', index='btree_not_null') # FIXME rename to parent_line_id
     combo_line_ids = fields.One2many('pos.order.line', 'combo_parent_id', string='Combo Lines') # FIXME rename to child_line_ids
 
     combo_item_id = fields.Many2one('product.combo.item', string='Combo Item')
     is_edited = fields.Boolean('Edited', default=False)
+    # Technical field holding custom data for the taxes computation engine.
+    extra_tax_data = fields.Json()
 
     @api.model
     def _load_pos_data_domain(self, data):
@@ -1405,7 +1409,8 @@ class PosOrderLine(models.Model):
     def _load_pos_data_fields(self, config_id):
         return [
             'qty', 'attribute_value_ids', 'custom_attribute_value_ids', 'price_unit', 'uuid', 'price_subtotal', 'price_subtotal_incl', 'order_id', 'note', 'price_type',
-            'product_id', 'discount', 'tax_ids', 'pack_lot_ids', 'customer_note', 'refunded_qty', 'price_extra', 'full_product_name', 'refunded_orderline_id', 'combo_parent_id', 'combo_line_ids', 'combo_item_id', 'refund_orderline_ids'
+            'product_id', 'discount', 'tax_ids', 'pack_lot_ids', 'customer_note', 'refunded_qty', 'price_extra', 'full_product_name', 'refunded_orderline_id', 'combo_parent_id', 'combo_line_ids', 'combo_item_id', 'refund_orderline_ids',
+            'extra_tax_data',
         ]
 
     @api.model
@@ -1733,7 +1738,7 @@ class PosPackOperationLot(models.Model):
     _rec_name = "lot_name"
     _inherit = ['pos.load.mixin']
 
-    pos_order_line_id = fields.Many2one('pos.order.line')
+    pos_order_line_id = fields.Many2one('pos.order.line', index='btree_not_null')
     order_id = fields.Many2one('pos.order', related="pos_order_line_id.order_id", readonly=False)
     lot_name = fields.Char('Lot Name')
     product_id = fields.Many2one('product.product', related='pos_order_line_id.product_id', readonly=False)

@@ -3,10 +3,10 @@
 
 from collections import Counter, defaultdict
 
-from odoo import _, api, fields, tools, models, Command
+from odoo import _, api, fields, models
 from odoo.addons.web.controllers.utils import clean_action
 from odoo.exceptions import UserError, ValidationError
-from odoo.osv import expression
+from odoo.fields import Command, Domain
 from odoo.tools import OrderedSet, groupby
 from odoo.tools.float_utils import float_compare, float_is_zero, float_round
 
@@ -44,7 +44,7 @@ class StockMoveLine(models.Model):
         'stock.quant.package', 'Source Package', ondelete='restrict',
         check_company=True,
         domain="[('location_id', '=', location_id)]")
-    package_level_id = fields.Many2one('stock.package_level', 'Package Level', check_company=True)
+    package_level_id = fields.Many2one('stock.package_level', 'Package Level', check_company=True, index='btree_not_null')
     lot_id = fields.Many2one(
         'stock.lot', 'Lot/Serial Number',
         domain="[('product_id', '=', product_id)]", check_company=True)
@@ -64,9 +64,9 @@ class StockMoveLine(models.Model):
         help="When validating the transfer, the products will be taken from this owner.")
     location_id = fields.Many2one(
         'stock.location', 'From', domain="[('usage', '!=', 'view')]", check_company=True, required=True,
-        compute="_compute_location_id", store=True, readonly=False, precompute=True,
+        compute="_compute_location_id", store=True, readonly=False, precompute=True, index=True,
     )
-    location_dest_id = fields.Many2one('stock.location', 'To', domain="[('usage', '!=', 'view')]", check_company=True, required=True, compute="_compute_location_id", store=True, readonly=False, precompute=True)
+    location_dest_id = fields.Many2one('stock.location', 'To', domain="[('usage', '!=', 'view')]", check_company=True, required=True, compute="_compute_location_id", store=True, index=True, readonly=False, precompute=True)
     location_usage = fields.Selection(string="Source Location Type", related='location_id.usage')
     location_dest_usage = fields.Selection(string="Destination Location Type", related='location_dest_id.usage')
     lots_visible = fields.Boolean(compute='_compute_lots_visible')
@@ -138,7 +138,9 @@ class StockMoveLine(models.Model):
                 line.location_dest_id = line.move_id.location_dest_id or line.picking_id.location_dest_id
 
     def _search_picking_type_id(self, operator, value):
-        return [('picking_id.picking_type_id', operator, value)]
+        if Domain.is_negative_operator(operator):
+            return NotImplemented
+        return Domain('picking_id.picking_type_id', operator, value)
 
     @api.depends('quant_id')
     def _compute_quantity(self):
@@ -304,17 +306,17 @@ class StockMoveLine(models.Model):
         dirty_move_lines = self.env['stock.move.line'].browse(dirty_move_line_ids)
         quants_data = []
         move_lines_data = []
-        domain = [("id", "in", dirty_quant_ids)]
-        for move_line in dirty_move_lines | deleted_move_lines:
-            move_line_domain = [
+        domain = Domain("id", "in", dirty_quant_ids) | Domain.OR(
+            Domain([
                 ("product_id", "=", move_line.product_id.id),
                 ("lot_id", "=", move_line.lot_id.id),
                 ("location_id", "=", move_line.location_id.id),
                 ("package_id", "=", move_line.package_id.id),
                 ("owner_id", "=", move_line.owner_id.id),
-            ]
-            domain = expression.OR([domain, move_line_domain])
-        if domain:
+            ])
+            for move_line in dirty_move_lines | deleted_move_lines
+        )
+        if not domain.is_false():
             quants = self.env['stock.quant'].search(domain)
             for quant in quants:
                 dirty_lines = dirty_move_lines.filtered(lambda ml: ml.product_id == quant.product_id
@@ -450,13 +452,13 @@ class StockMoveLine(models.Model):
                     # Only need to unlink the package level if it's empty. Otherwise will unlink it to still valid move lines.
                     if not package_level.move_line_ids:
                         package_level.unlink()
-        # When we try to write on a reserved move line any fields from `triggers` or directly
-        # `reserved_uom_qty` (the actual reserved quantity), we need to make sure the associated
+        # When we try to write on a reserved move line any fields from `triggers`, result_package_id excepted,
+        # or directly reserved_uom_qty` (the actual reserved quantity), we need to make sure the associated
         # quants are correctly updated in order to not make them out of sync (i.e. the sum of the
         # move lines `reserved_uom_qty` should always be equal to the sum of `reserved_quantity` on
         # the quants). If the new charateristics are not available on the quants, we chose to
         # reserve the maximum possible.
-        if updates or 'quantity' in vals:
+        if (updates and {'result_package_id'}.difference(updates.keys())) or 'quantity' in vals:
             for ml in self:
                 if not ml.product_id.is_storable or ml.state == 'done':
                     continue
@@ -1009,7 +1011,7 @@ class StockMoveLine(models.Model):
             )
         self.write({'result_package_id': package.id})
         if len(self.picking_id) == 1:
-            self.env['stock.package_level'].create({
+            self.env['stock.package_level'].with_context(from_put_in_pack=True).create({
                 'package_id': package.id,
                 'picking_id': self.picking_id.id,
                 'location_id': False,

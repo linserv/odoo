@@ -290,13 +290,19 @@ class ProductProduct(models.Model):
 
     @api.depends_context('partner_id')
     def _compute_product_code(self):
+        read_access = self.env['ir.model.access'].check('product.supplierinfo', 'read', False)
         for product in self:
             product.code = product.default_code
-            if self.env['ir.model.access'].check('product.supplierinfo', 'read', False):
+            if read_access:
                 for supplier_info in product.seller_ids:
                     if supplier_info.partner_id.id == product._context.get('partner_id'):
+                        if supplier_info.product_id and supplier_info.product_id != product:
+                            # Supplier info specific for another variant.
+                            continue
                         product.code = supplier_info.product_code or product.default_code
-                        break
+                        if product == supplier_info.product_id:
+                            # Supplier info specific for this variant.
+                            break
 
     @api.depends_context('partner_id')
     def _compute_partner_ref(self):
@@ -336,7 +342,7 @@ class ProductProduct(models.Model):
 
     def _search_all_product_tag_ids(self, operator, operand):
         if operator in expression.NEGATIVE_TERM_OPERATORS:
-            return [('product_tag_ids', operator, operand), ('additional_product_tag_ids', operator, operand)]
+            return NotImplemented
         return ['|', ('product_tag_ids', operator, operand), ('additional_product_tag_ids', operator, operand)]
 
     @api.onchange('default_code')
@@ -574,11 +580,13 @@ class ProductProduct(models.Model):
             [('name', operator, value)],
             [('default_code', operator, value)],
         ]
-        if operator in ('=', 'in') or (operator.endswith('like') and is_positive):
-            barcode_values = [value] if operator != 'in' else value
-            domains.append([('barcode', 'in', barcode_values)])
-        if operator == '=' and isinstance(value, str) and (m := re.search(r'(\[(.*?)\])', value)):
-            domains.append([('default_code', '=', m.group(2))])
+        if operator == 'in':
+            domains.append([('barcode', 'in', value)])
+            for v in value:
+                if isinstance(v, str) and (m := re.search(r'(\[(.*?)\])', v)):
+                    domains.append([('default_code', '=', m.group(2))])
+        elif operator.endswith('like') and is_positive:
+            domains.append([('barcode', 'in', [value])])
         if partner_id := self.env.context.get('partner_id'):
             supplier_domain = [
                 ('partner_id', '=', partner_id),

@@ -4230,7 +4230,9 @@ test(`clicking on stat buttons in edit mode on desktop`, async () => {
         },
     });
 
-    onRpc("web_save", ({ args }) => expect(args[1].foo).toBe("tralala"));
+    onRpc("web_save", ({ args }) => {
+        expect(args[1].foo).toBe("tralala");
+    });
     onRpc(({ method }) => expect.step(method));
     await mountView({
         resModel: "partner",
@@ -4271,7 +4273,9 @@ test(`clicking on stat buttons in edit mode on mobile`, async () => {
         },
     });
 
-    onRpc("web_save", ({ args }) => expect(args[1].foo).toBe("tralala"));
+    onRpc("web_save", ({ args }) => {
+        expect(args[1].foo).toBe("tralala");
+    });
     onRpc(({ method }) => expect.step(method));
     await mountView({
         resModel: "partner",
@@ -5118,6 +5122,82 @@ test(`switching to another record from a dirty one on desktop`, async () => {
     await contains(`.o_pager_previous`).click();
     expect(getPagerValue()).toEqual([1]);
 });
+
+test.tags("desktop")("Save record, no changes but dirty (add and remove tag)", async () => {
+    onRpc("web_save", () => expect.step("ERROR: web_save should not be called"));
+    onRpc("web_read", () => expect.step("web_read"));
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        arch: `<form>
+                <field name="type_ids" widget="many2many_tags"/>
+              </form>`,
+        resId: 1,
+    });
+
+    expect(`.o_field_widget[name=type_ids] .o_tag`).toHaveCount(0);
+
+    // add a tag
+    await contains(`.o_input_dropdown input`).click();
+    await contains(`.dropdown-item:contains(gold)`).click();
+
+    expect(`.o_field_widget[name=type_ids] .o_tag`).toHaveCount(1);
+
+    // remove tag
+    await contains(`.o_field_widget[name=type_ids] .o_tag .o_delete`).click();
+    expect(`.o_field_widget[name=type_ids] .o_tag`).toHaveCount(0);
+    expect.verifySteps(["web_read", "web_read"]);
+
+    // click on save
+    await contains(`.o_form_button_save`).click();
+    // The `web_save` RPC should not be called as there are no changes.
+    // The record must be marked as not dirty.
+    expect(`.o_form_status_indicator_buttons.invisible`).toHaveCount(1);
+    expect.verifySteps([]); // avoid doint an extra web_read
+});
+
+test.tags("desktop")(
+    "switching to another record from a dirty record but wo changes (add and remove tag)",
+    async () => {
+        onRpc("web_save", () => expect.step("ERROR: web_save should not be called"));
+        onRpc("web_read", () => expect.step("web_read"));
+        await mountView({
+            type: "form",
+            resModel: "partner",
+            arch: `<form>
+                  <field name="type_ids" widget="many2many_tags"/>
+              </form>`,
+            resIds: [1, 2],
+            resId: 1,
+        });
+
+        expect(getPagerValue()).toEqual([1]);
+        expect(getPagerLimit()).toBe(2);
+
+        expect(`.o_field_widget[name=type_ids] .o_tag`).toHaveCount(0);
+        expect(`.o_breadcrumb`).toHaveText("first record");
+
+        // add a tag
+        await contains(`.o_input_dropdown input`).click();
+        await contains(`.dropdown-item:contains(gold)`).click();
+
+        expect(`.o_field_widget[name=type_ids] .o_tag`).toHaveCount(1);
+
+        // remove tag
+        await contains(`.o_field_widget[name=type_ids] .o_tag .o_delete`).click();
+        expect(`.o_field_widget[name=type_ids] .o_tag`).toHaveCount(0);
+        expect.verifySteps(["web_read", "web_read"]);
+
+        // click on the pager to switch to the next record
+        // The `web_save` RPC should not be called as there are no changes.
+        // The next record should be load correctly.
+        await contains(`.o_pager_next`).click();
+        expect(`.modal`).toHaveCount(0);
+        expect(getPagerValue()).toEqual([2]);
+        expect(`.o_breadcrumb`).toHaveText("second record");
+        expect.verifySteps(["web_read"]);
+    }
+);
 
 test(`do not reload after save when using pager`, async () => {
     onRpc(({ method }) => expect.step(method));
@@ -7581,10 +7661,12 @@ test(`no autofocus with disable_autofocus option`, async () => {
         type: "form",
         arch: `<form disable_autofocus="1"><field name="int_field"/></form>`,
     });
-    expect(`.o_field_widget[name="foo"] input`).not.toBeFocused();
+
+    expect(`.o_field_widget[name="int_field"] input`).not.toBeFocused();
 
     await contains(`.o_form_button_save`).click();
-    expect(`.o_field_widget[name="foo"] input`).not.toBeFocused();
+
+    expect(`.o_field_widget[name="int_field"] input`).not.toBeFocused();
 });
 
 test.tags("desktop");
@@ -8715,9 +8797,9 @@ test(`buttons with "confirm" attribute: click twice on "Ok"`, async () => {
     await contains(`.o_statusbar_buttons button`).click();
     expect.verifySteps([]);
 
-    contains(`.modal-footer button.btn-primary`).click();
-    await animationFrame();
+    await click(`.modal-footer button.btn-primary`);
     expect(`.modal-footer button.btn-primary`).not.toBeEnabled();
+    await animationFrame();
     expect.verifySteps(["web_save", "execute_action"]);
 });
 
@@ -10450,7 +10532,7 @@ test(`fieldDependencies support for fields: dependence on a relational field`, a
     registry.category("fields").add("custom_field", {
         component: class CustomField extends Component {
             static props = ["*"];
-            static template = xml`<span t-esc="props.record.data.product_id[1]"/>`;
+            static template = xml`<span t-esc="props.record.data.product_id.display_name"/>`;
         },
         fieldDependencies: [{ name: "product_id", type: "many2one", relation: "product" }],
     });
@@ -11777,6 +11859,72 @@ test(`custom x2many with relatedFields and list view not inline`, async () => {
     await contains(`.o_data_row [name='foo'] input`).edit("new record");
     await contains(`.o_form_button_save`).click();
     expect.verifySteps(["web_read", "web_save"]);
+});
+
+test(`custom many2one with relatedFields`, async () => {
+    class CustomMany2One extends Component {
+        static template = xml`
+            <t t-set="value" t-value="props.record.data[props.name]"/>
+            <div class="content">
+                <div t-esc="value.id"/>
+                <div t-esc="value.display_name"/>
+                <div t-esc="value.foo"/>
+                <div t-esc="value.int_field"/>
+            </div>
+            <button id="update-m2o" t-on-click="() => this.update()">Update</button>
+        `;
+        static props = ["*"];
+
+        update() {
+            return this.props.record.update({ [this.props.name]: { id: 2 } });
+        }
+    }
+    fieldsRegistry.add("my_widget", {
+        component: CustomMany2One,
+        relatedFields: [
+            { name: "foo", type: "char" },
+            { name: "int_field", type: "integer" },
+        ],
+    });
+
+    onRpc("web_read", ({ kwargs }) => {
+        expect.step("web_read");
+        expect.step(kwargs.specification);
+    });
+
+    await mountView({
+        resModel: "partner",
+        type: "form",
+        arch: `<form><field name="parent_id" widget="my_widget"/></form>`,
+        resId: 1,
+    });
+    expect.verifySteps([
+        "web_read",
+        {
+            display_name: {},
+            parent_id: {
+                fields: {
+                    display_name: {},
+                    foo: {},
+                    int_field: {},
+                },
+            },
+        },
+    ]);
+    expect(`.o_field_widget[name="parent_id"] .content`).toHaveText(
+        "4\naaa\nMy little Foo Value\n0"
+    );
+
+    await contains(`#update-m2o`).click();
+    expect.verifySteps([
+        "web_read",
+        {
+            display_name: {},
+            foo: {},
+            int_field: {},
+        },
+    ]);
+    expect(`.o_field_widget[name="parent_id"] .content`).toHaveText("2\nsecond record\nblip\n9");
 });
 
 test(`existing record with falsy display_name`, async () => {

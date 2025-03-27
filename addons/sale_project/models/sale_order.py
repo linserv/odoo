@@ -3,16 +3,16 @@
 import ast
 from collections import defaultdict
 
-from odoo import api, fields, models, _, Command
+from odoo import api, fields, models, _
+from odoo.fields import Command, Domain
 from odoo.exceptions import UserError
-from odoo.osv.expression import AND, NEGATIVE_TERM_OPERATORS, TERM_OPERATORS_NEGATION
 from odoo.addons.project.models.project_task import CLOSED_STATES
 
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    tasks_ids = fields.Many2many('project.task', compute='_compute_tasks_ids', search='_search_tasks_ids', string='Tasks associated with this sale', export_string_translation=False)
+    tasks_ids = fields.Many2many('project.task', compute='_compute_tasks_ids', search='_search_tasks_ids', groups="project.group_project_user", string='Tasks associated with this sale', export_string_translation=False)
     tasks_count = fields.Integer(string='Tasks', compute='_compute_tasks_ids', groups="project.group_project_user", export_string_translation=False)
 
     visible_project = fields.Boolean('Display project', compute='_compute_visible_project', readonly=True, export_string_translation=False)
@@ -23,8 +23,8 @@ class SaleOrder(models.Model):
     show_create_project_button = fields.Boolean(compute='_compute_show_project_and_task_button', groups='project.group_project_user', export_string_translation=False)
     show_project_button = fields.Boolean(compute='_compute_show_project_and_task_button', groups='project.group_project_user', export_string_translation=False)
     show_task_button = fields.Boolean(compute='_compute_show_project_and_task_button', groups='project.group_project_user', export_string_translation=False)
-    closed_task_count = fields.Integer(compute='_compute_tasks_ids', export_string_translation=False)
-    completed_task_percentage = fields.Float(compute="_compute_completed_task_percentage", export_string_translation=False)
+    closed_task_count = fields.Integer(compute='_compute_tasks_ids', groups="project.group_project_user", export_string_translation=False)
+    completed_task_percentage = fields.Float(compute="_compute_completed_task_percentage", groups="project.group_project_user", export_string_translation=False)
     project_id = fields.Many2one('project.project', domain=[('allow_billable', '=', True)], copy=False, help="A task will be created for the project upon sales order confirmation. The analytic distribution of this project will also serve as a reference for newly created sales order items.")
     project_account_id = fields.Many2one('account.analytic.account', related='project_id.account_id')
 
@@ -60,13 +60,14 @@ class SaleOrder(models.Model):
 
     @api.model
     def _search_tasks_ids(self, operator, value):
-        if operator in NEGATIVE_TERM_OPERATORS:
-            positive_operator = TERM_OPERATORS_NEGATION[operator]
-        else:
-            positive_operator = operator
-        task_domain = [('display_name' if isinstance(value, str) else 'id', positive_operator, value), ('sale_order_id', '!=', False)]
+        if Domain.is_negative_operator(operator):
+            return NotImplemented
+        task_domain = [
+            ('display_name' if isinstance(value, str) else 'id', operator, value),
+            ('sale_order_id', '!=', False),
+        ]
         query = self.env['project.task']._search(task_domain)
-        return [('id', 'in' if positive_operator == operator else 'not in', query.subselect('sale_order_id'))]
+        return [('id', 'in', query.subselect('sale_order_id'))]
 
     @api.depends('order_line.product_id.project_id')
     def _compute_tasks_ids(self):
@@ -133,7 +134,7 @@ class SaleOrder(models.Model):
 
         # If the order has exactly one project and that project comes from a template, set the company of the template
         # on the project.
-        for order in self:
+        for order in self.sudo(): # Salesman may not have access to projects
             if len(order.project_ids) == 1:
                 project = order.project_ids[0]
                 for sol in order.order_line:
@@ -154,7 +155,7 @@ class SaleOrder(models.Model):
         project_ids = self.tasks_ids.project_id
         if len(project_ids) > 1:
             action = self.env['ir.actions.actions']._for_xml_id('project.action_view_task')
-            action['domain'] = AND([ast.literal_eval(action['domain']), self._tasks_ids_domain()])
+            action['domain'] = list(Domain.AND([ast.literal_eval(action['domain']), self._tasks_ids_domain()]))
             action['context'] = {}
         else:
             # Load top bar if all the tasks linked to the SO belong to the same project

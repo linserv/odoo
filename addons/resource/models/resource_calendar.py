@@ -87,7 +87,7 @@ class ResourceCalendar(models.Model):
                             help="If the active field is set to false, it will allow you to hide the Working Time without removing it.")
     company_id = fields.Many2one(
         'res.company', 'Company', domain=lambda self: [('id', 'in', self.env.companies.ids)],
-        default=lambda self: self.env.company)
+        default=lambda self: self.env.company, index='btree_not_null')
     attendance_ids = fields.One2many(
         'resource.calendar.attendance', 'calendar_id', 'Working Time',
         compute='_compute_attendance_ids', store=True, readonly=False, copy=True)
@@ -152,13 +152,20 @@ class ResourceCalendar(models.Model):
 
     @api.model
     def _search_work_time_rate(self, operator, value):
-        if operator not in ['=', '!=', '<', '>'] or not isinstance(value, int):
-            raise NotImplementedError(_('Operation not supported.'))
+        if operator in ('in', 'not in'):
+            if not all(isinstance(v, int) for v in value):
+                return NotImplemented
+        elif operator in ('<', '>'):
+            if not isinstance(value, int):
+                return NotImplemented
+        else:
+            return NotImplemented
+
         calendar_ids = self.env['resource.calendar'].search([])
-        if operator == '=':
-            calender = calendar_ids.filtered(lambda m: m.work_time_rate == value)
-        elif operator == '!=':
-            calender = calendar_ids.filtered(lambda m: m.work_time_rate != value)
+        if operator == 'in':
+            calender = calendar_ids.filtered(lambda m: m.work_time_rate in value)
+        elif operator == 'not in':
+            calender = calendar_ids.filtered(lambda m: m.work_time_rate not in value)
         elif operator == '<':
             calender = calendar_ids.filtered(lambda m: m.work_time_rate < value)
         elif operator == '>':

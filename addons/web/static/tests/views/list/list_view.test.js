@@ -29,10 +29,7 @@ import {
     tick,
 } from "@odoo/hoot-mock";
 import { Component, markup, onRendered, onWillStart, useRef, xml } from "@odoo/owl";
-import {
-    getPickerApplyButton,
-    getPickerCell,
-} from "@web/../tests/core/datetime/datetime_test_helpers";
+import { getPickerCell } from "@web/../tests/core/datetime/datetime_test_helpers";
 import {
     clickFieldDropdown,
     clickModalButton,
@@ -51,6 +48,7 @@ import {
     getService,
     installLanguages,
     makeServerError,
+    MockServer,
     mockService,
     models,
     mountView,
@@ -814,6 +812,47 @@ test(`list view with adjacent buttons and optional field`, async () => {
         message: "adjacent buttons in the arch must be grouped in a single column",
     });
     expect(`.o_data_row:eq(0) td.o_list_button`).toHaveCount(2);
+});
+
+test(`wait the view reload before closing the dialog`, async () => {
+    let searchReadDef;
+    onRpc("web_search_read", () => searchReadDef);
+    Foo._views = {
+        form: `<form><field name="foo"/></form>`,
+    };
+    onRpc("/web/dataset/call_button/foo/a", () => ({
+        type: "ir.actions.act_window",
+        name: "Archive Action",
+        res_model: "foo",
+        res_id: 1,
+        view_mode: "form",
+        target: "new",
+        views: [[false, "form"]],
+    }));
+
+    await mountView({
+        resModel: "foo",
+        type: "list",
+        arch: `
+            <list editable="bottom">
+                <field name="foo"/>
+                <button name="a" type="object" icon="fa-car"/>
+            </list>
+        `,
+    });
+    searchReadDef = new Deferred();
+    await contains(`tbody .o_list_button button:eq(0)`).click();
+    expect(`.o_dialog`).toHaveCount(1);
+    await contains(`.o_form_renderer .o_field_widget[name='foo'] input`).edit("plop");
+    await contains(`.o_dialog .o_form_button_save`).click();
+
+    await animationFrame(); // not needed but to be sure that the dialog is not closed.
+    expect(`.o_dialog`).toHaveCount(1);
+    searchReadDef.resolve();
+
+    await animationFrame();
+    expect(`.o_dialog`).toHaveCount(0);
+    expect(`tbody .o_list_char:eq(0)`).toHaveText("plop");
 });
 
 test(`list view with adjacent buttons with invisible modifier`, async () => {
@@ -3385,11 +3424,9 @@ test(`editable list view: basic char field edition`, async () => {
     expect(`.o_field_cell:eq(0)`).toHaveText("abc", {
         message: "changes should be saved correctly",
     });
+    expect(`.o_data_row:eq(0)`).not.toHaveClass("o_selected_row");
     expect(`.o_data_row:eq(1)`).toHaveClass("o_selected_row");
-    expect(`.o_data_row`).not.toHaveClass("o_selected_row", {
-        message: "saved row should be in readonly mode",
-    });
-    expect(Foo._records[0].foo).toBe("abc", {
+    expect(MockServer.env["foo"].browse(1)[0].foo).toBe("abc", {
         message: "the edition should have been properly saved",
     });
 });
@@ -10367,10 +10404,10 @@ test(`multi edit field with daterange widget`, async () => {
     // change dates range
     await contains(getPickerCell("16").at(0)).click();
     await contains(getPickerCell("12").at(1)).click();
-    expect(getPickerApplyButton()).not.toHaveAttribute("disabled");
 
     // Apply the changes
-    await contains(getPickerApplyButton()).click();
+    await contains(`.o_list_view`).click();
+
     expect(`.modal`).toHaveCount(1, {
         message: "The confirm dialog should appear to confirm the multi edition.",
     });
@@ -12621,7 +12658,7 @@ test(`char field edition in editable grouped list`, async () => {
     await contains(`.o_data_cell`).click();
     await contains(`.o_selected_row .o_data_cell [name=foo] input`).edit("pla");
     await contains(`.o_list_button_save`).click();
-    expect(Foo._records[3].foo).toBe("pla", {
+    expect(MockServer.env["foo"].browse(4)[0].foo).toBe("pla", {
         message: "the edition should have been properly saved",
     });
     expect(`.o_data_row:eq(0):contains(pla)`).toHaveCount(1);
@@ -15488,7 +15525,7 @@ test(`fieldDependencies support for fields`, async () => {
 test(`fieldDependencies support for fields: dependence on a relational field`, async () => {
     registry.category("fields").add("custom_field", {
         component: class CustomField extends Component {
-            static template = xml`<span t-esc="props.record.data.m2o[0]"/>`;
+            static template = xml`<span t-esc="props.record.data.m2o.id"/>`;
             static props = ["*"];
         },
         fieldDependencies: [{ name: "m2o", type: "many2one", relation: "bar" }],
@@ -16025,13 +16062,15 @@ test(`list view with default_group_by`, async () => {
         expect.step(`web_read_group${readGroupCount}`);
         switch (readGroupCount) {
             case 1:
-                return expect(kwargs.groupby).toEqual(["bar"]);
-            case 2:
-                return expect(kwargs.groupby).toEqual(["m2m"]);
             case 3:
-                return expect(kwargs.groupby).toEqual(["bar"]);
-            case 4:
-                return expect(kwargs.groupby).toEqual(["bar"]);
+            case 4: {
+                expect(kwargs.groupby).toEqual(["bar"]);
+                break;
+            }
+            case 2: {
+                expect(kwargs.groupby).toEqual(["m2m"]);
+                break;
+            }
         }
     });
 
@@ -16083,10 +16122,14 @@ test(`list view with multi-fields default_group_by`, async () => {
         readGroupCount++;
         expect.step(`web_read_group${readGroupCount}`);
         switch (readGroupCount) {
-            case 1:
-                return expect(kwargs.groupby).toEqual(["foo"]);
-            case 2:
-                return expect(kwargs.groupby).toEqual(["bar"]);
+            case 1: {
+                expect(kwargs.groupby).toEqual(["foo"]);
+                break;
+            }
+            case 2: {
+                expect(kwargs.groupby).toEqual(["bar"]);
+                break;
+            }
         }
     });
 
@@ -16224,7 +16267,7 @@ test(`Properties: boolean`, async () => {
     await contains(`.o_field_cell.o_boolean_cell`).click();
     await contains(`.o_field_cell.o_boolean_cell input`).click();
     await contains(`.o_list_button_save`).click();
-    expect(`.o_field_cell.o_boolean_cell input`).not.toBeChecked();
+    expect(`.o_field_cell.o_boolean_cell input:first`).not.toBeChecked();
     expect.verifySteps(["web_save"]);
 });
 

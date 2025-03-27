@@ -20,7 +20,7 @@ class StockValuationLayer(models.Model):
     _rec_name = 'product_id'
 
     company_id = fields.Many2one('res.company', 'Company', readonly=True, required=True)
-    product_id = fields.Many2one('product.product', 'Product', readonly=True, required=True, check_company=True, auto_join=True)
+    product_id = fields.Many2one('product.product', 'Product', readonly=True, required=True, check_company=True, auto_join=True, index=True)
     categ_id = fields.Many2one('product.category', related='product_id.categ_id')
     product_tmpl_id = fields.Many2one('product.template', related='product_id.product_tmpl_id')
     quantity = fields.Float('Quantity', readonly=True, digits='Product Unit')
@@ -51,14 +51,13 @@ class StockValuationLayer(models.Model):
                 svl.warehouse_id = svl.stock_move_id.location_dest_id.warehouse_id.id
 
     def _search_warehouse_id(self, operator, value):
-        layer_ids = self.search([
+        return [
             '|',
             ('stock_move_id.location_dest_id.warehouse_id', operator, value),
             '&',
             ('stock_move_id.location_id.usage', '=', 'internal'),
             ('stock_move_id.location_id.warehouse_id', operator, value),
-        ]).ids
-        return [('id', 'in', layer_ids)]
+        ]
 
     def _validate_accounting_entries(self):
         am_vals = []

@@ -44,6 +44,8 @@ class _Relational(Field[M], typing.Generic[M]):
         if records is None or len(records._ids) <= 1:
             return super().__get__(records, owner)
 
+        records._check_field_access(self, 'read')
+
         # multi-record case
         if self.compute and self.store:
             self.recompute(records)
@@ -676,9 +678,6 @@ class _RelationalMulti(_Relational[M], typing.Generic[M]):
         comodel = model.env[self.comodel_name]
 
         # update the operator to 'any'
-        if operator in ('=', '!='):
-            operator = 'in' if operator == '=' else 'not in'
-            value = [value]
         if operator in ('in', 'not in'):
             operator = 'any' if operator == 'in' else 'not any'
         assert operator in ('any', 'not any'), \

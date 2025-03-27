@@ -6,6 +6,7 @@ from pytz import utc
 from random import randint
 
 from odoo import api, fields, models, tools
+from odoo.exceptions import UserError
 from odoo.osv import expression
 from odoo.tools.mail import email_normalize, is_html_empty
 from odoo.tools.translate import _, html_translate
@@ -30,7 +31,7 @@ class EventTrack(models.Model):
 
     # description
     name = fields.Char('Title', required=True, translate=True)
-    event_id = fields.Many2one('event.event', 'Event', required=True)
+    event_id = fields.Many2one('event.event', 'Event', required=True, index=True)
     active = fields.Boolean(default=True)
     user_id = fields.Many2one('res.users', 'Responsible', tracking=True, default=lambda self: self.env.user)
     company_id = fields.Many2one('res.company', related='event_id.company_id')
@@ -360,8 +361,8 @@ class EventTrack(models.Model):
             track.wishlist_visitor_count = len(visitor_ids_map.get(track.id, []))
 
     def _search_wishlist_visitor_ids(self, operator, operand):
-        if operator == "not in":
-            raise NotImplementedError("Unsupported 'Not In' operation on track wishlist visitors")
+        if operator in ('not in', 'not any'):
+            raise UserError(self.env._("Unsupported 'Not In' operation on track wishlist visitors"))
 
         track_visitors = self.env['event.track.visitor'].sudo().search([
             ('visitor_id', operator, operand),

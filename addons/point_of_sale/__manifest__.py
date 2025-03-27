@@ -3,11 +3,11 @@
 
 {
     'name': 'Point of Sale',
-    'version': '1.0.1',
+    'version': '1.0.2',
     'category': 'Sales/Point of Sale',
     'sequence': 40,
     'summary': 'Handle checkouts and payments for shops and restaurants.',
-    'depends': ['resource', 'stock_account', 'barcodes', 'web_editor', 'digest', 'phone_validation'],
+    'depends': ['resource', 'stock_account', 'barcodes', 'web_editor', 'digest', 'phone_validation', 'partner_autocomplete'],
     'uninstall_hook': 'uninstall_hook',
     'data': [
         'security/point_of_sale_security.xml',
@@ -95,8 +95,7 @@
         ],
         'web.assets_unit_tests': [
             # for the related_models.test.js
-            'point_of_sale/static/src/app/models/utils/recursive_serialization.js',
-            'point_of_sale/static/src/app/models/related_models.js',
+            'point_of_sale/static/src/app/models/related_models/**/*',
             # for the data_service.test.js
             'point_of_sale/static/src/app/models/utils/indexed_db.js',
             'point_of_sale/static/src/app/models/data_service_options.js',
@@ -201,6 +200,7 @@
             ('remove', 'web/static/src/webclient/actions/reports/layout_assets/**/*'),
             ('remove', 'web/static/src/webclient/actions/**/*css'),
             'point_of_sale/static/src/customer_display/customer_display_adapter.js',
+            'partner_autocomplete/static/src/**/*',
         ],
         'point_of_sale.base_tests': [
             "web/static/lib/hoot-dom/**/*",

@@ -1,7 +1,7 @@
 import { registry } from "@web/core/registry";
 import { Base } from "./related_models";
 import { _t } from "@web/core/l10n/translation";
-import { random5Chars, uuidv4 } from "@point_of_sale/utils";
+import { random5Chars } from "@point_of_sale/utils";
 import { computeComboItems } from "./utils/compute_combo_items";
 import { accountTaxHelpers } from "@account/helpers/account_tax";
 import { localization } from "@web/core/l10n/localization";
@@ -27,20 +27,23 @@ export class PosOrder extends Base {
         this.nb_print = vals.nb_print || 0;
         this.to_invoice = vals.to_invoice || false;
         this.state = vals.state || "draft";
-        this.uuid = vals.uuid ? vals.uuid : uuidv4();
-        this.last_order_preparation_change = vals.last_order_preparation_change
-            ? JSON.parse(vals.last_order_preparation_change)
-            : {
-                  lines: {},
-                  general_customer_note: "",
-                  internal_note: "",
-                  sittingMode: 0,
-              };
+
+        if (!vals.last_order_preparation_change) {
+            this.last_order_preparation_change = {
+                lines: {},
+                general_customer_note: "",
+                internal_note: "",
+                sittingMode: 0,
+            };
+        } else {
+            this.last_order_preparation_change =
+                typeof vals.last_order_preparation_change === "object"
+                    ? vals.last_order_preparation_change
+                    : JSON.parse(vals.last_order_preparation_change);
+        }
+
         this.general_customer_note = vals.general_customer_note || "";
         this.internal_note = vals.internal_note || "";
-        if (!vals.lines) {
-            this.lines = [];
-        }
 
         if (!this.date_order) {
             this.date_order = DateTime.now();
@@ -48,25 +51,26 @@ export class PosOrder extends Base {
         if (!this.user_id && this.models["res.users"]) {
             this.user_id = this.user;
         }
+    }
 
+    initState() {
+        super.initState();
         // !!Keep all uiState in one object!!
-        if (!this.uiState) {
-            this.uiState = {
-                unmerge: {},
-                lastPrint: false,
-                lineToRefund: {},
-                displayed: true,
-                booked: false,
-                screen_data: {},
-                selected_orderline_uuid: undefined,
-                selected_paymentline_uuid: undefined,
-                locked: this.state !== "draft",
-                // Pos restaurant specific to most proper way is to override this
-                TipScreen: {
-                    inputTipAmount: "",
-                },
-            };
-        }
+        this.uiState = {
+            unmerge: {},
+            lastPrint: false,
+            lineToRefund: {},
+            displayed: true,
+            booked: false,
+            screen_data: {},
+            selected_orderline_uuid: undefined,
+            selected_paymentline_uuid: undefined,
+            locked: this.state !== "draft",
+            // Pos restaurant specific to most proper way is to override this
+            TipScreen: {
+                inputTipAmount: "",
+            },
+        };
     }
 
     get user() {
@@ -338,49 +342,6 @@ export class PosOrder extends Base {
             }
         }
         return null;
-    }
-
-    getOrderlinesGroupedByTaxIds() {
-        const orderlines_by_tax_group = {};
-        const lines = this.getOrderlines();
-        for (const line of lines) {
-            const tax_group = this._getTaxGroupKey(line);
-            if (!(tax_group in orderlines_by_tax_group)) {
-                orderlines_by_tax_group[tax_group] = [];
-            }
-            orderlines_by_tax_group[tax_group].push(line);
-        }
-        return orderlines_by_tax_group;
-    }
-
-    _getTaxGroupKey(line) {
-        return line
-            ._getProductTaxesAfterFiscalPosition()
-            .map((tax) => tax.id)
-            .join(",");
-    }
-
-    /**
-     * Calculate the amount that will be used as a base in order to apply a downpayment or discount product in PoS.
-     * In our calculation we take into account taxes that are included in the price.
-     *
-     * @param  {String} tax_ids a string of the tax ids that are applied on the orderlines, in csv format
-     * e.g. if taxes with ids 2, 5 and 6 are applied tax_ids will be "2,5,6"
-     * @param  {Orderline[]} lines an srray of Orderlines
-     * @return {Number} the base amount on which we will apply a percentile reduction
-     */
-    calculateBaseAmount(lines) {
-        const base_amount = lines.reduce(
-            (sum, line) =>
-                sum +
-                line.getAllPrices().priceWithTax -
-                line
-                    .getAllPrices()
-                    .taxesData.filter((taxData) => !taxData.tax.price_include)
-                    .reduce((sum, taxData) => (sum += taxData.tax_amount_currency), 0),
-            0
-        );
-        return base_amount;
     }
 
     getLastOrderline() {
@@ -919,18 +880,17 @@ export class PosOrder extends Base {
         return this.lines;
     }
 
-    serialize() {
-        const data = super.serialize(...arguments);
-
+    serializeForORM() {
+        const data = super.serializeForORM();
         if (
             data.last_order_preparation_change &&
             typeof data.last_order_preparation_change === "object"
         ) {
             data.last_order_preparation_change = JSON.stringify(data.last_order_preparation_change);
         }
-
         return data;
     }
+
     getCustomerDisplayData() {
         return {
             lines: this.getSortedOrderlines().map((l) => ({
@@ -991,11 +951,9 @@ export class PosOrder extends Base {
     }
     setGeneralCustomerNote(note) {
         this.general_customer_note = note || "";
-        this.setDirty();
     }
     setInternalNote(note) {
-        this.internal_note = note || "[]";
-        this.setDirty();
+        this.internal_note = note || "";
     }
 
     get orderChange() {

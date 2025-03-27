@@ -351,7 +351,7 @@ export class LinkPlugin extends Plugin {
      * @param {HTMLElement} [linkElement]
      */
     openLinkTools(linkElement, type) {
-        this.closeLinkTools();
+        this.overlay.close();
         if (!this.isLinkAllowedOnSelection()) {
             return this.services.notification.add(
                 _t("Unable to create a link on the current selection."),
@@ -471,7 +471,7 @@ export class LinkPlugin extends Plugin {
             recordInfo: this.config.getRecordInfo?.() || {},
             canEdit:
                 !this.linkInDocument || !this.linkInDocument.classList.contains("o_link_readonly"),
-            canUpload: !this.config.disableFile,
+            canUpload: this.config.allowFile,
             onUpload: this.config.onAttachmentChange,
             type: this.type || "",
         };

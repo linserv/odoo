@@ -49,7 +49,7 @@ class StockWarehouseOrderpoint(models.Model):
         domain=("[('product_tmpl_id', '=', context.get('active_id', False))] if context.get('active_model') == 'product.template' else"
             " [('id', '=', context.get('default_product_id', False))] if context.get('default_product_id') else"
             " [('is_storable', '=', True)]"),
-        ondelete='cascade', required=True, check_company=True)
+        ondelete='cascade', required=True, check_company=True, index=True)
     product_category_id = fields.Many2one('product.category', name='Product Category', related='product_id.categ_id')
     product_uom = fields.Many2one(
         'uom.uom', 'Unit', related='product_id.uom_id')
@@ -492,7 +492,7 @@ class StockWarehouseOrderpoint(models.Model):
         rounding = self.env['decimal.precision'].precision_get('Product Unit')
         # Group orderpoint by product-location
         orderpoint_by_product_location = self.env['stock.warehouse.orderpoint']._read_group(
-            [('id', 'in', orderpoints.ids)],
+            [('id', 'in', orderpoints.ids), ('product_id', 'in', product_ids)],
             ['product_id', 'location_id'],
             ['id:recordset'])
         orderpoint_by_product_location = {
@@ -511,7 +511,7 @@ class StockWarehouseOrderpoint(models.Model):
 
         # With archived ones to avoid `product_location_check` SQL constraints
         orderpoint_by_product_location = self.env['stock.warehouse.orderpoint'].with_context(active_test=False)._read_group(
-            [('id', 'in', orderpoints.ids)],
+            [('id', 'in', orderpoints.ids), ('product_id', 'in', product_ids)],
             ['product_id', 'location_id'],
             ['id:recordset'])
         orderpoint_by_product_location = {

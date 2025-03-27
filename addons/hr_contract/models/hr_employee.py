@@ -20,6 +20,8 @@ class HrEmployeePublic(models.Model):
         return super()._get_manager_only_fields() + ['first_contract_date']
 
     def _search_first_contract_date(self, operator, value):
+        if operator in expression.NEGATIVE_TERM_OPERATORS:
+            return NotImplemented
         employees = self.env['hr.employee'].sudo().search([('id', 'child_of', self.env.user.employee_id.ids), ('first_contract_date', operator, value)])
         return [('id', 'in', employees.ids)]
 
@@ -313,6 +315,7 @@ class HrEmployee(models.Model):
                 # display current resource_calendar_id as the default one if it exists (if False, fully flexible calendar)
                 'default_resource_calendar_id': self.resource_calendar_id.id or False,
                 'from_action_open_contract': True,
+                'default_hr_responsible_id': self.env.uid,
             }
             action['target'] = 'current'
             return action

@@ -76,7 +76,7 @@ export class SelfOrder extends Reactive {
 
         this.onNotified = getOnNotified(this.bus, this.access_token);
         this.onNotified("PRODUCT_CHANGED", (payload) => {
-            this.models.loadData(payload);
+            this.models.connectNewData(payload);
         });
         if (this.config.self_ordering_mode === "kiosk") {
             this.onNotified("STATUS", ({ status }) => {
@@ -91,7 +91,7 @@ export class SelfOrder extends Reactive {
             });
             this.onNotified("PAYMENT_STATUS", ({ payment_result, data }) => {
                 if (payment_result === "Success") {
-                    this.models.loadData(data);
+                    this.models.connectNewData(data);
                     const order = this.models["pos.order"].find(
                         (o) => o.access_token === data["pos.order"][0].access_token
                     );
@@ -156,7 +156,7 @@ export class SelfOrder extends Reactive {
 
         const handleMessage = (data) => {
             let message = "";
-            this.models.loadData(data);
+            this.models.connectNewData(data);
             const oUpdated = data["pos.order"].find((o) => o.uuid === this.selectedOrderUuid);
 
             if (["paid", "done"].includes(oUpdated?.state)) {
@@ -319,7 +319,7 @@ export class SelfOrder extends Reactive {
                     combo_item_id: comboItem.combo_item_id,
                     price_unit: comboItem.price_unit,
                     order_id: this.currentOrder,
-                    qty: 1,
+                    qty: values.qty,
                     attribute_value_ids: comboItem.attribute_value_ids?.map((attr) => [
                         "link",
                         attr,
@@ -353,11 +353,8 @@ export class SelfOrder extends Reactive {
         );
 
         if (lineToMerge) {
-            lineToMerge.setDirty();
             lineToMerge.qty += newLine.qty;
             newLine.delete();
-        } else {
-            newLine.setDirty();
         }
     }
     async confirmationPage(screen_mode, device, access_token = "") {
@@ -386,6 +383,7 @@ export class SelfOrder extends Reactive {
         ); // Stripe, Adyen, Online
 
         let order = this.currentOrder;
+        const orderHasChanges = Object.keys(order.changes).length > 0;
 
         // Stand number page will recall this function after the stand number is set
         if (
@@ -409,7 +407,7 @@ export class SelfOrder extends Reactive {
         if (paymentMethods.length === 0) {
             let screenMode = "pay";
 
-            if (Object.keys(order.changes).length > 0) {
+            if (orderHasChanges) {
                 screenMode = payAfter === "meal" ? "order" : "pay";
             }
 
@@ -419,7 +417,7 @@ export class SelfOrder extends Reactive {
             // and we redirect him to the confirmation page, the next time he validate his order
             // if the order is already saved on the server, we redirect him to the payment page
             // In each mode, we redirect the customer to the payment page directly
-            if (payAfter === "meal" && Object.keys(order.changes).length > 0) {
+            if (payAfter === "meal" && orderHasChanges) {
                 await this.sendDraftOrderToServer();
                 this.confirmationPage("order", device, order.access_token);
             } else {
@@ -676,12 +674,12 @@ export class SelfOrder extends Reactive {
             const data = await rpc(
                 `/pos-self-order/process-order/${this.config.self_ordering_mode}`,
                 {
-                    order: this.currentOrder.serialize({ orm: true }),
+                    order: this.currentOrder.serializeForORM(),
                     access_token: this.access_token,
                     table_identifier: this.currentOrder?.table_id?.identifier || false,
                 }
             );
-            this.models.loadData(data);
+            this.models.connectNewData(data);
             this.data.synchronizeLocalDataInIndexedDB();
             for (const order of data["pos.order"]) {
                 this.subscribeToOrderChannel(order);
@@ -714,7 +712,7 @@ export class SelfOrder extends Reactive {
                 access_token: this.access_token,
                 order_access_tokens: accessTokens,
             });
-            this.models.loadData(data);
+            this.models.connectNewData(data);
             this.selectedOrderUuid = null;
         } catch (error) {
             this.handleErrorNotification(
