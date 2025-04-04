@@ -19,7 +19,6 @@ class PurchaseOrder(models.Model):
     _name = 'purchase.order'
     _inherit = ['portal.mixin', 'product.catalog.mixin', 'mail.thread', 'mail.activity.mixin']
     _description = "Purchase Order"
-    _mail_thread_customer = True
     _rec_names_search = ['name', 'partner_ref']
     _order = 'priority desc, id desc'
 
@@ -251,6 +250,8 @@ class PurchaseOrder(models.Model):
                 currency=order.currency_id or order.company_id.currency_id,
                 company=order.company_id,
             )
+            if order.currency_id != order.company_currency_id:
+                order.tax_totals['amount_total_cc'] = f"({formatLang(self.env, order.amount_total_cc, currency_obj=self.company_currency_id)})"
 
     @api.depends('company_id.account_fiscal_country_id', 'fiscal_position_id.country_id', 'fiscal_position_id.foreign_vat')
     def _compute_tax_country_id(self):
@@ -521,7 +522,7 @@ class PurchaseOrder(models.Model):
         return action
 
     def print_quotation(self):
-        self.write({'state': "sent"})
+        self.filtered(lambda po: po.state == 'draft').write({'state': "sent"})
         return self.env.ref('purchase.report_purchase_quotation').report_action(self)
 
     def button_approve(self, force=False):
@@ -545,8 +546,6 @@ class PurchaseOrder(models.Model):
                 order.button_approve()
             else:
                 order.write({'state': 'to approve'})
-            if order.partner_id not in order.message_partner_ids:
-                order.message_subscribe([order.partner_id.id])
         return True
 
     def button_cancel(self):
@@ -1059,7 +1058,7 @@ class PurchaseOrder(models.Model):
             res[product.id] |= self._get_product_price_and_data(product)
         return res
 
-    def _get_product_catalog_record_lines(self, product_ids, child_field=False):
+    def _get_product_catalog_record_lines(self, product_ids, **kwargs):
         grouped_lines = defaultdict(lambda: self.env['purchase.order.line'])
         for line in self.order_line:
             if line.display_type or line.product_id.id not in product_ids:

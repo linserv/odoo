@@ -29,6 +29,7 @@
 
         # QWeb templates
         'views/delivery_form_templates.xml',
+        'views/gmc_templates.xml',
         'views/templates.xml',
 
         # Model views.
@@ -39,6 +40,7 @@
         'views/product_attribute_views.xml',
         'views/product_document_views.xml',
         'views/product_image_views.xml',
+        'views/product_pricelist_item_views.xml',
         'views/product_pricelist_views.xml',
         'views/product_product_add.xml',
         'views/product_public_category_views.xml',
@@ -164,6 +166,7 @@
         'website.assets_editor': [
             'website_sale/static/src/js/systray_items/*.js',
             'website_sale/static/src/xml/website_sale_utils.xml',
+            'website_sale/static/src/xml/website_sale_editor_previews.xml',
         ],
         'website.backend_assets_all_wysiwyg': [
             'website_sale/static/src/js/components/wysiwyg_adapter/wysiwyg_adapter.js',

@@ -2,14 +2,15 @@ import {
     click,
     contains,
     defineMailModels,
+    listenStoreFetch,
     mockGetMedia,
-    onRpcBefore,
     openDiscuss,
     patchUiSize,
     SIZES,
     start,
     startServer,
     triggerEvents,
+    waitStoreFetch,
 } from "@mail/../tests/mail_test_helpers";
 import { mailDataHelpers } from "@mail/../tests/mock_server/mail_mock_server";
 import {
@@ -165,9 +166,6 @@ test("should display invitations", async () => {
         channel_member_id: memberId,
         channel_id: channelId,
     });
-    onRpcBefore("/web/dataset/call_kw/ir.http/lazy_session_info", () => {
-        asyncStep(`init_messaging`);
-    });
     mockService("mail.sound_effects", {
         play(name) {
             asyncStep(`play - ${name}`);
@@ -176,8 +174,9 @@ test("should display invitations", async () => {
             asyncStep(`stop - ${name}`);
         },
     });
+    listenStoreFetch("init_messaging");
     await start();
-    await waitForSteps([`init_messaging`]);
+    await waitStoreFetch("init_messaging");
     const [partner] = pyEnv["res.partner"].read(serverState.partnerId);
     // send after init_messaging because bus subscription is done after init_messaging
     pyEnv["bus.bus"]._sendone(
@@ -640,4 +639,28 @@ test("automatically cancel incoming call after some time", async () => {
     await contains(".o-discuss-CallInvitation");
     await advanceTime(30_000);
     await contains(".o-discuss-CallInvitation", { count: 0 });
+});
+
+test("should also invite to the call when inviting to the channel", async () => {
+    mockGetMedia();
+    const pyEnv = await startServer();
+    const partnerId = pyEnv["res.partner"].create({
+        email: "testpartner@odoo.com",
+        name: "TestPartner",
+    });
+    pyEnv["res.users"].create({ partner_id: partnerId });
+    const channelId = pyEnv["discuss.channel"].create({
+        name: "TestChanel",
+        channel_member_ids: [Command.create({ partner_id: serverState.partnerId })],
+        channel_type: "channel",
+    });
+    await start();
+    await openDiscuss(channelId);
+    await click("[title='Start a Call']");
+    await contains(".o-discuss-Call");
+    await click(".o-mail-Discuss-header button[title='Invite People']");
+    await contains(".o-discuss-ChannelInvitation");
+    await click(".o-discuss-ChannelInvitation-selectable", { text: "TestPartner" });
+    await click("[title='Invite to Channel']:enabled");
+    await contains(".o-discuss-CallParticipantCard.o-isInvitation");
 });

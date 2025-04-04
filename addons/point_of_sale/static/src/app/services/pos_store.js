@@ -776,12 +776,14 @@ export class PosStore extends WithLazyGetterTrap {
             }
 
             // Product template of combo should not have more than 1 variant.
+            const [childLineConf, comboExtraLines] = payload;
             const comboPrices = computeComboItems(
                 values.product_tmpl_id.product_variant_ids[0],
-                payload,
+                childLineConf,
                 order.pricelist_id,
                 this.data.models["decimal.precision"].getAll(),
-                this.data.models["product.template.attribute.value"].getAllBy("id")
+                this.data.models["product.template.attribute.value"].getAllBy("id"),
+                comboExtraLines
             );
 
             values.combo_line_ids = comboPrices.map((comboItem) => [
@@ -796,7 +798,7 @@ export class PosStore extends WithLazyGetterTrap {
                     price_unit: comboItem.price_unit,
                     price_type: "manual",
                     order_id: order,
-                    qty: values.qty,
+                    qty: comboItem.qty,
                     attribute_value_ids: comboItem.attribute_value_ids?.map((attr) => [
                         "link",
                         attr,
@@ -820,8 +822,8 @@ export class PosStore extends WithLazyGetterTrap {
         // ---
         // This actions cannot be handled inside pos_order.js or pos_order_line.js
         const code = opts.code;
+        let pack_lot_ids = {};
         if (values.product_tmpl_id.isTracked() && (configure || code)) {
-            let pack_lot_ids = {};
             const packLotLinesToEdit =
                 (!values.product_tmpl_id.isAllowOnlyOneLot() &&
                     this.getOrder()
@@ -926,6 +928,14 @@ export class PosStore extends WithLazyGetterTrap {
         }
 
         this.numberBuffer.reset();
+
+        if (values.product_id.tracking === "serial") {
+            this.selectedOrder.getSelectedOrderline().setPackLotLines({
+                modifiedPackLotLines: pack_lot_ids.modifiedPackLotLines ?? [],
+                newPackLotLines: pack_lot_ids.newPackLotLines ?? [],
+                setQuantity: true,
+            });
+        }
 
         // FIXME: Put this in an effect so that we don't have to call it manually.
         order.recomputeOrderData();
@@ -1765,6 +1775,9 @@ export class PosStore extends WithLazyGetterTrap {
             );
         });
     }
+    editPartnerContext(partner) {
+        return {};
+    }
     /**
      * @param {import("@point_of_sale/app/models/res_partner").ResPartner?} partner leave undefined to create a new partner
      */
@@ -1774,6 +1787,7 @@ export class PosStore extends WithLazyGetterTrap {
             "point_of_sale.res_partner_action_edit_pos",
             {
                 props: { resId: partner?.id },
+                additionalContext: this.editPartnerContext(),
             }
         );
         const newPartner = await this.data.read("res.partner", record.config.resIds);
@@ -1807,8 +1821,8 @@ export class PosStore extends WithLazyGetterTrap {
     async allowProductCreation() {
         return await user.hasGroup("base.group_system");
     }
-    async orderDetails(order) {
-        this.dialog.add(FormViewDialog, {
+    orderDetailsProps(order) {
+        return {
             resModel: "pos.order",
             resId: order.id,
             onRecordSaved: async (record) => {
@@ -1821,7 +1835,10 @@ export class PosStore extends WithLazyGetterTrap {
                     type: "ir.actions.act_window_close",
                 });
             },
-        });
+        };
+    }
+    async orderDetails(order) {
+        this.dialog.add(FormViewDialog, this.orderDetailsProps(order));
     }
     async closePos() {
         this._resetConnectedCashier();
@@ -2222,19 +2239,32 @@ export class PosStore extends WithLazyGetterTrap {
               });
     }
 
+    sortByWordIndex(products, words) {
+        return products.sort((a, b) => {
+            const nameA = unaccent(a.name);
+            const nameB = unaccent(b.name);
+
+            const indexA = nameA.indexOf(words);
+            const indexB = nameB.indexOf(words);
+            return (
+                (indexA === -1) - (indexB === -1) || indexA - indexB || nameA.localeCompare(nameB)
+            );
+        });
+    }
+
     getProductsBySearchWord(searchWord, products) {
         const words = unaccent(searchWord.toLowerCase(), false);
         const exactMatches = products.filter((product) => product.exactMatch(words));
 
         if (exactMatches.length > 0 && words.length > 2) {
-            return exactMatches;
+            return this.sortByWordIndex(exactMatches, words);
         }
 
         const matches = products.filter((p) =>
             unaccent(p.searchString, false).toLowerCase().includes(words)
         );
 
-        return Array.from(new Set([...exactMatches, ...matches]));
+        return this.sortByWordIndex(Array.from(new Set([...exactMatches, ...matches])), words);
     }
 
     getPaymentMethodDisplayText(pm, order) {

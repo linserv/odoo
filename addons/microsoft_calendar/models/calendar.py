@@ -8,6 +8,7 @@ from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 
 from odoo import api, fields, models, _
+from odoo.osv import expression
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import email_normalize
 from odoo.osv import expression
@@ -281,16 +282,23 @@ class CalendarEvent(models.Model):
         day_range = int(ICP.get_param('microsoft_calendar.sync.range_days', default=365))
         lower_bound = fields.Datetime.subtract(fields.Datetime.now(), days=day_range)
         upper_bound = fields.Datetime.add(fields.Datetime.now(), days=day_range)
+
         # Define 'custom_lower_bound_range' param for limiting old events updates in Odoo and avoid spam on Microsoft.
         custom_lower_bound_range = ICP.get_param('microsoft_calendar.sync.lower_bound_range')
         if custom_lower_bound_range:
             lower_bound = fields.Datetime.subtract(fields.Datetime.now(), days=int(custom_lower_bound_range))
         domain = [
-            ('partner_ids.user_ids', 'in', self.env.user.id),
+            ('partner_ids.user_ids', 'in', [self.env.user.id]),
             ('stop', '>', lower_bound),
             ('start', '<', upper_bound),
             '!', '&', '&', ('recurrency', '=', True), ('recurrence_id', '!=', False), ('follow_recurrence', '=', True)
         ]
+
+        # Synchronize events that were created after the first synchronization date, when applicable.
+        first_synchronization_date = ICP.get_param('microsoft_calendar.sync.first_synchronization_date')
+        if first_synchronization_date:
+            domain = expression.AND([domain, [('create_date', '>=', first_synchronization_date)]])
+
         return self._extend_microsoft_domain(domain)
 
 
@@ -488,7 +496,7 @@ class CalendarEvent(models.Model):
             return 'organizer'
         return ATTENDEE_CONVERTER_O2M.get(attendee.state, 'None')
 
-    def _microsoft_values(self, fields_to_sync, initial_values={}):
+    def _microsoft_values(self, fields_to_sync, initial_values=()):
         values = dict(initial_values)
         if not fields_to_sync:
             return values
@@ -643,8 +651,8 @@ class CalendarEvent(models.Model):
                                     "\nEither update the events/attendees or archive these events %(details)s:"
                                     "\n%(invalid_events)s", details=details, invalid_events=invalid_events))
 
-    def _microsoft_values_occurence(self, initial_values={}):
-        values = initial_values
+    def _microsoft_values_occurence(self, initial_values=()):
+        values = dict(initial_values)
         values['type'] = 'occurrence'
 
         if self.allday:

@@ -251,7 +251,7 @@
                 <setting
                     id="abandoned_carts_setting"
                     string="Automatically send abandoned checkout emails"
-                    documentation="https://www.odoo.com/documentation/18.0/applications/websites/ecommerce/ecommerce_management/order_handling.html#abandoned-cart"
+                    documentation="/applications/websites/ecommerce/ecommerce_management/order_handling.html#abandoned-cart"
                     help="Mail only sent to signed in customers with items available for sale in carts created after the feature activation.">
                     <field name="send_abandoned_cart_email"/>
 
@@ -297,7 +297,21 @@
                     <field name="module_website_sale_autocomplete"/>
                 </setting>
             </setting>
-
+            <setting id="robots_setting" position="after">
+                <setting
+                    id="google_merchant_center_setting"
+                    help="Connect your eCommerce to Google Merchant Center via a product file."
+                    documentation="/applications/websites/ecommerce/products/catalog.html#multi-channel-promotion"
+                >
+                    <field name="enabled_gmc_src"/>
+                    <field
+                        name="gmc_xml_url"
+                        string="Copy file link"
+                        widget="CopyClipboardButton"
+                        invisible="not enabled_gmc_src"
+                    />
+                </setting>
+            </setting>
         </field>
     </record>
 </odoo>

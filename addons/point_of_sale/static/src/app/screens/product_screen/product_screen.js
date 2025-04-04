@@ -200,17 +200,12 @@ export class ProductScreen extends Component {
         }
 
         if (!product) {
-            const records = await this.pos.data.callRelated(
-                "pos.session",
-                "find_product_by_barcode",
-                [odoo.pos_session_id, code.base_code, this.pos.config.id]
-            );
+            await this.pos.data.callRelated("pos.session", "find_product_by_barcode", [
+                odoo.pos_session_id,
+                code.base_code,
+                this.pos.config.id,
+            ]);
             await this.pos.processProductAttributes();
-
-            if (records && records["product.product"].length > 0) {
-                product = records["product.product"][0];
-                await this.pos._loadMissingPricelistItems([product]);
-            }
         }
 
         return product;
@@ -329,14 +324,8 @@ export class ProductScreen extends Component {
         }
     }
 
-    async loadProductFromDB() {
-        const { searchProductWord } = this.pos;
-        if (!searchProductWord) {
-            return;
-        }
-
-        this.pos.setSelectedCategory(0);
-        const domain = [
+    loadProductFromDBDomain(searchProductWord) {
+        return [
             "|",
             "|",
             ["name", "ilike", searchProductWord],
@@ -345,6 +334,16 @@ export class ProductScreen extends Component {
             ["available_in_pos", "=", true],
             ["sale_ok", "=", true],
         ];
+    }
+
+    async loadProductFromDB() {
+        const { searchProductWord } = this.pos;
+        if (!searchProductWord) {
+            return;
+        }
+
+        this.pos.setSelectedCategory(0);
+        const domain = this.loadProductFromDBDomain(searchProductWord);
 
         const { limit_categories, iface_available_categ_ids } = this.pos.config;
         if (limit_categories && iface_available_categ_ids.length > 0) {

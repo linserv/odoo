@@ -282,10 +282,6 @@ class SaleOrder(models.Model):
             delivery_method = self._get_preferred_delivery_method(delivery_methods)
             self._set_delivery_method(delivery_method)
 
-        if 'partner_id' in fnames:
-            # Only add the main partner as follower of the order
-            self._message_subscribe([partner_id])
-
     def _cart_add(self, product_id:int, quantity:int|float=1.0, **kwargs):
         """Add quantity of the given product to the current sales order.
 
@@ -327,7 +323,7 @@ class SaleOrder(models.Model):
         }
 
     def _cart_find_product_line(
-        self, product_id, linked_line_id=False, no_variant_attribute_value_ids=None, **kwargs
+        self, product_id, *, linked_line_id=False, no_variant_attribute_value_ids=None, **kwargs
     ):
         """Find the cart line matching the given parameters.
 
@@ -472,6 +468,7 @@ class SaleOrder(models.Model):
         self,
         product_id,
         quantity,
+        *,
         linked_line_id=False,
         no_variant_attribute_value_ids=None,
         product_custom_attribute_values=None,

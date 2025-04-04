@@ -504,6 +504,8 @@ class ProductTemplate(models.Model):
             'list_price': max(pricelist_price, price_before_discount),
             'price': pricelist_price,
             'has_discounted_price': has_discounted_price,
+            'discount_start_date': pricelist_item.date_start,
+            'discount_end_date': pricelist_item.date_end,
         }
 
         if (
@@ -560,6 +562,11 @@ class ProductTemplate(models.Model):
                     combination_info['price']
                 ),
             })
+
+        if combination_info['prevent_zero_price_sale']:
+            # If price is zero and prevent_zero_price_sale is enabled we don't want to send any
+            # price information regarding the product
+            combination_info['compare_list_price'] = 0
 
         return combination_info
 

@@ -1016,6 +1016,20 @@ class TestUi(TestPointOfSaleHttpCommon):
         #   - the combo lines are correctly stored in and restored from local storage
         #   - the combo lines are correctly shared between the pos configs ( in cross ordering )
 
+    def test_07_product_combo_max_free_qty(self):
+        """ Test the max free quantity of a product combo."""
+        setup_product_combo_items(self)
+        self.office_combo.combo_ids[0].write({
+            'qty_free': 2,
+            'qty_max': 2,
+        })
+        self.office_combo.combo_ids[1].write({
+            'qty_free': 2,
+            'qty_max': 5,
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('ProductComboMaxFreeQtyTour')
+
     def test_07_pos_barcodes_scan(self):
         barcode_rule = self.env.ref("point_of_sale.barcode_rule_client")
         barcode_rule.pattern = barcode_rule.pattern + "|234"
@@ -1187,6 +1201,10 @@ class TestUi(TestPointOfSaleHttpCommon):
         })
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'ReceiptTrackingMethodTour', login="pos_user")
+
+    def test_printed_receipt_tour(self):
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour("point_of_sale.test_printed_receipt_tour")
 
     def test_limited_product_pricelist_loading(self):
         self.env['ir.config_parameter'].sudo().set_param('point_of_sale.limited_product_count', '1')
@@ -1778,6 +1796,15 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.assertEqual(len(self.main_pos_config.current_session_id.statement_line_ids), 1, "There should be one cash in/out statement line")
         self.assertEqual(self.main_pos_config.current_session_id.statement_line_ids[0].amount, -5, "The cash in/out amount should be -5")
 
+    def test_add_multiple_serials_at_once(self):
+        self.product_a = self.env['product.product'].create({
+            'name': 'Product A',
+            'is_storable': True,
+            'tracking': 'serial',
+            'available_in_pos': True,
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, "AddMultipleSerialsAtOnce", login="pos_user")
 
 # This class just runs the same tests as above but with mobile emulation
 class MobileTestUi(TestUi):

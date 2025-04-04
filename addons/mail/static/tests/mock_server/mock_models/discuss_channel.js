@@ -106,9 +106,10 @@ export class DiscussChannel extends models.ServerModel {
     /**
      * @param {number[]} ids
      * @param {number[]} partner_ids
+     * @param {boolean} [invite_to_rtc_call=undefined]
      */
-    add_members(ids, partner_ids) {
-        const kwargs = getKwArgs(arguments, "ids", "partner_ids");
+    add_members(ids, partner_ids, invite_to_rtc_call) {
+        const kwargs = getKwArgs(arguments, "ids", "partner_ids", "invite_to_rtc_call");
         ids = kwargs.ids;
         delete kwargs.ids;
         partner_ids = kwargs.partner_ids || [];
@@ -171,6 +172,9 @@ export class DiscussChannel extends models.ServerModel {
                     member_count: DiscussChannelMember.search_count([
                         ["channel_id", "=", channel.id],
                     ]),
+                    invitedMembers: kwargs.invite_to_rtc_call
+                        ? [["ADD", insertedChannelMembers]]
+                        : false,
                 })
                     .add(DiscussChannelMember.browse(insertedChannelMembers))
                     .get_result()
@@ -222,7 +226,7 @@ export class DiscussChannel extends models.ServerModel {
         );
         const [partner] = ResPartner.read(this.env.user.partner_id);
         this._broadcast([id], [partner]);
-        return new mailDataHelpers.Store(DiscussChannel.browse(id)).get_result();
+        return DiscussChannel.browse(id);
     }
 
     /** @param {number[]} ids */
@@ -363,7 +367,7 @@ export class DiscussChannel extends models.ServerModel {
             [id],
             partners.map(({ id }) => id)
         );
-        return DiscussChannel.browse(id)[0];
+        return DiscussChannel.browse(id);
     }
 
     /** @param {number[]} ids */
@@ -567,7 +571,7 @@ export class DiscussChannel extends models.ServerModel {
             [id],
             partners.map((partner) => partner.id)
         );
-        return new mailDataHelpers.Store(DiscussChannel.browse(id)).get_result();
+        return DiscussChannel.browse(id);
     }
 
     _create_sub_channel(ids, from_message_id, name) {

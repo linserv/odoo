@@ -167,7 +167,10 @@ export function addLink(node, transformChildren) {
  * @param validRecords.partners {Array}
  * @return {ReturnType<markup>}
  */
-function generateMentionsLinks(body, { partners = [], threads = [], specialMentions = [] }) {
+function generateMentionsLinks(
+    body,
+    { partners = [], roles = [], threads = [], specialMentions = [] }
+) {
     const mentions = [];
     for (const partner of partners) {
         const placeholder = `@-mention-partner-${partner.id}`;
@@ -206,6 +209,18 @@ function generateMentionsLinks(body, { partners = [], threads = [], specialMenti
             `@${special}`,
             markup(`<a href="#" class="o-discuss-mention">@${htmlEscape(special)}</a>`)
         );
+    }
+    for (const role of roles) {
+        const placeholder = `@-mention-role-${role.id}`;
+        const text = `@${role.name}`;
+        mentions.push({
+            class: "o-discuss-mention",
+            id: role.id,
+            model: "res.role",
+            placeholder,
+            text,
+        });
+        body = htmlReplace(body, text, placeholder);
     }
     for (const mention of mentions) {
         const link = document.createElement("a");
@@ -318,7 +333,7 @@ export const EMOJI_REGEX = /\p{Emoji_Presentation}|\p{Emoji}\uFE0F|\u200d/gu;
  * @param {string|ReturnType<markup>} content
  * @returns {ReturnType<markup>}
  */
-export function wrapEmojisWithTitles(content) {
+export function decorateEmojis(content) {
     if (!loader.loaded || !content) {
         return content;
     }
@@ -337,7 +352,7 @@ export function wrapEmojisWithTitles(content) {
             span,
             htmlReplaceAll(node.textContent, loader.loaded.emojiRegex, (codepoints) =>
                 markup(
-                    `<span title="${htmlFormatList(
+                    `<span class="o-mail-emoji" title="${htmlFormatList(
                         loader.loaded.emojiValueToShortcodes[codepoints],
                         { style: "unit-narrow" }
                     )}">${htmlEscape(codepoints)}</span>`

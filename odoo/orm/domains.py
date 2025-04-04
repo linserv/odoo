@@ -819,16 +819,12 @@ class DomainCondition(Domain):
             parent_domain = DomainCondition(self.field_expr, self.operator, self.value)
             return DomainCondition(parent_fname, 'any', parent_domain)
 
-        # handle non-stored fields (replace by searchable/stored items)
-        if not field.store:
-            # check that we have just the field (basic optimization only)
-            if field.name != self.field_expr:
-                return self
-            # find the implementation of search and execute it
-            if not field.search:
-                _logger.error("Non-stored field %s cannot be searched.", field, stack_info=_logger.isEnabledFor(logging.DEBUG))
-                return _TRUE_DOMAIN
-            return self._optimize_field_search_method(model)
+        # handle searchable fields
+        if field.search and field.name == self.field_expr:
+            domain = self._optimize_field_search_method(model).optimize(model)
+            # the domain is optimized so that value data types are already comparable
+            if domain != self:
+                return domain
 
         # optimizations based on operator
         for opt in _OPTIMIZATIONS_BY_OPERATOR[self.operator]:
@@ -887,7 +883,7 @@ class DomainCondition(Domain):
             "Unsupported operator on %(field_label)s %(model_label)s in %(domain)s",
             domain=repr(self),
             field_label=self._field(model).get_description(model.env, ['string'])['string'],
-            model_name=f"{model.env['ir.model']._get(model._name).name!r} ({model._name})",
+            model_label=f"{model.env['ir.model']._get(model._name).name!r} ({model._name})",
         ))
 
     def _to_sql(self, model: BaseModel, alias: str, query: Query) -> SQL:
@@ -1167,7 +1163,7 @@ def _optimize_like_str(condition, model):
 @field_type_optimization(['many2one', 'one2many', 'many2many'])
 def _optimize_relational_name_search(condition, model):
     """Search relational using `display_name`.
-    
+
     When a relational field is compared to a string, we actually want to make
     a condition on the `display_name` field.
     Negative conditions are translated into a "not any" for consistency.

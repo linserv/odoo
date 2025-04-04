@@ -2,9 +2,9 @@ import { Record } from "@mail/core/common/record";
 import {
     EMOJI_REGEX,
     convertBrToLineBreak,
+    decorateEmojis,
     htmlToTextContentInline,
     prettifyMessageContent,
-    wrapEmojisWithTitles,
 } from "@mail/utils/common/format";
 import { createDocumentFragmentFromContent } from "@mail/utils/common/html";
 
@@ -39,7 +39,7 @@ export class Message extends Record {
             if (!this.store.emojiLoader.loaded) {
                 loadEmoji();
             }
-            return wrapEmojisWithTitles(this.body) ?? "";
+            return decorateEmojis(this.body) ?? "";
         },
         html: true,
     });
@@ -48,7 +48,7 @@ export class Message extends Record {
             if (!this.store.emojiLoader.loaded) {
                 loadEmoji();
             }
-            return wrapEmojisWithTitles(this.translationValue) ?? "";
+            return decorateEmojis(this.translationValue) ?? "";
         },
         html: true,
     });
@@ -357,18 +357,22 @@ export class Message extends Record {
         return false;
     }
 
-    get inlineBody() {
-        if (this.notificationType === "call") {
-            return _t("%(caller)s started a call", { caller: this.author.name });
-        }
-        if (this.isEmpty) {
-            return _t("This message has been removed");
-        }
-        if (!this.body) {
-            return "";
-        }
-        return htmlToTextContentInline(this.body);
-    }
+    inlineBody = Record.attr("", {
+        /** @this {import("models").Message} */
+        compute() {
+            if (this.notificationType === "call") {
+                return _t("%(caller)s started a call", { caller: this.author.name });
+            }
+            if (this.isEmpty) {
+                return _t("This message has been removed");
+            }
+            if (!this.body) {
+                return "";
+            }
+            return decorateEmojis(htmlToTextContentInline(this.body));
+        },
+        html: true,
+    });
 
     get notificationIcon() {
         switch (this.notificationType) {
@@ -403,30 +407,34 @@ export class Message extends Record {
         return this.isBodyEmpty && this.attachment_ids.length > 0;
     }
 
-    get previewText() {
-        if (!this.hasOnlyAttachments) {
-            return this.inlineBody || this.subtype_description;
-        }
-        const { attachment_ids: attachments } = this;
-        if (!attachments || attachments.length === 0) {
-            return "";
-        }
-        switch (attachments.length) {
-            case 1:
-                return attachments[0].previewName;
-            case 2:
-                return _t("%(file1)s and %(file2)s", {
-                    file1: attachments[0].previewName,
-                    file2: attachments[1].previewName,
-                    count: attachments.length - 1,
-                });
-            default:
-                return _t("%(file1)s and %(count)s other attachments", {
-                    file1: attachments[0].previewName,
-                    count: attachments.length - 1,
-                });
-        }
-    }
+    previewText = Record.attr("", {
+        /** @this {import("models").Message} */
+        compute() {
+            if (!this.hasOnlyAttachments) {
+                return this.inlineBody || this.subtype_description;
+            }
+            const { attachment_ids: attachments } = this;
+            if (!attachments || attachments.length === 0) {
+                return "";
+            }
+            switch (attachments.length) {
+                case 1:
+                    return attachments[0].previewName;
+                case 2:
+                    return _t("%(file1)s and %(file2)s", {
+                        file1: attachments[0].previewName,
+                        file2: attachments[1].previewName,
+                        count: attachments.length - 1,
+                    });
+                default:
+                    return _t("%(file1)s and %(count)s other attachments", {
+                        file1: attachments[0].previewName,
+                        count: attachments.length - 1,
+                    });
+            }
+        },
+        html: true,
+    });
 
     get previewIcon() {
         const { attachment_ids: attachments } = this;
@@ -476,13 +484,18 @@ export class Message extends Record {
         this.store.env.services.notification.add(notification, { type });
     }
 
-    async edit(body, attachments = [], { mentionedChannels = [], mentionedPartners = [] } = {}) {
+    async edit(
+        body,
+        attachments = [],
+        { mentionedChannels = [], mentionedPartners = [], mentionedRoles = [] } = {}
+    ) {
         if (convertBrToLineBreak(this.body) === body && attachments.length === 0) {
             return;
         }
         const validMentions = this.store.getMentionsFromText(body, {
             mentionedChannels,
             mentionedPartners,
+            mentionedRoles,
         });
         const hadLink = this.hasLink; // to remove old previews if message no longer contains any link
         const data = await rpc("/mail/message/update_content", {
@@ -495,11 +508,38 @@ export class Message extends Record {
             body: await prettifyMessageContent(body, { validMentions }),
             message_id: this.id,
             partner_ids: validMentions?.partners?.map((partner) => partner.id),
+            role_ids: validMentions?.roles?.map((role) => role.id),
             ...this.thread.rpcParams,
         });
         this.store.insert(data);
         if ((hadLink || this.hasLink) && this.store.hasLinkPreviewFeature) {
             rpc("/mail/link_preview", { message_id: this.id }, { silent: true });
+        }
+    }
+
+    /** @param {import("models").Thread} thread the thread where the message is being viewed when starting edition */
+    enterEditMode(thread) {
+        const text = convertBrToLineBreak(this.body);
+        if (thread?.messageInEdition) {
+            thread.messageInEdition.composer = undefined;
+        }
+        this.composer = {
+            mentionedPartners: this.recipients,
+            text,
+            selection: {
+                start: text.length,
+                end: text.length,
+                direction: "none",
+            },
+        };
+    }
+
+    /** @param {import("models").Thread} thread the thread where the message is being viewed when stopping edition */
+    exitEditMode(thread) {
+        const threadAsInEdition = this.threadAsInEdition;
+        this.composer = undefined;
+        if (threadAsInEdition && threadAsInEdition.eq(thread)) {
+            threadAsInEdition.composer.autofocus++;
         }
     }
 
