@@ -27,7 +27,6 @@ from odoo.exceptions import UserError, AccessError, RedirectWarning
 from odoo.fields import Domain
 from odoo.service import security
 from odoo.http import request, root
-from odoo.osv.expression import NEGATIVE_TERM_OPERATORS, FALSE_DOMAIN
 from odoo.tools import check_barcode_encoding, config, is_html_empty, parse_version, split_every
 from odoo.tools.misc import find_in_path
 from odoo.tools.pdf import PdfFileReader, PdfFileWriter, PdfReadError
@@ -60,6 +59,21 @@ except Exception:
 
 def _get_wkhtmltopdf_bin():
     return find_in_path('wkhtmltopdf')
+
+
+def _run_wkhtmltopdf(args):
+    """
+    Runs the given arguments against the wkhtmltopdf binary.
+
+    Returns:
+        The process
+    """
+    return subprocess.run(
+        [_get_wkhtmltopdf_bin(), *args],
+        capture_output=True,
+        encoding='utf-8',
+        check=False,
+    )
 
 
 def _get_wkhtmltoimage_bin():
@@ -595,9 +609,8 @@ class IrActionsReport(models.Model):
             os.close(pdf_report_fd)
             stack.callback(delete_file, pdf_report_path)
 
-            wkhtmltopdf = [_get_wkhtmltopdf_bin()] + command_args + files_command_args + paths + [pdf_report_path]
-            process = subprocess.Popen(wkhtmltopdf, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
-            _out, err = process.communicate()
+            process = _run_wkhtmltopdf(command_args + files_command_args + paths + [pdf_report_path])
+            err = process.stderr
 
             match process.returncode:
                 case 0:

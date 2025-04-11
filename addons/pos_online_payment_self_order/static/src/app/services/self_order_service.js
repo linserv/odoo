@@ -6,7 +6,7 @@ patch(SelfOrder.prototype, {
     async setup(...args) {
         await super.setup(...args);
         this.onlinePaymentStatus = null;
-        this.onNotified("ONLINE_PAYMENT_STATUS", ({ status, data }) => {
+        this.data.connectWebSocket("ONLINE_PAYMENT_STATUS", ({ status, data }) => {
             this.models.connectNewData(data);
             this.onlinePaymentStatus = status;
             this.paymentError = status === "fail";
@@ -47,12 +47,12 @@ patch(SelfOrder.prototype, {
     },
     filterPaymentMethods(pms) {
         const pm = super.filterPaymentMethods(...arguments);
+        const pmIds = this.config.payment_method_ids.map((o) => o.id);
         const online_pms = pms.filter(
             (rec) =>
                 rec.is_online_payment &&
                 (this.config.self_order_online_payment_method_id?.id === rec.id ||
-                    (this.config.self_ordering_mode === "kiosk" &&
-                        this.config.payment_method_ids.includes(rec.id)))
+                    (this.config.self_ordering_mode === "kiosk" && pmIds.includes(rec.id)))
         );
         return [...new Set([...pm, ...online_pms])];
     },

@@ -32,7 +32,7 @@ import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { createElementWithContent } from "@web/core/utils/html";
 import { FileUploader } from "@web/views/fields/file_handler";
-import { escape } from "@web/core/utils/strings";
+import { escape, isEmail } from "@web/core/utils/strings";
 import { isDisplayStandalone, isIOS, isMobileOS } from "@web/core/browser/feature_detection";
 import { Dropdown } from "@web/core/dropdown/dropdown";
 import { DropdownItem } from "@web/core/dropdown/dropdown_item";
@@ -376,6 +376,7 @@ export class Composer extends Component {
                             return {
                                 label: suggestion.name,
                                 role: suggestion,
+                                thread: this.thread,
                                 optionTemplate: "mail.Composer.suggestionRole",
                                 classList: "o-mail-Composer-suggestion",
                             };
@@ -686,6 +687,15 @@ export class Composer extends Component {
         if (composer.message) {
             this.editMessage();
             return;
+        }
+        if (this.props.type !== "note") {
+            const allRecipients = [
+                ...composer.thread.suggestedRecipients,
+                ...composer.thread.additionalRecipients,
+            ];
+            if (allRecipients.some((recipient) => !recipient.email || !isEmail(recipient.email))) {
+                return;
+            }
         }
         await this.processMessage(async (value) => {
             await this._sendMessage(value, this.postData, this.extraData);

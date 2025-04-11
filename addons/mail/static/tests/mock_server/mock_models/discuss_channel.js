@@ -169,12 +169,12 @@ export class DiscussChannel extends models.ServerModel {
                 channel,
                 "mail.record/insert",
                 new mailDataHelpers.Store(this.browse(channel.id), {
+                    invited_member_ids: kwargs.invite_to_rtc_call
+                        ? [["ADD", insertedChannelMembers]]
+                        : false,
                     member_count: DiscussChannelMember.search_count([
                         ["channel_id", "=", channel.id],
                     ]),
-                    invitedMembers: kwargs.invite_to_rtc_call
-                        ? [["ADD", insertedChannelMembers]]
-                        : false,
                 })
                     .add(DiscussChannelMember.browse(insertedChannelMembers))
                     .get_result()
@@ -441,7 +441,7 @@ export class DiscussChannel extends models.ServerModel {
                 );
                 store.add(otherMembers.map((member) => member.id));
             }
-            res.rtcSessions = mailDataHelpers.Store.many(
+            res.rtc_session_ids = mailDataHelpers.Store.many(
                 DiscussChannelRtcSession.browse(channel.rtc_session_ids),
                 "ADD",
                 makeKwArgs({ extra: true })

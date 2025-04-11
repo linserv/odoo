@@ -117,7 +117,8 @@ function getPartialValueEditorInfo(fieldDef, operator, params = {}) {
             return {
                 component: null,
                 extractProps: null,
-                isSupported: (value) => value === false,
+                isSupported: (value) =>
+                    value === false || (fieldDef.type === "boolean" && value === true),
                 defaultValue: () => false,
             };
         case "=like":
@@ -147,22 +148,29 @@ function getPartialValueEditorInfo(fieldDef, operator, params = {}) {
                 },
             };
         }
-        case "is_not_within":
-        case "within": {
+        case "last":
+        case "not_last":
+        case "next":
+        case "not_next": {
             return {
                 component: Within,
                 extractProps: ({ value, update }) => ({
                     value,
                     update,
-                    amountEditorInfo: getValueEditorInfo({ type: "integer" }, "="),
+                    amountEditorInfo: {
+                        ...getValueEditorInfo({ type: "integer" }, "="),
+                        isSupported: (value) => Number.isInteger(value) && value >= 0,
+                        message: _t("Positive integer expected"),
+                    },
                     optionEditorInfo: makeSelectEditor(Within.options),
                 }),
                 isSupported: (value) =>
-                    Array.isArray(value) &&
-                    value.length === 3 &&
-                    typeof value[1] === "string" &&
-                    value[2] === fieldDef.type,
-                defaultValue: () => [-1, "months", fieldDef.type],
+                    Array.isArray(value) && value.length === 3 && value[2] === fieldDef.type,
+                defaultValue: () => [1, "months", fieldDef.type],
+                shouldResetValue: (value) =>
+                    !Number.isInteger(value[0]) ||
+                    value[0] < 0 ||
+                    !Within.options.some((o) => o[0] === value[1]),
             };
         }
         case "in":
@@ -279,20 +287,6 @@ function getPartialValueEditorInfo(fieldDef, operator, params = {}) {
         case "html":
         case "text":
             return STRING_EDITOR;
-        case "boolean": {
-            if (["is", "is_not"].includes(operator)) {
-                const options = [
-                    [true, _t("set")],
-                    [false, _t("not set")],
-                ];
-                return makeSelectEditor(options, params);
-            }
-            const options = [
-                [true, _t("True")],
-                [false, _t("False")],
-            ];
-            return makeSelectEditor(options, params);
-        }
         case "many2one": {
             if (["=", "!="].includes(operator)) {
                 return {

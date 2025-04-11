@@ -22,6 +22,7 @@ class DiscussChannel(models.Model):
     livechat_active = fields.Boolean('Is livechat ongoing?', help='Livechat session is active until visitor or operator leaves the conversation.')
     livechat_channel_id = fields.Many2one('im_livechat.channel', 'Channel', index='btree_not_null')
     livechat_operator_id = fields.Many2one('res.partner', string='Operator', index='btree_not_null')
+    channel_member_history_ids = fields.One2many('im_livechat.channel.member.history', 'channel_id')
     chatbot_current_step_id = fields.Many2one('chatbot.script.step', string='Chatbot Current Step')
     chatbot_message_ids = fields.One2many('chatbot.message', 'discuss_channel_id', string='Chatbot Messages')
     country_id = fields.Many2one('res.country', string="Country", help="Country of the visitor of the channel")
@@ -57,12 +58,12 @@ class DiscussChannel(models.Model):
         fields = [
             "anonymous_name",
             "chatbot_current_step",
+            Store.One("country_id", ["code", "name"]),
             "livechat_active",
-            Store.One("country_id", ["code", "name"], rename="anonymous_country"),
             "livechat_operator_id",
         ]
         if self.env.user._is_internal():
-            fields.append(Store.One("livechat_channel_id", ["name"], rename="livechatChannel"))
+            fields.append(Store.One("livechat_channel_id", ["name"]))
         return super()._to_store_defaults(for_current_user=for_current_user) + fields
 
     def _to_store(self, store: Store, fields):
@@ -299,6 +300,9 @@ class DiscussChannel(models.Model):
             chatbot_script,
             Markup('<div class="o_mail_notification">%s</div>') % _('Restarting conversation...'),
         )
+
+    def _get_allowed_channel_member_create_params(self):
+        return super()._get_allowed_channel_member_create_params() + ["livechat_member_type"]
 
     def _types_allowing_seen_infos(self):
         return super()._types_allowing_seen_infos() + ["livechat"]

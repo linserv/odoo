@@ -48,7 +48,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("DELETE", [channel_member.rtc_session_ids.id])],
+                                "rtc_session_ids": [("DELETE", [channel_member.rtc_session_ids.id])],
                             },
                         ],
                     },
@@ -59,7 +59,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("ADD", [channel_member.rtc_session_ids.id + 1])],
+                                "rtc_session_ids": [("ADD", [channel_member.rtc_session_ids.id + 1])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -123,7 +123,7 @@ class TestChannelRTC(MailCommon):
                 "discuss.channel": [
                     {
                         "id": channel.id,
-                        "rtcSessions": [
+                        "rtc_session_ids": [
                             ("ADD", [channel_member.rtc_session_ids.id]),
                             ("DELETE", [channel_member.rtc_session_ids.id - 1]),
                         ],
@@ -202,7 +202,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("ADD", [last_rtc_session_id + 1])],
+                                "rtc_session_ids": [("ADD", [last_rtc_session_id + 1])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -242,7 +242,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "invitedMembers": [("ADD", [channel_member_test_user.id])],
+                                "invited_member_ids": [("ADD", [channel_member_test_user.id])],
                             }
                         ],
                         "discuss.channel.member": [
@@ -285,7 +285,7 @@ class TestChannelRTC(MailCommon):
         test_user = self.env['res.users'].sudo().create({'name': "Test User", 'login': 'test'})
         test_guest = self.env['mail.guest'].sudo().create({'name': "Test Guest"})
         channel = self.env['discuss.channel']._create_group(partners_to=(self.user_employee.partner_id + test_user.partner_id).ids)
-        channel.add_members(guest_ids=test_guest.ids)
+        channel._add_members(guests=test_guest)
         channel_member_test_user = channel.sudo().channel_member_ids.filtered(lambda channel_member: channel_member.partner_id == test_user.partner_id)
         channel_member_test_guest = channel.sudo().channel_member_ids.filtered(lambda channel_member: channel_member.guest_id == test_guest)
         channel_member = channel.sudo().channel_member_ids.filtered(lambda channel_member: channel_member.partner_id == self.user_employee.partner_id)
@@ -320,7 +320,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("ADD", [last_rtc_session_id + 1])],
+                                "rtc_session_ids": [("ADD", [last_rtc_session_id + 1])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -360,7 +360,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("ADD", [last_rtc_session_id + 1])],
+                                "rtc_session_ids": [("ADD", [last_rtc_session_id + 1])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -400,7 +400,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "invitedMembers": [
+                                "invited_member_ids": [
                                     (
                                         "ADD",
                                         [channel_member_test_user.id, channel_member_test_guest.id],
@@ -472,7 +472,7 @@ class TestChannelRTC(MailCommon):
         test_user = self.env['res.users'].sudo().create({'name': "Test User", 'login': 'test'})
         test_guest = self.env['mail.guest'].sudo().create({'name': "Test Guest"})
         channel = self.env['discuss.channel']._create_group(partners_to=(self.user_employee.partner_id + test_user.partner_id).ids)
-        channel.add_members(guest_ids=test_guest.ids)
+        channel._add_members(guests=test_guest)
         channel_member = channel.sudo().channel_member_ids.filtered(lambda channel_member: channel_member.partner_id == self.user_employee.partner_id)
         channel_member._rtc_join_call()
 
@@ -500,7 +500,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "invitedMembers": [("DELETE", [channel_member_test_user.id])],
+                                "invited_member_ids": [("DELETE", [channel_member_test_user.id])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -537,7 +537,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("ADD", [channel_member.rtc_session_ids.id + 1])],
+                                "rtc_session_ids": [("ADD", [channel_member.rtc_session_ids.id + 1])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -602,7 +602,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "invitedMembers": [("DELETE", [channel_member_test_guest.id])],
+                                "invited_member_ids": [("DELETE", [channel_member_test_guest.id])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -639,7 +639,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("ADD", [channel_member.rtc_session_ids.id + 2])],
+                                "rtc_session_ids": [("ADD", [channel_member.rtc_session_ids.id + 2])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -686,7 +686,7 @@ class TestChannelRTC(MailCommon):
         test_user = self.env['res.users'].sudo().create({'name': "Test User", 'login': 'test'})
         test_guest = self.env['mail.guest'].sudo().create({'name': "Test Guest"})
         channel = self.env['discuss.channel']._create_group(partners_to=(self.user_employee.partner_id + test_user.partner_id).ids)
-        channel.add_members(guest_ids=test_guest.ids)
+        channel._add_members(guests=test_guest)
         channel_member = channel.sudo().channel_member_ids.filtered(lambda channel_member: channel_member.partner_id == self.user_employee.partner_id)
         channel_member._rtc_join_call()
 
@@ -712,7 +712,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "invitedMembers": [("DELETE", [channel_member_test_user.id])],
+                                "invited_member_ids": [("DELETE", [channel_member_test_user.id])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -769,7 +769,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "invitedMembers": [("DELETE", [channel_member_test_guest.id])],
+                                "invited_member_ids": [("DELETE", [channel_member_test_guest.id])],
                             },
                         ],
                         "discuss.channel.member": [
@@ -810,7 +810,7 @@ class TestChannelRTC(MailCommon):
         test_user = self.env['res.users'].sudo().create({'name': "Test User", 'login': 'test'})
         test_guest = self.env['mail.guest'].sudo().create({'name': "Test Guest"})
         channel = self.env['discuss.channel']._create_group(partners_to=(self.user_employee.partner_id + test_user.partner_id).ids)
-        channel.add_members(guest_ids=test_guest.ids)
+        channel._add_members(guests=test_guest)
         channel_member = channel.sudo().channel_member_ids.filtered(lambda channel_member: channel_member.partner_id == self.user_employee.partner_id)
         channel_member_test_user = channel.sudo().channel_member_ids.filtered(lambda channel_member: channel_member.partner_id == test_user.partner_id)
         channel_member_test_guest = channel.sudo().channel_member_ids.filtered(lambda channel_member: channel_member.guest_id == test_guest)
@@ -855,7 +855,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "invitedMembers": [
+                                "invited_member_ids": [
                                     (
                                         "DELETE",
                                         [channel_member_test_user.id, channel_member_test_guest.id],
@@ -921,7 +921,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("DELETE", [channel_member.rtc_session_ids.id])],
+                                "rtc_session_ids": [("DELETE", [channel_member.rtc_session_ids.id])],
                             },
                         ],
                     },
@@ -963,7 +963,7 @@ class TestChannelRTC(MailCommon):
 
         with self.mock_bus():
             with patch.object(fields.Datetime, 'now', lambda: now + relativedelta(seconds=10)):
-                channel.add_members(partner_ids=test_user.partner_id.ids, guest_ids=test_guest.ids, invite_to_rtc_call=True)
+                channel._add_members(users=test_user, guests=test_guest, invite_to_rtc_call=True)
 
         channel_member_test_user = channel.sudo().channel_member_ids.filtered(lambda member: member.partner_id == test_user.partner_id)
         channel_member_test_guest = channel.sudo().channel_member_ids.filtered(lambda member: member.guest_id == test_guest)
@@ -993,7 +993,7 @@ class TestChannelRTC(MailCommon):
                 (self.cr.dbname, "res.partner", test_user.partner_id.id),
                 # mail.record/insert - discuss.channel (rtcInvitingSession), discuss.channel.member
                 (self.cr.dbname, "mail.guest", test_guest.id),
-                # mail.record/insert - discuss.channel (invitedMembers), discuss.channel.member
+                # mail.record/insert - discuss.channel (invited_member_ids), discuss.channel.member
                 (self.cr.dbname, "discuss.channel", channel.id),
             ],
             message_items=[
@@ -1091,7 +1091,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "invitedMembers": [
+                                "invited_member_ids": [
                                     (
                                         "ADD",
                                         [channel_member_test_user.id, channel_member_test_guest.id],
@@ -1182,7 +1182,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("DELETE", [channel_member.rtc_session_ids.id])],
+                                "rtc_session_ids": [("DELETE", [channel_member.rtc_session_ids.id])],
                             },
                         ],
                     },
@@ -1240,7 +1240,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("DELETE", [channel_member.rtc_session_ids.id])],
+                                "rtc_session_ids": [("DELETE", [channel_member.rtc_session_ids.id])],
                             },
                         ],
                     },
@@ -1275,7 +1275,7 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtcSessions": [("DELETE", [channel_member.rtc_session_ids.id])],
+                                "rtc_session_ids": [("DELETE", [channel_member.rtc_session_ids.id])],
                             },
                         ],
                     },
@@ -1319,7 +1319,7 @@ class TestChannelRTC(MailCommon):
                     "type": "mail.record/insert",
                     "payload": {
                         "discuss.channel": [
-                            {"id": channel.id, "rtcSessions": [("DELETE", [test_session.id])]},
+                            {"id": channel.id, "rtc_session_ids": [("DELETE", [test_session.id])]},
                         ],
                     },
                 },

@@ -47,7 +47,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
 
     def test_livechat_username(self):
         # Open a new live chat
-        res = self.opener.post(url=self.open_chat_url, json=self.open_chat_params)
+        res = self.url_open(url=self.open_chat_url, json=self.open_chat_params)
         self.assertEqual(res.status_code, 200)
         channel_1 = self.env['discuss.channel'].search([('livechat_visitor_id', '=', self.visitor.id), ('livechat_active', '=', True)], limit=1)
 
@@ -65,7 +65,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
         self.operator.name
 
         # Open a new live chat
-        res = self.opener.post(url=self.open_chat_url, json=self.open_chat_params)
+        res = self.url_open(url=self.open_chat_url, json=self.open_chat_params)
         self.assertEqual(res.status_code, 200)
         channel_2 = self.env['discuss.channel'].search([('livechat_visitor_id', '=', self.visitor.id), ('livechat_active', '=', True)], limit=1)
 
@@ -115,7 +115,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
 
     def _common_basic_flow(self):
         # Open a new live chat
-        res = self.opener.post(url=self.open_chat_url, json=self.open_chat_params)
+        res = self.url_open(url=self.open_chat_url, json=self.open_chat_params)
         self.assertEqual(res.status_code, 200)
 
         channel = self.env['discuss.channel'].search([('livechat_visitor_id', '=', self.visitor.id), ('livechat_active', '=', True)], limit=1)
@@ -181,11 +181,11 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
             {
                 "discuss.channel": self._filter_channels_fields(
                     {
-                        "anonymous_country": False,
                         "anonymous_name": f"Visitor #{self.visitor.id}",
                         "authorizedGroupFullName": False,
                         "avatar_cache_key": "no-avatar",
                         "channel_type": "livechat",
+                        "country_id": False,
                         "create_uid": self.user_public.id,
                         "default_display_mode": False,
                         "description": False,
@@ -193,11 +193,11 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "from_message_id": False,
                         "group_based_subscription": False,
                         "id": channel.id,
-                        "invitedMembers": [("ADD", [])],
+                        "invited_member_ids": [("ADD", [])],
                         "is_editable": True,
                         "last_interest_dt": fields.Datetime.to_string(channel.last_interest_dt),
-                        "livechatChannel": self.livechat_channel.id,
                         "livechat_active": True,
+                        "livechat_channel_id": self.livechat_channel.id,
                         "livechat_operator_id": {
                             "id": self.operator.partner_id.id,
                             "type": "partner",
@@ -208,7 +208,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "name": f"Visitor #{self.visitor.id} El Deboulonnator",
                         "parent_channel_id": False,
                         "requested_by_operator": False,
-                        "rtcSessions": [("ADD", [])],
+                        "rtc_session_ids": [("ADD", [])],
                         "uuid": channel.uuid,
                         "visitor": {"id": self.visitor.id, "type": "visitor"},
                         "whatsapp_account_name": False,
@@ -296,11 +296,11 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
             Store(channel.with_context(guest=guest).with_user(self.user_public)).get_result()["discuss.channel"],
             self._filter_channels_fields(
                 {
-                    "anonymous_country": False,
                     "anonymous_name": f"Visitor #{self.visitor.id}",
                     "authorizedGroupFullName": False,
                     "avatar_cache_key": "no-avatar",
                     "channel_type": "livechat",
+                    "country_id": False,
                     "create_uid": self.user_public.id,
                     "custom_channel_name": False,
                     "custom_notifications": False,
@@ -310,7 +310,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                     "from_message_id": False,
                     "group_based_subscription": False,
                     "id": channel.id,
-                    "invitedMembers": [("ADD", [])],
+                    "invited_member_ids": [("ADD", [])],
                     "is_editable": False,
                     "is_pinned": True,
                     "last_interest_dt": fields.Datetime.to_string(channel.last_interest_dt),
@@ -326,7 +326,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                     "name": f"Visitor #{self.visitor.id} El Deboulonnator",
                     "parent_channel_id": False,
                     "requested_by_operator": False,
-                    "rtcSessions": [("ADD", [])],
+                    "rtc_session_ids": [("ADD", [])],
                     "uuid": channel.uuid,
                     "whatsapp_account_name": False,
                     "whatsapp_channel_valid_until": False,

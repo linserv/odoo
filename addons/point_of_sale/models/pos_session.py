@@ -406,7 +406,9 @@ class PosSession(models.Model):
         return True
 
     def get_session_orders(self):
-        return self.order_ids
+        return self.order_ids.filtered(lambda o:
+            not (o.preset_time and o.preset_time.date() > fields.Date.today())
+        )
 
     def action_pos_session_closing_control(self, balancing_account=False, amount_to_balance=0, bank_payment_method_diffs=None):
         bank_payment_method_diffs = bank_payment_method_diffs or {}
@@ -597,7 +599,7 @@ class PosSession(models.Model):
             }
 
         self.post_close_register_message()
-        self.config_id._notify(('CLOSING_SESSION', {'login_number': self.env.context.get('login_number', False)}))
+        self.config_id._notify(('CLOSING_SESSION', {'login_number': self.env.context.get('login_number', False), 'session_id': self.id}))
         return {'successful': True}
 
     def post_close_register_message(self):
@@ -1353,8 +1355,9 @@ class PosSession(models.Model):
         # reconcile stock output lines
         pickings = self.picking_ids.filtered(lambda p: not p.pos_order_id)
         pickings |= self._get_closed_orders().filtered(lambda o: not o.is_invoiced).mapped('picking_ids')
-        stock_moves = self.env['stock.move'].search([('picking_id', 'in', pickings.ids)])
-        stock_account_move_lines = self.env['account.move'].search([('stock_move_id', 'in', stock_moves.ids)]).mapped('line_ids')
+        stock_account_move_lines = self.env['account.move'].search(
+            [('stock_move_id.picking_id', 'in', pickings.ids)]
+        ).mapped('line_ids')
         for account_id in stock_output_lines:
             ( stock_output_lines[account_id]
             | stock_account_move_lines.filtered(lambda aml: aml.account_id == account_id)

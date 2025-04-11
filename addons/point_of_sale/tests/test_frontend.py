@@ -1003,7 +1003,10 @@ class TestUi(TestPointOfSaleHttpCommon):
 
     def test_07_product_combo(self):
         setup_product_combo_items(self)
-        self.office_combo.write({'lst_price': 50})
+        self.office_combo.write({
+            'lst_price': 50,
+            'barcode': 'SuperCombo',
+        })
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('ProductComboPriceTaxIncludedTour')
         order = self.env['pos.order'].search([])
@@ -1806,6 +1809,70 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, "AddMultipleSerialsAtOnce", login="pos_user")
 
+    def test_order_and_invoice_amounts(self):
+        payment_term = self.env['account.payment.term'].create({
+            'name': "early_payment_term",
+            'discount_percentage': 10,
+            'discount_days': 10,
+            'early_discount': True,
+            'early_pay_discount_computation': 'mixed',
+            'line_ids': [Command.create({
+                'value': 'percent',
+                'nb_days': 0,
+                'value_amount': 100,
+            })]
+        })
+        self.partner_test_1.property_payment_term_id = payment_term.id
+
+        tax = self.env['account.tax'].create({
+            'name': 'Tax 10%',
+            'amount': 10,
+            'amount_type': 'percent',
+            'type_tax_use': 'sale',
+        })
+        self.env['product.product'].create({
+            'name': 'Product Test',
+            'available_in_pos': True,
+            'list_price': 1000,
+            'taxes_id': [(6, 0, [tax.id])],
+        })
+
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PaymentScreenInvoiceOrder', login="pos_user")
+
+        order = self.env['pos.order'].search([('partner_id', '=', self.partner_test_1.id)], limit=1)
+        self.assertTrue(order)
+
+        self.assertEqual(order.partner_id, self.partner_test_1)
+
+        invoice = self.env['account.move'].search([('invoice_origin', '=', order.pos_reference)], limit=1)
+        self.assertTrue(invoice)
+        self.assertFalse(invoice.invoice_payment_term_id)
+
+        self.assertAlmostEqual(order.amount_total, invoice.amount_total, places=2, msg="Order and Invoice amounts do not match.")
+
+    def test_product_create_update_from_frontend(self):
+        ''' This test verifies product creation and updates product details from the POS frontend. '''
+        self.pos_admin.write({
+            'group_ids': [Command.link(self.env.ref('base.group_system').id)],
+        })
+        self.main_pos_config.with_user(self.pos_admin).open_ui()
+        self.start_tour('/pos/ui?config_id=%d' % self.main_pos_config.id, 'test_product_create_update_from_frontend', login='pos_admin')
+
+        # In the frontend, a product was created during the tour with the following details:
+        # - Product name: Test Frontend Product
+        # - Barcode: 710535977349
+        # - List price: 20.0
+
+        #  Ensure that the original product created in the frontend ('Test Frontend Product') has been edited to ('Test Frontend Product Edited').
+        frontend_created_product = self.env['product.product'].search_count([('name', '=', 'Test Frontend Product')])
+        frontend_created_product_edited = self.env['product.product'].search([('name', '=', 'Test Frontend Product Edited')])
+
+        self.assertEqual(frontend_created_product, 0)
+        self.assertEqual(frontend_created_product_edited.name, 'Test Frontend Product Edited')
+        self.assertEqual(frontend_created_product_edited.barcode, '710535977348')
+        self.assertEqual(frontend_created_product_edited.list_price, 50.0)
+
 # This class just runs the same tests as above but with mobile emulation
 class MobileTestUi(TestUi):
     browser_size = '375x667'
@@ -1841,11 +1908,14 @@ class TestTaxCommonPOS(TestPointOfSaleHttpCommon, TestTaxCommon):
         self.assertRecordValues(order, [expected_amounts])
 
     def assert_pos_orders_and_invoices(self, tour, tests_with_orders):
-        with self.with_new_session(user=self.pos_user) as session:
-            self.start_pos_tour(tour)
-            orders = self.env['pos.order'].search([('session_id', '=', session.id)], limit=len(tests_with_orders))
-            for index, (order, (test_code, _document, _soft_checking, _amount_type, _amount, expected_values)) in enumerate(zip(orders, tests_with_orders)):
-                with self.subTest(test_code=test_code, index=index):
-                    self.assert_pos_order_totals(order, expected_values)
-                    if order.account_move:
-                        self.assert_invoice_totals(order.account_move, expected_values)
+        if self.main_pos_config.current_session_id:
+            self.main_pos_config.current_session_id.post_closing_cash_details(0)
+            self.main_pos_config.current_session_id.close_session_from_ui()
+
+        self.start_pos_tour(tour)
+        orders = self.env['pos.order'].search([('session_id', '=', self.main_pos_config.current_session_id.id)], limit=len(tests_with_orders))
+        for index, (order, (test_code, _document, _soft_checking, _amount_type, _amount, expected_values)) in enumerate(zip(orders, tests_with_orders)):
+            with self.subTest(test_code=test_code, index=index):
+                self.assert_pos_order_totals(order, expected_values)
+                if order.account_move:
+                    self.assert_invoice_totals(order.account_move, expected_values)

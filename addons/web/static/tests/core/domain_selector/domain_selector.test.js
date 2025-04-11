@@ -117,14 +117,13 @@ test("creating a domain from scratch", async () => {
     await contains(
         ".o_model_field_selector_popover .o_model_field_selector_popover_item_name"
     ).click();
-    expect(SELECTORS.debugArea).toHaveCount(1);
-    expect(SELECTORS.debugArea).toHaveValue(`[("bar", "=", True)]`);
+    expect(SELECTORS.debugArea).toHaveValue(`[("bar", "!=", False)]`);
 
     // There should be a "+" button to add a domain part; clicking on it
     // should add the default "('id', '=', 1)" domain
     expect(SELECTORS.buttonAddNewRule).toHaveCount(1);
     await clickOnButtonAddNewRule();
-    expect(SELECTORS.debugArea).toHaveValue(`["&", ("bar", "=", True), ("bar", "=", True)]`);
+    expect(SELECTORS.debugArea).toHaveValue(`["&", ("bar", "!=", False), ("bar", "!=", False)]`);
 
     // There should be two "Add branch" buttons to add a domain "branch"; clicking on
     // the first one, should add this group with defaults "('id', '=', 1)"
@@ -132,7 +131,7 @@ test("creating a domain from scratch", async () => {
     expect(SELECTORS.buttonAddBranch).toHaveCount(2);
     await clickOnButtonAddBranch();
     expect(SELECTORS.debugArea).toHaveValue(
-        `["&", "&", ("bar", "=", True), "|", ("id", "=", 1), ("id", "=", 1), ("bar", "=", True)]`
+        `["&", "&", ("bar", "!=", False), "|", ("id", "=", 1), ("id", "=", 1), ("bar", "!=", False)]`
     );
 
     // There should be five buttons to remove domain part; clicking on
@@ -141,7 +140,7 @@ test("creating a domain from scratch", async () => {
     expect(SELECTORS.buttonDeleteNode).toHaveCount(5);
     await clickOnButtonDeleteNode(-1);
     await clickOnButtonDeleteNode(-1);
-    expect(SELECTORS.debugArea).toHaveValue(`["&", ("bar", "=", True), ("id", "=", 1)]`);
+    expect(SELECTORS.debugArea).toHaveValue(`["&", ("bar", "!=", False), ("id", "=", 1)]`);
 });
 
 test("building a domain with a datetime", async () => {
@@ -174,7 +173,7 @@ test("building a domain with an invalid path", async () => {
     await makeDomainSelector({
         domain: `[("fooooooo", "=", "abc")]`,
         update(domain) {
-            expect(domain).toBe(`[("bar", "=", True)]`);
+            expect(domain).toBe(`[("bar", "!=", False)]`);
         },
     });
 
@@ -188,8 +187,7 @@ test("building a domain with an invalid path", async () => {
     await openModelFieldSelectorPopover();
     await contains(".o_model_field_selector_popover_item_name").click();
     expect(getCurrentPath()).toBe("Bar");
-    expect(getCurrentOperator()).toBe("is");
-    expect(getCurrentValue()).toBe("set");
+    expect(getCurrentOperator()).toBe("set");
 });
 
 test("building a domain with an invalid path (2)", async () => {
@@ -394,10 +392,10 @@ test("cache fields_get", async () => {
     expect.verifySteps(["fields_get"]);
 });
 
-test("selection field with operator change from 'is set' to '='", async () => {
+test("selection field with operator change from 'set' to '='", async () => {
     await makeDomainSelector({ domain: `[['state', '!=', False]]` });
     expect(getCurrentPath()).toBe("State");
-    expect(getCurrentOperator()).toBe("is set");
+    expect(getCurrentOperator()).toBe("set");
 
     await selectOperator("=");
     expect(getCurrentPath()).toBe("State");
@@ -996,18 +994,18 @@ test("support properties", async () => {
     expectedDomain = `[("properties.xpad_prop_1", "=", False)]`;
     await contains(".o_model_field_selector_popover_item[data-name='xpad_prop_1'] button").click();
     expect(getCurrentPath()).toBe("Properties > M2O");
-    expect(getOperatorOptions()).toEqual(["is equal", "is not equal", "is set", "is not set"]);
+    expect(getOperatorOptions()).toEqual(["is equal", "is not equal", "set", "not set"]);
 
     const toTests = [
         {
             name: "xphone_prop_1",
-            domain: `[("properties.xphone_prop_1", "=", True)]`,
-            options: ["is", "is not"],
+            domain: `[("properties.xphone_prop_1", "!=", False)]`,
+            options: ["set", "not set"],
         },
         {
             name: "xphone_prop_2",
             domain: `[("properties.xphone_prop_2", "=", False)]`,
-            options: ["is equal", "is not equal", "is set", "is not set"],
+            options: ["is equal", "is not equal", "set", "not set"],
         },
         {
             name: "xphone_prop_3",
@@ -1019,8 +1017,8 @@ test("support properties", async () => {
                 "does not contain",
                 "is in",
                 "is not in",
-                "is set",
-                "is not set",
+                "set",
+                "not set",
                 "starts with",
                 "ends with",
             ],
@@ -1038,8 +1036,8 @@ test("support properties", async () => {
                 "is between",
                 "contains",
                 "does not contain",
-                "is set",
-                "is not set",
+                "set",
+                "not set",
             ],
         },
         {
@@ -1054,21 +1052,23 @@ test("support properties", async () => {
                 "is lower or equal",
                 "is between",
                 "is not between",
-                "is within",
-                "is not within",
-                "is set",
-                "is not set",
+                "next",
+                "not next",
+                "last",
+                "not last",
+                "set",
+                "not set",
             ],
         },
         {
             name: "xphone_prop_6",
             domain: `[("properties.xphone_prop_6", "in", "")]`,
-            options: ["is in", "is not in", "is set", "is not set"],
+            options: ["is in", "is not in", "set", "not set"],
         },
         {
             name: "xphone_prop_7",
             domain: `[("properties.xphone_prop_7", "in", [])]`,
-            options: ["is in", "is not in", "is set", "is not set"],
+            options: ["is in", "is not in", "set", "not set"],
         },
     ];
 
@@ -1118,7 +1118,7 @@ test("support properties (mode readonly)", async () => {
     const toTest = [
         {
             domain: `[("properties.xphone_prop_1", "=", False)]`,
-            result: "Properties ➔ Boolean is not set",
+            result: "Properties ➔ Boolean not set",
         },
         {
             domain: `[("properties.xphone_prop_2", "=", "abc")]`,
@@ -1209,9 +1209,9 @@ test("treat false and true like False and True", async () => {
         domain: `[("bar","=",false)]`,
         readonly: true,
     });
-    expect(getConditionText()).toBe(`Bar is not set`);
+    expect(getConditionText()).toBe(`Bar not set`);
     await parent.set(`[("bar","=",true)]`);
-    expect(getConditionText()).toBe(`Bar is set`);
+    expect(getConditionText()).toBe(`Bar set`);
 });
 
 test("Edit the value for field char and an operator in", async () => {
@@ -1316,10 +1316,10 @@ test("boolean field (readonly)", async () => {
         domain: `[]`,
     });
     const toTest = [
-        { domain: `[("bar", "=", True)]`, text: "Bar is set" },
-        { domain: `[("bar", "=", False)]`, text: "Bar is not set" },
-        { domain: `[("bar", "!=", True)]`, text: "Bar is not set" },
-        { domain: `[("bar", "!=", False)]`, text: "Bar is not not set" },
+        { domain: `[("bar", "=", True)]`, text: "Bar set" },
+        { domain: `[("bar", "=", False)]`, text: "Bar not set" },
+        { domain: `[("bar", "!=", True)]`, text: "Bar not set" },
+        { domain: `[("bar", "!=", False)]`, text: "Bar set" },
     ];
     for (const { domain, text } of toTest) {
         await parent.set(domain);
@@ -1334,9 +1334,9 @@ test("integer field (readonly)", async () => {
     });
     const toTest = [
         { domain: `[("int", "=", True)]`, text: `Int is equal true` },
-        { domain: `[("int", "=", False)]`, text: `Int is not set` },
+        { domain: `[("int", "=", False)]`, text: `Int not set` },
         { domain: `[("int", "!=", True)]`, text: `Int is not equal true` },
-        { domain: `[("int", "!=", False)]`, text: `Int is set` },
+        { domain: `[("int", "!=", False)]`, text: `Int set` },
         { domain: `[("int", "=", 1)]`, text: `Int is equal 1` },
         { domain: `[("int", "!=", 1)]`, text: `Int is not equal 1` },
         { domain: `[("int", "<", 1)]`, text: `Int is lower 1` },
@@ -1395,8 +1395,8 @@ test("char field (readonly)", async () => {
         domain: `[]`,
     });
     const toTest = [
-        { domain: `[("foo", "=", False)]`, text: `Foo is not set` },
-        { domain: `[("foo", "!=", False)]`, text: `Foo is set` },
+        { domain: `[("foo", "=", False)]`, text: `Foo not set` },
+        { domain: `[("foo", "!=", False)]`, text: `Foo set` },
         { domain: `[("foo", "=", "abc")]`, text: `Foo is equal abc` },
         { domain: `[("foo", "=", expr)]`, text: `Foo is equal expr` },
         { domain: `[("foo", "!=", "abc")]`, text: `Foo is not equal abc` },
@@ -1417,8 +1417,8 @@ test("selection field (readonly)", async () => {
         domain: `[]`,
     });
     const toTest = [
-        { domain: `[("state", "=", False)]`, text: `State is not set` },
-        { domain: `[("state", "!=", False)]`, text: `State is set` },
+        { domain: `[("state", "=", False)]`, text: `State not set` },
+        { domain: `[("state", "!=", False)]`, text: `State set` },
         { domain: `[("state", "=", "abc")]`, text: `State is equal ABC` },
         { domain: `[("state", "=", expr)]`, text: `State is equal expr` },
         { domain: `[("state", "!=", "abc")]`, text: `State is not equal ABC` },
@@ -1466,11 +1466,11 @@ test("selection property (readonly)", async () => {
     const toTest = [
         {
             domain: `[("properties.selection_prop", "=", false)]`,
-            text: `Properties ➔ Selection is not set`,
+            text: `Properties ➔ Selection not set`,
         },
         {
             domain: `[("properties.selection_prop", "!=", false)]`,
-            text: `Properties ➔ Selection is set`,
+            text: `Properties ➔ Selection set`,
         },
         {
             domain: `[("properties.selection_prop", "=", "abc")]`,
@@ -1560,8 +1560,8 @@ test("many2one field operators (edit)", async () => {
         "is not equal",
         "contains",
         "does not contain",
-        "is set",
-        "is not set",
+        "set",
+        "not set",
         "starts with",
         "ends with",
         "matches",
@@ -1733,12 +1733,12 @@ test("many2many field and operator set/not set (edit)", async () => {
 
     await selectOperator("not_set");
 
-    expect(getCurrentOperator()).toBe("is not set");
+    expect(getCurrentOperator()).toBe("not set");
     expect(".o_ds_value_cell").toHaveCount(0);
     expect.verifySteps([`[("product_id", "=", False)]`]);
 
     await selectOperator("set");
-    expect(getCurrentOperator()).toBe("is set");
+    expect(getCurrentOperator()).toBe("set");
     expect(".o_ds_value_cell").toHaveCount(0);
     expect.verifySteps([`[("product_id", "!=", False)]`]);
 
@@ -1760,15 +1760,15 @@ test("many2many field: clone a set/not set condition", async () => {
     expect.verifySteps([]);
 
     await selectOperator("not_set");
-    expect(getCurrentOperator()).toBe("is not set");
+    expect(getCurrentOperator()).toBe("not set");
     expect(".o_ds_value_cell").toHaveCount(0);
     expect.verifySteps([`[("product_id", "=", False)]`]);
     expect(SELECTORS.condition).toHaveCount(1);
 
     await clickOnButtonAddNewRule();
     expect(SELECTORS.condition).toHaveCount(2);
-    expect(getCurrentOperator()).toBe("is not set");
-    expect(getCurrentOperator(1)).toBe("is not set");
+    expect(getCurrentOperator()).toBe("not set");
+    expect(getCurrentOperator(1)).toBe("not set");
     expect.verifySteps([`["&", ("product_id", "=", False), ("product_id", "=", False)]`]);
 });
 
@@ -1784,8 +1784,8 @@ test("x2many field operators (edit)", async () => {
         "is not equal",
         "contains",
         "does not contain",
-        "is set",
-        "is not set",
+        "set",
+        "not set",
         "starts with",
         "ends with",
         "match",
@@ -1916,12 +1916,12 @@ test("many2many field: operator set/not set (edit)", async () => {
             expect.step(domain);
         },
     });
-    expect(getCurrentOperator()).toBe("is not set");
+    expect(getCurrentOperator()).toBe("not set");
     expect(".o_ds_value_cell").toHaveCount(0);
     expect.verifySteps([]);
 
     await selectOperator("set");
-    expect(getCurrentOperator()).toBe("is set");
+    expect(getCurrentOperator()).toBe("set");
     expect(".o_ds_value_cell").toHaveCount(0);
     expect.verifySteps([`[("product_ids", "!=", False)]`]);
 });
@@ -2000,7 +2000,7 @@ test("Include archived not shown when model doesn't have the active field", asyn
     expect('.form-switch label:contains("Include archived")').toHaveCount(0);
 });
 
-test("date/datetime edition: switch !=/is set", async () => {
+test("date/datetime edition: switch !=/set", async () => {
     mockDate("2023-04-20 17:00:00", 0);
     await makeDomainSelector({
         isDebugMode: true,
@@ -2014,7 +2014,7 @@ test("date/datetime edition: switch !=/is set", async () => {
     expect(getCurrentValue()).toBe("05/20/2023");
 
     await selectOperator("set");
-    expect(getCurrentOperator()).toBe("is set");
+    expect(getCurrentOperator()).toBe("set");
     expect(".o_datetime_input").toHaveCount(0);
     expect.verifySteps([`[("date", "!=", False)]`]);
 
@@ -2037,7 +2037,7 @@ test("date/datetime edition: switch is_set to other operators", async () => {
     await selectOperator("set");
     expect(".o_datetime_input").toHaveCount(0);
     expect(getCurrentValue()).toBe(null);
-    expect(getCurrentOperator()).toBe("is set");
+    expect(getCurrentOperator()).toBe("set");
     expect.verifySteps(['[("datetime", "!=", False)]']);
 
     await selectOperator("between");
@@ -2054,7 +2054,7 @@ test("date/datetime edition: switch is_set to other operators", async () => {
     await selectOperator("not_set");
     expect(".o_datetime_input").toHaveCount(0);
     expect(getCurrentValue()).toBe(null);
-    expect(getCurrentOperator()).toBe("is not set");
+    expect(getCurrentOperator()).toBe("not set");
     expect.verifySteps(['[("datetime", "=", False)]']);
 
     await selectOperator(">=");
@@ -2231,7 +2231,7 @@ test(`any/not any operator (readonly)`, async () => {
         },
         {
             domain: `[("product_id", "any", ["|", ("name", "in", [37,41] ), ("bar", "=", True)] )]`,
-            text: `Match\nall\nof the following rules:\nProduct\nmatches\nany\nof:\nProduct Name\nis in\n(\n37\n,\n41\n)\nProduct Bar\nis\nset`,
+            text: `Match\nall\nof the following rules:\nProduct\nmatches\nany\nof:\nProduct Name\nis in\n(\n37\n,\n41\n)\nProduct Bar\nset`,
         },
         {
             domain: `[("product_id", "any", ["&", ("name", "in", ["JD7", "KDB"]), ("team_id", "not any", ["&", ("id", "=", 17), ("name", "ilike", "mancity")])])]`,
@@ -2259,27 +2259,27 @@ test(`any/not any operator (readonly) for one2many`, async () => {
     expect(".o_domain_selector").toHaveText(text);
 });
 
-test(`within operator (readonly) for date`, async () => {
+test(`next operator (readonly) for date`, async () => {
     await makeDomainSelector({
         resModel: "partner",
         domain: `["&", ("date", ">=", context_today().strftime("%Y-%m-%d")), ("date", "<=", (context_today() + relativedelta(weeks = 1)).strftime("%Y-%m-%d"))]`,
         readonly: true,
     });
-    const text = `Match\nall\nof the following rules:\nDate\nis within\n1\nweeks`;
+    const text = `Match\nall\nof the following rules:\nDate\nnext\n1\nweeks`;
     expect(".o_domain_selector").toHaveText(text);
 });
 
-test(`within operator (readonly) for datetime`, async () => {
+test(`next operator (readonly) for datetime`, async () => {
     await makeDomainSelector({
         resModel: "partner",
         domain: `["&", ("datetime", ">=", datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S")), ("datetime", "<=", datetime.datetime.combine(context_today() + relativedelta(weeks=1), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S"))]`,
         readonly: true,
     });
-    const text = `Match\nall\nof the following rules:\nDatetime\nis within\n1\nweeks`;
+    const text = `Match\nall\nof the following rules:\nDatetime\nnext\n1\nweeks`;
     expect(".o_domain_selector").toHaveText(text);
 });
 
-test(`within operator (edit) for date`, async () => {
+test(`next operator (edit) for date`, async () => {
     await makeDomainSelector({
         resModel: "partner",
         domain: `["&", ("date", ">=", context_today().strftime("%Y-%m-%d")), ("date", "<=", (context_today() + relativedelta(weeks = 1)).strftime("%Y-%m-%d"))]`,
@@ -2287,7 +2287,7 @@ test(`within operator (edit) for date`, async () => {
             expect.step(domain);
         },
     });
-    expect(getCurrentOperator()).toBe("is within");
+    expect(getCurrentOperator()).toBe("next");
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1");
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
@@ -2295,41 +2295,61 @@ test(`within operator (edit) for date`, async () => {
     );
     await contains(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).edit("1%");
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
-    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1%");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(1) span`).toHaveText(`"1%"`);
+    expect(
+        `${SELECTORS.valueEditor} ${SELECTORS.editor} ${SELECTORS.clearNotSupported}`
+    ).toHaveCount(1);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor} .fa-exclamation-triangle`).toHaveAttribute(
+        "title",
+        "Positive integer expected"
+    );
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
         `"weeks"`
     );
     expect.verifySteps([
-        `["&", ("date", ">=", (context_today() + relativedelta(weeks = "1%")).strftime("%Y-%m-%d")), ("date", "<=", context_today().strftime("%Y-%m-%d"))]`,
+        `["&", ("date", ">=", context_today().strftime("%Y-%m-%d")), ("date", "<=", (context_today() + relativedelta(weeks = "1%")).strftime("%Y-%m-%d"))]`,
+    ]);
+
+    await contains(SELECTORS.clearNotSupported).click();
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
+        `"weeks"`
+    );
+    expect.verifySteps([
+        `["&", ("date", ">=", context_today().strftime("%Y-%m-%d")), ("date", "<=", (context_today() + relativedelta(weeks = 1)).strftime("%Y-%m-%d"))]`,
     ]);
 });
 
-test(`within operator (edit) for date with an expression for amount`, async () => {
+test(`next operator (edit) for date with an expression for amount`, async () => {
     await makeDomainSelector({
         resModel: "partner",
-        domain: `["&", ("date", ">=", context_today().strftime("%Y-%m-%d")), ("date", "<=", (context_today() + relativedelta(weeks = a)).strftime("%Y-%m-%d"))]`,
+        domain: `["&", ("date", ">=", context_today().strftime("%Y-%m-%d")), ("date", "<=", (context_today() + relativedelta(weeks = 1)).strftime("%Y-%m-%d"))]`,
         update(domain) {
             expect.step(domain);
         },
     });
-    expect(getCurrentOperator()).toBe("is within");
+    expect(getCurrentOperator()).toBe("next");
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
-    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("a");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1");
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
         `"weeks"`
     );
 
     await contains(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).edit("ab");
-    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("ab");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(1) span`).toHaveText(`"ab"`);
+    expect(
+        `${SELECTORS.valueEditor} ${SELECTORS.editor} ${SELECTORS.clearNotSupported}`
+    ).toHaveCount(1);
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
         `"weeks"`
     );
     expect.verifySteps([
-        `["&", ("date", ">=", (context_today() + relativedelta(weeks = "ab")).strftime("%Y-%m-%d")), ("date", "<=", context_today().strftime("%Y-%m-%d"))]`,
+        `["&", ("date", ">=", context_today().strftime("%Y-%m-%d")), ("date", "<=", (context_today() + relativedelta(weeks = "ab")).strftime("%Y-%m-%d"))]`,
     ]);
 });
 
-test(`within operator (edit) for datetime with invalid period`, async () => {
+test(`next operator (edit) for datetime with invalid period`, async () => {
     await makeDomainSelector({
         resModel: "partner",
         domain: `["&", ("datetime", ">=", datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S")), ("datetime", "<=", datetime.datetime.combine(context_today() + relativedelta(a=1), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S"))]`,
@@ -2337,7 +2357,7 @@ test(`within operator (edit) for datetime with invalid period`, async () => {
             expect.step(domain);
         },
     });
-    expect(getCurrentOperator()).toBe("is within");
+    expect(getCurrentOperator()).toBe("next");
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1");
     expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) span`).toHaveText("a");
@@ -2351,6 +2371,121 @@ test(`within operator (edit) for datetime with invalid period`, async () => {
     );
     expect.verifySteps([
         `["&", ("datetime", ">=", datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S")), ("datetime", "<=", datetime.datetime.combine(context_today() + relativedelta(days = 1), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S"))]`,
+    ]);
+});
+
+test(`last operator (readonly) for date`, async () => {
+    await makeDomainSelector({
+        resModel: "partner",
+        domain: `["&", ("date", ">=", (context_today() + relativedelta(weeks = -1)).strftime("%Y-%m-%d")), ("date", "<=", context_today().strftime("%Y-%m-%d"))]`,
+        readonly: true,
+    });
+    const text = `Match\nall\nof the following rules:\nDate\nlast\n1\nweeks`;
+    expect(".o_domain_selector").toHaveText(text);
+});
+
+test(`last operator (readonly) for datetime`, async () => {
+    await makeDomainSelector({
+        resModel: "partner",
+        domain: `["&", ("datetime", ">=", datetime.datetime.combine(context_today() + relativedelta(weeks = -1), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S")), ("datetime", "<=", datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S"))]`,
+        readonly: true,
+    });
+    const text = `Match\nall\nof the following rules:\nDatetime\nlast\n1\nweeks`;
+    expect(".o_domain_selector").toHaveText(text);
+});
+
+test(`last operator (edit) for date`, async () => {
+    await makeDomainSelector({
+        resModel: "partner",
+        domain: `["&", ("date", ">=", (context_today() + relativedelta(weeks = -1)).strftime("%Y-%m-%d")), ("date", "<=", context_today().strftime("%Y-%m-%d"))]`,
+        update(domain) {
+            expect.step(domain);
+        },
+    });
+    expect(getCurrentOperator()).toBe("last");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
+        `"weeks"`
+    );
+    await contains(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).edit("1%");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(1) span`).toHaveText(`"1%"`);
+    expect(
+        `${SELECTORS.valueEditor} ${SELECTORS.editor} ${SELECTORS.clearNotSupported}`
+    ).toHaveCount(1);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor} .fa-exclamation-triangle`).toHaveAttribute(
+        "title",
+        "Positive integer expected"
+    );
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
+        `"weeks"`
+    );
+    expect.verifySteps([
+        `["&", ("date", ">=", (context_today() + relativedelta(weeks = "1%")).strftime("%Y-%m-%d")), ("date", "<=", context_today().strftime("%Y-%m-%d"))]`,
+    ]);
+
+    await contains(SELECTORS.clearNotSupported).click();
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
+        `"weeks"`
+    );
+    expect.verifySteps([
+        `["&", ("date", ">=", (context_today() + relativedelta(weeks = -1)).strftime("%Y-%m-%d")), ("date", "<=", context_today().strftime("%Y-%m-%d"))]`,
+    ]);
+});
+
+test(`last operator (edit) for date with an expression for amount`, async () => {
+    await makeDomainSelector({
+        resModel: "partner",
+        domain: `["&", ("date", ">=", (context_today() + relativedelta(weeks = -1)).strftime("%Y-%m-%d")), ("date", "<=", context_today().strftime("%Y-%m-%d"))]`,
+        update(domain) {
+            expect.step(domain);
+        },
+    });
+    expect(getCurrentOperator()).toBe("last");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
+        `"weeks"`
+    );
+
+    await contains(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).edit("ab");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(1) span`).toHaveText(`"ab"`);
+    expect(
+        `${SELECTORS.valueEditor} ${SELECTORS.editor} ${SELECTORS.clearNotSupported}`
+    ).toHaveCount(1);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
+        `"weeks"`
+    );
+    expect.verifySteps([
+        `["&", ("date", ">=", (context_today() + relativedelta(weeks = "ab")).strftime("%Y-%m-%d")), ("date", "<=", context_today().strftime("%Y-%m-%d"))]`,
+    ]);
+});
+
+test(`last operator (edit) for datetime with invalid period`, async () => {
+    await makeDomainSelector({
+        resModel: "partner",
+        domain: `["&", ("datetime", ">=", datetime.datetime.combine(context_today() + relativedelta(a = -1), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S")), ("datetime", "<=", datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S"))]`,
+        update(domain) {
+            expect.step(domain);
+        },
+    });
+    expect(getCurrentOperator()).toBe("last");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) span`).toHaveText("a");
+    expect(isNotSupportedValue(2)).toBe(true);
+
+    await clearNotSupported();
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}`).toHaveCount(2);
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).toHaveValue("1");
+    expect(`${SELECTORS.valueEditor} ${SELECTORS.editor}:nth-child(2) select`).toHaveValue(
+        `"days"`
+    );
+    expect.verifySteps([
+        `["&", ("datetime", ">=", datetime.datetime.combine(context_today() + relativedelta(days = -1), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S")), ("datetime", "<=", datetime.datetime.combine(context_today(), datetime.time(0, 0, 0)).to_utc().strftime("%Y-%m-%d %H:%M:%S"))]`,
     ]);
 });
 
@@ -2453,8 +2588,8 @@ test("Hierarchical operators", async () => {
         "does not contain",
         "child of",
         "parent of",
-        "is set",
-        "is not set",
+        "set",
+        "not set",
         "starts with",
         "ends with",
         "matches",
@@ -2489,14 +2624,14 @@ test("Hierarchical operators", async () => {
             "is not equal",
             "contains",
             "does not contain",
-            "is set",
-            "is not set",
+            "set",
+            "not set",
             "starts with",
             "ends with",
             "matches",
             "matches none of",
         ],
-        { message: "no hierarchical operator if allow_hierachy_operators is set to false" }
+        { message: "no hierarchical operator if allow_hierachy_operators set to false" }
     );
 });
 
@@ -2510,14 +2645,12 @@ test("preserve virtual operators in sub domains", async () => {
     });
     expect(getCurrentOperator()).toBe("matches");
     expect(getCurrentOperator(1)).toBe("matches");
-    expect(getCurrentOperator(2)).toBe("is");
-    expect(getCurrentOperator(3)).toBe("is not set");
+    expect(getCurrentOperator(2)).toBe("not set");
+    expect(getCurrentOperator(3)).toBe("not set");
 
     await contains(".o_tree_editor:eq(1) a:contains('New Rule'):eq(1)").click();
-    expect(getCurrentOperator()).toBe("matches");
-    expect(getCurrentOperator(1)).toBe("matches");
-    expect(getCurrentOperator(2)).toBe("is");
-    expect(getCurrentOperator(3)).toBe("is not set");
+    expect(getCurrentOperator(2)).toBe("not set");
+    expect(getCurrentOperator(3)).toBe("not set");
     expect(getCurrentOperator(4)).toBe("is equal");
     expect.verifySteps([
         `[("product_id", "any", ["&", ("team_id", "any", ["&", ("active", "=", False), ("name", "=", False)]), ("id", "=", 1)])]`,
@@ -2526,9 +2659,35 @@ test("preserve virtual operators in sub domains", async () => {
     await clickOnButtonDeleteNode(4);
     expect(getCurrentOperator()).toBe("matches");
     expect(getCurrentOperator(1)).toBe("matches");
-    expect(getCurrentOperator(2)).toBe("is");
-    expect(getCurrentOperator(3)).toBe("is not set");
+    expect(getCurrentOperator(2)).toBe("not set");
+    expect(getCurrentOperator(3)).toBe("not set");
     expect.verifySteps([
         `[("product_id", "any", [("team_id", "any", ["&", ("active", "=", False), ("name", "=", False)])])]`,
     ]);
+});
+
+test("don't show avatar for expressions", async () => {
+    class Users extends models.Model {
+        _name = "res.users";
+        name = fields.Char();
+
+        _records = [
+            { id: 1, name: "Mitchell Admin" },
+            { id: 2, name: "Marc Demo" },
+        ];
+    }
+    defineModels([Users]);
+    Partner._fields.user_id = fields.Many2one({ relation: "res.users" });
+    await makeDomainSelector({
+        isDebugMode: true,
+        domain: `[("user_id", "in", [1, uid, 2])]`,
+        resModel: "partner",
+    });
+    expect(".o_tag").toHaveCount(3);
+    expect(".o_tag.o_avatar").toHaveCount(2);
+    expect(".o_tag:not(.o_avatar)").toHaveText("uid");
+    expect(".o_tag:not(.o_avatar) img").toHaveCount(0);
+    await contains(SELECTORS.debugArea).edit(`[("user_id", "=", uid)]`);
+    expect(".o_record_selector input").toHaveValue("uid");
+    expect(".o_record_selector img").toHaveCount(0);
 });

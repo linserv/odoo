@@ -1,4 +1,4 @@
-import { Record } from "@mail/core/common/record";
+import { fields, Record } from "@mail/core/common/record";
 import { Deferred } from "@web/core/utils/concurrency";
 
 export class RtcSession extends Record {
@@ -8,7 +8,7 @@ export class RtcSession extends Record {
     static _insert() {
         /** @type {import("models").RtcSession} */
         const session = super._insert(...arguments);
-        session.channel?.rtcSessions.add(session);
+        session.channel?.rtc_session_ids.add(session);
         return session;
     }
     /** @returns {Promise<import("models").RtcSession>} */
@@ -37,8 +37,8 @@ export class RtcSession extends Record {
     }
 
     // Server data
-    channel_member_id = Record.one("discuss.channel.member", { inverse: "rtcSession" });
-    persona = Record.one("Persona", {
+    channel_member_id = fields.One("discuss.channel.member", { inverse: "rtcSession" });
+    persona = fields.One("Persona", {
         compute() {
             return this.channel_member_id?.persona;
         },
@@ -62,7 +62,7 @@ export class RtcSession extends Record {
     dataChannel;
     audioError;
     videoError;
-    isTalking = Record.attr(false, {
+    isTalking = fields.Attr(false, {
         /** @this {import("models").RtcSession} */
         onUpdate() {
             if (this.isTalking && !this.isMute) {
@@ -70,19 +70,19 @@ export class RtcSession extends Record {
             }
         },
     });
-    isActuallyTalking = Record.attr(false, {
+    isActuallyTalking = fields.Attr(false, {
         /** @this {import("models").RtcSession} */
         compute() {
             return this.isTalking && !this.isMute;
         },
     });
-    isVideoStreaming = Record.attr(false, {
+    isVideoStreaming = fields.Attr(false, {
         /** @this {import("models").RtcSession} */
         compute() {
             return this.is_screen_sharing_on || this.is_camera_on;
         },
     });
-    shortStatus = Record.attr(undefined, {
+    shortStatus = fields.Attr(undefined, {
         compute() {
             if (this.is_screen_sharing_on) {
                 return "live";

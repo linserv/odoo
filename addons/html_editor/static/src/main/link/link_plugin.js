@@ -76,6 +76,10 @@ async function fetchInternalMetaData(url) {
     // Get the internal metadata
     const keepLastPromise = new KeepLast();
     const urlParsed = new URL(url);
+    // Enforce the current page's protocol to prevent mixed content issues.
+    if (urlParsed.protocol !== window.location.protocol) {
+        urlParsed.protocol = window.location.protocol;
+    }
 
     const result = await keepLastPromise
         .add(fetch(urlParsed))
@@ -247,6 +251,15 @@ export class LinkPlugin extends Plugin {
         });
         this.addDomListener(this.editable, "keydown", () => {
             delete this._isNavigatingByMouse;
+        });
+        this.addDomListener(this.editable, "auxclick", (ev) => {
+            if (ev.button === 1) {
+                const link = closestElement(ev.target, "a");
+                if (link?.href) {
+                    window.open(link.href, "_blank");
+                    ev.preventDefault();
+                }
+            }
         });
         // link creation is added to the command service because of a shortcut conflict,
         // as ctrl+k is used for invoking the command palette
@@ -587,9 +600,7 @@ export class LinkPlugin extends Plugin {
             }
         }
         if (!selectionData.documentSelectionIsInEditable) {
-            // note that data-prevent-closing-overlay also used in color picker but link popover
-            // and color picker don't open at the same time so it's ok to query like this
-            const popoverEl = document.querySelector("[data-prevent-closing-overlay=true]");
+            const popoverEl = document.querySelector(".o-we-linkpopover");
             if (popoverEl?.contains(selectionData.documentSelection?.anchorNode)) {
                 return;
             }

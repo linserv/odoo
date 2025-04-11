@@ -5,11 +5,7 @@
 }
 
 .o-mail-Discuss-core {
-    background-color: var(--mail-Discuss-coreBgColor, $body-bg);
-}
-
-.o-mail-Discuss-threadContainerHeader {
-    background-color: var(--mail-Discuss-coreBgColor, $body-bg);
+    background-color: $body-bg;
 }
 
 .o-mail-Discuss-selfAvatar {
@@ -54,6 +50,11 @@
 
 .o-mail-Discuss-headerCountry {
     width: 24px;
+}
+
+.o-mail-Discuss-headerImStatus {
+    bottom: -2px;
+    right: -2px;
 }
 
 .o-mail-Discuss-panelContainer {

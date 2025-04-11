@@ -199,7 +199,8 @@
             'web_tour/static/src/tour_service/**/*',
             'web/static/lib/hoot-dom/**/*',
 
-            'html_editor/static/src/**/*',
+            ('include', 'html_editor.assets_editor'),
+            'html_editor/static/src/fields/**/*',
 
             'mail/static/src/scss/variables/*.scss',
             'mail/static/src/chatter/web/form_renderer.scss',
@@ -212,7 +213,6 @@
 
             ('include', 'portal.assets_chatter_helpers'),
             'portal/static/src/chatter/core/**/*',
-            'project/static/src/project_sharing/search/favorite_menu/custom_favorite_item.xml',
             'project/static/src/project_sharing/**/*',
             'web/static/src/start.js',
         ],

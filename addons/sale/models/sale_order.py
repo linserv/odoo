@@ -12,8 +12,9 @@ from odoo.exceptions import AccessError, RedirectWarning, UserError, ValidationE
 from odoo.fields import Command
 from odoo.http import request
 from odoo.osv import expression
-from odoo.tools import SQL, float_is_zero, format_amount, format_date, is_html_empty
+from odoo.tools import OrderedSet, SQL, float_is_zero, format_amount, is_html_empty
 from odoo.tools.mail import html_keep_url
+from odoo.tools.misc import str2bool
 
 from odoo.addons.payment import utils as payment_utils
 
@@ -103,6 +104,12 @@ class SaleOrder(models.Model):
         string="Payment Ref.",
         help="The payment communication of this sale order.",
         copy=False)
+    pending_email_template_id = fields.Many2one(
+        string="Pending Email Template",
+        comodel_name='mail.template',
+        ondelete='set null',
+        readonly=True,
+    )  # The template of the pending email that must be sent asynchronously.
 
     require_signature = fields.Boolean(
         string="Online signature",
@@ -238,6 +245,11 @@ class SaleOrder(models.Model):
         string="Invoice Status",
         compute='_compute_invoice_status',
         store=True)
+
+    sale_warning_text = fields.Text(
+        "Sale Warning",
+        help="Internal warning for the partner or the products as set by the user.",
+        compute='_compute_sale_warning_text')
 
     # Payment fields
     transaction_ids = fields.Many2many(
@@ -795,6 +807,17 @@ class SaleOrder(models.Model):
         for order in self:
             order.access_url = f'/my/orders/{order.id}'
 
+    @api.depends('partner_id.name', 'partner_id.sale_warn_msg', 'order_line.sale_line_warn_msg')
+    def _compute_sale_warning_text(self):
+        for order in self:
+            warnings = OrderedSet()
+            if partner_msg := order.partner_id.sale_warn_msg:
+                warnings.add(order.partner_id.name + ' - ' + partner_msg)
+            for line in order.order_line:
+                if product_msg := line.sale_line_warn_msg:
+                    warnings.add(line.product_id.display_name + ' - ' + product_msg)
+            order.sale_warning_text = '\n'.join(warnings)
+
     #=== CONSTRAINT METHODS ===#
 
     @api.constrains('company_id', 'order_line')
@@ -870,32 +893,6 @@ class SaleOrder(models.Model):
             or (self.fiscal_position_id and self._origin.fiscal_position_id != self.fiscal_position_id)
         ):
             self.show_update_fpos = True
-
-    @api.onchange('partner_id')
-    def _onchange_partner_id_warning(self):
-        if not self.partner_id:
-            return
-
-        partner = self.partner_id
-
-        # If partner has no warning, check its company
-        if partner.sale_warn == 'no-message' and partner.parent_id:
-            partner = partner.parent_id
-
-        if partner.sale_warn and partner.sale_warn != 'no-message':
-            # Block if partner only has warning but parent company is blocked
-            if partner.sale_warn != 'block' and partner.parent_id and partner.parent_id.sale_warn == 'block':
-                partner = partner.parent_id
-
-            if partner.sale_warn == 'block':
-                self.partner_id = False
-
-            return {
-                'warning': {
-                    'title': _("Warning for %s", partner.name),
-                    'message': partner.sale_warn_msg,
-                }
-            }
 
     @api.onchange('pricelist_id')
     def _onchange_pricelist_id_show_update_prices(self):
@@ -1208,12 +1205,16 @@ class SaleOrder(models.Model):
         for order in self:
             order._send_order_notification_mail(mail_template)
 
-    def _send_order_notification_mail(self, mail_template):
-        """ Send a mail to the customer
+    def _send_order_notification_mail(self, mail_template, allow_deferred_sending=True):
+        """ Send a mail to the customer.
+
+        If the `sale.async_emails` ICP is set and `allow_deferred_sending` is true, order status
+        emails are sent asynchronously through a cron.
 
         Note: self.ensure_one()
 
         :param mail.template mail_template: the template used to generate the mail
+        :param bool allow_deferred_sending: Whether the email can be sent asynchronously.
         :return: None
         """
         self.ensure_one()
@@ -1225,11 +1226,38 @@ class SaleOrder(models.Model):
             # sending mail in sudo was meant for it being sent from superuser
             self = self.with_user(SUPERUSER_ID)
 
-        self.with_context(force_send=True).message_post_with_source(
-            mail_template,
-            email_layout_xmlid='mail.mail_notification_layout_with_responsible_signature',
-            subtype_xmlid='mail.mt_comment',
-        )
+        async_send = str2bool(self.env['ir.config_parameter'].sudo().get_param('sale.async_emails'))
+        cron = self.env.ref('sale.send_pending_emails_cron', raise_if_not_found=False)
+        cron_enabled = cron and cron.active
+        if async_send and cron_enabled and allow_deferred_sending:
+            # Schedule the email to be sent asynchronously.
+            self.pending_email_template_id = mail_template
+            cron._trigger()
+        else:  # Async emails are disabled, either by the user or we are in the cron job.
+            # Send the email synchronously.
+            self.with_context(force_send=True).message_post_with_source(
+                mail_template,
+                email_layout_xmlid='mail.mail_notification_layout_with_responsible_signature',
+                subtype_xmlid='mail.mt_comment',
+            )
+
+    @api.model
+    def _cron_send_pending_emails(self):
+        """ Find and send pending order status emails asynchronously.
+
+        :return: None
+        """
+        pending_email_orders = self.search([('pending_email_template_id', '!=', False)])
+        self.env['ir.cron']._commit_progress(remaining=len(pending_email_orders))
+        for order in pending_email_orders:
+            order = order[0]  # Avoid pre-fetching after each cache invalidation due to committing.
+            order._send_order_notification_mail(
+                order.pending_email_template_id, allow_deferred_sending=False
+            )  # Resume the email sending.
+            order.pending_email_template_id = None
+            remaining_time = self.env['ir.cron']._commit_progress(processed=1)
+            if not remaining_time:
+                break
 
     def action_lock(self):
         self.locked = True
@@ -2117,10 +2145,8 @@ class SaleOrder(models.Model):
         res = super()._get_product_catalog_order_data(products, **kwargs)
         for product in products:
             res[product.id]['price'] = pricelist.get(product.id)
-            if product.sale_line_warn != 'no-message' and product.sale_line_warn_msg:
+            if product.sale_line_warn_msg:
                 res[product.id]['warning'] = product.sale_line_warn_msg
-            if product.sale_line_warn == "block":
-                res[product.id]['readOnly'] = True
         return res
 
     def _get_product_catalog_record_lines(self, product_ids, **kwargs):

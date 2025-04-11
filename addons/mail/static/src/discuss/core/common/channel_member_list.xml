@@ -38,13 +38,13 @@
         <div class="o-discuss-ChannelMember d-flex align-items-center p-1 bg-inherit rounded" t-att-class="{ 'cursor-pointer': canOpenChatWith(member), 'o-offline': offline }" t-on-click.stop="(ev) => this.onClickAvatar(ev, member)">
             <div class="bg-inherit o-discuss-ChannelMember-avatar position-relative d-flex flex-shrink-0">
                 <img class="w-100 h-100 rounded o_object_fit_cover" t-att-src="member.persona.avatarUrl"/>
-                <ImStatus member="member" className="'position-absolute top-100 start-100 translate-middle mt-n1 ms-n1'" size="'md'"/>
+                <ImStatus member="member" className="'position-absolute top-100 start-100 translate-middle mt-n1 ' + (member.isTyping ? 'ms-n2' : 'ms-n1')" size="'md'"/>
             </div>
             <div t-ref="displayName" class="d-flex overflow-hidden flex-column">
                 <span class="ms-2 text-truncate text-muted fw-bold" t-esc="member.name" t-att-title="member.name"/>
             </div>
             <span class="ms-auto">
-                <span t-if="member.in(props.thread.invitedMembers)" class="p-1 fa fa-user-plus opacity-75"/>
+                <span t-if="member.in(props.thread.invited_member_ids)" class="p-1 fa fa-user-plus opacity-75"/>
                 <span t-if="member.rtcSession?.is_muted and !member.rtcSession?.is_deaf" class="p-1 fa fa-microphone-slash opacity-75"/>
                 <span t-elif="member.rtcSession?.is_deaf" class="p-1 fa fa-deaf opacity-75"/>
                 <span t-if="member.rtcSession?.raisingHand" class="p-1 fa fa-hand-paper-o"/>

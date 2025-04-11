@@ -11,6 +11,7 @@ from odoo import SUPERUSER_ID, _, api, fields, models
 from odoo.addons.stock.models.stock_move import PROCUREMENT_PRIORITIES
 from odoo.addons.web.controllers.utils import clean_action
 from odoo.exceptions import UserError, ValidationError
+from odoo.fields import Domain
 from odoo.osv import expression
 from odoo.tools import format_datetime, format_date, groupby, SQL
 from odoo.tools.float_utils import float_compare, float_is_zero
@@ -682,7 +683,7 @@ class StockPicking(models.Model):
     weight_bulk = fields.Float(
         'Bulk Weight', compute='_compute_bulk_weight', help="Total weight of products which are not in a package.")
     shipping_weight = fields.Float(
-        "Weight for Shipping", compute='_compute_shipping_weight', readonly=False,
+        "Weight for Shipping", compute='_compute_shipping_weight', readonly=False, store=True,
         help="Total weight of packages and products not in a package. "
         "Packages with no shipping weight specified will default to their products' total weight. "
         "This is the weight used to compute the cost of the shipping.")
@@ -721,6 +722,11 @@ class StockPicking(models.Model):
         string='Date Category', store=False,
         search='_search_date_category', readonly=True
     )
+    partner_country_id = fields.Many2one('res.country', related='partner_id.country_id')
+    picking_warning_text = fields.Text(
+        "Picking Instructions",
+        help="Internal instructions for the partner or its parent company as set by the user.",
+        compute='_compute_picking_warning_text')
 
     _name_uniq = models.Constraint(
         'unique(name, company_id)',
@@ -987,6 +993,16 @@ class StockPicking(models.Model):
         for picking in self:
             picking.return_count = len(picking.return_ids)
 
+    @api.depends('partner_id.name', 'partner_id.parent_id.name')
+    def _compute_picking_warning_text(self):
+        for picking in self:
+            text = ''
+            if partner_msg := picking.partner_id.picking_warn_msg:
+                text += partner_msg + '\n'
+            if parent_msg := picking.partner_id.parent_id.picking_warn_msg:
+                text += parent_msg + '\n'
+            picking.picking_warning_text = text
+
     def _get_next_transfers(self):
         next_pickings = self.move_ids.move_dest_ids.picking_id
         return next_pickings.filtered(lambda p: p not in self.return_ids)
@@ -1051,8 +1067,9 @@ class StockPicking(models.Model):
 
     @api.model
     def _search_delay_alert_date(self, operator, value):
-        late_stock_moves = self.env['stock.move'].search([('delay_alert_date', operator, value)])
-        return [('move_ids', 'in', late_stock_moves.ids)]
+        if Domain.is_negative_operator(operator):
+            return NotImplemented
+        return [('move_ids.delay_alert_date', operator, value)]
 
     @api.onchange('picking_type_id', 'partner_id')
     def _onchange_picking_type(self):
@@ -1067,21 +1084,6 @@ class StockPicking(models.Model):
                 if not move.product_id:
                     continue
                 move.description_picking = move.product_id._get_description(move.picking_type_id)
-
-        if self.partner_id and self.partner_id.picking_warn:
-            if self.partner_id.picking_warn == 'no-message' and self.partner_id.parent_id:
-                partner = self.partner_id.parent_id
-            elif self.partner_id.picking_warn not in ('no-message', 'block') and self.partner_id.parent_id.picking_warn == 'block':
-                partner = self.partner_id.parent_id
-            else:
-                partner = self.partner_id
-            if partner.picking_warn != 'no-message':
-                if partner.picking_warn == 'block':
-                    self.partner_id = False
-                return {'warning': {
-                    'title': ("Warning for %s") % partner.name,
-                    'message': partner.picking_warn_msg
-                }}
 
     @api.onchange('location_dest_id')
     def _onchange_location_dest_id(self):

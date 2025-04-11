@@ -28,6 +28,8 @@ class TestSaleOrder(SaleCommon):
             {'name': 'Partner 1'},
             {'name': 'Partner 2'},
         ])
+        cls.confirmation_email_template = cls.sale_order._get_confirmation_template()
+        cls.async_emails_cron = cls.env.ref('sale.send_pending_emails_cron')
 
     def test_computes_auto_fill(self):
         free_product, dummy_product = self.env['product.product'].create([{
@@ -339,6 +341,46 @@ class TestSaleOrder(SaleCommon):
         self.assertFalse(public_user.has_group('sale.group_auto_done_setting'))
         self.assertTrue(self.sale_order.locked)
 
+    def test_order_status_email_is_sent_synchronously_if_not_configured(self):
+        """ Test that the order status email is sent synchronously when nothing is configured. """
+        self.env['ir.config_parameter'].set_param('sale.async_emails', 'False')
+
+        self.sale_order._send_order_notification_mail(self.confirmation_email_template)
+        self.assertFalse(
+            self.env['ir.cron.trigger'].search_count([('cron_id', '=', self.async_emails_cron.id)]),
+            msg="The email should be sent synchronously when the system parameter is not set.",
+        )
+
+    def test_order_status_email_is_sent_asynchronously_if_configured(self):
+        """ Test that the order status email is sent asynchronously when configured. """
+        self.env['ir.config_parameter'].set_param('sale.async_emails', 'True')
+
+        self.sale_order._send_order_notification_mail(self.confirmation_email_template)
+        self.assertTrue(
+            self.sale_order.pending_email_template_id,
+            msg="The email template should be saved on the sales order.",
+        )
+        self.assertTrue(
+            self.env['ir.cron.trigger'].search_count([('cron_id', '=', self.async_emails_cron.id)]),
+            msg="The asynchronous email sending cron should be triggered.",
+        )
+
+    def test_async_emails_cron_does_not_trigger_itself(self):
+        """ Test that the asynchronous email sending cron does not loop indefinitely. """
+        self.env['ir.config_parameter'].set_param('sale.async_emails', 'True')
+        self.sale_order.pending_email_template_id = self.confirmation_email_template
+
+        with self.enter_registry_test_mode():
+            self.env.ref('sale.send_pending_emails_cron').method_direct_trigger()
+        self.assertFalse(
+            self.sale_order.pending_email_template_id,
+            msg="The email template should be removed from the sales order.",
+        )
+        self.assertFalse(
+            self.env['ir.cron.trigger'].search_count([('cron_id', '=', self.async_emails_cron.id)]),
+            msg="The email should be sent synchronously when requested by the cron.",
+        )
+
     def test_so_discount_is_not_reset(self):
         """ Discounts should not be recomputed on order confirmation """
         with patch(
@@ -545,6 +587,37 @@ class TestSaleOrder(SaleCommon):
             ],
         })
         self.assertEqual(new_order.order_line.price_unit, 22.0)
+
+    def test_sale_warnings(self):
+        """Test warnings when partner/products with sale warnings are used."""
+        partner_with_warning = self.env['res.partner'].create({
+            'name': 'Test Partner', 'sale_warn_msg': 'Highly infectious disease'})
+        sale_order = self.env['sale.order'].create({'partner_id': partner_with_warning.id})
+
+        product_with_warning1 = self.env['product.product'].create({
+            'name': 'Test Product 1', 'sale_line_warn_msg': 'Highly corrosive'})
+        product_with_warning2 = self.env['product.product'].create({
+            'name': 'Test Product 2', 'sale_line_warn_msg': 'Toxic pollutant'})
+        self.env['sale.order.line'].create([
+            {
+                'order_id': sale_order.id,
+                'product_id': product_with_warning1.id,
+            },
+            {
+                'order_id': sale_order.id,
+                'product_id': product_with_warning2.id,
+            },
+            # Warnings for duplicate products should not appear.
+            {
+                'order_id': sale_order.id,
+                'product_id': product_with_warning1.id,
+            },
+        ])
+
+        expected_warnings = ('Test Partner - Highly infectious disease',
+                             'Test Product 1 - Highly corrosive',
+                             'Test Product 2 - Toxic pollutant')
+        self.assertEqual(sale_order.sale_warning_text, '\n'.join(expected_warnings))
 
 
 @tagged('post_install', '-at_install')

@@ -117,7 +117,7 @@ class TestFrontendCommon(TestPointOfSaleHttpCommon):
             company_id=main_company.id,
         )
 
-        cls.env['product.product'].create({
+        cls.coca_cola_test = cls.env['product.product'].create({
             'available_in_pos': True,
             'list_price': 2.20,
             'name': 'Coca-Cola',
@@ -126,7 +126,7 @@ class TestFrontendCommon(TestPointOfSaleHttpCommon):
             'taxes_id': [(6, 0, [])],
         })
 
-        cls.env['product.product'].create({
+        cls.water_test = cls.env['product.product'].create({
             'available_in_pos': True,
             'list_price': 2.20,
             'name': 'Water',
@@ -135,7 +135,7 @@ class TestFrontendCommon(TestPointOfSaleHttpCommon):
             'taxes_id': [(6, 0, [])],
         })
 
-        cls.env['product.product'].create({
+        cls.minute_maid_test = cls.env['product.product'].create({
             'available_in_pos': True,
             'list_price': 2.20,
             'name': 'Minute Maid',
@@ -288,13 +288,6 @@ class TestFrontend(TestFrontendCommon):
         self.start_pos_tour('SaveLastPreparationChangesTour')
         self.assertTrue(self.pos_config.current_session_id.order_ids.last_order_preparation_change, "There should be a last order preparation change")
         self.assertTrue("Coca" in self.pos_config.current_session_id.order_ids.last_order_preparation_change, "The last order preparation change should contain 'Coca'")
-
-    def test_11_bill_screen_qrcode_data(self):
-        self.pos_config.write({'printer_ids': False})
-        self.pos_config.company_id.point_of_sale_use_ticket_qr_code = True
-        self.pos_config.company_id.point_of_sale_ticket_portal_url_display_mode = 'qr_code_and_url'
-        self.pos_config.with_user(self.pos_user).open_ui()
-        self.start_pos_tour('BillScreenTour')
 
     def test_12_order_tracking(self):
         self.pos_config.write({'order_edit_tracking': True})

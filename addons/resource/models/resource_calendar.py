@@ -14,7 +14,7 @@ from pytz import timezone, utc
 from odoo import api, fields, models, _
 from odoo.addons.base.models.res_partner import _tz_get
 from odoo.exceptions import ValidationError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools.date_intervals import Intervals, float_to_time, make_aware, datetime_to_string, string_to_datetime
 from odoo.tools.float_utils import float_round
 
@@ -353,13 +353,13 @@ class ResourceCalendar(models.Model):
         else:
             resources_list = list(resources) + [self.env['resource.resource']]
         resource_ids = [r.id for r in resources_list]
-        domain = domain if domain is not None else []
-        domain = expression.AND([domain, [
-            ('calendar_id', '=', self.id),
-            ('resource_id', 'in', resource_ids),
-            ('display_type', '=', False),
-            ('day_period', '!=' if not lunch else '=', 'lunch'),
-        ]])
+        domain = Domain.AND([
+            Domain(domain or Domain.TRUE),
+            Domain('calendar_id', '=', self.id),
+            Domain('resource_id', 'in', resource_ids),
+            Domain('display_type', '=', False),
+            Domain('day_period', '!=' if not lunch else '=', 'lunch'),
+        ])
 
         attendances = self.env['resource.calendar.attendance'].search(domain)
         # Since we only have one calendar to take in account
@@ -433,7 +433,10 @@ class ResourceCalendar(models.Model):
             for resource in resources:
                 if resource and resource._is_flexible():
                 # If the resource is flexible, return the whole period from start_dt to end_dt with a dummy attendance
-                    dummy_attendance = self.env['resource.calendar.attendance']
+                    dummy_attendance = self.env['resource.calendar.attendance'].new({
+                        'duration_hours': (end - start).total_seconds() / 3600,
+                        'duration_days': (end - start).days + 1,
+                    })
                     result_per_resource_id[resource.id] = WorkIntervals([(start, end, dummy_attendance)])
                 elif resource in per_resource_result:
                     resource_specific_result = [(max(bounds_per_tz[tz][0], tz.localize(val[0])), min(bounds_per_tz[tz][1], tz.localize(val[1])), val[2])
