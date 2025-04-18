@@ -104,7 +104,7 @@ class ProductProduct(models.Model):
     # There could be no variant for a combination if using dynamic attributes.
     _combination_unique = models.UniqueIndex("(product_tmpl_id, combination_indices) WHERE active IS TRUE")
 
-    is_favorite = fields.Boolean(related='product_tmpl_id.is_favorite', readonly=True, store=True)
+    is_favorite = fields.Boolean(related='product_tmpl_id.is_favorite', readonly=False, store=True)
     _is_favorite_index = models.Index("(is_favorite) WHERE is_favorite IS TRUE")
 
     @api.depends('image_variant_1920', 'image_variant_1024')
@@ -241,9 +241,10 @@ class ProductProduct(models.Model):
         """ With GS1 nomenclature, products and packagings use the same pattern. Therefore, we need
         to ensure the uniqueness between products' barcodes and packagings' ones"""
         # Barcodes should only be unique within a company
-        for company_id, barcodes_within_company in self._get_barcodes_by_company():
-            self._check_duplicated_product_barcodes(barcodes_within_company, company_id)
-            self._check_duplicated_packaging_barcodes(barcodes_within_company, company_id)
+        self_ctx = self.with_context(skip_preprocess_gs1=True)
+        for company_id, barcodes_within_company in self_ctx._get_barcodes_by_company():
+            self_ctx._check_duplicated_product_barcodes(barcodes_within_company, company_id)
+            self_ctx._check_duplicated_packaging_barcodes(barcodes_within_company, company_id)
 
     @api.constrains('company_id')
     def _check_company_id(self):
@@ -346,6 +347,11 @@ class ProductProduct(models.Model):
         if operator in expression.NEGATIVE_TERM_OPERATORS:
             return NotImplemented
         return ['|', ('product_tag_ids', operator, operand), ('additional_product_tag_ids', operator, operand)]
+
+    @api.onchange('standard_price')
+    def _onchange_standard_price(self):
+        if self.standard_price < 0:
+            raise ValidationError(_("The cost of a product can't be negative."))
 
     @api.onchange('default_code')
     def _onchange_default_code(self):

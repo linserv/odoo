@@ -93,7 +93,7 @@ class StockMove(models.Model):
         move_out_ids = set()
         locations_should_be_valued = (self.move_line_ids.location_id | self.move_line_ids.location_dest_id).filtered(lambda l: l._should_be_valued())
         for record in self:
-            for move_line in self.move_line_ids:
+            for move_line in record.move_line_ids:
                 if move_line._should_exclude_for_valuation() or not move_line.picked:
                     continue
                 if move_line.location_id not in locations_should_be_valued and move_line.location_dest_id in locations_should_be_valued:
@@ -536,10 +536,15 @@ class StockMove(models.Model):
         return svl_vals_list
 
     def _get_src_account(self, accounts_data):
-        return self.location_id.valuation_out_account_id.id or accounts_data['stock_input'].id
+        if self.location_id.usage == 'inventory':
+            return self.location_id.valuation_in_account_id.id or accounts_data['income'].id
+        else:
+            return self.location_id.valuation_out_account_id.id or accounts_data['stock_input'].id
 
     def _get_dest_account(self, accounts_data):
-        if not self.location_dest_id.usage in ('production', 'inventory'):
+        if self.location_dest_id.usage == 'inventory':
+            return self.location_dest_id.valuation_out_account_id.id or accounts_data['expense'].id
+        elif not self.location_dest_id.usage in ('production', 'inventory'):
             return accounts_data['stock_output'].id
         else:
             return self.location_dest_id.valuation_in_account_id.id or accounts_data['stock_output'].id

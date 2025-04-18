@@ -1,5 +1,4 @@
 import { hasTouch, isBrowserFirefox } from "@web/core/browser/feature_detection";
-import { rpc } from "@web/core/network/rpc";
 import { utils as uiUtils } from "@web/core/ui/ui_service";
 import publicWidget from "@web/legacy/js/public/public_widget";
 import "@website/libs/zoomodoo/zoomodoo";
@@ -402,7 +401,35 @@ export const WebsiteSale = publicWidget.Widget.extend(VariantMixin, {
             if (productGrid) {
                 productGrid.classList.add("opacity-50");
             }
-            $(ev.currentTarget).closest("form").submit();
+            const form = ev.currentTarget.closest('form');
+            const filters = form.querySelectorAll('input:checked, select');
+            const attributeValues = new Map();
+            const tags = new Set();
+            for (const filter of filters) {
+                if (filter.value) {
+                    if (filter.name === 'attribute_value') {
+                        // Group attribute value ids by attribute id.
+                        const [attributeId, attributeValueId] = filter.value.split('-');
+                        const valueIds = attributeValues.get(attributeId) ?? new Set();
+                        valueIds.add(attributeValueId);
+                        attributeValues.set(attributeId, valueIds);
+                    } else if (filter.name === 'tags') {
+                        tags.add(filter.value)
+                    }
+                }
+            }
+            const url = new URL(form.action);
+            const searchParams = url.searchParams;
+            // Aggregate all attribute values belonging to the same attribute into a single
+            // `attribute_value` search param.
+            for (const entry of attributeValues.entries()) {
+                searchParams.append('attribute_value', `${entry[0]}-${[...entry[1]].join(',')}`);
+            }
+            // Aggregate all tags into a single `tags` search param.
+            if (tags.size) {
+                searchParams.set('tags', [...tags].join(','));
+            }
+            window.location.href = `${url.pathname}?${searchParams.toString()}`;
         }
     },
     /**
@@ -602,54 +629,6 @@ publicWidget.registry.WebsiteSaleSearchModal = publicWidget.Widget.extend({
     },
 });
 
-publicWidget.registry.WebsiteSaleLayout = publicWidget.Widget.extend({
-    selector: '.oe_website_sale',
-    disabledInEditableMode: false,
-    events: {
-        'change .o_wsale_apply_layout input': '_onApplyShopLayoutChange',
-    },
-
-    //--------------------------------------------------------------------------
-    // Handlers
-    //--------------------------------------------------------------------------
-
-    /**
-     * @private
-     * @param {Event} ev
-     */
-    _onApplyShopLayoutChange: function (ev) {
-        const wysiwyg = this.options.wysiwyg;
-        if (wysiwyg) {
-            wysiwyg.odooEditor.observerUnactive('_onApplyShopLayoutChange');
-        }
-        var clickedValue = $(ev.target).val();
-        var isList = clickedValue === 'list';
-        if (!this.editableMode) {
-            rpc('/shop/save_shop_layout_mode', {
-                'layout_mode': isList ? 'list' : 'grid',
-            });
-        }
-
-        const activeClasses = ev.target.parentElement.dataset.activeClasses.split(' ');
-        ev.target.parentElement.querySelectorAll('.btn').forEach((btn) => {
-            activeClasses.map(c => btn.classList.toggle(c));
-        });
-
-        var $grid = this.$('#products_grid');
-        // Disable transition on all list elements, then switch to the new
-        // layout then reenable all transitions after having forced a redraw
-        // TODO should probably be improved to allow disabling transitions
-        // altogether with a class/option.
-        $grid.find('*').css('transition', 'none');
-        $grid.toggleClass('o_wsale_layout_list', isList);
-        void $grid[0].offsetWidth;
-        $grid.find('*').css('transition', '');
-        if (wysiwyg) {
-            wysiwyg.odooEditor.observerActive('_onApplyShopLayoutChange');
-        }
-    },
-});
-
 publicWidget.registry.WebsiteSaleAccordionProduct = publicWidget.Widget.extend({
     selector: "#product_accordion",
 
@@ -679,55 +658,8 @@ publicWidget.registry.WebsiteSaleAccordionProduct = publicWidget.Widget.extend({
     },
 });
 
-publicWidget.registry.websiteSaleProductPageReviews = publicWidget.Widget.extend({
-    selector: '#o_product_page_reviews',
-    disabledInEditableMode: false,
-
-    /**
-     * @override
-     */
-    init() {
-        this._super(...arguments);
-        this.website_menus = this.bindService("website_menus");
-    },
-
-    /**
-     * @override
-     */
-    async start() {
-        await this._super(...arguments);
-        this._updateChatterComposerPosition();
-        this.website_menus.registerCallback(this._updateChatterComposerPosition.bind(this));
-    },
-    /**
-     * @override
-     */
-    destroy() {
-        this.$el.find('.o_portal_chatter_composer').css('top', '');
-        this._super(...arguments);
-    },
-
-    //--------------------------------------------------------------------------
-    // Private
-    //--------------------------------------------------------------------------
-
-    /**
-     * @private
-     */
-    _updateChatterComposerPosition() {
-        let size = 20;
-        for (const el of document.querySelectorAll('.o_top_fixed_element')) {
-            size += $(el).outerHeight();
-        }
-        this.$el.find('.o_portal_chatter_composer').css('top', size);
-    },
-});
-
 export default {
     WebsiteSale: publicWidget.registry.WebsiteSale,
-    WebsiteSaleLayout: publicWidget.registry.WebsiteSaleLayout,
     WebsiteSaleSearchModal: publicWidget.registry.WebsiteSaleSearchModal,
     WebsiteSaleProductPage: publicWidget.registry.WebsiteSaleAccordionProduct,
-    WebsiteSaleCarouselProduct: publicWidget.registry.websiteSaleCarouselProduct,
-    WebsiteSaleProductPageReviews: publicWidget.registry.websiteSaleProductPageReviews,
 };

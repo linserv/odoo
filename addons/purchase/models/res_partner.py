@@ -28,10 +28,6 @@ class ResPartner(models.Model):
                     partner.purchase_order_count += count
                 partner = partner.parent_id
 
-    @api.model
-    def _commercial_fields(self):
-        return super()._commercial_fields()
-
     property_purchase_currency_id = fields.Many2one(
         'res.currency', string="Supplier Currency", company_dependent=True,
         help="This currency will be used for purchases from the current partner")
@@ -47,3 +43,12 @@ class ResPartner(models.Model):
     reminder_date_before_receipt = fields.Integer('Days Before Receipt', company_dependent=True,
         help="Number of days to send reminder email before the promised receipt date")
     buyer_id = fields.Many2one('res.users', string='Buyer')
+
+    def _compute_application_statistics_hook(self):
+        data_list = super()._compute_application_statistics_hook()
+        if not self.env.user.has_group('purchase.group_purchase_user'):
+            return data_list
+        for partner in self.filtered(lambda partner: partner.purchase_order_count):
+            stat_info = {'iconClass': 'fa-credit-card', 'value': partner.purchase_order_count, 'label': _('Purchases')}
+            data_list[partner.id].append(stat_info)
+        return data_list

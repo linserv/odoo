@@ -87,6 +87,7 @@ class ResCompany(models.Model):
         inverse='_inverse_peppol_purchase_journal_id',
     )
     peppol_external_provider = fields.Char(tracking=True)
+    peppol_can_send = fields.Boolean(compute='_compute_peppol_can_send')
 
     # -------------------------------------------------------------------------
     # HELPER METHODS
@@ -192,6 +193,12 @@ class ResCompany(models.Model):
                     company.account_peppol_phone_number = company.phone
                 except ValidationError:
                     continue
+
+    @api.depends('account_peppol_proxy_state')
+    def _compute_peppol_can_send(self):
+        can_send_domain = self.env['account_edi_proxy_client.user']._get_can_send_domain()
+        for company in self:
+            company.peppol_can_send = company.account_peppol_proxy_state in can_send_domain
 
     # -------------------------------------------------------------------------
     # LOW-LEVEL METHODS
@@ -319,3 +326,14 @@ class ResCompany(models.Model):
             'external_provider': external_provider,
             'error_msg': error_msg,
         }
+
+    def _account_peppol_send_welcome_email(self):
+        self.ensure_one()
+        if self.account_peppol_proxy_state not in ('sender', 'receiver'):
+            return
+
+        mail_template = self.env.ref('account_peppol.mail_template_peppol_registration', raise_if_not_found=False)
+        if not mail_template:
+            return
+
+        mail_template.send_mail(self.id, force_send=True)

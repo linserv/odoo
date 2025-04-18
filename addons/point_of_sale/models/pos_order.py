@@ -121,7 +121,7 @@ class PosOrder(models.Model):
 
     def _process_saved_order(self, draft):
         self.ensure_one()
-        if not draft:
+        if not draft and self.state != 'cancel':
             try:
                 self.action_pos_order_paid()
             except psycopg2.DatabaseError:
@@ -199,6 +199,16 @@ class PosOrder(models.Model):
             (move_type == 'out_invoice' and is_refund_order)
             or (move_type == 'out_refund' and not is_refund_order)
         ) else 1
+
+        if line_values['product_id'].type == 'combo':
+            quantity = int(line_values['quantity']) if line_values['quantity'] == int(
+                line_values['quantity']) else line_values['quantity']
+            return {
+                'display_type': 'line_section',
+                'name': f"{line_values['product_id'].name} x {quantity}",
+                'quantity': qty_sign * line_values['quantity'],
+                'product_uom_id': line_values['uom_id'].id,
+            }
 
         return {
             'product_id': line_values['product_id'].id,

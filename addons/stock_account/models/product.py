@@ -64,6 +64,7 @@ class ProductTemplate(models.Model):
 
     @api.onchange('standard_price')
     def _onchange_standard_price(self):
+        super()._onchange_standard_price()
         if self.lot_valuated and any(p.quantity_svl for p in self.product_variant_ids):
             return {
                 'warning': {
@@ -226,6 +227,7 @@ class ProductProduct(models.Model):
 
     @api.onchange('standard_price')
     def _onchange_standard_price(self):
+        super()._onchange_standard_price()
         if self.lot_valuated:
             return {
                 'warning': {
@@ -271,7 +273,7 @@ will update the cost of every lot/serial number in stock."),
         self.ensure_one()
         ctx = dict(self._context, default_product_id=self.id, default_company_id=self.env.company.id)
         return {
-            'name': _("Product Revaluation"),
+            'name': _('Product Revaluation - %s', self.display_name),
             'view_mode': 'form',
             'res_model': 'stock.valuation.layer.revaluation',
             'view_id': self.env.ref('stock_account.stock_valuation_layer_revaluation_form_view').id,

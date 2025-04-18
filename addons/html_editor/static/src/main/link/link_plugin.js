@@ -47,6 +47,9 @@ function isSelectionHasLink(selection) {
  */
 function isPositionAtEdgeofLink(link, offset) {
     const childNodes = [...link.childNodes];
+    if (!childNodes.length) {
+        return "end";
+    }
     let firstVisibleIndex = childNodes.findIndex(isVisible);
     firstVisibleIndex = firstVisibleIndex === -1 ? 0 : firstVisibleIndex;
     if (offset <= firstVisibleIndex) {
@@ -239,9 +242,10 @@ export class LinkPlugin extends Plugin {
             { sequence: 50 }
         );
         this.addDomListener(this.editable, "click", (ev) => {
-            if (ev.target.tagName === "A" && ev.target.isContentEditable) {
+            const linkEl = ev.target.closest("a");
+            if (linkEl) {
                 if (ev.ctrlKey || ev.metaKey) {
-                    window.open(ev.target.href, "_blank");
+                    window.open(linkEl.href, "_blank");
                 }
                 ev.preventDefault();
             }
@@ -461,15 +465,25 @@ export class LinkPlugin extends Plugin {
                     this.dependencies.dom.insert(link);
                 }
             }
-            this.closeLinkTools(cursorsToRestore);
-            this.dependencies.selection.focusEditable();
-            this.dependencies.history.addStep();
         };
 
+        const restoreSavePoint = this.dependencies.history.makeSavePoint();
         const props = {
             linkElement,
             isImage: isImage,
-            onApply: applyCallback,
+            onApply: (...args) => {
+                delete this._isNavigatingByMouse;
+                applyCallback(...args);
+                this.closeLinkTools(cursorsToRestore);
+                this.dependencies.selection.focusEditable();
+                this.dependencies.history.addStep();
+            },
+            onChange: applyCallback,
+            onDiscard: () => {
+                restoreSavePoint();
+                this.closeLinkTools();
+                this.dependencies.selection.focusEditable();
+            },
             onRemove: () => {
                 this.removeLinkInDocument();
                 this.linkInDocument = null;

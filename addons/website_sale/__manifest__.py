@@ -34,7 +34,6 @@
 
         # Model views.
         'views/account_move_views.xml',
-        'views/crm_team_views.xml',
         'views/delivery_carrier_views.xml',
         'views/digest_views.xml',
         'views/product_attribute_views.xml',
@@ -148,6 +147,7 @@
             'website_sale/static/src/scss/primary_variables.scss',
         ],
         'web.assets_backend': [
+            'website_sale/static/src/js/client_actions/**/*',
             'website_sale/static/src/js/tours/tour_utils.js',
             'website_sale/static/src/js/website_sale_video_field_preview.js',
             'website_sale/static/src/scss/website_sale_backend.scss',

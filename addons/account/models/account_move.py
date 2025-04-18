@@ -5584,24 +5584,14 @@ class AccountMove(models.Model):
     def _check_draftable(self):
         exchange_move_ids = set()
         if self:
-            self.env['account.full.reconcile'].flush_model(['exchange_move_id'])
             self.env['account.partial.reconcile'].flush_model(['exchange_move_id'])
             sql = SQL(
                 """
-                    SELECT DISTINCT sub.exchange_move_id
-                    FROM (
-                        SELECT exchange_move_id
-                        FROM account_full_reconcile
-                        WHERE exchange_move_id IN %s
-
-                        UNION ALL
-
-                        SELECT exchange_move_id
-                        FROM account_partial_reconcile
-                        WHERE exchange_move_id IN %s
-                    ) AS sub
+                    SELECT DISTINCT exchange_move_id
+                    FROM account_partial_reconcile
+                    WHERE exchange_move_id IN %s
                 """,
-                tuple(self.ids), tuple(self.ids),
+                tuple(self.ids),
             )
             exchange_move_ids = {id_ for id_, in self.env.execute_query(sql)}
 
@@ -6327,6 +6317,9 @@ class AccountMove(models.Model):
         move_ctx = self.with_context(default_move_type=custom_values.get('move_type', 'entry'), default_journal_id=custom_values.get('journal_id'))
         move = super(AccountMove, move_ctx).message_new(msg_dict, custom_values=values)
         move._compute_name()  # because the name is given, we need to recompute in case it is the first invoice of the journal
+
+        move.journal_id._notify_einvoices_received(move)
+
         return move
 
     def _message_post_after_hook(self, new_message, message_values):

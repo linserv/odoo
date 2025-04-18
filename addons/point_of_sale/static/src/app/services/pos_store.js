@@ -38,7 +38,8 @@ import { WithLazyGetterTrap } from "@point_of_sale/lazy_getter";
 import { debounce } from "@web/core/utils/timing";
 import DevicesSynchronisation from "../utils/devices_synchronisation";
 import { deserializeDateTime, formatDate } from "@web/core/l10n/dates";
-import { openCustomerDisplay } from "@point_of_sale/customer_display/utils";
+import { openProxyCustomerDisplay } from "@point_of_sale/customer_display/utils";
+import { ProductInfoPopup } from "@point_of_sale/app/components/popups/product_info_popup/product_info_popup";
 
 const { DateTime } = luxon;
 
@@ -562,13 +563,11 @@ export class PosStore extends WithLazyGetterTrap {
         this.markReady();
         this.showScreen(this.firstScreen);
         await this.deviceSync.readDataFromServer();
-        if (this.config.customer_display_type !== "none") {
-            openCustomerDisplay(
-                this.getDisplayDeviceIP(),
-                this.config.access_token,
-                this.config.id
-            );
-        }
+        openProxyCustomerDisplay(
+            this.getDisplayDeviceIP(),
+            this.config.access_token,
+            this.config.id
+        );
     }
 
     get productListViewMode() {
@@ -586,6 +585,10 @@ export class PosStore extends WithLazyGetterTrap {
         } else {
             return "flex-row-reverse justify-content-between m-1";
         }
+    }
+    async onProductInfoClick(productTemplate) {
+        const info = await this.getProductInfo(productTemplate, 1);
+        this.dialog.add(ProductInfoPopup, { info: info, productTemplate: productTemplate });
     }
     getProductPriceFormatted(productTemplate) {
         const formattedUnitPrice = this.env.utils.formatCurrency(
@@ -728,7 +731,7 @@ export class PosStore extends WithLazyGetterTrap {
                     .map((value) => value.id);
 
                 let candidate = productTemplate.product_variant_ids.find((variant) => {
-                    const attributeIds = variant.product_template_variant_value_ids.map(
+                    const attributeIds = variant.product_template_attribute_value_ids.map(
                         (value) => value.id
                     );
                     return (
@@ -1610,7 +1613,7 @@ export class PosStore extends WithLazyGetterTrap {
                     return;
                 }
 
-                this.printChanges(order, orderChange, reprint);
+                await this.printChanges(order, orderChange, reprint);
             } catch (e) {
                 console.info("Failed in printing the changes in the order", e);
             }
@@ -2296,6 +2299,8 @@ export class PosStore extends WithLazyGetterTrap {
             : list.sort((a, b) => {
                   if (b.is_favorite !== a.is_favorite) {
                       return b.is_favorite - a.is_favorite;
+                  } else if (a.pos_sequence !== b.pos_sequence) {
+                      return a.pos_sequence - b.pos_sequence;
                   }
                   return a.name.localeCompare(b.name);
               });

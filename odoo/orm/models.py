@@ -901,7 +901,6 @@ class BaseModel(metaclass=MetaModel):
         :returns: {ids: list(int)|False, messages: [Message][, lastrow: int]}
         """
         from .fields_relational import One2many  # noqa: PLC0415
-        self.env.flush_all()
 
         # determine values of mode, current_module and noupdate
         mode = self._context.get('mode', 'init')
@@ -911,7 +910,7 @@ class BaseModel(metaclass=MetaModel):
         self = self.with_context(_import_current_module=current_module)
 
         cr = self._cr
-        sp = cr.savepoint(flush=False)
+        savepoint = cr.savepoint()
 
         fields = [fix_import_export_id_paths(f) for f in fields]
 
@@ -980,13 +979,15 @@ class BaseModel(metaclass=MetaModel):
             # try again, this time record by record
             for i, rec_data in enumerate(data_list, 1):
                 try:
-                    with cr.savepoint():
-                        rec = self._load_records([rec_data], mode == 'update')
-                        ids.append(rec.id)
+                    rec = self._load_records([rec_data], mode == 'update')
+                    cr.flush()  # make sure flush exceptions are raised here
+                    ids.append(rec.id)
                 except psycopg2.Warning as e:
+                    savepoint.rollback()
                     info = rec_data['info']
                     messages.append(dict(info, type='warning', message=str(e)))
                 except psycopg2.Error as e:
+                    savepoint.rollback()
                     info = rec_data['info']
                     pg_error_info = {'message': self._sql_error_to_message(e)}
                     if e.diag.table_name == self._table:
@@ -998,13 +999,15 @@ class BaseModel(metaclass=MetaModel):
                     # avoid broken transaction) and keep going
                     errors += 1
                 except UserError as e:
+                    savepoint.rollback()
                     info = rec_data['info']
                     messages.append(dict(info, type='error', message=str(e)))
                     errors += 1
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
+                    savepoint.rollback()
                     _logger.debug("Error while loading record", exc_info=True)
                     info = rec_data['info']
-                    message = _('Unknown error during import: %(error_type)s: %(error_message)s', error_type=type(e), error_message=e)
+                    message = _('Unknown error during import: %(error_type)s: %(error_message)s', error_type=e.__class__, error_message=e)
                     moreinfo = _('Resolve other errors first')
                     messages.append(dict(info, type='error', message=message, moreinfo=moreinfo))
                     # Failed for some reason, perhaps due to invalid data supplied,
@@ -1013,7 +1016,7 @@ class BaseModel(metaclass=MetaModel):
                 if errors >= 10 and (errors >= i / 10):
                     messages.append({
                         'type': 'warning',
-                        'message': _(u"Found more than 10 errors and more than one error per 10 records, interrupted to avoid showing too many errors.")
+                        'message': _("Found more than 10 errors and more than one error per 10 records, interrupted to avoid showing too many errors.")
                     })
                     break
             if errors > 0 and global_error_message and global_error_message not in messages:
@@ -1030,7 +1033,7 @@ class BaseModel(metaclass=MetaModel):
             limit = float('inf')
         extracted = flush_recordset._extract_records(fields, data, log=messages.append, limit=limit)
 
-        converted = flush_recordset._convert_records(extracted, log=messages.append)
+        converted = flush_recordset._convert_records(extracted, log=messages.append, savepoint=savepoint)
 
         info = {'rows': {'to': -1}}
         for id, xid, record, info in converted:
@@ -1046,11 +1049,11 @@ class BaseModel(metaclass=MetaModel):
 
         flush()
         if any(message['type'] == 'error' for message in messages):
-            sp.rollback()
+            savepoint.rollback()
             ids = False
             # cancel all changes done to the registry/ormcache
             self.pool.reset_changes()
-        sp.close(rollback=False)
+        savepoint.close(rollback=False)
 
         nextrow = info['rows']['to'] + 1
         if nextrow < limit:
@@ -1184,7 +1187,7 @@ class BaseModel(metaclass=MetaModel):
             index += len(record_span)
 
     @api.model
-    def _convert_records(self, records, log=lambda a: None):
+    def _convert_records(self, records, *, log=lambda a: None, savepoint):
         """ Converts records from the source iterable (recursive dicts of
         strings) into forms which can be written to the database (via
         ``self.create`` or ``(ir.model.data)._update``)
@@ -1196,7 +1199,7 @@ class BaseModel(metaclass=MetaModel):
         if self.env.lang:
             field_names.update(self.env['ir.model.fields'].get_field_string(self._name))
 
-        convert = self.env['ir.fields.converter'].for_model(self)
+        convert = self.env['ir.fields.converter'].for_model(self, savepoint=savepoint)
 
         def _log(base, record, field, exception):
             type = 'warning' if isinstance(exception, Warning) else 'error'
@@ -2243,10 +2246,7 @@ class BaseModel(metaclass=MetaModel):
                     value = value.id
 
                 if not value and field.type == 'many2many':
-                    other_values = [other_row[group][0] if isinstance(other_row[group], tuple)
-                                    else other_row[group].id if isinstance(other_row[group], BaseModel)
-                                    else other_row[group] for other_row in rows_dict if other_row[group]]
-                    additional_domain = [(field_name, 'not in', other_values)]
+                    additional_domain = [(field_name, 'not any', [])]
                 else:
                     additional_domain = [(field_name, '=', value)]
 
@@ -2450,7 +2450,7 @@ class BaseModel(metaclass=MetaModel):
         :raise AccessError: if user is not allowed to access requested information
         """
         warnings.warn(
-            "Since 19.0, read_group is deprecated. Please use _read_group in the backend code or web_read_group for a complete formatted result",
+            "Since 19.0, read_group is deprecated. Please use _read_group in the backend code or formatted_read_group for a complete formatted result",
             DeprecationWarning,
         )
         groupby = [groupby] if isinstance(groupby, str) else groupby
@@ -4725,7 +4725,7 @@ class BaseModel(metaclass=MetaModel):
             if field.type != 'properties':
                 continue
             for record in self:
-                old_value = record[fname]
+                old_value = record[fname]._values
                 if not old_value:
                     continue
 
@@ -4742,7 +4742,7 @@ class BaseModel(metaclass=MetaModel):
             if fname not in self._fields or self._fields[fname].type != 'properties':
                 continue
             field_converter = self._fields[fname].convert_to_cache
-            to_write[fname] = dict(self[fname], **field_converter(values.pop(fname), self, validate=False))
+            to_write[fname] = dict(self[fname]._values, **field_converter(values.pop(fname), self, validate=False))
 
         self.write(values)
         if to_write:
@@ -6857,5 +6857,5 @@ def get_columns_from_sql_diagnostics(cr, diagnostics, *, check_registry=False) -
         WHERE conname = %s
             AND t.relname = %s
     """, diagnostics.constraint_name, diagnostics.table_name))
-    [columns] = cr.fetchone() or ([])
-    return columns
+    columns = cr.fetchone()
+    return columns[0] if columns else []

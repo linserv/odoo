@@ -31,6 +31,14 @@ export class Persona extends Record {
 
     /** @type {string} */
     avatar_128_access_token;
+    /** @type {string} */
+    commercial_company_name;
+    /**
+     * function = job position (Frenchism)
+     *
+     * @type {string}
+     */
+    function;
     /** @type {number} */
     id;
     /** @type {boolean | undefined} */
@@ -144,6 +152,14 @@ export class Persona extends Record {
             this.last_poll = DateTime.now();
         }
         this.im_status = newStatus;
+    }
+
+    _getActualModelName() {
+        return this.type === "partner"
+            ? "res.partner"
+            : this.type === "visitor"
+            ? "website.visitor"
+            : "mail.guest";
     }
 }
 

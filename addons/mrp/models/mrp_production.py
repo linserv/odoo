@@ -115,7 +115,7 @@ class MrpProduction(models.Model):
         help="Location where the system will stock the finished products.")
     location_final_id = fields.Many2one('stock.location', 'Final Location from procurement')
     date_deadline = fields.Datetime(
-        'Deadline', copy=False, store=True, readonly=True, compute='_compute_date_deadline',
+        'Deadline', copy=False, store=True, readonly=False, compute='_compute_date_deadline',
         help="Informative date allowing to define when the manufacturing order should be processed at the latest to fulfill delivery on time.")
     date_start = fields.Datetime(
         'Start', copy=False, default=_get_default_date_start,
@@ -433,7 +433,8 @@ class MrpProduction(models.Model):
     @api.depends('move_finished_ids.date_deadline')
     def _compute_date_deadline(self):
         for production in self:
-            production.date_deadline = min(production.move_finished_ids.filtered('date_deadline').mapped('date_deadline'), default=production.date_deadline or False)
+            if not production.date_deadline:
+                production.date_deadline = min(production.move_finished_ids.filtered('date_deadline').mapped('date_deadline'), default=False)
 
     @api.depends('workorder_ids.duration_expected')
     def _compute_duration_expected(self):
@@ -1423,7 +1424,7 @@ class MrpProduction(models.Model):
 
     def _prepare_stock_lot_values(self):
         self.ensure_one()
-        name = self.env['ir.sequence'].next_by_code('stock.lot.serial')
+        name = self.product_id.lot_sequence_id.next_by_id()
         exist_lot = not name or self.env['stock.lot'].search([
             ('product_id', '=', self.product_id.id),
             '|', ('company_id', '=', False), ('company_id', '=', self.company_id.id),
@@ -2942,6 +2943,9 @@ class MrpProduction(models.Model):
             'product_id': product_id,
             'product_uom_qty': quantity,
         }
+
+    def _is_display_stock_in_catalog(self):
+        return True
 
     def _post_run_manufacture(self, post_production_values):
         note_subtype_id = self.env['ir.model.data']._xmlid_to_res_id('mail.mt_note')

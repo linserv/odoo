@@ -209,6 +209,12 @@ class RequestHandler(CommonRequestHandler):
             self.rfile = BytesIO()
             self.wfile = BytesIO()
 
+    def log_error(self, format, *args):
+        if format == "Request timed out: %r" and config['test_enable']:
+            _logger.info(format, *args)
+        else:
+            super().log_error(format, *args)
+
 class ThreadedWSGIServerReloadable(LoggingBaseWSGIServerMixIn, werkzeug.serving.ThreadedWSGIServer):
     """ werkzeug Threaded WSGI Server patched to allow reusing a listen socket
     given by the environment, this is used by autoreload to keep the listen
@@ -663,7 +669,7 @@ class ThreadedServer(CommonServer):
             if config['test_enable']:
                 from odoo.tests.result import _logger as logger  # noqa: PLC0415
                 with Registry.registries._lock:
-                    for db, registry in Registry.registries.d.items():
+                    for db, registry in Registry.registries.items():
                         report = registry._assertion_report
                         log = logger.error if not report.wasSuccessful() \
                          else logger.warning if not report.testsRun \

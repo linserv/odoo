@@ -6,6 +6,7 @@ from dateutil.relativedelta import relativedelta
 import json
 import werkzeug.urls
 
+from markupsafe import Markup
 from pytz import utc, timezone
 
 from odoo import api, fields, models, _
@@ -486,7 +487,7 @@ class EventEvent(models.Model):
             params.update(location=self.address_inline)
         encoded_params = werkzeug.urls.url_encode(params)
         google_url = GOOGLE_CALENDAR_URL + encoded_params
-        iCal_url = f'/event/{self.id:d}/ics?{encoded_params}'
+        iCal_url = f'/event/{self.id:d}/ics'
         return {'google_url': google_url, 'iCal_url': iCal_url}
 
     def _default_website_meta(self):
@@ -628,5 +629,8 @@ class EventEvent(models.Model):
             for event, data in zip(self, results_data):
                 begin = self.env['ir.qweb.field.date'].record_to_html(event, 'date_begin', {})
                 end = self.env['ir.qweb.field.date'].record_to_html(event, 'date_end', {})
-                data['range'] = '%s🠖%s' % (begin, end) if begin != end else begin
+                data['range'] = (
+                    Markup('{} <i class="fa fa-long-arrow-right"></i> {}').format(begin, end)
+                    if begin != end else begin
+                )
         return results_data

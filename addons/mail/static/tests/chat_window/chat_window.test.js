@@ -944,7 +944,10 @@ test("Notification settings rendering in chatwindow", async () => {
 
 test("open channel in chat window from push notification", async () => {
     patchWithCleanup(window.navigator, {
-        serviceWorker: Object.assign(new EventBus(), { register: () => Promise.resolve() }),
+        serviceWorker: Object.assign(new EventBus(), {
+            register: () => Promise.resolve(),
+            ready: Promise.resolve(),
+        }),
     });
     const pyEnv = await startServer();
     const [channelId, salesId] = pyEnv["discuss.channel"].create([
@@ -1055,4 +1058,60 @@ test("Ctrl+k opens the @ command palette", async () => {
     await focus(".o-mail-ChatWindow", { text: "General" });
     triggerHotkey("control+k");
     await contains(".o_command_palette_search", { text: "@" });
+});
+
+test("Do not squash logged notes", async () => {
+    const pyEnv = await startServer();
+    const partnerId = pyEnv["res.partner"].create({ name: "TestPartner" });
+    const messageId = pyEnv["mail.message"].create([
+        {
+            model: "res.partner",
+            body: "Test Message",
+            author_id: partnerId,
+            needaction: true,
+            res_id: partnerId,
+        },
+        {
+            model: "res.partner",
+            body: "Message",
+            author_id: serverState.partnerId,
+            needaction: true,
+            res_id: partnerId,
+        },
+        {
+            model: "res.partner",
+            body: "Message Squashed",
+            author_id: serverState.partnerId,
+            needaction: true,
+            res_id: partnerId,
+        },
+        {
+            model: "res.partner",
+            body: "Hello",
+            author_id: serverState.partnerId,
+            needaction: true,
+            res_id: partnerId,
+            is_note: true,
+        },
+        {
+            model: "res.partner",
+            body: "World!",
+            author_id: serverState.partnerId,
+            needaction: true,
+            res_id: partnerId,
+            is_note: true,
+        },
+    ]);
+    pyEnv["mail.notification"].create({
+        mail_message_id: messageId[0],
+        notification_status: "sent",
+        notification_type: "inbox",
+        res_partner_id: serverState.partnerId,
+    });
+    await start();
+    await click(".o_menu_systray i[aria-label='Messages']");
+    await click(".o-mail-NotificationItem");
+    await contains(".o-mail-Message.o-squashed", { text: "Message Squashed" });
+    await contains(".o-mail-Message:not(.o-squashed)", { text: "Hello" });
+    await contains(".o-mail-Message:not(.o-squashed)", { text: "World!" });
 });

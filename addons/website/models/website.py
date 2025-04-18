@@ -253,10 +253,18 @@ class Website(models.Model):
     def _compute_blocked_third_party_domains(self):
         for website in self:
             custom_list = website.sudo().custom_blocked_third_party_domains
+
+            full_list = DEFAULT_BLOCKED_THIRD_PARTY_DOMAINS
             if custom_list:
-                full_list = f'{DEFAULT_BLOCKED_THIRD_PARTY_DOMAINS}\n{custom_list}'
-            else:
-                full_list = DEFAULT_BLOCKED_THIRD_PARTY_DOMAINS
+                # Note: each line of the custom list is already ensured to not
+                # have leading or trailing whitespaces.
+                lines = custom_list.splitlines()
+                custom_domains = '\n'.join([line for line in lines if line[0] != '#'])
+                if lines[0].startswith("#ignore_default"):
+                    full_list = custom_domains
+                else:
+                    full_list += f"\n{custom_domains}"
+
             website.blocked_third_party_domains = full_list
 
     def _get_blocked_third_party_domains_list(self):
@@ -1275,11 +1283,7 @@ class Website(models.Model):
             url = 'website_url' in record and record.website_url or record.url
             search_criteria.append((url, website.website_domain()))
 
-        # Search the URL in every relevant field
-        html_fields = self._get_html_fields() + [
-            ('website.menu', 'url'),
-        ]
-        for model_name, field_name in html_fields:
+        for model_name, field_name in self._get_html_fields():
             Model = self.env[model_name]
             if not Model.has_access('read'):
                 continue
@@ -1716,6 +1720,13 @@ class Website(models.Model):
         self._force()
         return self.get_client_action(path)
 
+    def _get_canonical_url(self):
+        """ Returns the canonical URL of the current request. """
+        self.ensure_one()
+        return self.env['ir.http']._url_localized(
+            lang_code=request.lang.code, canonical_domain=self.get_base_url()
+        )
+
     def _is_canonical_url(self):
         """Returns whether the current request URL is canonical."""
         self.ensure_one()
@@ -1723,7 +1734,7 @@ class Website(models.Model):
         # the language in the path. It is important to also test the domain of
         # the current URL.
         current_url = request.httprequest.url_root[:-1] + request.httprequest.environ['REQUEST_URI']
-        canonical_url = self.env['ir.http']._url_localized(lang_code=request.lang.code, canonical_domain=self.get_base_url())
+        canonical_url = self._get_canonical_url()
         # A request path with quotable characters (such as ",") is never
         # canonical because request.httprequest.base_url is always unquoted,
         # and canonical url is always quoted, so it is never possible to tell

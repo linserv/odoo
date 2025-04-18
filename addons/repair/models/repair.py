@@ -418,7 +418,7 @@ class RepairOrder(models.Model):
 
     def action_generate_serial(self):
         self.ensure_one()
-        name = self.env['ir.sequence'].next_by_code('stock.lot.serial')
+        name = self.product_id.lot_sequence_id.next_by_id()
         exist_lot = not name or self.env['stock.lot'].search([
             ('product_id', '=', self.product_id.id),
             '|', ('company_id', '=', False), ('company_id', '=', self.company_id.id),
@@ -732,6 +732,9 @@ class RepairOrder(models.Model):
                 grouped_lines[line.product_id] |= line
 
         return grouped_lines
+
+    def _is_display_stock_in_catalog(self):
+        return True
 
     def _update_order_line_info(self, product_id, quantity, **kwargs):
         move = self.move_ids.filtered(lambda e: e.product_id.id == product_id)
