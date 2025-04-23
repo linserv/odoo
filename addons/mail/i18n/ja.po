@@ -637,14 +637,14 @@ msgstr "AI"
 #. odoo-javascript
 #: code:addons/mail/static/src/discuss/call/common/call_invitation.xml:0
 msgid "Accept"
-msgstr "受理"
+msgstr "参加"
 
 #. module: mail
 #. odoo-javascript
 #: code:addons/mail/static/src/discuss/call/common/call_action_list.xml:0
 #: code:addons/mail/static/src/discuss/call/common/call_invitation.xml:0
 msgid "Accept with camera"
-msgstr "カメラで承諾"
+msgstr "カメラをオンにして参加"
 
 #. module: mail
 #. odoo-python
@@ -2374,7 +2374,7 @@ msgstr "独自の電子メールサーバーを構成する"
 #. odoo-javascript
 #: code:addons/mail/static/src/core/common/message_confirm_dialog.js:0
 msgid "Confirm"
-msgstr "確認"
+msgstr "確定"
 
 #. module: mail
 #. odoo-javascript
@@ -2389,7 +2389,7 @@ msgstr "確認"
 #. module: mail
 #: model:ir.model.fields.selection,name:mail.selection__fetchmail_server__state__done
 msgid "Confirmed"
-msgstr "確認済"
+msgstr "確定済"
 
 #. module: mail
 #. odoo-javascript
@@ -10365,7 +10365,7 @@ msgstr "ファイルをアップロード"
 #. odoo-javascript
 #: code:addons/mail/static/src/core/web/activity_list_popover_item.xml:0
 msgid "Upload file"
-msgstr "ファイルをアップロードする"
+msgstr "ファイルをアップロード"
 
 #. module: mail
 #. odoo-javascript

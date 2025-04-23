@@ -7,8 +7,8 @@
 # Lucia Pacheco, 2024
 # Leonardo J. Caballero G. <leonardocaballero@gmail.com>, 2024
 # Pedro M. Baeza <pedro.baeza@tecnativa.com>, 2025
-# Wil Odoo, 2025
 # Larissa Manderfeld, 2025
+# Wil Odoo, 2025
 # 
 msgid ""
 msgstr ""
@@ -16,7 +16,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-04-07 20:36+0000\n"
 "PO-Revision-Date: 2024-09-25 09:41+0000\n"
-"Last-Translator: Larissa Manderfeld, 2025\n"
+"Last-Translator: Wil Odoo, 2025\n"
 "Language-Team: Spanish (https://app.transifex.com/odoo/teams/41243/es/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -5317,7 +5317,7 @@ msgid ""
 "Some browsers don't allow HTTP calls from websites to devices in the network (for security reasons). If it is the case, you will need to follow Odoo's documentation for 'Self-signed certificate for ePOS printers' and 'Secure connection (HTTPS)' to solve the issue. "
 msgstr ""
 "Compruebe que la impresora siga conectada.  \n"
-"Algunos navegadores no permiten solicitudes HTTP desde sitios web a dispositivos en la red (por motivos de seguridad). Si ese es el caso, consulte la documentación de Odoo para \"Certificado autofirmado para impresoras ePOS\" y \"Conexión segura (HTTPS)\" para solucionar el problema."
+"Algunos navegadores no permiten solicitudes HTTP desde sitios web a dispositivos en la red (por motivos de seguridad). Si ese es el caso, consulte la documentación de Odoo para “Certificado autofirmado para impresoras ePOS” y “Conexión segura (HTTPS)” para solucionar el problema."
 
 #. module: point_of_sale
 #. odoo-python
@@ -7643,6 +7643,15 @@ msgstr "El tipo de tarjeta de pago (p. ej: Visa, AMEX, ...)"
 #. module: point_of_sale
 #. odoo-python
 #: code:addons/point_of_sale/models/pos_config.py:0
+msgid ""
+"The cash rounding strategy of the point of sale %(pos)s must be: '%(value)s'"
+msgstr ""
+"La estrategia de redondeo de efectivo del punto de venta %(pos)s debe ser: "
+"'%(value)s'"
+
+#. module: point_of_sale
+#. odoo-python
+#: code:addons/point_of_sale/models/pos_config.py:0
 msgid "The default pricelist must be included in the available pricelists."
 msgstr ""
 "La lista de precios por defecto debe incluirse en las listas de precios "
@@ -9274,7 +9283,7 @@ msgstr "p. ej. john.doe@correo.com"
 #: model_terms:ir.ui.view,arch_db:point_of_sale.pos_config_view_form
 #: model_terms:ir.ui.view,arch_db:point_of_sale.res_config_settings_view_form
 msgid "ePos Printer"
-msgstr "Impresora de ePos"
+msgstr "Impresora ePos"
 
 #. module: point_of_sale
 #: model_terms:ir.ui.view,arch_db:point_of_sale.view_pos_pos_form

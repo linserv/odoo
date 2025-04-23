@@ -6,8 +6,8 @@
 # JH CHOI <hwangtog@gmail.com>, 2024
 # Tiffany Chang, 2024
 # Daye Jeong, 2025
-# Wil Odoo, 2025
 # Sarah Park, 2025
+# Wil Odoo, 2025
 # 
 msgid ""
 msgstr ""
@@ -15,7 +15,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-04-07 20:36+0000\n"
 "PO-Revision-Date: 2024-09-25 09:41+0000\n"
-"Last-Translator: Sarah Park, 2025\n"
+"Last-Translator: Wil Odoo, 2025\n"
 "Language-Team: Korean (https://app.transifex.com/odoo/teams/41243/ko/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -7474,6 +7474,13 @@ msgstr "결제 카드 상표 (예: Visa, AMEX, ...)"
 #. module: point_of_sale
 #. odoo-python
 #: code:addons/point_of_sale/models/pos_config.py:0
+msgid ""
+"The cash rounding strategy of the point of sale %(pos)s must be: '%(value)s'"
+msgstr "%(pos)s POS은 '%(value)s' 반올림 방식을 사용해야 합니다."
+
+#. module: point_of_sale
+#. odoo-python
+#: code:addons/point_of_sale/models/pos_config.py:0
 msgid "The default pricelist must be included in the available pricelists."
 msgstr "기본 가격 목록이 사용 가능한 가격 목록에 포함되어 있어야 합니다."
 
@@ -8770,7 +8777,7 @@ msgstr "다른 회사의 주문에 대해서는 청구서를 발행할 수 없�
 msgid ""
 "You cannot delete a rounding method that is used in a Point of Sale "
 "configuration."
-msgstr ""
+msgstr "POS 환경설정에서 사용 중인 반올림 방식은 삭제할 수 없습니다."
 
 #. module: point_of_sale
 #. odoo-python
