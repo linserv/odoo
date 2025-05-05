@@ -7,8 +7,8 @@
 # Martin Trigaux, 2024
 # Ryoko Tsuda <ryoko@quartile.co>, 2024
 # Tiffany Chang, 2024
-# Junko Augias, 2025
 # Wil Odoo, 2025
+# Junko Augias, 2025
 # 
 msgid ""
 msgstr ""
@@ -16,7 +16,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-04-07 20:36+0000\n"
 "PO-Revision-Date: 2024-09-25 09:41+0000\n"
-"Last-Translator: Wil Odoo, 2025\n"
+"Last-Translator: Junko Augias, 2025\n"
 "Language-Team: Japanese (https://app.transifex.com/odoo/teams/41243/ja/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -104,7 +104,7 @@ msgstr "%(refunded_order)s 返金"
 #. odoo-python
 #: code:addons/point_of_sale/models/pos_session.py:0
 msgid "%(title)s %(product_name)s with %(taxes)s"
-msgstr ""
+msgstr "%(title)s %(product_name)s 税: %(taxes)s"
 
 #. module: point_of_sale
 #. odoo-javascript
@@ -135,7 +135,7 @@ msgstr "%s オーダがインポートされました"
 #. odoo-python
 #: code:addons/point_of_sale/models/pos_session.py:0
 msgid "%s untaxed"
-msgstr ""
+msgstr "%s 税抜金額"
 
 #. module: point_of_sale
 #. odoo-javascript
@@ -642,7 +642,7 @@ msgstr "point_of_sale用のSMS機能を有効化する"
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_config__active
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_payment_method__active
 msgid "Active"
-msgstr "有効化"
+msgstr "アクティブ"
 
 #. module: point_of_sale
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_session__activity_ids
@@ -694,7 +694,7 @@ msgstr "レシートに5桁のコードを追加し、ユーザがポータル�
 #. odoo-javascript
 #: code:addons/point_of_sale/static/src/app/navbar/closing_popup/closing_popup.xml:0
 msgid "Add a closing note..."
-msgstr "終了ノートを追加..."
+msgstr "クロージングメモを追加..."
 
 #. module: point_of_sale
 #: model_terms:ir.ui.view,arch_db:point_of_sale.res_config_settings_view_form
@@ -726,7 +726,7 @@ msgstr "開始ノートを追加..."
 #. module: point_of_sale
 #: model_terms:ir.ui.view,arch_db:point_of_sale.res_config_settings_view_form
 msgid "Add internal notes on order lines for the kitchen"
-msgstr "厨房へのオーダ明細に内部ノートを追加"
+msgstr "厨房へのオーダ明細に内部メモを追加"
 
 #. module: point_of_sale
 #. odoo-javascript
@@ -1083,7 +1083,7 @@ msgstr "AvaTax PoS 統合"
 #. module: point_of_sale
 #: model_terms:ir.ui.view,arch_db:point_of_sale.res_config_settings_view_form
 msgid "Available"
-msgstr "処理可能"
+msgstr "利用可能"
 
 #. module: point_of_sale
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_order__available_payment_method_ids
@@ -1154,13 +1154,13 @@ msgstr "ベーグル"
 #. odoo-javascript
 #: code:addons/point_of_sale/static/src/backend/pos_kanban_view/pos_kanban_view.js:0
 msgid "Bakery"
-msgstr "製パン店"
+msgstr "ベーカリー"
 
 #. module: point_of_sale
 #. odoo-python
 #: code:addons/point_of_sale/models/pos_config.py:0
 msgid "Bakery Shop"
-msgstr "製パン店 店舗"
+msgstr "ベーカリー 店舗"
 
 #. module: point_of_sale
 #. odoo-javascript
@@ -1445,7 +1445,7 @@ msgstr "現金 %(session_name)s"
 #. odoo-python
 #: code:addons/point_of_sale/models/pos_config.py:0
 msgid "Cash Bakery"
-msgstr "現金 製パン店"
+msgstr "現金 ベーカリー"
 
 #. module: point_of_sale
 #. odoo-python
@@ -3527,7 +3527,7 @@ msgstr "内部注釈"
 #. module: point_of_sale
 #: model_terms:ir.ui.view,arch_db:point_of_sale.res_config_settings_view_form
 msgid "Internal Notes"
-msgstr "内部注記"
+msgstr "内部メモ"
 
 #. module: point_of_sale
 #. odoo-javascript
@@ -6885,7 +6885,7 @@ msgstr "配送日"
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_config__picking_policy
 #: model:ir.model.fields,field_description:point_of_sale.field_res_config_settings__pos_picking_policy
 msgid "Shipping Policy"
-msgstr "配送方針"
+msgstr "配送ポリシー"
 
 #. module: point_of_sale
 #: model:product.attribute,name:point_of_sale.product_attribute_size_number
