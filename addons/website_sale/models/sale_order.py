@@ -233,6 +233,14 @@ class SaleOrder(models.Model):
             return self.env['website'].browse(website_id).get_base_url()
         return super()._get_note_url()
 
+    def _needs_customer_address(self):
+        """Return whether we need the address details of the customer (country, street, ...).
+
+        If an order only has services, unless the customer wants an invoice, their checkout can
+        be sped up by allowing them to only provide their name, email and phone numbers.
+        """
+        return not self.only_services
+
     def _update_address(self, partner_id, fnames=None):
         if not fnames:
             return
@@ -639,7 +647,9 @@ class SaleOrder(models.Model):
 
     def _is_reorder_allowed(self):
         self.ensure_one()
-        return self.state == 'sale' and any(line._is_reorder_allowed() for line in self.order_line if not line.display_type)
+        return self.state == 'sale' and any(
+            line._is_reorder_allowed() for line in self.order_line if line.product_id
+        )
 
     def _filter_can_send_abandoned_cart_mail(self):
         self.website_id.ensure_one()

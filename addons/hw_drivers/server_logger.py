@@ -69,7 +69,7 @@ class AsyncHTTPHandler(logging.Handler):
             return convert_to_byte(f"{log_level},{line_formatted}")
 
         def empty_queue():
-            yield convert_to_byte(f"mac {helpers.get_mac_address()}")
+            yield convert_to_byte(f"identifier {helpers.get_identifier()}")
             for _ in range(self._MAX_BATCH_SIZE):
                 # Use a limit to avoid having too heavy requests & infinite loop of the queue receiving new entries
                 try:
@@ -147,7 +147,12 @@ def _server_log_sender_handler_filter(log_record):
 
     def _filter_frequent_irrelevant_calls():
         """Filter out this frequent irrelevant HTTP calls, to avoid spamming the server with useless logs"""
-        return log_record.name == 'werkzeug' and log_record.args and len(log_record.args) > 0 and log_record.args[0].startswith('GET /hw_proxy/hello ')
+        return (
+            log_record.name == 'werkzeug'
+            and log_record.args
+            and len(log_record.args) > 0
+            and str(log_record.args[0]).startswith('GET /hw_proxy/hello ')
+        )
 
     return not (_filter_my_logs() or _filter_frequent_irrelevant_calls())
 

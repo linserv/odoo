@@ -2,6 +2,7 @@ import { registry } from "@web/core/registry";
 import { Base } from "./related_models";
 import { _t } from "@web/core/l10n/translation";
 import { random5Chars } from "@point_of_sale/utils";
+import { roundCurrency } from "@point_of_sale/app/models/utils/currency";
 import { computeComboItems } from "./utils/compute_combo_items";
 import { accountTaxHelpers } from "@account/helpers/account_tax";
 import { localization } from "@web/core/l10n/localization";
@@ -132,10 +133,14 @@ export class PosOrder extends Base {
     get presetRequirementsFilled() {
         return (
             (!this.preset_id?.needsPartner ||
-                (this.partner_id?.name && this.partner_id?.pos_contact_address)) &&
+                (this.partner_id?.name && (this.partner_id?.street || this.partner_id?.street2))) &&
             (!this.preset_id?.needsName || this.partner_id?.name || this.floating_order_name) &&
             (!this.preset_id?.needsSlot || this.preset_time)
         );
+    }
+
+    get isRefund() {
+        return this.is_refund === true;
     }
 
     getEmailItems() {
@@ -166,11 +171,7 @@ export class PosOrder extends Base {
         // If each line is negative, we assume it's a refund order.
         // It's a normal order if it doesn't contain a line (useful for pos_settle_due).
         // TODO: Properly differentiate refund orders from normal ones.
-        const documentSign =
-            lines.length === 0 || !lines.every((l) => l.product_id.uom_id.isNegative(l.qty))
-                ? 1
-                : -1;
-
+        const documentSign = this.isRefund ? -1 : 1;
         const baseLines = lines.map((line) =>
             accountTaxHelpers.prepare_base_line_for_taxes_computation(
                 line,
@@ -251,6 +252,7 @@ export class PosOrder extends Base {
     }
 
     getRoundedRemaining(roundingMethod, remaining) {
+        remaining = roundCurrency(remaining, this.currency);
         if (this.currency.isZero(remaining)) {
             return 0;
         } else if (this.currency.isNegative(remaining)) {
@@ -456,15 +458,8 @@ export class PosOrder extends Base {
         return true;
     }
 
-    _isRefundOrder() {
-        if (this.lines.length > 0 && this.lines[0].refunded_orderline_id) {
-            return true;
-        }
-        return false;
-    }
-
-    _isRefundAndSalesNotAllowed(values, options) {
-        return this._isRefundOrder() && (!values.qty || values.qty > 0);
+    isSaleDisallowed(values, options) {
+        return this.isRefund && (!values.qty || values.qty > 0);
     }
 
     getSelectedOrderline() {
@@ -506,7 +501,7 @@ export class PosOrder extends Base {
             newPaymentLine.setAmount(totalAmountDue);
 
             if (
-                (payment_method.payment_terminal && !this._isRefundOrder()) ||
+                (payment_method.payment_terminal && !this.isRefund) ||
                 payment_method.payment_method_type === "qr_code"
             ) {
                 newPaymentLine.setPaymentStatus("pending");
@@ -744,7 +739,7 @@ export class PosOrder extends Base {
 
     isRefundInProcess() {
         return (
-            this._isRefundOrder() &&
+            this.isRefund &&
             this.payment_ids.some(
                 (pl) => pl.payment_method_id.use_payment_terminal && pl.payment_status !== "done"
             )
@@ -914,7 +909,7 @@ export class PosOrder extends Base {
 
     getCustomerDisplayData() {
         return {
-            lines: this.getSortedOrderlines().map((l) => ({
+            lines: this.lines.map((l) => ({
                 ...l.getDisplayData(),
                 isSelected: l.isSelected(),
                 imageSrc: `/web/image/product.product/${l.product_id.id}/image_128`,
@@ -943,29 +938,6 @@ export class PosOrder extends Base {
             return seqA - seqB;
         }
         return pos_categ_id_A - pos_categ_id_B;
-    }
-
-    // orderlines will be sorted on the basis of pos product category and sequence for group the orderlines in order cart
-    getSortedOrderlines() {
-        if (this.config.orderlines_sequence_in_cart_by_category && this.lines.length) {
-            const linesToSort = [...this.lines];
-            linesToSort.sort(this.sortBySequenceAndCategory);
-            const resultLines = [];
-            linesToSort.forEach((line) => {
-                if (line.combo_line_ids?.length > 0) {
-                    resultLines.push(line);
-                    const sortedChildLines = line.combo_line_ids.sort(
-                        this.sortBySequenceAndCategory
-                    );
-                    resultLines.push(...sortedChildLines);
-                } else if (!line.combo_parent_id) {
-                    resultLines.push(line);
-                }
-            });
-            return resultLines;
-        } else {
-            return this.lines;
-        }
     }
     getName() {
         return this.floatingOrderName || "";

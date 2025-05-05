@@ -6,29 +6,46 @@ import { x2ManyCommands } from "@web/core/orm_service";
 import { evaluateBooleanExpr } from "@web/core/py_js/py";
 import { escape } from "@web/core/utils/strings";
 import { DataPoint } from "./datapoint";
+import { FetchRecordError } from "./errors";
 import {
-    createMany2OneValue,
     createPropertyActiveField,
     getBasicEvalContext,
     getFieldContext,
     getFieldsSpec,
     parseServerValue,
 } from "./utils";
-import { FetchRecordError } from "./errors";
+
+/**
+ * Redefine default 'Record' type
+ * TODO: rename 'Record' to 'RelationalRecord'?
+ * @template {keyof any} K
+ * @template T
+ * @typedef {{ [P in K]: T }} RecordType
+ */
+
+/**
+ * @typedef {{
+ *  currentValues?: RecordType<string, unknown>;
+ *  orderBys?: RecordType<string, unknown>;
+ *  withInvisible?: boolean;
+ *  withReadonly?: boolean;
+ * }} FieldSpecifications
+ *
+ * @typedef {"edit" | "readonly"} Mode
+ */
 
 export class Record extends DataPoint {
     static type = "Record";
 
     /**
-     * @param {import("./relational_model").Config} config
-     * @param {Object} data
-     * @param {Object} [options={}]
-     * @param {boolean} [options.manuallyAdded]
-     * @param {Function} [options.onUpdate]
-     * @param {Record} [options.parentRecord]
-     * @param {string} [options.virtualId]
+     * @type {typeof DataPoint.prototype.setup<{
+     *  manuallyAdded?: boolean;
+     *  onUpdate?: () => unknown;
+     *  parentRecord?: Record;
+     *  virtualId?: string;
+     * }>}
      */
-    setup(config, data, options = {}) {
+    setup(_config, data, options = {}) {
         this._manuallyAdded = options.manuallyAdded === true;
         this._onUpdate = options.onUpdate || (() => {});
         this._parentRecord = options.parentRecord;
@@ -41,7 +58,9 @@ export class Record extends DataPoint {
         this.dirty = false;
         this.selected = false;
 
+        /** @type {Set<string>} */
         this._invalidFields = new Set();
+        /** @type {Set<string>} */
         this._unsetRequiredFields = markRaw(new Set());
         this._closeInvalidFieldsNotification = () => {};
 
@@ -72,6 +91,10 @@ export class Record extends DataPoint {
         this._setData(data);
     }
 
+    /**
+     * @param {RecordType<string, unknown>} data
+     * @param {FieldSpecifications} [params]
+     */
     _setData(data, { orderBys } = {}) {
         this._isEvalContextReady = false;
         if (this.resId) {
@@ -91,6 +114,9 @@ export class Record extends DataPoint {
         this._initialTextValues = { ...this._textValues };
 
         this._invalidFields.clear();
+        if (!this.isNew) {
+            this._checkValidity();
+        }
         this._savePoint = undefined;
     }
 
@@ -106,6 +132,7 @@ export class Record extends DataPoint {
         return true;
     }
 
+    /** @type {boolean} */
     get isActive() {
         if ("active" in this.activeFields) {
             return this.data.active;
@@ -204,6 +231,9 @@ export class Record extends DataPoint {
         });
     }
 
+    /**
+     * @param {FieldSpecifications} [params]
+     */
     async getChanges({ withReadonly } = {}) {
         await this.model._askChanges();
         return this.model.mutex.exec(() => this._getChanges(this._changes, { withReadonly }));
@@ -228,21 +258,33 @@ export class Record extends DataPoint {
         return this.model.mutex.exec(() => this._load());
     }
 
+    /**
+     * @param {Parameters<Record["_save"]>[0]} options
+     */
     async save(options) {
         await this.model._askChanges();
         return this.model.mutex.exec(() => this._save(options));
     }
 
+    /**
+     * @param {string} fieldName
+     */
     async setInvalidField(fieldName) {
         this.dirty = true;
         return this._setInvalidField(fieldName);
     }
 
+    /**
+     * @param {string} fieldName
+     */
     async resetFieldValidity(fieldName) {
         this.dirty = true;
         return this._resetFieldValidity(fieldName);
     }
 
+    /**
+     * @param {Mode} mode
+     */
     switchMode(mode) {
         return this.model.mutex.exec(() => this._switchMode(mode));
     }
@@ -334,7 +376,7 @@ export class Record extends DataPoint {
 
         // mark changed fields as valid if they were not, and re-evaluate required attributes
         // for all fields, as some of them might still be unset but become valid with those changes
-        this._removeInvalidFields(Object.keys({ ...changes, ...serverChanges }));
+        this._removeInvalidFields(...Object.keys(changes), ...Object.keys(serverChanges));
         this._checkValidity({ removeInvalidOnly: true });
         return undoChanges;
     }
@@ -447,7 +489,7 @@ export class Record extends DataPoint {
             this._unsetRequiredFields.clear();
             for (const fieldName of unsetRequiredFields) {
                 this._unsetRequiredFields.add(fieldName);
-                this._setInvalidField(fieldName);
+                this._invalidFields.add(fieldName);
             }
         }
         const isValid = !this._invalidFields.size;
@@ -488,26 +530,31 @@ export class Record extends DataPoint {
         }
         const context = getFieldContext(this, fieldName);
         if (!resId && displayName !== undefined) {
-            const pair = await this.model.orm.call(resModel, "name_create", [displayName], { context });
-            return pair && createMany2OneValue(pair);
+            const pair = await this.model.orm.call(resModel, "name_create", [displayName], {
+                context,
+            });
+            return pair && { id: pair[0], display_name: pair[1] };
         }
         if (resId && displayName === undefined) {
             const fieldSpec = { display_name: {} };
             if (this.activeFields[fieldName].related) {
-                Object.assign(fieldSpec, getFieldsSpec(
-                    this.activeFields[fieldName].related.activeFields,
-                    this.activeFields[fieldName].related.fields,
-                    getBasicEvalContext(this.config),
-                ));
+                Object.assign(
+                    fieldSpec,
+                    getFieldsSpec(
+                        this.activeFields[fieldName].related.activeFields,
+                        this.activeFields[fieldName].related.fields,
+                        getBasicEvalContext(this.config)
+                    )
+                );
             }
             const kwargs = {
                 context,
                 specification: fieldSpec,
             };
             const records = await this.model.orm.webRead(resModel, [resId], kwargs);
-            return createMany2OneValue(records[0]);
+            return records[0];
         }
-        return createMany2OneValue(value);
+        return value;
     }
 
     _computeDataContext() {
@@ -553,6 +600,11 @@ export class Record extends DataPoint {
         };
     }
 
+    /**
+     * @param {RecordType<string, unknown>} data
+     * @param {string} fieldName
+     * @param {FieldSpecifications} [params]
+     */
     _createStaticListDatapoint(data, fieldName, { orderBys } = {}) {
         const { related, limit, defaultOrderBy } = this.activeFields[fieldName];
         const config = {
@@ -593,6 +645,9 @@ export class Record extends DataPoint {
         this._savePoint = undefined;
         this._setEvalContext();
         this._invalidFields.clear();
+        if (!this.isNew) {
+            this._checkValidity();
+        }
         this._closeInvalidFieldsNotification();
         this._closeInvalidFieldsNotification = () => {};
         this._restoreActiveFields();
@@ -619,14 +674,14 @@ export class Record extends DataPoint {
             return value.map((property) => {
                 let value;
                 if (property.type === "many2one") {
-                    value = property.value;
+                    value = property.value && [property.value.id, property.value.display_name];
                 } else if (
                     (property.type === "date" || property.type === "datetime") &&
                     typeof property.value === "string"
                 ) {
                     // TO REMOVE: need refactoring PropertyField to use the same format as the server
                     value = property.value;
-                } else {
+                } else if (property.value !== undefined) {
                     value = this._formatServerValue(property.type, property.value);
                 }
                 return {
@@ -638,6 +693,10 @@ export class Record extends DataPoint {
         return value;
     }
 
+    /**
+     * @param {RecordType<string, unknown>} [changes]
+     * @param {FieldSpecifications} [params]
+     */
     _getChanges(changes = this._changes, { withReadonly } = {}) {
         const result = {};
         for (const [fieldName, value] of Object.entries(changes)) {
@@ -689,6 +748,9 @@ export class Record extends DataPoint {
         return defaultValues;
     }
 
+    /**
+     * @param {RecordType<string, unknown>} values
+     */
     _getTextValues(values) {
         const textValues = {};
         for (const fieldName in values) {
@@ -702,16 +764,25 @@ export class Record extends DataPoint {
         return textValues;
     }
 
+    /**
+     * @param {string} fieldName
+     */
     _isInvisible(fieldName) {
         const invisible = this.activeFields[fieldName].invisible;
         return invisible ? evaluateBooleanExpr(invisible, this.evalContextWithVirtualIds) : false;
     }
 
+    /**
+     * @param {string} fieldName
+     */
     _isReadonly(fieldName) {
         const readonly = this.activeFields[fieldName].readonly;
         return readonly ? evaluateBooleanExpr(readonly, this.evalContextWithVirtualIds) : false;
     }
 
+    /**
+     * @param {string} fieldName
+     */
     _isRequired(fieldName) {
         const required = this.activeFields[fieldName].required;
         return required ? evaluateBooleanExpr(required, this.evalContextWithVirtualIds) : false;
@@ -733,6 +804,7 @@ export class Record extends DataPoint {
 
     /**
      * This function extracts all properties and adds them to fields and activeFields.
+     *
      * @param {Object[]} properties the list of properties to be extracted
      * @param {string} fieldName name of the field containing the properties
      * @param {Array} parent Array with ['id, 'display_name'], representing the record to which the definition of properties is linked
@@ -785,8 +857,8 @@ export class Record extends DataPoint {
                 data[propertyFieldName] = staticList;
             } else if (property.type === "many2one") {
                 data[propertyFieldName] =
-                    property.value.length && property.value[1] === null
-                        ? createMany2OneValue([property.value.id, _t("No Access")])
+                    property.value && property.value.display_name === null
+                        ? { id: property.value.id, display_name: _t("No Access") }
                         : property.value;
             } else {
                 data[propertyFieldName] = property.value ?? false;
@@ -796,6 +868,10 @@ export class Record extends DataPoint {
         return data;
     }
 
+    /**
+     * @param {RecordType<string, unknown>} serverValues
+     * @param {FieldSpecifications} [params]
+     */
     _parseServerValues(serverValues, { currentValues, orderBys } = {}) {
         const parsedValues = {};
         if (!serverValues) {
@@ -848,7 +924,6 @@ export class Record extends DataPoint {
         const proms = Object.entries(changes)
             .filter(([fieldName]) => this.fields[fieldName].type === "many2one")
             .map(async ([fieldName, value]) => {
-                value = createMany2OneValue(value);
                 if (!value) {
                     changes[fieldName] = false;
                 } else if (!this.activeFields[fieldName]) {
@@ -969,7 +1044,10 @@ export class Record extends DataPoint {
         }
     }
 
-    _removeInvalidFields(fieldNames) {
+    /**
+     * @param {...string} fieldNames
+     */
+    _removeInvalidFields(...fieldNames) {
         for (const fieldName of fieldNames) {
             this._invalidFields.delete(fieldName);
         }
@@ -1161,6 +1239,9 @@ export class Record extends DataPoint {
         }
     }
 
+    /**
+     * @param {string} fieldName
+     */
     async _setInvalidField(fieldName) {
         const canProceed = this.model.hooks.onWillSetInvalidField(this, fieldName);
         if (canProceed === false) {
@@ -1187,6 +1268,9 @@ export class Record extends DataPoint {
         this._invalidFields.delete(fieldName);
     }
 
+    /**
+     * @param {Mode} mode
+     */
     _switchMode(mode) {
         this.model._updateConfig(this.config, { mode }, { reload: false });
         if (mode === "readonly") {
@@ -1285,7 +1369,12 @@ export class Record extends DataPoint {
             if (this.fields[fieldName].type === "many2one") {
                 const curVal = toRaw(this.data[fieldName]);
                 const nextVal = changes[fieldName];
-                if (curVal && nextVal && curVal.id === nextVal.id && curVal.display_name === nextVal.display_name) {
+                if (
+                    curVal &&
+                    nextVal &&
+                    curVal.id === nextVal.id &&
+                    curVal.display_name === nextVal.display_name
+                ) {
                     delete changes[fieldName];
                 }
             }

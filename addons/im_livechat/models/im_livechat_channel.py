@@ -181,7 +181,7 @@ class Im_LivechatChannel(models.Model):
         self.ensure_one()
         # sudo: im_livechat.channel - users can leave channels
         self.sudo().user_ids = [Command.unlink(self.env.user.id)]
-        self.env.user._bus_send_store(self, ["are_you_inside", "name"])
+        self.env.user._bus_send_store(self.sudo(), ["are_you_inside", "name"])
 
     def action_view_rating(self):
         """ Action to display the rating relative to the channel, so all rating of the
@@ -231,6 +231,7 @@ class Im_LivechatChannel(models.Model):
             Command.create(
                 {
                     "livechat_member_type": "agent" if user_operator else "bot",
+                    "chatbot_script_id": chatbot_script.id if not user_operator else False,
                     "partner_id": operator_partner_id,
                     "unpin_dt": fields.Datetime.now(),
                 }
@@ -255,6 +256,7 @@ class Im_LivechatChannel(models.Model):
             'livechat_active': True,
             'livechat_operator_id': operator_partner_id,
             'livechat_channel_id': self.id,
+            "livechat_failure": "no_answer" if user_operator else "no_failure",
             'chatbot_current_step_id': chatbot_script._get_welcome_steps()[-1].id if chatbot_script else False,
             'anonymous_name': False if user_id else anonymous_name,
             'country_id': country_id,

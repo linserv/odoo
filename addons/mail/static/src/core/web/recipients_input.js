@@ -8,6 +8,7 @@ import { useSelectCreate } from "@web/views/fields/relational_utils";
 import { rpc } from "@web/core/network/rpc";
 import { usePopover } from "@web/core/popover/popover_hook";
 import { useTagNavigation } from "@web/core/record_selectors/tag_navigation_hook";
+import { uniqueId } from "@web/core/utils/functions";
 import { RecipientsPopover } from "./recipients_popover";
 import { RecipientsInputTagsList } from "./recipients_input_tags_list";
 
@@ -94,14 +95,13 @@ export class RecipientsInput extends Component {
 
                     options.push(
                         ...matches.map((match) => ({
-                            id: match.id,
                             label: match.email
                                 ? _t("%(partner_name)s <%(partner_email)s>", {
                                       partner_name: match.name,
                                       partner_email: match.email,
                                   })
                                 : match.name,
-                            onSelectOption: () => {
+                            onSelect: () => {
                                 this.insertAdditionalRecipient({
                                     email: match.email,
                                     name: match.name,
@@ -115,20 +115,20 @@ export class RecipientsInput extends Component {
                     if (matches.length >= limit) {
                         options.push({
                             label: _t("Search More..."),
-                            classList: "o_m2o_dropdown_option o_m2o_dropdown_option_search_more",
-                            onSelectOption: () => {
+                            cssClass: "o_m2o_dropdown_option o_m2o_dropdown_option_search_more",
+                            onSelect: () => {
                                 this.openListViewToSelectResPartner({});
                             },
                         });
                     }
 
                     const createOption = {
-                        classList: "o_m2o_dropdown_option o_m2o_dropdown_option_create",
+                        cssClass: "o_m2o_dropdown_option o_m2o_dropdown_option_create",
                         label: _t("Create %s", name),
                     };
 
                     if (isEmail(email)) {
-                        createOption.onSelectOption = async () => {
+                        createOption.onSelect = async () => {
                             const partners = await rpc("/mail/partner/from_email", {
                                 thread_model: this.props.thread.model,
                                 thread_id: this.props.thread.id,
@@ -152,7 +152,7 @@ export class RecipientsInput extends Component {
                             }
                         };
                     } else {
-                        createOption.onSelectOption = async () => {
+                        createOption.onSelect = async () => {
                             const [partnerId] = await this.orm.create("res.partner", [
                                 { name, email },
                             ]);
@@ -178,7 +178,8 @@ export class RecipientsInput extends Component {
             const title = `${recipient.name} ${recipient.email ? "<" + recipient.email + ">" : ""}`;
             title.trim();
             tags.push({
-                id: recipient.partner_id,
+                id: uniqueId("tag_"),
+                resId: recipient.partner_id,
                 canEdit: true,
                 text: recipient.name || recipient.email,
                 name: recipient.name,
@@ -270,10 +271,5 @@ export class RecipientsInput extends Component {
             this.props.thread.suggestedRecipients.length ||
             this.props.thread.additionalRecipients.length;
         return hasRecipients ? "" : _t("Followers only");
-    }
-
-    /** @param {Object} option */
-    onSelect(option) {
-        option.onSelectOption?.();
     }
 }

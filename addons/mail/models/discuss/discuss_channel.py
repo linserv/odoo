@@ -68,7 +68,7 @@ class DiscussChannel(models.Model):
     sfu_channel_uuid = fields.Char(groups="base.group_system")
     sfu_server_url = fields.Char(groups="base.group_system")
     rtc_session_ids = fields.One2many('discuss.channel.rtc.session', 'channel_id', groups="base.group_system")
-    last_call_message_id = fields.Many2one("mail.message", string="Message of last call start")
+    call_history_ids = fields.One2many("discuss.call.history", "channel_id")
     is_member = fields.Boolean("Is Member", compute="_compute_is_member", search="_search_is_member", compute_sudo=True)
     # sudo: discuss.channel - sudo for performance, self member can be accessed on accessible channel
     self_member_id = fields.Many2one("discuss.channel.member", compute="_compute_self_member_id", compute_sudo=True)
@@ -861,6 +861,10 @@ class DiscussChannel(models.Model):
     def _message_subscribe(self, partner_ids=None, subtype_ids=None, customer_ids=None):
         # Do not allow follower subscription on channels. Only members are considered
         raise UserError(_('Adding followers on channels is not possible. Consider adding members instead.'))
+
+    def _should_invite_members_to_join_call(self):
+        self.ensure_one()
+        return len(self.rtc_session_ids) == 1 and self.channel_type != "channel"
 
     # ------------------------------------------------------------
     # BROADCAST

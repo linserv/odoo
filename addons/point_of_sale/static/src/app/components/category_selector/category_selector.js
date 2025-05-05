@@ -25,13 +25,14 @@ export class CategorySelector extends Component {
     }
 
     getCategoriesAndSub() {
-        const rootCategories = this.pos.models["pos.category"].filter(
-            (category) => !category.parent_id
-        );
+        const rootCategories = this.pos.models["pos.category"]
+            .filter((category) => !category.parent_id)
+            .sort((a, b) => a.sequence - b.sequence);
         const selected = this.pos.selectedCategory ? [this.pos.selectedCategory] : [];
         const allParents = selected.concat(this.pos.selectedCategory?.allParents || []).reverse();
         return this.getCategoriesList(rootCategories, allParents, 0)
             .flat(Infinity)
+            .filter((c) => c.hasProductsToShow)
             .map(this.getChildCategoriesInfo, this);
     }
 

@@ -81,6 +81,12 @@ export class CallParticipantCard extends Component {
         );
     }
 
+    get isSmall() {
+        return Boolean(
+            this.props.isSidebarItem || this.ui.isSmall || this.props.minimized || this.props.inset
+        );
+    }
+
     get showLiveLabel() {
         if (this.props.isSidebarItem) {
             return false;
@@ -137,7 +143,7 @@ export class CallParticipantCard extends Component {
     }
 
     get name() {
-        return this.channelMember?.persona.name;
+        return this.channelMember?.name;
     }
 
     get hasMediaError() {

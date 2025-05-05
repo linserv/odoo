@@ -518,9 +518,15 @@ export class SearchBar extends Component {
             resModel,
             domain,
             context: this.env.searchModel.domainEvalContext,
-            onConfirm: (domain) => this.env.searchModel.splitAndAddDomain(domain, groupId),
+            onConfirm: (nextDomain) => {
+                if (nextDomain !== domain) {
+                    this.env.searchModel.splitAndAddDomain(nextDomain, groupId);
+                }
+            },
             disableConfirmButton: (domain) => domain === `[]`,
-            title: _t("Modify Condition"),
+            title: _t("Custom Filter"),
+            confirmButtonText: _t("Search"),
+            discardButtonText: _t("Discard"),
             isDebugMode: this.env.searchModel.isDebugMode,
         });
     }

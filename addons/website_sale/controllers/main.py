@@ -220,15 +220,16 @@ class WebsiteSale(payment_portal.PaymentPortal):
         return fuzzy_search_term, product_count, search_result
 
     def _shop_get_query_url_kwargs(
-        self, search, min_price, max_price, order=None, tags=None, attribute_value=None, **kwargs
+        self, search, min_price, max_price, order=None, tags=None, **kwargs
     ):
+        attribute_values = request.session.get('attribute_values', [])
         return {
             'search': search,
             'min_price': min_price,
             'max_price': max_price,
             'order': order,
             'tags': tags,
-            'attribute_value': attribute_value,
+            'attribute_values': attribute_values,
         }
 
     def _get_additional_shop_values(self, values, **kwargs):
@@ -283,12 +284,14 @@ class WebsiteSale(payment_portal.PaymentPortal):
         gap = website.shop_gap or "16px"
 
         request_args = request.httprequest.args
-        attribute_values = request_args.getlist('attribute_value')
+        attribute_values = request_args.getlist('attribute_values')
         attribute_value_dict = self._get_attribute_value_dict(attribute_values)
         attribute_ids = set(attribute_value_dict.keys())
         attribute_value_ids = set(itertools.chain.from_iterable(attribute_value_dict.values()))
         if attribute_values:
-            post['attribute_value'] = attribute_values
+            request.session['attribute_values'] = attribute_values
+        else:
+            request.session.pop('attribute_values', None)
 
         filter_by_tags_enabled = website.is_view_active('website_sale.filter_products_tags')
         if filter_by_tags_enabled:
@@ -372,7 +375,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
         if filter_by_tags_enabled and search_product:
             all_tags = ProductTag.search(
                 expression.AND([
-                    [('product_ids.is_published', '=', True), ('visible_on_ecommerce', '=', True)],
+                    [('product_ids.is_published', '=', True), ('visible_to_customers', '=', True)],
                     website_domain
                 ])
             )
@@ -381,6 +384,8 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
         Category = request.env['product.public.category']
         categs_domain = [('parent_id', '=', False)] + website_domain
+        if not self.env.user._is_internal():
+            categs_domain = expression.AND([categs_domain, [('has_published_products', '=', True)]])
         if search:
             search_categories = Category.search(
                 [('product_tmpl_ids', 'in', search_product.ids)] + website_domain
@@ -722,7 +727,10 @@ class WebsiteSale(payment_portal.PaymentPortal):
             product_markup_data.append(self._prepare_breadcrumb_markup_data(
                 request.website.get_base_url(), category, product.name
             ))
-        keep = QueryURL(self._get_shop_path(category))
+        keep = QueryURL(
+            self._get_shop_path(category),
+            attribute_values=request.session.get('attribute_values', [])
+        )
 
         # Needed to trigger the recently viewed product rpc
         view_track = request.website.viewref("website_sale.product").track
@@ -1152,6 +1160,11 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
         return json.dumps(feedback_dict)
 
+    def _needs_address(self):
+        if cart := request.cart:
+            return cart._needs_customer_address()
+        return super()._needs_address()
+
     def _prepare_address_update(self, order_sudo, partner_id=None, address_type=None):
         """ Find the partner whose address to update and return it along with its address type.
 
@@ -1300,7 +1313,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
         if shipping_address:
             #in order to not override shippig address, it's checked separately from shipping option
             self._include_country_and_state_in_address(shipping_address)
-            shipping_address, _side_values = self._parse_form_data(billing_address)
+            shipping_address, _side_values = self._parse_form_data(shipping_address)
 
             if order_sudo.partner_shipping_id.name.endswith(order_sudo.name):
                 # The existing partner was created by `process_express_checkout_delivery_choice`, it

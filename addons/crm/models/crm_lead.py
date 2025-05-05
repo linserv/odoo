@@ -161,6 +161,13 @@ class CrmLead(models.Model):
     date_conversion = fields.Datetime('Conversion Date', readonly=True)
     date_deadline = fields.Date('Expected Closing', help="Estimate of the date on which the opportunity will be won.")
     # Customer / contact
+
+    # UX field to ease partner creation
+    # Not to be relied on for business logic
+    commercial_partner_id = fields.Many2one(
+        'res.partner', string='Customer Company', domain="[('is_company', '=', True)]",
+        compute='_compute_commercial_partner_id', readonly=False, store=False,
+    )
     partner_id = fields.Many2one(
         'res.partner', string='Customer', check_company=True, index=True, tracking=10,
         help="Linked partner (optional). Usually created when converting the lead. You can find a partner by its Name, TIN, Email or Internal Reference.")
@@ -387,16 +394,52 @@ class CrmLead(models.Model):
             if not lead.name and lead.partner_id and lead.partner_id.name:
                 lead.name = _("%s's opportunity") % lead.partner_id.name
 
+    @api.depends('partner_id', 'partner_name')
+    def _compute_commercial_partner_id(self):
+        leads_w_partners = self.filtered('partner_id')
+        for lead in leads_w_partners:
+            commercial_partner = lead.partner_id.commercial_partner_id
+            lead.commercial_partner_id = commercial_partner.is_company and commercial_partner != lead.partner_id and commercial_partner
+        # match by name if exists
+        remaining_leads_w_pname = (self - leads_w_partners).filtered('partner_name')
+        commercial_partner_by_name = self.env['res.partner']._read_group(
+            [('is_company', '=', True), ('name', 'in', remaining_leads_w_pname.mapped('partner_name'))],
+            ['name'], ['id:array_agg'],
+        )
+        remaining_leads_by_name = remaining_leads_w_pname.grouped('partner_name')
+        for commercial_partner_name, commercial_partner_ids in commercial_partner_by_name:
+            remaining_leads_by_name[commercial_partner_name].commercial_partner_id = commercial_partner_ids[0]
+
+    @api.onchange('commercial_partner_id')
+    def _onchange_commercial_partner_id(self):
+        for lead in self:
+            if lead.partner_id and lead.commercial_partner_id != lead.partner_id.commercial_partner_id:
+                # writing to partner will invalidate and recompute
+                # re-write the original value to keep user selection
+                commercial_partner = lead.commercial_partner_id
+                lead.update({
+                    'partner_id': False,
+                    'email_from': False,
+                    'phone': False,
+                })
+                lead.commercial_partner_id = commercial_partner
+            if not lead.name and lead.commercial_partner_id:
+                lead.name = _("%s's opportunity", lead.commercial_partner_id.name)
+
     @api.depends('partner_id')
     def _compute_contact_name(self):
         """ compute the new values when partner_id has changed """
-        for lead in self:
+        to_reset = self.filtered(lambda l: not l.partner_id)
+        to_reset.contact_name = False
+        for lead in (self - to_reset):
             lead.update(lead._prepare_contact_name_from_partner(lead.partner_id))
 
     @api.depends('partner_id')
     def _compute_partner_name(self):
         """ compute the new values when partner_id has changed """
-        for lead in self:
+        to_reset = self.filtered(lambda l: not l.partner_id)
+        to_reset.partner_name = False
+        for lead in (self - to_reset):
             lead.update(lead._prepare_partner_name_from_partner(lead.partner_id))
 
     @api.depends('partner_id')
@@ -503,7 +546,7 @@ class CrmLead(models.Model):
 
     @api.depends(lambda self: ['stage_id', 'team_id'] + self._pls_get_safe_fields())
     def _compute_probabilities(self):
-        lead_probabilities = self._pls_get_naive_bayes_probabilities()
+        lead_probabilities, _unused = self._pls_get_naive_bayes_probabilities()
         for lead in self:
             if lead.id in lead_probabilities:
                 was_automated = lead.active and lead.is_automated_probability
@@ -744,6 +787,20 @@ class CrmLead(models.Model):
             if vals.get('website'):
                 vals['website'] = self.env['res.partner']._clean_website(vals['website'])
         leads = super().create(vals_list)
+
+        if self.default_get(['partner_id']).get('partner_id') is None:
+            commercial_partner_ids = [vals['commercial_partner_id'] for vals in vals_list if vals.get('commercial_partner_id')]
+            CommercialPartners = self.env['res.partner'].with_prefetch(commercial_partner_ids)
+            for lead, lead_vals in zip(leads, vals_list, strict=True):
+                if not lead_vals.get('partner_id') and lead_vals.get('commercial_partner_id'):
+                    commercial_partner = CommercialPartners.browse(lead_vals['commercial_partner_id'])
+                    if (lead.phone or lead.email_from) and (
+                        lead.phone_sanitized != commercial_partner.phone_sanitized or
+                        lead.email_normalized != commercial_partner.email_normalized
+                    ):
+                        lead.partner_name = lead.partner_name or commercial_partner.name
+                        continue
+                    lead.partner_id = commercial_partner
 
         leads._handle_won_lost({}, {
             lead.id: {
@@ -1077,6 +1134,9 @@ class CrmLead(models.Model):
         return True
 
     def action_set_automated_probability(self):
+        """ Update the automated probability and align probability to that value """
+        self.ensure_one()
+        self._compute_probabilities()
         self.write({'probability': self.automated_probability})
 
     def action_set_won_rainbowman(self):
@@ -1744,7 +1804,7 @@ class CrmLead(models.Model):
 
         return True
 
-    def _handle_partner_assignment(self, force_partner_id=False, create_missing=True):
+    def _handle_partner_assignment(self, force_partner_id=False, create_missing=True, with_parent=None):
         """ Update customer (partner_id) of leads. Purpose is to set the same
         partner on most leads; either through a newly created partner either
         through a given partner_id.
@@ -1752,12 +1812,13 @@ class CrmLead(models.Model):
         :param int force_partner_id: if set, update all leads to that customer;
         :param create_missing: for leads without customer, create a new one
           based on lead information;
+        :param with_parent: if set, create the new partner with the given parent
         """
         for lead in self:
             if force_partner_id:
                 lead.partner_id = force_partner_id
             if not lead.partner_id and create_missing:
-                partner = lead._create_customer()
+                partner = lead._create_customer(with_parent=with_parent)
                 lead.partner_id = partner.id
 
     def _handle_salesmen_assignment(self, user_ids=False, team_id=False):
@@ -1865,9 +1926,10 @@ class CrmLead(models.Model):
             )
         return partner
 
-    def _create_customer(self):
+    def _create_customer(self, with_parent=None):
         """ Create a partner from lead data and link it to the lead.
 
+        :param with_parent: if set, create the new partner with the given parent
         :return: newly-created partner browse record
         """
         Partner = self.env['res.partner']
@@ -1875,15 +1937,17 @@ class CrmLead(models.Model):
         if not contact_name:
             contact_name = parse_contact_from_email(self.email_from)[0] if self.email_from else False
 
-        if self.partner_name:
+        if with_parent:
+            partner_company = with_parent
+        elif self.partner_name:
             partner_company = Partner.create(self._prepare_customer_values(self.partner_name, is_company=True))
         elif self.partner_id:
             partner_company = self.partner_id
         else:
-            partner_company = None
+            partner_company = self.env['res.partner']
 
         if contact_name:
-            return Partner.create(self._prepare_customer_values(contact_name, is_company=False, parent_id=partner_company.id if partner_company else False))
+            return Partner.create(self._prepare_customer_values(contact_name, is_company=False, parent_id=partner_company.id))
 
         if partner_company:
             return partner_company
@@ -1898,7 +1962,7 @@ class CrmLead(models.Model):
             if not email_key and len(self) > 1:
                 continue
             values = email_keys_to_values.setdefault(email_key, {})
-            contact_name = lead.contact_name or parse_contact_from_email(lead.email_from)[0] or lead.partner_name or lead.email_from
+            contact_name = lead.contact_name or parse_contact_from_email(lead.email_from)[0] or lead.email_from
             is_company = bool(lead.partner_name) and contact_name == lead.partner_name
             # Note that we don't attempt to create the parent company even if partner name is set
             values.update({
@@ -1907,6 +1971,9 @@ class CrmLead(models.Model):
                 ).items() if val and key != 'email'  # don't force email used as criterion
             })
             values['is_company'] = is_company
+            if not is_company and lead.commercial_partner_id:
+                values['parent_id'] = lead.commercial_partner_id.id
+                values.pop('company_name', None)
         return email_keys_to_values
 
     def _prepare_customer_values(self, partner_name, is_company=False, parent_id=False):
@@ -2059,7 +2126,7 @@ class CrmLead(models.Model):
     # ---------------------------------
     # PLS: Probability Computation
     # ---------------------------------
-    def _pls_get_naive_bayes_probabilities(self, batch_mode=False):
+    def _pls_get_naive_bayes_probabilities(self, batch_mode=False, is_tooltip=False):
         """
         In machine learning, naive Bayes classifiers (NBC) are a family of simple "probabilistic classifiers" based on
         applying Bayes theorem with strong (naive) independence assumptions between the variables taken into account.
@@ -2082,11 +2149,27 @@ class CrmLead(models.Model):
         This is called 'zero frequency' and that leads to division (or at least multiplication) by zero.
         To avoid this, we add 0.1 in each frequency. With few data, the computation is than not really realistic.
         The more we have records to analyse, the more the estimation will be precise.
-        :return: probability in percent (and integer rounded) that the lead will be won at the current stage.
+
+        :param: is_tooltip (boolean). If true, method recomputes the probability of self, that should be a singleton, and
+            also returns a dict containing probability, and a list of all (score, field, value) triplets for all value of
+            PLS fields that impact the computation of the probability. Score is a simple value that indicates whether the
+            impact is positive (>.5) or negative (<.5). See method prepare_pls_tooltip_data, or test_pls_tooltip_data for
+            more details
+
+        :return: probability in percent (and rounded at 2 decimals) that the lead will be won at the current stage.
         """
         lead_probabilities = {}
         if not self:
             return lead_probabilities
+
+        # Initialize tooltip data. A returned 0.00 probability means computation was not possible.
+        tooltip_data = {}
+        if is_tooltip:
+            self.ensure_one()
+            tooltip_data = {
+                'probability': 0.0,
+                'scores': [],
+            }
 
         # Get all leads values, no matter the team_id
         domain = []
@@ -2118,6 +2201,13 @@ class CrmLead(models.Model):
         frequency_teams = frequencies.mapped('team_id')
         frequency_team_ids = [team.id for team in frequency_teams]
 
+        # restrict to frequencies of lead team if any exist.
+        if is_tooltip and self.team_id & frequency_teams:
+            frequency_team_ids = [self.team_id.id]
+            frequencies = frequencies.filtered(
+                lambda frequency: frequency.team_id & self.team_id
+            )
+
         # 1. Compute each variable value count individually
         # regroup each variable to be able to compute their own probabilities
         # As all the variable does not enter into account (as we reject unset values in the process)
@@ -2128,7 +2218,7 @@ class CrmLead(models.Model):
         result[-1] = dict((field, dict(won_total=0, lost_total=0)) for field in leads_fields)
         for frequency in frequencies:
             field = frequency['variable']
-            value = frequency['value']
+            value = frequency['value']  # This is always a string
 
             # To avoid that a tag take too much importance if its subset is too small,
             # we ignore the tag frequencies if we have less than 50 won or lost for this tag.
@@ -2189,17 +2279,28 @@ class CrmLead(models.Model):
                 if value_result:
                     total_won = team_won if field == 'stage_id' else field_result['won_total']
                     total_lost = team_lost if field == 'stage_id' else field_result['lost_total']
-
                     # if one count = 0, we cannot compute lead probability
                     if not total_won or not total_lost:
                         continue
-                    s_lead_won *= value_result['won'] / total_won
-                    s_lead_lost *= value_result['lost'] / total_lost
+                    p_field_value_won = value_result['won'] / total_won
+                    p_field_value_lost = value_result['lost'] / total_lost
+                    s_lead_won *= p_field_value_won
+                    s_lead_lost *= p_field_value_lost
 
+                    if is_tooltip:
+                        score = (
+                            1 - p_field_value_lost if field == 'stage_id'
+                            else p_field_value_won / (p_field_value_won + p_field_value_lost)
+                        )
+                        tooltip_data['scores'].append((score, field, value))
             # 3. Compute Probability to win
             probability = s_lead_won / (s_lead_won + s_lead_lost)
             lead_probabilities[lead_id] = min(max(round(100 * probability, 2), 0.01), 99.99)
-        return lead_probabilities
+
+        if tooltip_data and self.id in lead_probabilities:
+            tooltip_data['probability'] = lead_probabilities[self.id]
+
+        return lead_probabilities, tooltip_data
 
     # ---------------------------------
     # PLS: Live Increment
@@ -2279,7 +2380,8 @@ class CrmLead(models.Model):
         lead_probabilities = {}
         for i in range(0, leads_to_update_count, PLS_COMPUTE_BATCH_STEP):
             leads_to_update_part = leads_to_update[i:i + PLS_COMPUTE_BATCH_STEP]
-            lead_probabilities.update(leads_to_update_part._pls_get_naive_bayes_probabilities(batch_mode=True))
+            batch_probabilites, _unused = leads_to_update_part._pls_get_naive_bayes_probabilities(batch_mode=True)
+            lead_probabilities.update(batch_probabilites)
         _logger.info("Predictive Lead Scoring : New automated probabilities computed")
 
         # 3. Group by new probability to reduce server roundtrips when executing the update
@@ -2640,3 +2742,79 @@ class CrmLead(models.Model):
                         lead_values.append(('tag_id', tag.id))
                 leads_values_dict[lead.id] = {'values': lead_values, 'team_id': lead['team_id'].id}
             return leads_values_dict
+
+    # PLS Backend Tooltip
+    # -------------------
+    def prepare_pls_tooltip_data(self):
+        '''
+            Compute and return all necessary information to render CrmPlsTooltip, displayed when
+            pressing the small AI button, located next to the label of probability when automated,
+            in the crm.lead form view. This method first replaces ids with display names of relational
+            fields before returning data, then also recomputes probabilities and writes them on self.
+
+            :returns dict: {
+                low_3_data: list of field-value couples for lowest 3 criterions, lowest first
+                probability: numerical value, used for display on tooltip
+                team_name: string, name of lead team if any
+                top_3_data: list of field-value couples for top 3 criterions, highest first
+            }
+        '''
+        self.ensure_one()
+        _unused, tooltip_data = self._pls_get_naive_bayes_probabilities(is_tooltip=True)
+        sorted_scores_with_name = []
+
+        # We want to display names in the tooltip, not ids.
+        # The last element in tuple is only used for tags to ensure same color in tooltip.
+        for score, field, value in sorted(tooltip_data['scores']):
+            # Skip nonsense results for phone and email states. May happen in a db having a few leads.
+            if field in ['phone_state', 'email_state']:
+                if value in [False, 'incorrect'] and tools.float_compare(score, 0.50, 2) > 0:
+                    continue
+                if value == 'correct' and tools.float_compare(score, 0.50, 2) < 0:
+                    continue
+            if field == 'tag_id':
+                tag = self.tag_ids.filtered(lambda tag: tag.id == value)
+                sorted_scores_with_name.append((score, field, tag.display_name, tag.color))
+            elif isinstance(self[field], models.BaseModel):
+                sorted_scores_with_name.append((score, field, self[field].display_name, False))
+            else:
+                sorted_scores_with_name.append((score, field, str(value), False))
+
+        # Update automated probability, as it may have changed since last computation
+        # -> avoids differences in display between tooltip and record. A 0.00 probability implies
+        # that the computation was not possible. Sample data will be used instead.
+        probability_values = {'automated_probability': tooltip_data['probability']}
+        if self.is_automated_probability:
+            probability_values['probability'] = tooltip_data['probability']
+        self.write(probability_values)
+
+        # Sample values if probability could not be computed. If it was, but if all scores
+        # were excluded above, a placeholder will be used instead in the tooltip.
+        if tools.float_is_zero(tooltip_data['probability'], 2):
+            sorted_scores_with_name = [
+                (.1, 'email_state', False, False),
+                (.2, 'tag_id', _('Exploration'), 4),
+                (.3, 'stage_id', _('New'), False),
+                (.7, 'phone_state', 'correct', False),
+                (.8, 'country_id', _('Belgium'), False),
+                (.9, 'tag_id', _('Consulting'), 3),
+            ]
+
+        return {
+            'low_3_data': [
+                {
+                    'field': element[1],
+                    'value': element[2],
+                    'color': element[3]
+                } for element in sorted_scores_with_name[:3] if tools.float_compare(element[0], 0.50, 2) < 0
+            ],
+            'probability': tooltip_data['probability'],
+            'team_name': self.team_id.display_name,
+            'top_3_data': [
+                {
+                    'field': element[1],
+                    'value': element[2],
+                    'color': element[3]
+                } for element in sorted_scores_with_name[::-1][:3] if tools.float_compare(element[0], 0.50, 2) > 0
+            ],
+        }

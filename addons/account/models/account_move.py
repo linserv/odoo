@@ -89,7 +89,6 @@ class AccountMove(models.Model):
     _check_company_auto = True
     _sequence_index = "journal_id"
     _rec_names_search = ['name', 'partner_id.name', 'ref']
-    _systray_view = 'activity'
     _mailing_enabled = True
 
     @property
@@ -458,6 +457,10 @@ class AccountMove(models.Model):
         string="Display QR-code",
         compute='_compute_display_qr_code',
     )
+    display_link_qr_code = fields.Boolean(
+        string="Display Link QR-code",
+        compute='_compute_display_link_qr_code',
+    )
     qr_code_method = fields.Selection(
         string="Payment QR-code", copy=False,
         selection=lambda self: self.env['res.partner.bank'].get_available_qr_methods_in_sequence(),
@@ -797,7 +800,7 @@ class AccountMove(models.Model):
     @api.depends('invoice_date', 'company_id')
     def _compute_date(self):
         for move in self:
-            if not move.invoice_date:
+            if not move.invoice_date or not move.is_invoice():
                 if not move.date:
                     move.date = fields.Date.context_today(self)
                 continue
@@ -881,12 +884,7 @@ class AccountMove(models.Model):
     @api.depends('company_id', 'invoice_filter_type_domain')
     def _compute_suitable_journal_ids(self):
         for m in self:
-            journal_type = m.invoice_filter_type_domain or 'general'
-            company = m.company_id or self.env.company
-            m.suitable_journal_ids = self.env['account.journal'].search([
-                *self.env['account.journal']._check_company_domain(company),
-                ('type', '=', journal_type),
-            ])
+            m.suitable_journal_ids = self._get_suitable_journal_ids(m.move_type, m.company_id)
 
     @api.depends('posted_before', 'state', 'journal_id', 'date', 'move_type', 'origin_payment_id')
     def _compute_name(self):
@@ -910,7 +908,7 @@ class AccountMove(models.Model):
     @api.depends('date', 'journal_id', 'move_type', 'name', 'posted_before', 'sequence_number', 'sequence_prefix', 'state')
     def _compute_name_placeholder(self):
         for move in self:
-            if (not move.name or move.name == '/') and self.date and not move._get_last_sequence():
+            if (not move.name or move.name == '/') and move.date and not move._get_last_sequence():
                 sequence_format_string, sequence_format_values = move._get_next_sequence_format()
                 sequence_format_values['seq'] = sequence_format_values['seq'] + 1
                 move.name_placeholder = sequence_format_string.format(**sequence_format_values)
@@ -1753,12 +1751,7 @@ class AccountMove(models.Model):
     @api.depends('move_type')
     def _compute_invoice_filter_type_domain(self):
         for move in self:
-            if move.is_sale_document(include_receipts=True):
-                move.invoice_filter_type_domain = 'sale'
-            elif move.is_purchase_document(include_receipts=True):
-                move.invoice_filter_type_domain = 'purchase'
-            else:
-                move.invoice_filter_type_domain = False
+            move.invoice_filter_type_domain = self._get_invoice_filter_type_domain(move.move_type)
 
     @api.depends('commercial_partner_id', 'company_id', 'move_type')
     def _compute_bank_partner_id(self):
@@ -2019,6 +2012,14 @@ class AccountMove(models.Model):
             move.display_qr_code = (
                 move.move_type in ('out_invoice', 'out_receipt', 'in_invoice', 'in_receipt')
                 and move.company_id.qr_code
+            )
+
+    @api.depends('company_id')
+    def _compute_display_link_qr_code(self):
+        for move in self:
+            move.display_link_qr_code = (
+                move.move_type in ('out_invoice', 'out_receipt', 'in_invoice', 'in_receipt')
+                and move.company_id.link_qr_code
             )
 
     @api.depends('amount_total', 'currency_id')
@@ -3522,13 +3523,13 @@ class AccountMove(models.Model):
         return self.filtered(lambda move: move.name != '/')._is_end_of_seq_chain()
 
     def _get_unlink_logger_message(self):
-        """ Before unlink, get a log message for audit trail if it's enabled.
+        """ Before unlink, get a log message for audit trail if restricted.
         Logger is added here because in api ondelete, account.move.line is deleted, and we can't get total amount """
         if not self._context.get('force_delete'):
             pass
 
         moves_details = []
-        for move in self.filtered(lambda m: m.posted_before and m.company_id.check_account_audit_trail):
+        for move in self.filtered(lambda m: m.posted_before and m.company_id.restrictive_audit_trail):
             entry_details = f"{move.name} ({move.id}) amount {move.amount_total} {move.currency_id.name} and partner {move.partner_id.display_name}"
             account_balances_per_account = defaultdict(float)
             for line in move.line_ids:
@@ -3569,11 +3570,11 @@ class AccountMove(models.Model):
     @api.ondelete(at_uninstall=False)
     def _unlink_account_audit_trail_except_once_post(self):
         if not self._context.get('force_delete') and any(
-                move.posted_before and move.company_id.check_account_audit_trail
+                move.posted_before and move.company_id.restrictive_audit_trail
                 for move in self
         ):
             raise UserError(_(
-                "To keep the audit trail, you can not delete journal entries once they have been posted.\n"
+                "To keep the restrictive audit trail, you can not delete journal entries once they have been posted.\n"
                 "Instead, you can cancel the journal entry."
             ))
 
@@ -3891,7 +3892,6 @@ class AccountMove(models.Model):
         domain = [
             *self.env['account.move.line']._check_company_domain(company_id),
             ('partner_id', '=', partner_id),
-            ('account_id.deprecated', '=', False),
             ('date', '>=', date.today() - timedelta(days=365 * 2)),
         ]
         if move_type in self.env['account.move'].get_inbound_types(include_receipts=True):
@@ -5030,13 +5030,13 @@ class AccountMove(models.Model):
     def _can_be_unlinked(self):
         self.ensure_one()
         lock_date = self.company_id._get_user_fiscal_lock_date(self.journal_id)
-        is_part_of_audit_trail = self.posted_before and self.company_id.check_account_audit_trail
+        is_part_of_restricted_audit_trail = self.posted_before and self.company_id.restrictive_audit_trail
         posted_caba_entry = self.state == 'posted' and (self.tax_cash_basis_rec_id or self.tax_cash_basis_origin_move_id)
         posted_exchange_diff_entry = self.state == 'posted' and self.exchange_diff_partial_ids
-        return not self.inalterable_hash and self.date > lock_date and not is_part_of_audit_trail and not posted_caba_entry and not posted_exchange_diff_entry
+        return not self.inalterable_hash and self.date > lock_date and not is_part_of_restricted_audit_trail and not posted_caba_entry and not posted_exchange_diff_entry
 
     def _is_protected_by_audit_trail(self):
-        return any(move.posted_before and move.company_id.check_account_audit_trail for move in self)
+        return any(move.posted_before and move.company_id.restrictive_audit_trail for move in self)
 
     def _unlink_or_reverse(self):
         if not self:
@@ -5132,11 +5132,18 @@ class AccountMove(models.Model):
                     move.currency_id.name
                 ))
 
-            if move.line_ids.account_id.filtered(lambda account: account.deprecated) and not self._context.get('skip_account_deprecation_check'):
-                validation_msgs.add(_("A line of this move is using a deprecated account, you cannot post it."))
+            if move.line_ids.account_id.filtered(lambda account: not account.active) and not self._context.get('skip_account_deprecation_check'):
+                validation_msgs.add(_("A line of this move is using a archived account, you cannot post it."))
 
             # If the field autocheck_on_post is set, we want the checked field on the move to be checked
-            move.checked = move.journal_id.autocheck_on_post
+            if move.journal_id.autocheck_on_post:
+                move.checked = move.journal_id.autocheck_on_post
+            else:
+                move.sudo().activity_schedule(
+                    activity_type_id=self.env.ref('mail.mail_activity_data_todo').id,
+                    summary=_('To check'),
+                    user_id=move.invoice_user_id.name,
+                )
 
         if validation_msgs:
             msg = "\n".join([line for line in validation_msgs])
@@ -5798,6 +5805,24 @@ class AccountMove(models.Model):
         return False
 
     @api.model
+    def _get_suitable_journal_ids(self, move_type, company=False):
+        """Return the suitable journals for the given move type and company (current company if False)."""
+        journal_type = self._get_invoice_filter_type_domain(move_type) or 'general'
+        return self.env['account.journal'].search([
+            *self.env['account.journal']._check_company_domain(company or self.env.company),
+            ('type', '=', journal_type),
+        ])
+
+    @api.model
+    def _get_invoice_filter_type_domain(self, move_type):
+        if self.is_sale_document(include_receipts=True, move_type=move_type):
+            return 'sale'
+        elif self.is_purchase_document(include_receipts=True, move_type=move_type):
+            return 'purchase'
+        else:
+            return False
+
+    @api.model
     def get_invoice_types(self, include_receipts=False):
         return self.get_sale_types(include_receipts) + self.get_purchase_types(include_receipts)
 
@@ -5811,15 +5836,15 @@ class AccountMove(models.Model):
     def get_sale_types(self, include_receipts=False):
         return ['out_invoice', 'out_refund'] + (include_receipts and ['out_receipt'] or [])
 
-    def is_sale_document(self, include_receipts=False):
-        return self.move_type in self.get_sale_types(include_receipts)
+    def is_sale_document(self, include_receipts=False, move_type=False):
+        return (move_type or self.move_type) in self.get_sale_types(include_receipts)
 
     @api.model
     def get_purchase_types(self, include_receipts=False):
         return ['in_invoice', 'in_refund'] + (include_receipts and ['in_receipt'] or [])
 
-    def is_purchase_document(self, include_receipts=False):
-        return self.move_type in self.get_purchase_types(include_receipts)
+    def is_purchase_document(self, include_receipts=False, move_type=False):
+        return (move_type or self.move_type) in self.get_purchase_types(include_receipts)
 
     @api.model
     def get_inbound_types(self, include_receipts=True):
@@ -6054,6 +6079,20 @@ class AccountMove(models.Model):
         self.qr_code_method = qr_code_method
 
         return rslt
+
+    def _generate_portal_payment_qr(self):
+        # This method is designed to prevent traceback.
+        # Scenario: A traceback occurs when `account.payment` is not installed, and the user attempts to
+        # preview or print the invoice.
+        self.ensure_one()
+        return None
+
+    def _get_portal_payment_link(self):
+        # This method is designed to prevent traceback.
+        # Scenario: A traceback occurs when `account.payment` is not installed, and the user attempts to
+        # preview or print the invoice.
+        self.ensure_one()
+        return None
 
     def _generate_and_send(self, force_synchronous=True, allow_fallback_pdf=True, **custom_settings):
         """ Generate the pdf and electronic format(s) for the current invoices and send them given default settings

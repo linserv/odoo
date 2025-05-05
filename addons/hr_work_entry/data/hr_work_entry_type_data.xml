@@ -458,6 +458,7 @@
         <field name="code">CH_UNPAID</field>
         <field name="sequence">15</field>
         <field name="color">5</field>
+        <field name="country_id" ref="base.ch"/>
     </record>
 
     <record id="l10n_ch_swissdec_illness_wt" model="hr.work.entry.type">
@@ -530,6 +531,25 @@
         <field name="sequence">40</field>
         <field name="color">5</field>
         <field name="country_id" ref="base.ch"/>
+    </record>
+
+<!-- EG: Egypt -->
+    <record id="l10n_eg_work_entry_type_paid_sick_leave" model="hr.work.entry.type">
+        <field name="name">Paid Sick Time off</field>
+        <field name="code">EGSICKLEAVE100</field>
+        <field name="country_id" ref="base.eg"/>
+    </record>
+
+    <record id="l10n_eg_work_entry_type_sick_leave_75" model="hr.work.entry.type">
+        <field name="name">Sick Time off (75% Paid)</field>
+        <field name="code">EGSICKLEAVE75</field>
+        <field name="country_id" ref="base.eg"/>
+    </record>
+
+    <record id="l10n_eg_work_entry_type_sick_leave_unpaid" model="hr.work.entry.type">
+        <field name="name">Sick Time off (Unpaid)</field>
+        <field name="code">EGSICKLEAVE0</field>
+        <field name="country_id" ref="base.eg"/>
     </record>
 
 <!-- HK : Hong Kong -->

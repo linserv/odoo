@@ -165,7 +165,10 @@ registry.category("web_tour.tours").add("test_tracking_number_closing_session", 
             ProductScreen.clickDisplayedProduct("Desk Pad", true, "1.0"),
             ProductScreen.clickPayButton(),
             PaymentScreen.clickPaymentMethod("Bank"),
+            PaymentScreen.enterPaymentLineAmount("Bank", "20"),
             PaymentScreen.clickValidate(),
+            ReceiptScreen.isShown(),
+            ReceiptScreen.clickNextOrder(),
         ].flat(),
 });
 
@@ -205,5 +208,20 @@ registry.category("web_tour.tours").add("test_cash_in_out", {
             CashMoveList.deleteCashMove("10"),
             CashMoveList.checkNumberOfRows(1),
             CashMoveList.checkCashMoveShown("5"),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_zero_decimal_places_currency", {
+    checkDelay: 50,
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickDisplayedProduct("Test Product", true, "1.00"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.clickPaymentMethod("Cash"),
+            PaymentScreen.clickValidate(),
+            ReceiptScreen.receiptIsThere(),
+            ReceiptScreen.totalAmountContains("100"),
         ].flat(),
 });

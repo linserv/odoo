@@ -22,7 +22,7 @@ class TestHolidaysFlow(TestHrHolidaysCommon):
         cls.leave_type = cls.env['hr.leave.type'].create({
             'name': 'Paid Time Off',
             'time_type': 'leave',
-            'requires_allocation': 'no',
+            'requires_allocation': False,
         })
 
     def test_departure_without_leave_and_allocation_employee(self):
@@ -64,7 +64,7 @@ class TestHolidaysFlow(TestHrHolidaysCommon):
             'departure_date': self.departure_date}
         self.assertTrue(message in leave.message_ids.mapped('body'))
 
-        cancel_message = "<p>The time off has been cancelled: The employee will leave the company on %(departure_date)s.</p>" % {
+        cancel_message = "<p>The time off request has been cancelled for the following reason:</p><p>The employee will leave the company on %(departure_date)s.</p>" % {
             'departure_date': self.departure_date
         }
         self.assertTrue(cancel_message in self.env['hr.leave'].search([

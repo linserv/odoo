@@ -32,7 +32,7 @@
                         class="position-absolute start-0 top-0 bottom-0 end-0 bg-inherit opacity-0 opacity-100-hover"
                         t-att-class="{'px-2 transition-base': !facet.icon}"
                         >
-                        <i class="fa fa-fw fa-cog"/>
+                        <i class="fa fa-fw fa-pencil"/>
                     </span>
                     <span t-if="env.searchModel.canOrderByCount and facet.type === 'groupBy' and !env.searchModel.orderByCount"
                         class="position-absolute start-0 top-0 bottom-0 end-0 bg-inherit opacity-0 opacity-100-hover"
@@ -75,7 +75,7 @@
                     </a>
                 </t>
                 <a href="#" t-on-click.prevent="" t-att-class="{'ps-3 pe-2 text-truncate': item.isFieldProperty }" t-att-title="item.title">
-                    <t t-if="item.isAddCustomFilterButton"><span class="text-action">Add Custom Filter</span></t>
+                    <t t-if="item.isAddCustomFilterButton"><span class="text-action">Custom Filter...</span></t>
                     <t t-elif="item.loadMore"><span class="text-action"><t t-esc="item.label"/></span></t>
                     <t t-elif="item.isChild">
                         <t t-esc="item.label"/>

@@ -306,7 +306,7 @@ export class KanbanController extends Component {
     }
 
     get modelOptions() {
-        return {};
+        return { lazy: !this.env.inDialog && !!this.props.display.controlPanel };
     }
 
     get progressBarAggregateFields() {
@@ -355,9 +355,16 @@ export class KanbanController extends Component {
                 description: _t("Export"),
                 callback: () => this.exportRecords(),
             },
+            duplicate: {
+                isAvailable: () => this.props.archInfo.activeActions.duplicate,
+                sequence: 30,
+                icon: "fa fa-clone",
+                description: _t("Duplicate"),
+                callback: () => this.model.root.duplicateRecords(),
+            },
             archive: {
                 isAvailable: () => this.archiveEnabled,
-                sequence: 20,
+                sequence: 40,
                 icon: "oi oi-archive",
                 description: _t("Archive"),
                 callback: () =>
@@ -365,23 +372,17 @@ export class KanbanController extends Component {
             },
             unarchive: {
                 isAvailable: () => this.archiveEnabled,
-                sequence: 30,
+                sequence: 45,
                 icon: "oi oi-unarchive",
                 description: _t("Unarchive"),
                 callback: () => this.model.root.toggleArchiveWithConfirmation(false),
             },
-            duplicate: {
-                isAvailable: () => this.props.archInfo.activeActions.duplicate,
-                sequence: 35,
-                icon: "fa fa-clone",
-                description: _t("Duplicate"),
-                callback: () => this.model.root.duplicateRecords(),
-            },
             delete: {
                 isAvailable: () => this.props.archInfo.activeActions.delete,
-                sequence: 40,
+                sequence: 50,
                 icon: "fa fa-trash-o",
                 description: _t("Delete"),
+                class: "text-danger",
                 callback: () =>
                     this.deleteRecordsWithConfirmation(this.deleteConfirmationDialogProps),
             },
@@ -426,23 +427,27 @@ export class KanbanController extends Component {
     }
 
     get canCreate() {
-        const { create, createGroup } = this.props.archInfo.activeActions;
+        return this.props.archInfo.activeActions.create;
+    }
+
+    get isNewButtonDisabled() {
+        const { createGroup } = this.props.archInfo.activeActions;
         const list = this.model.root;
-        if (!create) {
-            return false;
-        }
-        if (list.isGrouped) {
-            if (list.groupByField.type !== "many2one") {
-                return true;
-            }
-            return list.groups.length || !createGroup;
-        }
-        return true;
+        return (
+            this.model.isReady &&
+            list.isGrouped &&
+            list.groupByField.type === "many2one" &&
+            list.groups.length === 0 &&
+            createGroup
+        );
     }
 
     get canQuickCreate() {
         const { activeActions } = this.props.archInfo;
         if (!activeActions.quickCreate) {
+            return false;
+        }
+        if (!this.model.isReady) {
             return false;
         }
 

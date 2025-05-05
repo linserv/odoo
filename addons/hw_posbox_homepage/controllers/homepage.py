@@ -13,8 +13,8 @@ from itertools import groupby
 from pathlib import Path
 
 from odoo import http
-from odoo.addons.hw_drivers.tools import helpers, route, wifi
-from odoo.addons.hw_drivers.main import iot_devices
+from odoo.addons.hw_drivers.tools import certificate, helpers, route, upgrade, wifi
+from odoo.addons.hw_drivers.main import iot_devices, unsupported_devices
 from odoo.addons.hw_drivers.connection_manager import connection_manager
 from odoo.tools.misc import file_path
 from odoo.addons.hw_drivers.server_logger import (
@@ -99,7 +99,7 @@ class IotBoxOwlHomePage(http.Controller):
             'message': 'Successfully cleared credentials',
         })
 
-    @route.iot_route('/hw_posbox_homepage/wifi_clear', type='http', cors='*')
+    @route.iot_route('/hw_posbox_homepage/wifi_clear', type='http', cors='*', linux_only=True)
     def clear_wifi_configuration(self):
         helpers.update_conf({'wifi_ssid': '', 'wifi_password': ''})
         wifi.disconnect()
@@ -141,8 +141,6 @@ class IotBoxOwlHomePage(http.Controller):
                     'ip': conf.get('addr', 'No Internet'),
                 } for conf in netifaces.ifaddresses(iface_id).get(netifaces.AF_INET, [])])
 
-        is_certificate_ok, certificate_details = helpers.get_certificate_status()
-
         devices = [{
             'name': device.device_name,
             'value': str(device.data['value']),
@@ -150,6 +148,8 @@ class IotBoxOwlHomePage(http.Controller):
             'identifier': device.device_identifier,
             'connection': device.device_connection,
         } for device in iot_devices.values()]
+        devices += list(unsupported_devices.values())
+
         device_type_key = lambda device: device['type']
         grouped_devices = {
             device_type: list(devices)
@@ -165,7 +165,7 @@ class IotBoxOwlHomePage(http.Controller):
             'enterprise_code': helpers.get_conf('enterprise_code'),
             'hostname': helpers.get_hostname(),
             'ip': helpers.get_ip(),
-            'mac': helpers.get_mac_address(),
+            'identifier': helpers.get_identifier(),
             'devices': grouped_devices,
             'server_status': odoo_server_url,
             'pairing_code': connection_manager.pairing_code,
@@ -176,46 +176,44 @@ class IotBoxOwlHomePage(http.Controller):
             'network_interfaces': network_interfaces,
             'version': helpers.get_version(),
             'system': platform.system(),
-            'is_certificate_ok': is_certificate_ok,
-            'certificate_details': certificate_details,
+            'certificate_end_date': certificate.get_certificate_end_date(),
             'wifi_ssid': helpers.get_conf('wifi_ssid'),
             'qr_code_wifi' : network_qr_codes.get('qr_wifi'),
             'qr_code_url' : network_qr_codes.get('qr_url'),
         })
 
-    @route.iot_route('/hw_posbox_homepage/wifi', type="http", cors='*')
+    @route.iot_route('/hw_posbox_homepage/wifi', type="http", cors='*', linux_only=True)
     def get_available_wifi(self):
         return json.dumps({
             'currentWiFi': wifi.get_current(),
             'availableWiFi': wifi.get_available_ssids(),
         })
 
-    @route.iot_route('/hw_posbox_homepage/version_info', type="http", cors='*')
+    @route.iot_route('/hw_posbox_homepage/version_info', type="http", cors='*', linux_only=True)
     def get_version_info(self):
-        git = ["git", "--work-tree=/home/pi/odoo/", "--git-dir=/home/pi/odoo/.git"]
         # Check branch name and last commit hash on IoT Box
-        current_commit = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, check=False, text=True)
-        current_branch = subprocess.run(
-            [*git, "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, check=False, text=True
-        )
-        if current_commit.returncode != 0 or current_branch.returncode != 0:
-            return
-        current_commit = current_commit.stdout.strip()
-        current_branch = current_branch.stdout.strip()
+        current_commit = upgrade.git("rev-parse", "HEAD")
+        current_branch = upgrade.git("rev-parse", "--abbrev-ref", "HEAD")
+        if not current_commit or not current_branch:
+            return json.dumps({
+                'status': 'error',
+                'message': 'Failed to retrieve current commit or branch',
+            })
 
-        last_available_commit = subprocess.run(
-            [*git, "ls-remote", "origin", current_branch], capture_output=True, check=False, text=True
-        )
-        if last_available_commit.returncode != 0:
+        last_available_commit = upgrade.git("ls-remote", "origin", current_branch)
+        if not last_available_commit:
             _logger.error("Failed to retrieve last commit available for branch origin/%s", current_branch)
-            return
-        last_available_commit = last_available_commit.stdout.split()[0].strip()
+            return json.dumps({
+                'status': 'error',
+                'message': 'Failed to retrieve last commit available for branch origin/' + current_branch,
+            })
+        last_available_commit = last_available_commit.split()[0].strip()
 
         return json.dumps({
             'status': 'success',
             # Checkout requires db to align with its version (=branch)
             'odooIsUpToDate': current_commit == last_available_commit or not bool(helpers.get_odoo_server_url()),
-            'imageIsUpToDate': not bool(helpers.check_image()),
+            'imageIsUpToDate': platform.system() == "Linux" and not bool(helpers.check_image()),
             'currentCommitHash': current_commit,
         })
 
@@ -277,7 +275,7 @@ class IotBoxOwlHomePage(http.Controller):
             'message': 'Successfully saved credentials',
         }
 
-    @route.iot_route('/hw_posbox_homepage/update_wifi', type="jsonrpc", methods=['POST'], cors='*')
+    @route.iot_route('/hw_posbox_homepage/update_wifi', type="jsonrpc", methods=['POST'], cors='*', linux_only=True)
     def update_wifi(self, essid, password):
         if wifi.reconnect(essid, password, force_update=True):
             helpers.update_conf({'wifi_ssid': essid, 'wifi_password': password})
@@ -299,13 +297,15 @@ class IotBoxOwlHomePage(http.Controller):
 
         return res_payload
 
-    @route.iot_route('/hw_posbox_homepage/generate_password', type="jsonrpc", methods=["POST"], cors='*', sign=True)
+    @route.iot_route(
+        '/hw_posbox_homepage/generate_password', type="jsonrpc", methods=["POST"], cors='*', sign=True, linux_only=True
+    )
     def generate_password(self):
         return {
             'password': helpers.generate_password(),
         }
 
-    @route.iot_route('/hw_posbox_homepage/enable_ngrok', type="jsonrpc", methods=['POST'], cors='*')
+    @route.iot_route('/hw_posbox_homepage/enable_ngrok', type="jsonrpc", methods=['POST'], cors='*', linux_only=True)
     def enable_remote_connection(self, auth_token):
         if subprocess.call(['pgrep', 'ngrok']) == 1:
             subprocess.Popen(['sudo', 'systemd-run', 'ngrok', 'tcp', '--authtoken', auth_token, '--log', '/tmp/ngrok.log', '22'])
@@ -316,7 +316,7 @@ class IotBoxOwlHomePage(http.Controller):
             'message': 'Ngrok tunnel is now enabled',
         }
 
-    @route.iot_route('/hw_posbox_homepage/update_hostname', type="jsonrpc", methods=['POST'], cors='*')
+    @route.iot_route('/hw_posbox_homepage/update_hostname', type="jsonrpc", methods=['POST'], cors='*', linux_only=True)
     def update_hostname(self, hostname):
         """Update the hostname of the IoT Box.
 
@@ -412,9 +412,9 @@ class IotBoxOwlHomePage(http.Controller):
             'message': 'Logger level updated',
         }
 
-    @route.iot_route('/hw_posbox_homepage/update_git_tree', type="jsonrpc", methods=['POST'], cors='*')
+    @route.iot_route('/hw_posbox_homepage/update_git_tree', type="jsonrpc", methods=['POST'], cors='*', linux_only=True)
     def update_git_tree(self):
-        helpers.check_git_branch()
+        upgrade.check_git_branch()
         return {
             'status': 'success',
             'message': 'Successfully updated the IoT Box',

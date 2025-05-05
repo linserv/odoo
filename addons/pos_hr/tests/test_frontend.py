@@ -73,7 +73,7 @@ class TestUi(TestPosHrHttpCommon):
         self.main_pos_config.with_user(self.pos_admin).open_ui()
 
         self.start_tour(
-            "/pos/ui?config_id=%d" % self.main_pos_config.id,
+            "/pos/ui/%d" % self.main_pos_config.id,
             "CashierStayLogged",
             login="pos_admin",
         )
@@ -84,7 +84,7 @@ class TestUi(TestPosHrHttpCommon):
         self.main_pos_config.with_user(self.pos_admin).open_ui()
 
         self.start_tour(
-            "/pos/ui?config_id=%d" % self.main_pos_config.id,
+            "/pos/ui/%d" % self.main_pos_config.id,
             "CashierCanSeeProductInfo",
             login="pos_admin",
         )
@@ -99,7 +99,19 @@ class TestUi(TestPosHrHttpCommon):
         self.main_pos_config.with_user(self.pos_admin).open_ui()
 
         self.start_tour(
-            "/pos/ui?config_id=%d" % self.main_pos_config.id,
+            "/pos/ui/%d" % self.main_pos_config.id,
             "CashierCannotClose",
             login="pos_user",
+        )
+
+    def test_change_on_rights_reflected_directly(self):
+        """When changes in employee rights (advanced/basic/minimal) should
+        be reflected directly and not read from the cache."""
+
+        self.main_pos_config.advanced_employee_ids = self.pos_admin.employee_id
+        self.main_pos_config.with_user(self.pos_admin).open_ui()
+        self.start_tour(
+            "/pos/ui?config_id=%d" % self.main_pos_config.id,
+            "test_change_on_rights_reflected_directly",
+            login="pos_admin",
         )

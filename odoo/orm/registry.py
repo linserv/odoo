@@ -27,11 +27,10 @@ from odoo.tools import (
     OrderedSet,
     config,
     lazy_classproperty,
-    lazy_property,
     remove_accents,
     sql,
 )
-from odoo.tools.func import locked
+from odoo.tools.func import locked, reset_cached_properties
 from odoo.tools.lru import LRU
 from odoo.tools.misc import Collector, format_frame
 
@@ -39,7 +38,7 @@ from .utils import SUPERUSER_ID
 from . import model_classes
 
 if typing.TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Iterable, Iterator, MutableMapping
+    from collections.abc import Callable, Collection, Iterable, Iterator
     from odoo.fields import Field
     from odoo.models import BaseModel
     from odoo.sql_db import BaseCursor, Connection, Cursor
@@ -90,7 +89,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
     _saved_lock: threading.RLock | DummyRLock | None = None
 
     @lazy_classproperty
-    def registries(cls) -> MutableMapping[str, Registry]:
+    def registries(cls) -> LRU[str, Registry]:
         """ A mapping from database names to registries. """
         size = config.get('registry_lru_size', None)
         if not size:
@@ -335,7 +334,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
         for cache in self.__caches.values():
             cache.clear()
 
-        lazy_property.reset_all(self)
+        reset_cached_properties(self)
         self._field_trigger_trees.clear()
         self._is_modifying_relations.clear()
 
@@ -368,7 +367,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
         for cache in self.__caches.values():
             cache.clear()
 
-        lazy_property.reset_all(self)
+        reset_cached_properties(self)
         self._field_trigger_trees.clear()
         self._is_modifying_relations.clear()
         self.registry_invalidated = True
@@ -388,7 +387,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
                 self.field_depends_context[field] = tuple(depends_context)
 
         # clean the lazy_property again in case they are cached by another ongoing registry readonly request
-        lazy_property.reset_all(self)
+        reset_cached_properties(self)
 
         # Reinstall registry hooks. Because of the condition, this only happens
         # on a fully loaded registry, and not on a registry being loaded.

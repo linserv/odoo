@@ -17,53 +17,38 @@ websocket.enableTrace(True, level=logging.getLevelName(_logger.getEffectiveLevel
 
 
 @helpers.require_db
-def send_to_controller(device_type, params, server_url=None):
+def send_to_controller(params, server_url=None):
     """Confirm the operation's completion by sending a response back to the Odoo server
 
-    :param device_type: the type of device that the operation was performed on
     :param params: the parameters to send back to the server
     :param server_url: URL of the Odoo server (provided by decorator).
     """
-    routes = {
-        "printer": "/iot/printer/status",
-    }
-    params['iot_mac'] = helpers.get_mac_address()
-    server_url += routes[device_type]
     try:
-        response = requests.post(server_url, json={'params': params}, timeout=5)
+        response = requests.post(server_url + "/iot/box/send_websocket", json={'params': params}, timeout=5)
         response.raise_for_status()
     except requests.exceptions.RequestException:
         _logger.exception('Could not reach confirmation status URL: %s', server_url)
 
 
 def on_message(ws, messages):
-    """
-        Synchronously handle messages received by the websocket.
-    """
-    messages = json.loads(messages)
-    _logger.debug("websocket received a message: %s", pprint.pformat(messages))
-    iot_mac = helpers.get_mac_address()
-    for message in messages:
-        message_type = message['message']['type']
+    """Synchronously handle messages received by the websocket."""
+    for message in json.loads(messages):
+        _logger.debug("websocket received a message: %s", pprint.pformat(message))
         payload = message['message']['payload']
-        if message_type == 'iot_action':
-            if iot_mac in payload['iotDevice']['iotIdentifiers']:
-                for device in payload['iotDevice']['identifiers']:
-                    device_identifier = device['identifier']
+        if not helpers.get_identifier() in payload.get('iot_identifiers', []):
+            continue
+
+        match message['message']['type']:
+            case 'iot_action':
+                for device_identifier in payload['device_identifiers']:
                     if device_identifier in main.iot_devices:
-                        start_operation_time = time.perf_counter()
                         _logger.debug("device '%s' action started with: %s", device_identifier, pprint.pformat(payload))
                         main.iot_devices[device_identifier].action(payload)
-                        _logger.info("device '%s' action finished - %.*f", device_identifier, 3, time.perf_counter() - start_operation_time)
-            else:
-                # likely intended as IoT share the same channel
-                _logger.debug("message ignored due to different iot mac: %s", iot_mac)
-        elif message_type == 'server_clear':
-            if iot_mac in payload['iotIdentifiers']:
+            case 'server_clear':
                 helpers.disconnect_from_server()
                 close_server_log_sender_handler()
-        elif message_type != 'print_confirmation':  # intended to be ignored
-            _logger.warning("message type not supported: %s", message_type)
+            case _:
+                continue
 
 
 def on_error(ws, error):
@@ -82,9 +67,14 @@ class WebsocketClient(Thread):
         """
             When the client is setup, this function send a message to subscribe to the iot websocket channel
         """
-        ws.send(
-            json.dumps({'event_name': 'subscribe', 'data': {'channels': [self.channel], 'last': 0, 'mac_address': helpers.get_mac_address()}})
-        )
+        ws.send(json.dumps({
+            'event_name': 'subscribe',
+            'data': {
+                'channels': [self.channel],
+                'last': 0,
+                'identifier': helpers.get_identifier(),
+            }
+        }))
 
     def __init__(self, channel, server_url=None):
         """This class will not be instantiated if no db is connected.

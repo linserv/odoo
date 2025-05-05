@@ -1418,6 +1418,9 @@
                 &::placeholder {
                     color: $o-we-sidebar-content-field-control-item-color;
                 }
+                &.datetimepicker-input.text-primary {
+                    color: inherit !important;
+                }
             }
             span {
                 flex: 0 0 auto;
@@ -2930,6 +2933,9 @@ we-select.o_grid we-toggler {
             [data-snippet="s_quotes_carousel_minimal"],
             [data-snippet="s_quotes_carousel"] {
                 height: 550px;
+            }
+            [data-snippet="s_quotes_carousel_compact"] {
+                height: 350px;
             }
             [data-snippet="s_three_columns"] .figure-img[style*="height:50vh"] {
                 /* In Travel theme. */

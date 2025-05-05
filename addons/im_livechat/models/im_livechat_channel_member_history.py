@@ -5,6 +5,7 @@ from odoo.exceptions import ValidationError
 class ImLivechatChannelMemberHistory(models.Model):
     _name = "im_livechat.channel.member.history"
     _description = "Keep the channel member history"
+    _rec_names_search = ["partner_id", "guest_id"]
 
     member_id = fields.Many2one("discuss.channel.member", index="btree_not_null")
     livechat_member_type = fields.Selection(
@@ -25,6 +26,13 @@ class ImLivechatChannelMemberHistory(models.Model):
     partner_id = fields.Many2one(
         "res.partner", compute="_compute_member_fields", index="btree_not_null", store=True
     )
+    chatbot_script_id = fields.Many2one(
+        "chatbot.script", compute="_compute_member_fields", index="btree_not_null", store=True
+    )
+    agent_expertise_ids = fields.Many2many(
+        "im_livechat.expertise", compute="_compute_member_fields", store=True
+    )
+    avatar_128 = fields.Binary(compute="_compute_avatar_128")
 
     _member_id_unique = models.Constraint(
         "UNIQUE(member_id)", "Members can only be linked to one history"
@@ -53,3 +61,19 @@ class ImLivechatChannelMemberHistory(models.Model):
             history.livechat_member_type = (
                 history.livechat_member_type or history.member_id.livechat_member_type
             )
+            history.chatbot_script_id = history.chatbot_script_id or history.member_id.chatbot_script_id
+            history.agent_expertise_ids = (
+                history.agent_expertise_ids or history.member_id.agent_expertise_ids
+            )
+
+    @api.depends("partner_id.name", "guest_id.name")
+    def _compute_display_name(self):
+        for history in self:
+            history.display_name = (
+                history.partner_id.name or history.guest_id.name or self.env._("Unknown")
+            )
+
+    @api.depends("partner_id.avatar_128", "guest_id.avatar_128")
+    def _compute_avatar_128(self):
+        for history in self:
+            history.avatar_128 = history.partner_id.avatar_128 or history.guest_id.avatar_128

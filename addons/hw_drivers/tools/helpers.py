@@ -3,7 +3,6 @@
 
 import configparser
 import contextlib
-import datetime
 from enum import Enum
 from functools import cache, wraps
 from importlib import util
@@ -11,7 +10,6 @@ import inspect
 import io
 import logging
 import netifaces
-from OpenSSL import crypto
 import os
 from pathlib import Path
 import platform
@@ -27,7 +25,7 @@ import time
 import zipfile
 
 from odoo import http, release, service
-from odoo.tools.func import lazy_property
+from odoo.tools.func import reset_cached_properties
 from odoo.tools.misc import file_path
 
 lock = Lock()
@@ -43,12 +41,6 @@ class Orientation(Enum):
     INVERTED = '180'
     LEFT = '90'
     RIGHT = '270'
-
-
-class CertificateStatus(Enum):
-    OK = 1
-    NEED_REFRESH = 2
-    ERROR = 3
 
 
 class IoTRestart(Thread):
@@ -129,105 +121,10 @@ def start_nginx_server():
     if platform.system() == 'Windows':
         path_nginx = get_path_nginx()
         if path_nginx:
-            os.chdir(path_nginx)
             _logger.info('Start Nginx server: %s\\nginx.exe', path_nginx)
-            os.popen('nginx.exe')
-            os.chdir('..\\server')
+            subprocess.Popen([str(path_nginx / 'nginx.exe')], cwd=str(path_nginx))
     elif platform.system() == 'Linux':
         subprocess.check_call(["sudo", "service", "nginx", "restart"])
-
-def check_certificate():
-    """
-    Check if the current certificate is up to date or not authenticated
-    :return CheckCertificateStatus
-    """
-    server = get_odoo_server_url()
-
-    if not server:
-        _logger.info('Ignoring the nginx certificate check without a connected database')
-        return {"status": CertificateStatus.ERROR,
-                "error_code": "ERR_IOT_HTTPS_CHECK_NO_SERVER"}
-
-    if platform.system() == 'Windows':
-        path = Path(get_path_nginx()).joinpath('conf/nginx-cert.crt')
-    elif platform.system() == 'Linux':
-        path = Path('/etc/ssl/certs/nginx-cert.crt')
-
-    if not path.exists():
-        return {"status": CertificateStatus.NEED_REFRESH}
-
-    try:
-        with path.open('r') as f:
-            cert = crypto.load_certificate(crypto.FILETYPE_PEM, f.read())
-    except EnvironmentError:
-        _logger.exception("Unable to read certificate file")
-        return {"status": CertificateStatus.ERROR,
-                "error_code": "ERR_IOT_HTTPS_CHECK_CERT_READ_EXCEPTION"}
-
-    cert_end_date = datetime.datetime.strptime(cert.get_notAfter().decode('utf-8'), "%Y%m%d%H%M%SZ") - datetime.timedelta(days=10)
-    for key in cert.get_subject().get_components():
-        if key[0] == b'CN':
-            cn = key[1].decode('utf-8')
-    if cn == 'OdooTempIoTBoxCertificate' or datetime.datetime.now() > cert_end_date:
-        message = 'Your certificate %s must be updated' % cn
-        _logger.info(message)
-        return {"status": CertificateStatus.NEED_REFRESH}
-    else:
-        message = 'Your certificate %(certificate)s is valid until %(end_date)s' % {"certificate": cn, "end_date": cert_end_date}
-        _logger.info(message)
-        return {"status": CertificateStatus.OK, "message": message}
-
-
-@toggleable
-@require_db
-def check_git_branch(server_url=None):
-    """Check if the local branch is the same as the connected Odoo DB and
-    checkout to match it if needed.
-
-    :param server_url: The URL of the connected Odoo database (provided by decorator).
-    """
-    try:
-        response = requests.post(server_url + "/web/webclient/version_info", json={}, timeout=5)
-        response.raise_for_status()
-        data = response.json()
-    except requests.exceptions.HTTPError:
-        _logger.exception('Could not reach configured server to get the Odoo version')
-        return
-    except ValueError:
-        _logger.exception('Could not load JSON data: Received data is not valid JSON.\nContent:\n%s', response.content)
-        return
-
-    try:
-        git = ['git', '--work-tree=/home/pi/odoo/', '--git-dir=/home/pi/odoo/.git']
-
-        db_branch = data['result']['server_serie'].replace('~', '-')
-        if not subprocess.check_output(git + ['ls-remote', 'origin', db_branch]):
-            db_branch = 'master'
-
-        local_branch = (
-            subprocess.check_output(git + ['symbolic-ref', '-q', '--short', 'HEAD']).decode('utf-8').rstrip()
-        )
-        _logger.info(
-            "Current IoT Box local git branch: %s / Associated Odoo database's git branch: %s",
-            local_branch,
-            db_branch,
-        )
-
-        if db_branch != local_branch:
-            try:
-                with writable():
-                    subprocess.run(git + ['branch', '-m', db_branch], check=True)
-                    subprocess.run(git + ['remote', 'set-branches', 'origin', db_branch], check=True)
-                    _logger.info("Updating odoo folder to the branch %s", db_branch)
-                    subprocess.run(
-                        ['/home/pi/odoo/addons/iot_box_image/configuration/checkout.sh'], check=True
-                    )
-            except subprocess.CalledProcessError:
-                _logger.exception("Failed to update the code with git.")
-            finally:
-                odoo_restart()
-    except Exception:
-        _logger.exception('An error occurred while trying to update the code with git')
 
 
 def check_image():
@@ -294,27 +191,6 @@ def generate_password():
         return 'Error: Check IoT log'
 
 
-def get_certificate_status(is_first=True):
-    """
-    Will get the HTTPS certificate details if present. Will load the certificate if missing.
-
-    :param is_first: Use to make sure that the recursion happens only once
-    :return: (bool, str)
-    """
-    check_certificate_result = check_certificate()
-    certificateStatus = check_certificate_result["status"]
-
-    if certificateStatus == CertificateStatus.ERROR:
-        return False, check_certificate_result["error_code"]
-
-    if certificateStatus == CertificateStatus.NEED_REFRESH and is_first:
-        certificate_process = load_certificate()
-        if certificate_process is not True:
-            return False, certificate_process
-        return get_certificate_status(is_first=False)  # recursive call to attempt certificate read
-    return True, check_certificate_result.get("message",
-                                              "The HTTPS certificate was generated correctly")
-
 def get_img_name():
     major, minor = get_version()[1:].split('.')
     return 'iotboxv%s_%s.zip' % (major, minor)
@@ -327,16 +203,24 @@ def get_ip():
             if addr != '127.0.0.1':
                 return addr
 
-def get_mac_address():
-    interfaces = netifaces.interfaces()
-    for interface in interfaces:
-        if netifaces.ifaddresses(interface).get(netifaces.AF_INET):
-            addr = netifaces.ifaddresses(interface).get(netifaces.AF_LINK)[0]['addr']
-            if addr != '00:00:00:00:00:00':
-                return addr
+
+@cache
+def get_identifier():
+    if platform.system() == 'Linux':
+        return read_file_first_line('/sys/firmware/devicetree/base/serial-number').strip("\x00")
+
+    # On windows, get motherboard's uuid (serial number isn't reliable as it's not always present)
+    command = ['powershell', '-Command', "(Get-CimInstance Win32_ComputerSystemProduct).UUID"]
+    p = subprocess.run(command, stdout=subprocess.PIPE, check=False)
+    if p.returncode != 0:
+        _logger.error("Failed to get Windows IoT serial number")
+        return False
+
+    return p.stdout.decode().strip() or False
+
 
 def get_path_nginx():
-    return str(list(Path().absolute().parent.glob('*nginx*'))[0])
+    return path_file('nginx')
 
 
 @cache
@@ -379,53 +263,6 @@ def get_version(detailed_version=False):
 
     return version
 
-
-def load_certificate():
-    """
-    Send a request to Odoo with customer db_uuid and enterprise_code to get a true certificate
-    """
-    db_uuid = get_conf('db_uuid')
-    enterprise_code = get_conf('enterprise_code')
-    if not (db_uuid and enterprise_code):
-        return "ERR_IOT_HTTPS_LOAD_NO_CREDENTIAL"
-
-    try:
-        response = requests.post(
-            'https://www.odoo.com/odoo-enterprise/iot/x509',
-            json = {'params': {'db_uuid': db_uuid, 'enterprise_code': enterprise_code}},
-            timeout=5,
-        )
-        response.raise_for_status()
-        data = response.json()  # decode once
-    except requests.exceptions.RequestException as e:
-        _logger.exception("An error occurred while trying to reach odoo.com servers.")
-        return "ERR_IOT_HTTPS_LOAD_REQUEST_EXCEPTION\n\n%s" % e
-
-    error = data.get('error')
-    result = data.get('result')
-    if error or not result:
-        _logger.warning("An error received from odoo.com while trying to get the certificate: %s", error or 'Empty response')
-        return "ERR_IOT_HTTPS_LOAD_REQUEST_NO_RESULT"
-
-    update_conf({'subject': result['subject_cn']})
-
-    if platform.system() == 'Linux':
-        with writable():
-            Path('/etc/ssl/certs/nginx-cert.crt').write_text(result['x509_pem'])
-            Path('/root_bypass_ramdisks/etc/ssl/certs/nginx-cert.crt').write_text(result['x509_pem'])
-            Path('/etc/ssl/private/nginx-cert.key').write_text(result['private_key_pem'])
-            Path('/root_bypass_ramdisks/etc/ssl/private/nginx-cert.key').write_text(result['private_key_pem'])
-    elif platform.system() == 'Windows':
-        Path(get_path_nginx()).joinpath('conf/nginx-cert.crt').write_text(result['x509_pem'])
-        Path(get_path_nginx()).joinpath('conf/nginx-cert.key').write_text(result['private_key_pem'])
-    time.sleep(3)
-    if platform.system() == 'Windows':
-        odoo_restart(0)
-    elif platform.system() == 'Linux':
-        start_nginx_server()
-    return True
-
-
 def delete_iot_handlers():
     """Delete all drivers, interfaces and libs if any.
     This is needed to avoid conflicts with the newly downloaded drivers.
@@ -457,7 +294,7 @@ def download_iot_handlers(auto=True, server_url=None):
     try:
         response = requests.post(
             server_url + '/iot/get_handlers',
-            data={'mac': get_mac_address(), 'auto': auto},
+            data={'identifier': get_identifier(), 'auto': auto},
             timeout=8,
             headers={'If-None-Match': etag} if etag else None,
         )
@@ -504,7 +341,8 @@ def load_iot_handlers():
                     spec.loader.exec_module(module)
                 except Exception:
                     _logger.exception('Unable to load handler file: %s', file)
-    lazy_property.reset_all(http.root)
+    reset_cached_properties(http.root)
+
 
 def list_file_by_os(file_list):
     platform_os = platform.system()
@@ -533,7 +371,7 @@ def path_file(*args):
     if platform_os == 'Linux':
         return Path("~pi", *args).expanduser()  # Path.home() returns odoo user's home instead of pi's
     elif platform_os == 'Windows':
-        return Path().absolute().parent.joinpath('server', *args)
+        return Path().absolute().parent.joinpath(*args)
 
 
 def read_file_first_line(filename):

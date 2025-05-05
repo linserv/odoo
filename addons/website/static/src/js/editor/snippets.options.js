@@ -225,7 +225,7 @@ const FontFamilyPickerUserValueWidget = SelectUserValueWidget.extend({
 
         const fontsToLoad = [];
         for (const font of this.googleFonts) {
-            const fontURL = `https://fonts.googleapis.com/css?family=${encodeURIComponent(font).replace(/%20/g, '+')}`;
+            const fontURL = `https://fonts.googleapis.com/css?family=${encodeURIComponent(font).replace(/%20/g, '+')}:300,300i,400,400i,700,700i`;
             fontsToLoad.push(fontURL);
         }
         for (const font of this.googleLocalFonts) {
@@ -374,18 +374,17 @@ const FontFamilyPickerUserValueWidget = SelectUserValueWidget.extend({
                     return filtered.map((fontFamilyName) => {
                         return {
                             label: fontFamilyName,
-                            value: fontFamilyName,
+                            onSelect: () => this.onGoogleFontSelect(fontFamilyName),
                         };
                     });
                 }}];
             }
-            async onGoogleFontSelect(selected) {
+            async onGoogleFontSelect(fontFamily) {
                 this.fileInput.el.value = "";
                 this.state.uploadedFonts = [];
                 this.state.uploadedFontName = undefined;
                 this.state.uploadedFontFaces = undefined;
                 try {
-                    const fontFamily = selected.value;
                     const result = await fetch(`https://fonts.googleapis.com/css?family=${encodeURIComponent(fontFamily)}:300,300i,400,400i,700,700i`, {method: 'HEAD'});
                     // Google fonts server returns a 400 status code if family is not valid.
                     if (result.ok) {
@@ -2996,7 +2995,9 @@ options.registry.DeviceVisibility = options.Class.extend({
      * @override
      */
     async onTargetHide() {
+        this.options.wysiwyg.odooEditor.observerUnactive("onTargetHide");
         this.$target[0].classList.remove('o_snippet_override_invisible');
+        this.options.wysiwyg.odooEditor.observerActive("onTargetHide");
     },
     /**
      * @override
@@ -3007,7 +3008,9 @@ options.registry.DeviceVisibility = options.Class.extend({
         if ((this.$target[0].classList.contains('o_snippet_mobile_invisible')
                 || this.$target[0].classList.contains('o_snippet_desktop_invisible')
             ) && isMobilePreview === isMobileHidden) {
+            this.options.wysiwyg.odooEditor.observerUnactive("onTargetShow");
             this.$target[0].classList.add('o_snippet_override_invisible');
+            this.options.wysiwyg.odooEditor.observerActive("onTargetShow");
         }
     },
     /**

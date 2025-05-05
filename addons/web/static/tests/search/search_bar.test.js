@@ -15,7 +15,9 @@ import { Deferred, animationFrame, mockTimeZone } from "@odoo/hoot-mock";
 import { Component, onWillUpdateProps, xml } from "@odoo/owl";
 import {
     SELECTORS,
+    addNewRule,
     clickOnButtonDeleteNode,
+    editValue,
     getCurrentOperator,
     getCurrentPath,
     getCurrentValue,
@@ -768,7 +770,7 @@ test("many2one_reference fields are supported in search view", async () => {
     expect(queryAllTexts`.o_searchview_autocomplete .o-dropdown-item`).toEqual([
         "Search Foo for: 12",
         "Search Resource ID for: 12",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     await keyDown("ArrowDown");
@@ -781,7 +783,7 @@ test("many2one_reference fields are supported in search view", async () => {
     await editSearch("1a");
     expect(queryAllTexts`.o_searchview_autocomplete .o-dropdown-item`).toEqual([
         "Search Foo for: 1a",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     await validateSearch();
@@ -967,7 +969,7 @@ test("search a property", async () => {
         "My Tags (Bar 1) for: A",
         "My Tags (Bar 1) for: AA",
         "My Text (Bar 2) for: a",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     // click again on the expand icon to hide the properties
@@ -975,7 +977,7 @@ test("search a property", async () => {
     expect(`.o_searchview_autocomplete .o-dropdown-item`).toHaveCount(2);
     expect(queryAllTexts`.o_searchview_autocomplete .o-dropdown-item`).toEqual([
         "Search Properties",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     // search for a partner, and expand the many2many property
@@ -991,7 +993,7 @@ test("search a property", async () => {
         "Bob",
         "Bobby",
         "My Text (Bar 2) for: Bo",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     // fold all the properties (included the search result)
@@ -999,7 +1001,7 @@ test("search a property", async () => {
     expect(`.o_searchview_autocomplete .o-dropdown-item`).toHaveCount(2);
     expect(queryAllTexts`.o_searchview_autocomplete .o-dropdown-item`).toEqual([
         "Search Properties",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     // unfold all the properties but fold the search result
@@ -1011,7 +1013,7 @@ test("search a property", async () => {
         "My Partner (Bar 1)",
         "My Partners (Bar 1)",
         "My Text (Bar 2) for: Bo",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     // select Bobby
@@ -1037,7 +1039,7 @@ test("search a property", async () => {
         "My Tags (Bar 1) for: A",
         "My Tags (Bar 1) for: AA",
         "My Text (Bar 2) for: a",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     // select the selection option "AA"
@@ -1088,7 +1090,7 @@ test("search a property", async () => {
         "Alicia",
         "My Partners (Bar 1)",
         "My Text (Bar 2) for: Ali",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
     await contains(".o_searchview_autocomplete .o-dropdown-item:nth-child(4)").click();
     expect(searchBar.env.searchModel.domain).toEqual([
@@ -1111,7 +1113,7 @@ test("search a property", async () => {
         "My Tags (Bar 1) for: A",
         "My Tags (Bar 1) for: AA",
         "My Text (Bar 2) for: A",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     await contains(".o_searchview_autocomplete .o-dropdown-item:nth-child(7)").click();
@@ -1136,7 +1138,7 @@ test("search a property", async () => {
         "My Selection (Bar 1) for: B",
         "My Tags (Bar 1) for: B",
         "My Text (Bar 2) for: B",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
     await contains(".o_searchview_autocomplete .o-dropdown-item:nth-child(5)").click();
     expect(searchBar.env.searchModel.domain).toEqual([
@@ -1178,7 +1180,7 @@ test("search a property", async () => {
         "(no result)",
         "My Partners (Bar 1)",
         "My Text (Bar 2) for: Bobby",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 
     // test the navigation with keyboard
@@ -1292,7 +1294,7 @@ test("search a property: definition record id in the context", async () => {
 
 test("edit a filter", async () => {
     onRpc("/web/domain/validate", () => true);
-    await mountWithSearch(SearchBar, {
+    const searchBar = await mountWithSearch(SearchBar, {
         resModel: "partner",
         searchMenuTypes: ["groupBy"], // we need it to have facet (see facets getter in search_model)
         searchViewId: false,
@@ -1314,10 +1316,10 @@ test("edit a filter", async () => {
 
     await contains(".o_facet_with_domain .o_searchview_facet_label").click();
     expect(`.modal`).toHaveCount(1);
-    expect(`.modal header`).toHaveText("Modify Condition");
+    expect(`.modal header`).toHaveText("Custom Filter");
     expect(`.modal .o_domain_selector`).toHaveCount(1);
     expect(SELECTORS.condition).toHaveCount(1);
-    expect(queryAllTexts`.modal footer button`).toEqual(["Confirm", "Discard"]);
+    expect(queryAllTexts`.modal footer button`).toEqual(["Search", "Discard"]);
     expect(getCurrentPath()).toBe("Birthday");
     expect(getCurrentOperator()).toBe("is greater or equal");
     expect(getCurrentValue()).toBe("context_today()");
@@ -1335,7 +1337,8 @@ test("edit a filter", async () => {
 
     await contains(".modal footer button").click();
     expect(`.modal`).toHaveCount(0);
-    expect(getFacetTexts()).toEqual(["Bool", "Id is equal 1"]);
+    expect(getFacetTexts()).toEqual(["Id\n1", "Bool"]);
+    expect(searchBar.env.searchModel.domain).toEqual([["id", "=", 1]]);
 });
 
 test("edit a filter with context: context is kept after edition", async () => {
@@ -1356,8 +1359,9 @@ test("edit a filter with context: context is kept after edition", async () => {
     expect(searchBar.env.searchModel.context.specialKey).toBe("abc");
 
     await contains(".o_facet_with_domain .o_searchview_facet_label").click();
+    await contains(`.modal ${SELECTORS.addNewRule}`).click();
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`Foo is equal abc`]);
+    expect(getFacetTexts()).toEqual([`Foo`]);
     expect(searchBar.env.searchModel.context.specialKey).toBe("abc");
 });
 
@@ -1375,7 +1379,7 @@ test("edit a favorite", async () => {
     ];
 
     onRpc("/web/domain/validate", () => true);
-    await mountWithSearch(SearchBar, {
+    const searchBar = await mountWithSearch(SearchBar, {
         resModel: "partner",
         searchMenuTypes: ["groupBy"], // we need it to have facet (see facets getter in search_model)
         searchViewId: false,
@@ -1400,15 +1404,20 @@ test("edit a favorite", async () => {
     expect(getCurrentPath()).toBe("Foo");
     expect(getCurrentOperator()).toBe("contains");
     expect(getCurrentValue()).toBe("abc");
+    await editValue("def");
+    expect(getCurrentPath()).toBe("Foo");
+    expect(getCurrentOperator()).toBe("contains");
+    expect(getCurrentValue()).toBe("def");
 
     await contains(".modal footer button").click();
     expect(`.modal`).toHaveCount(0);
-    expect(getFacetTexts()).toEqual(["Bool\n>\nCompany", "Foo contains abc"]);
+    expect(getFacetTexts()).toEqual(["Foo\ndef", "Bool\n>\nCompany"]);
+    expect(searchBar.env.searchModel.domain).toEqual([["foo", "ilike", "def"]]);
 });
 
 test("edit a field", async () => {
     onRpc("/web/domain/validate", () => true);
-    await mountWithSearch(SearchBar, {
+    const searchBar = await mountWithSearch(SearchBar, {
         resModel: "partner",
         searchViewId: false,
         searchViewArch: `
@@ -1434,12 +1443,11 @@ test("edit a field", async () => {
     expect(getCurrentPath(0)).toBe("Foo");
     expect(getCurrentOperator(0)).toBe("contains");
     expect(getCurrentValue(0)).toBe("abc");
-    expect(getCurrentPath(1)).toBe("Foo");
-    expect(getCurrentOperator(1)).toBe("contains");
-    expect(getCurrentValue(1)).toBe("def");
+    await clickOnButtonDeleteNode();
 
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`Foo contains abc or Foo contains def`]);
+    expect(getFacetTexts()).toEqual(["Foo\ndef"]);
+    expect(searchBar.env.searchModel.domain).toEqual([["foo", "ilike", "def"]]);
 });
 
 test("no rpc for getting display_name for facets if known", async () => {
@@ -1472,7 +1480,7 @@ test("no rpc for getting display_name for facets if known", async () => {
 
     await contains(".o-autocomplete--dropdown-menu .o-autocomplete--dropdown-item").click();
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Bar is in ( First record )"]);
+    expect(getFacetTexts()).toEqual(["Bar\nFirst record"]);
 });
 
 test.tags`desktop`("clicking on search input trigger the search menu", async () => {
@@ -1505,7 +1513,7 @@ test("facets display with any / not any operator", async function () {
         searchViewId: false,
         searchViewArch: `
             <search>
-                <filter name="filter" string="Filter" domain="[('company', 'any', [('bar', 'any', [('company', 'in', ['JD7', 'KDB'])])])]"/>
+                <filter name="filter" string="Filter" domain="[('company', 'any', [])]"/>
             </search>
         `,
         context: {
@@ -1518,101 +1526,9 @@ test("facets display with any / not any operator", async function () {
     await contains(".o_facet_with_domain .o_searchview_facet_label").click();
     expect.verifySteps([`fields_get`]);
 
+    await addNewRule();
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([
-        "Company matches ( Bar matches ( Company is in ( JD7 , KDB ) ) )",
-    ]);
-    expect.verifySteps([`/web/domain/validate`]);
-});
-
-test("facets display with any / not any operator (with a complex path)", async function () {
-    onRpc(({ method }) => expect.step(method));
-    onRpc("/web/domain/validate", () => {
-        expect.step("/web/domain/validate");
-        return true;
-    });
-    await mountWithSearch(SearchBar, {
-        resModel: "partner",
-        searchViewId: false,
-        searchViewArch: `
-            <search>
-                <filter name="filter" string="Filter" domain="['|', ('company.company', 'any', [('id', '=', 1)]), ('Bar', '=', false)]"/>
-            </search>
-        `,
-        context: {
-            search_default_filter: true,
-        },
-    });
-    expect(getFacetTexts()).toEqual(["Filter"]);
-    expect.verifySteps([`get_views`]);
-
-    await contains(".o_facet_with_domain .o_searchview_facet_label").click();
-    expect.verifySteps([`fields_get`]);
-
-    await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([
-        "Company ➔ Company matches ( Id is equal 1 ) or Bar is equal false",
-    ]);
-    expect.verifySteps([`/web/domain/validate`]);
-});
-
-test("facets display with any / not any operator (with a or)", async function () {
-    onRpc(({ method }) => expect.step(method));
-    onRpc("/web/domain/validate", () => {
-        expect.step("/web/domain/validate");
-        return true;
-    });
-    await mountWithSearch(SearchBar, {
-        resModel: "partner",
-        searchViewId: false,
-        searchViewArch: `
-            <search>
-                <filter name="filter" string="Filter" domain="['|', ('company', 'any', [('id', '=', 1)]), ('bar', '=', false)]"/>
-            </search>
-        `,
-        context: {
-            search_default_filter: true,
-        },
-    });
-    expect(getFacetTexts()).toEqual(["Filter"]);
-    expect.verifySteps([`get_views`]);
-
-    await contains(".o_facet_with_domain .o_searchview_facet_label").click();
-    expect.verifySteps([`fields_get`]);
-
-    await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Company matches ( Id is equal 1 ) or Bar is equal false"]);
-    expect.verifySteps([`/web/domain/validate`]);
-});
-
-test("facets display with any / not any operator (check brackets)", async function () {
-    onRpc(({ method }) => expect.step(method));
-    onRpc("/web/domain/validate", () => {
-        expect.step("/web/domain/validate");
-        return true;
-    });
-    await mountWithSearch(SearchBar, {
-        resModel: "partner",
-        searchViewId: false,
-        searchViewArch: `
-            <search>
-                <filter isDebugMode="true" name="filter" string="Filter" domain="['|', ('company', 'any', [('bar', 'any', [('bool', '=', False)]), ('bar', 'any', [('bool', '=', True)])]), ('bar', '=', false)]"/>
-            </search>
-        `,
-        context: {
-            search_default_filter: true,
-        },
-    });
-    expect(getFacetTexts()).toEqual(["Filter"]);
-    expect.verifySteps([`get_views`]);
-
-    await contains(".o_facet_with_domain .o_searchview_facet_label").click();
-    expect.verifySteps([`fields_get`]);
-
-    await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([
-        "Company matches ( Bar matches ( Bool not set ) and Bar matches ( Bool set ) ) or Bar is equal false",
-    ]);
+    expect(getFacetTexts()).toEqual(["Company"]);
     expect.verifySteps([`/web/domain/validate`]);
 });
 
@@ -1645,7 +1561,7 @@ test("select autocompleted many2one with allowed_company_ids domain (cids: 1-5)"
         "Search Bar for: rec",
         "Second record",
         "Third record",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 });
 
@@ -1682,7 +1598,7 @@ test("select autocompleted many2one with allowed_company_ids domain (cids: 1)", 
     expect(queryAllTexts(`.o_searchview_autocomplete .o-dropdown-item`)).toEqual([
         "Search Bar for: rec",
         "Second record",
-        "Add Custom Filter",
+        "Custom Filter...",
     ]);
 });
 
@@ -1704,7 +1620,7 @@ test("throw error when domain can not be parsed", async () => {
     expect.verifyErrors(["Error: Name 'wrong' is not defined"]);
 });
 
-test("dropdown menu last element is 'Add Custom Filter'", async () => {
+test("dropdown menu last element is 'Custom Filter...'", async () => {
     await mountWithSearch(SearchBar, {
         resModel: "partner",
         searchMenuTypes: [],
@@ -1717,9 +1633,7 @@ test("dropdown menu last element is 'Add Custom Filter'", async () => {
     });
     await editSearch("a");
     await animationFrame();
-    expect(".o_searchview_autocomplete .o-dropdown-item:last-child").toHaveText(
-        "Add Custom Filter"
-    );
+    expect(".o_searchview_autocomplete .o-dropdown-item:last-child").toHaveText("Custom Filter...");
 });
 
 test("order by count resets when there is no group left", async () => {

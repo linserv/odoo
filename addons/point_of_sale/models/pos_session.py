@@ -133,7 +133,7 @@ class PosSession(models.Model):
             'pos.category', 'pos.bill', 'res.company', 'account.tax', 'account.tax.group', 'product.template', 'product.product', 'product.attribute', 'product.attribute.custom.value',
             'product.template.attribute.line', 'product.template.attribute.value', 'product.template.attribute.exclusion', 'product.combo', 'product.combo.item', 'res.users', 'res.partner', 'product.uom',
             'decimal.precision', 'uom.uom', 'res.country', 'res.country.state', 'res.lang', 'product.pricelist', 'product.pricelist.item', 'product.category',
-            'account.cash.rounding', 'account.fiscal.position', 'account.fiscal.position.tax', 'stock.picking.type', 'res.currency', 'pos.note', 'product.tag', 'ir.module.module']
+            'account.cash.rounding', 'account.fiscal.position', 'stock.picking.type', 'res.currency', 'pos.note', 'product.tag', 'ir.module.module']
 
     @api.model
     def _load_pos_data_domain(self, data):
@@ -197,6 +197,10 @@ class PosSession(models.Model):
 
     def delete_opening_control_session(self):
         self.ensure_one()
+        if not self.exists():
+            return {
+                'status': 'success',
+            }
         if self.state != 'opening_control' or len(self.order_ids) > 0:
             raise UserError(_("You can only cancel a session that is in opening control state and has no orders."))
         self.sudo().unlink()
@@ -471,7 +475,7 @@ class PosSession(models.Model):
                 check_move_validity=False, skip_invoice_sync=True
             )._create_account_move(balancing_account, amount_to_balance, bank_payment_method_diffs)
 
-            balance = sum(self.move_id.line_ids.mapped('balance'))
+            balance = sum(record.move_id.line_ids.mapped('balance'))
             try:
                 with self.move_id._check_balanced({'records': self.move_id.sudo()}):
                     pass
@@ -487,12 +491,12 @@ class PosSession(models.Model):
                 return self._close_session_action(balance)
 
             self.sudo()._post_statement_difference(cash_difference_before_statements)
-            if self.move_id.line_ids:
-                self.move_id.sudo().with_company(self.company_id)._post()
+            if record.move_id.line_ids:
+                record.move_id.with_company(self.company_id)._post()
                 # Set the uninvoiced orders' state to 'done'
                 self.env['pos.order'].search([('session_id', '=', self.id), ('state', '=', 'paid')]).write({'state': 'done'})
             else:
-                self.move_id.sudo().unlink()
+                record.move_id.sudo().unlink()
             self.sudo().with_company(self.company_id)._reconcile_account_move_lines(data)
         else:
             self.sudo()._post_statement_difference(self.cash_register_difference)
@@ -540,7 +544,7 @@ class PosSession(models.Model):
                 st_line_vals['payment_ref'] = _("Cash difference observed during the counting (Profit) - closing")
                 st_line_vals['counterpart_account_id'] = self.cash_journal_id.profit_account_id.id
 
-            created_line = self.env['account.bank.statement.line'].create(st_line_vals)
+            created_line = self.env['account.bank.statement.line'].with_context(no_retrieve_partner=True).create(st_line_vals)
 
             if created_line:
                 created_line.move_id.message_post(body=_(
@@ -602,7 +606,8 @@ class PosSession(models.Model):
                 'redirect': True
             }
 
-        self.post_close_register_message()
+        if self.env.user.email:
+            self.post_close_register_message()
         self.config_id._notify(('CLOSING_SESSION', {'login_number': self.env.context.get('login_number', False), 'session_id': self.id}))
         return {'successful': True}
 
@@ -1242,7 +1247,7 @@ class PosSession(models.Model):
                 )
 
         # create the statement lines and account move lines
-        BankStatementLine = self.env['account.bank.statement.line']
+        BankStatementLine = self.env['account.bank.statement.line'].with_context(no_retrieve_partner=True)
         split_cash_statement_lines = {}
         combine_cash_statement_lines = {}
         split_cash_receivable_lines = {}
@@ -1427,10 +1432,10 @@ class PosSession(models.Model):
         else:
             product_name = ""
             product_uom = False
-        title = 'Sales' if sign == 1 else 'Refund'
-        name = '%s untaxed' % title
+        title = _('Sales') if sign == 1 else _('Refund')
+        name = _('%s untaxed', title)
         if applied_taxes:
-            name = '%s %s with %s' % (title, product_name, ', '.join([tax.name for tax in applied_taxes]))
+            name = _('%(title)s %(product_name)s with %(taxes)s', title=title, product_name=product_name, taxes=', '.join([tax.name for tax in applied_taxes]))
         partial_vals = {
             'name': name,
             'account_id': account_id,
@@ -1805,7 +1810,7 @@ class PosSession(models.Model):
             for session in sessions
         ]
 
-        self.env['account.bank.statement.line'].create(vals_list)
+        self.env['account.bank.statement.line'].with_context(no_retrieve_partner=True).create(vals_list)
 
     def delete_cash_in_out(self, absl_id, partner_id):
         if not self.env.user.has_group('account.group_account_basic'):

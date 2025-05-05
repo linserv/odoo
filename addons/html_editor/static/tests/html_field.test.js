@@ -898,7 +898,10 @@ test("Embed video by pasting video URL", async () => {
     // Press Enter to select first option in the powerbox ("Embed Youtube Video").
     await press("Enter");
     await animationFrame();
-    expect(anchorNode.outerHTML).toBe("<p></p>");
+    const videoIframe = queryOne("div.media_iframe_video");
+    expect(videoIframe.nextElementSibling).toHaveOuterHTML(
+        `<p o-we-hint-text='Type "/" for commands' class="o-we-hint"><br></p>`
+    );
     expect(
         'div.media_iframe_video iframe[src="//www.youtube.com/embed/qxb74CMR748?rel=0&autoplay=0"]'
     ).toHaveCount(1);
@@ -962,8 +965,7 @@ test("link preview in Link Popover", async () => {
     });
     // Click on Discard button to undo changes.
     await contains(".o-we-linkpopover .o_we_discard_link").click();
-    await waitForNone(".o-we-linkpopover", { root: document, timeout: 1500 });
-    expect(".o-we-linkpopover").toHaveCount(0);
+    await waitFor("a.o_we_edit_link");
     expect(".test_target a").toHaveText("This website");
 
     // Click on the edit link icon
@@ -1029,6 +1031,7 @@ test("html field with a placeholder", async () => {
     );
 
     moveSelectionOutsideEditor();
+    htmlEditor.editable.blur();
     await tick();
     expect(`[name="txt"] .odoo-editor-editable`).toHaveInnerHTML(
         '<div class="o-paragraph o-we-hint" o-we-hint-text="test"><br></div>',

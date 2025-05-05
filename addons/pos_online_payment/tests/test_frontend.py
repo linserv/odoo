@@ -20,7 +20,7 @@ import odoo.tests
 class TestUi(TestPointOfSaleHttpCommon, OnlinePaymentCommon):
 
     def _get_url(self):
-        return f"/pos/ui?config_id={self.pos_config.id}"
+        return f"/pos/ui/{self.pos_config.id}"
 
     def start_pos_tour(self, tour_name, login="pos_user", **kwargs):
         self.start_tour(self._get_url(), tour_name, login=login, **kwargs)
@@ -28,7 +28,7 @@ class TestUi(TestPointOfSaleHttpCommon, OnlinePaymentCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-
+        cls.env.user.group_ids |= cls.env.ref('point_of_sale.group_pos_manager')
         # Code from addons/account_payment/tests/common.py:
         Method_get_payment_method_information = AccountPaymentMethod._get_payment_method_information
 

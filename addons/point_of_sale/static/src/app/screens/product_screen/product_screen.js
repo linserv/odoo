@@ -24,6 +24,7 @@ import {
 } from "@point_of_sale/app/screens/product_screen/control_buttons/control_buttons";
 import { BarcodeVideoScanner } from "@web/core/barcode/barcode_video_scanner";
 import { OptionalProductPopup } from "@point_of_sale/app/components/popups/optional_products_popup/optional_products_popup";
+import { useRouterParamsChecker } from "@point_of_sale/app/hooks/pos_router_hook";
 import { debounce } from "@web/core/utils/timing";
 
 const { DateTime } = luxon;
@@ -41,7 +42,9 @@ export class ProductScreen extends Component {
         ProductCard,
         BarcodeVideoScanner,
     };
-    static props = {};
+    static props = {
+        orderUuid: { type: String },
+    };
 
     setup() {
         super.setup();
@@ -55,7 +58,10 @@ export class ProductScreen extends Component {
             currentOffset: 0,
             quantityByProductTmplId: {},
         });
+
+        useRouterParamsChecker();
         onMounted(() => {
+            this.currentOrder.deselectOrderline();
             this.pos.openOpeningControl();
             this.pos.addPendingOrder([this.currentOrder.id]);
             // Call `reset` when the `onMounted` callback in `numberBuffer.use` is done.
@@ -109,9 +115,10 @@ export class ProductScreen extends Component {
         useEffect(
             () => {
                 this.state.quantityByProductTmplId = this.currentOrder?.lines?.reduce((acc, ol) => {
-                    acc[ol.product_id.product_tmpl_id.id]
-                        ? (acc[ol.product_id.product_tmpl_id.id] += ol.qty)
-                        : (acc[ol.product_id.product_tmpl_id.id] = ol.qty);
+                    if (!ol.combo_parent_id) {
+                        const productTmplId = ol.product_id.product_tmpl_id.id;
+                        acc[productTmplId] = (acc[productTmplId] || 0) + ol.qty;
+                    }
                     return acc;
                 }, {});
             },
@@ -390,4 +397,12 @@ export class ProductScreen extends Component {
     }
 }
 
-registry.category("pos_screens").add("ProductScreen", ProductScreen);
+registry.category("pos_pages").add("ProductScreen", {
+    name: "ProductScreen",
+    component: ProductScreen,
+    route: `/pos/ui/${odoo.pos_config_id}/product/{string:orderUuid}`,
+    params: {
+        orderUuid: true,
+        orderFinalized: false,
+    },
+});

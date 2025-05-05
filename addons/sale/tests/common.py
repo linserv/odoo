@@ -24,7 +24,7 @@ class SaleCommon(
         (cls.product + cls.service_product).write({
             'taxes_id': [Command.clear()],
         })
-
+        cls._enable_pricelists()
         cls.empty_order, cls.sale_order = cls.env['sale.order'].create([
             {
                 'partner_id': cls.partner.id,
@@ -207,7 +207,7 @@ class TestSaleCommon(AccountTestInvoicingCommon):
         return groups | cls.quick_ref('sales_team.group_sale_manager')
 
 
-class TestTaxCommonSale(TestTaxCommon):
+class TestTaxCommonSale(TestSaleCommon, TestTaxCommon):
 
     @classmethod
     def get_default_groups(cls):

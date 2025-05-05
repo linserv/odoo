@@ -308,9 +308,12 @@ class MrpProduction(models.Model):
         picking_type_by_company = {pt['company_id']: pt['id'] for pt in picking_types}
         default_picking_type_id = self._context.get('default_picking_type_id')
         default_picking_type = default_picking_type_id and self.env['stock.picking.type'].browse(default_picking_type_id)
+        if not default_picking_type:
+            default_warehouse_id = self._context.get('force_warehouse_id')
+            default_picking_type = default_warehouse_id and self.env['stock.warehouse'].browse(default_warehouse_id).manu_type_id
         for mo in self:
             if default_picking_type and default_picking_type.company_id == mo.company_id:
-                mo.picking_type_id = default_picking_type_id
+                mo.picking_type_id = default_picking_type
                 continue
             if mo.bom_id and mo.bom_id.picking_type_id:
                 mo.picking_type_id = mo.bom_id.picking_type_id
@@ -1424,7 +1427,10 @@ class MrpProduction(models.Model):
 
     def _prepare_stock_lot_values(self):
         self.ensure_one()
-        name = self.product_id.lot_sequence_id.next_by_id()
+        if self.product_id.lot_sequence_id:
+            name = self.product_id.lot_sequence_id.next_by_id()
+        else:
+            name = self.env['ir.sequence'].next_by_code('stock.lot.serial')
         exist_lot = not name or self.env['stock.lot'].search([
             ('product_id', '=', self.product_id.id),
             '|', ('company_id', '=', False), ('company_id', '=', self.company_id.id),
@@ -1776,7 +1782,7 @@ class MrpProduction(models.Model):
             return name
         seq_back = "-" + "0" * (SIZE_BACK_ORDER_NUMERING - 1 - int(math.log10(sequence))) + str(sequence)
         regex = re.compile(r"-\d+$")
-        if regex.search(name) and sequence > 1:
+        if regex.search(name) and (max(self.procurement_group_id.mrp_production_ids.mapped("backorder_sequence")) > 1 or sequence > 1):
             return regex.sub(seq_back, name)
         return name + seq_back
 

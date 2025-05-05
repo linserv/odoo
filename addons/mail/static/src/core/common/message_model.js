@@ -34,6 +34,7 @@ export class Message extends Record {
     attachment_ids = fields.Many("ir.attachment", { inverse: "message" });
     author = fields.One("Persona");
     body = fields.Html("");
+    call_history_ids = fields.Many("discuss.call.history");
     richBody = fields.Html("", {
         compute() {
             if (!this.store.emojiLoader.loaded) {
@@ -87,7 +88,7 @@ export class Message extends Record {
     is_transient;
     message_link_preview_ids = fields.Many("mail.message.link.preview", { inverse: "message_id" });
     /** @type {number[]} */
-    parentMessage = fields.One("mail.message");
+    parent_id = fields.One("mail.message");
     /**
      * When set, this temporary/pending message failed message post, and the
      * value is a callback to re-attempt to post the message.
@@ -340,7 +341,7 @@ export class Message extends Record {
 
     get authorName() {
         if (this.author) {
-            return this.author.name;
+            return this.getPersonaName(this.author);
         }
         return this.email_from;
     }
@@ -446,7 +447,7 @@ export class Message extends Record {
 
     /** @param {import("models").Thread} thread the thread where the message is shown */
     canAddReaction(thread) {
-        return Boolean(!this.is_transient && this.thread && !this.thread.isTransient);
+        return Boolean(!this.is_transient && this.thread?.can_react && !this.thread.isTransient);
     }
 
     /** @param {import("models").Thread} thread the thread where the message is shown */
@@ -531,6 +532,14 @@ export class Message extends Record {
         if (threadAsInEdition && threadAsInEdition.eq(thread)) {
             threadAsInEdition.composer.autofocus++;
         }
+    }
+
+    /**
+     * @param {import("models").Persona} persona
+     * @returns {string}
+     */
+    getPersonaName(persona) {
+        return this.thread?.getPersonaName(persona) || persona.displayName;
     }
 
     async react(content) {

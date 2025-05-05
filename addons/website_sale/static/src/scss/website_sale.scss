@@ -1212,7 +1212,7 @@ a.no-decoration {
         background-image: escape-svg($accordion-button-icon);
     }
 
-    #product_accordion, #wsale_products_attributes_collapse h6, #o_wsale_price_range_option h6 {
+    #product_accordion, #wsale_products_attributes_collapse h6, #o_wsale_price_range_option h6, #o_wsale_total_accordion .accordion-header {
         --accordion-active-bg: inherit;
         --accordion-active-color: var(--accordion-btn-color);
         --accordion-btn-padding-x : 0;
@@ -1273,4 +1273,29 @@ a.no-decoration {
 
 body.modal-open:has(.js_sale.o_wsale_product_page) {
     overflow: hidden;
+}
+
+.o_wsale_variant_pills_shop {
+    padding: $spacer/2 $spacer;
+    border: none;
+    cursor: pointer;
+
+    &.btn.active {
+        background-color: map-get($theme-colors, 'primary');
+    }
+    &:not(.active) {
+        color: map-get($grays, '600');
+        background-color: map-get($grays, '200');
+    }
+    &:hover{
+        background-color: map-get($theme-colors, 'primary');
+        color: white;
+    }
+
+    input {
+        -moz-appearance: none;
+        -webkit-appearance: none;
+        appearance: none;
+        opacity: 0;
+    }
 }

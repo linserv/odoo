@@ -98,7 +98,7 @@ class AccountMoveLine(models.Model):
         index=False,  # covered by account_move_line_account_id_date_idx defined in init()
         auto_join=True,
         ondelete="cascade",
-        domain="[('deprecated', '=', False), ('account_type', '!=', 'off_balance')]",
+        domain="[('account_type', '!=', 'off_balance')]",
         check_company=True,
         tracking=True,
     )
@@ -182,6 +182,10 @@ class AccountMoveLine(models.Model):
         index='btree_not_null',
         copy=False,
         help="The bank statement used for bank reconciliation")
+    commercial_partner_country = fields.Many2one(
+        string="Commercial Partner Country",
+        related="move_id.commercial_partner_id.country_id",
+    )
 
     # === Tax fields === #
     tax_ids = fields.Many2many(
@@ -270,6 +274,10 @@ class AccountMoveLine(models.Model):
         string='Matched Credits',
         readonly=True,
         help='Credit journal items that are matched with this journal item.',
+    )
+    reconciled_lines_ids = fields.Many2many(
+        comodel_name='account.move.line',
+        compute='_compute_reconciled_lines_ids', inverse='_inverse_reconciled_lines_ids',
     )
     matching_number = fields.Char(
         string="Matching #",
@@ -445,8 +453,8 @@ class AccountMoveLine(models.Model):
     _partner_id_ref_idx = models.Index("(partner_id, ref)")
     _date_name_id_idx = models.Index("(date desc, move_name desc, id)")
     # Match exactly how the ORM converts domains to ensure the query planner uses it
-    _unreconciled_index = models.Index("(account_id, partner_id) WHERE reconciled IS NOT TRUE AND parent_state = 'posted'")
-    _journal_id_neg_amnt_residual_idx = models.Index("(journal_id) WHERE amount_residual < 0 AND parent_state = 'posted'")
+    _unreconciled_index = models.Index("(account_id, partner_id) WHERE reconciled IS NOT TRUE")
+    _journal_id_neg_amnt_residual_idx = models.Index("(journal_id) WHERE amount_residual < 0")
     # covers the standard index on account_id
     _account_id_date_idx = models.Index("(account_id, date)")
 
@@ -563,7 +571,7 @@ class AccountMoveLine(models.Model):
                            ON account_companies.account_account_id = account.id
                      WHERE account_companies.res_company_id = ANY(%(company_ids)s)
                        AND account.account_type IN ('asset_receivable', 'liability_payable')
-                       AND account.deprecated = 'f'
+                       AND account.active = 't'
                 )
                 SELECT * FROM previous
                 UNION ALL
@@ -881,7 +889,7 @@ class AccountMoveLine(models.Model):
             tax_ids = filtered_supplier_taxes_id or self.account_id.tax_ids.filtered(lambda tax: tax.type_tax_use == 'purchase')
 
         else:
-            tax_ids = False if self.env.context.get('skip_computed_taxes') else self.account_id.tax_ids
+            tax_ids = False if self.env.context.get('skip_computed_taxes') or self.move_id.is_entry() else self.account_id.tax_ids
 
         if self.company_id and tax_ids:
             tax_ids = tax_ids._filter_taxes_by_company(self.company_id)
@@ -1068,6 +1076,11 @@ class AccountMoveLine(models.Model):
         for line in self:
             line.payment_date = line.discount_date if line.discount_date and date.today() <= line.discount_date else line.date_maturity
 
+    @api.depends('matched_debit_ids', 'matched_credit_ids')
+    def _compute_reconciled_lines_ids(self):
+        for line in self:
+            line.reconciled_lines_ids = line.matched_debit_ids.debit_move_id + line.matched_credit_ids.credit_move_id
+
     def _search_payment_date(self, operator, value):
         if operator == 'in':
             # recursive call with operator '='
@@ -1175,6 +1188,12 @@ class AccountMoveLine(models.Model):
             and not line.product_id.taxes_id.filtered(lambda tax: tax.company_id == line.company_id)
         ))
 
+    def _inverse_reconciled_lines_ids(self):
+        self._reconcile_plan([
+            line + line.reconciled_lines_ids
+            for line in self
+        ])
+
     # -------------------------------------------------------------------------
     # CONSTRAINT METHODS
     # -------------------------------------------------------------------------
@@ -1188,15 +1207,12 @@ class AccountMoveLine(models.Model):
             account = line.account_id
             journal = line.move_id.journal_id
 
-            if account.deprecated and not self.env.context.get('skip_account_deprecation_check'):
-                raise UserError(_('The account %(name)s (%(code)s) is deprecated.', name=account.name, code=account.code))
+            if not account.active and not self.env.context.get('skip_account_deprecation_check'):
+                raise UserError(_('The account %(name)s (%(code)s) is archived.', name=account.name, code=account.code))
 
             account_currency = account.currency_id
             if account_currency and account_currency != line.company_currency_id and account_currency != line.currency_id:
                 raise UserError(_('The account selected on your journal entry forces to provide a secondary currency. You should remove the secondary currency on the account.'))
-
-            if account.allowed_journal_ids and journal not in account.allowed_journal_ids:
-                raise UserError(_('You cannot use this account (%s) in this journal, check the field \'Allowed Journals\' on the related account.', account.display_name))
 
             if account in (journal.default_account_id, journal.suspense_account_id):
                 continue
@@ -1510,9 +1526,9 @@ class AccountMoveLine(models.Model):
         protected_fields = self._get_lock_date_protected_fields()
         account_to_write = self.env['account.account'].browse(vals['account_id']) if 'account_id' in vals else None
 
-        # Check writing a deprecated account.
-        if account_to_write and account_to_write.deprecated:
-            raise UserError(_('You cannot use a deprecated account.'))
+        # Check writing a archived account.
+        if account_to_write and not account_to_write.active:
+            raise UserError(_('You cannot use an archived account.'))
 
         inalterable_fields = set(self._get_integrity_hash_fields()).union({'inalterable_hash'})
         hashed_moves = self.move_id.filtered('inalterable_hash')
@@ -2545,6 +2561,14 @@ class AccountMoveLine(models.Model):
 
         all_amls._reconcile_post_hook(pre_hook_data)
 
+    def _get_exchange_journal(self, company):
+        return company.currency_exchange_journal_id
+
+    def _get_exchange_account(self, company, amount):
+        if amount > 0.0:
+            return company.expense_currency_exchange_account_id
+        return company.income_currency_exchange_account_id
+
     def _prepare_exchange_difference_move_vals(self, amounts_list, company=None, exchange_date=None, **kwargs):
         """ Prepare values to create later the exchange difference journal entry.
         The exchange difference journal entry is there to fix the debit/credit of lines when the journal items are
@@ -2564,9 +2588,7 @@ class AccountMoveLine(models.Model):
         if not company:
             return
 
-        journal = company.currency_exchange_journal_id
-        expense_exchange_account = company.expense_currency_exchange_account_id
-        income_exchange_account = company.income_currency_exchange_account_id
+        journal = self._get_exchange_journal(company)
         accounting_exchange_date = journal.with_context(move_date=exchange_date).accounting_date if journal else date.min
 
         move_vals = {
@@ -2599,10 +2621,7 @@ class AccountMoveLine(models.Model):
             else:
                 continue
 
-            if amount_residual_to_fix > 0.0:
-                exchange_line_account = expense_exchange_account
-            else:
-                exchange_line_account = income_exchange_account
+            exchange_line_account = self._get_exchange_account(company, amount_residual_to_fix)
 
             sequence = len(move_vals['line_ids'])
             line_vals = [
@@ -2616,6 +2635,7 @@ class AccountMoveLine(models.Model):
                     'currency_id': line.currency_id.id,
                     'partner_id': line.partner_id.id,
                     'sequence': sequence,
+                    'reconciled_lines_ids': [Command.set(line.ids)],
                 },
                 {
                     'name': _('Currency exchange rate difference'),
@@ -2678,16 +2698,8 @@ class AccountMoveLine(models.Model):
                 ))
 
         # ==== Create the moves ====
-        exchange_moves = self.env['account.move'].create(exchange_move_values_list)
-
-        # ==== Reconcile ====
-        reconciliation_plan = []
-        for exchange_move, exchange_diff_values in zip(exchange_moves, exchange_diff_values_list):
-            for source_line, sequence in exchange_diff_values['to_reconcile']:
-                exchange_diff_line = exchange_move.line_ids[sequence]
-                reconciliation_plan.append((source_line + exchange_diff_line))
-
-        self.with_context(no_exchange_difference=True)._reconcile_plan(reconciliation_plan)
+        exchange_moves = self.env['account.move'].with_context(no_exchange_difference=True).create(exchange_move_values_list)
+        # The reconciliation of exchange moves is now dealt thanks to the reconciled_lines_ids field
 
         # ==== See if the exchange moves need to be posted or not ====
         exchange_moves_to_post = self.env['account.move']
@@ -3040,6 +3052,24 @@ class AccountMoveLine(models.Model):
 
     def _check_edi_line_tax_required(self):
         return self.product_id.type != 'combo'
+
+    def _get_aml_values(self, **kwargs):
+        self.ensure_one()
+        return {
+            'name': self.name,
+            'account_id': self.account_id.id,
+            'currency_id': self.currency_id.id,
+            'amount_currency': self.amount_currency,
+            'balance': self.balance,
+            'reconcile_model_id': self.reconcile_model_id.id,
+            'analytic_distribution': self.analytic_distribution,
+            'tax_repartition_line_id': self.tax_repartition_line_id.id,
+            'tax_ids': [Command.set(self.tax_ids.ids)],
+            'tax_tag_ids': [Command.set(self.tax_tag_ids.ids)],
+            'group_tax_id': self.group_tax_id.id,
+            'partner_id': self.partner_id.id,
+            **kwargs,
+        }
 
     # -------------------------------------------------------------------------
     # PUBLIC ACTIONS

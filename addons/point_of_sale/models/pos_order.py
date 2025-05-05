@@ -49,7 +49,7 @@ class PosOrder(models.Model):
         ], limit=1)
 
         if open_session:
-            _logger.warning('Using open session %s for saving order %s', open_session.name, order['name'])
+            _logger.warning('Using open session %s for uuid number %s', open_session.name, order['uuid'])
             return open_session
 
         raise UserError(_('No open session available. Please open a new session to capture the order.'))
@@ -91,6 +91,10 @@ class PosOrder(models.Model):
             pos_order = pos_order.with_company(pos_order.company_id)
         else:
             pos_order = existing_order
+
+            # If the order is belonging to another session, it must be moved to the current session first
+            if order.get('session_id') and order['session_id'] != pos_order.session_id.id:
+                pos_order.write({'session_id': order['session_id']})
 
             # Save lines and payments before to avoid exception if a line is deleted
             # when vals change the state to 'paid'
@@ -295,6 +299,7 @@ class PosOrder(models.Model):
     currency_rate = fields.Float("Currency Rate", compute='_compute_currency_rate', compute_sudo=True, store=True, digits=0, readonly=True,
         help='The rate of the currency to the currency of rate applicable at the date of the order')
 
+    is_refund = fields.Boolean(string='Is Refund', readonly=True, default=False)
     state = fields.Selection(
         [('draft', 'New'), ('cancel', 'Cancelled'), ('paid', 'Paid'), ('done', 'Posted')],
         'Status', readonly=True, copy=False, default='draft', index=True)
@@ -1129,6 +1134,13 @@ class PosOrder(models.Model):
 
         _logger.info("PoS synchronisation #%d finished", sync_token)
         return pos_order_ids.read_pos_data(orders, config_id)
+
+    @api.model
+    def read_pos_data_uuid(self, uuid):
+        order = self.search([('uuid', '=', uuid)], limit=1)
+        if not order:
+            return {}
+        return order.read_pos_data([], order.config_id.id)
 
     def read_pos_data(self, data, config_id):
         # If the previous session is closed, the order will get a new session_id due to _get_valid_session in _process_order

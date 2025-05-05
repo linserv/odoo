@@ -123,7 +123,6 @@ class ScaleDriver(SerialDriver):
 
         self._read_weight()
         self.last_sent_value = self.data['value']
-        event_manager.device_changed(self)
 
     @staticmethod
     def _get_raw_response(connection):
@@ -216,7 +215,7 @@ class AdamEquipmentDriver(ScaleDriver):
     priority = 0  # Test the supported method of this driver last, after all other serial drivers
 
     def __init__(self, identifier, device):
-        super(AdamEquipmentDriver, self).__init__(identifier, device)
+        super().__init__(identifier, device)
         self._is_reading = False
         self._last_weight_time = 0
         self.device_manufacturer = 'Adam'
@@ -280,5 +279,5 @@ class AdamEquipmentDriver(ScaleDriver):
         except serial.serialutil.SerialTimeoutException:
             pass
         except Exception:
-            _logger.exception('Error while probing %s with protocol %s' % (device, protocol.name))
+            _logger.exception('Error while probing %s with protocol %s', device, protocol.name)
         return False

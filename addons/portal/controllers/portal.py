@@ -291,7 +291,11 @@ class CustomerPortal(Controller):
         :return: The set of mandatory billing field names.
         :rtype: set
         """
-        return self._get_mandatory_address_fields(country_sudo)
+        base_fields = {'name', 'email'}
+        if not self._needs_address():
+            return base_fields
+        base_fields.add('phone')  # not required for quick checkout (event)
+        return base_fields | self._get_mandatory_address_fields(country_sudo)
 
     def _check_delivery_address(self, partner_sudo):
         """ Check that all mandatory delivery fields are filled for the given partner.
@@ -312,7 +316,15 @@ class CustomerPortal(Controller):
         :return: The set of mandatory delivery field names.
         :rtype: set
         """
-        return self._get_mandatory_address_fields(country_sudo)
+        base_fields = {'name', 'email'}
+        if not self._needs_address():
+            return base_fields
+        base_fields.add('phone')  # not required for quick checkout (event)
+        return base_fields | self._get_mandatory_address_fields(country_sudo)
+
+    def _needs_address(self):
+        """ Hook meant to be overridden in other modules. """
+        return True
 
     def _get_mandatory_address_fields(self, country_sudo):
         """ Return the set of common mandatory address fields.
@@ -321,7 +333,7 @@ class CustomerPortal(Controller):
         :return: The set of common mandatory address field names.
         :rtype: set
         """
-        field_names = {'name', 'email', 'street', 'city', 'country_id', 'phone'}
+        field_names = {'street', 'city', 'country_id'}
         if country_sudo.state_required:
             field_names.add('state_id')
         if country_sudo.zip_required:
@@ -481,6 +493,7 @@ class CustomerPortal(Controller):
         use_delivery_as_billing=False,
         callback='/my/addresses',
         required_fields=False,
+        verify_address_values=True,
         **form_data
     ):
         """ Create or update an address if there is no error else return error dict.
@@ -493,6 +506,7 @@ class CustomerPortal(Controller):
         :param str callback: The URL to redirect to in case of successful address creation/update.
         :param str required_fields: The additional required address values, as a comma-separated
                                     list of `res.partner` fields.
+        :param bool verify_address_values: Whether we want to check the given address values.
         :return: Partner record and A JSON-encoded feedback, with either the success URL or
                  an error message.
         :rtype: res.partner, dict
@@ -502,24 +516,25 @@ class CustomerPortal(Controller):
         # Parse form data into address values, and extract incompatible data as extra form data.
         address_values, extra_form_data = self._parse_form_data(form_data)
 
-        # Validate the address values and highlights the problems in the form, if any.
-        invalid_fields, missing_fields, error_messages = self._validate_address_values(
-            address_values,
-            partner_sudo,
-            address_type,
-            use_delivery_as_billing,
-            required_fields or '',
-            **extra_form_data,
-        )
-        if form_data.get("login_field"):
-            # Validate login and highlights the problems in the form, if any.
-            login = extra_form_data.get("login", "").strip()
-            self._validate_login_and_update(login, invalid_fields, missing_fields, error_messages)
-        if error_messages:
-            return partner_sudo, {
-                'invalid_fields': list(invalid_fields | missing_fields),
-                'messages': error_messages,
-            }
+        if verify_address_values:
+            # Validate the address values and highlights the problems in the form, if any.
+            invalid_fields, missing_fields, error_messages = self._validate_address_values(
+                address_values,
+                partner_sudo,
+                address_type,
+                use_delivery_as_billing,
+                required_fields or '',
+                **extra_form_data,
+            )
+            if form_data.get("login_field"):
+                # Validate login and highlights the problems in the form, if any.
+                login = extra_form_data.get("login", "").strip()
+                self._validate_login_and_update(login, invalid_fields, missing_fields, error_messages)
+            if error_messages:
+                return partner_sudo, {
+                    'invalid_fields': list(invalid_fields | missing_fields),
+                    'messages': error_messages,
+                }
 
         if not partner_sudo:  # Creation of a new address.
             self._complete_address_values(
@@ -571,16 +586,6 @@ class CustomerPortal(Controller):
                     address_values[key] = field.convert_to_cache(value, ResPartner)
             elif value:  # The value cannot be saved on the `res.partner` model.
                 extra_form_data[key] = value
-
-        if (
-            hasattr(ResPartner, 'check_vat')  # The `base_vat` module is installed.
-            and address_values.get('vat')
-            and address_values.get('country_id')
-        ):
-            address_values['vat'] = ResPartner.fix_eu_vat_number(
-                address_values['country_id'],
-                address_values['vat'],
-            )
 
         if 'zipcode' in form_data and not form_data.get('zip'):
             address_values['zip'] = form_data.pop('zipcode', '')
@@ -704,7 +709,7 @@ class CustomerPortal(Controller):
         ResPartnerSudo = request.env['res.partner'].sudo()
         if (
             address_values.get('vat')
-            and hasattr(ResPartnerSudo, 'check_vat')  # base_vat module is installed
+            and hasattr(ResPartnerSudo, '_check_vat')  # account module is installed
             and 'vat' not in invalid_fields
         ):
             partner_dummy = ResPartnerSudo.new({
@@ -713,7 +718,7 @@ class CustomerPortal(Controller):
                 if fname in address_values
             })
             try:
-                partner_dummy.check_vat()
+                partner_dummy._check_vat()
             except ValidationError as exception:
                 invalid_fields.add('vat')
                 error_messages.append(exception.args[0])
@@ -733,6 +738,12 @@ class CustomerPortal(Controller):
                 for fname in commercial_fields:
                     if fname in required_field_set and fname not in address_values:
                         required_field_set.remove(fname)
+
+        address_fields = self._get_mandatory_address_fields(country)
+        if any(address_values.get(fname) for fname in address_fields):
+            # If the customer provided any address information, they should provide their whole
+            # address, even if the address wasn't required (e.g. the order only contains services).
+            required_field_set |= address_fields
 
         # Verify that no required field has been left empty.
         for field_name in required_field_set:

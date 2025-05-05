@@ -1170,7 +1170,7 @@ patch(PosOrder.prototype, {
 
             lst.push({
                 product_id: discountProduct,
-                price_unit: -(entry[1] * discountFactor),
+                price_unit: -(Math.min(this.getTotalWithTax(), entry[1]) * discountFactor),
                 qty: 1,
                 reward_id: reward,
                 is_reward_line: true,
@@ -1400,40 +1400,9 @@ patch(PosOrder.prototype, {
             return super.removeOrderline(lineToRemove);
         }
     },
-    getSortedOrderlines() {
-        const lines = super.getSortedOrderlines();
-        if (this.config.orderlines_sequence_in_cart_by_category && this.lines.length) {
-            const rewardLines = [];
-            const resultLines = [];
 
-            lines.forEach((line) => {
-                if (line.is_reward_line) {
-                    rewardLines.push(line);
-                } else {
-                    resultLines.push(line);
-                }
-            });
-
-            rewardLines.forEach((line) => {
-                if (line.reward_id.reward_type === "discount") {
-                    resultLines.splice(resultLines.length, 0, line);
-                } else if (line.reward_id.reward_type === "product") {
-                    const rewardProductIndex = resultLines.findIndex(
-                        (rewardLine) =>
-                            line.reward_id?.reward_product_id?.id === rewardLine.product_id.id
-                    );
-                    resultLines.splice(rewardProductIndex + 1, 0, line);
-                }
-            });
-            return resultLines;
-        }
-        return lines;
-    },
-
-    _isRefundAndSalesNotAllowed(values, options) {
+    isSaleDisallowed(values, options) {
         // Allow gift cards to be added to a refund
-        return (
-            super._isRefundAndSalesNotAllowed(values, options) && !options.eWalletGiftCardProgram
-        );
+        return super.isSaleDisallowed(values, options) && !options.eWalletGiftCardProgram;
     },
 });

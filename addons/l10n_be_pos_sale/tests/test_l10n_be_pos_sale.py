@@ -31,9 +31,8 @@ class TestPoSSaleL10NBe(TestPointOfSaleHttpCommon):
                 (0, 0, {'repartition_type': 'tax', 'factor_percent': 100.0}),
                 (0, 0, {'repartition_type': 'tax', 'factor_percent': -100.0}),
             ],
+            'fiscal_position_ids': intracom_fpos,
         })
-
-        intracom_fpos.tax_ids.tax_dest_id = intracom_tax
 
         self.product_a = self.env['product.product'].create({
             'name': 'Product A',
@@ -95,7 +94,7 @@ class TestPoSSaleL10NBe(TestPointOfSaleHttpCommon):
         })
 
         b_pos_config.open_ui()
-        self.start_tour("/pos/ui?config_id=%d" % b_pos_config.id, 'test_pos_branch_company_access', login="pos_user")
+        self.start_tour("/pos/ui/%d" % b_pos_config.id, 'test_pos_branch_company_access', login="pos_user")
 
 
 @odoo.tests.tagged('post_install_l10n', 'post_install', '-at_install')
@@ -118,4 +117,4 @@ class TestPoSSaleL10NBeNormalCompany(TestPointOfSaleHttpCommon):
             })],
         })
         self.main_pos_config.open_ui()
-        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'PosSettleOrderTryInvoice', login="accountman")
+        self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'PosSettleOrderTryInvoice', login="accountman")

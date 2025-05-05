@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
     <t t-name="point_of_sale.OrderDisplay">
-        <t t-set="lines" t-value="order.getSortedOrderlines()"/>
+        <t t-set="lines" t-value="order.lines"/>
         <t t-if="lines.length">
             <div class="d-flex flex-column flex-grow-1 overflow-hidden">
                 <div t-ref="scrollable" class="order-container d-flex flex-column flex-grow-1 overflow-y-auto text-start">
@@ -13,7 +13,7 @@
                         t-attf-class="{{this.props.mode === 'receipt' ? 'mt-1 bg-opacity-75 p-0 ' : 'customer-note w-100 p-2 text-break bg-warning bg-opacity-25 mt-0 text-warning'}}">
                         <div class="flex-wrap w-100 m-0">
                             <div class="ps-1">
-                                <t t-foreach="order.general_customer_note.split('\n')" t-as="subNote" t-key="subNote_index">
+                                <t t-foreach="order.general_customer_note.trim().split('\n')" t-as="subNote" t-key="subNote_index">
                                     <div class="d-inline text-break">
                                         <t t-esc="subNote"/><br/>
                                     </div>
@@ -21,7 +21,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="internal-note-container d-flex flex-wrap gap-2 p-2">
+                    <div t-if="order.internal_note" class="internal-note-container d-flex flex-wrap gap-2" t-attf-class="{{this.props.mode === 'receipt' ? 'py-2' : 'p-2'}}">
                         <TagsList tags="getInternalNotes()"/>
                     </div>
                 </div>

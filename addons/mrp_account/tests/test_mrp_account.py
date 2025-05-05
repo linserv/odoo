@@ -20,14 +20,12 @@ class TestMrpAccount(TestMrpCommon):
         # setting up alternative workcenters
         cls.wc_alt_1 = cls.env['mrp.workcenter'].create({
             'name': 'Nuclear Workcenter bis',
-            'default_capacity': 3,
             'time_start': 9,
             'time_stop': 5,
             'time_efficiency': 80,
         })
         cls.wc_alt_2 = cls.env['mrp.workcenter'].create({
             'name': 'Nuclear Workcenter ter',
-            'default_capacity': 1,
             'time_start': 10,
             'time_stop': 5,
             'time_efficiency': 85,
@@ -173,7 +171,6 @@ class TestMrpAccount(TestMrpCommon):
         quants.action_apply_inventory()
 
         bom = self.mrp_bom_desk.copy()
-        bom.bom_line_ids.manual_consumption = False
         bom.operation_ids = False
         production_table_form = Form(self.env['mrp.production'])
         production_table_form.product_id = self.dining_table
@@ -347,7 +344,6 @@ class TestMrpAccountMove(TestAccountMoveStockCommon):
         cls.default_sv_account_id = field.get_company_dependent_fallback(cls.env['product.category']).id
         cls.workcenter = cls.env['mrp.workcenter'].create({
             'name': 'Workcenter',
-            'default_capacity': 1,
             'time_efficiency': 100,
         })
 

@@ -382,7 +382,8 @@ class MailingMailing(models.Model):
 
     @api.depends('email_from', 'mail_server_id')
     def _compute_warning_message(self):
-        for mailing in self:
+        self.warning_message = False
+        for mailing in self.filtered(lambda mailing: mailing.mailing_type == "mail"):
             mail_server = mailing.mail_server_id
             if mail_server and not mail_server._match_from_filter(mailing.email_from, mail_server.from_filter):
                 mailing.warning_message = _(
@@ -1279,7 +1280,7 @@ class MailingMailing(models.Model):
             }
 
         random_tip = self.env['digest.tip'].search(
-            [('group_id.category_id', '=', self.env.ref('base.module_category_marketing_email_marketing').id)]
+            [('group_id.privilege_id', '=', self.env.ref('mass_mailing.res_groups_privilege_email_marketing').id)]
         )
         if random_tip:
             random_tip = random.choice(random_tip).tip_description

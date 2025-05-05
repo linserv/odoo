@@ -294,16 +294,17 @@ class TestMrpOrder(TestMrpCommon):
         details_operation_form = Form(mo.move_raw_ids[1], view=self.env.ref('stock.view_stock_move_operations'))
         with details_operation_form.move_line_ids.edit(0) as ml:
             ml.lot_id = lot_1
-            ml.quantity = 20
+            ml.quantity = 21
         details_operation_form.save()
         mo.move_raw_ids[1].picked = True
+        mo.move_raw_ids[1]._onchange_quantity()
         update_quantity_wizard = self.env['change.production.qty'].create({
             'mo_id': mo.id,
             'product_qty': 4,
         })
         update_quantity_wizard.change_prod_qty()
 
-        self.assertEqual(mo.move_raw_ids.filtered(lambda m: m.product_id == p1).quantity, 20, 'Update the produce quantity should not impact already produced quantity.')
+        self.assertEqual(mo.move_raw_ids.filtered(lambda m: m.product_id == p1).quantity, 21, 'Update the produce quantity should not impact already produced quantity.')
         self.assertEqual(mo.move_finished_ids.product_uom_qty, 4)
         mo.button_mark_done()
 
@@ -3026,7 +3027,6 @@ class TestMrpOrder(TestMrpCommon):
         """
         workcenter_1 = self.env['mrp.workcenter'].create({
             'name': 'wc1',
-            'default_capacity': 2,
             'time_start': 1,
             'time_stop': 1,
             'time_efficiency': 100,
@@ -3034,12 +3034,20 @@ class TestMrpOrder(TestMrpCommon):
 
         workcenter_2 = self.env['mrp.workcenter'].create({
             'name': 'wc2',
-            'default_capacity': 2,
             'time_start': 10,
             'time_stop': 5,
             'time_efficiency': 100,
             'alternative_workcenter_ids': [workcenter_1.id]
         })
+
+        for workcenter in [workcenter_1, workcenter_2]:
+            self.env['mrp.workcenter.capacity'].create({
+                'workcenter_id': workcenter.id,
+                'product_uom_id': self.uom_unit.id,
+                'capacity': 2,
+                'time_start': workcenter.time_start,
+                'time_stop': workcenter.time_stop,
+            })
 
         product_to_build = self.env['product.product'].create({
             'name': 'final product',
@@ -3078,7 +3086,11 @@ class TestMrpOrder(TestMrpCommon):
         mo.button_unplan()
 
         # Update the production capcity
-        workcenter_2.default_capacity = 4
+        self.env['mrp.workcenter.capacity'].search([
+            ('workcenter_id', '=', workcenter_2.id),
+            ('product_id', '=', False),
+            ('product_uom_id', '=', self.uom_unit.id)
+        ]).capacity = 4
 
         #MO_2
         mo_form = Form(self.env['mrp.production'])
@@ -3384,21 +3396,18 @@ class TestMrpOrder(TestMrpCommon):
         self.env.company.resource_calendar_id.tz = 'Europe/Brussels'
         workcenter_1 = self.env['mrp.workcenter'].create({
             'name': 'wc1',
-            'default_capacity': 1,
             'time_start': 10,
             'time_stop': 5,
             'time_efficiency': 100,
         })
         workcenter_2 = self.env['mrp.workcenter'].create({
             'name': 'wc2',
-            'default_capacity': 1,
             'time_start': 10,
             'time_stop': 5,
             'time_efficiency': 100,
         })
         workcenter_3 = self.env['mrp.workcenter'].create({
             'name': 'wc3',
-            'default_capacity': 1,
             'time_start': 10,
             'time_stop': 5,
             'time_efficiency': 100,
@@ -3739,13 +3748,18 @@ class TestMrpOrder(TestMrpCommon):
         """
         # Required for `workorder_ids` to be visible in the view
         self.env.user.group_ids += self.env.ref('mrp.group_mrp_routings')
-        self.workcenter_2.update({
+        self.env['mrp.workcenter.capacity'].search([
+            ('workcenter_id', '=', self.workcenter_2.id),
+            ('product_id', '=', False),
+            ('product_uom_id', '=', self.product_5.uom_id.id)
+        ]).write({
             'time_start': 10,
             'time_stop': 20,
         })
         self.env['mrp.workcenter.capacity'].create({
-            'product_id': self.product_4.id,
             'workcenter_id': self.workcenter_2.id,
+            'product_id': self.product_4.id,
+            'product_uom_id': self.product_4.uom_id.id,
             'time_start': 5,
             'time_stop': 10,
         })
@@ -4278,8 +4292,8 @@ class TestMrpOrder(TestMrpCommon):
             ],
             'type': 'normal',
             'bom_line_ids': [
-                (0, 0, {'product_id': self.product_2.id, 'product_qty': 2, 'manual_consumption': True}),
-                (0, 0, {'product_id': self.product_1.id, 'product_qty': 4, 'manual_consumption': True})
+                (0, 0, {'product_id': self.product_2.id, 'product_qty': 2}),
+                (0, 0, {'product_id': self.product_1.id, 'product_qty': 4})
             ]})
         mo = mo_form.save()
         mo.action_confirm()
@@ -4437,9 +4451,11 @@ class TestMrpOrder(TestMrpCommon):
                 - work_center_1 faster because workcenter_2 is busy despite being faster
                 in preparation but it will finish later than workcenter 1.
         """
+
+        self.product_1.uom_id = self.uom_unit.id
+
         workcenter_1 = self.env['mrp.workcenter'].create({
             'name': 'wc1',
-            'default_capacity': 1,
             'time_start': 2,
             'time_stop': 2,
             'time_efficiency': 100,
@@ -4447,10 +4463,9 @@ class TestMrpOrder(TestMrpCommon):
         workcenter_2 = workcenter_1.copy({'name': 'wc2'})
 
         workcenter_1.alternative_workcenter_ids = workcenter_2
-        workcenter_1.capacity_ids = [Command.create({'product_id': self.product_1.id, 'capacity': 1, 'time_start': 10})]
-        workcenter_2.capacity_ids = [Command.create({'product_id': self.product_1.id, 'capacity': 1, 'time_start': 5})]
+        workcenter_1.capacity_ids = [Command.create({'product_id': self.product_1.id, 'product_uom_id': self.product_1.uom_id.id, 'capacity': 1, 'time_start': 10})]
+        workcenter_2.capacity_ids = [Command.create({'product_id': self.product_1.id, 'product_uom_id': self.product_1.uom_id.id, 'capacity': 1, 'time_start': 5})]
 
-        self.product_1.uom_id = self.uom_unit.id
         bom = self.env['mrp.bom'].create({
             'product_id': self.product_1.id,
             'product_tmpl_id': self.product_1.product_tmpl_id.id,
@@ -4718,7 +4733,6 @@ class TestMrpOrder(TestMrpCommon):
         })
         workcenter_1 = self.env['mrp.workcenter'].create({
             'name': 'wc1',
-            'default_capacity': 1,
             'time_efficiency': 100,
             'costs_hour': 10,
         })
@@ -4993,7 +5007,6 @@ class TestMrpOrder(TestMrpCommon):
         })
         workcenter_5 = self.env['mrp.workcenter'].create({
             'name': 'Workcenter no pause',
-            'default_capacity': 1,
             'time_start': 0,
             'time_stop': 0,
             'time_efficiency': 100,

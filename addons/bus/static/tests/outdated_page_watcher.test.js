@@ -10,27 +10,16 @@ import {
     waitForSteps,
 } from "@web/../tests/web_test_helpers";
 import { browser } from "@web/core/browser/browser";
-import { serializeDateTime } from "@web/core/l10n/dates";
 import { WebClient } from "@web/webclient/webclient";
 import { addBusServiceListeners, defineBusModels, startBusService } from "./bus_test_helpers";
 
 defineBusModels();
 describe.current.tags("desktop");
 
-const { DateTime } = luxon;
 test("disconnect during vacuum should ask for reload", async () => {
     browser.location.addEventListener("reload", () => asyncStep("reload"));
-    addBusServiceListeners(
-        ["connect", () => asyncStep("connect")],
-        ["disconnect", () => (lastDisconnectDt = DateTime.now())]
-    );
-    // Vacuum permanently clears notifs, so reload might be required to recover
-    // coherent state in apps like Discuss.
-    let lastDisconnectDt;
-    onRpc("/bus/get_autovacuum_info", () => ({
-        lastcall: serializeDateTime(lastDisconnectDt.plus({ minute: 1 })),
-        nextcall: serializeDateTime(DateTime.now().plus({ day: 1 })),
-    }));
+    addBusServiceListeners(["connect", () => asyncStep("connect")]);
+    onRpc("/bus/has_missed_notifications", () => true);
     await mountWithCleanup(WebClient);
     startBusService();
     await runAllTimers();
@@ -43,4 +32,25 @@ test("disconnect during vacuum should ask for reload", async () => {
     );
     await contains(".o_notification button:contains(Refresh)").click();
     await waitForSteps(["reload"]);
+});
+
+test("reconnect after going offline after bus gc should ask for reload", async () => {
+    addBusServiceListeners(
+        ["connect", () => asyncStep("connect")],
+        ["disconnect", () => asyncStep("disconnect")]
+    );
+    onRpc("/bus/has_missed_notifications", () => true);
+    await mountWithCleanup(WebClient);
+    startBusService();
+    await runAllTimers();
+    await waitForSteps(["connect"]);
+    browser.dispatchEvent(new Event("offline"));
+    await waitForSteps(["disconnect"]);
+    browser.dispatchEvent(new Event("online"));
+    await runAllTimers();
+    await waitForSteps(["connect"]);
+    await waitFor(".o_notification");
+    expect(".o_notification_content:first").toHaveText(
+        "Save your work and refresh to get the latest updates and avoid potential issues."
+    );
 });

@@ -32,15 +32,17 @@ export class PartnerAutoCompleteCharField extends CharField {
             {
                 options: async (request, shouldSearchWorldWide) => {
                     if (await this.validateSearchTerm(request)) {
-                        let queryCountryId = this.props.record.data?.country_id ? this.props.record.data.country_id[0] : false;
+                        let queryCountryId = this.props.record.data?.country_id ? this.props.record.data.country_id.id : false;
                         if (shouldSearchWorldWide){
                         	queryCountryId = 0;
                         }
                         const suggestions = await this.partnerAutocomplete.autocomplete(request, queryCountryId);
-                        suggestions.forEach((suggestion) => {
-                            suggestion.classList = "partner_autocomplete_dropdown_char";
-                        });
-                        return suggestions;
+                        return suggestions.map((suggestion) => ({
+                            cssClass: "partner_autocomplete_dropdown_char",
+                            data: suggestion,
+                            label: suggestion.name,
+                            onSelect: () => this.onSelectPartnerAutocompleteOption(suggestion),
+                        }));
                     }
                     else {
                         return [];
@@ -52,8 +54,8 @@ export class PartnerAutoCompleteCharField extends CharField {
         ];
     }
 
-    async onSelect(option) {
-        let data = await this.partnerAutocomplete.getCreateData(Object.getPrototypeOf(option));
+    async onSelectPartnerAutocompleteOption(option) {
+        let data = await this.partnerAutocomplete.getCreateData(option);
         if (!data?.company) {
             return;
         }
@@ -63,14 +65,6 @@ export class PartnerAutoCompleteCharField extends CharField {
             data.company[logoField] = data.logo;
         }
 
-        // Format the many2one fields
-        const many2oneFields = ['country_id', 'state_id'];
-        many2oneFields.forEach((field) => {
-            if (data.company[field]) {
-                data.company[field] = [data.company[field].id, data.company[field].display_name];
-            }
-        });
-
         // Save UNSPSC codes (tags)
         const unspsc_codes = data.company.unspsc_codes
 
@@ -78,7 +72,9 @@ export class PartnerAutoCompleteCharField extends CharField {
         data.company = this.partnerAutocomplete.removeUselessFields(data.company, Object.keys(this.props.record.fields));
 
         // Update record with retrieved values
-        await this.props.record.update({name: data.company.name});  // Needed otherwise name it is not saved
+        if (data.company.name) {
+            await this.props.record.update({name: data.company.name});  // Needed otherwise name it is not saved
+        }
         await this.props.record.update(data.company);
 
         // Add UNSPSC codes (tags)

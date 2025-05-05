@@ -13,7 +13,7 @@ class AccountMove(models.Model):
         selection=[
             ('ready', 'Ready to send'),
             ('to_send', 'Queued'),
-            ('skipped', 'Skipped'),
+            ('skipped', 'Skipped'),  # TODO remove this state in master, we now put a regular error.
             ('processing', 'Pending Reception'),
             ('done', 'Done'),
             ('error', 'Error'),
@@ -51,8 +51,12 @@ class AccountMove(models.Model):
             else:
                 move.peppol_move_state = move.peppol_move_state
 
-    def _notify_by_email_prepare_rendering_context(self, message, **kwargs):
-        render_context = super()._notify_by_email_prepare_rendering_context(message, **kwargs)
+    def _notify_by_email_prepare_rendering_context(self, message, msg_vals=False, model_description=False,
+                                                   force_email_company=False, force_email_lang=False):
+        render_context = super()._notify_by_email_prepare_rendering_context(
+            message, msg_vals=msg_vals, model_description=model_description,
+            force_email_company=force_email_company, force_email_lang=force_email_lang
+        )
         invoice = render_context['record']
         invoice_country = invoice.commercial_partner_id.country_code
         if invoice_country in PEPPOL_DEFAULT_COUNTRIES:

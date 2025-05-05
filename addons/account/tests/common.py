@@ -88,13 +88,6 @@ class AccountTestInvoicingCommon(ProductCommon):
         # ==== Fiscal positions ====
         cls.fiscal_pos_a = cls.env['account.fiscal.position'].create({
             'name': 'fiscal_pos_a',
-            'tax_ids': ([(0, None, {
-                    'tax_src_id': cls.tax_sale_a.id,
-                    'tax_dest_id': cls.tax_sale_b.id,
-            })] if cls.tax_sale_b else []) + ([(0, None, {
-                    'tax_src_id': cls.tax_purchase_a.id,
-                    'tax_dest_id': cls.tax_purchase_b.id,
-            })] if cls.tax_purchase_b else []),
             'account_ids': [
                 (0, None, {
                     'account_src_id': cls.product_a.property_account_income_id.id,
@@ -106,6 +99,12 @@ class AccountTestInvoicingCommon(ProductCommon):
                 }),
             ] if cls.env.registry.loaded else [],
         })
+        if cls.tax_sale_b:
+            cls.tax_sale_b.fiscal_position_ids = cls.fiscal_pos_a.ids
+            cls.tax_sale_b.original_tax_ids = cls.tax_sale_a
+        if cls.tax_purchase_b:
+            cls.tax_purchase_b.fiscal_position_ids = cls.fiscal_pos_a.ids
+            cls.tax_purchase_b.original_tax_ids = cls.tax_purchase_a
 
         # ==== Payment terms ====
         cls.pay_terms_a = cls.env.ref('account.account_payment_term_immediate')
@@ -185,6 +184,18 @@ class AccountTestInvoicingCommon(ProductCommon):
             cls.inbound_payment_method_line.payment_account_id = in_outstanding_account
             cls.outbound_payment_method_line = bank_journal.outbound_payment_method_line_ids[0]
             cls.outbound_payment_method_line.payment_account_id = out_outstanding_account
+
+        # user with restricted groups
+        cls.simple_accountman = cls.env['res.users'].create({
+            'name': 'simple accountman',
+            'login': 'simple_accountman',
+            'password': 'simple_accountman',
+            'group_ids': [
+                # the `account` specific groups from get_default_groups()
+                Command.link(cls.env.ref('account.group_account_manager').id),
+                Command.link(cls.env.ref('account.group_account_user').id),
+            ],
+        })
 
     @classmethod
     def change_company_country(cls, company, country):
@@ -268,7 +279,6 @@ class AccountTestInvoicingCommon(ProductCommon):
                     # This is a consequence of moving groups from data to demo data: https://github.com/odoo/odoo/pull/198078
                     'group_hr_manager', # hr
                     'group_mrp_manager', # mrp
-                    'group_pos_manager', # point_of_sale
                     'group_purchase_manager', # purchase
                     'group_stock_manager', # stock
                     # enterprise groups
@@ -894,6 +904,12 @@ class TestTaxCommon(AccountTestInvoicingHttpCommon):
             return {}
         return taxes._eval_taxes_computation_turn_to_product_values(product=product)
 
+    def _jsonify_product_uom(self, uom):
+        return {
+            'id': uom.id,
+            'name': uom.name,
+        }
+
     def _jsonify_tax_group(self, tax_group):
         return {
             'id': tax_group.id,
@@ -941,6 +957,7 @@ class TestTaxCommon(AccountTestInvoicingHttpCommon):
             'currency_id': self._jsonify_currency(line.get('currency_id') or document['currency']),
             'rate': line['rate'] if 'rate' in line else document['rate'],
             'product_id': self._jsonify_product(line['product_id'], line['tax_ids']),
+            'product_uom_id': self._jsonify_product_uom(line['product_uom_id']),
             'tax_ids': [self._jsonify_tax(tax) for tax in line['tax_ids']],
             'price_unit': line['price_unit'],
             'quantity': line['quantity'],
@@ -969,6 +986,20 @@ class TestTaxCommon(AccountTestInvoicingHttpCommon):
             'currency_id': self._jsonify_currency(company.currency_id),
         }
 
+    def convert_base_line_to_invoice_line(self, document, base_line):
+        values = {
+            'price_unit': base_line['price_unit'],
+            'discount': base_line['discount'],
+            'quantity': base_line['quantity'],
+        }
+        if base_line['product_id']:
+            values['product_id'] = base_line['product_id'].id
+        if base_line['product_uom_id']:
+            values['product_uom_id'] = base_line['product_uom_id'].id
+        if base_line['tax_ids']:
+            values['tax_ids'] = [Command.set(base_line['tax_ids'].ids)]
+        return values
+
     def convert_document_to_invoice(self, document):
         invoice_date = '2020-01-01'
         currency = document['currency']
@@ -979,13 +1010,7 @@ class TestTaxCommon(AccountTestInvoicingHttpCommon):
             'currency_id': currency.id,
             'invoice_cash_rounding_id': document['cash_rounding'] and document['cash_rounding'].id,
             'invoice_line_ids': [
-                Command.create({
-                    'product_id': base_line['product_id'].id,
-                    'price_unit': base_line['price_unit'],
-                    'discount': base_line['discount'],
-                    'quantity': base_line['quantity'],
-                    'tax_ids': [Command.set(base_line['tax_ids'].ids)],
-                })
+                Command.create(self.convert_base_line_to_invoice_line(document, base_line))
                 for base_line in document['lines']
             ],
         })

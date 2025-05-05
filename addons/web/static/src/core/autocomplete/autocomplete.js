@@ -11,7 +11,6 @@ export class AutoComplete extends Component {
     static props = {
         value: { type: String, optional: true },
         id: { type: String, optional: true },
-        onSelect: { type: Function },
         sources: {
             type: Array,
             element: {
@@ -64,6 +63,7 @@ export class AutoComplete extends Component {
         this.nextOptionId = 0;
         this.sources = [];
         this.inEdition = false;
+        this.mouseSelectionActive = false;
 
         this.state = useState({
             navigationRev: 0,
@@ -100,6 +100,7 @@ export class AutoComplete extends Component {
 
         useExternalListener(window, "scroll", this.externalClose, true);
         useExternalListener(window, "pointerdown", this.externalClose, true);
+        useExternalListener(window, "mousemove", () => this.mouseSelectionActive = true, true);
 
         this.hotkey = useService("hotkey");
         this.hotkeysToRemove = [];
@@ -173,6 +174,7 @@ export class AutoComplete extends Component {
     close() {
         this.state.open = false;
         this.state.activeSourceOption = null;
+        this.mouseSelectionActive = false;
     }
 
     cancel() {
@@ -224,9 +226,13 @@ export class AutoComplete extends Component {
         }
     }
     makeOption(option) {
-        return Object.assign(Object.create(option), {
+        return {
+            cssClass: "",
+            data: {},
+            ...option,
             id: ++this.nextOptionId,
-        });
+            unselectable: !option.onSelect,
+        };
     }
     makeSource(source) {
         return {
@@ -246,7 +252,7 @@ export class AutoComplete extends Component {
         );
     }
 
-    selectOption(option, params = {}) {
+    selectOption(option) {
         this.inEdition = false;
         if (option.unselectable) {
             return;
@@ -257,10 +263,7 @@ export class AutoComplete extends Component {
         }
 
         this.forceValFromProp = true;
-        this.props.onSelect(option, {
-            ...params,
-            input: this.inputRef.el,
-        });
+        option.onSelect();
         this.close();
     }
 
@@ -434,6 +437,10 @@ export class AutoComplete extends Component {
     }
 
     onOptionMouseEnter(indices) {
+        if (!this.mouseSelectionActive) {
+            return;
+        }
+
         const [sourceIndex, optionIndex] = indices;
         if (this.sources[sourceIndex].options[optionIndex]?.unselectable) {
             this.state.activeSourceOption = null;

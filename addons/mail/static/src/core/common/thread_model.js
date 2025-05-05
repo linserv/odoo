@@ -86,6 +86,8 @@ export class Thread extends Record {
     get canUnpin() {
         return this.channel_type === "chat" && this.importantCounter === 0;
     }
+    /** @type {boolean} */
+    can_react = true;
     close_chat_window = fields.Attr(undefined, {
         /** @this {import("models").Thread} */
         onUpdate() {
@@ -183,7 +185,7 @@ export class Thread extends Record {
             this.onPinStateUpdated();
         },
     });
-    mainAttachment = fields.One("ir.attachment");
+    message_main_attachment_id = fields.One("ir.attachment");
     message_needaction_counter = 0;
     message_needaction_counter_bus_id = 0;
     messageInEdition = fields.One("mail.message", { inverse: "threadAsInEdition" });
@@ -324,6 +326,16 @@ export class Thread extends Record {
             this.typesAllowingCalls.includes(this.channel_type) &&
             !this.correspondent?.persona.eq(this.store.odoobot)
         );
+    }
+
+    /**
+     * Return the name of the given persona to display in the context of this
+     * thread.
+     *
+     * @param {import("models").Persona} persona
+     */
+    getPersonaName(persona) {
+        return persona.displayName;
     }
 
     get hasAttachmentPanel() {
@@ -810,7 +822,7 @@ export class Thread extends Record {
             };
             tmpData.author = this.store.self;
             if (parentId) {
-                tmpData.parentMessage = this.store["mail.message"].get(parentId);
+                tmpData.parent_id = this.store["mail.message"].get(parentId);
             }
             const prettyContent = await prettifyMessageContent(body, {
                 validMentions: this.store.getMentionsFromText(body, {
@@ -848,9 +860,9 @@ export class Thread extends Record {
 
     /** @param {number} index */
     async setMainAttachmentFromIndex(index) {
-        this.mainAttachment = this.attachmentsInWebClientView[index];
+        this.message_main_attachment_id = this.attachmentsInWebClientView[index];
         await this.store.env.services.orm.call("ir.attachment", "register_as_main_attachment", [
-            this.mainAttachment.id,
+            this.message_main_attachment_id.id,
         ]);
     }
 

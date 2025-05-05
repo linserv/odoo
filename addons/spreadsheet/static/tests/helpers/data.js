@@ -292,6 +292,32 @@ export class ResCurrency extends models.Model {
     ];
 }
 
+export class ResCountry extends webModels.ResCountry {
+    _name = "res.country";
+    name = fields.Char({ string: "Country" });
+    code = fields.Char({ string: "Code" });
+
+    _records = [
+        { id: 1, name: "Belgium", code: "BE" },
+        { id: 2, name: "France", code: "FR" },
+        { id: 3, name: "United States", code: "US" },
+    ];
+}
+
+export class ResCountryState extends models.Model {
+    _name = "res.country.state";
+    name = fields.Char({ string: "Name" });
+    code = fields.Char({ string: "Code" });
+    country_id = fields.Many2one({ relation: "res.country" });
+    display_name = fields.Char({ string: "Display Name" });
+
+    _records = [
+        { id: 1, name: "California", code: "CA", country_id: 3, display_name: "California (US)" },
+        { id: 2, name: "New York", code: "NY", country_id: 3, display_name: "New York (US)" },
+        { id: 3, name: "Texas", code: "TX", country_id: 3, display_name: "Texas (US)" },
+    ];
+}
+
 export class Partner extends models.Model {
     _name = "partner";
 
@@ -469,18 +495,48 @@ export class Product extends models.Model {
     name = fields.Char({ string: "Product Name" });
     display_name = fields.Char({ string: "Product Name" });
     active = fields.Boolean({ string: "Active", default: true });
+    template_id = fields.Many2one({
+        string: "Template",
+        relation: "product",
+        store: true,
+        sortable: true,
+        groupable: true,
+        searchable: true,
+    });
     properties_definitions = fields.PropertiesDefinition();
+    pognon = fields.Monetary({
+        string: "Money!",
+        currency_field: "currency_id",
+        store: true,
+        sortable: true,
+        aggregator: "avg",
+        groupable: true,
+        searchable: true,
+    });
+    currency_id = fields.Many2one({
+        string: "Currency",
+        relation: "res.currency",
+        store: true,
+        sortable: true,
+        groupable: true,
+        searchable: true,
+    });
 
     _records = [
         {
             id: 37,
             display_name: "xphone",
             name: "xphone",
+            currency_id: 2,
+            pognon: 699.99,
         },
         {
             id: 41,
             display_name: "xpad",
+            template_id: 37,
             name: "xpad",
+            currency_id: 2,
+            pognon: 599.99,
         },
     ];
 }
@@ -525,6 +581,8 @@ export const SpreadsheetModels = {
     IrActions,
     ResGroup,
     ResUsers,
+    ResCountry,
+    ResCountryState,
     SpreadsheetMixin,
     ResCurrency,
     Partner,

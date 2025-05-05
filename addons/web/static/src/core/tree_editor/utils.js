@@ -1,22 +1,25 @@
-import { unique, zip } from "@web/core/utils/arrays";
-import { getOperatorLabel } from "@web/core/tree_editor/tree_editor_operator_editor";
-import {
-    Expression,
-    condition,
-    createVirtualOperators,
-    normalizeValue,
-    isTree,
-    Couple,
-} from "@web/core/tree_editor/condition_tree";
-import { useService } from "@web/core/utils/hooks";
-import { _t } from "@web/core/l10n/translation";
 import {
     deserializeDate,
     deserializeDateTime,
     formatDate,
     formatDateTime,
 } from "@web/core/l10n/dates";
+import { parseTime } from "@web/core/l10n/time";
+import { _t } from "@web/core/l10n/translation";
 import { useLoadFieldInfo, useLoadPathDescription } from "@web/core/model_field_selector/utils";
+import {
+    Couple,
+    Expression,
+    condition,
+    createVirtualOperators,
+    isTree,
+    normalizeValue,
+    splitPath,
+} from "@web/core/tree_editor/condition_tree";
+import { get_OPTIONS_WITH_SELECT } from "@web/core/tree_editor/tree_editor_datetime_options";
+import { getOperatorLabel } from "@web/core/tree_editor/tree_editor_operator_editor";
+import { unique, zip } from "@web/core/utils/arrays";
+import { useService } from "@web/core/utils/hooks";
 import { Within } from "./tree_editor_components";
 
 /**
@@ -41,6 +44,19 @@ function formatValue(val, disambiguate, fieldDef, displayNames) {
         const [, label] = (fieldDef.selection || []).find(([v]) => v === val) || [];
         if (label !== undefined) {
             val = label;
+        }
+    }
+    if (["datetime_option", "date_option", "time_option"].includes(fieldDef?.type)) {
+        if (fieldDef.name in get_OPTIONS_WITH_SELECT()) {
+            const { options } = get_OPTIONS_WITH_SELECT()[fieldDef.name];
+            const [, label] = (options || []).find(([v]) => v === val) || [];
+            if (label !== undefined) {
+                val = label;
+            }
+        } else if (fieldDef.name === "__time" && typeof val === "string") {
+            return parseTime(val, true).toString(true);
+        } else if (fieldDef.name === "__date" && typeof val === "string") {
+            return formatDate(deserializeDate(val));
         }
     }
     if (typeof val === "string") {
@@ -193,9 +209,9 @@ function _getConditionDescription(node, getFieldDef, getPathDescription, display
     const values = ["next", "not_next", "last", "not_last"].includes(operator)
         ? [value[0], Within.options.find((option) => option[0] === value[1])[1]]
         : (Array.isArray(value) ? value : [value])
-              .slice(0, 21)
+              .slice(0, 5)
               .map((val, index) =>
-                  index < 20 ? formatValue(val, dis, fieldDef, coModeldisplayNames) : "..."
+                  index < 4 ? formatValue(val, dis, fieldDef, coModeldisplayNames) : "..."
               );
     let join;
     let addParenthesis = Array.isArray(value);
@@ -221,56 +237,6 @@ function _getConditionDescription(node, getFieldDef, getPathDescription, display
     }
     description.valueDescription = { values, join, addParenthesis };
     return description;
-}
-
-export function useGetTreeDescription(fieldService, nameService) {
-    fieldService ||= useService("field");
-    nameService ||= useService("name");
-    const makeGetFieldDef = useMakeGetFieldDef(fieldService);
-    const makeGetConditionDescription = useMakeGetConditionDescription(fieldService, nameService);
-    return async (resModel, tree) => {
-        async function getTreeDescription(resModel, tree, isSubExpression = false) {
-            tree = simplifyTree(tree);
-            if (tree.type === "connector") {
-                // we assume that the domain tree is normalized (--> there is at least two children)
-                const childDescriptions = tree.children.map((node) =>
-                    getTreeDescription(resModel, node, true)
-                );
-                const separator = tree.value === "&" ? _t("and") : _t("or");
-                let description = await Promise.all(childDescriptions);
-                description = description.join(` ${separator} `);
-                if (isSubExpression || tree.negate) {
-                    description = `( ${description} )`;
-                }
-                if (tree.negate) {
-                    description = `! ${description}`;
-                }
-                return description;
-            }
-            const getFieldDef = await makeGetFieldDef(resModel, tree);
-            const getConditionDescription = await makeGetConditionDescription(
-                resModel,
-                tree,
-                getFieldDef
-            );
-            const { pathDescription, operatorDescription, valueDescription } =
-                getConditionDescription(tree);
-            const stringDescription = [pathDescription, operatorDescription];
-            if (valueDescription) {
-                const { values, join, addParenthesis } = valueDescription;
-                const jointedValues = values.join(` ${join} `);
-                stringDescription.push(addParenthesis ? `( ${jointedValues} )` : jointedValues);
-            } else if (isTree(tree.value)) {
-                const _fieldDef = getFieldDef(tree.path);
-                const _resModel = getResModel(_fieldDef);
-                const _tree = tree.value;
-                const description = await getTreeDescription(_resModel, _tree);
-                stringDescription.push(`( ${description} )`);
-            }
-            return stringDescription.join(" ");
-        }
-        return getTreeDescription(resModel, tree);
-    };
 }
 
 export function getResModel(fieldDef) {
@@ -314,10 +280,27 @@ function _extractIdsRecursive(tree, getFieldDef, idsByModel) {
     return idsByModel;
 }
 
+function addPaths(paths, path) {
+    const { initialPath, lastPart } = splitPath(path);
+    if (initialPath && lastPart) {
+        // these paths are used in _createSpecialPaths
+        paths.push(
+            initialPath,
+            [initialPath, "__date"].join("."),
+            [initialPath, "__time"].join("."),
+            [initialPath, "__date", lastPart].join("."),
+            [initialPath, "__time", lastPart].join(".")
+        );
+    }
+}
+
 export function getPathsInTree(tree, lookInSubTrees = false) {
     const paths = [];
     if (tree.type === "condition") {
         paths.push(tree.path);
+        if (typeof tree.path === "string") {
+            addPaths(paths, tree.path);
+        }
         if (lookInSubTrees && isTree(tree.value)) {
             const subTreePaths = getPathsInTree(tree.value, lookInSubTrees);
             for (const p of subTreePaths) {
@@ -353,7 +336,7 @@ export function getDefaultPath(fieldDefs) {
  * @param {Tree} tree
  * @returns {tree}
  */
-function simplifyTree(tree) {
+export function simplifyTree(tree) {
     if (tree.type === "condition") {
         return tree;
     }
@@ -390,7 +373,7 @@ function simplifyTree(tree) {
                 value.push(...child.value);
             }
         }
-        children.push(condition(path, "in", normalizeValue(value)));
+        children.push(condition(path, "in", normalizeValue(unique(value))));
     }
     if (children.length === 1) {
         return { ...children[0] };

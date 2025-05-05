@@ -685,6 +685,7 @@ class TestUi(HttpCaseWithWebsiteUser):
 
     def test_powerbox_snippet(self):
         self.start_tour('/', 'website_powerbox_snippet', login='admin')
+        self.start_tour('/', 'website_powerbox_keyword', login='admin')
 
     def test_website_no_dirty_lazy_image(self):
         website = self.env['website'].browse(1)
@@ -750,3 +751,6 @@ class TestUi(HttpCaseWithWebsiteUser):
 
     def test_website_add_snippet_dialog(self):
         self.start_tour("/", "website_add_snippet_dialog", login="admin")
+
+    def test_popup_visibility_option(self):
+        self.start_tour("/", "website_popup_visibility_option", login="admin")

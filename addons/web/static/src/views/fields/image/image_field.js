@@ -76,7 +76,7 @@ export class ImageField extends Component {
 
     get imgAlt() {
         if (this.fieldType === "many2one" && this.props.record.data[this.props.name]) {
-            return this.props.record.data[this.props.name][1];
+            return this.props.record.data[this.props.name].display_name;
         }
         return this.props.alt;
     }
@@ -130,7 +130,7 @@ export class ImageField extends Component {
         if (this.fieldType === "many2one") {
             this.lastURL = imageUrl(
                 this.props.record.fields[this.props.name].relation,
-                this.props.record.data[this.props.name][0],
+                this.props.record.data[this.props.name].id,
                 imageFieldName,
                 { unique: this.rawCacheKey }
             );
@@ -188,6 +188,8 @@ export class ImageField extends Component {
                 const ctx = canvas.getContext("2d");
                 ctx.fillStyle = "transparent";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = "high";
                 ctx.drawImage(
                     image,
                     0,

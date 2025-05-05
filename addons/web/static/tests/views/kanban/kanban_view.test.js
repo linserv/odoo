@@ -80,8 +80,9 @@ import {
     validateSearch,
     webModels,
 } from "@web/../tests/web_test_helpers";
-import { FileInput } from "@web/core/file_input/file_input";
+import { addNewRule } from "@web/../tests/core/tree_editor/condition_tree_editor_test_helpers";
 
+import { FileInput } from "@web/core/file_input/file_input";
 import { browser } from "@web/core/browser/browser";
 import { currencies } from "@web/core/currency";
 import { registry } from "@web/core/registry";
@@ -1431,7 +1432,7 @@ test("pager, update calls onUpdatedPager", async () => {
     expect.step("next page");
     await contains(".o_pager_next").click();
     expect(getPagerValue()).toEqual([4, 4]);
-    expect.verifySteps(["render", "next page", "render", "onUpdatedPager"]);
+    expect.verifySteps(["render", "render", "next page", "render", "onUpdatedPager"]);
 });
 
 test("click on a button type='delete' to delete a record in a column", async () => {
@@ -4067,11 +4068,11 @@ test("quick create record while adding a new column", async () => {
     expect(".o_kanban_group:first-child .o_kanban_record").toHaveCount(2);
 
     // add a new column
-    expect(".o_column_quick_create .o_quick_create_folded").toHaveCount(1);
+    expect(".o_column_quick_create.o_quick_create_folded").toHaveCount(1);
 
     await quickCreateKanbanColumn();
 
-    expect(".o_column_quick_create .o_quick_create_unfolded").toHaveCount(1);
+    expect(".o_column_quick_create.o_quick_create_unfolded").toHaveCount(1);
 
     await editKanbanColumnName("new column");
     await validateKanbanColumn();
@@ -4622,7 +4623,7 @@ test("user without permission cannot drag and drop a record thus sequence remain
 });
 
 test.tags("desktop");
-test("drag and drop highlight on hover", async () => {
+test("drag and drop highlight on hover and has visible placeholder", async () => {
     await mountView({
         type: "kanban",
         resModel: "partner",
@@ -4642,11 +4643,16 @@ test("drag and drop highlight on hover", async () => {
     // first record of first column moved to the bottom of second column
     const { drop, moveTo } = await contains(".o_kanban_group:first-child .o_kanban_record").drag();
     await moveTo(".o_kanban_group:nth-child(2)");
+    expect(".o_kanban_group:first-child .o_kanban_record").toHaveCount(2);
+    expect(".o_kanban_group:nth-child(2) .o_kanban_record").toHaveCount(3); // includes the placeholder
+    expect(".o_kanban_group:nth-child(2) .o_kanban_record:eq(2)").toBeVisible();
 
     expect(getKanbanColumn(1)).toHaveClass("o_kanban_hover");
 
     await drop();
 
+    expect(".o_kanban_group:first-child .o_kanban_record").toHaveCount(1);
+    expect(".o_kanban_group:nth-child(2) .o_kanban_record").toHaveCount(3);
     expect(".o_kanban_group:nth-child(2).o_kanban_hover").toHaveCount(0);
 });
 
@@ -5173,6 +5179,92 @@ test("kanban view with default_group_by", async () => {
     await contains(".o_searchview_facet .o_facet_remove").click();
     expect(".o_kanban_group").toHaveCount(2);
     expect(`.o_searchview_facet`).toHaveCount(0);
+});
+
+test.tags("desktop");
+test("edit a favorite: group by = default_group_by", async () => {
+    expect.assertions(4);
+
+    const irFilters = [
+        {
+            context: "{ 'group_by': ['bar'] }",
+            domain: "[]",
+            id: 1,
+            is_default: true,
+            name: "My favorite",
+            sort: "[]",
+            user_ids: [2],
+        },
+    ];
+
+    onRpc("web_read_group", ({ kwargs }) => {
+        expect(kwargs.groupby).toEqual(["bar"]);
+    });
+    onRpc("/web/domain/validate", () => true);
+
+    await mountView({
+        type: "kanban",
+        resModel: "partner",
+        arch: `
+            <kanban default_group_by="bar">
+                <templates>
+                    <t t-name="card">
+                        <field name="foo"/>
+                    </t>
+                </templates>
+            </kanban>`,
+        irFilters,
+    });
+
+    expect(getFacetTexts()).toEqual(["My favorite"]);
+
+    await contains(".o_searchview_facet_label").click();
+    await addNewRule();
+    await contains("button:contains('Search')").click();
+    expect(getFacetTexts()).toEqual(["Id\n1"]);
+});
+
+test.tags("desktop");
+test("edit a favorite: group by != default_group_by", async () => {
+    expect.assertions(4);
+
+    const irFilters = [
+        {
+            context: "{ 'group_by': ['product_id'] }",
+            domain: "[]",
+            id: 1,
+            is_default: true,
+            name: "My favorite",
+            sort: "[]",
+            user_ids: [2],
+        },
+    ];
+
+    onRpc("web_read_group", ({ kwargs }) => {
+        expect(kwargs.groupby).toEqual(["product_id"]);
+    });
+    onRpc("/web/domain/validate", () => true);
+
+    await mountView({
+        type: "kanban",
+        resModel: "partner",
+        arch: `
+            <kanban default_group_by="bar">
+                <templates>
+                    <t t-name="card">
+                        <field name="foo"/>
+                    </t>
+                </templates>
+            </kanban>`,
+        irFilters,
+    });
+
+    expect(getFacetTexts()).toEqual(["My favorite"]);
+
+    await contains(".o_searchview_facet_label").click();
+    await addNewRule();
+    await contains("button:contains('Search')").click();
+    expect(getFacetTexts()).toEqual(["Id\n1", "Product"]);
 });
 
 test.tags("desktop");
@@ -5941,19 +6033,19 @@ test("quick create several columns in a row", async () => {
     expect(".o_column_quick_create").toHaveCount(1, {
         message: "should have a ColumnQuickCreate widget",
     });
-    expect(".o_column_quick_create .o_quick_create_folded:visible").toHaveCount(1, {
+    expect(".o_column_quick_create.o_quick_create_folded:visible").toHaveCount(1, {
         message: "the ColumnQuickCreate should be folded",
     });
-    expect(".o_column_quick_create .o_quick_create_unfolded:visible").toHaveCount(0, {
+    expect(".o_column_quick_create.o_quick_create_unfolded:visible").toHaveCount(0, {
         message: "the ColumnQuickCreate should be folded",
     });
 
     // add a new column
     await quickCreateKanbanColumn();
-    expect(".o_column_quick_create .o_quick_create_folded:visible").toHaveCount(0, {
+    expect(".o_column_quick_create.o_quick_create_folded:visible").toHaveCount(0, {
         message: "the ColumnQuickCreate should be unfolded",
     });
-    expect(".o_column_quick_create .o_quick_create_unfolded:visible").toHaveCount(1, {
+    expect(".o_column_quick_create.o_quick_create_unfolded:visible").toHaveCount(1, {
         message: "the ColumnQuickCreate should be unfolded",
     });
     await editKanbanColumnName("New Column 1");
@@ -5961,10 +6053,10 @@ test("quick create several columns in a row", async () => {
     expect(".o_kanban_group").toHaveCount(3, { message: "should now have three columns" });
 
     // add another column
-    expect(".o_column_quick_create .o_quick_create_folded:visible").toHaveCount(0, {
+    expect(".o_column_quick_create.o_quick_create_folded:visible").toHaveCount(0, {
         message: "the ColumnQuickCreate should still be unfolded",
     });
-    expect(".o_column_quick_create .o_quick_create_unfolded:visible").toHaveCount(1, {
+    expect(".o_column_quick_create.o_quick_create_unfolded:visible").toHaveCount(1, {
         message: "the ColumnQuickCreate should still be unfolded",
     });
     await editKanbanColumnName("New Column 2");
@@ -6188,7 +6280,7 @@ test("quick create column and examples: with folded columns", async () => {
     });
 
     // the quick create should already be unfolded as there are no records
-    expect(".o_column_quick_create .o_quick_create_unfolded").toHaveCount(1);
+    expect(".o_column_quick_create.o_quick_create_unfolded").toHaveCount(1);
 
     // click to see the examples
     await contains(".o_column_quick_create .o_kanban_examples").click();
@@ -7295,7 +7387,7 @@ test("empty grouped kanban with sample data: delete a column", async () => {
     await contains(".o_dialog footer .btn-primary").click();
 
     expect(".o_kanban_group").toHaveCount(0);
-    expect(".o_column_quick_create .o_quick_create_unfolded").toHaveCount(1);
+    expect(".o_column_quick_create.o_quick_create_unfolded").toHaveCount(1);
 });
 
 test("empty grouped kanban with sample data: add a column and delete it right away", async () => {
@@ -8180,12 +8272,10 @@ test("update buttons after column creation", async () => {
         groupBy: ["product_id"],
     });
 
-    expect(".o-kanban-button-new").toHaveCount(0);
-
+    expect(".o-kanban-button-new").not.toBeEnabled();
     await editKanbanColumnName("new column");
     await validateKanbanColumn();
-
-    expect(".o_control_panel_main_buttons button.o-kanban-button-new").toHaveCount(1);
+    expect(".o-kanban-button-new").toBeEnabled();
 });
 
 test.tags("desktop");
@@ -12114,12 +12204,15 @@ test("column quick create - title and placeholder", async function (assert) {
         groupBy: ["product_id"],
     });
 
-    expect(".o_column_quick_create .o_quick_create_folded").toHaveText("Product");
+    expect(".o_column_quick_create.o_quick_create_folded").toHaveProperty(
+        "textContent",
+        " Add Product"
+    );
 
-    await contains("button.o_kanban_add_column").click();
+    await quickCreateKanbanColumn();
 
     expect(
-        ".o_column_quick_create .o_quick_create_unfolded .input-group .form-control"
+        ".o_column_quick_create.o_quick_create_unfolded .input-group .form-control"
     ).toHaveAttribute("placeholder", "Product...");
 });
 
@@ -12284,7 +12377,7 @@ test("quick create record in grouped kanban in a form view dialog", async () => 
 
     expect(".modal").toHaveCount(1);
 
-    await clickModalButton({ text: "Save & Close" });
+    await clickModalButton({ text: "Save" });
 
     expect(".o_kanban_group:first-child .o_kanban_record").toHaveCount(3, {
         message: "first column should contain three records",
@@ -12865,7 +12958,8 @@ test("Keep scrollTop when loading records with load more", async () => {
     const clickKanbanLoadMoreButton = queryFirst(".o_kanban_load_more button");
     clickKanbanLoadMoreButton.scrollIntoView();
     const previousScrollTop = queryOne(".o_content").scrollTop;
-    await contains(clickKanbanLoadMoreButton).click();
+    clickKanbanLoadMoreButton.click();
+    await animationFrame();
     expect(previousScrollTop).not.toBe(0, { message: "Should not have the scrollTop value at 0" });
     expect(queryOne(".o_content").scrollTop).toBe(previousScrollTop);
 });
@@ -13782,10 +13876,14 @@ test("groups will be scrolled to on unfold if outside of viewport", async () => 
     });
     // scroll to the end
     await contains(".o_content").scroll({ left: 5000 });
-    expect(".o_content").toHaveProperty("scrollLeft", 3604);
+    expect(".o_content").toHaveProperty("scrollLeft", 3302);
     await contains(".o_kanban_group:last").click();
-    expect(".o_content").toHaveProperty("scrollLeft", 3604, {
-        message: "last group had enough space to remain completely visible after unfold: no scroll",
+    expect(".o_content").toHaveProperty("scrollLeft", 3562);
+    ({ x, width } = queryRect('.o_kanban_group:contains("column 11\n(1)")'));
+    // TODO JUM: change digits option
+    expect(x + width).toBeCloseTo(window.innerWidth, {
+        digits: 0,
+        message: "same as above",
     });
 });
 
@@ -13809,4 +13907,112 @@ test("hide pager in the kanban view with sample data", async () => {
 
     expect(".o_content").toHaveClass("o_view_sample_data");
     expect(".o_cp_pager").not.toBeVisible();
+});
+
+test.tags("desktop");
+test("kanban views make their control panel available directly", async () => {
+    const def = new Deferred();
+    onRpc("web_search_read", () => def);
+    await mountView({
+        arch: `
+            <kanban>
+                <templates>
+                    <div t-name="card">
+                        <field name="foo"/>
+                    </div>
+                </templates>
+            </kanban>`,
+        resModel: "partner",
+        type: "kanban",
+    });
+
+    expect(".o_kanban_view").toHaveCount(1);
+    expect(".o_kanban_view .o_control_panel .o_searchview").toHaveCount(1);
+    expect(".o_kanban_view .o_kanban_renderer").toHaveCount(0);
+
+    def.resolve();
+    await animationFrame();
+    expect(".o_kanban_view .o_kanban_renderer").toHaveCount(1);
+    expect(".o_kanban_view .o_kanban_record:not(.o_kanban_ghost)").toHaveCount(4);
+});
+
+test.tags("desktop");
+test("interact with search view while kanban is loading", async () => {
+    const defs = [new Deferred()];
+    onRpc("web_search_read", () => defs.pop());
+    await mountView({
+        arch: `
+            <kanban>
+                <templates>
+                    <div t-name="card">
+                        <field name="foo"/>
+                    </div>
+                </templates>
+            </kanban>`,
+        searchViewArch: `
+            <search>
+                <filter name="group_by_foo" domain="[]" string="GroupBy Foo" context="{ 'group_by': 'foo' }"/>
+            </search>`,
+        resModel: "partner",
+        type: "kanban",
+    });
+
+    expect(".o_kanban_view").toHaveCount(1);
+    expect(".o_kanban_view .o_control_panel .o_searchview").toHaveCount(1);
+    expect(".o_kanban_view .o_kanban_renderer").toHaveCount(0);
+
+    await toggleSearchBarMenu();
+    await toggleMenuItem("GroupBy Foo");
+    expect(".o_kanban_view .o_kanban_renderer").toHaveCount(1);
+    expect(".o_kanban_view .o_kanban_group").toHaveCount(3);
+    expect(".o_kanban_view .o_kanban_record").toHaveCount(4);
+});
+
+test("click on New while kanban is loading", async () => {
+    onRpc("web_search_read", () => new Deferred());
+    await mountView({
+        arch: `
+            <kanban>
+                <templates>
+                    <div t-name="card">
+                        <field name="foo"/>
+                    </div>
+                </templates>
+            </kanban>`,
+        resModel: "partner",
+        type: "kanban",
+        createRecord: () => expect.step("create record"),
+    });
+
+    expect(".o_kanban_view").toHaveCount(1);
+    expect(".o_kanban_view .o_control_panel").toHaveCount(1);
+    expect(".o_kanban_view .o_kanban_renderer").toHaveCount(0);
+
+    await createKanbanRecord();
+    expect.verifySteps(["create record"]);
+});
+
+test("click on New while kanban is loading (with quick create)", async () => {
+    onRpc("web_search_read", () => new Deferred());
+    await mountView({
+        arch: `
+            <kanban on_create="quick_create">
+                <templates>
+                    <div t-name="card">
+                        <field name="foo"/>
+                    </div>
+                </templates>
+            </kanban>`,
+        resModel: "partner",
+        type: "kanban",
+        groupBy: ["foo"],
+        createRecord: () => expect.step("create record"),
+    });
+
+    expect(".o_kanban_view").toHaveCount(1);
+    expect(".o_kanban_view .o_control_panel").toHaveCount(1);
+    expect(".o_kanban_view .o_kanban_renderer").toHaveCount(0);
+
+    await createKanbanRecord();
+    expect.verifySteps(["create record"]);
 });

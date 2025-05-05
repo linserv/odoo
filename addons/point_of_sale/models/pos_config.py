@@ -199,8 +199,6 @@ class PosConfig(models.Model):
         string='Closing Entry by product',
         help="Display the breakdown of sales lines by product in the automatically generated closing entry.")
     order_edit_tracking = fields.Boolean(string="Track orders edits", help="Store edited orders in the backend", default=False)
-    orderlines_sequence_in_cart_by_category = fields.Boolean(string="Order cart by category's sequence", default=False,
-        help="When active, orderlines will be sorted based on product category and sequence in the product screen's order cart.")
     last_data_change = fields.Datetime(string='Last Write Date', readonly=True, compute='_compute_local_data_integrity', store=True)
     fallback_nomenclature_id = fields.Many2one('barcode.nomenclature', string="Fallback Nomenclature")
 
@@ -243,6 +241,8 @@ class PosConfig(models.Model):
     def _post_read_pos_data(self, data):
         if not data[0]['use_pricelist']:
             data[0]['pricelist_id'] = False
+        if data:
+            data[0]['_IS_VAT'] = self.env.company.country_id.id in self.env.ref("base.europe").country_ids.ids
         return super()._post_read_pos_data(data)
 
     @api.depends('payment_method_ids')
@@ -315,6 +315,21 @@ class PosConfig(models.Model):
                 pos_config.pos_session_state = False
                 pos_config.pos_session_duration = 0
                 pos_config.current_user_id = False
+
+    @api.constrains('rounding_method')
+    def _check_rounding_method_strategy(self):
+        for config in self:
+            if config.cash_rounding and config.rounding_method.strategy != 'add_invoice_line':
+                selection_value = "Add a rounding line"
+                for key, val in self.env["account.cash.rounding"]._fields["strategy"]._description_selection(config.env):
+                    if key == "add_invoice_line":
+                        selection_value = val
+                        break
+                raise ValidationError(_(
+                    "The cash rounding strategy of the point of sale %(pos)s must be: '%(value)s'",
+                    pos=config.name,
+                    value=selection_value,
+                ))
 
     def _check_profit_loss_cash_journal(self):
         if self.cash_control and self.payment_method_ids:
@@ -393,6 +408,9 @@ class PosConfig(models.Model):
         if not self.env.is_admin() and {'is_header_or_footer', 'receipt_header', 'receipt_footer'} & values.keys():
             raise AccessError(_('Only administrators can edit receipt headers and footers'))
 
+    def _config_sequence_implementation(self):
+        return 'standard'
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -404,6 +422,7 @@ class PosConfig(models.Model):
                 'prefix': "%s/" % vals['name'],
                 'code': "pos.order",
                 'company_id': vals.get('company_id', False),
+                'implementation': self._config_sequence_implementation(),
             }
             # force sequence_id field to new pos.order sequence
             vals['sequence_id'] = IrSequence.create(val).id
@@ -578,7 +597,7 @@ class PosConfig(models.Model):
     def _action_to_open_ui(self):
         if not self.current_session_id:
             self.env['pos.session'].create({'user_id': self.env.uid, 'config_id': self.id})
-        pos_url = '/pos/ui?config_id=%d&from_backend=True' % self.id
+        pos_url = '/pos/ui/%d?from_backend=True' % self.id
         debug = request and request.session.debug
         if debug:
             pos_url += '&debug=%s' % debug
@@ -589,17 +608,10 @@ class PosConfig(models.Model):
         }
 
     def _get_url_to_cache(self, debug):
-        url_to_cache = []
-        base_urls = [
-            f"/pos/ui?config_id={self.id}&from_backend=True",
-            f"/pos/ui?config_id={self.id}",
+        url_to_cache = [
+            f"/pos/ui/{self.id}?from_backend=True",
+            f"/pos/ui/{self.id}",
         ]
-
-        if not debug:
-            url_to_cache.extend(base_urls)
-        else:
-            url_to_cache.extend([f"{url}&debug={debug}" for url in base_urls])
-
         return self.env["ir.qweb"]._get_asset_links("point_of_sale.assets_prod", debug=debug) + url_to_cache
 
     def _check_before_creating_new_session(self):
@@ -871,8 +883,8 @@ class PosConfig(models.Model):
         loaders = self._get_demo_data_loader_methods()
         for prefix, loader in loaders.items():
             if xml_id.startswith(prefix):
-                return loader()
-        return loaders.get(self._get_default_demo_data_xml_id(), self._load_onboarding_furniture_demo_data)()
+                return loader(True)
+        return loaders.get(self._get_default_demo_data_xml_id(), self._load_onboarding_furniture_demo_data)(True)
 
     def _get_demo_data_loader_methods(self):
         return {
@@ -899,13 +911,13 @@ class PosConfig(models.Model):
             'record': config,
             'noupdate': True,
         }])
-        if with_demo_data:
-            config._load_onboarding_clothes_demo_data()
+        config._load_onboarding_clothes_demo_data(with_demo_data)
         return {'config_id': config.id}
 
-    def _load_onboarding_clothes_demo_data(self):
+    def _load_onboarding_clothes_demo_data(self, with_demo_data=True):
         self.ensure_one()
-        if not self.env.ref('point_of_sale.product_category_clothes', raise_if_not_found=False):
+        convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/scenarios/clothes_category_data.xml', idref=None, mode='init', noupdate=True)
+        if with_demo_data:
             convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/scenarios/clothes_data.xml', idref=None, mode='init', noupdate=True)
         clothes_categories = self.get_record_by_ref([
             'point_of_sale.pos_category_upper',
@@ -931,13 +943,13 @@ class PosConfig(models.Model):
             'record': config,
             'noupdate': True,
         }])
-        if with_demo_data:
-            config._load_onboarding_bakery_demo_data()
+        config._load_onboarding_bakery_demo_data(with_demo_data)
         return {'config_id': config.id}
 
-    def _load_onboarding_bakery_demo_data(self):
+    def _load_onboarding_bakery_demo_data(self, with_demo_data=True):
         self.ensure_one()
-        if not self.env.ref('point_of_sale.pos_category_breads', raise_if_not_found=False):
+        convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/scenarios/bakery_category_data.xml', idref=None, mode='init', noupdate=True)
+        if with_demo_data:
             convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/scenarios/bakery_data.xml', idref=None, mode='init', noupdate=True)
 
         bakery_categories = self.get_record_by_ref([
@@ -965,17 +977,16 @@ class PosConfig(models.Model):
             'record': config,
             'noupdate': True,
         }])
-        if with_demo_data:
-            config._load_onboarding_furniture_demo_data()
-            if self.env.company.id == self.env.ref('base.main_company').id:
-                existing_session = self.env.ref('point_of_sale.pos_closed_session_2', raise_if_not_found=False)
-                if not existing_session:
-                    convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/orders_demo.xml', idref=None, mode='init', noupdate=True)
+        config._load_onboarding_furniture_demo_data(with_demo_data)
+        existing_session = self.env.ref('point_of_sale.pos_closed_session_2', raise_if_not_found=False)
+        if with_demo_data and self.env.company.id == self.env.ref('base.main_company').id and not existing_session:
+            convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/orders_demo.xml', idref=None, mode='init', noupdate=True)
         return {'config_id': config.id}
 
-    def _load_onboarding_furniture_demo_data(self):
+    def _load_onboarding_furniture_demo_data(self, with_demo_data=False):
         self.ensure_one()
-        if not self.env.ref('point_of_sale.pos_category_miscellaneous', raise_if_not_found=False):
+        convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/scenarios/furniture_category_data.xml', idref=None, mode='init', noupdate=True)
+        if with_demo_data:
             product_module = self.env['ir.module.module'].search([('name', '=', 'product')])
             if not product_module.demo:
                 convert.convert_file(self._env_with_clean_context(), 'product', 'data/product_category_demo.xml', idref=None, mode='init', noupdate=True)
@@ -991,6 +1002,24 @@ class PosConfig(models.Model):
         if furniture_categories:
             self.limit_categories = True
             self.iface_available_categ_ids = furniture_categories
+
+    @api.model
+    def load_onboarding_retail_scenario(self, with_demo_data=False):
+        journal, payment_methods_ids = self._create_journal_and_payment_methods(
+            cash_journal_vals={'name': _("Cash %s", self.env.company.name), 'show_on_dashboard': False},
+        )
+        config = self.env['pos.config'].create([{
+            'name': self.env.company.name,
+            'company_id': self.env.company.id,
+            'journal_id': journal.id,
+            'payment_method_ids': payment_methods_ids
+        }])
+        self.env['ir.model.data']._update_xmlids([{
+            'xml_id': self._get_suffixed_ref_name('point_of_sale.pos_config_retail'),
+            'record': config,
+            'noupdate': True,
+        }])
+        return {'config_id': config.id}
 
     def _get_suffixed_ref_name(self, ref_name):
         """Suffix the given ref_name with the id of the current company if it's not the main company."""

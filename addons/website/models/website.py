@@ -430,6 +430,9 @@ class Website(models.Model):
         configurator_action_todo = self.env.ref('website.website_configurator_todo')
         return configurator_action_todo.action_launch()
 
+    def _idna_url(self, url):
+        return get_base_domain(url.lower(), True).encode('idna').decode('ascii')
+
     def _is_indexable_url(self, url):
         """
         Returns True if the given url has to be indexed by search engines.
@@ -442,7 +445,7 @@ class Website(models.Model):
         :param url: the url to check
         :return: True if the url has to be indexed, False otherwise
         """
-        return get_base_domain(url.lower(), True) == get_base_domain(self.domain.lower(), True)
+        return self._idna_url(url) == self._idna_url(self.domain)
 
     # ----------------------------------------------------------
     # Configurator
@@ -1059,6 +1062,7 @@ class Website(models.Model):
             fallback_create_missing_industry_image('s_carousel_cards_default_image_1', 's_carousel_default_image_1')
             fallback_create_missing_industry_image('s_carousel_cards_default_image_2', 's_carousel_default_image_2')
             fallback_create_missing_industry_image('s_carousel_cards_default_image_3', 's_carousel_default_image_3')
+            fallback_create_missing_industry_image('s_banner_connected_default_image', 's_cover_default_image')
 
         except Exception:
             pass

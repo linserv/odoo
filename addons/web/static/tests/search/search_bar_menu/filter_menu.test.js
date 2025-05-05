@@ -2,11 +2,14 @@ import { expect, test } from "@odoo/hoot";
 import { queryAll, queryAllTexts, queryFirst } from "@odoo/hoot-dom";
 import { animationFrame, mockDate } from "@odoo/hoot-mock";
 import {
+    addNewRule,
     clickOnButtonAddBranch,
-    clickOnButtonAddNewRule,
+    clickOnButtonAddRule,
     getCurrentPath,
     openModelFieldSelectorPopover,
     selectOperator,
+    SELECTORS,
+    toggleConnector,
 } from "@web/../tests/core/tree_editor/condition_tree_editor_test_helpers";
 import {
     contains,
@@ -41,7 +44,7 @@ test("simple rendering with no filter", async () => {
     expect(".o_menu_item").toHaveCount(1);
     expect(".dropdown-divider").toHaveCount(0);
     expect(".dropdown-item").toHaveCount(1);
-    expect(`.dropdown-item`).toHaveText("Add Custom Filter");
+    expect(`.dropdown-item`).toHaveText("Custom Filter...");
 });
 
 test("simple rendering with a single filter", async () => {
@@ -60,7 +63,7 @@ test("simple rendering with a single filter", async () => {
     expect(`.o_menu_item[role=menuitemcheckbox]`).toHaveCount(1);
     expect(queryFirst`.o_menu_item`).toHaveProperty("ariaChecked", "false");
     expect(`.dropdown-divider`).toHaveCount(1);
-    expect(`.o_menu_item:nth-of-type(2)`).toHaveText("Add Custom Filter");
+    expect(`.o_menu_item:nth-of-type(2)`).toHaveText("Custom Filter...");
 });
 
 test(`toggle a "simple" filter in filter menu works`, async () => {
@@ -601,7 +604,7 @@ test("arch order of groups of filters preserved", async () => {
     );
 });
 
-test("Open 'Add Custom Filter' dialog", async () => {
+test("Open 'Custom Filter' dialog", async () => {
     await mountWithSearch(SearchBarMenu, {
         resModel: "foo",
         searchMenuTypes: ["filter"],
@@ -609,18 +612,18 @@ test("Open 'Add Custom Filter' dialog", async () => {
         searchViewArch: `<search></search>`,
     });
     await toggleSearchBarMenu();
-    expect(queryAllTexts`.o_filter_menu .dropdown-item`).toEqual(["Add Custom Filter"]);
+    expect(queryAllTexts`.o_filter_menu .dropdown-item`).toEqual(["Custom Filter..."]);
     expect(".modal").toHaveCount(0);
 
     await openAddCustomFilterDialog();
     expect(".modal").toHaveCount(1);
-    expect(".modal header").toHaveText("Add Custom Filter");
+    expect(".modal header").toHaveText("Custom Filter");
     expect(".modal .o_domain_selector").toHaveCount(1);
     expect(".modal .o_domain_selector .o_tree_editor_condition").toHaveCount(1);
-    expect(queryAllTexts`.modal footer button`).toEqual(["Add", "Cancel"]);
+    expect(queryAllTexts`.modal footer button`).toEqual(["Search", "Discard"]);
 });
 
-test("Default leaf in 'Add Custom Filter' dialog is based on ID (if no special fields on model)", async () => {
+test("Default leaf in 'Custom Filter' dialog is based on ID (if no special fields on model)", async () => {
     await mountWithSearch(SearchBarMenu, {
         resModel: "foo",
         searchMenuTypes: ["filter"],
@@ -634,7 +637,7 @@ test("Default leaf in 'Add Custom Filter' dialog is based on ID (if no special f
     expect(getCurrentPath()).toBe("Id");
 });
 
-test("Default leaf in 'Add Custom Filter' dialog is based on first special field (if any special fields on model)", async () => {
+test("Default leaf in 'Custom Filter' dialog is based on first special field (if any special fields on model)", async () => {
     defineModels([class Country extends models.Model {}]);
     Foo._fields.country_id = fields.Many2one({ string: "Country", relation: "country" });
     await mountWithSearch(SearchBarMenu, {
@@ -662,11 +665,11 @@ test("Default connector is '|' (any)", async () => {
     expect(".modal .o_domain_selector .o_tree_editor_condition").toHaveCount(1);
     expect(".o_tree_editor_condition .o_model_field_selector_chain_part").toHaveCount(1);
     expect(getCurrentPath()).toBe("Id");
-    expect(".o_domain_selector .o_tree_editor_connector").toHaveCount(1);
+    expect(SELECTORS.connectorValue).toHaveCount(1);
 
-    await clickOnButtonAddNewRule();
-    expect(".o_domain_selector .dropdown-toggle").toHaveCount(1);
-    expect(".o_domain_selector .dropdown-toggle").toHaveText("any");
+    await addNewRule();
+    expect(SELECTORS.connectorValue).toHaveCount(1);
+    expect(SELECTORS.connectorValue).toHaveText("any");
     expect(".modal .o_domain_selector .o_tree_editor_condition").toHaveCount(2);
 });
 
@@ -692,31 +695,20 @@ test("Add a custom filter", async () => {
     expect(".o_filter_menu .o_menu_item:not(.o_add_custom_filter)").toHaveCount(1);
 
     await openAddCustomFilterDialog();
-    await clickOnButtonAddNewRule();
-    await contains(".o_domain_selector .dropdown-toggle").click();
-    await contains(queryFirst(".dropdown-menu .dropdown-item")).click();
-
+    await addNewRule();
+    await toggleConnector();
     await clickOnButtonAddBranch(-1);
-    await clickOnButtonAddBranch(-1);
+    await clickOnButtonAddRule(-1);
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([
-        "Filter",
-        "Id is equal 1",
-        "Id is equal 1",
-        "( Id is equal 1 and Id is equal 1 ) or Id is in ( 1 , 1 )",
-    ]);
+    expect(getFacetTexts()).toEqual(["Filter", "Id"]);
     expect(searchBar.env.searchModel.domain).toEqual([
         "&",
         ["foo", "=", "abc"],
         "&",
-        ["id", "=", 1],
         "&",
         ["id", "=", 1],
-        "|",
-        "|",
         ["id", "=", 1],
-        ["id", "=", 1],
-        "&",
+        "|",
         ["id", "=", 1],
         ["id", "=", 1],
     ]);
@@ -745,7 +737,7 @@ test("Add a custom filter containing an expression", async () => {
         `[("foo", "in", [uid, 1, "a"])]`
     );
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`Foo is in ( uid , 1 , "a" )`]);
+    expect(getFacetTexts()).toEqual([`Foo\nuid\nor\n1\nor\n"a"`]);
     expect(searchBar.env.searchModel.domain).toEqual([
         ["foo", "in", [7, 1, "a"]], // uid = 7
     ]);
@@ -767,10 +759,11 @@ test("Add a custom filter containing a between operator", async () => {
     await toggleSearchBarMenu();
     await openAddCustomFilterDialog();
     await contains(`.o_domain_selector_debug_container textarea`).edit(
-        `[("id", "between", [0, 10])]`
+        `[("id", ">=", 0), ("id", "<=", 10)]`
     );
+
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`Id is between 0 and 10`]);
+    expect(getFacetTexts()).toEqual([`Id\n( 0 and 10 )`]);
     expect(searchBar.env.searchModel.domain).toEqual(["&", ["id", ">=", 0], ["id", "<=", 10]]);
 });
 
@@ -789,10 +782,10 @@ test("consistent display of ! in debug mode", async () => {
     await contains(`.o_domain_selector_debug_container textarea`).edit(
         `["!", "|", ("foo", "=", 1 ), ("id", "=", 2)]`
     );
-    expect(".o_tree_editor_row .dropdown-toggle").toHaveText("none");
+    expect(SELECTORS.connectorValue).toHaveText("none");
 
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`! ( Foo is equal 1 or Id is equal 2 )`]);
+    expect(getFacetTexts()).toEqual([`Custom filter`]);
     expect(searchBar.env.searchModel.domain).toEqual(["!", "|", ["foo", "=", 1], ["id", "=", 2]]);
 });
 
@@ -812,26 +805,26 @@ test("display of (not) set in facets", async () => {
     await openAddCustomFilterDialog();
     await selectOperator("not_set");
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Id not set"]);
+    expect(getFacetTexts()).toEqual(["Id\nnot set"]);
     expect(searchBar.env.searchModel.domain).toEqual([["id", "=", false]]);
 
     await contains(".o_searchview_facet_label").click();
     await selectOperator("set");
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Id set"]);
+    expect(getFacetTexts()).toEqual(["Id\nset"]);
     expect(searchBar.env.searchModel.domain).toEqual([["id", "!=", false]]);
 
     await contains(".o_searchview_facet_label").click();
     await openModelFieldSelectorPopover();
     await contains(".o_model_field_selector_popover_item_name:contains(Boolean)").click();
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Boolean set"]);
+    expect(getFacetTexts()).toEqual(["Boolean\nset"]);
     expect(searchBar.env.searchModel.domain).toEqual([["boolean", "!=", false]]);
 
     await contains(".o_searchview_facet_label").click();
     await selectOperator("not_set");
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Boolean not set"]);
+    expect(getFacetTexts()).toEqual(["Boolean\nnot set"]);
     expect(searchBar.env.searchModel.domain).toEqual([["boolean", "=", false]]);
 });
 
@@ -878,24 +871,17 @@ test("display names in facets", async () => {
     await toggleSearchBarMenu();
     await openAddCustomFilterDialog();
     await contains(`.o_domain_selector_debug_container textarea`).edit(
-        `[("bar", "=", 1 ), ("bar", "in", [2, 5555]), ("bar", "!=", false), ("id", "=", 2)]`
+        `["|", ("bar", "=", 1 ), ("bar", "in", [2, 5555])]`
     );
     await contains(".modal footer button").click();
 
     expect(getFacetTexts()).toEqual([
-        "Bar is equal John",
-        "Bar is in ( David , Inaccessible/missing record ID: 5555 )",
-        "Bar is not equal false",
-        "Id is equal 2",
+        "Bar\nJohn\nor\nDavid\nor\nInaccessible/missing record ID: 5555",
     ]);
     expect(searchBar.env.searchModel.domain).toEqual([
-        "&",
+        "|",
         ["bar", "=", 1],
-        "&",
         ["bar", "in", [2, 5555]],
-        "&",
-        ["bar", "!=", false],
-        ["id", "=", 2],
     ]);
 });
 
@@ -934,7 +920,7 @@ test("display names in facets (with a property)", async () => {
     );
     await contains(".modal footer button").click();
 
-    expect(getFacetTexts()).toEqual(["Properties \u2794 M2O is equal John"]);
+    expect(getFacetTexts()).toEqual(["M2O\nJohn"]);
     expect(searchBar.env.searchModel.domain).toEqual([["properties.m2o", "=", 1]]);
 });
 
@@ -1047,6 +1033,6 @@ test("shorten descriptions of long lists", async function () {
         `[("id", "in", [${values}])]`
     );
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`Id is in ( ${values.slice(0, 20).join(" , ")} , ... )`]);
+    expect(getFacetTexts()).toEqual([`Id\n${[...values.slice(0, 4), "..."].join("\nor\n")}`]);
     expect(searchBar.env.searchModel.domain).toEqual([["id", "in", values]]);
 });

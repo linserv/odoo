@@ -2448,7 +2448,11 @@ export class Model extends Array {
 
         const idNamePairs = this.name_search(name, domain, operator, limit, kwargs);
         if (Object.keys(specification).length === 1 && "display_name" in specification) {
-            return idNamePairs.map(([id, name]) => ({ id, display_name: name }));
+            return idNamePairs.map(([id, name]) => ({
+                id,
+                display_name: name,
+                __formatted_display_name: name,
+            }));
         }
 
         return this.web_read(
@@ -2928,7 +2932,7 @@ export class Model extends Array {
                         result[field.name] = container[field.definition_record_field].map(
                             (def) => ({
                                 ...def,
-                                value: record[field.name][def.name] ?? false,
+                                value: record[field.name][def.name],
                             })
                         );
                     } else {
@@ -3180,7 +3184,7 @@ export class Model extends Array {
                     if (property.definition_deleted) {
                         delete record[fieldName][property.name];
                     } else {
-                        let value = property.value ?? property.default ?? false;
+                        let value = property.value ?? property.default;
                         if (value && property.comodel) {
                             // For relational fields: transform to [id, display_name] tuples
                             const coModel = this.env[property.comodel];
