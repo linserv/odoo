@@ -4981,7 +4981,7 @@ msgstr "Todos los viernes de 6 pm a 7 pm"
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.snippet_options
 msgid "Every Time"
-msgstr "Cada vez"
+msgstr "Siempre"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.searchbar_input_snippet_options
@@ -9900,7 +9900,7 @@ msgstr "Reportes"
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_website_form_options
 msgid "Required"
-msgstr "Requerido"
+msgstr "Obligatorio"
 
 #. module: website
 #. odoo-javascript

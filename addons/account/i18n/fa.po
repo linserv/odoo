@@ -39,6 +39,7 @@
 # Faraz Sadri Alamdari <ifarazir@gmail.com>, 2025
 # Tiffany Chang, 2025
 # fardin mardani <fmardani0@gmail.com>, 2025
+# Kami kaveh, 2025
 # Naser mars, 2025
 # 
 msgid ""
@@ -1647,14 +1648,14 @@ msgstr ""
 #: code:addons/account/models/account_move_line.py:0
 #, python-format
 msgid "Account %s is of payable type, but is used in a sale operation."
-msgstr ""
+msgstr "حساب %s از نوع پرداختنی است، اما در عملیات فروش استفاده می‌شود.."
 
 #. module: account
 #. odoo-python
 #: code:addons/account/models/account_move_line.py:0
 #, python-format
 msgid "Account %s is of receivable type, but is used in a purchase operation."
-msgstr ""
+msgstr "حساب %s از نوع دریافتنی است، اما در عملیات خرید استفاده می‌شود."
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_res_config_settings__module_account_avatax
@@ -3696,7 +3697,7 @@ msgstr ""
 #: code:addons/account/wizard/accrued_orders.py:0
 #, python-format
 msgid "Cannot create an accrual entry with orders in different currencies."
-msgstr ""
+msgstr "نمی‌توان یک ورودی تعهدی با سفارش‌هایی با ارزهای مختلف ایجاد کرد."
 
 #. module: account
 #. odoo-python
@@ -16424,6 +16425,10 @@ msgid ""
 "                you receive from your vendor according to the draft\n"
 "                document in Odoo."
 msgstr ""
+"صورتحساب فروشندگان می‌تواند به‌صورت پیش‌فرض بر اساس خریدها ایجاد شوند.\n"
+"                سفارش‌هاو رسیدها. This allows you to control bills\n"
+"                you receive from your vendor according to the draft\n"
+"                document in Odoo."
 
 #. module: account
 #. odoo-javascript

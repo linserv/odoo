@@ -44,7 +44,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         })
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = self.kit
         bom_product_form.product_tmpl_id = self.kit.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
@@ -151,7 +150,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         })
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = self.subkit1
         bom_product_form.product_tmpl_id = self.subkit1.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
@@ -161,7 +159,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         self.bom_a = bom_product_form.save()
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = self.subkit2
         bom_product_form.product_tmpl_id = self.subkit2.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
@@ -174,7 +171,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         self.bom_b = bom_product_form.save()
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = self.kit
         bom_product_form.product_tmpl_id = self.kit.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
@@ -187,7 +183,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         self.final_bom = bom_product_form.save()
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = self.kit_2
         bom_product_form.product_tmpl_id = self.kit_2.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
@@ -289,7 +284,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         })
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = self.kit
         bom_product_form.product_tmpl_id = self.kit.product_tmpl_id
         bom_product_form.product_qty = 2.0
         bom_product_form.type = 'phantom'
@@ -390,7 +384,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         })
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = kit_1
         bom_product_form.product_tmpl_id = kit_1.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
@@ -403,7 +396,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         self.bom_a = bom_product_form.save()
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = kit_2
         bom_product_form.product_tmpl_id = kit_2.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
@@ -495,7 +487,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         })
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = kit_1
         bom_product_form.product_tmpl_id = kit_1.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
@@ -505,7 +496,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         self.bom_a = bom_product_form.save()
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = kit_2
         bom_product_form.product_tmpl_id = kit_2.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
@@ -515,7 +505,6 @@ class TestPosMrp(TestPointOfSaleCommon):
         self.bom_b = bom_product_form.save()
 
         bom_product_form = Form(self.env['mrp.bom'])
-        bom_product_form.product_id = kit_3
         bom_product_form.product_tmpl_id = kit_3.product_tmpl_id
         bom_product_form.product_qty = 1.0
         bom_product_form.type = 'phantom'
