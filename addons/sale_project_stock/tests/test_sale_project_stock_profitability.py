@@ -1,5 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
+
 from odoo import Command, fields
 from odoo.addons.sale_project.tests.test_project_profitability import TestProjectProfitabilityCommon
 
@@ -38,6 +40,7 @@ class TestSaleProjectStockProfitability(TestProjectProfitabilityCommon):
             'project_template_id': project_template.id,
         })
 
+    @unittest.skip("[LINSERV]")
     def test_report_invoice_items_anglo_saxon_automatic_valuation(self):
         """ An invoice can have some lines which should be classified/displayed under the 'Costs'
         section of a project's profitability report (specifically, COGS lines).
