@@ -40,6 +40,12 @@ class StockWarehouseOrderpoint(models.Model):
             }
         return super()._get_replenishment_order_notification()
 
+    def _compute_allowed_replenishment_uom_ids(self):
+        super()._compute_allowed_replenishment_uom_ids()
+        for orderpoint in self:
+            if 'manufacture' in orderpoint.rule_ids.mapped('action'):
+                orderpoint.allowed_replenishment_uom_ids += orderpoint.product_id.bom_ids.product_uom_id
+
     @api.depends('route_id')
     def _compute_show_bom(self):
         manufacture_route = []
@@ -91,7 +97,7 @@ class StockWarehouseOrderpoint(models.Model):
             ratios_total = []
             for bom_line, bom_line_data in bom_sub_lines:
                 component = bom_line.product_id
-                if not component.is_storable or float_is_zero(bom_line_data['qty'], precision_rounding=bom_line.product_uom_id.rounding):
+                if not component.is_storable or bom_line.product_uom_id.is_zero(bom_line_data['qty']):
                     continue
                 uom_qty_per_kit = bom_line_data['qty'] / bom_line_data['original_qty']
                 qty_per_kit = bom_line.product_uom_id._compute_quantity(uom_qty_per_kit, bom_line.product_id.uom_id, raise_if_failure=False)

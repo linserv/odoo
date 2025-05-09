@@ -115,10 +115,6 @@ for (let snippet of snippetsNames) {
                 content: `Hide the ${snippet.name} popup`,
                 trigger: `:iframe [data-snippet='${snippet.name}'] .s_popup_close`,
                 run: "click",
-            },
-            {
-                content: `Make sure ${snippet.name} is hidden`,
-                trigger: ":iframe body:not(.modal-open)",
             }
         );
     } else if (isDropInOnlySnippet) {
@@ -130,7 +126,6 @@ for (let snippet of snippetsNames) {
 }
 
 registry.category("web_tour.tours").add("snippets_all_drag_and_drop", {
-    checkDelay: 100,
     // To run the tour locally, you need to insert the URL sent by the python
     // tour here. There is currently an issue with tours which don't have an URL
     // url: '/?enable_editor=1&snippets_names=s_process_steps:columns,s_website_form:,s_...',

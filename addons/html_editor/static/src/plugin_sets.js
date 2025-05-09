@@ -19,7 +19,6 @@ import { SplitPlugin } from "./core/split_plugin";
 import { UserCommandPlugin } from "./core/user_command_plugin";
 import { AlignPlugin } from "./main/align/align_plugin";
 import { BannerPlugin } from "./main/banner_plugin";
-import { ChatGPTPlugin } from "./main/chatgpt/chatgpt_plugin";
 import { ColumnPlugin } from "./main/column_plugin";
 import { EmojiPlugin } from "./main/emoji_plugin";
 import { ColorPlugin } from "./main/font/color_plugin";
@@ -63,6 +62,7 @@ import { EmbeddedComponentPlugin } from "./others/embedded_component_plugin";
 import { TableOfContentPlugin } from "@html_editor/others/embedded_components/plugins/table_of_content_plugin/table_of_content_plugin";
 import { ToggleBlockPlugin } from "@html_editor/others/embedded_components/plugins/toggle_block_plugin/toggle_block_plugin";
 import { VideoPlugin } from "@html_editor/others/embedded_components/plugins/video_plugin/video_plugin";
+import { CaptionPlugin } from "@html_editor/others/embedded_components/plugins/caption_plugin/caption_plugin";
 import { QWebPlugin } from "./others/qweb_plugin";
 import { EditorVersionPlugin } from "./core/editor_version_plugin";
 
@@ -126,7 +126,6 @@ export const CORE_PLUGINS = [
 export const MAIN_PLUGINS = [
     ...CORE_PLUGINS,
     BannerPlugin,
-    ChatGPTPlugin,
     ColorPlugin,
     SeparatorPlugin,
     ColumnPlugin,
@@ -178,6 +177,7 @@ export const EMBEDDED_COMPONENT_PLUGINS = [
     TableOfContentPlugin,
     ToggleBlockPlugin,
     VideoPlugin,
+    CaptionPlugin,
 ];
 
 export const DYNAMIC_PLACEHOLDER_PLUGINS = [DynamicPlaceholderPlugin, QWebPlugin];

@@ -352,11 +352,24 @@ export class Many2XAutocomplete extends Component {
         const label = record.__formatted_display_name || record.display_name;
         return {
             data: { record },
-            label: label ? odoomark(label.split("\n")[0]) : _t("Unnamed"),
+            label: label ? odoomark(label) : _t("Unnamed"),
             onSelect: () => this.props.update([record]),
         };
     }
 
+    onQuickCreateError(error, request) {
+        if (
+            error instanceof RPCError &&
+            error.exceptionName === "odoo.exceptions.ValidationError"
+        ) {
+            return this.openMany2X({  
+                context: this.getCreationContext(request),  
+                nextRecordsContext: this.props.context,  
+            });
+        } else {
+            throw error;
+        }
+    }
     async loadOptionsSource(request) {
         if (this.lastProm) {
             this.lastProm.abort(false);
@@ -411,13 +424,7 @@ export class Many2XAutocomplete extends Component {
                         try {
                             await this.props.quickCreate(request);
                         } catch (e) {
-                            if (
-                                e instanceof RPCError &&
-                                e.exceptionName === "odoo.exceptions.ValidationError"
-                            ) {
-                                return slowCreate();
-                            }
-                            throw e;
+                            this.onQuickCreateError(e, request);
                         }
                     },
                 });

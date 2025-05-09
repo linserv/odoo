@@ -742,6 +742,9 @@ class AccountMove(models.Model):
         search='_search_next_payment_date',
     )
 
+    display_send_button = fields.Boolean(compute='_compute_display_send_button')
+    highlight_send_button = fields.Boolean(compute='_compute_highlight_send_button')
+
     _checked_idx = models.Index("(journal_id) WHERE (checked IS NOT TRUE)")
     _payment_idx = models.Index("(journal_id, state, payment_state, move_type, date)")
     _unique_name = models.UniqueIndex(
@@ -2154,6 +2157,16 @@ class AccountMove(models.Model):
         for move in self:
             move.next_payment_date = min([line.payment_date for line in move.line_ids.filtered(lambda l: l.payment_date and not l.reconciled)], default=False)
 
+    @api.depends('move_type', 'state')
+    def _compute_display_send_button(self):
+        for move in self:
+            move.display_send_button = move.is_sale_document() and move.state == 'posted'
+
+    @api.depends('is_being_sent', 'invoice_pdf_report_id')
+    def _compute_highlight_send_button(self):
+        for move in self:
+            move.highlight_send_button = not move.is_being_sent and not move.invoice_pdf_report_id
+
     def _search_next_payment_date(self, operator, value):
         if operator not in ('in', '<', '<='):
             return NotImplemented
@@ -2869,7 +2882,7 @@ class AccountMove(models.Model):
             return self.env['account.move.line']._fields[field].convert_to_write(record[field], record)
 
         def get_tax_line_tracked_fields(line):
-            return ('amount_currency', 'balance')
+            return ('amount_currency', 'balance', 'analytic_distribution')
 
         def get_base_line_tracked_fields(line):
             grouping_key = AccountTax._prepare_base_line_grouping_key(fake_base_line)
@@ -3514,7 +3527,8 @@ class AccountMove(models.Model):
             for move in self:
                 if 'tax_totals' in vals:
                     super(AccountMove, move).write({'tax_totals': vals['tax_totals']})
-        if 'journal_id' in vals:
+
+        if any(field in vals for field in ['journal_id', 'currency_id']):
             self.line_ids._check_constrains_account_id_journal_id()
 
         return res
@@ -5691,33 +5705,41 @@ class AccountMove(models.Model):
     # CRON
     # -------------------------------------------------------------------------
 
-    def _autopost_draft_entries(self):
+    def _autopost_draft_entries(self, batch_size=100):
         ''' This method is called from a cron job.
         It is used to post entries such as those created by the module
         account_asset and recurring entries created in _post().
         '''
-        moves = self.search([
+        domain = [
             ('state', '=', 'draft'),
             ('date', '<=', fields.Date.context_today(self)),
             ('auto_post', '!=', 'no'),
             '|', ('checked', '=', True), ('journal_id.autocheck_on_post', '=', True)
-        ], limit=100)
+        ]
+        moves = self.search(domain, limit=batch_size)
+        remaining = len(moves) if len(moves) < batch_size else self.search_count(domain)
+        self.env['ir.cron']._commit_progress(remaining=remaining)
 
         try:  # try posting in batch
-            with self.env.cr.savepoint():
-                moves._post()
+            moves._post()
+            self.env['ir.cron']._commit_progress(len(moves))
+            return
         except UserError:  # if at least one move cannot be posted, handle moves one by one
-            for move in moves:
-                try:
-                    with self.env.cr.savepoint():
-                        move._post()
-                except UserError as e:
-                    move.checked = False
-                    msg = _('The move could not be posted for the following reason: %(error_message)s', error_message=e)
-                    move.message_post(body=msg, message_type='comment')
+            self.env.cr.rollback()
 
-        if len(moves) == 100:  # assumes there are more whenever search hits limit
-            self.env.ref('account.ir_cron_auto_post_draft_entry')._trigger()
+        for move in moves:
+            try:
+                move = move.try_lock_for_update().filtered_domain(domain)
+                if not move:
+                    continue
+                move._post()
+                self.env['ir.cron']._commit_progress(1)
+            except UserError as e:
+                self.env.cr.rollback()
+                move.checked = False
+                msg = _('The move could not be posted for the following reason: %(error_message)s', error_message=e)
+                move.message_post(body=msg, message_type='comment')
+                self.env['ir.cron']._commit_progress()
 
     @api.model
     def _cron_account_move_send(self, job_count=10):
@@ -5742,17 +5764,9 @@ class AccountMove(models.Model):
                 },
             ]
 
-        limit = job_count + 1
-        to_process = self.env['account.move'].search(
-            [('sending_data', '!=', False)],
-            limit=limit,
-        )
-        need_retrigger = len(to_process) > job_count
+        domain = [('sending_data', '!=', False)]
+        to_process = self.search(domain, limit=job_count).try_lock_for_update()
         if not to_process:
-            return
-
-        to_process = to_process[:job_count]
-        if not self.env['res.company']._with_locked_records(to_process, allow_raising=False):
             return
 
         # Collect moves by res.partner that executed the Send & Print wizard, must be done before the _process
@@ -5774,8 +5788,7 @@ class AccountMove(models.Model):
                 partner._bus_send(*get_account_notification(partner_moves_success, True))
             partner_moves_error.sending_data = False
 
-        if need_retrigger:
-            self.env.ref('account.ir_cron_account_move_send')._trigger()
+        self.env['ir.cron']._commit_progress(len(to_process), remaining=self.search_count(domain))
 
     # -------------------------------------------------------------------------
     # HELPER METHODS

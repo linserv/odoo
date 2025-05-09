@@ -343,7 +343,9 @@ export class PosStore extends WithLazyGetterTrap {
                 ),
             });
         } finally {
-            const orders = this.models["pos.order"].filter((o) => typeof o.id !== "number");
+            // All orders saved on the server should be cancelled by the device that closes
+            // the session. If some orders are not cancelled, we need to cancel them here.
+            const orders = this.models["pos.order"].filter((o) => typeof o.id === "number");
             for (const order of orders) {
                 if (!order.finalized) {
                     order.state = "cancel";
@@ -1676,6 +1678,24 @@ export class PosStore extends WithLazyGetterTrap {
             : "";
     }
 
+    getOrderData(order, reprint) {
+        return {
+            reprint: reprint,
+            pos_reference: order.getName(),
+            config_name: order.config_id.name,
+            time: DateTime.now().toFormat("HH:mm"),
+            tracking_number: order.tracking_number,
+            preset_name: order.preset_id?.name || "",
+            employee_name: order.employee_id?.name || order.user_id?.name,
+            internal_note: order.internal_note,
+            general_customer_note: order.general_customer_note,
+            changes: {
+                title: "",
+                data: [],
+            },
+        };
+    }
+
     generateOrderChange(order, orderChange, categories, reprint = false) {
         const isPartOfCombo = (line) =>
             line.isCombo || this.models["product.product"].get(line.product_id).type == "combo";
@@ -1692,22 +1712,7 @@ export class PosStore extends WithLazyGetterTrap {
         });
         orderChange.new = [...comboChanges, ...normalChanges];
 
-        const orderData = {
-            reprint: reprint,
-            pos_reference: order.getName(),
-            config_name: order.config_id.name,
-            time: DateTime.now().toFormat("HH:mm"),
-            tracking_number: order.tracking_number,
-            preset_name: order.preset_id?.name || "",
-            preset_time: order.presetDateTime,
-            employee_name: order.employee_id?.name || order.user_id?.name,
-            internal_note: this.getStrNotes(order.internal_note),
-            general_customer_note: order.general_customer_note,
-            changes: {
-                title: "",
-                data: [],
-            },
-        };
+        const orderData = this.getOrderData(order, reprint);
 
         const changes = this.filterChangeByCategories(categories, orderChange);
         for (const changeItem of [...changes.new, ...changes.cancelled, ...changes.noteUpdate]) {
@@ -1969,8 +1974,10 @@ export class PosStore extends WithLazyGetterTrap {
         }
 
         if (preset) {
+            order.setPreset(preset);
+
             if (preset.needsPartner) {
-                const partner = order.partner_id || (await this.selectPartner());
+                const partner = order.partner_id || (await this.selectPartner(order));
                 if (!partner) {
                     return;
                 }
@@ -1980,7 +1987,6 @@ export class PosStore extends WithLazyGetterTrap {
                 }
             }
 
-            order.setPreset(preset);
             if (preset.identification === "name" && !order.floating_order_name && !order.table_id) {
                 order.floating_order_name = order.getPartner()?.name;
                 if (!order.floating_order_name) {
@@ -2019,9 +2025,8 @@ export class PosStore extends WithLazyGetterTrap {
     setPartnerToCurrentOrder(partner) {
         this.getOrder().setPartner(partner);
     }
-    async selectPartner() {
+    async selectPartner(currentOrder = this.getOrder()) {
         // FIXME, find order to refund when we are in the ticketscreen.
-        const currentOrder = this.getOrder();
         if (!currentOrder) {
             return false;
         }
@@ -2260,6 +2265,11 @@ export class PosStore extends WithLazyGetterTrap {
                 return false;
             }
         }
+        payment.qrPaymentData = {
+            name: payment.payment_method_id.name,
+            amount: this.env.utils.formatCurrency(payment.amount),
+            qrCode: qr,
+        };
         return await ask(
             this.env.services.dialog,
             {
@@ -2270,7 +2280,10 @@ export class PosStore extends WithLazyGetterTrap {
             },
             {},
             QRPopup
-        );
+        ).then((result) => {
+            payment.qrPaymentData = null;
+            return result;
+        });
     }
 
     get isTicketScreenShown() {

@@ -1,3 +1,4 @@
+import { delay } from '@odoo/hoot-dom';
 import {
     changeOption,
     clickOnEditAndWaitEditMode,
@@ -141,7 +142,6 @@ const addExistingField = function (name, type, label, required, display) {
 registerWebsitePreviewTour("website_form_editor_tour", {
     url: '/',
     edition: true,
-    checkDelay: 100,
 }, () => [
     // Drop a form builder snippet and configure it
     {
@@ -920,7 +920,10 @@ registerWebsitePreviewTour('website_form_conditional_required_checkboxes', {
     {
         content: 'Try sending empty form',
         trigger: ':iframe .s_website_form_send',
-        run: "click",
+        async run(helpers) {
+            await delay(1000);
+            await helpers.click();
+        },
     }, {
         content: 'Check the form could not be sent',
         trigger: ':iframe #s_website_form_result.text-danger',
@@ -934,7 +937,10 @@ registerWebsitePreviewTour('website_form_conditional_required_checkboxes', {
     }, {
         content: 'Try sending the form',
         trigger: ':iframe .s_website_form_send',
-        run: "click",
+        async run(helpers) {
+            await delay(1000);
+            await helpers.click();
+        },
     }, {
         content: "Check the form was sent (success page without form)",
         trigger: ':iframe body:not(:has([data-snippet="s_website_form"])) .fa-paper-plane',
@@ -955,7 +961,10 @@ registerWebsitePreviewTour('website_form_conditional_required_checkboxes', {
     }, {
         content: 'Try sending the form again',
         trigger: ':iframe .s_website_form_send',
-        run: "click",
+        async run(helpers) {
+            await delay(1000);
+            await helpers.click();
+        },
     }, {
         content: "Check the form was again sent (success page without form)",
         trigger: ':iframe body:not(:has([data-snippet="s_website_form"])) .fa-paper-plane',

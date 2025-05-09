@@ -1,10 +1,17 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from datetime import timedelta
+from __future__ import annotations
 
-from odoo import api, fields, tools, models, _
+from datetime import timedelta
+from typing import TYPE_CHECKING, Literal
+
+from odoo import _, api, fields, models, tools
 from odoo.exceptions import UserError
+from odoo.tools import float_round
+
+if TYPE_CHECKING:
+    from odoo.orm.types import Self
+    from odoo.tools.float_utils import RoundingMethod
 
 
 class UomUom(models.Model):
@@ -68,7 +75,37 @@ class UomUom(models.Model):
                 ", ".join(locked_uoms.mapped('name')),
             ))
 
-    def _compute_quantity(self, qty, to_unit, round=True, rounding_method='UP', raise_if_failure=True):
+    def round(self, value: float, rounding_method: RoundingMethod = 'HALF-UP') -> float:
+        """Round the value using the 'Product Unit' precision"""
+        self.ensure_one()
+        digits = self.env['decimal.precision'].precision_get('Product Unit')
+        return tools.float_round(value, precision_digits=digits, rounding_method=rounding_method)
+
+    def compare(self, value1: float, value2: float) -> Literal[-1, 0, 1]:
+        """Compare two measures after rounding them with the 'Product Unit' precision
+
+        :param value1: origin value to compare
+        :param value2: value to compare to
+        :return: -1, 0 or 1, if ``value1`` is lower than, equal to, or greater than ``value2``.
+        """
+        self.ensure_one()
+        digits = self.env['decimal.precision'].precision_get('Product Unit')
+        return tools.float_compare(value1, value2, precision_digits=digits)
+
+    def is_zero(self, value: float) -> bool:
+        """Check if the value is zero after rounding with the 'Product Unit' precision"""
+        self.ensure_one()
+        digits = self.env['decimal.precision'].precision_get('Product Unit')
+        return tools.float_is_zero(value, precision_digits=digits)
+
+    def _compute_quantity(
+        self,
+        qty: float,
+        to_unit: Self,
+        round: bool = True,
+        rounding_method: RoundingMethod = 'UP',
+        raise_if_failure: bool = True,
+    ) -> float:
         """ Convert the given quantity from the current UoM `self` into a given one
             :param qty: the quantity to convert
             :param to_unit: the destination UomUom record (uom.uom)
@@ -92,7 +129,23 @@ class UomUom(models.Model):
 
         return amount
 
-    def _compute_price(self, price, to_unit):
+    def _check_qty(self, product_qty, uom_id, rounding_method="HALF-UP"):
+        """Check if product_qty in given uom is a multiple of the packaging qty.
+        If not, rounding the product_qty to closest multiple of the packaging qty
+        according to the rounding_method "UP", "HALF-UP or "DOWN".
+        """
+        self.ensure_one()
+        packaging_qty = self._compute_quantity(1, uom_id)
+        # We do not use the modulo operator to check if qty is a mltiple of q. Indeed the quantity
+        # per package might be a float, leading to incorrect results. For example:
+        # 8 % 1.6 = 1.5999999999999996
+        # 5.4 % 1.8 = 2.220446049250313e-16
+        if product_qty and packaging_qty:
+            product_qty = float_round(product_qty / packaging_qty, precision_rounding=1.0,
+                                  rounding_method=rounding_method) * packaging_qty
+        return product_qty
+
+    def _compute_price(self, price: float, to_unit: Self) -> float:
         self.ensure_one()
         if not self or not price or not to_unit or self == to_unit:
             return price
@@ -129,7 +182,7 @@ class UomUom(models.Model):
         else:
             return self.browse(set(linked_model_data.mapped('res_id')))
 
-    def _has_common_reference(self, other_uom):
+    def _has_common_reference(self, other_uom: Self) -> bool:
         """ Check if `self` and `other_uom` have a common reference unit """
         self.ensure_one()
         other_uom.ensure_one()
