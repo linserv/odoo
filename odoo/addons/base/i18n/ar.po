@@ -12165,6 +12165,12 @@ msgid ""
 "- EOS Calculations\n"
 "\n"
 msgstr ""
+"\n"
+"قواعد كشوف المرتبات ونهاية الخدمة في الإمارات العربية المتحدة.\n"
+"=======================================================\n"
+"- حسابات الراتب الأساسي\n"
+"- حسابات نهاية الخدمة\n"
+"\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_us
@@ -18900,7 +18906,7 @@ msgstr "إنشاء القائمة"
 #. module: base
 #: model:ir.model,name:base.model_wizard_ir_model_menu_create
 msgid "Create Menu Wizard"
-msgstr "إنشاء معالج قائمة"
+msgstr "معالج إنشاء القائمة "
 
 #. module: base
 #: model:ir.model.fields.selection,name:base.selection__ir_actions_server__state__object_create
