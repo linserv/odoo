@@ -72,7 +72,9 @@ class AccountMoveReversal(models.TransientModel):
             raise UserError(_("All selected moves for reversal must belong to the same company."))
 
         if any(move.state != "posted" for move in move_ids):
-            raise UserError(_('You can only reverse posted moves.'))
+            raise UserError(_(
+                'To reverse a journal entry, it has to be posted first.'
+            ))
         if 'company_id' in fields:
             res['company_id'] = move_ids.company_id.id or self.env.company.id
         if 'move_ids' in fields:
@@ -90,10 +92,11 @@ class AccountMoveReversal(models.TransientModel):
     def _prepare_default_reversal(self, move):
         reverse_date = self.date
         mixed_payment_term = move.invoice_payment_term_id.id if move.invoice_payment_term_id.early_pay_discount_computation == 'mixed' else None
+        lang = move.partner_id.lang or self.env.lang
         return {
-            'ref': _('Reversal of: %(move_name)s, %(reason)s', move_name=move.name, reason=self.reason)
+            'ref': self.with_context(lang=lang).env._('Reversal of: %(move_name)s, %(reason)s', move_name=move.name, reason=self.reason)
                    if self.reason
-                   else _('Reversal of: %s', move.name),
+                   else self.with_context(lang=lang).env._('Reversal of: %s', move.name),
             'date': reverse_date,
             'invoice_date_due': reverse_date,
             'invoice_date': move.is_invoice(include_receipts=True) and (self.date or move.date) or False,

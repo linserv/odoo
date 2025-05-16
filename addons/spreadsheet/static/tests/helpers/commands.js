@@ -163,7 +163,12 @@ export function deleteColumns(model, columns, sheetId = model.getters.getActiveS
 }
 
 /** Create a test chart in the active sheet*/
-export function createBasicChart(model, chartId, sheetId = model.getters.getActiveSheetId()) {
+export function createBasicChart(
+    model,
+    chartId,
+    definition,
+    sheetId = model.getters.getActiveSheetId()
+) {
     model.dispatch("CREATE_CHART", {
         figureId: chartId,
         col: 0,
@@ -181,6 +186,7 @@ export function createBasicChart(model, chartId, sheetId = model.getters.getActi
             verticalAxisPosition: "left",
             legendPosition: "top",
             stackedBar: false,
+            ...definition,
         },
     });
 }
@@ -236,6 +242,15 @@ export function createGaugeChart(model, chartId, sheetId = model.getters.getActi
                 },
             },
         },
+    });
+}
+
+export function updateChart(model, chartId, partialDefinition) {
+    const definition = model.getters.getChartDefinition(chartId);
+    return model.dispatch("UPDATE_CHART", {
+        definition: { ...definition, ...partialDefinition },
+        figureId: chartId,
+        sheetId: model.getters.getActiveSheetId(),
     });
 }
 

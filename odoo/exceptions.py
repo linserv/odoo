@@ -3,10 +3,6 @@
 Those types are understood by the RPC layer.
 Any other exception type bubbling until the RPC layer will be
 treated as a 'Server error'.
-
-.. note::
-    If you consider introducing new exceptions,
-    check out the :mod:`odoo.addons.test_exceptions` module.
 """
 
 
@@ -126,4 +122,16 @@ class ValidationError(UserError):
     .. admonition:: Example
 
         When you try to create a new user with a login which already exist in the db.
+    """
+
+
+class ConcurrencyError(Exception):
+    """
+    Signal that two concurrent transactions tried to commit something
+    that violates some constraint. Signal that the transaction that
+    failed should be retried after a short delay, see
+    :func:`~odoo.service.model.retrying`.
+
+    This exception is low-level and has very few use cases, it should
+    only be used if all alternatives are deemed worse.
     """

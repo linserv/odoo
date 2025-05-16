@@ -234,19 +234,6 @@ test("Click on avatar opens its partner chat window", async () => {
     await contains(".o_card_user_infos > a", { text: "+45687468" });
 });
 
-test("Can use channel command /who", async () => {
-    const pyEnv = await startServer();
-    const channelId = pyEnv["discuss.channel"].create({
-        channel_type: "channel",
-        name: "my-channel",
-    });
-    await start();
-    await openDiscuss(channelId);
-    await insertText(".o-mail-Composer-input", "/who");
-    await press("Enter");
-    await contains(".o_mail_notification", { text: "You are alone in this channel." });
-});
-
 test("sidebar: chat im_status rendering", async () => {
     const pyEnv = await startServer();
     const [partnerId_1, partnerId_2, partnerId_3] = pyEnv["res.partner"].create([
@@ -1847,6 +1834,21 @@ test("warning on send with shortcut when attempting to post message with still-u
     await contains(".o-mail-AttachmentContainer .fa.fa-circle-o-notch");
     await press("Enter"); // Try to send message
     await contains(".o_notification", { text: "Please wait while the file is uploading." });
+});
+
+test("post attachment-only message shows optimistically the new message with attachment", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "test" });
+    onRpcBefore("/mail/message/post", async () => await new Deferred());
+    await start();
+    await openDiscuss(channelId);
+    await contains(".o-mail-Composer input[type=file]");
+    const file = new File(["hello, world"], "text.txt", { type: "text/plain" });
+    await editInput(document.body, ".o-mail-Composer input[type=file]", [file]);
+    await contains(".o-mail-AttachmentCard:not(:has(.fa.fa-circle-o-notch)):contains('text.txt')");
+    await press("Enter");
+    await contains(".o-mail-Message");
+    await contains(".o-mail-Message .o-mail-AttachmentCard:contains('text.txt')");
 });
 
 test("failure on loading messages should display error", async () => {

@@ -17,7 +17,7 @@ import { Transition } from "@web/core/transition";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs";
 import { SearchBar } from "../search_bar/search_bar";
 
-import { Component, useState, onMounted, useExternalListener, useRef, useEffect } from "@odoo/owl";
+import { Component, useState, onMounted, useRef, useEffect } from "@odoo/owl";
 
 const STICKY_CLASS = "o_mobile_sticky";
 
@@ -111,9 +111,6 @@ export class ControlPanel extends Component {
         }+${user.userId}`;
 
         this.state = useState({
-            showSearchBar: false,
-            showMobileSearch: false,
-            showViewSwitcher: false,
             embeddedInfos: {
                 showEmbedded:
                     this.env.config.embeddedActions?.length > 0 &&
@@ -156,7 +153,6 @@ export class ControlPanel extends Component {
             );
         }
 
-        useExternalListener(window, "click", this.onWindowClick);
         useEffect(() => {
             if (
                 !this.env.isSmall ||
@@ -165,9 +161,12 @@ export class ControlPanel extends Component {
                 return;
             }
             const scrollingEl = this.getScrollingElement();
+            this.scrollingElementResizeObserver.observe(scrollingEl);
             scrollingEl.addEventListener("scroll", this.onScrollThrottledBound);
             this.root.el.style.top = "0px";
+            this.scrollingElementHeight = scrollingEl.scrollHeight;
             return () => {
+                this.scrollingElementResizeObserver.unobserve(scrollingEl);
                 scrollingEl.removeEventListener("scroll", this.onScrollThrottledBound);
             };
         });
@@ -240,6 +239,16 @@ export class ControlPanel extends Component {
         });
     }
 
+    scrollingElementResizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+            if (this.scrollingElementHeight !== entry.target.scrollingElementHeight) {
+                this.oldScrollTop +=
+                    entry.target.scrollingElementHeight - this.scrollingElementHeight;
+                this.scrollingElementHeight = entry.target.scrollingElementHeight;
+            }
+        }
+    });
+
     getDropdownClass(action) {
         return (!this.env.isSmall && this._checkValueLocalStorage(action)) ||
             (this.env.isSmall && this.state.embeddedInfos.currentEmbeddedAction?.id === action.id)
@@ -271,17 +280,6 @@ export class ControlPanel extends Component {
         } else {
             return _t("Custom Embedded Action");
         }
-    }
-
-    /**
-     * Reset mobile search state
-     */
-    resetSearchState() {
-        Object.assign(this.state, {
-            showSearchBar: false,
-            showMobileSearch: false,
-            showViewSwitcher: false,
-        });
     }
 
     /**
@@ -350,7 +348,6 @@ export class ControlPanel extends Component {
      * @param {import("@web/views/view").ViewType} viewType
      */
     switchView(viewType, newWindow) {
-        this.resetSearchState();
         this.actionService.switchView(viewType, {}, { newWindow });
     }
 
@@ -362,16 +359,6 @@ export class ControlPanel extends Component {
         );
         const nextIndex = (currentIndex + 1) % viewSwitcherEntries.length;
         this.switchView(viewSwitcherEntries[nextIndex].type);
-    }
-
-    /**
-     * @private
-     * @param {MouseEvent} ev
-     */
-    onWindowClick(ev) {
-        if (this.state.showViewSwitcher && !ev.target.closest(".o_cp_switch_buttons")) {
-            this.state.showViewSwitcher = false;
-        }
     }
 
     /**

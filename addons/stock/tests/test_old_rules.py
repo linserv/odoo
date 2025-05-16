@@ -139,9 +139,9 @@ class TestOldRules(TestStockCommon):
         self.env['stock.quant']._update_available_quantity(self.productA, self.warehouse_3_steps.lot_stock_id, 4.0)
 
         # We alter one rule and we set it to 'mts_else_mto'
-        self.warehouse_3_steps.delivery_route_id.rule_ids.filtered(lambda r: r.procure_method == "make_to_order").write({
-            'procure_method': 'mts_else_mto',
-        })
+        self.warehouse_3_steps.delivery_route_id.rule_ids.filtered(
+            lambda r: r.procure_method == "make_to_order"
+        ).procure_method = 'mts_else_mto'
 
         pg = self.env['procurement.group'].create({'name': 'Test-pg-mtso-mto'})
 
@@ -193,9 +193,7 @@ class TestOldRules(TestStockCommon):
         # We alter one rule and we set it to 'mts_else_mto'
         self.warehouse_3_steps.delivery_route_id.rule_ids.filtered(
             lambda r: r.procure_method == "make_to_order"
-        ).write({
-            'procure_method': 'mts_else_mto',
-        })
+        ).procure_method = 'mts_else_mto'
 
         pg1 = self.env['procurement.group'].create({'name': 'Test-pg-mtso-mts-1'})
         pg2 = self.env['procurement.group'].create({'name': 'Test-pg-mtso-mts-2'})
@@ -335,7 +333,7 @@ class TestOldRules(TestStockCommon):
             'product_uom_qty': 5.0,
             'product_uom': prod.uom_id.id,
             'location_id': self.warehouse_3_steps.wh_output_stock_loc_id.id,
-            'location_dest_id': self.env.ref('stock.stock_location_customers').id,
+            'location_dest_id': self.customer_location.id,
             'warehouse_id':  self.warehouse_3_steps.id,
             'picking_type_id':  self.warehouse_3_steps.out_type_id.id,
             'procure_method': 'make_to_order',
@@ -518,7 +516,7 @@ class TestOldRules(TestStockCommon):
             'product_uom_qty': 5.0,
             'product_uom': self.product.uom_id.id,
             'location_id': warehouse.wh_output_stock_loc_id.id,
-            'location_dest_id': self.env.ref('stock.stock_location_customers').id,
+            'location_dest_id': self.customer_location.id,
             'warehouse_id': warehouse.id,
             'picking_type_id': warehouse.out_type_id.id,
             'procure_method': 'make_to_order',
@@ -605,3 +603,39 @@ class TestOldRules(TestStockCommon):
         move2._action_confirm()
         self.assertEqual(picking_pick.partner_id.id, False)
         self.assertEqual(picking_pick.origin, False)
+
+    def test_propagate_cancel_in_pull_setup(self):
+        """
+        Check the cancellation propagation in pull set ups.
+        """
+        # create a procurement group
+        procurement_group0 = self.env['procurement.group'].create({})
+        product1 = self.env['product.product'].create({
+            'name': 'test_procurement_cancel_propagation',
+            'is_storable': True,
+        })
+        pick_pack_ship_route = self.warehouse_3_steps.delivery_route_id
+        pick_rule = pick_pack_ship_route.rule_ids.filtered(lambda rule: rule.picking_type_id == self.warehouse_3_steps.pick_type_id)
+        pack_rule = pick_pack_ship_route.rule_ids.filtered(lambda rule:  rule.picking_type_id == self.warehouse_3_steps.pack_type_id)
+        (pick_rule | pack_rule).propagate_cancel = True
+        ship_rule = pick_pack_ship_route.rule_ids - (pick_rule | pack_rule)
+        self.env['procurement.group'].run([
+            procurement_group0.Procurement(
+                product1,
+                1.0,
+                product1.uom_id,
+                ship_rule.location_dest_id,
+                'test_mtso_mts_1',
+                'test_mtso_mts_1',
+                self.warehouse_3_steps.company_id,
+                {
+                    'warehouse_id': self.warehouse_3_steps,
+                    'group_id': procurement_group0,
+                }
+            ),
+        ])
+        move_chain = self.env['stock.move'].search([('product_id', '=', product1.id)])
+        self.assertEqual(len(move_chain), 3)
+        pick_move = move_chain.filtered(lambda m: m.picking_type_id == self.warehouse_3_steps.pick_type_id)
+        pick_move.picking_id.action_cancel()
+        self.assertEqual(move_chain.mapped('state'), ['cancel', 'cancel', 'cancel'])

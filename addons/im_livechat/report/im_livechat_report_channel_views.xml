@@ -52,7 +52,7 @@
             <field name="name">im_livechat.report.channel.graph</field>
             <field name="model">im_livechat.report.channel</field>
             <field name="arch" type="xml">
-                <graph string="Livechat Support Statistics" type="line" stacked="1" sample="1">
+                <graph js_class="im_livechat.channel_report_graph_views" string="Livechat Support Statistics" type="line" stacked="1" sample="1">
                     <field name="call_duration_hour" type="measure" widget="float_time"/>
                     <field name="has_call" invisible="1"/>
                     <field name="percentage_of_calls" type="measure" widget="percentage"/>
@@ -75,7 +75,7 @@
                     <field name="chatbot_answers_path_str" string="Chatbot Answers"/>
                     <field name="session_expertises" string="Expertise"/>
                     <field name="visitor_partner_id"/>
-                    <filter name="my_session" domain="[('partner_id.user_id', '=', uid)]" string="My Sessions"/>
+                    <filter name="my_session" domain="[('partner_id.user_ids', '=', uid)]" string="My Sessions"/>
                     <separator/>
                     <filter name="escalated" string="Escalated" domain="[('session_outcome', '=', 'escalated')]"/>
                     <filter name="no_answer" string="Not Answered" domain="[('session_outcome', '=', 'no_answer')]"/>

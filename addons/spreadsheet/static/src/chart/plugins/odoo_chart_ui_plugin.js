@@ -1,5 +1,5 @@
 import { Domain } from "@web/core/domain";
-import { ChartDataSource } from "../data_source/chart_data_source";
+import { ChartDataSource, chartTypeToDataSourceMode } from "../data_source/chart_data_source";
 import { OdooUIPlugin } from "@spreadsheet/plugins";
 
 export class OdooChartUIPlugin extends OdooUIPlugin {
@@ -28,21 +28,20 @@ export class OdooChartUIPlugin extends OdooUIPlugin {
                 this._addDomains();
                 break;
             case "UPDATE_CHART": {
-                switch (cmd.definition.type) {
-                    case "odoo_pie":
-                    case "odoo_bar":
-                    case "odoo_line": {
-                        const dataSource = this.getChartDataSource(cmd.figureId);
-                        const chart = this.getters.getChart(cmd.figureId);
-                        if (
-                            cmd.definition.type !== chart.type ||
-                            chart.cumulative !== cmd.definition.cumulative ||
-                            dataSource.getInitialDomainString() !==
-                                new Domain(cmd.definition.searchParams.domain).toString()
-                        ) {
-                            this.shouldChartUpdateReloadDataSource = true;
-                        }
-                        break;
+                if (cmd.definition.type.startsWith("odoo_")) {
+                    const dataSource = this.getChartDataSource(cmd.figureId);
+                    const chart = this.getters.getChart(cmd.figureId);
+                    if (
+                        chart.metaData.cumulated !== cmd.definition.cumulative ||
+                        chart.cumulatedStart !== cmd.definition.cumulatedStart ||
+                        dataSource.getInitialDomainString() !==
+                            new Domain(cmd.definition.searchParams.domain).toString()
+                    ) {
+                        this.shouldChartUpdateReloadDataSource = true;
+                    } else if (cmd.definition.type !== chart.type) {
+                        dataSource.changeChartType(
+                            chartTypeToDataSourceMode(cmd.definition.type)
+                        );
                     }
                 }
                 break;

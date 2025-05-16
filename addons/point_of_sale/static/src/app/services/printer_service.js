@@ -36,10 +36,15 @@ export class PrinterService extends Reactive {
         throw {
             title: printResult.message.title || "Error",
             body: printResult.message.body,
+            canRetry: printResult.canRetry,
             errorCode: printResult.errorCode,
         };
     }
     async print(component, props, options = {}) {
+        if (!this.device && !options?.webPrintFallback) {
+            console.log("No printer device available and webPrintFallback is not enabled");
+            return;
+        }
         this.state.isPrinting = true;
         const el = await this.renderer.toHtml(component, props);
         try {

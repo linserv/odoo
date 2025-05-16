@@ -260,7 +260,8 @@ export function isVisible(node) {
             // @todo: handle it in resources?
             isMediaElement(node) ||
             hasVisibleContent(node) ||
-            isProtecting(node))
+            isProtecting(node) ||
+            isEmbeddedComponent(node))
     );
 }
 export function hasVisibleContent(node) {
@@ -296,13 +297,7 @@ const iconTags = ["I", "SPAN"];
 const iconClasses = ["fa", "fab", "fad", "far", "oi"];
 
 export const ICON_SELECTOR = iconTags
-    .map((tag) => {
-        return iconClasses
-            .map((cls) => {
-                return `${tag}.${cls}`;
-            })
-            .join(", ");
-    })
+    .map((tag) => iconClasses.map((cls) => `${tag}.${cls}`).join(", "))
     .join(", ");
 
 /**
@@ -431,6 +426,10 @@ export function containsAnyNonPhrasingContent(element) {
         child = child.nextSibling;
     }
     return false;
+}
+
+export function isEmbeddedComponent(node) {
+    return node.nodeType === Node.ELEMENT_NODE && node.matches("[data-embedded]");
 }
 
 /**

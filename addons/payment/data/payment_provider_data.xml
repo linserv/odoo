@@ -285,6 +285,7 @@
                          ref('payment.payment_method_paysafecard'),
                          ref('payment.payment_method_p24'),
                          ref('payment.payment_method_sofort'),
+                         ref('payment.payment_method_trustly'),
                          ref('payment.payment_method_twint'),
                      ])]"
         />
@@ -330,11 +331,13 @@
         <field name="payment_method_ids"
                eval="[Command.set([
                          ref('payment.payment_method_card'),
+                         ref('payment.payment_method_emi_india'),
+                         ref('payment.payment_method_fpx'),
                          ref('payment.payment_method_netbanking'),
+                         ref('payment.payment_method_paylater_india'),
+                         ref('payment.payment_method_paynow'),
                          ref('payment.payment_method_upi'),
                          ref('payment.payment_method_wallets_india'),
-                         ref('payment.payment_method_paylater_india'),
-                         ref('payment.payment_method_emi_india'),
                      ])]"
         />
     </record>

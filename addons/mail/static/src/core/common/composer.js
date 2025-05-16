@@ -444,9 +444,9 @@ export class Composer extends Component {
         }
     }
 
-    onCloseFullComposerCallback() {
+    onCloseFullComposerCallback(isDiscard) {
         if (this.props.onCloseFullComposerCallback) {
-            this.props.onCloseFullComposerCallback();
+            this.props.onCloseFullComposerCallback(isDiscard);
         } else {
             this.thread?.fetchNewMessages();
         }
@@ -613,7 +613,7 @@ export class Composer extends Component {
                     this.clear();
                 }
                 this.props.composer.replyToMessage = undefined;
-                this.onCloseFullComposerCallback();
+                this.onCloseFullComposerCallback(isDiscard);
                 this.state.isFullComposerOpen = false;
                 // Use another event bus so that no message is sent to the
                 // closed composer.
@@ -763,11 +763,8 @@ export class Composer extends Component {
         } else {
             this.env.services.dialog.add(MessageConfirmDialog, {
                 message: composer.message,
-                onConfirm: () => {
-                    this.message.remove();
-                    this.props.onDiscardCallback?.();
-                },
-                prompt: _t("Are you sure you want to delete this message?"),
+                onConfirm: () => this.message.remove(),
+                prompt: _t("Are you sure you want to bid farewell to this message forever?"),
             });
         }
         this.suggestion?.clearRawMentions();
@@ -804,7 +801,13 @@ export class Composer extends Component {
     onFocusin() {
         const composer = toRaw(this.props.composer);
         composer.isFocused = true;
-        composer.thread?.markAsRead({ sync: false });
+        if (
+            composer.thread?.scrollTop === "bottom" &&
+            !composer.thread.scrollUnread &&
+            !composer.thread.markedAsUnread
+        ) {
+            composer.thread?.markAsRead();
+        }
     }
 
     onFocusout(ev) {

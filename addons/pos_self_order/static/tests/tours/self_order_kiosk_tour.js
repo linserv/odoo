@@ -145,7 +145,7 @@ registry.category("web_tour.tours").add("self_order_language_changes", {
         LandingPage.checkKioskCountryFlagShown("us"),
 
         LandingPage.selectKioskLocation("Test-Takeout"),
-        CategoryPage.clickKioskCategory("Uncategorised"),
+        CategoryPage.clickKioskCategory("Test Category"),
         ProductPage.clickKioskProduct("Test Product"),
         ProductPage.clickBack(),
         ...CategoryPage.clickCancel(),
@@ -156,7 +156,7 @@ registry.category("web_tour.tours").add("self_order_language_changes", {
 
         Utils.clickBtn("Commander maintenant"),
         LandingPage.selectKioskLocation("Test-Takeout"),
-        CategoryPage.clickKioskCategory("Uncategorised"),
+        CategoryPage.clickKioskCategory("Catégorie Test"),
         ProductPage.clickKioskProduct("Produit Test"),
     ],
 });
@@ -175,6 +175,19 @@ registry.category("web_tour.tours").add("test_self_order_kiosk_combo_sides", {
             { name: "Size", value: "M" },
             { name: "Fabric", value: "Leather" },
         ]),
+        Utils.clickBtn("Add to cart"),
+    ],
+});
+
+registry.category("web_tour.tours").add("test_self_order_kiosk_combo_qty_max_free", {
+    steps: () => [
+        Utils.clickBtn("Order Now"),
+        LandingPage.selectKioskLocation("Test-In"),
+        CategoryPage.clickKioskCategory("Category 2"),
+        ProductPage.clickKioskProduct("Office Combo"),
+        ProductPage.clickKioskProduct("Combo Product 4"),
+        ...Utils.increaseComboItemQty("Combo Product 4", 3),
+        Utils.clickBtn("Next"),
         Utils.clickBtn("Add to cart"),
     ],
 });

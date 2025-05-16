@@ -15,6 +15,7 @@ const {
     getLineChartLegend,
     getChartShowValues,
     getTrendDatasetForLineChart,
+    getTopPaddingForDashboard,
 } = chartHelpers;
 
 export class OdooLineChart extends OdooChart {
@@ -23,6 +24,7 @@ export class OdooLineChart extends OdooChart {
         this.verticalAxisPosition = definition.verticalAxisPosition;
         this.stacked = definition.stacked;
         this.cumulative = definition.cumulative;
+        this.cumulatedStart = definition.cumulatedStart;
         this.axesDesign = definition.axesDesign;
         this.fillArea = definition.fillArea;
     }
@@ -33,6 +35,7 @@ export class OdooLineChart extends OdooChart {
             verticalAxisPosition: this.verticalAxisPosition,
             stacked: this.stacked,
             cumulative: this.cumulative,
+            cumulatedStart: this.cumulatedStart,
             axesDesign: this.axesDesign,
             fillArea: this.fillArea,
         };
@@ -70,6 +73,7 @@ function createOdooChartRuntime(chart, getters) {
         dataSetsValues: datasets.map((ds) => ({ data: ds.data, label: ds.label })),
         locale,
         trendDataSetsValues,
+        topPadding: getTopPaddingForDashboard(definition, getters),
     };
 
     const chartJsDatasets = getLineChartDatasets(definition, chartData);
@@ -81,7 +85,7 @@ function createOdooChartRuntime(chart, getters) {
         },
         options: {
             ...CHART_COMMON_OPTIONS,
-            layout: getChartLayout(definition),
+            layout: getChartLayout(definition, chartData),
             scales: getLineChartScales(definition, chartData),
             plugins: {
                 title: getChartTitle(definition),
