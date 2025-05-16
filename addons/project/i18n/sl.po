@@ -3377,7 +3377,7 @@ msgstr "Projekt"
 #. module: project
 #: model:ir.model.fields,field_description:project.field_project_project__account_id
 msgid "Project Account"
-msgstr ""
+msgstr "Projektni račun"
 
 #. module: project
 #: model:ir.model.fields,field_description:project.field_project_project__user_id
@@ -3801,7 +3801,7 @@ msgstr "Raziskave"
 #: model:account.analytic.account,name:project.analytic_research_development
 #: model:project.project,name:project.project_project_2
 msgid "Research & Development"
-msgstr ""
+msgstr "Raziskave in razvoj"
 
 #. module: project
 #. odoo-javascript

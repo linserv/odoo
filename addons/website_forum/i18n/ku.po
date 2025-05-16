@@ -926,7 +926,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website_forum.forum_post_view_form
 #: model_terms:ir.ui.view,arch_db:website_forum.forum_post_view_search
 msgid "Archived"
-msgstr ""
+msgstr "ئەرشیف کراوە"
 
 #. module: website_forum
 #. odoo-javascript
@@ -1004,14 +1004,14 @@ msgstr ""
 #. module: website_forum
 #: model:ir.model,name:website_forum.model_ir_attachment
 msgid "Attachment"
-msgstr ""
+msgstr "هاوپێچ"
 
 #. module: website_forum
 #: model:ir.model.fields,field_description:website_forum.field_forum_forum__message_attachment_count
 #: model:ir.model.fields,field_description:website_forum.field_forum_post__message_attachment_count
 #: model:ir.model.fields,field_description:website_forum.field_forum_tag__message_attachment_count
 msgid "Attachment Count"
-msgstr ""
+msgstr "ژمارەی هاوپێچەکان"
 
 #. module: website_forum
 #: model_terms:ir.ui.view,arch_db:website_forum.forum_post_view_search
@@ -1071,7 +1071,7 @@ msgstr ""
 #. module: website_forum
 #: model:ir.model.fields.selection,name:website_forum.selection__forum_post_reason__reason_type__basic
 msgid "Basic"
-msgstr ""
+msgstr "بنەڕەتی"
 
 #. module: website_forum
 #: model_terms:ir.ui.view,arch_db:website_forum.no_results_message
@@ -1512,7 +1512,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website_forum.forum_searchbar_input_snippet_options
 #: model_terms:ir.ui.view,arch_db:website_forum.new_question
 msgid "Description"
-msgstr ""
+msgstr "وەسف"
 
 #. module: website_forum
 #: model_terms:ir.ui.view,arch_db:website_forum.forum_forum_view_form
@@ -1526,7 +1526,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website_forum.post_answer
 #: model_terms:ir.ui.view,arch_db:website_forum.post_comment
 msgid "Discard"
-msgstr ""
+msgstr "ڕەتکردنەوە"
 
 #. module: website_forum
 #: model:gamification.badge,name:website_forum.badge_6
@@ -1790,14 +1790,14 @@ msgstr ""
 #: model:ir.model.fields,field_description:website_forum.field_forum_post__message_follower_ids
 #: model:ir.model.fields,field_description:website_forum.field_forum_tag__message_follower_ids
 msgid "Followers"
-msgstr ""
+msgstr "فۆڵۆوەرەکان"
 
 #. module: website_forum
 #: model:ir.model.fields,field_description:website_forum.field_forum_forum__message_partner_ids
 #: model:ir.model.fields,field_description:website_forum.field_forum_post__message_partner_ids
 #: model:ir.model.fields,field_description:website_forum.field_forum_tag__message_partner_ids
 msgid "Followers (Partners)"
-msgstr ""
+msgstr "فۆڵۆوەرەکان (هاوبەشەکان)"
 
 #. module: website_forum
 #: model_terms:forum.forum,faq:website_forum.forum_help
@@ -2020,14 +2020,14 @@ msgstr ""
 #: model:ir.model.fields,field_description:website_forum.field_forum_post_vote__id
 #: model:ir.model.fields,field_description:website_forum.field_forum_tag__id
 msgid "ID"
-msgstr ""
+msgstr "ID"
 
 #. module: website_forum
 #: model:ir.model.fields,help:website_forum.field_forum_forum__message_needaction
 #: model:ir.model.fields,help:website_forum.field_forum_post__message_needaction
 #: model:ir.model.fields,help:website_forum.field_forum_tag__message_needaction
 msgid "If checked, new messages require your attention."
-msgstr ""
+msgstr "ئەگەر پشکنینیان بۆ کرا، پەیامە نوێیەکان پێویستیان بە سەرنجی تۆ هەیە."
 
 #. module: website_forum
 #: model:ir.model.fields,help:website_forum.field_forum_forum__message_has_error
@@ -2037,7 +2037,7 @@ msgstr ""
 #: model:ir.model.fields,help:website_forum.field_forum_tag__message_has_error
 #: model:ir.model.fields,help:website_forum.field_forum_tag__message_has_sms_error
 msgid "If checked, some messages have a delivery error."
-msgstr ""
+msgstr "ئەگەر پشکنینیان بۆ کرا، هەندێک لە نامەکان هەڵەی گەیاندنیان هەیە."
 
 #. module: website_forum
 #: model:ir.model.fields,help:website_forum.field_forum_forum__karma_dofollow
@@ -2222,7 +2222,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:website_forum.field_forum_post_vote__write_uid
 #: model:ir.model.fields,field_description:website_forum.field_forum_tag__write_uid
 msgid "Last Updated by"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لەلایەن..."
 
 #. module: website_forum
 #: model:ir.model.fields,field_description:website_forum.field_forum_forum__write_date
@@ -2230,7 +2230,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:website_forum.field_forum_post_vote__write_date
 #: model:ir.model.fields,field_description:website_forum.field_forum_tag__write_date
 msgid "Last Updated on"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لە..."
 
 #. module: website_forum
 #: model:ir.model.fields,field_description:website_forum.field_forum_post__last_activity_date

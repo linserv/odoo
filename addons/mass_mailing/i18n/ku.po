@@ -955,7 +955,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:mass_mailing.view_mail_mass_mailing_form
 #: model_terms:ir.ui.view,arch_db:mass_mailing.view_mail_mass_mailing_search
 msgid "Archived"
-msgstr ""
+msgstr "ئەرشیف کراوە"
 
 #. module: mass_mailing
 #. odoo-python
@@ -987,18 +987,18 @@ msgstr ""
 #. module: mass_mailing
 #: model_terms:ir.ui.view,arch_db:mass_mailing.view_mail_mass_mailing_form
 msgid "Attach a file"
-msgstr ""
+msgstr "فایلێک هاوپێچ بکە"
 
 #. module: mass_mailing
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_contact__message_attachment_count
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_mailing__message_attachment_count
 msgid "Attachment Count"
-msgstr ""
+msgstr "ژمارەی هاوپێچەکان"
 
 #. module: mass_mailing
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_mailing__attachment_ids
 msgid "Attachments"
-msgstr ""
+msgstr "هاوپێچەکان"
 
 #. module: mass_mailing
 #: model_terms:ir.ui.view,arch_db:mass_mailing.snippet_options
@@ -1789,7 +1789,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:mass_mailing.mailing_contact_import_view_form
 #: model_terms:ir.ui.view,arch_db:mass_mailing.mailing_mailing_schedule_date_view_form
 msgid "Discard"
-msgstr ""
+msgstr "ڕەتکردنەوە"
 
 #. module: mass_mailing
 #: model_terms:ir.ui.view,arch_db:mass_mailing.email_designer_snippets
@@ -1878,7 +1878,7 @@ msgstr ""
 #: model:ir.model.fields.selection,name:mass_mailing.selection__mailing_mailing__state__draft
 #: model:ir.model.fields.selection,name:mass_mailing.selection__mailing_trace_report__state__draft
 msgid "Draft"
-msgstr ""
+msgstr "ڕەشنووس"
 
 #. module: mass_mailing
 #: model_terms:ir.ui.view,arch_db:mass_mailing.s_features_grid
@@ -2066,7 +2066,7 @@ msgstr ""
 #: model:ir.actions.act_window,name:mass_mailing.mailing_filter_action
 #: model:ir.ui.menu,name:mass_mailing.mailing_filter_menu_action
 msgid "Favorite Filters"
-msgstr ""
+msgstr "فلتەرە دڵخوازەکان"
 
 #. module: mass_mailing
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_mailing__mailing_filter_domain
@@ -2160,13 +2160,13 @@ msgstr ""
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_contact__message_follower_ids
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_mailing__message_follower_ids
 msgid "Followers"
-msgstr ""
+msgstr "فۆڵۆوەرەکان"
 
 #. module: mass_mailing
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_contact__message_partner_ids
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_mailing__message_partner_ids
 msgid "Followers (Partners)"
-msgstr ""
+msgstr "فۆڵۆوەرەکان (هاوبەشەکان)"
 
 #. module: mass_mailing
 #: model_terms:ir.ui.view,arch_db:mass_mailing.snippet_options
@@ -2204,7 +2204,7 @@ msgstr ""
 #. module: mass_mailing
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_trace_report__email_from
 msgid "From"
-msgstr ""
+msgstr "لە"
 
 #. module: mass_mailing
 #: model_terms:ir.ui.view,arch_db:mass_mailing.snippet_options
@@ -2336,7 +2336,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_trace__id
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_trace_report__id
 msgid "ID"
-msgstr ""
+msgstr "ID"
 
 #. module: mass_mailing
 #: model:ir.model.fields,help:mass_mailing.field_mailing_trace__mail_mail_id_int
@@ -2350,18 +2350,18 @@ msgstr ""
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_mailing__activity_exception_icon
 #: model_terms:ir.ui.view,arch_db:mass_mailing.s_rating_options
 msgid "Icon"
-msgstr ""
+msgstr "ئایکۆن"
 
 #. module: mass_mailing
 #: model:ir.model.fields,help:mass_mailing.field_mailing_mailing__activity_exception_icon
 msgid "Icon to indicate an exception activity."
-msgstr ""
+msgstr "ئایکۆن بۆ ئاماژەدان بە چالاکیەکی ئیستسناء."
 
 #. module: mass_mailing
 #: model:ir.model.fields,help:mass_mailing.field_mailing_contact__message_needaction
 #: model:ir.model.fields,help:mass_mailing.field_mailing_mailing__message_needaction
 msgid "If checked, new messages require your attention."
-msgstr ""
+msgstr "ئەگەر پشکنینیان بۆ کرا، پەیامە نوێیەکان پێویستیان بە سەرنجی تۆ هەیە."
 
 #. module: mass_mailing
 #: model:ir.model.fields,help:mass_mailing.field_mailing_mailing__ab_testing_enabled
@@ -2377,7 +2377,7 @@ msgstr ""
 #: model:ir.model.fields,help:mass_mailing.field_mailing_mailing__message_has_error
 #: model:ir.model.fields,help:mass_mailing.field_mailing_mailing__message_has_sms_error
 msgid "If checked, some messages have a delivery error."
-msgstr ""
+msgstr "ئەگەر پشکنینیان بۆ کرا، هەندێک لە نامەکان هەڵەی گەیاندنیان هەیە."
 
 #. module: mass_mailing
 #: model:ir.model.fields,help:mass_mailing.field_mail_compose_message__mass_mailing_name
@@ -2589,7 +2589,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_subscription_optout__write_uid
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_trace__write_uid
 msgid "Last Updated by"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لەلایەن..."
 
 #. module: mass_mailing
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_contact__write_date
@@ -2605,7 +2605,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_subscription_optout__write_date
 #: model:ir.model.fields,field_description:mass_mailing.field_mailing_trace__write_date
 msgid "Last Updated on"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لە..."
 
 #. module: mass_mailing
 #: model_terms:ir.ui.view,arch_db:mass_mailing.s_hr_options

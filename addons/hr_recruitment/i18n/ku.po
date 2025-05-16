@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-16 13:39+0000\n"
+"POT-Creation-Date: 2025-05-07 20:36+0000\n"
 "PO-Revision-Date: 2024-09-25 09:41+0000\n"
 "Last-Translator: Raz Omer Hussein, 2025\n"
 "Language-Team: Kurdish (https://app.transifex.com/odoo/teams/41243/ku/)\n"
@@ -689,7 +689,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.hr_candidate_view_search
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.hr_kanban_view_applicant
 msgid "Archived"
-msgstr ""
+msgstr "ئەرشیف کراوە"
 
 #. module: hr_recruitment
 #. odoo-javascript
@@ -714,13 +714,13 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.applicant_send_mail_view_form
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.candidate_send_mail_view_form
 msgid "Attach a file"
-msgstr ""
+msgstr "فایلێک هاوپێچ بکە"
 
 #. module: hr_recruitment
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_applicant__message_attachment_count
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_candidate__message_attachment_count
 msgid "Attachment Count"
-msgstr ""
+msgstr "ژمارەی هاوپێچەکان"
 
 #. module: hr_recruitment
 #: model:ir.model.fields,field_description:hr_recruitment.field_applicant_send_mail__attachment_ids
@@ -728,7 +728,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_applicant__attachment_ids
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_candidate__attachment_ids
 msgid "Attachments"
-msgstr ""
+msgstr "هاوپێچەکان"
 
 #. module: hr_recruitment
 #: model:ir.model.fields,field_description:hr_recruitment.field_applicant_send_mail__author_id
@@ -740,7 +740,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_applicant__availability
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_candidate__availability
 msgid "Availability"
-msgstr ""
+msgstr "بەردەست بوون"
 
 #. module: hr_recruitment
 #: model:hr.recruitment.degree,name:hr_recruitment.degree_bachelor
@@ -1064,7 +1064,7 @@ msgstr ""
 #. module: hr_recruitment
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_job__alias_defaults
 msgid "Default Values"
-msgstr ""
+msgstr "بەهاکانی پێشوەختە"
 
 #. module: hr_recruitment
 #: model_terms:ir.actions.act_window,help:hr_recruitment.action_hr_job_platforms
@@ -1141,7 +1141,7 @@ msgstr ""
 #. module: hr_recruitment
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_applicant_refuse_reason__name
 msgid "Description"
-msgstr ""
+msgstr "وەسف"
 
 #. module: hr_recruitment
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.hr_applicant_view_form
@@ -1172,7 +1172,7 @@ msgstr ""
 #. module: hr_recruitment
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.hr_job_simple_form
 msgid "Discard"
-msgstr ""
+msgstr "ڕەتکردنەوە"
 
 #. module: hr_recruitment
 #: model:res.groups,name:hr_recruitment.group_applicant_cv_display
@@ -1421,13 +1421,13 @@ msgstr ""
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_applicant__message_follower_ids
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_candidate__message_follower_ids
 msgid "Followers"
-msgstr ""
+msgstr "فۆڵۆوەرەکان"
 
 #. module: hr_recruitment
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_applicant__message_partner_ids
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_candidate__message_partner_ids
 msgid "Followers (Partners)"
-msgstr ""
+msgstr "فۆڵۆوەرەکان (هاوبەشەکان)"
 
 #. module: hr_recruitment
 #: model:ir.model.fields,help:hr_recruitment.field_hr_applicant__activity_type_icon
@@ -1438,7 +1438,7 @@ msgstr ""
 #. module: hr_recruitment
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.hr_applicant_view_search_bis
 msgid "Future Activities"
-msgstr ""
+msgstr "چالاکییەکانی داهاتوو"
 
 #. module: hr_recruitment
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.hr_recruitment_source_tree
@@ -1555,7 +1555,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_recruitment_source__id
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_recruitment_stage__id
 msgid "ID"
-msgstr ""
+msgstr "ID"
 
 #. module: hr_recruitment
 #: model:ir.model.fields,help:hr_recruitment.field_hr_job__alias_parent_thread_id
@@ -1568,19 +1568,19 @@ msgstr ""
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_applicant__activity_exception_icon
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_candidate__activity_exception_icon
 msgid "Icon"
-msgstr ""
+msgstr "ئایکۆن"
 
 #. module: hr_recruitment
 #: model:ir.model.fields,help:hr_recruitment.field_hr_applicant__activity_exception_icon
 #: model:ir.model.fields,help:hr_recruitment.field_hr_candidate__activity_exception_icon
 msgid "Icon to indicate an exception activity."
-msgstr ""
+msgstr "ئایکۆن بۆ ئاماژەدان بە چالاکیەکی ئیستسناء."
 
 #. module: hr_recruitment
 #: model:ir.model.fields,help:hr_recruitment.field_hr_applicant__message_needaction
 #: model:ir.model.fields,help:hr_recruitment.field_hr_candidate__message_needaction
 msgid "If checked, new messages require your attention."
-msgstr ""
+msgstr "ئەگەر پشکنینیان بۆ کرا، پەیامە نوێیەکان پێویستیان بە سەرنجی تۆ هەیە."
 
 #. module: hr_recruitment
 #: model:ir.model.fields,help:hr_recruitment.field_hr_applicant__message_has_error
@@ -1588,7 +1588,7 @@ msgstr ""
 #: model:ir.model.fields,help:hr_recruitment.field_hr_candidate__message_has_error
 #: model:ir.model.fields,help:hr_recruitment.field_hr_candidate__message_has_sms_error
 msgid "If checked, some messages have a delivery error."
-msgstr ""
+msgstr "ئەگەر پشکنینیان بۆ کرا، هەندێک لە نامەکان هەڵەی گەیاندنیان هەیە."
 
 #. module: hr_recruitment
 #: model:ir.model.fields,help:hr_recruitment.field_hr_recruitment_stage__hired_stage
@@ -1898,7 +1898,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_recruitment_source__write_uid
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_recruitment_stage__write_uid
 msgid "Last Updated by"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لەلایەن..."
 
 #. module: hr_recruitment
 #: model:ir.model.fields,field_description:hr_recruitment.field_applicant_get_refuse_reason__write_date
@@ -1913,13 +1913,13 @@ msgstr ""
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_recruitment_source__write_date
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_recruitment_stage__write_date
 msgid "Last Updated on"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لە..."
 
 #. module: hr_recruitment
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.hr_applicant_view_search_bis
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.view_hr_job_kanban
 msgid "Late Activities"
-msgstr ""
+msgstr "چالاکییەکانی دواتر"
 
 #. module: hr_recruitment
 #. odoo-javascript
@@ -1992,7 +1992,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_applicant__message_main_attachment_id
 #: model:ir.model.fields,field_description:hr_recruitment.field_hr_candidate__message_main_attachment_id
 msgid "Main Attachment"
-msgstr ""
+msgstr "هاوپێچی سەرەکی"
 
 #. module: hr_recruitment
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.hr_candidate_view_form
@@ -2787,8 +2787,6 @@ msgid "Send Interview Survey"
 msgstr ""
 
 #. module: hr_recruitment
-#: model:ir.actions.act_window,name:hr_recruitment.action_hr_applicant_mass_sms
-#: model:ir.actions.act_window,name:hr_recruitment.action_hr_candidate_mass_sms
 #: model_terms:ir.ui.view,arch_db:hr_recruitment.res_config_settings_view_form
 msgid "Send SMS"
 msgstr ""

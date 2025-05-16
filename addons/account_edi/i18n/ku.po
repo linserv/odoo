@@ -65,7 +65,7 @@ msgstr ""
 #: model:ir.model,name:account_edi.model_ir_attachment
 #: model:ir.model.fields,field_description:account_edi.field_account_edi_document__attachment_id
 msgid "Attachment"
-msgstr ""
+msgstr "هاوپێچ"
 
 #. module: account_edi
 #: model:ir.model.fields,field_description:account_edi.field_account_edi_document__blocking_level
@@ -131,7 +131,7 @@ msgstr ""
 #. module: account_edi
 #: model_terms:ir.ui.view,arch_db:account_edi.view_move_form_inherit
 msgid "Download"
-msgstr ""
+msgstr "دابەزاندن"
 
 #. module: account_edi
 #: model_terms:ir.ui.view,arch_db:account_edi.view_move_form_inherit
@@ -261,13 +261,13 @@ msgstr ""
 #: model:ir.model.fields,field_description:account_edi.field_account_edi_document__id
 #: model:ir.model.fields,field_description:account_edi.field_account_edi_format__id
 msgid "ID"
-msgstr ""
+msgstr "ID"
 
 #. module: account_edi
 #: model:ir.model.fields.selection,name:account_edi.selection__account_edi_document__blocking_level__info
 #: model:ir.model.fields.selection,name:account_edi.selection__account_move__edi_blocking_level__info
 msgid "Info"
-msgstr ""
+msgstr "زانیاری"
 
 #. module: account_edi
 #. odoo-python
@@ -292,13 +292,13 @@ msgstr ""
 #: model:ir.model.fields,field_description:account_edi.field_account_edi_document__write_uid
 #: model:ir.model.fields,field_description:account_edi.field_account_edi_format__write_uid
 msgid "Last Updated by"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لەلایەن..."
 
 #. module: account_edi
 #: model:ir.model.fields,field_description:account_edi.field_account_edi_document__write_date
 #: model:ir.model.fields,field_description:account_edi.field_account_edi_format__write_date
 msgid "Last Updated on"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لە..."
 
 #. module: account_edi
 #: model:ir.model.fields,field_description:account_edi.field_account_edi_document__move_id

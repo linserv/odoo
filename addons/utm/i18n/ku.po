@@ -58,7 +58,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:utm.utm_medium_view_search
 #: model_terms:ir.ui.view,arch_db:utm.view_utm_campaign_view_search
 msgid "Archived"
-msgstr ""
+msgstr "ئەرشیف کراوە"
 
 #. module: utm
 #: model_terms:ir.actions.act_window,help:utm.action_view_utm_tag
@@ -281,7 +281,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:utm.field_utm_stage__id
 #: model:ir.model.fields,field_description:utm.field_utm_tag__id
 msgid "ID"
-msgstr ""
+msgstr "ID"
 
 #. module: utm
 #. odoo-javascript
@@ -296,7 +296,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:utm.field_utm_stage__write_uid
 #: model:ir.model.fields,field_description:utm.field_utm_tag__write_uid
 msgid "Last Updated by"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لەلایەن..."
 
 #. module: utm
 #: model:ir.model.fields,field_description:utm.field_utm_campaign__write_date
@@ -305,7 +305,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:utm.field_utm_stage__write_date
 #: model:ir.model.fields,field_description:utm.field_utm_tag__write_date
 msgid "Last Updated on"
-msgstr ""
+msgstr "دوایین نوێکردنەوە لە..."
 
 #. module: utm
 #. odoo-javascript
