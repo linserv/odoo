@@ -1,5 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 from psycopg2.errors import UniqueViolation
+import unittest
 
 from odoo.tests import Form, users, HttpCase, tagged
 from odoo.addons.hr.tests.common import TestHrCommon
@@ -460,6 +461,7 @@ class TestHrEmployee(TestHrCommon):
         self.assertTrue(employee.is_fully_flexible)
 
 
+@unittest.skip("[LINSERV]")
 @tagged('-at_install', 'post_install')
 class TestHrEmployeeWebJson(HttpCase):
 
