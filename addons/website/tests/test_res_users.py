@@ -1,7 +1,8 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
 from psycopg2 import IntegrityError
-from unittest import TestCase, skip
+from unittest import TestCase
 
 from odoo.tests.common import TransactionCase, new_test_user
 from odoo.exceptions import ValidationError
