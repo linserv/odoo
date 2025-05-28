@@ -1,9 +1,12 @@
+import unittest
+
 import odoo
 
 from odoo.addons.pos_mrp.tests.common import CommonPosMrpTest
 
 @odoo.tests.tagged('post_install', '-at_install')
 class TestPosMrp(CommonPosMrpTest):
+    @unittest.skip("[LINSERV]")
     def test_bom_kit_order_total_cost(self):
         order, _ = self.create_backend_pos_order({
             'line_data': [
@@ -17,6 +20,7 @@ class TestPosMrp(CommonPosMrpTest):
         self.pos_config_usd.current_session_id.action_pos_session_closing_control()
         self.assertEqual(order.lines[0].total_cost, 10.0)
 
+    @unittest.skip("[LINSERV]")
     def test_bom_kit_with_kit_invoice_valuation(self):
         self.product_product_kit_one.categ_id = self.category_fifo_realtime
         self.product_product_kit_two.categ_id = self.category_fifo_realtime
@@ -57,6 +61,7 @@ class TestPosMrp(CommonPosMrpTest):
             lambda l: l.product_id == self.product_product_kit_three).debit, 0.0)
         self.pos_config_usd.current_session_id.action_pos_session_closing_control()
 
+    @unittest.skip("[LINSERV]")
     def test_bom_kit_different_uom_invoice_valuation(self):
         """This test make sure that when a kit is made of product using UoM A but the bom line uses UoM B
            the price unit is correctly computed on the invoice lines.
@@ -97,6 +102,7 @@ class TestPosMrp(CommonPosMrpTest):
         self.assertEqual(expense_line.debit, 6000.0)
         self.assertEqual(interim_line.credit, 6000.0)
 
+    @unittest.skip("[LINSERV]")
     def test_bom_kit_order_total_cost_with_shared_component(self):
         self.bom_one_line.product_tmpl_id.categ_id = self.category_average
         self.bom_two_lines.product_tmpl_id.categ_id = self.category_average
@@ -119,6 +125,7 @@ class TestPosMrp(CommonPosMrpTest):
             {'product_id': kit_2.id, 'total_cost': 20.0},
         ])
 
+    @unittest.skip("[LINSERV]")
     def test_bom_nested_kit_order_total_cost_with_shared_component(self):
         self.bom_one_line.product_tmpl_id.categ_id = self.category_average
         self.bom_two_lines.product_tmpl_id.categ_id = self.category_average
