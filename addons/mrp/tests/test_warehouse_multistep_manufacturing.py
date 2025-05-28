@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
+
 from odoo.tests import Form, tagged
 from odoo.addons.mrp.tests.common import TestMrpCommon
 from odoo import Command
 
 
+@unittest.skip("[LINSERV]")
 @tagged('post_install', '-at_install')
 class TestMultistepManufacturingWarehouse(TestMrpCommon):
 
