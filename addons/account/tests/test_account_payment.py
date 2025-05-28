@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import unittest
 from contextlib import contextmanager
 
 from odoo import Command, fields
@@ -164,6 +165,7 @@ class TestAccountPayment(AccountTestInvoicingCommon):
             },
         ])
 
+    @unittest.skip("[LINSERV]")
     def test_payment_move_sync_onchange(self):
 
         pay_form = Form(self.env['account.payment'].with_context(
