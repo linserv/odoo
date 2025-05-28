@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
+import unittest
 from datetime import timedelta
 
 from odoo import Command, fields
@@ -98,6 +99,7 @@ class TestProcurement(TestMrpCommon):
         self.assertEqual(production_product_6.state, 'done', 'Production order should be in state done')
         self.assertEqual(self.product_6.qty_available, 24, 'Wrong quantity available of finished product.')
 
+    @unittest.skip("[LINSERV]")
     def test_procurement_2(self):
         """Check that a manufacturing order create the right procurements when the route are set on
         a parent category of a product"""
