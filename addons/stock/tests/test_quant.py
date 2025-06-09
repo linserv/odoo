@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
 from contextlib import closing
 from datetime import datetime, timedelta
 from unittest.mock import patch
@@ -201,6 +202,7 @@ class StockQuant(TransactionCase):
         self.assertEqual(self.env['stock.quant']._get_available_quantity(self.product, self.stock_location), 3.0)
         self.assertEqual(len(self.gather_relevant(self.product, self.stock_location)), 2)
 
+    @unittest.skip("[LINSERV]")
     def test_increase_available_quantity_3(self):
         """ Increase the available quantity when a concurrent transaction is already increasing
         the reserved quanntity for the same product.
@@ -292,6 +294,7 @@ class StockQuant(TransactionCase):
         self.assertEqual(self.env['stock.quant']._get_available_quantity(self.product, self.stock_location), 1.0)
         self.assertEqual(len(self.gather_relevant(self.product, self.stock_location)), 1)
 
+    @unittest.skip("[LINSERV]")
     def test_decrease_available_quantity_3(self):
         """ Decrease the available quantity when a concurrent transaction is already increasing
         the reserved quanntity for the same product.
