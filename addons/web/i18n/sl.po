@@ -19,13 +19,14 @@
 # Katja Deržič, 2024
 # Gregor Flajs, 2024
 # Wil Odoo, 2025
+# Jan Zorko, 2025
 # Aleš Pipan, 2025
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 17.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-09 20:37+0000\n"
+"POT-Creation-Date: 2025-05-14 20:48+0000\n"
 "PO-Revision-Date: 2023-10-26 23:09+0000\n"
 "Last-Translator: Aleš Pipan, 2025\n"
 "Language-Team: Slovenian (https://app.transifex.com/odoo/teams/41243/sl/)\n"
@@ -581,6 +582,8 @@ msgid ""
 "<span class=\"text-nowrap\">$ <span "
 "class=\"oe_currency_value\">11,750.00</span></span>"
 msgstr ""
+"<span class=\"text-nowrap\">$ <span "
+"class=\"oe_currency_value\">11,750.00</span></span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
@@ -588,16 +591,18 @@ msgid ""
 "<span class=\"text-nowrap\">$ <span "
 "class=\"oe_currency_value\">7,500.00</span></span>"
 msgstr ""
+"<span class=\"text-nowrap\">€ <span "
+"class=\"oe_currency_value\">7,500.00</span></span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span class=\"text-nowrap\">1,500.00</span>"
-msgstr ""
+msgstr "<span class=\"text-nowrap\">1,500.00</span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span class=\"text-nowrap\">2,350.00</span>"
-msgstr ""
+msgstr "<span class=\"text-nowrap\">2,350.00</span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
@@ -624,12 +629,12 @@ msgstr ""
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span>$ <span class=\"oe_currency_value\">19,250.00</span></span>"
-msgstr ""
+msgstr "<span>€<span class=\"oe_currency_value\">19,250.00</span></span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span>5.00</span>"
-msgstr ""
+msgstr "<span>5.00</span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
@@ -1114,6 +1119,13 @@ msgstr "Vsi uporabniki"
 
 #. module: web
 #. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+#, python-format
+msgid "Allow expressions"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
 #: code:addons/web/static/src/core/colorlist/colorlist.js:0
 #, python-format
 msgid "Almond"
@@ -1560,7 +1572,7 @@ msgstr ""
 #: code:addons/web/static/src/views/list/list_controller.js:0
 #, python-format
 msgid "Bye-bye, record!"
-msgstr ""
+msgstr "Adijo, ta zapis!"
 
 #. module: web
 #. odoo-javascript
@@ -1950,6 +1962,8 @@ msgid ""
 "Company tagline, which is included in a printed document's header or footer "
 "(depending on the selected layout)."
 msgstr ""
+"Slogan podjetja, ki je vključen v glavo ali nogo natisnjenega dokumenta "
+"(odvisno od izbrane postavitve)."
 
 #. module: web
 #. odoo-javascript
@@ -2363,7 +2377,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/properties/property_definition.js:0
 #, python-format
 msgid "Decimal"
-msgstr ""
+msgstr "Decimalno"
 
 #. module: web
 #. odoo-javascript
@@ -2872,7 +2886,7 @@ msgstr ""
 #: code:addons/web/static/src/core/debug/profiling/profiling_item.xml:0
 #, python-format
 msgid "Enable profiling"
-msgstr ""
+msgstr "Omogoči profiliranje"
 
 #. module: web
 #. odoo-javascript
@@ -3444,7 +3458,7 @@ msgstr ""
 #. module: web
 #: model:ir.model.fields,help:web.field_base_document_layout__company_details
 msgid "Header text displayed at the top of all reports."
-msgstr ""
+msgstr "Besedilo glave, prikazano na vrhu vseh poročil."
 
 #. module: web
 #. odoo-javascript
@@ -3616,6 +3630,13 @@ msgstr ""
 msgid ""
 "If checked, users won't be able to create records through the autocomplete "
 "dropdown at all."
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+#, python-format
+msgid "If true, non-literals are accepted"
 msgstr ""
 
 #. module: web
@@ -5045,7 +5066,7 @@ msgstr ""
 #: code:addons/web/static/src/views/list/list_controller.js:0
 #, python-format
 msgid "No, keep it"
-msgstr ""
+msgstr "Ne, obdrži"
 
 #. module: web
 #. odoo-javascript
@@ -5820,7 +5841,7 @@ msgstr "Vrstica napredka"
 #: code:addons/web/static/src/views/view_components/column_progress.xml:0
 #, python-format
 msgid "Progress bar"
-msgstr ""
+msgstr "Vrstica napredka"
 
 #. module: web
 #. odoo-javascript
@@ -5949,7 +5970,7 @@ msgstr "Območje"
 #: code:addons/web/static/src/core/colorlist/colorlist.js:0
 #, python-format
 msgid "Raspberry"
-msgstr ""
+msgstr "Malina"
 
 #. module: web
 #. odoo-javascript
@@ -6461,7 +6482,7 @@ msgstr "Iskanje: %s"
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__secondary_color
 msgid "Secondary Color"
-msgstr ""
+msgstr "Sekundarna barva"
 
 #. module: web
 #. odoo-javascript
@@ -7116,6 +7137,20 @@ msgstr ""
 msgid ""
 "The content of this cell is too long for an XLSX file (more than %s "
 "characters). Please use the CSV format for this export."
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+#, python-format
+msgid "The domain involves non-literals. Their evaluation might fail."
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+#, python-format
+msgid "The domain should not involve non-literals"
 msgstr ""
 
 #. module: web
@@ -19230,7 +19265,7 @@ msgstr "je med"
 #: code:addons/web/static/src/core/tree_editor/tree_editor_operator_editor.js:0
 #, python-format
 msgid "is in"
-msgstr ""
+msgstr "je med"
 
 #. module: web
 #. odoo-javascript
@@ -19244,7 +19279,7 @@ msgstr "ni"
 #: code:addons/web/static/src/core/tree_editor/tree_editor_operator_editor.js:0
 #, python-format
 msgid "is not in"
-msgstr ""
+msgstr "ni med"
 
 #. module: web
 #. odoo-javascript
@@ -22093,7 +22128,7 @@ msgstr ""
 #: code:addons/web/static/src/views/calendar/calendar_common/calendar_common_popover.js:0
 #, python-format
 msgid "minute"
-msgstr ""
+msgstr "minuta"
 
 #. module: web
 #. odoo-javascript
@@ -25729,7 +25764,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/many2many_tags_avatar/many2many_tags_avatar_field.xml:0
 #, python-format
 msgid "props.placeholder"
-msgstr ""
+msgstr "props.placeholder"
 
 #. module: web
 #. odoo-javascript
@@ -27445,7 +27480,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "second"
-msgstr ""
+msgstr "sekunda"
 
 #. module: web
 #. odoo-javascript
@@ -33344,7 +33379,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "write"
-msgstr ""
+msgstr "pisati"
 
 #. module: web
 #. odoo-javascript

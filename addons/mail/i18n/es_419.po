@@ -6,8 +6,8 @@
 # Iran Villalobos López, 2023
 # Lucia Pacheco, 2024
 # Martin Trigaux, 2024
-# Patricia Gutiérrez Capetillo <pagc@odoo.com>, 2024
 # Wil Odoo, 2024
+# Patricia Gutiérrez Capetillo <pagc@odoo.com>, 2025
 # Fernanda Alvarez, 2025
 # 
 msgid ""
@@ -3349,7 +3349,7 @@ msgstr "Seudónimo de correo electrónico"
 #. module: mail
 #: model:ir.model,name:mail.model_mail_alias
 msgid "Email Aliases"
-msgstr "Seudónimos de correos"
+msgstr "Seudónimos de correo"
 
 #. module: mail
 #: model:ir.model,name:mail.model_mail_alias_mixin
@@ -5239,7 +5239,7 @@ msgstr "Guardar archivos adjuntos"
 #. module: mail
 #: model:ir.model.fields,field_description:mail.field_mail_activity_type__keep_done
 msgid "Keep Done"
-msgstr "Mantener como Hecho"
+msgstr "Mantener actividades hechas"
 
 #. module: mail
 #: model:ir.model.fields,field_description:mail.field_mail_compose_message__auto_delete_keep_log
@@ -11304,8 +11304,8 @@ msgstr "Por ejemplo, \"Correo de bienvenida\""
 #: model_terms:ir.ui.view,arch_db:mail.mail_compose_message_view_form_template_save
 msgid "e.g. \"Welcome to MyCompany\" or \"Nice to meet you, {{ object.name }}\""
 msgstr ""
-"por ejemplo:  \"Bienvenido a MiEmpresa\" o \"Gusto en conocerlo, {{ "
-"object.name }}\""
+"Por ejemplo, \"Le damos la bienvenida a MiEmpresa\" o \"Gusto en conocerle, "
+"{{ object.name }}\""
 
 #. module: mail
 #: model_terms:ir.ui.view,arch_db:mail.mail_alias_domain_view_form

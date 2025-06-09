@@ -29,7 +29,7 @@ msgstr ""
 #: code:addons/spreadsheet_dashboard_pos_hr/data/files/pos_dashboard.json:0
 #, python-format
 msgid "Average order"
-msgstr ""
+msgstr "Ortalama sipariş"
 
 #. module: spreadsheet_dashboard_pos_hr
 #. odoo-javascript
@@ -85,7 +85,7 @@ msgstr "Siparişler"
 #: code:addons/spreadsheet_dashboard_pos_hr/data/files/pos_dashboard.json:0
 #, python-format
 msgid "Orders by Month"
-msgstr ""
+msgstr "Aylık Siparişler"
 
 #. module: spreadsheet_dashboard_pos_hr
 #. odoo-javascript
@@ -184,35 +184,35 @@ msgstr "Oturumlar"
 #: code:addons/spreadsheet_dashboard_pos_hr/data/files/pos_dashboard.json:0
 #, python-format
 msgid "Top Orders"
-msgstr ""
+msgstr "En İyi Siparişler"
 
 #. module: spreadsheet_dashboard_pos_hr
 #. odoo-javascript
 #: code:addons/spreadsheet_dashboard_pos_hr/data/files/pos_dashboard.json:0
 #, python-format
 msgid "Top Points of Sale"
-msgstr ""
+msgstr "En İyi Satış Noktaları"
 
 #. module: spreadsheet_dashboard_pos_hr
 #. odoo-javascript
 #: code:addons/spreadsheet_dashboard_pos_hr/data/files/pos_dashboard.json:0
 #, python-format
 msgid "Top Products"
-msgstr ""
+msgstr "En Çok Satan Ürünler"
 
 #. module: spreadsheet_dashboard_pos_hr
 #. odoo-javascript
 #: code:addons/spreadsheet_dashboard_pos_hr/data/files/pos_dashboard.json:0
 #, python-format
 msgid "Top Responsibles"
-msgstr ""
+msgstr "En Aktif Sorumlular"
 
 #. module: spreadsheet_dashboard_pos_hr
 #. odoo-javascript
 #: code:addons/spreadsheet_dashboard_pos_hr/data/files/pos_dashboard.json:0
 #, python-format
 msgid "Top Sessions"
-msgstr ""
+msgstr "En Yoğun Oturumlar"
 
 #. module: spreadsheet_dashboard_pos_hr
 #. odoo-javascript

@@ -18,6 +18,7 @@
 # Grega Vavtar <grega@hbs.si>, 2024
 # Wil Odoo, 2024
 # Jasmina Macur <jasmina@hbs.si>, 2025
+# Jan Zorko, 2025
 # Aleš Pipan, 2025
 # 
 msgid ""
@@ -350,7 +351,7 @@ msgstr ""
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.project_sharing_project_task_view_form
 msgid "<i class=\"oi oi-arrow-right me-1\"/>Back to edit mode"
-msgstr ""
+msgstr "<i class=\"oi oi-arrow-right me-1\"/>Nazaj v način urejanja"
 
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.view_task_kanban
@@ -652,7 +653,7 @@ msgstr ""
 #. module: project
 #: model:ir.model.fields,help:project.field_project_share_wizard__note
 msgid "Add extra content to display in the email"
-msgstr ""
+msgstr "Dodajte dodatno vsebino za prikaz v e-pošti"
 
 #. module: project
 #. odoo-javascript
@@ -1943,7 +1944,7 @@ msgstr "Datum izteka"
 #. module: project
 #: model:project.tags,name:project.project_tags_05
 msgid "External"
-msgstr ""
+msgstr "Zunanji"
 
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.view_task_form2
@@ -2591,7 +2592,7 @@ msgstr "Lokalno zaznavanje dohodnih delov"
 #: code:addons/project/static/src/views/project_task_kanban/project_task_kanban_examples.js:0
 #, python-format
 msgid "Logo Design"
-msgstr ""
+msgstr "Oblikovanje logotipa"
 
 #. module: project
 #. odoo-javascript
@@ -3171,7 +3172,7 @@ msgstr ""
 #: code:addons/project/controllers/portal.py:0
 #, python-format
 msgid "Others"
-msgstr ""
+msgstr "Ostali"
 
 #. module: project
 #: model:ir.actions.act_window,name:project.action_view_task_overpassed_draft

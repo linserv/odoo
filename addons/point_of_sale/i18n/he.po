@@ -2969,7 +2969,7 @@ msgstr "קיימת בקרת מזומנים"
 #. module: point_of_sale
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_category__has_image
 msgid "Has Image"
-msgstr ""
+msgstr "בעל תמונה"
 
 #. module: point_of_sale
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_session__has_message
@@ -7976,7 +7976,7 @@ msgstr "סוג קובץ לא נתמך"
 #: code:addons/point_of_sale/models/pos_order.py:0
 #, python-format
 msgid "Unsupported search operation"
-msgstr ""
+msgstr "פעולת חיפוש לא נתמכת"
 
 #. module: point_of_sale
 #. odoo-javascript

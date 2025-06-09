@@ -264,6 +264,17 @@ class Project(models.Model):
                 action['res_id'] = res_id
             return action
 
+        if section_name == 'cost_of_goods_sold':
+            action = {
+                'name': _('Cost of Goods Sold Items'),
+                'type': 'ir.actions.act_window',
+                'res_model': 'account.move.line',
+                'views': [[False, 'tree'], [False, 'form']],
+                'domain': [('move_id', '=', res_id), ('display_type', '=', 'cogs')],
+                'context': {'create': False, 'edit': False},
+            }
+            return action
+
         return super().action_profitability_items(section_name, domain, res_id)
 
     @api.depends('sale_order_id.invoice_status', 'tasks.sale_order_id.invoice_status')
@@ -1039,7 +1050,7 @@ class ProjectTask(models.Model):
         if not self.display_sale_order_button:
             return {}
         return {
-            "name": "Portal Sale Order",
+            "name": _("Portal Sale Order"),
             "type": "ir.actions.act_url",
             "url": self.sale_order_id.access_url,
         }

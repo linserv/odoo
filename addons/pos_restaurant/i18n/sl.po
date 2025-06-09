@@ -211,7 +211,7 @@ msgstr "Banka"
 #: code:addons/pos_restaurant/models/pos_config.py:0
 #, python-format
 msgid "Bar"
-msgstr ""
+msgstr "Bar"
 
 #. module: pos_restaurant
 #. odoo-javascript
@@ -423,7 +423,7 @@ msgstr "Polnilo"
 #. module: pos_restaurant
 #: model:ir.model.fields,field_description:pos_restaurant.field_restaurant_table__floor_id
 msgid "Floor"
-msgstr ""
+msgstr "Tla"
 
 #. module: pos_restaurant
 #: model:ir.model.fields,field_description:pos_restaurant.field_restaurant_floor__name

@@ -6,13 +6,14 @@
 # Alvin Wu <Alvin.Wu.work@gmail.com>, 2024
 # Martin Trigaux, 2024
 # Wil Odoo, 2025
+# Pak Wai Ho, 2025
 # Tony Ng, 2025
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 17.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-09 20:37+0000\n"
+"POT-Creation-Date: 2025-05-14 20:48+0000\n"
 "PO-Revision-Date: 2023-10-26 23:09+0000\n"
 "Last-Translator: Tony Ng, 2025\n"
 "Language-Team: Chinese (Taiwan) (https://app.transifex.com/odoo/teams/41243/zh_TW/)\n"
@@ -1117,6 +1118,13 @@ msgstr "全天"
 #, python-format
 msgid "All users"
 msgstr "所有使用者"
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+#, python-format
+msgid "Allow expressions"
+msgstr "允許表達式"
 
 #. module: web
 #. odoo-javascript
@@ -3635,6 +3643,13 @@ msgstr "若勾選，使用者將完全無法利用下拉式選單的自動填寫
 
 #. module: web
 #. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+#, python-format
+msgid "If true, non-literals are accepted"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
 #: code:addons/web/static/src/core/file_viewer/file_viewer.xml:0
 #: code:addons/web/static/src/views/fields/attachment_image/attachment_image_field.xml:0
 #: code:addons/web/static/src/views/fields/image/image_field.js:0
@@ -4625,7 +4640,7 @@ msgstr "一"
 #: code:addons/web/static/src/views/fields/monetary/monetary_field.js:0
 #, python-format
 msgid "Monetary"
-msgstr "貨幣的"
+msgstr "貨幣金額"
 
 #. module: web
 #. odoo-javascript
@@ -4727,7 +4742,7 @@ msgstr "聖誕老人太太"
 #: code:addons/web/static/src/views/fields/text/text_field.js:0
 #, python-format
 msgid "Multiline Text"
-msgstr "多行文本"
+msgstr "多行文字"
 
 #. module: web
 #. odoo-javascript
@@ -7140,6 +7155,20 @@ msgstr "此儲存格的內容對於 XLSX 檔來說太長（超過 %s  字元）�
 
 #. module: web
 #. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+#, python-format
+msgid "The domain involves non-literals. Their evaluation might fail."
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+#, python-format
+msgid "The domain should not involve non-literals"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
 #: code:addons/web/static/src/core/errors/error_dialogs.xml:0
 #: code:addons/web/static/src/public/error_notifications.js:0
 #, python-format
@@ -8083,7 +8112,7 @@ msgstr "編寫一個域，允許按不同條件建立記錄。"
 #: code:addons/web/controllers/home.py:0
 #, python-format
 msgid "Wrong login/password"
-msgstr "錯誤的登入名/密碼"
+msgstr "登入名稱或密碼錯誤"
 
 #. module: web
 #. odoo-javascript

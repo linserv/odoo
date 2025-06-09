@@ -41,14 +41,15 @@
 # Kami kaveh, 2025
 # Naser mars, 2025
 # Tiffany Chang, 2025
+# akadesign117, 2025
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 17.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-07 20:35+0000\n"
+"POT-Creation-Date: 2025-05-14 20:46+0000\n"
 "PO-Revision-Date: 2023-10-26 23:09+0000\n"
-"Last-Translator: Tiffany Chang, 2025\n"
+"Last-Translator: akadesign117, 2025\n"
 "Language-Team: Persian (https://app.transifex.com/odoo/teams/41243/fa/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -5753,7 +5754,6 @@ msgstr "رها کردن"
 #. module: account
 #. odoo-python
 #: code:addons/account/models/account_move_line.py:0
-#: code:addons/account/models/account_move_line.py:0
 #: model:ir.model.fields.selection,name:account.selection__account_move_line__display_type__discount
 #, python-format
 msgid "Discount"
@@ -5820,7 +5820,7 @@ msgstr "واحد ارز مقدار تخفیف "
 #: code:addons/account/models/account_move.py:0
 #, python-format
 msgid "Discount of %(amount)s if paid today"
-msgstr ""
+msgstr "تخفیف از %(amount)sاگر امروز پرداخت شود"
 
 #. module: account
 #. odoo-python
@@ -17403,7 +17403,7 @@ msgstr ""
 #: code:addons/account/models/account_move.py:0
 #, python-format
 msgid "You cannot switch the type of a document which has been posted once."
-msgstr ""
+msgstr "شما نمی توانید نوع سندی را که یک بار پست شده است تغییر دهید."
 
 #. module: account
 #. odoo-python

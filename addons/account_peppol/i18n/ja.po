@@ -24,16 +24,10 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:account_peppol.mail_notification_layout_with_responsible_signature_and_peppol
 msgid ""
 "<br/>\n"
-"                                In Belgium, electronic invoicing will be <u>mandatory as of January 2026</u> - don't wait to register."
+"                                In Belgium, electronic invoicing is <u>mandatory as of January 2026</u> - don't wait to register."
 msgstr ""
-
-#. module: account_peppol
-#: model_terms:ir.ui.view,arch_db:account_peppol.mail_notification_layout_with_responsible_signature_and_peppol
-msgid ""
-"<i class=\"text-muted\" style=\"min-width: 590px;\">\n"
-"                            This invoice has also been <b style=\"color: $o-enterprise-action-color\">sent via Peppol</b>.\n"
-"                        </i>"
-msgstr ""
+"<br/>\n"
+"                                ベルギーでは電子請求が <u>2026年1月より義務化</u>されます。 - 今すぐご登録ください。"
 
 #. module: account_peppol
 #: model_terms:ir.ui.view,arch_db:account_peppol.account_peppol_view_move_form
@@ -805,6 +799,11 @@ msgid ""
 msgstr "この機能は非推奨です。移行キーが必要な場合は、Odooサポートまでお問い合わせ下さい。"
 
 #. module: account_peppol
+#: model_terms:ir.ui.view,arch_db:account_peppol.mail_notification_layout_with_responsible_signature_and_peppol
+msgid "This invoice has also been"
+msgstr "この請求書もすでに"
+
+#. module: account_peppol
 #. odoo-python
 #: code:addons/account_peppol/models/res_config_settings.py:0
 #, python-format
@@ -956,12 +955,20 @@ msgstr "登録は1日以内に有効になります。"
 
 #. module: account_peppol
 #: model_terms:ir.ui.view,arch_db:account_peppol.mail_notification_layout_with_responsible_signature_and_peppol
-msgid ""
-"to send invoices, but this one <b style=\"color: $o-enterprise-action-"
-"color;\">could not be sent via Peppol</b>."
-msgstr ""
+msgid "could not be sent via Peppol"
+msgstr "Peppol経由で送信できませんでした"
+
+#. module: account_peppol
+#: model_terms:ir.ui.view,arch_db:account_peppol.mail_notification_layout_with_responsible_signature_and_peppol
+msgid "sent via Peppol"
+msgstr "Peppol経由で送信済です"
+
+#. module: account_peppol
+#: model_terms:ir.ui.view,arch_db:account_peppol.mail_notification_layout_with_responsible_signature_and_peppol
+msgid "to send invoices, but this one"
+msgstr "請求書を送信するには、しかし、この請求書は"
 
 #. module: account_peppol
 #: model_terms:ir.ui.view,arch_db:account_peppol.mail_notification_layout_with_responsible_signature_and_peppol
 msgid "uses"
-msgstr ""
+msgstr "ユーザー"

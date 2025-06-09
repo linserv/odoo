@@ -20,13 +20,14 @@
 # Quim - coopdevs <quim.rebull@coopdevs.org>, 2023
 # marcescu, 2023
 # Josep Anton Belchi, 2025
+# Wil Odoo, 2025
 # Noemi Pla, 2025
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 17.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-07 20:36+0000\n"
+"POT-Creation-Date: 2025-05-22 18:37+0000\n"
 "PO-Revision-Date: 2023-10-26 23:09+0000\n"
 "Last-Translator: Noemi Pla, 2025\n"
 "Language-Team: Catalan (https://app.transifex.com/odoo/teams/41243/ca/)\n"
@@ -77,6 +78,8 @@ msgid ""
 "<span class=\"fa fa-lg fa-building-o fa-fw\" title=\"Values set here are "
 "company-specific.\" groups=\"base.group_multi_company\"/>"
 msgstr ""
+"<span class=\"fa fa-lg fa-building-o fa-fw\" title=\"Values set here are "
+"company-specific.\" groups=\"base.group_multi_company\"/>"
 
 #. module: sale_project
 #: model_terms:ir.ui.view,arch_db:sale_project.view_edit_project_inherit_form
@@ -156,6 +159,13 @@ msgstr "Cancel·lat"
 #: model:ir.model,name:sale_project.model_res_config_settings
 msgid "Config Settings"
 msgstr "Paràmetres de configuració"
+
+#. module: sale_project
+#. odoo-python
+#: code:addons/sale_project/models/project.py:0
+#, python-format
+msgid "Cost of Goods Sold"
+msgstr "Cost dels béns venuts"
 
 #. module: sale_project
 #: model_terms:ir.ui.view,arch_db:sale_project.view_order_form_inherit_sale_project
@@ -523,6 +533,13 @@ msgid ""
 msgstr ""
 "Percentatge de la quantitat ordenada que es lliurarà automàticament una "
 "vegada s'hagi assolit la fita."
+
+#. module: sale_project
+#. odoo-python
+#: code:addons/sale_project/models/project.py:0
+#, python-format
+msgid "Portal Sale Order"
+msgstr ""
 
 #. module: sale_project
 #. odoo-python

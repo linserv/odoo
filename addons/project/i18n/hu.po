@@ -46,6 +46,13 @@ msgid ""
 "                </p>\n"
 "            "
 msgstr ""
+"\n"
+"                <p class=\"o_view_nocontent_smiling_face\">\n"
+"                    Nincsenek mérföldkövek. Készítsen egyet!\n"
+"                </p><p>\n"
+"                    Kövesse nyomon a sikeres megvalósításhoz vezető lényegesebb előrehaladási pontokat.\n"
+"                </p>\n"
+"            "
 
 #. module: project
 #. odoo-javascript
@@ -4487,7 +4494,7 @@ msgstr "Feladat értékelése"
 #. module: project
 #: model:ir.model,name:project.model_project_task_recurrence
 msgid "Task Recurrence"
-msgstr ""
+msgstr "Feladat ismétlődés"
 
 #. module: project
 #: model:ir.model,name:project.model_project_task_type

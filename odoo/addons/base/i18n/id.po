@@ -605,6 +605,9 @@ msgid ""
 "            Egypt Tax Authority Invoice Integration\n"
 "        "
 msgstr ""
+"\n"
+"            Integrasi Faktur Otoritas Pajak Mesir\n"
+"        "
 
 #. module: base
 #: model:ir.module.module,summary:base.module_l10n_ke_edi_oscu
@@ -4479,6 +4482,8 @@ msgid ""
 "\n"
 "E-Transport implementation for Batch Pickings in Romania\n"
 msgstr ""
+"\n"
+"Implementasi e-Transport untuk Batch Picking di Romania\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_ro_edi_stock
@@ -4486,6 +4491,8 @@ msgid ""
 "\n"
 "E-Transport implementation for Romania\n"
 msgstr ""
+"\n"
+"E-Transport implementation for Romania\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_it_edi
@@ -4511,6 +4518,8 @@ msgid ""
 "\n"
 "E-invoice implementation for Saudi Arabia; Integration with ZATCA\n"
 msgstr ""
+"\n"
+"E-invoice implementation for Saudi Arabia; Integration with ZATCA\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_l10n_sa_edi_pos
@@ -11074,6 +11083,9 @@ msgid ""
 "This module fully implements the ELM 5.0 wage standard and is Swissdec certified under certificate 1203.25. Any unauthorized modifications are strictly prohibited, as they may lead to errors in data transmission and calculations.\n"
 "The Module is not retro-compatible with Previous Swiss Payroll versions, installation will require a re-generation of your yearly Payroll-accounting.\n"
 msgstr ""
+"\n"
+"Modul ini sepenuhnya mengimplementasi standar gaji ELM 5.0 dan memiliki sertifikasi Swissdec di bawah sertifikat 1203.25. Modifikasi apa pun yang tidak diotorisasi sangat keras dilarang, karena mungkin berujung ke error di transmisi dan kalkulasi data.\n"
+"Modul tidak retro-compatible dengan versi-versi Payroll Swiss Sebelumnya, penginstalan akan memerlukan pembuatan ulang akuntansi Payroll tahunan Anda.\n"
 
 #. module: base
 #: model:ir.module.module,description:base.module_sms
@@ -19600,8 +19612,8 @@ msgstr "D - PASOKAN LISTRIK, GAS, UAP DAN AIR CONDITIONING"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_delivery_dhl
-msgid "DHL Express Shipping"
-msgstr "DHL Express Shipping"
+msgid "DHL Express Shipping (Legacy)"
+msgstr "Pengiriman Express DHL (Legacy)"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_l10n_din5008
@@ -33981,12 +33993,12 @@ msgstr "Romania - Laporan Akuntansi"
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_l10n_ro_edi_stock
 msgid "Romania - E-Transport"
-msgstr ""
+msgstr "Romania - E-Transport"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_l10n_ro_edi_stock_batch
 msgid "Romania - E-Transport Batch Pickings"
-msgstr ""
+msgstr "Romania - E-Transport Batch Picking"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_l10n_ro_edi
@@ -35050,8 +35062,14 @@ msgstr "Kirim parsel Anda melalui shiprocket dan lacak mereka online"
 
 #. module: base
 #: model:ir.module.module,description:base.module_delivery_dhl
-msgid "Send your shippings through DHL and track them online"
-msgstr "Kirim parsel Anda melalui DHL dan lacak mereka online"
+msgid ""
+"This is the legacy integration with DHL Express that is no longer supported."
+" Please install the new \"DHL Express Shipping\" module and uninstall this "
+"one as soon as possible."
+msgstr ""
+"Ini adalah integrasi lampau dengan DHL Express yang tidak lagi didukung. "
+"Silakan instal modul \"Pengiriman DHL Express\" dan uninstal yang ini "
+"secepat mungkin."
 
 #. module: base
 #: model:ir.module.module,description:base.module_delivery_fedex_rest
@@ -36445,7 +36463,7 @@ msgstr "Swiss - Point of Sale"
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_l10n_ch_hr_payroll_elm_transmission
 msgid "Swissdec Certified Payroll (ELM 5.0)"
-msgstr ""
+msgstr "Swissdec Certified Payroll (ELM 5.0)"
 
 #. module: base
 #: model_terms:ir.ui.view,arch_db:base.language_install_view_form_lang_switch

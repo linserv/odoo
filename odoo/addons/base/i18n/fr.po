@@ -19668,8 +19668,8 @@ msgstr "D - FOURNITURE D'ÉLECTRICITÉ, DE GAZ, DE VAPEUR ET D'AIR CONDITIONNÉ"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_delivery_dhl
-msgid "DHL Express Shipping"
-msgstr "Expédition par DHL Express"
+msgid "DHL Express Shipping (Legacy)"
+msgstr "Expédition DHL Express (Legacy)"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_l10n_din5008
@@ -20815,7 +20815,7 @@ msgstr "Localisation colombienne eCommerce"
 #. module: base
 #: model:ir.module.module,summary:base.module_l10n_ro_edi
 msgid "E-Invoice implementation for Romania"
-msgstr "Implémentation de la facture électronique pour la Roumanie"
+msgstr "Implémentation de la facturation électronique pour la Roumanie"
 
 #. module: base
 #: model:ir.module.module,summary:base.module_l10n_dk_oioubl
@@ -28351,7 +28351,7 @@ msgstr "Namibie"
 #: code:addons/base/models/ir_qweb_fields.py:0
 #, python-format
 msgid "Narrow"
-msgstr "Étroit"
+msgstr "Restreint"
 
 #. module: base
 #: model:res.country,name:base.nr
@@ -35212,8 +35212,14 @@ msgstr "Envoyez vos colis avec Shiprocket et suivez-les en ligne"
 
 #. module: base
 #: model:ir.module.module,description:base.module_delivery_dhl
-msgid "Send your shippings through DHL and track them online"
-msgstr "Faites vos expéditions via DHL et suivez-les en ligne"
+msgid ""
+"This is the legacy integration with DHL Express that is no longer supported."
+" Please install the new \"DHL Express Shipping\" module and uninstall this "
+"one as soon as possible."
+msgstr ""
+"Il s'agit de l'ancienne intégration avec DHL Express qui n'est plus prise en"
+" charge. Veuillez installer le nouveau module \"Expédition DHL Express\" et "
+"désinstaller celui-ci dès que possible."
 
 #. module: base
 #: model:ir.module.module,description:base.module_delivery_fedex_rest

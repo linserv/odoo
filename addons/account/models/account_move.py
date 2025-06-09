@@ -1476,21 +1476,17 @@ class AccountMove(models.Model):
     @api.depends('move_type', 'partner_id', 'company_id')
     def _compute_narration(self):
         use_invoice_terms = self.env['ir.config_parameter'].sudo().get_param('account.use_invoice_terms')
-        for move in self:
-            if not move.is_sale_document(include_receipts=True):
-                continue
-            if not use_invoice_terms:
-                move.narration = False
+        invoice_to_update_terms = self.filtered(lambda m: use_invoice_terms and m.is_sale_document(include_receipts=True))
+        for move in invoice_to_update_terms:
+            lang = move.partner_id.lang or self.env.user.lang
+            if move.company_id.terms_type != 'html':
+                narration = move.company_id.with_context(lang=lang).invoice_terms if not is_html_empty(move.company_id.invoice_terms) else ''
             else:
-                lang = move.partner_id.lang or self.env.user.lang
-                if not move.company_id.terms_type == 'html':
-                    narration = move.company_id.with_context(lang=lang).invoice_terms if not is_html_empty(move.company_id.invoice_terms) else ''
-                else:
-                    baseurl = self.env.company.get_base_url() + '/terms'
-                    context = {'lang': lang}
-                    narration = _('Terms & Conditions: %s', baseurl)
-                    del context
-                move.narration = narration or False
+                baseurl = self.env.company.get_base_url() + '/terms'
+                context = {'lang': lang}
+                narration = _('Terms & Conditions: %s', baseurl)
+                del context
+            move.narration = narration or False
 
     def _get_partner_credit_warning_exclude_amount(self):
         # to extend in module 'sale'; see there for details
@@ -3224,7 +3220,8 @@ class AccountMove(models.Model):
                         success = decoder(invoice, file_data, new)
 
                         if success or file_data['attachment'].mimetype in ALLOWED_MIMETYPES:
-                            invoice._link_bill_origin_to_purchase_orders(timeout=4)
+                            if not extend_with_existing_lines:
+                                invoice._link_bill_origin_to_purchase_orders(timeout=4)
                             invoices |= invoice
                             current_invoice = self.env['account.move']
                             add_file_data_results(file_data, invoice)
@@ -3333,7 +3330,7 @@ class AccountMove(models.Model):
                     tax_values[key] += diff_sign * abs_delta_to_add
                     abs_diff -= abs_delta_to_add
 
-        return self.env['account.tax']._aggregate_taxes(
+        return self.env['account.tax'].with_company(self.company_id)._aggregate_taxes(
             to_process,
             filter_tax_values_to_apply=filter_tax_values_to_apply,
             grouping_key_generator=grouping_key_generator,
@@ -3438,7 +3435,7 @@ class AccountMove(models.Model):
                 bases_details[frozendict(grouping_dict)] = base_detail
 
                 # Compute the tax amounts.
-                tax_details_with_epd = self.env['account.tax']._aggregate_taxes(
+                tax_details_with_epd = self.env['account.tax'].with_company(self.company_id)._aggregate_taxes(
                     to_process,
                     grouping_key_generator=grouping_key_generator,
                 )
@@ -4047,6 +4044,7 @@ class AccountMove(models.Model):
         }
 
     def action_update_fpos_values(self):
+        self.invoice_line_ids._compute_price_unit()
         self.invoice_line_ids._compute_tax_ids()
         self.line_ids._compute_account_id()
 
