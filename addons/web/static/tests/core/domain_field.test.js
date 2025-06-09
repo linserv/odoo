@@ -17,6 +17,7 @@ import {
     getConditionText,
     getCurrentPath,
     getCurrentValue,
+    getOperatorOptions,
 } from "@web/../tests/core/tree_editor/condition_tree_editor_test_helpers";
 import {
     contains,
@@ -31,6 +32,7 @@ import {
 } from "@web/../tests/web_test_helpers";
 
 import { WebClient } from "@web/webclient/webclient";
+import { registry } from "@web/core/registry";
 
 class PartnerType extends models.Model {
     name = fields.Char({ string: "Partner Type" });
@@ -44,10 +46,28 @@ class PartnerType extends models.Model {
 
 defineModels([Partner, Product, Team, Player, Country, Stage, PartnerType]);
 
-test("The domain editor should not crash the view when given a dynamic filter", async function () {
+function replaceNotificationService() {
+    registry.category("services").add(
+        "notification",
+        {
+            start() {
+                return {
+                    add(message) {
+                        expect.step(message);
+                    },
+                };
+            },
+        },
+        { force: true }
+    );
+}
+
+test("The domain editor should not crash the view when given a dynamic filter (allow_expressions=False)", async function () {
     // dynamic filters (containing variables, such as uid, parent or today)
     // are handled by the domain editor
     Partner._records[0].foo = `[("int", "=", uid)]`;
+
+    replaceNotificationService();
 
     await mountView({
         type: "form",
@@ -63,6 +83,49 @@ test("The domain editor should not crash the view when given a dynamic filter", 
     expect(getCurrentValue()).toBe("uid", {
         message: "The widget should show the dynamic filter.",
     });
+    expect(".o_field_domain").not.toHaveClass("o_field_invalid");
+    expect.verifySteps(["The domain should not involve non-literals"]);
+});
+
+test("The domain editor should not crash the view when given a dynamic filter (allow_expressions=False) in a sub domain", async function () {
+    Partner._fields.company_id = fields.Many2one({ relation: "partner" });
+    Partner._records[0].foo = "[('company_id', 'any', [('id', '=', uid)])]";
+
+    replaceNotificationService();
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: `
+                <form>
+                    <field name="foo" widget="domain" options="{'model': 'partner'}" />
+                    <field name="int" invisible="1" />
+                </form>`,
+    });
+    expect.verifySteps(["The domain should not involve non-literals"]);
+});
+
+test("The domain editor should not crash the view when given a dynamic filter (allow_expressions=True)", async function () {
+    Partner._records[0].foo = `[("int", "=", uid)]`;
+
+    replaceNotificationService();
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: `
+                    <form>
+                        <field name="foo" widget="domain" options="{'model': 'partner', 'allow_expressions':True}" />
+                        <field name="int" invisible="1" />
+                    </form>`,
+    });
+    expect(getCurrentValue()).toBe("uid", {
+        message: "The widget should show the dynamic filter.",
+    });
+    expect(".o_field_domain").not.toHaveClass("o_field_invalid");
+    expect.verifySteps(["The domain involves non-literals. Their evaluation might fail."]);
 });
 
 test("The domain editor should not crash the view when given a dynamic filter ( datetime )", async function () {
@@ -380,7 +443,6 @@ test("domain field: manually edit domain with textarea", async function () {
                 <field name="bar"/>
                 <field name="foo" widget="domain" options="{'model': 'bar'}"/>
             </form>`,
-        search: `<search />`,
     };
 
     onRpc("search_count", ({ args }) => expect.step(args[0]));
@@ -421,11 +483,10 @@ test("domain field: manually set an invalid domain with textarea", async functio
 
     Partner._views = {
         form: `
-                <form>
-                    <field name="bar"/>
-                    <field name="foo" widget="domain" options="{'model': 'bar'}"/>
-                </form>`,
-        search: `<search />`,
+            <form>
+                <field name="bar"/>
+                <field name="foo" widget="domain" options="{'model': 'bar'}"/>
+            </form>`,
     };
 
     onRpc("/web/domain/validate", async (request) => {
@@ -488,11 +549,10 @@ test("domain field: reload count by clicking on the refresh button", async funct
 
     Partner._views = {
         form: `
-                <form>
-                    <field name="bar"/>
-                    <field name="foo" widget="domain" options="{'model': 'bar'}"/>
-                </form>`,
-        search: `<search />`,
+            <form>
+                <field name="bar"/>
+                <field name="foo" widget="domain" options="{'model': 'bar'}"/>
+            </form>`,
     };
 
     onRpc("/web/domain/validate", () => true);
@@ -572,9 +632,8 @@ test("domain field: edit domain with dynamic content", async function () {
         form: `
             <form>
                 <field name="bar"/>
-                <field name="foo" widget="domain" options="{'model': 'bar'}"/>
+                <field name="foo" widget="domain" options="{'model': 'bar', 'allow_expressions':True}"/>
             </form>`,
-        search: `<search />`,
     };
 
     onRpc("web_save", ({ args }) => {
@@ -616,9 +675,8 @@ test("domain field: edit through selector (dynamic content)", async function () 
         form: `
             <form>
                 <field name="bar"/>
-                <field name="foo" widget="domain" options="{'model': 'bar'}"/>
+                <field name="foo" widget="domain" options="{'model': 'bar', 'allow_expressions':True}"/>
             </form>`,
-        search: `<search />`,
     };
 
     onRpc(({ method }) => expect.step(method));
@@ -644,7 +702,7 @@ test("domain field: edit through selector (dynamic content)", async function () 
     // Open and close the datepicker
     await contains(".o_datetime_input").click();
     expect(".o_datetime_picker").toHaveCount(1);
-    await scroll(getFixture(), { top: 10 });
+    await scroll(getFixture(), { top: 10 }, { scrollable: false });
     expect(".o_datetime_picker").toHaveCount(1);
     expect(SELECTORS.debugArea).toHaveValue(rawDomain);
     expect.verifySteps([]);
@@ -1018,10 +1076,125 @@ test("folded domain field with withinh operator", async function () {
             <form>
                 <sheet>
                     <group>
-                        <field name="foo" widget="domain" options="{'model': 'partner', 'foldable': true}" />
+                        <field name="foo" widget="domain" options="{'model': 'partner', 'foldable': true, 'allow_expressions':True}" />
                     </group>
                 </sheet>
             </form>`,
     });
     expect(`.o_field_domain .o_facet_values`).toHaveText("Datetime is within 2 months");
+});
+
+test("allow_expressions = true", async function () {
+    Partner._records[0].foo = "[]";
+
+    serverState.debug = "1";
+    replaceNotificationService();
+
+    onRpc("/web/domain/validate", () => true);
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: `
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="foo" widget="domain" options="{'model': 'partner.type', 'allow_expressions':True}" />
+                        </group>
+                    </sheet>
+                </form>`,
+        context: { path: "name", name: "name" },
+    });
+
+    await contains(SELECTORS.debugArea).edit(`[("name", "=", [name])]`);
+    await animationFrame();
+    expect(".o_field_domain").not.toHaveClass("o_field_invalid");
+    expect.verifySteps(["The domain involves non-literals. Their evaluation might fail."]);
+
+    await contains(SELECTORS.debugArea).edit(
+        `["&", ("name", "=", "name"), (path, "=", "other name")]`
+    );
+    await animationFrame();
+    expect(".o_field_domain").not.toHaveClass("o_field_invalid");
+    expect.verifySteps(["The domain involves non-literals. Their evaluation might fail."]);
+});
+
+test("allow_expressions = false (default)", async function () {
+    Partner._records[0].foo = "[]";
+
+    serverState.debug = "1";
+    replaceNotificationService();
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: `
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="foo" widget="domain" options="{'model': 'partner.type' }" />
+                        </group>
+                    </sheet>
+                </form>`,
+        context: { path: "name", name: "name" },
+    });
+
+    await contains(SELECTORS.debugArea).edit(`[("name", "=", [name])]`);
+    await animationFrame();
+    expect(".o_field_domain").toHaveClass("o_field_invalid");
+    expect.verifySteps(["The domain should not involve non-literals"]);
+
+    await contains(SELECTORS.debugArea).edit(
+        `["&", ("name", "=", "name"), (path, "=", "other name")]`
+    );
+    await animationFrame();
+    expect(".o_field_domain").toHaveClass("o_field_invalid");
+    expect.verifySteps(["The domain should not involve non-literals"]);
+});
+
+test("hide within operators when allow_expressions = False", async function () {
+    Partner._records[0].foo = `[("datetime", "=", False)]`;
+
+    serverState.debug = "1";
+    replaceNotificationService();
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: `
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="foo" widget="domain" options="{'model': 'partner' }" />
+                        </group>
+                    </sheet>
+                </form>`,
+    });
+
+    expect(getOperatorOptions()).toEqual([
+        "=",
+        "!=",
+        ">",
+        ">=",
+        "<",
+        "<=",
+        "is between",
+        "is set",
+        "is not set",
+    ]);
+
+    await contains(SELECTORS.debugArea).edit(
+        `["&", ("date", ">=", context_today().strftime("%Y-%m-%d")), ("date", "<=", (context_today() + relativedelta(weeks = a)).strftime("%Y-%m-%d"))]`
+    );
+    await animationFrame();
+    expect(".o_field_domain").toHaveClass("o_field_invalid");
+    expect.verifySteps(["The domain should not involve non-literals"]);
+
+    await contains(`${SELECTORS.valueEditor} ${SELECTORS.editor}:first input`).edit("2");
+    await animationFrame();
+    expect(".o_field_domain").not.toHaveClass("o_field_invalid"); // should we have class? We don't do it in other cases
+    expect.verifySteps(["The domain should not involve non-literals"]);
 });

@@ -15,7 +15,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-07 20:36+0000\n"
+"POT-Creation-Date: 2025-05-30 18:36+0000\n"
 "PO-Revision-Date: 2024-09-25 09:41+0000\n"
 "Last-Translator: Erwin van der Ploeg <erwin@odooexperts.nl>, 2025\n"
 "Language-Team: Dutch (https://app.transifex.com/odoo/teams/41243/nl/)\n"
@@ -216,6 +216,18 @@ msgstr "%(ref)s (%(currency_amount)s)"
 #: code:addons/account/models/account_account_tag.py:0
 msgid "%(tag)s (%(country_code)s)"
 msgstr "%(tag)s (%(country_code)s)"
+
+#. module: account
+#. odoo-python
+#: code:addons/account/models/account_tax.py:0
+msgid ""
+"%(tax_account)s (%(account_name)s) should be an account of type "
+"\"%(receivable)s\" or \"%(payable)s\" with both options "
+"\"%(allow_reconciliation)s\" and \"%(non_trade)s\" enabled."
+msgstr ""
+"%(tax_account)s (%(account_name)s) moet een account zijn van het type "
+"\"%(receivable)s\" of \"%(payable)s\" met beide opties "
+"\"%(allow_reconciliation)s\" en \"%(non_trade)s\" ingeschakeld."
 
 #. module: account
 #. odoo-python
@@ -1379,6 +1391,11 @@ msgstr "<span>Waarschuwing: dit document kan een duplicaat zijn van</span>"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.report_invoice_document
+msgid "<strong class=\"d-block mt-3\">Shipping Address</strong>"
+msgstr "<strong class=\"d-block mt-3\">Afleveradres</strong>"
+
+#. module: account
+#: model_terms:ir.ui.view,arch_db:account.report_invoice_document
 msgid "<strong class=\"mr16\">Subtotal</strong>"
 msgstr "<strong class=\"mr16\">Subtotaal</strong>"
 
@@ -1444,11 +1461,6 @@ msgstr "<strong>Referentie</strong>"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.report_invoice_document
-msgid "<strong>Shipping Address</strong>"
-msgstr "<strong>Verzendadres</strong>"
-
-#. module: account
-#: model_terms:ir.ui.view,arch_db:account.report_invoice_document
 msgid "<strong>Source</strong>"
 msgstr "<strong>Bron</strong>"
 
@@ -1489,6 +1501,8 @@ msgid ""
 "<strong>Warning:</strong> Once the Audit Trail is enabled, it cannot be "
 "disabled again if there are any existing journal items."
 msgstr ""
+"<strong>Waarschuwing:</strong> Nadat het controletraject is ingeschakeld, "
+"kan het niet meer worden uitgeschakeld als er bestaande boekingen zijn."
 
 #. module: account
 #. odoo-python
@@ -1534,6 +1548,8 @@ msgid ""
 "A bank account with Account Number %(number)s already exists for Partner "
 "%(partner)s, but is archived. Please unarchive it instead."
 msgstr ""
+"Er bestaat al een bankrekening met rekeningnummer %(number)s voor partner "
+"%(partner)s, maar deze is gearchiveerd. Dearchiveer deze in plaats daarvan."
 
 #. module: account
 #: model_terms:ir.actions.act_window,help:account.action_bank_statement_tree
@@ -1587,7 +1603,7 @@ msgstr ""
 #: code:addons/account/models/account_report.py:0
 msgid "A line cannot have both children and a groupby value (line '%s')."
 msgstr ""
-"Een regel kan niet zowel kinderen als een groupby-waarde hebben (regel "
+"Een regel kan niet zowel kinderen als een groeperen op-waarde hebben (regel "
 "'%s')."
 
 #. module: account
@@ -2365,7 +2381,7 @@ msgstr "Audittrail inschakelen"
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.autopost_bills_wizard
 msgid "Activate auto-validation"
-msgstr "Automatische validatie activeren"
+msgstr "Automatische bevestiging activeren"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.res_config_settings_view_form
@@ -3538,7 +3554,7 @@ msgstr "Bankrekening"
 #. odoo-python
 #: code:addons/account/models/res_partner_bank.py:0
 msgid "Bank Account %(link)s with number %(number)s archived"
-msgstr ""
+msgstr "Bankrekening %(link)s met nummer %(number)s gearchiveerd"
 
 #. module: account
 #. odoo-python
@@ -4146,6 +4162,7 @@ msgstr ""
 #: code:addons/account/models/account_move_send.py:0
 msgid "Cannot identify the invoices in the generated PDF: %s"
 msgstr ""
+"De facturen in de gegenereerde PDF kunnen niet worden geïdentificeerd: %s"
 
 #. module: account
 #: model:account.account,name:account.1_capital
@@ -7983,8 +8000,8 @@ msgid ""
 "Groupby feature isn't supported by aggregation engine. Please remove the "
 "groupby value on '%s'"
 msgstr ""
-"Groupby-functie wordt niet ondersteund door de aggregatie-engine. Verwijder "
-"de groupby-waarde op '%s'"
+"Groeperen op functie wordt niet ondersteund door de aggregatie-engine. "
+"Verwijder de groeperen op-waarde op '%s'"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_merge_wizard_line__grouping_key
@@ -11964,7 +11981,7 @@ msgstr "Partners met ontbrekende bankrekening"
 #: code:addons/account/models/partner.py:0
 msgid "Partners that are used in hashed entries cannot be merged."
 msgstr ""
-" Partners die worden gebruikt in gehashte boekingen kunnen niet worden "
+"Partners die worden gebruikt in gehashte boekingen kunnen niet worden "
 "samengevoegd."
 
 #. module: account
@@ -15472,6 +15489,14 @@ msgstr ""
 "geïmplementeerd"
 
 #. module: account
+#. odoo-python
+#: code:addons/account/models/partner.py:0
+msgid ""
+"The commercial partner has been updated for all related accounting entries."
+msgstr ""
+"De commerciële partner is bijgewerkt voor alle gerelateerde boekingen."
+
+#. module: account
 #: model:ir.model.fields,help:account.field_account_tax_repartition_line__company_id
 msgid "The company this distribution line belongs to."
 msgstr "Het bedrijf waartoe deze verdeelregel behoord."
@@ -18792,6 +18817,16 @@ msgstr ""
 
 #. module: account
 #. odoo-python
+#: code:addons/account/models/partner.py:0
+msgid ""
+"You cannot set a partner as an invoicing address of another if they have a "
+"different %(vat_label)s."
+msgstr ""
+"Je kunt een partner niet instellen als factuuradres van een andere partner "
+"als deze een andere %(vat_label)s heeft."
+
+#. module: account
+#. odoo-python
 #: code:addons/account/models/account_account.py:0
 msgid ""
 "You cannot switch an account to prevent the reconciliation if some partial "
@@ -18879,6 +18914,16 @@ msgstr ""
 "Je kunt geen factuur bevestigen met een negatief totaalbedrag. Maak hiervoor"
 " een creditfactuur aan. Gebruik het actiemenu om deze factuur om te zetten "
 "in een creditfactuur."
+
+#. module: account
+#. odoo-python
+#: code:addons/account/models/partner.py:0
+msgid ""
+"You do not have permission to mark this partner as the main commercial "
+"partner."
+msgstr ""
+"Je hebt geen toestemming om deze partner te markeren als de belangrijkste "
+"commerciële partner."
 
 #. module: account
 #. odoo-python

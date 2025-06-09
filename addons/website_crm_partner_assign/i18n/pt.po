@@ -563,7 +563,7 @@ msgstr "Esperados"
 #: model_terms:ir.ui.view,arch_db:website_crm_partner_assign.portal_my_lead
 #: model_terms:ir.ui.view,arch_db:website_crm_partner_assign.portal_my_opportunity
 msgid "Expected Closing:"
-msgstr ""
+msgstr "Previsão de Fecho:"
 
 #. module: website_crm_partner_assign
 #. odoo-python
@@ -1242,7 +1242,7 @@ msgstr "Prata"
 #. module: website_crm_partner_assign
 #: model:crm.tag,name:website_crm_partner_assign.tag_portal_lead_is_spam
 msgid "Spam"
-msgstr ""
+msgstr "Spam"
 
 #. module: website_crm_partner_assign
 #. odoo-python

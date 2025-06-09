@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-10 13:24+0000\n"
+"POT-Creation-Date: 2025-05-23 18:39+0000\n"
 "PO-Revision-Date: 2024-09-25 09:42+0000\n"
 "Last-Translator: Raz Omer Hussein, 2025\n"
 "Language-Team: Kurdish (https://app.transifex.com/odoo/teams/41243/ku/)\n"
@@ -989,6 +989,12 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/debug/debug_menu_items.xml:0
 msgid "All users"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+msgid "Allow expressions"
 msgstr ""
 
 #. module: web
@@ -2685,9 +2691,15 @@ msgstr ""
 
 #. module: web
 #. odoo-javascript
+#: code:addons/web/static/src/webclient/debug/profiling/profiling_item.xml:0
+msgid "Entry Count"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
 #: code:addons/web/static/src/core/file_upload/file_upload_service.js:0
 msgid "Error"
-msgstr ""
+msgstr "هەڵە"
 
 #. module: web
 #. odoo-javascript
@@ -3291,6 +3303,12 @@ msgstr ""
 msgid ""
 "If checked, users won't be able to create records through the autocomplete "
 "dropdown at all."
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+msgid "If true, non-literals are accepted"
 msgstr ""
 
 #. module: web
@@ -4064,7 +4082,7 @@ msgstr ""
 #: code:addons/web/static/src/webclient/burger_menu/burger_menu.xml:0
 #: model:ir.model,name:web.model_ir_ui_menu
 msgid "Menu"
-msgstr ""
+msgstr "مێنۆ"
 
 #. module: web
 #. odoo-javascript
@@ -4145,7 +4163,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/dynamic_widget/dynamic_model_field_selector_char.js:0
 #: code:addons/web/static/src/views/fields/properties/property_definition.xml:0
 msgid "Model"
-msgstr ""
+msgstr "مۆدێل"
 
 #. module: web
 #. odoo-javascript
@@ -4362,7 +4380,7 @@ msgstr ""
 #: code:addons/web/static/src/views/list/list_controller.xml:0
 #: code:addons/web/static/src/views/view_dialogs/select_create_dialog.xml:0
 msgid "New"
-msgstr ""
+msgstr "نوێ"
 
 #. module: web
 #. odoo-javascript
@@ -4453,7 +4471,7 @@ msgstr ""
 #: code:addons/web/static/src/views/list/list_renderer.js:0
 #: code:addons/web/static/src/views/pivot/pivot_model.js:0
 msgid "No"
-msgstr ""
+msgstr "نەخێر"
 
 #. module: web
 #. odoo-javascript
@@ -4597,8 +4615,9 @@ msgstr ""
 #: code:addons/web/static/src/views/kanban/kanban_header.js:0
 #: code:addons/web/static/src/views/list/list_renderer.js:0
 #: code:addons/web/static/src/views/pivot/pivot_model.js:0
+#: code:addons/web/static/src/webclient/debug/profiling/profiling_item.xml:0
 msgid "None"
-msgstr ""
+msgstr "هیچکامیان"
 
 #. module: web
 #. odoo-python
@@ -4696,7 +4715,7 @@ msgstr ""
 #: code:addons/web/static/src/webclient/settings_form_view/widgets/res_config_edition.xml:0
 #: model_terms:ir.ui.view,arch_db:web.brand_promotion_message
 msgid "Odoo"
-msgstr ""
+msgstr "ئۆدۆ"
 
 #. module: web
 #. odoo-javascript
@@ -4928,7 +4947,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/kanban/progress_bar_hook.js:0
 msgid "Other"
-msgstr ""
+msgstr "هی تر"
 
 #. module: web
 #. odoo-javascript
@@ -4986,7 +5005,7 @@ msgstr ""
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__partner_id
 msgid "Partner"
-msgstr ""
+msgstr "هاوبەش"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.login
@@ -5020,7 +5039,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/percentage/percentage_field.js:0
 msgid "Percentage"
-msgstr ""
+msgstr "لەسەدا"
 
 #. module: web
 #. odoo-javascript
@@ -5134,7 +5153,7 @@ msgstr ""
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__preview
 msgid "Preview"
-msgstr ""
+msgstr "پێشبینی"
 
 #. module: web
 #: model:ir.actions.report,name:web.action_report_externalpreview
@@ -5226,7 +5245,7 @@ msgstr ""
 #: code:addons/web/static/src/search/action_menus/action_menus.js:0
 #: code:addons/web/static/src/webclient/actions/reports/report_action.xml:0
 msgid "Print"
-msgstr ""
+msgstr "چاپ"
 
 #. module: web
 #. odoo-javascript
@@ -5384,7 +5403,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/debug/debug_menu_basic.js:0
 msgid "Record"
-msgstr ""
+msgstr "تۆمار"
 
 #. module: web
 #. odoo-javascript
@@ -5420,7 +5439,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/debug/debug_menu_basic.js:0
 msgid "Records"
-msgstr ""
+msgstr "تۆمارەکان"
 
 #. module: web
 #. odoo-javascript
@@ -5432,7 +5451,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/reference/reference_field.js:0
 msgid "Reference"
-msgstr ""
+msgstr "سەرچاوە"
 
 #. module: web
 #. odoo-javascript
@@ -5468,7 +5487,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/image/image_field.js:0
 msgid "Reload"
-msgstr ""
+msgstr "دووبارە بارکردنەوە"
 
 #. module: web
 #. odoo-javascript
@@ -5526,7 +5545,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/webclient/actions/action_service.js:0
 msgid "Report"
-msgstr ""
+msgstr "ڕاپۆرت"
 
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__report_footer
@@ -5675,7 +5694,7 @@ msgstr ""
 #: code:addons/web/static/src/views/list/list_controller.xml:0
 #: code:addons/web/static/src/webclient/settings_form_view/settings_confirmation_dialog.xml:0
 msgid "Save"
-msgstr ""
+msgstr "هەڵگرتن"
 
 #. module: web
 #. odoo-javascript
@@ -6197,7 +6216,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/statusbar/statusbar_field.js:0
 msgid "Status"
-msgstr ""
+msgstr "دۆخ"
 
 #. module: web
 #. odoo-javascript
@@ -6331,7 +6350,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/many2many_tags/many2many_tags_field.js:0
 #: code:addons/web/static/src/views/fields/properties/property_definition.js:0
 msgid "Tags"
-msgstr ""
+msgstr "تاگەکان"
 
 #. module: web
 #. odoo-javascript
@@ -6420,6 +6439,9 @@ msgid ""
 "country format. You can use '/' to indicate that the partner is not subject "
 "to tax."
 msgstr ""
+"ژمارەی ناسنامەی باج. بەهاکان لێرەدا بە پشتبەستن بە فۆرماتەکەی وڵات پشتڕاست "
+"دەکرێنەوە. دەتوانیت '/' بەکاربهێنیت بۆ ئەوەی ئاماژە بەوە بکەیت کە هاوبەشەکە "
+"باج نادات."
 
 #. module: web
 #. odoo-python
@@ -6451,6 +6473,18 @@ msgstr ""
 msgid ""
 "The content of this cell is too long for an XLSX file (more than %s "
 "characters). Please use the CSV format for this export."
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+msgid "The domain involves non-literals. Their evaluation might fail."
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/domain/domain_field.js:0
+msgid "The domain should not involve non-literals"
 msgstr ""
 
 #. module: web
@@ -6658,7 +6692,7 @@ msgstr ""
 #: code:addons/web/static/src/views/calendar/calendar_controller.xml:0
 #: code:addons/web/static/src/views/fields/remaining_days/remaining_days_field.js:0
 msgid "Today"
-msgstr ""
+msgstr "ئەمڕۆ"
 
 #. module: web
 #. odoo-javascript
@@ -6725,7 +6759,7 @@ msgstr ""
 #: code:addons/web/static/src/views/graph/graph_model.js:0
 #: code:addons/web/static/src/views/pivot/pivot_model.js:0
 msgid "Total"
-msgstr ""
+msgstr "کۆ"
 
 #. module: web
 #. odoo-javascript
@@ -6755,7 +6789,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/tree_editor/tree_editor_value_editors.js:0
 msgid "True"
-msgstr ""
+msgstr "ڕاست"
 
 #. module: web
 #. odoo-javascript
@@ -6778,7 +6812,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/float_toggle/float_toggle_field.js:0
 #: code:addons/web/static/src/views/fields/integer/integer_field.js:0
 msgid "Type"
-msgstr ""
+msgstr "جۆر"
 
 #. module: web
 #. odoo-javascript
@@ -6900,7 +6934,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/many2one/many2one_field.js:0
 #: code:addons/web/static/src/views/fields/relational_utils.js:0
 msgid "Unnamed"
-msgstr ""
+msgstr "بێ ناو"
 
 #. module: web
 #. odoo-javascript
@@ -7139,7 +7173,7 @@ msgstr ""
 #: code:addons/web/static/src/views/list/list_renderer.xml:0
 #: model:ir.model,name:web.model_ir_ui_view
 msgid "View"
-msgstr ""
+msgstr "بینین"
 
 #. module: web
 #. odoo-javascript
@@ -7203,7 +7237,7 @@ msgstr ""
 #: code:addons/web/static/src/search/search_bar_menu/search_bar_menu.js:0
 #: code:addons/web/static/src/views/fields/domain/domain_field.xml:0
 msgid "Warning"
-msgstr ""
+msgstr "ئاگادار کردنەوە"
 
 #. module: web
 #. odoo-javascript
@@ -7215,7 +7249,7 @@ msgstr ""
 #. odoo-python
 #: code:addons/web/models/models.py:0
 msgid "Warnings"
-msgstr ""
+msgstr "ئاگادارکردنەوەکان"
 
 #. module: web
 #. odoo-javascript
@@ -7704,7 +7738,6 @@ msgstr ""
 
 #. module: web
 #. odoo-javascript
-#: code:addons/web/static/src/core/debug/debug_menu_items.xml:0
 #: code:addons/web/static/src/core/tree_editor/tree_editor.xml:0
 msgid "all"
 msgstr ""
@@ -18176,12 +18209,6 @@ msgstr ""
 
 #. module: web
 #. odoo-javascript
-#: code:addons/web/static/src/views/view_dialogs/export_data_dialog.xml:0
-msgid "new_template"
-msgstr ""
-
-#. module: web
-#. odoo-javascript
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 msgid "news"
 msgstr ""
@@ -18745,7 +18772,7 @@ msgstr ""
 #: code:addons/web/static/src/search/search_model.js:0
 #: code:addons/web/static/src/views/fields/dynamic_placeholder_popover.xml:0
 msgid "or"
-msgstr ""
+msgstr "یان"
 
 #. module: web
 #. odoo-javascript
@@ -21687,12 +21714,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/list/list_confirmation_dialog.xml:0
 msgid "selected records,"
-msgstr ""
-
-#. module: web
-#. odoo-javascript
-#: code:addons/web/static/src/core/debug/debug_menu_items.xml:0
-msgid "self"
 msgstr ""
 
 #. module: web
@@ -26279,18 +26300,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 msgid "zombie"
-msgstr ""
-
-#. module: web
-#. odoo-javascript
-#: code:addons/web/static/src/views/view_components/column_progress.xml:0
-msgid "{{ bar.count }} {{ bar.string }}"
-msgstr ""
-
-#. module: web
-#. odoo-javascript
-#: code:addons/web/static/src/views/kanban/kanban_column_quick_create.xml:0
-msgid "{{ relatedFieldName }}..."
 msgstr ""
 
 #. module: web
