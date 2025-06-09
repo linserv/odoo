@@ -15,7 +15,7 @@ export function isEmpty(el) {
 }
 
 export function isEmptyTextNode(node) {
-    return node.nodeType === Node.TEXT_NODE && node.nodeValue.length === 0;
+    return node.nodeType === Node.TEXT_NODE && node.textContent.trim().length === 0;
 }
 
 /**
@@ -300,6 +300,10 @@ export const ICON_SELECTOR = iconTags
     .map((tag) => iconClasses.map((cls) => `${tag}.${cls}`).join(", "))
     .join(", ");
 
+export const MEDIA_SELECTOR = `${ICON_SELECTOR} , .o_image, .media_iframe_video`;
+
+export const EDITABLE_MEDIA_CLASS = "o_editable_media";
+
 /**
  * Indicates if the given node is an icon element.
  *
@@ -319,7 +323,9 @@ export function isMediaElement(node) {
     return (
         isIconElement(node) ||
         (node.classList &&
-            (node.classList.contains("o_image") || node.classList.contains("media_iframe_video")))
+            (node.classList.contains("o_image") ||
+                node.classList.contains("media_iframe_video"))) ||
+        node.nodeName === "CANVAS"
     );
 }
 

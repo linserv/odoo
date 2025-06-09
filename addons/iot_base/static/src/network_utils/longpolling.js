@@ -1,5 +1,6 @@
 import { registry } from '@web/core/registry';
-import { post, uuid } from '@iot_base/network_utils/http';
+import { post } from '@iot_base/network_utils/http';
+import { uuid } from "@web/core/utils/strings";
 import { _t } from '@web/core/l10n/translation';
 
 export class IoTLongpolling {
@@ -36,7 +37,7 @@ export class IoTLongpolling {
      * @param {boolean} fallback if true, no notification will be displayed on fail
      * @param {Callback} callback
      */
-    async addListener(iot_ip, devices, listener_id, callback, fallback = false) {
+    async addListener(iot_ip, devices, listener_id, callback, fallback = true) {
         if (!this._listeners[iot_ip]) {
             this._listeners[iot_ip] = {
                 last_event: 0,
@@ -86,7 +87,16 @@ export class IoTLongpolling {
             device_identifier: device_identifier,
             data,
         };
-        return this._rpcIoT(iot_ip, route || this.actionRoute, body, undefined, fallback);
+        return this._rpcIoT(iot_ip, route || this.actionRoute, body, undefined, fallback).then(
+            (result) => {
+                return result
+            },
+            (e) => {
+                if (e.name === "TimeoutError") {
+                    this._onError();
+                }
+            }
+        );
     }
 
     /**
@@ -95,7 +105,7 @@ export class IoTLongpolling {
      * @param {string} iot_ip
      * @param {boolean} fallback if true, no notification will be displayed on fail
      */
-    startPolling(iot_ip, fallback = false) {
+    startPolling(iot_ip, fallback = true) {
         if (iot_ip) {
             if (!this._listeners[iot_ip].rpc) {
                 this._poll(iot_ip, fallback);
@@ -161,11 +171,11 @@ export class IoTLongpolling {
      * @param {string} iot_ip
      * @param {boolean} fallback if true, no notification will be displayed on fail
      */
-    _poll(iot_ip, fallback = false) {
+    _poll(iot_ip, fallback = true) {
         const listener = this._listeners[iot_ip];
 
         // The backend has a maximum cycle time of 50 seconds so give +10 seconds
-        this._rpcIoT(iot_ip, this.pollRoute, { listener: listener }, 60000).then(
+        this._rpcIoT(iot_ip, this.pollRoute, { listener: listener }, 60000, fallback).then(
             (result) => {
                 this._retries = 0;
                 this._listeners[iot_ip].rpc = false;
@@ -181,8 +191,6 @@ export class IoTLongpolling {
             (e) => {
                 if (e.name === "TimeoutError") {
                     this._onError();
-                } else if (!fallback) {
-                    this._doWarnFail(iot_ip);
                 }
             }
         );

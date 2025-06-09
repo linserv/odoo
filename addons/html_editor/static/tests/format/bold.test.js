@@ -73,17 +73,22 @@ test("should make qweb tag bold and create a step even with partial selection in
     expect(lastStep.mutations[0].value).toBe("font-weight: bolder;");
 });
 
+test.tags("desktop");
 test("should make a whole heading bold after a triple click", async () => {
     await testEditor({
         styleContent: styleH1Bold,
-        contentBefore: `<h1>${notStrong(`[ab`)}</h1><p>]cd</p>`,
-        stepFunction: bold,
+        contentBefore: `<h1>${notStrong(`ab`)}</h1><p>cd</p>`,
+        stepFunction: async (editor) => {
+            await tripleClick(editor.editable.querySelector("h1"));
+            bold(editor);
+        },
         contentAfter: `<h1>[ab]</h1><p>cd</p>`,
     });
 });
 
+test.tags("desktop");
 test("should make a whole heading not bold after a triple click (heading is considered bold)", async () => {
-    const { el, editor } = await setupEditor(`<h1>[ab</h1><p>]cd</p>`, {
+    const { el, editor } = await setupEditor(`<h1>ab</h1><p>cd</p>`, {
         styleContent: styleH1Bold,
     });
     await tripleClick(el.querySelector("h1"));
@@ -219,6 +224,55 @@ test("should make a few characters bold inside table (bold)", async () => {
                     </tr>
             </tbody>
             </table>`),
+    });
+});
+
+test("should make two paragraphs (separated with whitespace) bold", async () => {
+    await testEditor({
+        contentBefore: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
+        stepFunction: bold,
+        contentAfter: `
+            <p><strong>[abc</strong></p>
+            <p><strong>def]</strong></p>
+        `,
+    });
+});
+
+test("should make two paragraphs (separated with whitespace) not bold", async () => {
+    await testEditor({
+        contentBefore: `
+            <p><strong>[abc</strong></p>
+            <p><strong>def]</strong></p>
+        `,
+        stepFunction: bold,
+        contentAfter: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
+    });
+});
+
+test("should make two paragraphs (separated with whitespace) bold, then not bold", async () => {
+    await testEditor({
+        contentBefore: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
+        stepFunction: async (editor) => {
+            bold(editor);
+            expect(getContent(editor.editable)).toBe(`
+            <p><strong>[abc</strong></p>
+            <p><strong>def]</strong></p>
+        `);
+            bold(editor);
+        },
+        contentAfter: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
     });
 });
 

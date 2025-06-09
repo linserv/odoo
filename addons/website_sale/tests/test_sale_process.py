@@ -9,7 +9,6 @@ from odoo.addons.base.tests.common import HttpCaseWithUserDemo
 from odoo.addons.website_sale.tests.common import WebsiteSaleCommon
 from odoo.addons.website.tests.common import HttpCaseWithWebsiteUser
 
-
 _logger = logging.getLogger(__name__)
 
 

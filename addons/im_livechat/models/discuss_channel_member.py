@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 
 from odoo import api, models, fields
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.addons.mail.tools.discuss import Store
 
 
@@ -119,12 +119,9 @@ class DiscussChannelMember(models.Model):
             )
 
     def _to_store_defaults(self):
-        # sudo: discuss.channel - reading livechat channel to check whether current member is a bot is allowed
-        bot = self.channel_id.sudo().livechat_channel_id.rule_ids.chatbot_script_id.operator_partner_id
         return super()._to_store_defaults() + [
             Store.Attr(
-                "is_bot",
-                lambda member: member.partner_id in bot,
+                "livechat_member_type",
                 predicate=lambda member: member.channel_id.channel_type == "livechat",
             )
         ]
@@ -135,7 +132,7 @@ class DiscussChannelMember(models.Model):
             new_fields = [
                 "active",
                 "avatar_128",
-                Store.One("country_id", ["code", "name"], rename="country"),
+                Store.One("country_id", ["code", "name"]),
                 "im_status",
                 "is_public",
                 "user_livechat_username",
@@ -150,7 +147,7 @@ class DiscussChannelMember(models.Model):
         if self.channel_id.channel_type == 'livechat':
             return [
                 "avatar_128",
-                Store.One("country_id", ["code", "name"], rename="country"),
+                Store.One("country_id", ["code", "name"]),
                 "im_status",
                 "name",
                 "offline_since",
@@ -161,12 +158,7 @@ class DiscussChannelMember(models.Model):
         domain = super()._get_rtc_invite_members_domain(*a, **kw)
         chatbot = self.channel_id.chatbot_current_step_id.chatbot_script_id
         if self.channel_id.channel_type == "livechat" and chatbot:
-            domain = expression.AND(
-                [
-                    domain,
-                    [("partner_id", "!=", chatbot.operator_partner_id.id)],
-                ]
-            )
+            domain &= Domain("partner_id", "!=", chatbot.operator_partner_id.id)
         return domain
 
     def _get_html_link_title(self):

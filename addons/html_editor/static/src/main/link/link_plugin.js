@@ -6,12 +6,12 @@ import { _t } from "@web/core/l10n/translation";
 import { LinkPopover } from "./link_popover";
 import { DIRECTIONS, leftPos, nodeSize, rightPos } from "@html_editor/utils/position";
 import { EMAIL_REGEX, URL_REGEX, cleanZWChars, deduceURLfromText } from "./utils";
-import { isVisible, isZwnbsp } from "@html_editor/utils/dom_info";
+import { isElement, isVisible, isZwnbsp } from "@html_editor/utils/dom_info";
 import { KeepLast } from "@web/core/utils/concurrency";
 import { rpc } from "@web/core/network/rpc";
 import { memoize } from "@web/core/utils/functions";
 import { withSequence } from "@html_editor/utils/resource";
-import { isBlock } from "@html_editor/utils/blocks";
+import { isBlock, closestBlock } from "@html_editor/utils/blocks";
 
 /**
  * @typedef {import("@html_editor/core/selection_plugin").EditorSelection} EditorSelection
@@ -91,7 +91,7 @@ async function fetchInternalMetaData(url) {
             const html_parser = new window.DOMParser();
             const doc = html_parser.parseFromString(content, "text/html");
             const internalUrlMetaData = await rpc("/html_editor/link_preview_internal", {
-                preview_url: urlParsed.pathname,
+                preview_url: urlParsed.href,
             });
 
             internalUrlMetaData["favicon"] = doc.querySelector("link[rel~='icon']");
@@ -144,6 +144,7 @@ export class LinkPlugin extends Plugin {
         "overlay",
         "color",
         "baseContainer",
+        "feff",
     ];
     // @phoenix @todo: do we want to have createLink and insertLink methods in link plugin?
     static shared = ["createLink", "insertLink", "getPathAsUrlCommand"];
@@ -219,6 +220,15 @@ export class LinkPlugin extends Plugin {
             icon: "fa-square",
         }),
 
+        link_popovers: [
+            withSequence(50, {
+                //Default option
+                PopoverClass: LinkPopover,
+                isAvailable: () => true,
+                getProps: (props) => props,
+            }),
+        ],
+
         /** Handlers */
         beforeinput_handlers: withSequence(5, this.onBeforeInput.bind(this)),
         input_handlers: this.onInputDeleteNormalizeLink.bind(this),
@@ -229,19 +239,16 @@ export class LinkPlugin extends Plugin {
         selectionchange_handlers: this.handleSelectionChange.bind(this),
         clean_for_save_handlers: ({ root }) => this.removeEmptyLinks(root),
         normalize_handlers: this.normalizeLink.bind(this),
+        after_insert_handlers: this.handleAfterInsert.bind(this),
 
         /** Overrides */
         split_element_block_overrides: this.handleSplitBlock.bind(this),
         insert_line_break_element_overrides: this.handleInsertLineBreak.bind(this),
     };
+
     setup() {
-        this.overlay = this.dependencies.overlay.createOverlay(
-            LinkPopover,
-            {
-                closeOnPointerdown: false,
-            },
-            { sequence: 50 }
-        );
+        this.initializePopovers();
+        this.currentOverlay = this.getActivePopover().overlay;
         this.addDomListener(this.editable, "click", (ev) => {
             const linkEl = ev.target.closest("a");
             if (linkEl) {
@@ -268,7 +275,7 @@ export class LinkPlugin extends Plugin {
         });
         // link creation is added to the command service because of a shortcut conflict,
         // as ctrl+k is used for invoking the command palette
-        this.unregisterLinkCommandCallback = this.services.command.add(
+        this.unregisterLinkCommandCallback = this.services.command?.add(
             "Create link",
             () => {
                 this.dependencies.selection.focusEditable();
@@ -293,10 +300,12 @@ export class LinkPlugin extends Plugin {
         this.getAttachmentMetadata = memoize((url) =>
             fetchAttachmentMetaData(url, this.services.orm)
         );
+        this.LinkPopoverState = { editing: false };
+        this.newlyInsertedLinks = new Set();
     }
 
     destroy() {
-        this.unregisterLinkCommandCallback();
+        this.unregisterLinkCommandCallback?.();
     }
 
     // -------------------------------------------------------------------------
@@ -360,11 +369,24 @@ export class LinkPlugin extends Plugin {
     }
 
     isLinkAllowedOnSelection() {
+        if (this.getResource("link_compatible_selection_predicates").some((p) => p())) {
+            return true;
+        }
         const linksInSelection = this.dependencies.selection
-            .getTraversedNodes()
+            .getTargetedNodes()
             .filter((n) => n.tagName === "A");
+        const targetedNodes = this.dependencies.selection.getTargetedNodes();
         return (
-            linksInSelection.length < 2 && this.dependencies.selection.getTraversedBlocks().size < 2
+            linksInSelection.length < 2 &&
+            // Prevent a link across sibling blocks:
+            !targetedNodes.some((node) => {
+                const next = node.nextSibling;
+                const previous = node.previousSibling;
+                return (
+                    (next && targetedNodes.includes(next) && isBlock(next)) ||
+                    (previous && targetedNodes.includes(previous) && isBlock(previous))
+                );
+            })
         );
     }
 
@@ -374,7 +396,8 @@ export class LinkPlugin extends Plugin {
      * @param {HTMLElement} [linkElement]
      */
     openLinkTools(linkElement, type) {
-        this.overlay.close();
+        this.currentOverlay.close();
+        this.LinkPopoverState.editing = false;
         if (!this.isLinkAllowedOnSelection()) {
             return this.services.notification.add(
                 _t("Unable to create a link on the current selection."),
@@ -408,27 +431,36 @@ export class LinkPlugin extends Plugin {
         const selectionTextContent = selection?.textContent();
         const isImage = !!findInSelection(selection, "img");
 
-        const applyCallback = (url, label, classes) => {
-            if (this.linkInDocument && isImage) {
+        const applyCallback = (url, label, classes, customStyle, linkTarget) => {
+            if (this.linkInDocument) {
                 if (url) {
                     this.linkInDocument.href = url;
                 } else {
                     this.linkInDocument.removeAttribute("href");
                 }
-            } else if (this.linkInDocument) {
-                if (url) {
-                    this.linkInDocument.href = url;
+                if (linkTarget) {
+                    this.linkInDocument.setAttribute("target", linkTarget);
                 } else {
-                    this.linkInDocument.removeAttribute("href");
+                    this.linkInDocument.removeAttribute("target");
                 }
-                if (classes) {
-                    this.linkInDocument.className = classes;
-                } else {
-                    this.linkInDocument.removeAttribute("class");
-                }
-                if (cleanZWChars(this.linkInDocument.innerText) !== label) {
-                    this.linkInDocument.innerText = label;
-                    cursorsToRestore = null;
+                if (!isImage) {
+                    if (classes) {
+                        this.linkInDocument.className = classes;
+                    } else {
+                        this.linkInDocument.removeAttribute("class");
+                    }
+                    if (customStyle) {
+                        this.linkInDocument.setAttribute("style", customStyle);
+                    } else {
+                        this.linkInDocument.removeAttribute("style");
+                    }
+                    if (
+                        this.linkInDocument.childElementCount == 0 &&
+                        cleanZWChars(this.linkInDocument.innerText) !== label
+                    ) {
+                        this.linkInDocument.innerText = label;
+                        cursorsToRestore = null;
+                    }
                 }
             } else if (url) {
                 // prevent the link creation if the url field was empty
@@ -476,6 +508,12 @@ export class LinkPlugin extends Plugin {
                     if (classes) {
                         link.className = classes;
                     }
+                    if (customStyle) {
+                        link.setAttribute("style", customStyle);
+                    }
+                    if (linkTarget) {
+                        link.setAttribute("target", linkTarget);
+                    }
                     this.linkInDocument = link;
                     cursorsToRestore = null;
                     this.dependencies.dom.insert(link);
@@ -483,8 +521,9 @@ export class LinkPlugin extends Plugin {
             }
         };
 
-        const restoreSavePoint = this.dependencies.history.makeSavePoint();
+        this.restoreSavePoint = this.dependencies.history.makeSavePoint();
         const props = {
+            document: this.document,
             linkElement,
             isImage: isImage,
             onApply: (...args) => {
@@ -496,22 +535,28 @@ export class LinkPlugin extends Plugin {
             },
             onChange: applyCallback,
             onDiscard: () => {
-                restoreSavePoint();
-                this.openLinkTools(linkElement);
+                this.restoreSavePoint();
+                if (linkElement.isConnected) {
+                    this.openLinkTools(linkElement);
+                }
                 this.dependencies.selection.focusEditable();
             },
             onRemove: () => {
                 this.removeLinkInDocument();
                 this.linkInDocument = null;
-                this.overlay.close();
+                this.currentOverlay.close();
             },
             onCopy: () => {
                 this.linkInDocument = null;
-                this.overlay.close();
+                this.currentOverlay.close();
             },
             onClose: () => {
                 this.linkInDocument = null;
-                this.overlay.close();
+                this.currentOverlay.close();
+                this.dependencies.selection.focusEditable();
+            },
+            onEdit: () => {
+                this.restoreSavePoint = this.dependencies.history.makeSavePoint();
             },
             getInternalMetaData: this.getInternalMetaData,
             getExternalMetaData: this.getExternalMetaData,
@@ -522,9 +567,25 @@ export class LinkPlugin extends Plugin {
             canUpload: this.config.allowFile,
             onUpload: this.config.onAttachmentChange,
             type: this.type || "",
+            LinkPopoverState: this.LinkPopoverState,
+            showReplaceTitleBanner: this.newlyInsertedLinks.has(linkElement),
+            allowCustomStyle: this.config.allowCustomStyle,
+            allowTargetBlank: this.config.allowTargetBlank,
         };
-        this.overlay.open({ props });
+
+        const popover = this.getActivePopover(linkElement);
+        this.currentOverlay = popover.overlay;
+        if (!linkElement.href) {
+            this.LinkPopoverState.editing = true;
+        }
+        this.currentOverlay.open({ props: popover.getProps(props) });
+        if (this.linkInDocument) {
+            if (this.newlyInsertedLinks.has(this.linkInDocument)) {
+                this.newlyInsertedLinks.delete(this.linkInDocument);
+            }
+        }
     }
+
     /**
      * close the link tool
      *
@@ -535,8 +596,8 @@ export class LinkPlugin extends Plugin {
         // Some unit tests fail when this.overlay.isOpen but the DOM don't contain the linkPopover yet.
         // Because of some kind of race condition between the hoot mock event and the owl renderer.
         // This is why we check for the popover in the DOM.
-        if (this.overlay.isOpen && document.querySelector(".o-we-linkpopover")) {
-            this.overlay.close();
+        if (this.currentOverlay.isOpen && document.querySelector(".o-we-linkpopover")) {
+            this.currentOverlay.close();
             if (link && link.isConnected) {
                 this.dependencies.selection.setSelection({
                     anchorNode: link,
@@ -544,7 +605,16 @@ export class LinkPlugin extends Plugin {
                     focusNode: link,
                     focusOffset: nodeSize(link),
                 });
+                const saveCustomStyle = link.getAttribute("style");
+                link.removeAttribute("style");
                 this.dependencies.color.removeAllColor();
+                if (
+                    saveCustomStyle &&
+                    this.config.allowCustomStyle &&
+                    link.className.includes("custom")
+                ) {
+                    link.setAttribute("style", saveCustomStyle);
+                }
                 // Remove the current link (linkInDocument) if it has no content
                 if (cleanZWChars(link.innerText) === "" && !link.querySelector("img")) {
                     const [anchorNode, anchorOffset] = rightPos(link);
@@ -566,6 +636,10 @@ export class LinkPlugin extends Plugin {
 
     normalizeLink(root) {
         for (const anchorEl of selectElements(root, "a")) {
+            if (/btn(-[a-z0-9_-]*)custom/.test(anchorEl.className)) {
+                // if the link is a customized button, we don't want to change the color
+                continue;
+            }
             const { color } = anchorEl.style;
             const childNodes = [...anchorEl.childNodes];
             // For each anchor element, if it has an inline color style,
@@ -576,7 +650,7 @@ export class LinkPlugin extends Plugin {
             if (color && childNodes.every((n) => !isBlock(n))) {
                 anchorEl.style.removeProperty("color");
                 const font = selectElements(anchorEl, "font").next().value;
-                if (font && anchorEl.textContent === font.textContent) {
+                if (font && cleanZWChars(anchorEl.textContent) === font.textContent) {
                     continue;
                 }
                 const newFont = this.document.createElement("font");
@@ -631,9 +705,9 @@ export class LinkPlugin extends Plugin {
                 }
             }
         }
-        if (!selectionData.documentSelectionIsInEditable) {
-            const popoverEl = document.querySelector(".o-we-linkpopover");
-            if (popoverEl?.contains(selectionData.documentSelection?.anchorNode)) {
+        if (!selectionData.currentSelectionIsInEditable) {
+            const anchorNode = document.getSelection()?.anchorNode;
+            if (anchorNode && isElement(anchorNode) && anchorNode.closest(".o-we-linkpopover")) {
                 return;
             }
             this.linkInDocument = null;
@@ -650,10 +724,17 @@ export class LinkPlugin extends Plugin {
             }
         } else {
             const closestLinkElement = closestElement(selection.anchorNode, "A");
-            if (closestLinkElement) {
+            if (closestLinkElement && closestLinkElement.isContentEditable) {
                 if (closestLinkElement !== this.linkInDocument) {
                     this.openLinkTools(closestLinkElement);
                 }
+            } else if (
+                closestLinkElement &&
+                (closestLinkElement.getAttribute("role") === "menuitem" ||
+                    closestLinkElement.classList.contains("nav-link")) &&
+                !closestLinkElement.dataset.bsToggle
+            ) {
+                this.openLinkTools(closestLinkElement);
             } else {
                 this.linkInDocument = null;
                 this.closeLinkTools();
@@ -669,7 +750,7 @@ export class LinkPlugin extends Plugin {
      */
     extendLinkToSelection(linkElement) {
         this.dependencies.split.splitSelection();
-        const selectedNodes = this.dependencies.selection.getSelectedNodes();
+        const selectedNodes = this.dependencies.selection.getTargetedNodes();
         let before = linkElement.previousSibling;
         while (before !== null && selectedNodes.includes(before)) {
             linkElement.insertBefore(before, linkElement.firstChild);
@@ -700,7 +781,6 @@ export class LinkPlugin extends Plugin {
 
     removeLinkFromSelection() {
         const selection = this.dependencies.split.splitSelection();
-        const cursors = this.dependencies.selection.preserveSelection();
 
         // If not, unlink only the part(s) of the link(s) that are selected:
         // `<a>a[b</a>c<a>d</a>e<a>f]g</a>` => `<a>a</a>[bcdef]<a>g</a>`.
@@ -711,10 +791,27 @@ export class LinkPlugin extends Plugin {
             closestElement(anchorNode, "a"),
             closestElement(focusNode, "a"),
         ];
+        let cursors;
+        if (startLink) {
+            // If a FEFF character is present as anchorNode or focusNode,
+            // restoring the selection later may throw an error. Therefore,
+            // FEFF characters should be cleaned before splitting the link.
+            cursors = this.dependencies.selection.preserveSelection();
+            this.dependencies.feff.removeFeffs(startLink, cursors);
+            cursors.restore();
+        }
+        if (endLink && startLink !== endLink) {
+            cursors = this.dependencies.selection.preserveSelection();
+            this.dependencies.feff.removeFeffs(endLink, cursors);
+            cursors.restore();
+        }
+        ({ anchorNode, focusNode, anchorOffset, focusOffset } =
+            this.dependencies.selection.getEditableSelection());
+        cursors = this.dependencies.selection.preserveSelection();
         // to remove link from selected images
-        const selectedNodes = this.dependencies.selection.getSelectedNodes();
-        const selectedImageNodes = selectedNodes.filter((node) => node.tagName === "IMG");
-        if (selectedImageNodes && startLink && endLink && startLink === endLink) {
+        let targetedNodes = this.dependencies.selection.getTargetedNodes();
+        const selectedImageNodes = targetedNodes.filter((node) => node.tagName === "IMG");
+        if (selectedImageNodes.length && startLink && endLink && startLink === endLink) {
             for (const imageNode of selectedImageNodes) {
                 let imageLink;
                 const figure = closestElement(imageNode, "figure");
@@ -746,12 +843,14 @@ export class LinkPlugin extends Plugin {
             // when only unlink an inline image, add step after the unwrapping
             if (
                 selectedImageNodes.length === 1 &&
-                selectedImageNodes.length === selectedNodes.length
+                selectedImageNodes.length === targetedNodes.length
             ) {
                 this.dependencies.history.addStep();
                 return;
             }
         }
+        const startBlock = closestBlock(startLink);
+        const endBlock = closestBlock(endLink);
         if (startLink && startLink.isConnected) {
             anchorNode = this.dependencies.split.splitAroundUntil(anchorNode, startLink);
             anchorOffset = direction === DIRECTIONS.RIGHT ? 0 : nodeSize(anchorNode);
@@ -769,7 +868,7 @@ export class LinkPlugin extends Plugin {
                 { normalize: true }
             );
         }
-        const targetedNodes = this.dependencies.selection.getSelectedNodes();
+        targetedNodes = this.dependencies.selection.getTargetedNodes();
         const links = new Set(
             targetedNodes
                 .map((node) => closestElement(node, "a"))
@@ -782,17 +881,29 @@ export class LinkPlugin extends Plugin {
             }
             cursors.restore();
         }
+        if (startBlock) {
+            // Remove empty links splitted by `splitAroundUntil` due to
+            // adjacent invisible text nodes.
+            this.removeEmptyLinks(startBlock);
+        }
+        if (endBlock && endBlock !== startBlock) {
+            this.removeEmptyLinks(endBlock);
+        }
         this.dependencies.history.addStep();
     }
 
     removeEmptyLinks(root) {
         // @todo: check for unremovables
         // @todo: preserve spaces
+        const buttonClassRegex =
+            /^(btn|btn-(sm|lg|(?:[a-z0-9_]+-)?(?:primary|secondary))|rounded-circle)$/;
         for (const link of root.querySelectorAll("a")) {
             if ([...link.childNodes].some(isVisible)) {
                 continue;
             }
-            const classes = [...link.classList].filter((c) => !this.ignoredClasses.has(c));
+            const classes = [...link.classList].filter(
+                (c) => !this.ignoredClasses.has(c) && !buttonClassRegex.test(c)
+            );
             const attributes = [...link.attributes].filter(
                 (a) => !["style", "href", "class"].includes(a.name)
             );
@@ -860,8 +971,8 @@ export class LinkPlugin extends Plugin {
             if (url && this?.isCurrentLinkInSync) {
                 linkEl.setAttribute("href", url);
                 this.isCurrentLinkInSync = false;
-                if (this.overlay.isOpen) {
-                    this.overlay.close();
+                if (this.currentOverlay.isOpen) {
+                    this.currentOverlay.close();
                 }
             }
         }
@@ -961,6 +1072,39 @@ export class LinkPlugin extends Plugin {
         blockToSplit = targetNode;
         splitOrLineBreakCallback({ ...params, targetNode, targetOffset, blockToSplit });
         return true;
+    }
+
+    handleAfterInsert(insertedNodes) {
+        for (const node of insertedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                for (const link of selectElements(node, "A")) {
+                    if (link.getAttribute("href") === link.textContent && !this.isImage) {
+                        this.newlyInsertedLinks.add(link);
+                    }
+                }
+            }
+        }
+    }
+
+    initializePopovers() {
+        this.overlays = [];
+        this.getResource("link_popovers").map((link_popover) => {
+            this.overlays.push({
+                overlay: this.dependencies.overlay.createOverlay(
+                    link_popover.PopoverClass,
+                    {
+                        closeOnPointerdown: false,
+                    },
+                    { sequence: 50 }
+                ),
+                isAvailable: link_popover.isAvailable,
+                getProps: link_popover.getProps,
+            });
+        });
+    }
+
+    getActivePopover(linkElement) {
+        return this.overlays.find((overlay) => overlay.isAvailable(linkElement));
     }
 }
 

@@ -53,14 +53,19 @@ test("should make qweb tag underline", async () => {
     });
 });
 
+test.tags("desktop");
 test("should make a whole heading underline after a triple click", async () => {
     await testEditor({
-        contentBefore: `<h1>[ab</h1><p>]cd</p>`,
-        stepFunction: underline,
+        contentBefore: `<h1>ab</h1><p>cd</p>`,
+        stepFunction: async (editor) => {
+            await tripleClick(editor.editable.querySelector("h1"));
+            underline(editor);
+        },
         contentAfter: `<h1>${u(`[ab]`)}</h1><p>cd</p>`,
     });
 });
 
+test.tags("desktop");
 test("should make a whole heading not underline after a triple click", async () => {
     const { el, editor } = await setupEditor(`<h1>${u(`ab`)}</h1><p>cd</p>`);
     await tripleClick(el.querySelector("h1"));
@@ -90,6 +95,55 @@ test("should make a selection ending with underline text fully underline", async
         contentBefore: `<p>[ab</p><p>${u(`c]d`)}</p>`,
         stepFunction: underline,
         contentAfter: `<p>${u(`[ab`)}</p><p>${u(`c]d`)}</p>`,
+    });
+});
+
+test("should make two paragraphs (separated with whitespace) underline", async () => {
+    await testEditor({
+        contentBefore: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
+        stepFunction: underline,
+        contentAfter: `
+            <p><u>[abc</u></p>
+            <p><u>def]</u></p>
+        `,
+    });
+});
+
+test("should make two paragraphs (separated with whitespace) not underline", async () => {
+    await testEditor({
+        contentBefore: `
+            <p><u>[abc</u></p>
+            <p><u>def]</u></p>
+        `,
+        stepFunction: underline,
+        contentAfter: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
+    });
+});
+
+test("should make two paragraphs (separated with whitespace) underline, then not underline", async () => {
+    await testEditor({
+        contentBefore: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
+        stepFunction: async (editor) => {
+            underline(editor);
+            expect(getContent(editor.editable)).toBe(`
+            <p><u>[abc</u></p>
+            <p><u>def]</u></p>
+        `);
+            underline(editor);
+        },
+        contentAfter: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
     });
 });
 

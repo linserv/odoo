@@ -64,7 +64,9 @@ class AccountMove(models.Model):
     )
     l10n_my_edi_custom_form_reference = fields.Char(
         string="Customs Form Reference Number",
-        help="Reference Number of Customs Form No.1, 9, etc.",
+        help="""Reference Number of Customs Forms
+Customs form No. 2 for Customer Invoices
+Customs form No. 1, 9, etc for Vendor Bills""",
     )
     # False => Not sent yet.
     l10n_my_edi_state = fields.Selection(
@@ -513,15 +515,15 @@ class AccountMove(models.Model):
             ('l10n_my_edi_retry_at', '<=', datetime.datetime.now()),
             ('l10n_my_edi_retry_at', '=', False),
         ]])
+        if self._can_commit():
+            self.env['ir.cron']._commit_progress(remaining=self.search_count(invoice_domain))
         grouped_invoices = self.env["account.move"]._read_group(
             invoice_domain,
             groupby=["company_id", "l10n_my_edi_submission_uid"],
             aggregates=["id:recordset"],
             limit=MAX_SUBMISSION_UPDATE,
         )
-        invoice_count = self.search_count(invoice_domain)  # Count the total amount of invoices to process.
 
-        processed_invoices = 0
         for company, submission_uid, invoices in grouped_invoices:
             if not company.l10n_my_edi_proxy_user_id:
                 continue
@@ -558,14 +560,11 @@ class AccountMove(models.Model):
                 if invoice.l10n_my_edi_state == "valid":
                     invoice._update_validation_fields(invoice_result)
 
-            processed_invoices += len(invoices)
             # Commit if we can, in case an issue arises later.
             if self._can_commit():
-                self.env['ir.cron']._notify_progress(done=processed_invoices, remaining=invoice_count - processed_invoices)
-                self._cr.commit()
+                self.env['ir.cron']._commit_progress(len(invoices))
 
             time.sleep(0.3)  # There is a limit of how many calls we can do, so we pace ourselves
-        self.env['ir.cron']._notify_progress(done=processed_invoices, remaining=invoice_count - processed_invoices)
 
     @api.model
     def _l10n_my_get_submission_status(self, submission_uid, proxy_user):
@@ -715,7 +714,10 @@ class AccountMove(models.Model):
             'update_active_documents': _('You cannot update this invoice, has it has been referenced by a debit or credit note.\n'
                                          'If you still want to update it, you must first update the debit/credit note.'),
             'update_forbidden': _('You do not have the permission to update this invoice.'),
-            'search_date_invalid': _('The search params are invalid.'),  # Should never happen
+            'document_not_found': _('The document provided in the request does not exist.'),  # Should never happen
+            'search_date_invalid': _('The search params are invalid.'),  # Should also never happen
+            'submission_too_large': _('The submission is too large, try to send fewer invoices at once.'),
+            'action_forbidden': _('Permission to do this action has not been granted. Please ensure that Odoo has sufficient permissions on the MyInvois platform.'),
         }
 
         if error.get('target'):
@@ -846,6 +848,7 @@ class AccountMove(models.Model):
         try:
             qr_code = self.env['ir.actions.report'].barcode(
                 barcode_type='QR',
+                quiet=False,
                 width=128,
                 height=128,
                 humanreadable=1,

@@ -54,7 +54,8 @@ export class PosOrderline extends Base {
 
             if (product_packaging_by_barcode[code.code]) {
                 this.setQuantity(
-                    uom_by_id[product_packaging_by_barcode[code.code].uom_id.id].factor
+                    uom_by_id[product_packaging_by_barcode[code.code].uom_id.id].factor /
+                        this.product_id.product_tmpl_id.uom_id.factor
                 );
             }
         }
@@ -535,6 +536,19 @@ export class PosOrderline extends Base {
             taxDetails: taxDetails,
             taxesData: baseLine.tax_details.taxes_data,
         };
+    }
+
+    computePriceWithTaxBeforeDiscount() {
+        return this.combo_line_ids.length > 0
+            ? // total of all combo lines if it is combo parent
+              formatCurrency(
+                  this.combo_line_ids.reduce(
+                      (total, cl) => total + cl.allPrices.priceWithTaxBeforeDiscount,
+                      0
+                  ),
+                  this.currency
+              )
+            : formatCurrency(this.allPrices.priceWithTaxBeforeDiscount, this.currency);
     }
 
     get allPrices() {

@@ -343,7 +343,8 @@ class IrUiView(models.Model):
                 * all views inheriting from it, enabled or not
                   - but not the optional children of a non-enabled child
                 * all views called from it (via t-call)
-            :returns recordset of ir.ui.view
+
+            :returns: recordset of ir.ui.view
         """
         try:
             view = self._view_obj(view_id)
@@ -498,6 +499,7 @@ class IrUiView(models.Model):
         }
         snippet_addition_view_values.update(self._snippet_save_view_values_hook())
         self.create(snippet_addition_view_values)
+        return name
 
     @api.model
     def rename_snippet(self, name, view_id, template_key):

@@ -6,6 +6,7 @@ import { useService } from "@web/core/utils/hooks";
 
 import { AlertDialog, ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { NumberPopup } from "@point_of_sale/app/components/popups/number_popup/number_popup";
+import { PriceFormatter } from "@point_of_sale/app/components/price_formatter/price_formatter";
 import { DatePickerPopup } from "@point_of_sale/app/components/popups/date_picker_popup/date_picker_popup";
 import { ConnectionLostError, RPCError } from "@web/core/network/rpc";
 
@@ -26,6 +27,7 @@ export class PaymentScreen extends Component {
         Numpad,
         PaymentScreenPaymentLines,
         PaymentScreenStatus,
+        PriceFormatter,
     };
     static props = {
         orderUuid: String,
@@ -54,7 +56,6 @@ export class PaymentScreen extends Component {
 
     onMounted() {
         const order = this.pos.getOrder();
-        this.pos.addPendingOrder([order.id]);
 
         for (const payment of order.payment_ids) {
             const pmid = payment.payment_method_id.id;
@@ -122,6 +123,10 @@ export class PaymentScreen extends Component {
     get selectedPaymentLine() {
         return this.currentOrder.getSelectedPaymentline();
     }
+    makeAnimation() {
+        this.pos.addAnimation = true;
+        setTimeout(() => (this.pos.addAnimation = false), 1000);
+    }
     async addNewPaymentLine(paymentMethod) {
         if (
             paymentMethod.type === "pay_later" &&
@@ -144,6 +149,9 @@ export class PaymentScreen extends Component {
             return;
         }
 
+        if (this.paymentLines.length === 0) {
+            this.makeAnimation();
+        }
         // original function: click_paymentmethods
         const result = this.currentOrder.addPaymentline(paymentMethod);
         if (!this.checkCashRoundingHasBeenWellApplied()) {
@@ -229,7 +237,6 @@ export class PaymentScreen extends Component {
         if (newTip === undefined) {
             return;
         }
-
         await this.pos.setTip(parseFloat(newTip ?? ""));
         const pLine =
             this.selectedPaymentLine &&
@@ -246,8 +253,9 @@ export class PaymentScreen extends Component {
             );
             return;
         }
-
-        pLine.setAmount(pLine.getAmount() - (tip || 0) + parseFloat(newTip));
+        const tipDifference = parseFloat(newTip) - (tip || 0);
+        const tipToAdd = change <= 0 ? tipDifference : Math.max(0, tipDifference - change);
+        pLine.setAmount(pLine.getAmount() + tipToAdd);
     }
     async toggleShippingDatePicker() {
         if (!this.currentOrder.getShippingDate()) {
@@ -391,6 +399,11 @@ export class PaymentScreen extends Component {
         let nextPage = this.nextPage;
         let switchScreen = true;
 
+        this.currentOrder.uiState.locked = true;
+        if (!this.pos.config.module_pos_restaurant) {
+            this.pos.sendOrderInPreparation(this.currentOrder, { orderDone: true });
+        }
+
         if (
             nextPage.page === "ReceiptScreen" &&
             this.currentOrder.nb_print === 0 &&
@@ -401,11 +414,10 @@ export class PaymentScreen extends Component {
                 : true;
 
             if (invoiced_finalized) {
-                this.pos.printReceipt({ order: this.currentOrder });
+                await this.pos.printReceipt({ order: this.currentOrder });
 
                 if (this.pos.config.iface_print_skip_screen) {
-                    this.currentOrder.setScreenData({ name: "" });
-                    this.currentOrder.uiState.locked = true;
+                    this.pos.orderDone(this.currentOrder);
                     switchScreen = this.currentOrder.uuid === this.pos.selectedOrderUuid;
                     nextPage = this.pos.defaultPage;
                     if (switchScreen) {

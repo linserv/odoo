@@ -10,8 +10,8 @@ from itertools import repeat
 import pytz
 from werkzeug.urls import url_parse
 
-from odoo import api, fields, models, Command
-from odoo.osv.expression import AND
+from odoo import api, fields, models
+from odoo.fields import Command, Domain
 from odoo.addons.base.models.res_partner import _tz_get
 from odoo.addons.calendar.models.calendar_attendee import CalendarAttendee
 from odoo.addons.calendar.models.calendar_recurrence import (
@@ -23,7 +23,7 @@ from odoo.addons.calendar.models.calendar_recurrence import (
     BYDAY_SELECTION
 )
 from odoo.addons.calendar.models.utils import interval_from_events
-from odoo.tools.date_intervals import intervals_overlap
+from odoo.tools.intervals import intervals_overlap
 from odoo.tools.translate import _
 from odoo.tools.misc import get_lang
 from odoo.tools import html2plaintext, html_sanitize, is_html_empty, single_email_re
@@ -821,7 +821,7 @@ class CalendarEvent(models.Model):
         }
         private_fields = fnames - self._get_public_fields()
         if not self.env.su and private_fields:
-            domain = AND([domain, self._get_default_privacy_domain()])
+            domain = Domain.AND([domain, self._get_default_privacy_domain()])
         return super()._read_group(domain, groupby, aggregates, having=having, offset=offset, limit=limit, order=order)
 
     def unlink(self):
@@ -1229,26 +1229,6 @@ class CalendarEvent(models.Model):
             'byday': str(get_weekday_occurence(event_date)),
             'day': event_date.day,
         }
-
-    def _split_recurrence(self, time_values):
-        """Apply time changes to events and update the recurrence accordingly.
-
-        :return: detached events
-        """
-        self.ensure_one()
-        if not time_values:
-            return self.browse()
-        if self.follow_recurrence and self.recurrency:
-            previous_week_day_field = weekday_to_field(self._get_start_date().weekday())
-        else:
-            # When we try to change recurrence values of an event not following the recurrence, we get the parameters from
-            # the base_event
-            previous_week_day_field = weekday_to_field(self.recurrence_id.base_event_id._get_start_date().weekday())
-        self.write(time_values)
-        return self._apply_recurrence_values({
-            previous_week_day_field: False,
-            **self._get_recurrence_params(),
-        }, future=True)
 
     def _break_recurrence(self, future=True):
         """Breaks the event's recurrence.

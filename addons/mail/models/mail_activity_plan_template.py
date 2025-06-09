@@ -145,10 +145,12 @@ class MailActivityPlanTemplate(models.Model):
         :param <res.user> on_demand_responsible: on demand responsible
         :param recordset applied_on_record: the record on which the activity
             will be created
-        :return dict: {'responsible': <res.user>, error: str|False}
+        :returns: {'responsible': <res.user>, error: str|False}
+        :rtype: dict
         """
         self.ensure_one()
         error = False
+        warning = False
         if self.responsible_type == 'other':
             responsible = self.responsible_id
         elif self.responsible_type == 'on_demand':
@@ -162,4 +164,5 @@ class MailActivityPlanTemplate(models.Model):
         return {
             'responsible': responsible,
             'error': error,
+            'warning': warning,
         }

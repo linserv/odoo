@@ -8,10 +8,9 @@ from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 
 from odoo import api, fields, models, _
-from odoo.osv import expression
 from odoo.exceptions import UserError, ValidationError
+from odoo.fields import Domain
 from odoo.tools import email_normalize
-from odoo.osv import expression
 
 ATTENDEE_CONVERTER_O2M = {
     'needsAction': 'notresponded',
@@ -53,11 +52,6 @@ class CalendarEvent(models.Model):
     @api.model
     def _restart_microsoft_sync(self):
         domain = self._get_microsoft_sync_domain()
-
-        # Sync only events created/updated after last sync date (with 5 min of time acceptance).
-        if self.env.user.microsoft_last_sync_date:
-            time_offset = timedelta(minutes=5)
-            domain = expression.AND([domain, [('write_date', '>=', self.env.user.microsoft_last_sync_date - time_offset)]])
 
         self.env['calendar.event'].with_context(dont_notify=True).search(domain).write({
             'need_sync_m': True,
@@ -288,17 +282,17 @@ class CalendarEvent(models.Model):
         custom_lower_bound_range = ICP.get_param('microsoft_calendar.sync.lower_bound_range')
         if custom_lower_bound_range:
             lower_bound = fields.Datetime.subtract(fields.Datetime.now(), days=int(custom_lower_bound_range))
-        domain = [
+        domain = Domain([
             ('partner_ids.user_ids', 'in', [self.env.user.id]),
             ('stop', '>', lower_bound),
             ('start', '<', upper_bound),
             '!', '&', '&', ('recurrency', '=', True), ('recurrence_id', '!=', False), ('follow_recurrence', '=', True)
-        ]
+        ])
 
         # Synchronize events that were created after the first synchronization date, when applicable.
         first_synchronization_date = ICP.get_param('microsoft_calendar.sync.first_synchronization_date')
         if first_synchronization_date:
-            domain = expression.AND([domain, [('create_date', '>=', first_synchronization_date)]])
+            domain &= Domain('create_date', '>=', first_synchronization_date)
 
         return self._extend_microsoft_domain(domain)
 
@@ -696,3 +690,8 @@ class CalendarEvent(models.Model):
             if user_id and self.with_user(user_id).sudo()._check_microsoft_sync_status():
                 return user_id
         return self.env.user
+
+    def _is_microsoft_insertion_blocked(self, sender_user):
+        self.ensure_one()
+        has_different_owner = self.user_id and self.user_id != sender_user
+        return has_different_owner

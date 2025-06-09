@@ -14,7 +14,7 @@ import { HWPrinter } from "@point_of_sale/app/utils/printer/hw_printer";
 import { renderToElement } from "@web/core/utils/render";
 import { TimeoutPopup } from "@pos_self_order/app/components/timeout_popup/timeout_popup";
 import { constructFullProductName, deduceUrl, random5Chars } from "@point_of_sale/utils";
-import { getOrderLineValues, computeInitialComboPrice } from "./card_utils";
+import { getOrderLineValues } from "./card_utils";
 import {
     getTaxesAfterFiscalPosition,
     getTaxesValues,
@@ -248,7 +248,7 @@ export class SelfOrder extends Reactive {
         );
 
         if (lineToMerge) {
-            lineToMerge.qty += newLine.qty;
+            lineToMerge.setQuantity(lineToMerge.qty + newLine.qty);
             newLine.delete();
         }
     }
@@ -362,7 +362,7 @@ export class SelfOrder extends Reactive {
 
         const pricelist = autoSelectedPresets
             ? this.config.default_preset_id?.pricelist_id
-            : this.config.default_pricelist_id;
+            : this.config.pricelist_id;
 
         return this.models["pos.order"].create({
             company_id: this.company,
@@ -786,7 +786,7 @@ export class SelfOrder extends Reactive {
     getProductPriceInfo(productTemplate, product) {
         const pricelist = this.config.use_presets
             ? this.currentOrder.preset_id?.pricelist_id
-            : this.config.default_pricelist_id;
+            : this.config.pricelist_id;
         const price = productTemplate.getPrice(pricelist, 1, 0, false, product);
         let taxes = productTemplate.taxes_id;
 
@@ -814,10 +814,6 @@ export class SelfOrder extends Reactive {
         return { pricelist_price: price, ...taxesData };
     }
     getProductDisplayPrice(productTemplate, product) {
-        if (productTemplate.isCombo()) {
-            return computeInitialComboPrice(this, productTemplate);
-        }
-
         const taxesData = this.getProductPriceInfo(productTemplate, product);
         if (this.isTaxesIncludedInPrice()) {
             return taxesData.total_included;

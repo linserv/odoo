@@ -3,6 +3,7 @@ import { BlurManager } from "@mail/discuss/call/common/blur_manager";
 import { monitorAudio } from "@mail/utils/common/media_monitoring";
 import { rpc } from "@web/core/network/rpc";
 import { assignDefined, closeStream, onChange } from "@mail/utils/common/misc";
+import { CallInfiniteMirroringWarning } from "@mail/discuss/call/common/call_infinite_mirroring_warning";
 
 import { reactive, toRaw } from "@odoo/owl";
 
@@ -41,7 +42,6 @@ function subscribe(target, event, f) {
 }
 
 const SW_MESSAGE_TYPE = {
-    UNEXPECTED_CALL_TERMINATION: "UNEXPECTED_CALL_TERMINATION",
     POST_RTC_LOGS: "POST_RTC_LOGS",
 };
 export const CONNECTION_TYPES = { P2P: "p2p", SERVER: "server" };
@@ -369,6 +369,7 @@ export class Rtc extends Record {
     start() {
         const services = this.store.env.services;
         this.notification = services.notification;
+        this.overlay = services.overlay;
         this.soundEffectsService = services["mail.sound_effects"];
         this.pttExtService = services["discuss.ptt_extension"];
         if (this._broadcastChannel) {
@@ -435,10 +436,6 @@ export class Rtc extends Record {
 
         browser.addEventListener("pagehide", () => {
             if (this.state.channel) {
-                browser.navigator.serviceWorker?.controller?.postMessage({
-                    name: SW_MESSAGE_TYPE.UNEXPECTED_CALL_TERMINATION,
-                    channelId: this.state.channel.id,
-                });
                 const data = JSON.stringify({
                     params: { channel_id: this.state.channel.id, session_id: this.selfSession.id },
                 });
@@ -472,6 +469,33 @@ export class Rtc extends Record {
             }
             this.call();
         }, PING_INTERVAL);
+    }
+
+    get displaySurface() {
+        return this.state.sourceScreenStream?.getVideoTracks()[0]?.getSettings().displaySurface;
+    }
+
+    showMirroringWarning() {
+        this.state.screenTrack.enabled = false;
+        const trackEndedFn = () => this.removeMirroringWarning?.();
+        this.removeMirroringWarning = this.overlay.add(
+            CallInfiniteMirroringWarning,
+            {
+                onClose: ({ stopScreensharing } = {}) => {
+                    this.removeMirroringWarning({ stopScreensharing });
+                },
+            },
+            {
+                onRemove: ({ stopScreensharing } = {}) => {
+                    if (stopScreensharing) {
+                        this.toggleVideo("screen", false);
+                    }
+                    this.state.screenTrack?.removeEventListener("ended", trackEndedFn);
+                    this.removeMirroringWarning = null;
+                },
+            }
+        );
+        this.state.screenTrack.addEventListener("ended", trackEndedFn, { once: true });
     }
 
     setPttReleaseTimeout(duration = 200) {
@@ -1294,9 +1318,7 @@ export class Rtc extends Record {
             // only register the beforeunload event if there is a call as FireFox will not place
             // the pages with beforeunload listeners in the bfcache.
             subscribe(browser, "beforeunload", (event) => {
-                if (this.store.env.services["multi_tab"].isOnLastTab) {
-                    event.preventDefault();
-                }
+                event.preventDefault();
             })
         );
     }

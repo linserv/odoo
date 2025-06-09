@@ -591,7 +591,7 @@ test("Post a message containing an email address followed by a mention on anothe
 test("basic rendering of canceled notification", async () => {
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({ name: "test" });
-    const partnerId = pyEnv["res.partner"].create({ name: "Someone" });
+    const partnerId = pyEnv["res.partner"].create({ name: "Someone", email: "test@test.be" });
     const messageId = pyEnv["mail.message"].create({
         body: "not empty",
         message_type: "email",
@@ -611,7 +611,7 @@ test("basic rendering of canceled notification", async () => {
     await click(".o-mail-Message-notification");
     await contains(".o-mail-MessageNotificationPopover");
     await contains(".o-mail-MessageNotificationPopover .fa-trash-o");
-    await contains(".o-mail-MessageNotificationPopover", { text: "Someone" });
+    await contains(".o-mail-MessageNotificationPopover", { text: "Someone (test@test.be)" });
 });
 
 test("first unseen message should be directly preceded by the new message separator if there is a transient message just before it while composer is not focused", async () => {
@@ -919,4 +919,42 @@ test("Can scroll to notification", async () => {
     await click("[title='Pinned Messages']");
     await click(".o-discuss-PinnedMessagesPanel a[role='button']", { text: "Jump" });
     await isInViewportOf(".o-mail-NotificationMessage:contains(notification 0)", ".o-mail-Thread");
+});
+
+test("Update unread counter when receiving new message", async () => {
+    const pyEnv = await startServer();
+    const partnerId = pyEnv["res.partner"].create({ name: "Demo" });
+    const userId = pyEnv["res.users"].create({ name: "Demo User", partner_id: partnerId });
+    const channelId = pyEnv["discuss.channel"].create({
+        channel_member_ids: [
+            Command.create({
+                message_unread_counter: 1,
+                partner_id: serverState.partnerId
+            }),
+            Command.create({ partner_id: partnerId }),
+        ],
+        channel_type: "chat",
+    });
+    pyEnv["mail.message"].create({
+        author_id: partnerId,
+        body: "<p>Test</p>",
+        model: "discuss.channel",
+        res_id: channelId,
+    });
+    await start();
+    await openDiscuss(undefined);
+    await contains(".o-discuss-badge", { text: "1" });
+
+    await withUser(userId, () =>
+        rpc("/mail/message/post", {
+            post_data: {
+                body: "Message 1",
+                message_type: "comment",
+                subtype_xmlid: "mail.mt_comment",
+            },
+            thread_id: channelId,
+            thread_model: "discuss.channel",
+        })
+    );
+    await contains(".o-discuss-badge", { text: "2" });
 });

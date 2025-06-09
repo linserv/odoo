@@ -6,6 +6,9 @@ import { describe, expect, test } from "@odoo/hoot";
 import { createSpreadsheetWithChart } from "@spreadsheet/../tests/helpers/chart";
 import { addGlobalFilter, setGlobalFilterValue } from "@spreadsheet/../tests/helpers/commands";
 import { globalFieldMatchingRegistry } from "@spreadsheet/global_filters/helpers";
+import { THIS_YEAR_GLOBAL_FILTER } from "../helpers/global_filter";
+
+const { DateTime } = luxon;
 
 describe.current.tags("headless");
 defineSpreadsheetModels();
@@ -16,15 +19,9 @@ defineSpreadsheetModels();
 
 async function addChartGlobalFilter(model) {
     const chartId = model.getters.getChartIds(model.getters.getActiveSheetId())[0];
-    /** @type {DateGlobalFilter}*/
-    const filter = {
-        id: "42",
-        type: "date",
-        label: "Last Year",
-        rangeType: "fixedPeriod",
-        defaultValue: { yearOffset: -1 },
-    };
-    await addGlobalFilter(model, filter, { chart: { [chartId]: { chain: "date", type: "date" } } });
+    await addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {
+        chart: { [chartId]: { chain: "date", type: "date" } },
+    });
 }
 
 test("Can add a chart global filter", async function () {
@@ -71,7 +68,7 @@ test("Chart is impacted by global filter in dashboard mode", async function () {
     expect(computedDomain).toEqual([]);
     await setGlobalFilterValue(model, {
         id: "42",
-        value: { yearOffset: -1 },
+        value: { type: "year", period: { year: DateTime.local().year - 1 } },
     });
     computedDomain = model.getters.getChartDataSource(chartId).getComputedDomain();
     expect(computedDomain.length).toBe(3);
@@ -114,8 +111,8 @@ test("field matching is removed when filter is deleted", async function () {
     expect(model.getters.getChartFieldMatch(chartId)[filter.id]).toEqual(matching);
     expect(model.getters.getChartDataSource(chartId).getComputedDomain()).toEqual([
         "&",
-        ["date", ">=", "2021-01-01"],
-        ["date", "<=", "2021-12-31"],
+        ["date", ">=", "2022-01-01"],
+        ["date", "<=", "2022-12-31"],
     ]);
     model.dispatch("REMOVE_GLOBAL_FILTER", {
         id: filter.id,
@@ -128,8 +125,8 @@ test("field matching is removed when filter is deleted", async function () {
     expect(model.getters.getChartFieldMatch(chartId)[filter.id]).toEqual(matching);
     expect(model.getters.getChartDataSource(chartId).getComputedDomain()).toEqual([
         "&",
-        ["date", ">=", "2021-01-01"],
-        ["date", "<=", "2021-12-31"],
+        ["date", ">=", "2022-01-01"],
+        ["date", "<=", "2022-12-31"],
     ]);
     model.dispatch("REQUEST_REDO");
     expect(model.getters.getChartFieldMatch(chartId)[filter.id]).toBe(undefined);

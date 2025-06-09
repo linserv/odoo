@@ -93,7 +93,7 @@ export class MoveNodePlugin extends Plugin {
     intersectionObserverCallback(entries) {
         for (const entry of entries) {
             const element = entry.target;
-            if (entry.isIntersecting) {
+            if (entry.isIntersecting && element.isConnected) {
                 this.visibleMovableElements.add(element);
                 this.resetHooksNextMousemove = true;
             } else {
@@ -445,10 +445,11 @@ export class MoveNodePlugin extends Plugin {
         }
     }
     isNodeMovable(node) {
-        return (
-            node.parentElement?.getAttribute("contentEditable") === "true" &&
-            !node.matches(this.getResource("move_node_blacklist_selectors").join(", "))
-        );
+        const blacklistSelectors = this.getResource("move_node_blacklist_selectors").join(", ");
+        if (blacklistSelectors && node.matches(blacklistSelectors)) {
+            return false;
+        }
+        return node.parentElement?.getAttribute("contentEditable") === "true";
     }
 }
 

@@ -1,19 +1,27 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import base64
+import json
+import logging
+
 from werkzeug import urls
 from werkzeug.exceptions import NotFound
 
 from odoo import SUPERUSER_ID, api, fields, models
+from odoo.exceptions import AccessError
+
 from odoo.fields import Domain
 from odoo.http import request
 from odoo.osv import expression
-from odoo.tools import ormcache
+from odoo.tools import file_open, ormcache
 from odoo.tools.translate import LazyTranslate, _
 
 from odoo.addons.website_sale import const
 
 
+logger = logging.getLogger(__name__)
 _lt = LazyTranslate(__name__)
+
 
 CART_SESSION_CACHE_KEY = 'sale_order_id'
 FISCAL_POSITION_SESSION_CACHE_KEY = 'fiscal_position_id'
@@ -42,7 +50,9 @@ class Website(models.Model):
 
     enabled_portal_reorder_button = fields.Boolean(string="Re-order From Portal")
     salesperson_id = fields.Many2one(
-        string="Salesperson", comodel_name='res.users', domain="[('share', '=', False)]",
+        string="Salesperson",
+        comodel_name='res.users',
+        domain=[('share', '=', False)],
     )
     salesteam_id = fields.Many2one(
         string="Sales Team",
@@ -249,11 +259,7 @@ class Website(models.Model):
         website_settings = {}
         views_to_disable = []
         views_to_enable = []
-        IrUiView = self.env['ir.ui.view'].with_context(active_test=False, website_id=website.id)
-
-        def get_views(xmlids_):
-            domain = expression.AND([[('key', 'in', xmlids_)], website.website_domain()])
-            return IrUiView.search(domain).filter_duplicate()
+        ThemeUtils = self.env['theme.utils'].with_context(website_id=website.id)
 
         def parse_style_config(style_config_):
             website_settings.update(style_config_['website_fields'])
@@ -273,11 +279,97 @@ class Website(models.Model):
         # Apply eCommerce page style configurations.
         if website_settings:
             website.write(website_settings)
-        if views_to_disable:
-            get_views(views_to_disable).active = False
-        if views_to_enable:
-            get_views(views_to_enable).active = True
+        for xml_id in views_to_disable:
+            if (
+                xml_id == 'website_sale_comparison.product_add_to_compare'
+                and 'website_sale_comparison' not in self.env['ir.module.module']._installed()
+            ):
+                continue
+            ThemeUtils.disable_view(xml_id)
+        for xml_id in views_to_enable:
+            ThemeUtils.enable_view(xml_id)
 
+        return res
+
+    def configurator_addons_apply(self, industry_name=None, **kwargs):
+        """Override of `website` to generate eCommerce categories for a given industry using AI."""
+
+        def generate_categories(industry_name_):
+            lang = self.env.context.get('lang')
+            prompt = (
+                f"You are a seasoned Marketing Expert specializing in crafting high-converting eCommerce experiences.\n"
+                f"Your task is to develop compelling category names and descriptions for a {industry_name_}'s new online store.\n"
+                f"The goal is to create categories that are persuasive, attention-grabbing, and concise, encouraging visitors to explore the offerings.\n"
+                f"All content should be in {lang}.\n"
+                f"Here's the format you will use to generate the categories:\n"
+                f'{{"categories": ['
+                f'{{"name": "$category_name_1", "description": "$category_description_1"}}, '
+                f'{{"name": "$category_name_2", "description": "$category_description_2"}}, '
+                f'{{"name": "$category_name_3", "description": "$category_description_3"}}, '
+                f'{{"name": "$category_name_4", "description": "$category_description_4"}}, '
+                f'{{"name": "$category_name_5", "description": "$category_description_5"}}, '
+                f'{{"name": "$category_name_6", "description": "$category_description_6"}}, '
+                f'{{"name": "$category_name_7", "description": "$category_description_7"}}, '
+                f'{{"name": "$category_name_8", "description": "$category_description_8"}}'
+                f']}}\n'
+                f"Constraints:\n"
+                f"Language: {lang}\n"
+                f"Category Names: Must be nouns only (no adjectives).\n"
+                f"Description Length: Keep descriptions very short and to the point (ideally under 20 words).\n"
+                f"Persuasion: Descriptions should be persuasive and designed to attract attention.\n"
+                f"Number of Categories: Exactly 8 categories are required.\n"
+                f"Now, generate the 8 eCommerce categories for the {industry_name_}, adhering to the specified format and constraints."
+            )
+            IrConfigParameterSudo = self.env['ir.config_parameter'].sudo()
+            database_id = IrConfigParameterSudo.get_param('database.uuid')
+            try:
+                response = self._OLG_api_rpc('/api/olg/1/chat', {
+                    'prompt': prompt,
+                    'conversation_history': [],
+                    'database_id': database_id,
+                })
+            except AccessError:
+                logger.warning("API is unreachable for the category generation")
+                return None
+
+            if response['status'] == 'success':
+                content = response['content'].replace('```json\n', '').replace('\n```', '')
+                try:
+                    return json.loads(content)
+                except json.JSONDecodeError:
+                    logger.warning("API response is not a valid JSON for the category generation")
+            elif response['status'] == 'error_prompt_too_long':
+                logger.warning("Prompt is too long for the category generation")
+            elif response['status'] == 'limit_call_reached':
+                logger.warning("Limit call reached for the category generation")
+            else:
+                logger.warning("Response could not be generated for the category generation")
+            return None
+
+        res = super().configurator_addons_apply(industry_name=industry_name, **kwargs)
+
+        if self.env['product.public.category'].search_count([], limit=1):
+            logger.info("Categories already exist, skipping AI generation.")
+            return
+
+        category_specs = generate_categories(industry_name)
+        if not isinstance(category_specs, dict):
+            return
+
+        if len(category_specs.get('categories')) == 8:
+            images_names = [f'shape_mixed_{i}.png' for i in range(1, 9)]
+            categories = []
+            for idx, cat in enumerate(category_specs['categories']):
+                image_name = images_names[idx]
+                img_path = 'website_sale/static/src/img/categories/' + image_name
+                with file_open(img_path, 'rb') as file:
+                    image_base64 = base64.b64encode(file.read())
+                categories.append({
+                    'name': cat['name'],
+                    'website_description': cat['description'],
+                    'image_1920': image_base64,
+                })
+            self.env['product.public.category'].sudo().create(categories)
         return res
 
     # This method is cached, must not return records! See also #8795
@@ -528,6 +620,7 @@ class Website(models.Model):
         SaleOrderSudo = self.env['sale.order'].sudo()
 
         sale_order_sudo = SaleOrderSudo
+        partner_sudo = self.env.user.partner_id
         if CART_SESSION_CACHE_KEY in request.session:
             sale_order_sudo = SaleOrderSudo.browse(request.session[CART_SESSION_CACHE_KEY])
             if sale_order_sudo and (
@@ -546,13 +639,22 @@ class Website(models.Model):
             if (
                 sale_order_sudo
                 and not self.env.user._is_public()
-                and self.env.user.partner_id.id != sale_order_sudo.partner_id.id
+                and partner_sudo.id != sale_order_sudo.partner_id.id
                 and not request.env.cr.readonly
             ):
-                sale_order_sudo._update_address(self.env.user.partner_id.id, ['partner_id'])
-        elif self.env.user and not self.env.user._is_public():  # Search for abandonned cart.
+                sale_order_sudo._update_address(partner_sudo.id, ['partner_id'])
+        elif (
+            self.env.user
+            and not self.env.user._is_public()
+            # If the company of the partner doesn't allow them to buy from this website, updating
+            # the cart customer would raise because of multi-company checks.
+            # No abandoned cart should be returned in this situation.
+            and partner_sudo.filtered_domain(
+                self.env['res.partner']._check_company_domain(self.company_id.id)
+            )
+        ):  # Search for abandonned cart.
             abandonned_cart_sudo = SaleOrderSudo.search([
-                ('partner_id', '=', self.env.user.partner_id.id),
+                ('partner_id', '=', partner_sudo.id),
                 ('website_id', '=', self.id),
                 ('state', '=', 'draft'),
             ], limit=1)
@@ -560,7 +662,7 @@ class Website(models.Model):
                 if not request.env.cr.readonly:
                     # Force the recomputation of the pricelist and fiscal position when resurrecting
                     # an abandonned cart
-                    abandonned_cart_sudo._update_address(self.env.user.partner_id.id, ['partner_id'])
+                    abandonned_cart_sudo._update_address(partner_sudo.id, ['partner_id'])
                     abandonned_cart_sudo._verify_cart()
                 sale_order_sudo = abandonned_cart_sudo
 
@@ -644,7 +746,11 @@ class Website(models.Model):
             (all_abandoned_carts - abandoned_carts).cart_recovery_email_sent = True
             for sale_order in abandoned_carts:
                 template = self.env.ref('website_sale.mail_template_sale_cart_recovery')
-                template.send_mail(sale_order.id, email_values={'email_to': sale_order.partner_id.email})
+                # fallback email_vals in case partner_to and email_to were emptied
+                email_vals = {} if template.email_to or template.partner_to else {
+                    'email_to': sale_order.partner_id.email_formatted
+                }
+                template.send_mail(sale_order.id, email_values=email_vals)
                 sale_order.cart_recovery_email_sent = True
 
     @api.model_create_multi

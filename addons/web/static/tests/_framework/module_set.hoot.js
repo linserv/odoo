@@ -133,7 +133,9 @@ const fetchDependencies = async (addons) => {
             dependencyBatchPromise = Deferred.resolve().then(() => {
                 const module_names = [...new Set(dependencyBatch)];
                 dependencyBatch = [];
-                return orm("ir.module.module.dependency", "all_dependencies", [], { module_names });
+                return realOrm("ir.module.module.dependency", "all_dependencies", [], {
+                    module_names,
+                });
             });
         }
         dependencyBatch.push(...addonsToFetch);
@@ -219,7 +221,7 @@ const makeFixedFactory = (name) => () => {
  * @param {any[]} args
  * @param {Record<string, any>} kwargs
  */
-const orm = async (model, method, args, kwargs) => {
+export const realOrm = async (model, method, args, kwargs) => {
     const response = await realFetch(`/web/dataset/call_kw/${model}/${method}`, {
         body: JSON.stringify({
             id: nextRpcId++,
@@ -412,13 +414,21 @@ class ModuleSetLoader extends loader.constructor {
 
 const ALLOWED_GLOBAL_KEYS = [
     "ace", // Ace editor
+    // Bootstrap.js is voluntarily ignored as it is deprecated
     "Chart", // Chart.js
+    "Cropper", // Cropper.js
+    "DOMPurify", // DOMPurify
     "FullCalendar", // Full Calendar
     "L", // Leaflet
     "lamejs", // LameJS
     "luxon", // Luxon
-    "odoo",
-    "owl",
+    "odoo", // Odoo global object
+    "owl", // Owl
+    "pdfjsLib", // PDF JS
+    "Popper", // Popper
+    "SignaturePad", // Signature Pad
+    "StackTrace", // StackTrace
+    "ZXing", // ZXing
 ];
 const AUTO_INCLUDED_ADDONS = {
     /**
@@ -585,11 +595,12 @@ export async function runTests(options) {
     // Run all test files
     const filteredSuitePaths = new Set(suites.map((s) => s.fullName));
     let currentAddonsKey = "";
-    let lastSuiteName = undefined;
+    let lastSuiteName = null;
     let lastNumberTests = 0;
     for (const moduleName of testModuleNames) {
         if (lastSuiteName) {
             await __gcAndLogMemory(lastSuiteName, lastNumberTests);
+            lastSuiteName = null;
         }
         const suitePath = getSuitePath(moduleName);
         if (!filteredSuitePaths.has(suitePath)) {

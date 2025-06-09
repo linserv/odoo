@@ -1168,3 +1168,58 @@ test("insert with id relation keeps existing field values", async () => {
     expect(member2.channel.eq(channel1)).toBe(true);
     expect(member2.is_internal).toBe(true);
 });
+
+test("Inserting single-id data on non-single id Model throws human-readable error", async () => {
+    (class Persona extends Record {
+        static id = AND("partner_id", "guest_id");
+    }).register(localRegistry);
+    (class Message extends Record {
+        static id = "id";
+        id;
+        author = fields.One("Persona");
+    }).register(localRegistry);
+    const store = await start();
+    store.warnErrors = false;
+    const paul = store.Persona.insert({ partner_id: 1 });
+    store.Persona.insert({ guest_id: 2 });
+    expect(store.Persona.get({ partner_id: 1 }).exists()).toBe(true);
+    expect(store.Persona.get({ guest_id: 2 }).exists()).toBe(true);
+    expect(store.Persona.get(1)).toBe(undefined);
+    expect(store.Persona.get(2)).toBe(undefined);
+    expect(() => store.Persona.insert(3)).toThrow(
+        `Cannot insert "3" on model "Persona": this model doesn't support single-id data!`
+    );
+    const msg = store.Message.insert(100);
+    expect(() => (msg.author = 1)).toThrow(
+        `Cannot insert "1" on relational field "Message/author": target model "Persona" doesn't support single-id data!`
+    );
+    msg.author = { partner_id: 1 };
+    expectRecord(msg.author).toEqual(paul);
+});
+
+test("Can assign new record on Many field with One inverse", async () => {
+    (class Thread extends Record {
+        static id = "name";
+        name;
+        files = fields.Many("File", { inverse: "thread" });
+    }).register(localRegistry);
+    (class File extends Record {
+        static id = "name";
+        thread = fields.One("Thread", { inverse: "files" });
+        name;
+    }).register(localRegistry);
+    const store = await start();
+    const thread = store.Thread.insert("general");
+    const file1 = store.File.insert("file1.txt");
+    const file2 = store.File.insert("file2.txt");
+    thread.files.push(file1);
+    expect(thread.files.length).toBe(1);
+    expectRecord(thread.files[0]).toEqual(file1);
+    expectRecord(file1.thread).toEqual(thread);
+    expect(file2.thread).toBe(undefined);
+    thread.files[0] = file2;
+    expect(thread.files.length).toBe(1);
+    expectRecord(thread.files[0]).toEqual(file2);
+    expectRecord(file2.thread).toEqual(thread);
+    expect(file1.thread).toBe(undefined);
+});

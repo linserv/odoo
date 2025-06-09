@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 from odoo import api, fields, models, _
 from odoo.addons.link_tracker.models.link_tracker import LINK_TRACKER_MIN_CODE_LENGTH
 from odoo.exceptions import UserError
-from odoo.osv import expression
+from odoo.fields import Domain
 
 _logger = logging.getLogger(__name__)
 
@@ -154,7 +154,8 @@ class MailingMailing(models.Model):
         """ Give list of opt-outed records, depending on specific model-based
         computation if available.
 
-        :return list: opt-outed record IDs
+        :returns: opt-outed record IDs
+        :rtype: list
         """
         self.ensure_one()
         opt_out = []
@@ -303,7 +304,7 @@ class MailingMailing(models.Model):
     def _get_default_mailing_domain(self):
         mailing_domain = super()._get_default_mailing_domain()
         if self.mailing_type == 'sms' and 'phone_sanitized_blacklisted' in self.env[self.mailing_model_name]._fields:
-            mailing_domain = expression.AND([mailing_domain, [('phone_sanitized_blacklisted', '=', False)]])
+            mailing_domain &= Domain('phone_sanitized_blacklisted', '=', False)
 
         return mailing_domain
 

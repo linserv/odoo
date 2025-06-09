@@ -10,7 +10,7 @@ from odoo import api, fields, models, _
 from odoo.addons.mail.tools.discuss import Store
 from odoo.addons.mail.tools.web_push import PUSH_NOTIFICATION_ACTION, PUSH_NOTIFICATION_TYPE
 from odoo.exceptions import AccessError, UserError, ValidationError
-from odoo.osv import expression
+from odoo.fields import Domain
 from ...tools import jwt, discuss
 
 _logger = logging.getLogger(__name__)
@@ -60,13 +60,13 @@ class DiscussChannelMember(models.Model):
     @api.autovacuum
     def _gc_unpin_outdated_sub_channels(self):
         outdated_dt = fields.Datetime.now() - timedelta(days=2)
-        domain = expression.AND(
+        domain = Domain.AND(
             [
                 [
                     ("channel_id.parent_channel_id", "!=", False),
                     ("last_interest_dt", "<", outdated_dt),
                 ],
-                expression.OR(
+                Domain.OR(
                     [
                         [("channel_id.last_interest_dt", "=", False)],
                         [("channel_id.last_interest_dt", "<", outdated_dt)],
@@ -103,16 +103,14 @@ class DiscussChannelMember(models.Model):
         if operator != 'in':
             return NotImplemented
         current_partner, current_guest = self.env["res.partner"]._get_current_persona()
-        return [
-            '|',
-            ("partner_id", "=", current_partner.id) if current_partner else expression.FALSE_LEAF,
-            ("guest_id", "=", current_guest.id) if current_guest else expression.FALSE_LEAF,
-        ]
+        domain_partner = Domain("partner_id", "=", current_partner.id) if current_partner else Domain.FALSE
+        domain_guest = Domain("guest_id", "=", current_guest.id) if current_guest else Domain.FALSE
+        return domain_partner | domain_guest
 
     def _search_is_pinned(self, operator, operand):
         if operator != 'in':
             return NotImplemented
-        return expression.OR([
+        return Domain.OR([
             [("unpin_dt", "=", False)],
             [("last_interest_dt", ">=", self._field_to_sql(self._table, "unpin_dt"))],
             [("channel_id.last_interest_dt", ">=", self._field_to_sql(self._table, "unpin_dt"))],
@@ -219,7 +217,7 @@ class DiscussChannelMember(models.Model):
             ]
             for member in self
         ]
-        for member in self.env["discuss.channel.member"].search(expression.OR(domains)):
+        for member in self.env["discuss.channel.member"].search(Domain.OR(domains)):
             member.channel_id._action_unfollow(partner=member.partner_id, guest=member.guest_id)
         return super().unlink()
 
@@ -231,7 +229,7 @@ class DiscussChannelMember(models.Model):
             :param is_typing: (boolean) tells whether the members are typing or not
         """
         for member in self:
-            member.channel_id._bus_send_store(member, extra_fields={"isTyping": is_typing})
+            member.channel_id._bus_send_store(member, extra_fields={"isTyping": is_typing, "is_typing_dt": fields.Datetime.now()})
 
     def _notify_mute(self):
         for member in self:
@@ -259,13 +257,13 @@ class DiscussChannelMember(models.Model):
         return [
             # sudo: res.partner - reading partner related to a member is considered acceptable
             Store.Attr(
-                "persona",
+                "partner_id",
                 lambda m: Store.One(m.partner_id.sudo(), m._get_store_partner_fields(fields)),
                 predicate=lambda m: m.partner_id,
             ),
             # sudo: mail.guest - reading guest related to a member is considered acceptable
             Store.Attr(
-                "persona",
+                "guest_id",
                 lambda m: Store.One(m.guest_id.sudo(), m._get_store_guest_fields(fields)),
                 predicate=lambda m: m.guest_id,
             ),
@@ -273,7 +271,7 @@ class DiscussChannelMember(models.Model):
 
     def _to_store_defaults(self):
         return [
-            Store.One("channel_id", [], as_thread=True, rename="thread"),
+            Store.One("channel_id", [], as_thread=True),
             "create_date",
             "fetched_message_id",
             "last_seen_dt",
@@ -397,8 +395,10 @@ class DiscussChannelMember(models.Model):
             - Current sessions are returned.
             - Sessions given in check_rtc_session_ids that no longer exists
               are returned as non-existing.
+
             :param list check_rtc_session_ids: list of the ids of the sessions to check
-            :returns tuple: (current_rtc_sessions, outdated_rtc_sessions)
+            :returns: (current_rtc_sessions, outdated_rtc_sessions)
+            :rtype: tuple
         """
         self.ensure_one()
         self.channel_id.rtc_session_ids._delete_inactive_rtc_sessions()
@@ -412,13 +412,13 @@ class DiscussChannelMember(models.Model):
         :param list member_ids: List of the partner ids to invite.
         """
         self.ensure_one()
-        domain = [
+        domain = Domain([
             ('channel_id', '=', self.channel_id.id),
             ('rtc_inviting_session_id', '=', False),
             ('rtc_session_ids', '=', False),
-        ]
+        ])
         if member_ids:
-            domain = expression.AND([domain, [('id', 'in', member_ids)]])
+            domain &= Domain('id', 'in', member_ids)
         return domain
 
     def _rtc_invite_members(self, member_ids=None):
@@ -443,7 +443,7 @@ class DiscussChannelMember(models.Model):
                     "invited_member_ids": Store.Many(
                         members,
                         [
-                            Store.One("channel_id", [], as_thread=True, rename="thread"),
+                            Store.One("channel_id", [], as_thread=True),
                             *self.env["discuss.channel.member"]._to_store_persona("avatar_card"),
                         ],
                         mode="ADD",
@@ -534,7 +534,7 @@ class DiscussChannelMember(models.Model):
         target._bus_send_store(
             self,
             [
-                Store.One("channel_id", [], as_thread=True, rename="thread"),
+                Store.One("channel_id", [], as_thread=True),
                 *self.env["discuss.channel.member"]._to_store_persona("avatar_card"),
                 "seen_message_id",
             ],
@@ -554,7 +554,7 @@ class DiscussChannelMember(models.Model):
         self._bus_send_store(
             self,
             [
-                Store.One("channel_id", [], as_thread=True, rename="thread"),
+                Store.One("channel_id", [], as_thread=True),
                 "message_unread_counter",
                 {"message_unread_counter_bus_id": bus_last_id},
                 "new_message_separator",

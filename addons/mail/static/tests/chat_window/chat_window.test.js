@@ -177,8 +177,8 @@ test("chat window: basic rendering", async () => {
     await contains(".o-mail-ChatWindow-header", { text: "General" });
     await contains(".o-mail-ChatWindow-header .o-mail-ChatWindow-threadAvatar");
     await contains(".o-mail-ChatWindow-command", { count: 5 });
-    await contains("[title='Start a Call']");
-    await contains("[title='Start a Video Call']");
+    await contains("[title='Start Call']");
+    await contains("[title='Start Video Call']");
     await contains("[title='Open Actions Menu']");
     await contains("[title='Fold']");
     await contains("[title*='Close Chat Window']");
@@ -676,6 +676,19 @@ test("chat window: composer state conservation on toggle discuss", async () => {
     await contains(".o-mail-Composer-input", { value: "XDU for the win !" });
 });
 
+test("don't show chat hub options when discuss is open", async () => {
+    const pyEnv = await startServer();
+    pyEnv["discuss.channel"].create({});
+    await start();
+    await click(".o_menu_systray i[aria-label='Messages']");
+    await click(".o-mail-NotificationItem");
+    await contains(".o-mail-ChatWindow");
+    await contains(".o-mail-ChatHub [title='Chat Options']");
+    await openDiscuss();
+    await contains(".o-mail-ChatWindow", { count: 0 });
+    await contains(".o-mail-ChatHub [title='Chat Options']", { count: 0 });
+});
+
 test("chat window: scroll conservation on toggle discuss", async () => {
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({});
@@ -1091,7 +1104,9 @@ test("Do not squash logged notes", async () => {
             author_id: serverState.partnerId,
             needaction: true,
             res_id: partnerId,
-            is_note: true,
+            subtype_id: pyEnv["mail.message.subtype"].search([
+                ["subtype_xmlid", "=", "mail.mt_note"],
+            ])[0],
         },
         {
             model: "res.partner",
@@ -1099,7 +1114,9 @@ test("Do not squash logged notes", async () => {
             author_id: serverState.partnerId,
             needaction: true,
             res_id: partnerId,
-            is_note: true,
+            subtype_id: pyEnv["mail.message.subtype"].search([
+                ["subtype_xmlid", "=", "mail.mt_note"],
+            ])[0],
         },
     ]);
     pyEnv["mail.notification"].create({

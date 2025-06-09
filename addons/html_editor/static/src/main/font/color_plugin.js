@@ -16,11 +16,20 @@ import {
 import { closestElement, descendants } from "@html_editor/utils/dom_traversal";
 import { reactive } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
-import { isColorGradient, isCSSColor, RGBA_REGEX, rgbaToHex } from "@web/core/utils/colors";
+import {
+    isColorGradient,
+    isCSSColor,
+    RGBA_REGEX,
+    rgbaToHex,
+    COLOR_COMBINATION_CLASSES_REGEX,
+} from "@web/core/utils/colors";
 import { ColorSelector } from "./color_selector";
+import { backgroundImageCssToParts, backgroundImagePartsToCss } from "@html_editor/utils/image";
 
 const RGBA_OPACITY = 0.6;
 const HEX_OPACITY = "99";
+const COLOR_COMBINATION_CLASSES = [1, 2, 3, 4, 5].map((i) => `o_cc${i}`);
+const COLOR_COMBINATION_SELECTOR = COLOR_COMBINATION_CLASSES.map((c) => `.${c}`).join(", ");
 
 /**
  * @typedef { Object } ColorShared
@@ -30,7 +39,13 @@ const HEX_OPACITY = "99";
 export class ColorPlugin extends Plugin {
     static id = "color";
     static dependencies = ["selection", "split", "history", "format"];
-    static shared = ["colorElement", "getPropsForColorSelector", "removeAllColor"];
+    static shared = [
+        "colorElement",
+        "getPropsForColorSelector",
+        "removeAllColor",
+        "getElementColors",
+        "getColorCombination",
+    ];
     resources = {
         user_commands: [
             {
@@ -58,6 +73,20 @@ export class ColorPlugin extends Plugin {
         /** Handlers */
         selectionchange_handlers: this.updateSelectedColor.bind(this),
         remove_format_handlers: this.removeAllColor.bind(this),
+        color_combination_getters: getColorCombinationFromClass,
+
+        /** Overridables */
+        /**
+         * Makes the way colors are applied overridable.
+         *
+         * @param {Element} element
+         * @param {string} color hexadecimal or bg-name/text-name class
+         * @param {'color'|'backgroundColor'} mode 'color' or 'backgroundColor'
+         */
+        apply_style: (element, mode, color) => {
+            element.style[mode] = color;
+            return true;
+        },
 
         /** Predicates */
         has_format_predicates: [
@@ -95,7 +124,7 @@ export class ColorPlugin extends Plugin {
     }
 
     updateSelectedColor() {
-        const nodes = this.dependencies.selection.getTraversedNodes().filter(isTextNode);
+        const nodes = this.dependencies.selection.getTargetedNodes().filter(isTextNode);
         if (nodes.length === 0) {
             return;
         }
@@ -103,9 +132,15 @@ export class ColorPlugin extends Plugin {
         if (!el) {
             return;
         }
+
+        Object.assign(this.selectedColors, this.getElementColors(el));
+    }
+
+    getElementColors(el) {
         const elStyle = getComputedStyle(el);
         const backgroundImage = elStyle.backgroundImage;
-        const hasGradient = isColorGradient(backgroundImage);
+        const gradient = backgroundImageCssToParts(backgroundImage).gradient;
+        const hasGradient = isColorGradient(gradient);
         const hasTextGradientClass = el.classList.contains("text-gradient");
 
         let backgroundColor = elStyle.backgroundColor;
@@ -123,10 +158,11 @@ export class ColorPlugin extends Plugin {
             }
         }
 
-        this.selectedColors.color =
-            hasGradient && hasTextGradientClass ? backgroundImage : rgbaToHex(elStyle.color);
-        this.selectedColors.backgroundColor =
-            hasGradient && !hasTextGradientClass ? backgroundImage : rgbaToHex(backgroundColor);
+        return {
+            color: hasGradient && hasTextGradientClass ? gradient : rgbaToHex(elStyle.color),
+            backgroundColor:
+                hasGradient && !hasTextGradientClass ? gradient : rgbaToHex(backgroundColor),
+        };
     }
 
     /**
@@ -170,7 +206,7 @@ export class ColorPlugin extends Plugin {
                 let max = 40;
                 const hasAnySelectedNodeColor = (mode) => {
                     const nodes = this.dependencies.selection
-                        .getTraversedNodes()
+                        .getTargetedNodes()
                         .filter((n) => isTextNode(n) || n.classList.contains("o_selected_td"));
                     return hasAnyNodesColor(nodes, mode);
                 };
@@ -208,7 +244,7 @@ export class ColorPlugin extends Plugin {
             color += HEX_OPACITY;
         }
         let selection = this.dependencies.selection.getEditableSelection();
-        let selectionNodes;
+        let targetedNodes;
         // Get the <font> nodes to color
         if (selection.isCollapsed) {
             let zws;
@@ -227,32 +263,32 @@ export class ColorPlugin extends Plugin {
                 },
                 { normalize: false }
             );
-            selectionNodes = [zws];
+            targetedNodes = [zws];
         } else {
             selection = this.dependencies.split.splitSelection();
-            selectionNodes = this.dependencies.selection
-                .getSelectedNodes()
+            targetedNodes = this.dependencies.selection
+                .getTargetedNodes()
                 .filter((node) => isContentEditable(node) && node.nodeName !== "T");
             if (isEmptyBlock(selection.endContainer)) {
-                selectionNodes.push(selection.endContainer, ...descendants(selection.endContainer));
+                targetedNodes.push(selection.endContainer, ...descendants(selection.endContainer));
             }
         }
 
         const hexColor = rgbaToHex(color).toLowerCase();
-        const selectedNodes = selectionNodes.filter((node) => {
+        const selectedNodes = targetedNodes.filter((node) => {
             if (mode === "backgroundColor" && color) {
                 return !closestElement(node, "table.o_selected_table");
             }
             const li = closestElement(node, "li");
-            if (li && color && this.dependencies.selection.isNodeContentsFullySelected(li)) {
+            if (li && color && this.dependencies.selection.areNodeContentsFullySelected(li)) {
                 return rgbaToHex(li.style.color).toLowerCase() !== hexColor;
             }
             return true;
         });
 
-        const selectedFieldNodes = new Set(
+        const targetedFieldNodes = new Set(
             this.dependencies.selection
-                .getSelectedNodes()
+                .getTargetedNodes()
                 .map((n) => closestElement(n, "*[t-field],*[t-out],*[t-esc]"))
                 .filter(Boolean)
         );
@@ -358,7 +394,7 @@ export class ColorPlugin extends Plugin {
                 return font;
             });
 
-        for (const fieldNode of selectedFieldNodes) {
+        for (const fieldNode of targetedFieldNodes) {
             this.colorElement(fieldNode, color, mode);
         }
 
@@ -413,29 +449,127 @@ export class ColorPlugin extends Plugin {
      * @param {'color'|'backgroundColor'} mode 'color' or 'backgroundColor'
      */
     colorElement(element, color, mode) {
-        const newClassName = element.className
+        let parts = backgroundImageCssToParts(element.style["background-image"]);
+        const oldClassName = element.getAttribute("class") || "";
+
+        if (element.matches(COLOR_COMBINATION_SELECTOR)) {
+            removePresetGradient(element);
+        }
+
+        if (color.startsWith("o_cc")) {
+            parts = backgroundImageCssToParts(element.style["background-image"]);
+            element.classList.remove(...COLOR_COMBINATION_CLASSES);
+            element.classList.add(color);
+            setBackgroundImageAndOverride(element, element.style["background-image"]);
+            this.fixColorCombination(element);
+            return;
+        }
+
+        if (mode === "backgroundColor") {
+            if (!color) {
+                element.classList.remove(...COLOR_COMBINATION_CLASSES);
+            }
+            delete parts.gradient;
+            const newBackgroundImage = backgroundImagePartsToCss(parts);
+            setBackgroundImageAndOverride(element, newBackgroundImage);
+            element.style["background-color"] = "";
+        }
+
+        const newClassName = oldClassName
             .replace(mode === "color" ? TEXT_CLASSES_REGEX : BG_CLASSES_REGEX, "")
             .replace(/\btext-gradient\b/g, "") // cannot be combined with setting a background
             .replace(/\s+/, " ");
-        element.className !== newClassName && (element.className = newClassName);
-        element.style["background-image"] = "";
-        if (mode === "backgroundColor") {
-            element.style["background"] = "";
+        if (oldClassName !== newClassName) {
+            element.setAttribute("class", newClassName);
         }
         if (color.startsWith("text") || color.startsWith("bg-")) {
             element.style[mode] = "";
             element.classList.add(color);
         } else if (isColorGradient(color)) {
             element.style[mode] = "";
+            parts.gradient = color;
             if (mode === "color") {
-                element.style["background"] = "";
-                element.style["background-image"] = color;
+                element.style["background-color"] = "";
                 element.classList.add("text-gradient");
-            } else {
-                element.style["background-image"] = color;
             }
+            this.delegateTo(
+                "apply_style",
+                element,
+                "background-image",
+                backgroundImagePartsToCss(parts)
+            );
         } else {
-            element.style[mode] = color;
+            this.delegateTo("apply_style", element, mode, color);
         }
+        this.fixColorCombination(element);
+    }
+    /**
+     * There is a limitation with css. The defining a background image and a
+     * background gradient is done only by setting one style (background-image).
+     * If there is a class (in this case o_cc[1-5]) that defines a gradient, it
+     * will be overridden by the background-image property.
+     *
+     * This function will set the gradient of the o_cc in the background-image
+     * so that setting an image in the background-image property will not
+     * override the gradient.
+     */
+    fixColorCombination(element) {
+        const parts = backgroundImageCssToParts(element.style["background-image"]);
+        const hasBackgroundColor =
+            element.style["background-color"] ||
+            !!element.className.match(/\bbg-/) ||
+            parts.gradient;
+
+        if (!hasBackgroundColor) {
+            element.style["background-image"] = "";
+            parts.gradient = backgroundImageCssToParts(
+                // Compute the style from o_cc class.
+                getComputedStyle(element).backgroundImage
+            ).gradient;
+            element.style["background-image"] = backgroundImagePartsToCss(parts);
+        }
+    }
+
+    getColorCombination(el, actionParam) {
+        for (const handler of this.getResource("color_combination_getters")) {
+            const value = handler(el, actionParam);
+            if (value) {
+                return value;
+            }
+        }
+    }
+}
+
+function getColorCombinationFromClass(el) {
+    return el.className.match?.(COLOR_COMBINATION_CLASSES_REGEX)?.[0];
+}
+
+/**
+ * Remove the gradient of the element only if it is the inheritance from the o_cc selector.
+ */
+function removePresetGradient(element) {
+    const oldBackgroundImage = element.style["background-image"];
+    const parts = backgroundImageCssToParts(oldBackgroundImage);
+    const currentGradient = parts.gradient;
+    element.style.removeProperty("background-image");
+    const styleWithoutGradient = getComputedStyle(element);
+    const presetGradient = backgroundImageCssToParts(styleWithoutGradient.backgroundImage).gradient;
+    if (presetGradient !== currentGradient) {
+        const withGradient = backgroundImagePartsToCss(parts);
+        element.style["background-image"] = withGradient === "none" ? "" : withGradient;
+    } else {
+        delete parts.gradient;
+        const withoutGradient = backgroundImagePartsToCss(parts);
+        element.style["background-image"] = styleWithoutGradient === "none" ? "" : withoutGradient;
+    }
+}
+
+function setBackgroundImageAndOverride(el, backgroundImage) {
+    const isNone = !backgroundImage || backgroundImage === "none";
+    el.style.backgroundImage = isNone ? "" : backgroundImage;
+    // If the current background image is empty but the inherited one isn't
+    // force the background image to override the inherited one.
+    if (isNone && getComputedStyle(el).backgroundImage !== "none") {
+        el.style.backgroundImage = "none";
     }
 }

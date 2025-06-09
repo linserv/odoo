@@ -183,6 +183,21 @@ export function clickPartnerButton() {
 export function clickCustomer(name) {
     return [PartnerList.clickPartner(name), { ...back(), isActive: ["mobile"] }];
 }
+export function selectPreset(selectedPreset, presetToSelect) {
+    return [
+        clickReview(),
+        {
+            content: "click preset button",
+            trigger: `.product-screen button:contains("${selectedPreset}")`,
+            run: "click",
+        },
+        {
+            content: `click preset '${presetToSelect}' from preset modal`,
+            trigger: `.modal-body button:contains(${presetToSelect})`,
+            run: "click",
+        },
+    ];
+}
 export function customerIsSelected(name) {
     return [
         clickReview(),
@@ -507,6 +522,12 @@ export function selectedOrderlineHasDirect(productName, quantity, price) {
         productName,
         quantity,
         price,
+    });
+}
+export function orderComboLineHas(productName, quantity) {
+    return Order.hasLine({
+        productName,
+        quantity,
     });
 }
 export function orderLineHas(productName, quantity, price) {
@@ -874,4 +895,18 @@ export function longPressProduct(productName) {
             },
         },
     ];
+}
+
+export function isEmpty() {
+    return {
+        content: "Verify that the Product Screen is empty",
+        trigger: ".product-screen:not(:has(.product-list))",
+    };
+}
+
+export function loadSampleButtonIsThere() {
+    return {
+        content: "Click Load Sample",
+        trigger: ".product-screen .o_nocontent_help button:contains('Load Sample')",
+    };
 }

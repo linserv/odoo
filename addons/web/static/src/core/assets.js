@@ -23,10 +23,10 @@ function getCacheMap(targetDoc) {
 export function computeBundleCacheMap(targetDoc) {
     const cacheMap = getCacheMap(targetDoc);
     for (const script of targetDoc.head.querySelectorAll("script[src]")) {
-        cacheMap.set(script.src, Promise.resolve());
+        cacheMap.set(script.getAttribute("src"), Promise.resolve());
     }
     for (const link of targetDoc.head.querySelectorAll("link[rel=stylesheet][href]")) {
-        cacheMap.set(link.href, Promise.resolve());
+        cacheMap.set(link.getAttribute("href"), Promise.resolve());
     }
 }
 
@@ -87,17 +87,21 @@ export class AssetsLoadingError extends Error {}
  * Utility component that loads an asset bundle before instanciating a component
  */
 export class LazyComponent extends Component {
-    static template = xml`<t t-component="Component" t-props="props.props"/>`;
+    static template = xml`<t t-component="Component" t-props="componentProps"/>`;
     static props = {
         Component: String,
         bundle: String,
-        props: { type: Object, optional: true },
+        props: { type: [Object, Function], optional: true },
     };
     setup() {
         onWillStart(async () => {
             await loadBundle(this.props.bundle);
             this.Component = registry.category("lazy_components").get(this.props.Component);
         });
+    }
+
+    get componentProps() {
+        return typeof this.props.props === "function" ? this.props.props() : this.props.props;
     }
 }
 
@@ -201,9 +205,9 @@ export const assets = {
             return cacheMap.get(url);
         }
         const linkEl = targetDoc.createElement("link");
+        linkEl.setAttribute("href", url);
         linkEl.type = "text/css";
         linkEl.rel = "stylesheet";
-        linkEl.href = url;
         const promise = new Promise((resolve, reject) =>
             onLoadAndError(linkEl, resolve, async (error) => {
                 cacheMap.delete(url);
@@ -242,8 +246,8 @@ export const assets = {
             return cacheMap.get(url);
         }
         const scriptEl = targetDoc.createElement("script");
+        scriptEl.setAttribute("src", url);
         scriptEl.type = url.includes("web/static/lib/pdfjs/") ? "module" : "text/javascript";
-        scriptEl.src = url;
         const promise = new Promise((resolve, reject) =>
             onLoadAndError(scriptEl, resolve, (error) => {
                 cacheMap.delete(url);

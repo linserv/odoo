@@ -29,9 +29,6 @@ class TestMassMailValues(MassMailCommon):
         super(TestMassMailValues, cls).setUpClass()
         cls._create_mailing_list()
 
-    def _eval_domain(self, domain):
-        return self.env['mailing.filter']._evaluate_domain(domain)
-
     @users('user_marketing')
     def test_mailing_body_cropped_vml_image(self):
         """ Testing mail mailing responsive bg-image cropping for Outlook.
@@ -382,45 +379,6 @@ class TestMassMailValues(MassMailCommon):
                 self.assertEqual(mailing.mail_server_id, mail_server)
 
     @users('user_marketing')
-    @mute_logger('odoo.sql_db')
-    def test_mailing_computed_fields_dynamic_domain(self):
-        """Ensure dynamic domain evaluation works and isn't obviously unsafe."""
-        filters = self.env['mailing.filter'].create([
-            {'name': 'Literals Filter',
-             'mailing_domain': [('create_uid', '=', '1')],
-             'mailing_model_id': self.env['ir.model']._get('discuss.channel').id
-             },
-            {'name': 'String Literals Filter',
-             'mailing_domain': "[('create_uid', '=', '1')]",
-             'mailing_model_id': self.env['ir.model']._get('discuss.channel').id
-             },
-            {'name': 'Dynamic Filter',
-             'mailing_domain': "[('id', '=', 1 + 1)]",
-             'mailing_model_id': self.env['ir.model']._get('discuss.channel').id
-             },
-            {'name': 'Dynamic Date Context Methods',
-             'mailing_domain': "[('create_date', '<=', (datetime.datetime(2042, 12, 31) + relativedelta(days=1)).to_utc().strftime('%Y-%m-%d'))]",
-             'mailing_model_id': self.env['ir.model']._get('discuss.channel').id
-             },
-            {'name': 'Dynamic Date Object',
-             'mailing_domain': "[('create_date', '<=', datetime.datetime(2042, 12, 31) + relativedelta(days=1))]",
-             'mailing_model_id': self.env['ir.model']._get('discuss.channel').id
-             }
-        ])
-        domains = [
-            [('create_uid', '=', '1')], [('create_uid', '=', '1')], [('id', '=', 2)],
-            [('create_date', '<=', '2043-01-01')], [('create_date', '<=', datetime(2043, 1, 1))],
-        ]
-        for mailing_filter, domain in zip(filters, domains):
-            self.assertListEqual(self._eval_domain(mailing_filter.mailing_domain), domain)
-        with self.assertRaises(ValidationError):
-            self.env['mailing.filter'].create({
-                'name': 'Illegal Dynamic Filter',
-                'mailing_domain': "[('id', '=', datetime.sys.hash_info)]",
-                'mailing_model_id': self.env['ir.model']._get('discuss.channel').id
-            })
-
-    @users('user_marketing')
     def test_mailing_computed_fields_form(self):
         mailing_form = Form(self.env['mailing.mailing'].with_context(
             default_mailing_domain="[('email', 'ilike', 'test.example.com')]",
@@ -534,8 +492,8 @@ class TestMassMailValues(MassMailCommon):
                 'schedule_date': datetime(2023, 2, 17, 11, 0),
             })
         mailing.action_put_in_queue()
-        with self.mock_mail_gateway(mail_unlink_sent=False):
-            mailing._process_mass_mailing_queue()
+        with self.mock_mail_gateway(mail_unlink_sent=False), self.enter_registry_test_mode():
+            self.env.ref('mass_mailing.ir_cron_mass_mailing_queue').sudo().method_direct_trigger()
 
         self.assertFalse(mailing.body_html)
         self.assertEqual(mailing.mailing_model_name, 'res.partner')
@@ -753,13 +711,17 @@ class TestMassMailFeatures(MassMailCommon, CronMixinCase):
             'body_html': 'This is mass mail marketing demo'
         })
         mailing.action_put_in_queue()
-        with self.mock_mail_gateway(mail_unlink_sent=False):
-            mailing._process_mass_mailing_queue()
+        self.assertEqual(mailing.email_from, self.env.user.email_formatted)
+        with self.mock_mail_gateway(mail_unlink_sent=False), self.enter_registry_test_mode():
+            self.env.ref('mass_mailing.ir_cron_mass_mailing_queue').sudo().method_direct_trigger()
 
+        author = self.env.ref('base.user_root').partner_id
+        email_values = {'email_from': mailing.email_from}
         self.assertMailTraces(
-            [{'partner': partner_a},
-             {'partner': partner_b, 'trace_status': 'cancel', 'failure_type': 'mail_bl'}],
-            mailing, partner_a + partner_b, check_mail=True
+            [{'partner': partner_a, 'email_values': email_values},
+             {'partner': partner_b, 'trace_status': 'cancel', 'failure_type': 'mail_bl', 'email_values': email_values}],
+            mailing, partner_a + partner_b,
+            check_mail=True, author=author,
         )
 
     @users('user_marketing')
@@ -787,14 +749,17 @@ Email: <a id="url5" href="mailto:test@odoo.com">test@odoo.com</a></div>""",
 
         mailing.action_put_in_queue()
 
-        with self.mock_mail_gateway(mail_unlink_sent=False):
-            mailing._process_mass_mailing_queue()
+        with self.mock_mail_gateway(mail_unlink_sent=False), self.enter_registry_test_mode():
+            self.env.ref('mass_mailing.ir_cron_mass_mailing_queue').sudo().method_direct_trigger()
 
+        author = self.env.ref('base.user_root').partner_id
+        email_values = {'email_from': mailing.email_from}
         self.assertMailTraces(
-            [{'email': 'fleurus@example.com'},
-             {'email': 'gorramts@example.com'},
-             {'email': 'ybrant@example.com'}],
-            mailing, self.mailing_list_1.contact_ids, check_mail=True
+            [{'email': 'fleurus@example.com', 'email_values': email_values},
+             {'email': 'gorramts@example.com', 'email_values': email_values},
+             {'email': 'ybrant@example.com', 'email_values': email_values}],
+            mailing, self.mailing_list_1.contact_ids,
+            check_mail=True, author=author,
         )
 
         for contact in self.mailing_list_1.contact_ids:

@@ -8,15 +8,13 @@ import { parseTime } from "@web/core/l10n/time";
 import { _t } from "@web/core/l10n/translation";
 import { useLoadFieldInfo, useLoadPathDescription } from "@web/core/model_field_selector/utils";
 import {
-    Couple,
-    Expression,
     condition,
-    createVirtualOperators,
+    Expression,
     isTree,
     normalizeValue,
     splitPath,
 } from "@web/core/tree_editor/condition_tree";
-import { get_OPTIONS_WITH_SELECT } from "@web/core/tree_editor/tree_editor_datetime_options";
+import { OPTIONS_WITH_SELECT } from "@web/core/tree_editor/tree_editor_datetime_options";
 import { getOperatorLabel } from "@web/core/tree_editor/tree_editor_operator_editor";
 import { unique, zip } from "@web/core/utils/arrays";
 import { useService } from "@web/core/utils/hooks";
@@ -30,6 +28,18 @@ import { Within } from "./tree_editor_components";
  * @returns
  */
 function formatValue(val, disambiguate, fieldDef, displayNames) {
+    if (
+        fieldDef?.type === "date_option" &&
+        fieldDef.name in OPTIONS_WITH_SELECT &&
+        typeof val !== "string"
+    ) {
+        const options = OPTIONS_WITH_SELECT[fieldDef.name];
+        const valToCompare = val instanceof Expression ? val._expr : val;
+        const [, label] = (options || []).find(([v]) => v === valToCompare) || [];
+        if (label !== undefined) {
+            val = label;
+        }
+    }
     if (val instanceof Expression) {
         return val.toString();
     }
@@ -46,25 +56,18 @@ function formatValue(val, disambiguate, fieldDef, displayNames) {
             val = label;
         }
     }
-    if (["datetime_option", "date_option", "time_option"].includes(fieldDef?.type)) {
-        if (fieldDef.name in get_OPTIONS_WITH_SELECT()) {
-            const { options } = get_OPTIONS_WITH_SELECT()[fieldDef.name];
-            const [, label] = (options || []).find(([v]) => v === val) || [];
-            if (label !== undefined) {
-                val = label;
-            }
-        } else if (fieldDef.name === "__time" && typeof val === "string") {
-            return parseTime(val, true).toString(true);
-        } else if (fieldDef.name === "__date" && typeof val === "string") {
-            return formatDate(deserializeDate(val));
-        }
-    }
     if (typeof val === "string") {
         if (fieldDef?.type === "datetime") {
             return formatDateTime(deserializeDateTime(val));
         }
-        if (fieldDef?.type === "date") {
+        if (
+            fieldDef?.type === "date" ||
+            (fieldDef?.type === "datetime_option" && fieldDef.name === "__date")
+        ) {
             return formatDate(deserializeDate(val));
+        }
+        if (fieldDef?.type === "datetime_option" && fieldDef.name === "__time") {
+            return parseTime(val, true).toString(true);
         }
     }
     if (disambiguate && typeof val === "string") {
@@ -104,41 +107,20 @@ export function useMakeGetFieldDef(fieldService) {
         const paths = new Set([...pathsInTree, ...additionalsPath]);
         const promises = [];
         const fieldDefs = {};
-        const loadFieldInfoFromMultiplePaths = async (resModel, fieldDefs, path) => {
-            if (typeof path === "string" && !(path in fieldDefs)) {
-                const prom = loadFieldInfo(resModel, path).then(({ fieldDef }) => {
-                    fieldDefs[path].fieldDef = fieldDef;
-                    return fieldDef?.relation || null;
-                });
-                fieldDefs[path] = { prom, pathFieldDefs: {}, fieldDef: null };
-                return prom;
-            }
-            if (path instanceof Couple && typeof path.fst === "string" && path.fst in fieldDefs) {
-                const resModel = await fieldDefs[path.fst].prom;
-                if (resModel) {
-                    return loadFieldInfoFromMultiplePaths(
-                        resModel,
-                        fieldDefs[path.fst].pathFieldDefs,
-                        path.snd
-                    );
-                }
-            }
-            return null;
-        };
         for (const path of paths) {
-            promises.push(loadFieldInfoFromMultiplePaths(resModel, fieldDefs, path));
+            promises.push(
+                loadFieldInfo(resModel, path).then(({ fieldDef }) => {
+                    fieldDefs[path] = fieldDef;
+                })
+            );
         }
         await Promise.all(promises);
-        const _getFieldDef = (path, fieldDefs) => {
+        return (path) => {
             if (typeof path === "string") {
-                return fieldDefs[path].fieldDef;
-            }
-            if (path instanceof Couple && typeof path.fst === "string" && path.fst in fieldDefs) {
-                return _getFieldDef(path.snd, fieldDefs[path.fst].pathFieldDefs);
+                return fieldDefs[path];
             }
             return null;
         };
-        return (path) => _getFieldDef(path, fieldDefs);
     };
 }
 
@@ -186,10 +168,28 @@ export function useMakeGetConditionDescription(fieldService, nameService) {
 }
 
 function _getConditionDescription(node, getFieldDef, getPathDescription, displayNames) {
-    const nodeWithVirtualOperators = createVirtualOperators(node, { getFieldDef });
-    const { operator, negate, value, path } = nodeWithVirtualOperators;
+    let { operator, negate, value, path } = node;
+    if (["=", "!="].includes(operator) && value === false) {
+        operator = operator === "=" ? "not_set" : "set";
+    } else if (["in", "not in"].includes(operator) && Array.isArray(value) && value.length === 0) {
+        operator = operator === "in" ? "not_set" : "set";
+    }
     const fieldDef = getFieldDef(path);
-    const operatorLabel = getOperatorLabel(operator, fieldDef?.type, negate);
+    const operatorLabel = getOperatorLabel(operator, fieldDef?.type, negate, (operator) => {
+        switch (operator) {
+            case "=":
+            case "in":
+                return "=";
+            case "!=":
+            case "not in":
+                return _t("not =");
+            case "any":
+                return ":";
+            case "not any":
+                return _t(": not");
+        }
+    });
+
     const pathDescription = getPathDescription(path);
     const description = {
         pathDescription,
@@ -230,13 +230,114 @@ function _getConditionDescription(node, getFieldDef, getPathDescription, display
             break;
         case "in":
         case "not in":
-            join = ",";
-            break;
+            addParenthesis = false;
+        // eslint-disable-next-line no-fallthrough
         default:
             join = _t("or");
     }
     description.valueDescription = { values, join, addParenthesis };
     return description;
+}
+
+export function useGetTreeDescription(fieldService, nameService) {
+    fieldService ||= useService("field");
+    nameService ||= useService("name");
+    const makeGetFieldDef = useMakeGetFieldDef(fieldService);
+    const makeGetConditionDescription = useMakeGetConditionDescription(fieldService, nameService);
+    return async (resModel, tree) => {
+        async function getTreeDescription(resModel, tree, isSubExpression = false) {
+            tree = simplifyTree(tree);
+            if (tree.type === "connector") {
+                // we assume that the domain tree is normalized (--> there is at least two children)
+                const childDescriptions = tree.children.map((node) =>
+                    getTreeDescription(resModel, node, true)
+                );
+                const separator = tree.value === "&" ? _t("and") : _t("or");
+                let description = await Promise.all(childDescriptions);
+                description = description.join(` ${separator} `);
+                if (isSubExpression || tree.negate) {
+                    description = `( ${description} )`;
+                }
+                if (tree.negate) {
+                    description = `! ${description}`;
+                }
+                return description;
+            }
+            const getFieldDef = await makeGetFieldDef(resModel, tree);
+            const getConditionDescription = await makeGetConditionDescription(
+                resModel,
+                tree,
+                getFieldDef
+            );
+            const { pathDescription, operatorDescription, valueDescription } =
+                getConditionDescription(tree);
+            const stringDescription = [pathDescription, operatorDescription];
+            if (valueDescription) {
+                const { values, join, addParenthesis } = valueDescription;
+                const jointedValues = values.join(` ${join} `);
+                stringDescription.push(addParenthesis ? `( ${jointedValues} )` : jointedValues);
+            } else if (isTree(tree.value)) {
+                const _fieldDef = getFieldDef(tree.path);
+                const _resModel = getResModel(_fieldDef);
+                const _tree = tree.value;
+                const description = await getTreeDescription(_resModel, _tree);
+                stringDescription.push(`( ${description} )`);
+            }
+            return stringDescription.join(" ");
+        }
+        return getTreeDescription(resModel, tree);
+    };
+}
+
+export function useGetTreeTooltip(fieldService, nameService) {
+    fieldService ||= useService("field");
+    nameService ||= useService("name");
+    const makeGetFieldDef = useMakeGetFieldDef(fieldService);
+    const makeGetConditionDescription = useMakeGetConditionDescription(fieldService, nameService);
+    return async (resModel, tree) => {
+        async function getTooltipLines(resModel, tree, depth = 0) {
+            const tabs = " ".repeat(depth * 4);
+            tree = simplifyTree(tree);
+            if (tree.type === "connector") {
+                // we assume that the domain tree is normalized (--> there is at least two children)
+                let connector = tree.value === "&" ? _t("all") : _t("any");
+                if (tree.negate) {
+                    connector = tree.value === "&" ? _t("not all") : _t("none");
+                }
+                connector = `${tabs}${connector}`;
+                const childrenTooltipLines = await Promise.all(
+                    tree.children.map((node) => getTooltipLines(resModel, node, depth + 1))
+                );
+                return [connector, ...childrenTooltipLines].flat();
+            }
+            const getFieldDef = await makeGetFieldDef(resModel, tree);
+            const getConditionDescription = await makeGetConditionDescription(
+                resModel,
+                tree,
+                getFieldDef
+            );
+            const { pathDescription, operatorDescription, valueDescription } =
+                getConditionDescription(tree);
+            const descr = [];
+            const stringDescriptions = [pathDescription, operatorDescription];
+            if (valueDescription) {
+                const { values, join, addParenthesis } = valueDescription;
+                const jointedValues = values.join(` ${join} `);
+                stringDescriptions.push(addParenthesis ? `( ${jointedValues} )` : jointedValues);
+            }
+            descr.push(`${tabs}${stringDescriptions.join(" ")}`);
+            if (isTree(tree.value)) {
+                const _fieldDef = getFieldDef(tree.path);
+                const _resModel = getResModel(_fieldDef);
+                const _tree = tree.value;
+                const tooltipLines = await getTooltipLines(_resModel, _tree, depth + 1);
+                descr.push(...tooltipLines);
+            }
+            return descr;
+        }
+        const descriptions = await getTooltipLines(resModel, tree);
+        return descriptions.join("\n");
+    };
 }
 
 export function getResModel(fieldDef) {
@@ -280,7 +381,8 @@ function _extractIdsRecursive(tree, getFieldDef, idsByModel) {
     return idsByModel;
 }
 
-function addPaths(paths, path) {
+function makePaths(path) {
+    const paths = [path];
     const { initialPath, lastPart } = splitPath(path);
     if (initialPath && lastPart) {
         // these paths are used in _createSpecialPaths
@@ -292,28 +394,33 @@ function addPaths(paths, path) {
             [initialPath, "__time", lastPart].join(".")
         );
     }
+    return paths;
 }
 
-export function getPathsInTree(tree, lookInSubTrees = false) {
+function _getPathsInTree(tree, lookInSubTrees = false) {
     const paths = [];
     if (tree.type === "condition") {
         paths.push(tree.path);
-        if (typeof tree.path === "string") {
-            addPaths(paths, tree.path);
-        }
-        if (lookInSubTrees && isTree(tree.value)) {
-            const subTreePaths = getPathsInTree(tree.value, lookInSubTrees);
+        if (typeof tree.path === "string" && lookInSubTrees && isTree(tree.value)) {
+            const subTreePaths = _getPathsInTree(tree.value, lookInSubTrees);
             for (const p of subTreePaths) {
-                paths.push(new Couple(tree.path, p));
+                if (typeof p === "string") {
+                    paths.push(`${tree.path}.${p}`);
+                }
             }
         }
     }
     if (tree.type === "connector" && tree.children) {
         for (const child of tree.children) {
-            paths.push(...getPathsInTree(child, lookInSubTrees));
+            paths.push(..._getPathsInTree(child, lookInSubTrees));
         }
     }
     return unique(paths);
+}
+
+function getPathsInTree(tree, lookInSubTrees = false) {
+    const paths = _getPathsInTree(tree, lookInSubTrees);
+    return paths.flatMap((p) => makePaths(p));
 }
 
 const SPECIAL_FIELDS = ["country_id", "user_id", "partner_id", "stage_id", "id"];
@@ -336,7 +443,7 @@ export function getDefaultPath(fieldDefs) {
  * @param {Tree} tree
  * @returns {tree}
  */
-export function simplifyTree(tree) {
+function simplifyTree(tree) {
     if (tree.type === "condition") {
         return tree;
     }
@@ -346,7 +453,8 @@ export function simplifyTree(tree) {
     }
     const children = [];
     const childrenByPath = {};
-    for (const child of processedChildren) {
+    for (let index = 0; index < processedChildren.length; index++) {
+        const child = processedChildren[index];
         if (
             child.type === "connector" ||
             typeof child.path !== "string" ||
@@ -355,25 +463,25 @@ export function simplifyTree(tree) {
             children.push(child);
         } else {
             if (!childrenByPath[child.path]) {
-                childrenByPath[child.path] = [];
+                childrenByPath[child.path] = { elems: [], index };
+                children.push(child); // will be replaced if necessary
             }
-            childrenByPath[child.path].push(child);
+            childrenByPath[child.path].elems.push(child);
         }
     }
     for (const path in childrenByPath) {
-        if (childrenByPath[path].length === 1) {
-            children.push(childrenByPath[path][0]);
+        if (childrenByPath[path].elems.length === 1) {
             continue;
         }
         const value = [];
-        for (const child of childrenByPath[path]) {
+        for (const child of childrenByPath[path].elems) {
             if (child.operator === "=") {
                 value.push(child.value);
             } else {
                 value.push(...child.value);
             }
         }
-        children.push(condition(path, "in", normalizeValue(unique(value))));
+        children[childrenByPath[path].index] = condition(path, "in", normalizeValue(unique(value)));
     }
     if (children.length === 1) {
         return { ...children[0] };

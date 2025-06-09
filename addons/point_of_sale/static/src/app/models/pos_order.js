@@ -412,9 +412,10 @@ export class PosOrder extends Base {
                             configuration: {
                                 attribute_value_ids: cLine.attribute_value_ids,
                             },
+                            qty: pLine.qty,
                         };
                     } else {
-                        return { combo_item_id: cLine.combo_item_id };
+                        return { combo_item_id: cLine.combo_item_id, qty: pLine.qty };
                     }
                 }),
                 pricelist,
@@ -423,7 +424,7 @@ export class PosOrder extends Base {
             );
         }
         const combo_children_lines = this.lines.filter(
-            (line) => line.price_type === "original" && line.combo_parent_id
+            (line) => line.price_type === "automatic" && line.combo_parent_id
         );
         combo_children_lines.forEach((line) => {
             line.setUnitPrice(
@@ -944,7 +945,11 @@ export class PosOrder extends Base {
         return pos_categ_id_A - pos_categ_id_B;
     }
     getName() {
-        return this.floatingOrderName || "";
+        let name = this.floatingOrderName || "";
+        if (this.isRefund) {
+            name += _t(" (Refund)");
+        }
+        return name;
     }
     setGeneralCustomerNote(note) {
         this.general_customer_note = note || "";

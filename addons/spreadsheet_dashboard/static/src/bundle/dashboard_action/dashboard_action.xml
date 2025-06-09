@@ -5,17 +5,10 @@
             <t t-set-slot="layout-actions" t-if="!state.activeDashboard?.isSample">
                 <t t-set="status" t-value="state.activeDashboard and state.activeDashboard.status"/>
                 <div class="d-flex flex-wrap">
-                    <div t-if="status === Status.Loaded"
-                        class="o_filter_value_container"
-                        t-as="filter"
-                        t-foreach="filters"
-                        t-key="activeDashboardId + '_' + filter.id">
-                        <FilterValue
-                            filter="filter"
-                            model="state.activeDashboard.model"
-                            showTitle="true"
-                        />
-                    </div>
+                    <DashboardSearchBar t-if="status === Status.Loaded and state.activeDashboard.model.getters.getGlobalFilters().length"
+                                        t-key="activeDashboardId"
+                                        model="state.activeDashboard.model"
+                    />
                 </div>
             </t>
             <t t-set-slot="control-panel-navigation-additional" t-if="!state.activeDashboard?.isSample">
@@ -50,8 +43,7 @@
                     An error occured while loading the dashboard
                 </div>
                 <t t-else="">
-                    <MobileFigureContainer t-if="env.isSmall" spreadsheetModel="dashboard.model" t-key="dashboard.id"/>
-                    <div t-else="" class="o_renderer" t-att-class="{'o-sample-dashboard': dashboard.isSample}">
+                    <div class="o_renderer" t-att-class="{'o-sample-dashboard': dashboard.isSample}">
                         <SpreadsheetComponent
                             model="dashboard.model"
                             t-key="dashboard.id"/>

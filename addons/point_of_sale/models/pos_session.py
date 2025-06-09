@@ -1144,11 +1144,17 @@ class PosSession(models.Model):
             'company_id': self.company_id.id,
         })
 
+        # In community the outstanding account is computed on the creation of account.payment records
+        accounting_installed = self.env['account.move']._get_invoice_in_payment_state() == 'in_payment'
+        if not account_payment.outstanding_account_id and accounting_installed:
+            account_payment.outstanding_account_id = account_payment._get_outstanding_account(account_payment.payment_type)
+
         if float_compare(amounts['amount'], 0, precision_rounding=self.currency_id.rounding) < 0:
             # revert the accounts because account.payment doesn't accept negative amount.
             account_payment.write({
                 'outstanding_account_id': account_payment.destination_account_id,
                 'destination_account_id': account_payment.outstanding_account_id,
+                'payment_type': 'outbound',
             })
 
         account_payment.action_post()
@@ -1545,21 +1551,22 @@ class PosSession(models.Model):
         [1] Except when `force_company_currency` = True. It means that values in `amounts_to_add`
             is in company currency.
 
-        :params old_amounts dict:
+        :param dict old_amounts:
             Amounts to update
-        :params amounts_to_add dict:
+        :param dict amounts_to_add:
             Amounts used to update the old_amounts
-        :params date date:
+        :param date date:
             Date used for conversion
-        :params round bool:
+        :param bool round:
             Same as round parameter of `res.currency._convert`.
             Defaults to True because that is the default of `res.currency._convert`.
             We put it to False if we want to round globally.
-        :params force_company_currency bool:
+        :param bool force_company_currency:
             If True, the values in amounts_to_add are in company's currency.
             Defaults to False because it is only used to anglo-saxon lines.
 
-        :return dict: new amounts combining the values of `old_amounts` and `amounts_to_add`.
+        :returns: new amounts combining the values of `old_amounts` and `amounts_to_add`.
+        :rtype: dict
         """
         # make a copy of the old amounts
         new_amounts = { **old_amounts }
@@ -1603,14 +1610,15 @@ class PosSession(models.Model):
         in account module. Understanding this basic is important in correctly assigning values for
         'amount' and 'amount_currency' in the account.move.line record.
 
-        :param partial_move_line_vals dict:
+        :param dict partial_move_line_vals:
             initial values in creating account.move.line
-        :param amount float:
+        :param float amount:
             amount derived from pos.payment, pos.order, or pos.order.line records
-        :param amount_converted float:
+        :param float amount_converted:
             converted value of `amount` from the given `session_currency` to company currency
 
-        :return dict: complete values for creating 'amount.move.line' record
+        :return: complete values for creating 'amount.move.line' record
+        :rtype: dict
         """
         if self.is_in_company_currency or force_company_currency:
             additional_field = {}
@@ -1956,16 +1964,10 @@ class ProcurementGroup(models.Model):
 
     @api.model
     def _run_scheduler_tasks(self, use_new_cursor=False, company_id=False):
-        super(ProcurementGroup, self)._run_scheduler_tasks(use_new_cursor=use_new_cursor, company_id=company_id)
+        super()._run_scheduler_tasks(use_new_cursor=use_new_cursor, company_id=company_id)
         self.env['pos.session']._alert_old_session()
-        if 'scheduler_task_done' in self._context:
-            task_done = self._context.get('scheduler_task_done', {'task_done': 0})['task_done'] + 1
-            self._context['scheduler_task_done']['task_done'] = task_done
-        else:
-            task_done = self._get_scheduler_tasks_to_do()
         if use_new_cursor:
-            self.env['ir.cron']._notify_progress(done=task_done, remaining=self._get_scheduler_tasks_to_do() - task_done)
-            self.env.cr.commit()
+            self.env['ir.cron']._commit_progress(1)
 
     @api.model
     def _get_scheduler_tasks_to_do(self):

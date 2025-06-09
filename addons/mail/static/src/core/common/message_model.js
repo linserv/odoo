@@ -32,7 +32,11 @@ export class Message extends Record {
     }
 
     attachment_ids = fields.Many("ir.attachment", { inverse: "message" });
-    author = fields.One("Persona");
+    author_id = fields.One("Persona");
+    author_guest_id = fields.One("Persona");
+    get author() {
+        return this.author_id || this.author_guest_id;
+    }
     body = fields.Html("");
     call_history_ids = fields.Many("discuss.call.history");
     richBody = fields.Html("", {
@@ -80,10 +84,12 @@ export class Message extends Record {
     incoming_email_cc;
     /** @type {Array[Array[string]]} */
     incoming_email_to;
-    /** @type {boolean} */
-    is_discussion;
-    /** @type {boolean} */
-    is_note;
+    get isDiscussion() {
+        return this.store.mt_comment?.eq(this.subtype_id);
+    }
+    get isNote() {
+        return this.store.mt_note?.eq(this.subtype_id);
+    }
     /** @type {boolean} */
     is_transient;
     message_link_preview_ids = fields.Many("mail.message.link.preview", { inverse: "message_id" });
@@ -105,7 +111,8 @@ export class Message extends Record {
         sort: (r1, r2) => r1.sequence - r2.sequence,
     });
     notification_ids = fields.Many("mail.notification", { inverse: "mail_message_id" });
-    recipients = fields.Many("Persona");
+    partner_ids = fields.Many("Persona");
+    subtype_id = fields.One("mail.message.subtype");
     thread = fields.One("Thread");
     threadAsNeedaction = fields.One("Thread", {
         compute() {
@@ -136,8 +143,6 @@ export class Message extends Record {
     });
     /** @type {string} */
     subject;
-    /** @type {string} */
-    subtype_description;
     /** @type {Object[]} */
     trackingValues = [];
     /** @type {string|undefined} */
@@ -168,10 +173,10 @@ export class Message extends Record {
         if (this.message_type === "notification") {
             return undefined;
         }
-        if (!this.isSelfAuthored && !this.is_note && !this.isHighlightedFromMention) {
+        if (!this.isSelfAuthored && !this.isNote && !this.isHighlightedFromMention) {
             return "blue";
         }
-        if (this.isSelfAuthored && !this.is_note && !this.isHighlightedFromMention) {
+        if (this.isSelfAuthored && !this.isNote && !this.isHighlightedFromMention) {
             return "green";
         }
         if (this.isHighlightedFromMention) {
@@ -231,7 +236,7 @@ export class Message extends Record {
     }
 
     get isSelfMentioned() {
-        return this.store.self.in(this.recipients);
+        return this.store.self.in(this.partner_ids);
     }
 
     get isHighlightedFromMention() {
@@ -298,7 +303,7 @@ export class Message extends Record {
                 this.isBodyEmpty &&
                 this.attachment_ids.length === 0 &&
                 this.trackingValues.length === 0 &&
-                !this.subtype_description
+                !this.subtype_id?.description
             );
         },
     });
@@ -357,7 +362,7 @@ export class Message extends Record {
         /** @this {import("models").Message} */
         compute() {
             if (this.notificationType === "call") {
-                return _t("%(caller)s started a call", { caller: this.author.name });
+                return _t("%(caller)s started a call", { caller: this.authorName });
             }
             if (this.isEmpty) {
                 return _t("This message has been removed");
@@ -407,7 +412,7 @@ export class Message extends Record {
         /** @this {import("models").Message} */
         compute() {
             if (!this.hasOnlyAttachments) {
-                return this.inlineBody || this.subtype_description;
+                return this.inlineBody || this.subtype_id?.description;
             }
             const { attachment_ids: attachments } = this;
             if (!attachments || attachments.length === 0) {
@@ -524,7 +529,7 @@ export class Message extends Record {
             thread.messageInEdition.composer = undefined;
         }
         this.composer = {
-            mentionedPartners: this.recipients,
+            mentionedPartners: this.partner_ids,
             text,
             selection: {
                 start: text.length,

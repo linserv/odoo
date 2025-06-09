@@ -146,13 +146,14 @@ describe("collapsed selection", () => {
         await testEditor({
             contentBefore: "<p>content</p>",
             stepFunction: async (editor) => {
-                editor.shared.selection.setCursorEnd(editor.editable, false);
+                editor.shared.selection.setCursorEnd(editor.editable);
                 editor.shared.selection.focusEditable();
                 await tick();
                 editor.shared.dom.insert(parseHTML(editor.document, "<div>abc</div><p>def</p>"));
                 editor.shared.history.addStep();
             },
             contentAfter: "<p>content</p><div>abc</div><p>def[]</p>",
+            config: { allowInlineAtRoot: true },
         });
     });
 
@@ -391,7 +392,7 @@ describe("not collapsed selection", () => {
                 );
             },
             contentAfterEdit:
-                '<p>\ufeff<i class="fa fa-pastafarianism" contenteditable="false">\u200b</i>\ufeff[]</p>',
+                '<p><i class="fa fa-pastafarianism" contenteditable="false">\u200b</i>[]</p>',
             contentAfter: '<p><i class="fa fa-pastafarianism"></i>[]</p>',
         });
     });

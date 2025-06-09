@@ -13,7 +13,7 @@ test("Message model properties", async () => {
     await start();
     const store = getService("mail.store");
     store.Store.insert({
-        self: { id: serverState.partnerId, type: "partner" },
+        self_partner: { id: serverState.partnerId, type: "partner" },
     });
     store.Thread.insert({
         id: serverState.partnerId,
@@ -27,7 +27,7 @@ test("Message model properties", async () => {
     });
     const message = store["mail.message"].insert({
         attachment_ids: 750,
-        author: { id: 5, name: "Demo" },
+        author_id: { id: 5, name: "Demo" },
         body: markup("<p>Test</p>"),
         date: deserializeDateTime("2019-05-05 10:00:00"),
         id: 4000,

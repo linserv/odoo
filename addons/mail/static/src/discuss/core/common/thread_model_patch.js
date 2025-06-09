@@ -58,7 +58,7 @@ const threadPatch = {
     setup() {
         super.setup();
         this.channel_member_ids = fields.Many("discuss.channel.member", {
-            inverse: "thread",
+            inverse: "channel_id",
             onDelete: (r) => r.delete(),
             sort: (m1, m2) => m1.id - m2.id,
         });
@@ -66,6 +66,12 @@ const threadPatch = {
             /** @this {import("models").Thread} */
             compute() {
                 return this.computeCorrespondent();
+            },
+        });
+        this.correspondentCountry = fields.One("res.country", {
+            /** @this {import("models").Thread} */
+            compute() {
+                return this.correspondent?.persona?.country_id ?? this.country_id;
             },
         });
         /** @type {"video_full_screen"|undefined} */
@@ -227,6 +233,9 @@ const threadPatch = {
         }
         return super.avatarUrl;
     },
+    get showCorrespondentCountry() {
+        return false;
+    },
     /** @returns {import("models").ChannelMember} */
     computeCorrespondent() {
         if (this.channel_type === "channel") {
@@ -248,8 +257,11 @@ const threadPatch = {
         return this.channel_member_ids.filter(({ persona }) => persona.notEq(this.store.self));
     },
     get displayName() {
+        if (this.supportsCustomChannelName && this.custom_channel_name) {
+            return this.custom_channel_name;
+        }
         if (this.channel_type === "chat" && this.correspondent) {
-            return this.custom_channel_name || this.correspondent.name;
+            return this.correspondent.name;
         }
         if (this.channel_type === "group" && !this.name) {
             return formatList(this.channel_member_ids.map((channelMember) => channelMember.name));
@@ -343,10 +355,14 @@ const threadPatch = {
         }
         this.markReadSequential(async () => {
             this.markingAsRead = true;
-            return rpc("/discuss/channel/mark_as_read", {
-                channel_id: this.id,
-                last_message_id: newestPersistentMessage.id,
-            }).catch((e) => {
+            return rpc(
+                "/discuss/channel/mark_as_read",
+                {
+                    channel_id: this.id,
+                    last_message_id: newestPersistentMessage.id,
+                },
+                { silent: true }
+            ).catch((e) => {
                 if (e.code !== 404) {
                     throw e;
                 }

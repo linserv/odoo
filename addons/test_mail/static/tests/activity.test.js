@@ -17,7 +17,7 @@ import { ActivityModel } from "@mail/views/web/activity/activity_model";
 import { ActivityRenderer } from "@mail/views/web/activity/activity_renderer";
 import { beforeEach, describe, expect, test } from "@odoo/hoot";
 import { keyDown, waitFor } from "@odoo/hoot-dom";
-import { animationFrame, mockDate } from "@odoo/hoot-mock";
+import { animationFrame, disableAnimations, mockDate } from "@odoo/hoot-mock";
 import { onMounted, onWillUnmount } from "@odoo/owl";
 import { MailTestActivity } from "@test_mail/../tests/mock_server/models/mail_test_activity";
 import { defineTestMailModels } from "@test_mail/../tests/test_mail_test_helpers";
@@ -82,6 +82,10 @@ function patchActivityDomain(load, params) {
     }
     return load(params);
 }
+
+// Because tests implicitly use Popover
+// and that it uses HTMLElement.animate()
+disableAnimations();
 
 describe.current.tags("desktop");
 defineTestMailModels();
@@ -210,6 +214,7 @@ test("activity view: simple activity rendering", async () => {
                     default_res_id: mailTestActivityIds[1],
                     default_res_model: "mail.test.activity",
                     default_activity_type_id: mailActivityTypeIds[2],
+                    dialog_size: "large",
                 },
                 res_id: false,
                 res_model: "mail.activity",

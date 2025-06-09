@@ -375,7 +375,7 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
         move_form.ref = 'azerty'
 
         # Debit base tax line.
-        with move_form.line_ids.new() as credit_line:
+        with move_form.journal_line_ids.new() as credit_line:
             credit_line.name = 'debit_line_1'
             credit_line.account_id = self.company_data['default_account_revenue']
             credit_line.debit = 1000.0
@@ -384,7 +384,7 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
 
 
         # Balance the journal entry.
-        with move_form.line_ids.new() as credit_line:
+        with move_form.journal_line_ids.new() as credit_line:
             credit_line.name = 'balance'
             credit_line.account_id = self.company_data['default_account_revenue']
             credit_line.credit = 1100.0
@@ -403,7 +403,7 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
         move_form.ref = 'azerty'
 
         # Debit base tax line.
-        with move_form.line_ids.new() as credit_line:
+        with move_form.journal_line_ids.new() as credit_line:
             credit_line.name = 'debit_line_1'
             credit_line.account_id = self.company_data['default_account_revenue']
             credit_line.credit = 1000.0
@@ -411,7 +411,7 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
             credit_line.tax_ids.add(sale_tax)
 
         # Balance the journal entry.
-        with move_form.line_ids.new() as debit_line:
+        with move_form.journal_line_ids.new() as debit_line:
             debit_line.name = 'balance'
             debit_line.account_id = self.company_data['default_account_revenue']
             debit_line.debit = 1100.0
@@ -461,7 +461,7 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
         move_form.ref = 'azerty'
 
         # Debit base tax line.
-        with move_form.line_ids.new() as credit_line:
+        with move_form.journal_line_ids.new() as credit_line:
             credit_line.name = 'debit_line_1'
             credit_line.account_id = self.company_data['default_account_revenue']
             credit_line.debit = 1000.0
@@ -469,7 +469,7 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
             credit_line.tax_ids.add(purch_tax)
 
         # Balance the journal entry.
-        with move_form.line_ids.new() as credit_line:
+        with move_form.journal_line_ids.new() as credit_line:
             credit_line.name = 'balance'
             credit_line.account_id = self.company_data['default_account_revenue']
             credit_line.credit = 1100.0
@@ -488,7 +488,7 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
         move_form.ref = 'azerty'
 
         # Debit base tax line.
-        with move_form.line_ids.new() as credit_line:
+        with move_form.journal_line_ids.new() as credit_line:
             credit_line.name = 'debit_line_1'
             credit_line.account_id = self.company_data['default_account_revenue']
             credit_line.credit = 1000.0
@@ -496,7 +496,7 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
             credit_line.tax_ids.add(purch_tax)
 
         # Balance the journal entry.
-        with move_form.line_ids.new() as debit_line:
+        with move_form.journal_line_ids.new() as debit_line:
             debit_line.name = 'balance'
             debit_line.account_id = self.company_data['default_account_revenue']
             debit_line.debit = 1100.0
@@ -569,7 +569,7 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
             with Form(self.env['account.move'], view='account.view_move_form') as move_form:
                 for line_field in ('debit', 'credit'):
                     line_amount = tax_field == line_field and 1000 or 1150
-                    with move_form.line_ids.new() as line_form:
+                    with move_form.journal_line_ids.new() as line_form:
                         line_form.name = '%s_line' % line_field
                         line_form.account_id = self.company_data['default_account_revenue']
                         line_form.debit = line_field == 'debit' and line_amount or 0
@@ -838,3 +838,51 @@ class TestInvoiceTaxes(AccountTestInvoicingCommon):
         self.assertRecordValues(receivable_line, [
             {'amount_currency': 1410.02, 'balance': 705.02},
         ])
+
+    def test_product_account_tags(self):
+        product_tag = self.env['account.account.tag'].create({
+            'name': "Pikachu",
+            'applicability': 'products',
+        })
+        self.product_a.account_tag_ids = [Command.set(product_tag.ids)]
+
+        invoice = self.env['account.move'].create({
+            'move_type': 'out_invoice',
+            'date': '2025-01-01',
+            'partner_id': self.partner_a.id,
+            'invoice_line_ids': [
+                Command.create({
+                    'name': 'test with product tag',
+                    'product_id': self.product_a.id,
+                    'price_unit': 1000,
+                    'tax_ids': self.percent_tax_1.ids,
+                }),
+                Command.create({
+                    'name': 'test with product tag',
+                    'product_id': self.product_b.id,
+                    'price_unit': 100,
+                    'tax_ids': self.percent_tax_1.ids,
+                }),
+                Command.create({
+                    'name': 'test without product tag',
+                    'product_id': self.product_b.id,
+                    'price_unit': 200,
+                    'tax_ids': self.percent_tax_2.ids,
+                }),
+            ]
+        })
+
+        invoice.action_post()
+
+        self.assertRecordValues(
+            invoice.line_ids,
+            [
+                {'tax_ids': self.percent_tax_1.ids, 'tax_line_id': False,                 'tax_tag_ids': product_tag.ids,  'credit': 1000, 'debit': 0},
+                {'tax_ids': self.percent_tax_1.ids, 'tax_line_id': False,                 'tax_tag_ids': [],               'credit': 100,  'debit': 0},
+                {'tax_ids': self.percent_tax_2.ids, 'tax_line_id': False,                 'tax_tag_ids': [],               'credit': 200,  'debit': 0},
+                {'tax_ids': [],                     'tax_line_id': self.percent_tax_1.id, 'tax_tag_ids': product_tag.ids,  'credit': 210,  'debit': 0},
+                {'tax_ids': [],                     'tax_line_id': self.percent_tax_1.id, 'tax_tag_ids': [],               'credit': 21,   'debit': 0},
+                {'tax_ids': [],                     'tax_line_id': self.percent_tax_2.id, 'tax_tag_ids': [],               'credit': 24,   'debit': 0},
+                {'tax_ids': [],                     'tax_line_id': False,                 'tax_tag_ids': [],               'credit': 0,    'debit': 1555},
+            ],
+        )

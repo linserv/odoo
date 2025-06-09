@@ -59,7 +59,7 @@ export class Notification extends Record {
                 return _t("Exception");
         }
     }
-    persona = fields.One("Persona");
+    res_partner_id = fields.One("Persona");
 
     get isFailure() {
         return ["exception", "bounce"].includes(this.notification_status);
@@ -78,7 +78,7 @@ export class Notification extends Record {
 
     get isFollowerNotification() {
         return this.mail_message_id.thread.followers.some(
-            (follower) => follower.partner.id === this.persona.id
+            (follower) => follower.partner_id.id === this.res_partner_id.id
         );
     }
 

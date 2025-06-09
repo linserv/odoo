@@ -20,6 +20,7 @@ from odoo.fields import Domain
 from odoo.http import Stream, root, request
 from odoo.tools import config, consteq, human_size, image, split_every, str2bool
 from odoo.tools.mimetypes import guess_mimetype, fix_filename_extension
+from odoo.tools.misc import limited_field_access_token
 
 _logger = logging.getLogger(__name__)
 
@@ -542,6 +543,12 @@ class IrAttachment(models.Model):
             if public:
                 allowed_ids.add(id_)
                 continue
+
+            if res_field and not self.env.is_system():
+                field = self.env[res_model]._fields[res_field]
+                if field.groups and not self.env.user.has_groups(field.groups):
+                    continue
+
             if not res_id and (self.env.is_system() or create_uid == self.env.uid):
                 allowed_ids.add(id_)
                 continue
@@ -667,6 +674,15 @@ class IrAttachment(models.Model):
             attachment.write({'access_token': access_token})
             tokens.append(access_token)
         return tokens
+
+    def _get_raw_access_token(self):
+        """Return a scoped access token for the `raw` field. The token can be
+        used with `ir_binary._find_record` to bypass access rights.
+
+        :rtype: str
+        """
+        self.ensure_one()
+        return limited_field_access_token(self, "raw", scope="binary")
 
     @api.model
     def create_unique(self, values_list):

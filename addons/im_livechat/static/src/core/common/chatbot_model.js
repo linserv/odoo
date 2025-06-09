@@ -37,7 +37,7 @@ export class Chatbot extends Record {
                 return {
                     id: -0.1 - this.thread.id,
                     thread: this.thread,
-                    author: this.script.operator_partner_id,
+                    author_id: this.script.operator_partner_id,
                 };
             }
         },
@@ -81,7 +81,7 @@ export class Chatbot extends Record {
             chatbot_script_id: this.script.id,
         });
         this.store.insert(store_data);
-        this.thread.messages.push(this.store["mail.message"].get(message_id));
+        this.thread.messages.add(message_id);
         if (this.currentStep) {
             this.currentStep.isLast = false;
             this.thread.livechat_active = true;
@@ -121,7 +121,7 @@ export class Chatbot extends Record {
             // create them now on the client side.
             this.currentStep.message = this.store["mail.message"].insert({
                 id: this.store.getNextTemporaryId(),
-                author: this.script.operator_partner_id,
+                author_id: this.script.operator_partner_id,
                 body: this.currentStep.scriptStep.message,
                 thread: this.thread,
             });

@@ -12,7 +12,7 @@ from odoo.addons.base.models.avatar_mixin import get_hsl_from_seed
 from odoo.addons.mail.tools.discuss import Store
 from odoo.addons.mail.tools.web_push import PUSH_NOTIFICATION_TYPE
 from odoo.exceptions import UserError, ValidationError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools import format_list, get_lang, html_escape
 from odoo.tools.misc import OrderedSet
 
@@ -419,8 +419,6 @@ class DiscussChannel(models.Model):
     def _field_store_repr(self, field_name):
         """Return the default Store representation of the given field name, which can be passed as
         param to the various Store methods."""
-        if field_name == "group_public_id":
-            return [Store.Attr("authorizedGroupFullName", lambda c: c.group_public_id.full_name)]
         if field_name == "group_ids":
             return [Store.Attr("group_based_subscription", lambda c: bool(c.group_ids))]
         return [field_name]
@@ -522,13 +520,10 @@ class DiscussChannel(models.Model):
         all_new_members = self.env["discuss.channel.member"]
         for channel in self:
             members_to_create = []
-            existing_members = self.env['discuss.channel.member'].search(expression.AND([
-                [('channel_id', '=', channel.id)],
-                expression.OR([
-                    [('partner_id', 'in', partners.ids)],
-                    [('guest_id', 'in', guests.ids)]
-                ])
-            ]))
+            existing_members = self.env['discuss.channel.member'].search(
+                Domain('channel_id', '=', channel.id)
+                & (Domain('partner_id', 'in', partners.ids) | Domain('guest_id', 'in', guests.ids))
+            )
             members_to_create += [{
                 **(create_member_params or {}),
                 'partner_id': partner.id,
@@ -597,12 +592,12 @@ class DiscussChannel(models.Model):
             :param list member_ids: list of the members ids from which the invitation has to be removed
         """
         self.ensure_one()
-        channel_member_domain = [
+        channel_member_domain = Domain([
             ('channel_id', '=', self.id),
             ('rtc_inviting_session_id', '!=', False),
-        ]
+        ])
         if member_ids:
-            channel_member_domain = expression.AND([channel_member_domain, [('id', 'in', member_ids)]])
+            channel_member_domain &= Domain('id', 'in', member_ids)
         members = self.env['discuss.channel.member'].search(channel_member_domain)
         members.rtc_inviting_session_id = False
         members._bus_send_store(self, {"rtcInvitingSession": False})
@@ -613,7 +608,7 @@ class DiscussChannel(models.Model):
                     "invited_member_ids": Store.Many(
                         members,
                         [
-                            Store.One("channel_id", [], as_thread=True, rename="thread"),
+                            Store.One("channel_id", [], as_thread=True),
                             *self.env["discuss.channel.member"]._to_store_persona("avatar_card"),
                         ],
                         mode="DELETE",
@@ -689,27 +684,27 @@ class DiscussChannel(models.Model):
                     'ushare': ushare,
                 })
 
-        domain = expression.AND([
+        domain = Domain.AND([
             [("channel_id", "=", self.id)],
             [("partner_id", "!=", author_id)],
             [("partner_id.active", "=", True)],
             [("mute_until_dt", "=", False)],
             [("partner_id.user_ids.res_users_settings_ids.mute_until_dt", "=", False)],
-            expression.OR([
+            Domain.OR([
                 [("channel_id.channel_type", "!=", "channel")],
-                expression.AND([
+                Domain.AND([
                     [("channel_id.channel_type", "=", "channel")],
-                    expression.OR([
+                    Domain.OR([
                         [("custom_notifications", "=", "all")],
-                        expression.AND([
+                        Domain.AND([
                             [("custom_notifications", "=", False)],
                             [("partner_id.user_ids.res_users_settings_ids.channel_notifications", "=", "all")],
                         ]),
-                        expression.AND([
+                        Domain.AND([
                             [("custom_notifications", "=", "mentions")],
                             [("partner_id", "in", pids)],
                         ]),
-                        expression.AND([
+                        Domain.AND([
                             [("custom_notifications", "=", False)],
                             [("partner_id.user_ids.res_users_settings_ids.channel_notifications", "=", False)],
                             [("partner_id", "in", pids)],
@@ -1050,11 +1045,11 @@ class DiscussChannel(models.Model):
             "description",
             Store.One("from_message_id"),
             "group_ids",
-            "group_public_id",
+            Store.One("group_public_id", ["full_name"]),
             Store.Many(
                 "invited_member_ids",
                 [
-                    Store.One("channel_id", [], as_thread=True, rename="thread"),
+                    Store.One("channel_id", [], as_thread=True),
                     *self.env["discuss.channel.member"]._to_store_persona("avatar_card"),
                 ],
                 mode="ADD",
@@ -1316,22 +1311,19 @@ class DiscussChannel(models.Model):
     @api.readonly
     @api.model
     def get_mention_suggestions(self, search, limit=8):
-        """ Return 'limit'-first channels' id, name, channel_type and authorizedGroupFullName fields such that the
+        """ Return 'limit'-first channels' name, channel_type and group_public_id fields such that the
             name matches a 'search' string. Exclude channels of type chat (DM) and group.
         """
         domain = [("name", "ilike", search), ("channel_type", "=", "channel")]
         channels = self.search(domain, limit=limit)
-        return [{
-            'authorizedGroupFullName': channel.group_public_id.full_name,
-            'channel_type': channel.channel_type,
-            'model': "discuss.channel",
-            'id': channel.id,
-            'name': channel.name,
-            'parent_channel_id': {
-                'id': channel.parent_channel_id.id,
-                'model': 'discuss.channel'
-            } if channel.parent_channel_id else False,
-        } for channel in channels]
+        channel_fields = [
+            "name",
+            "channel_type",
+            Store.One("group_public_id", ["full_name"]),
+            Store.One("parent_channel_id", [])
+        ]
+        store = Store(channels, channel_fields)
+        return store.get_result()
 
     def _get_last_messages(self):
         """ Return the last message for each of the given channels."""

@@ -531,3 +531,55 @@ class TestFrontend(TestFrontendCommon):
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour(f"/pos/ui/{self.main_pos_config.id}", 'test_multiple_preparation_printer_different_categories', login="pos_user")
+
+    def test_preset_timing_restaurant(self):
+        """
+        Test to set order preset hour inside a tour
+        """
+        self.preset_eat_in = self.env['pos.preset'].create({
+            'name': 'Eat in',
+        })
+        self.preset_takeaway = self.env['pos.preset'].create({
+            'name': 'Takeaway',
+            'identification': 'name',
+        })
+        self.main_pos_config.write({
+            'use_presets': True,
+            'default_preset_id': self.preset_eat_in.id,
+            'available_preset_ids': [(6, 0, [self.preset_takeaway.id])],
+        })
+        resource_calendar = self.env['resource.calendar'].create({
+            'name': 'Takeaway',
+            'attendance_ids': [(0, 0, {
+                'name': 'Takeaway',
+                'dayofweek': str(day),
+                'hour_from': 0,
+                'hour_to': 24,
+                'day_period': 'morning',
+            }) for day in range(0, 7)],
+        })
+        self.preset_takeaway.write({
+            'use_timing': True,
+            'resource_calendar_id': resource_calendar
+        })
+        self.start_pos_tour('test_preset_timing_restaurant')
+
+    def test_combo_preparation_receipt_layout(self):
+        setup_product_combo_items(self)
+        pos_printer = self.env['pos.printer'].create({
+            'name': 'Printer',
+            'printer_type': 'epson_epos',
+            'epson_printer_ip': '0.0.0.0',
+            'product_categories_ids': [Command.set(self.env['pos.category'].search([]).ids)],
+        })
+        self.pos_config.write({
+            'is_order_printer': True,
+            'printer_ids': [Command.set(pos_printer.ids)],
+        })
+        self.pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour(f"/pos/ui/{self.pos_config.id}", 'test_combo_preparation_receipt_layout', login="pos_user")
+
+    def test_tip_after_payment(self):
+        self.pos_config.write({'iface_tipproduct': True, 'tip_product_id': self.tip.id})
+        self.pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_tip_after_payment')

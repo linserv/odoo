@@ -139,10 +139,9 @@ registry.category("web_tour.tours").add("kiosk_order_price_null", {
 
 registry.category("web_tour.tours").add("self_order_language_changes", {
     steps: () => [
-        Utils.clickBtn("Order Now"),
-
         LandingPage.checkKioskLanguageSelected("English"),
         LandingPage.checkKioskCountryFlagShown("us"),
+        Utils.clickBtn("Order Now"),
 
         LandingPage.selectKioskLocation("Test-Takeout"),
         CategoryPage.clickKioskCategory("Test Category"),
@@ -150,9 +149,9 @@ registry.category("web_tour.tours").add("self_order_language_changes", {
         ProductPage.clickBack(),
         ...CategoryPage.clickCancel(),
 
-        Utils.clickBtn("Order Now"),
+        LandingPage.checkKioskLanguageSelected("English"),
+        LandingPage.checkKioskCountryFlagShown("us"),
         ...Utils.changeKioskLanguage("Français"),
-        Utils.clickBackBtn(),
 
         Utils.clickBtn("Commander maintenant"),
         LandingPage.selectKioskLocation("Test-Takeout"),
@@ -189,5 +188,24 @@ registry.category("web_tour.tours").add("test_self_order_kiosk_combo_qty_max_fre
         ...Utils.increaseComboItemQty("Combo Product 4", 3),
         Utils.clickBtn("Next"),
         Utils.clickBtn("Add to cart"),
+    ],
+});
+
+registry.category("web_tour.tours").add("test_self_order_pricelist", {
+    steps: () => [
+        Utils.checkIsNoBtn("My Order"),
+        Utils.clickBtn("Order Now"),
+        CategoryPage.clickKioskCategory("Miscellaneous"),
+        ProductPage.clickKioskProduct("Coca-Cola"),
+        ProductPage.clickKioskProduct("Coca-Cola"),
+        Utils.clickBtn("Checkout"),
+        CartPage.checkKioskProduct("Coca-Cola", "5.06", "2"),
+        CartPage.clickBack(),
+        ProductPage.clickKioskProduct("Coca-Cola"),
+        Utils.clickBtn("Checkout"),
+        CartPage.checkKioskProduct("Coca-Cola", "3.45", "3"),
+        Utils.clickBtn("Pay"),
+        Utils.clickBtn("Close"),
+        Utils.checkIsNoBtn("My Order"),
     ],
 });

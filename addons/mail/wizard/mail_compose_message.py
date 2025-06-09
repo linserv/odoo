@@ -167,11 +167,9 @@ class MailComposeMessage(models.TransientModel):
         'wizard_id', 'partner_id', 'Additional Contacts',
         compute='_compute_partner_ids', readonly=False, store=True)
     partner_ids_all_have_email = fields.Boolean(compute="_compute_partner_ids_all_have_email")
-    notified_bcc = fields.Many2many(
-        string='Bcc', comodel_name='res.partner', compute='_compute_notified_bcc', readonly=True, store=False)
-    notified_bcc_contains_share = fields.Boolean('Is an external partner follower of the document?', compute="_compute_notified_bcc")
-    show_notified_bcc = fields.Boolean('Show BCC', store=False)  # TODO: remove field in master
-
+    notified_bcc_contains_share = fields.Boolean(
+        'Is an external partner follower of the document?',
+        compute="_compute_notified_bcc_contains_share")
     # sending
     auto_delete = fields.Boolean(
         'Delete Emails',
@@ -563,13 +561,12 @@ class MailComposeMessage(models.TransientModel):
 
     @api.depends('composition_batch', 'composition_mode', 'message_type',
                  'model', 'res_ids', 'subtype_id')
-    def _compute_notified_bcc(self):
+    def _compute_notified_bcc_contains_share(self):
         """ When being in monorecord comment mode, compute 'bcc' which are
         followers that are going to be 'silently' notified by the message. """
         post_composers = self.filtered(
             lambda comp: comp.model and comp.composition_mode == 'comment' and not comp.composition_batch
         )
-        (self - post_composers).notified_bcc = False
         (self - post_composers).notified_bcc_contains_share = False
         for composer in post_composers:
             record = self.env[composer.model].browse(
@@ -586,7 +583,6 @@ class MailComposeMessage(models.TransientModel):
                     and pid != self.env.user.partner_id.id)
             ]
             notified_bcc = self.env['res.partner'].search([('id', 'in', partner_ids)])
-            composer.notified_bcc = notified_bcc
             composer.notified_bcc_contains_share = any(notified_bcc.mapped('partner_share'))
 
     @api.depends('composition_mode', 'template_id')
@@ -777,7 +773,7 @@ class MailComposeMessage(models.TransientModel):
         """ Process the wizard content and proceed with sending the related
             email(s), rendering any template patterns on the fly if needed.
 
-        :return tuple: (
+        :return: (
             result_mails_su: in mass mode, sent emails (as sudo),
             result_messages: in comment mode, posted messages
         )
@@ -968,8 +964,9 @@ class MailComposeMessage(models.TransientModel):
 
         :param list res_ids: list of record IDs on which composer runs;
 
-        :return dict: for each res_id, values to create the mail.mail or to
+        :return: for each res_id, values to create the mail.mail or to
           give to message_post, depending on composition mode;
+        :rtype: dict
         """
         self.ensure_one()
         email_mode = self.composition_mode == 'mass_mail'
@@ -1013,7 +1010,8 @@ class MailComposeMessage(models.TransientModel):
         """Meant to be overridden to filter out and handle mail that must not be sent.
 
         :param dict mail_values_all: mail values by res_id
-        :return dict: filtered mail_vals_all
+        :return: filtered mail_vals_all
+        :rtype: dict
         """
         return mail_values_all
 
@@ -1021,8 +1019,9 @@ class MailComposeMessage(models.TransientModel):
         """Prepare values always valid, not rendered or dynamic whatever the
         composition mode and related records.
 
-        :return dict: a dict of (field name, value) to be used to populate
+        :returns: a dict of (field name, value) to be used to populate
           values for each res_id in '_prepare_mail_values';
+        :rtype: dict
         """
         self.ensure_one()
         email_mode = self.composition_mode == 'mass_mail'
@@ -1087,8 +1086,9 @@ class MailComposeMessage(models.TransientModel):
 
         :param list res_ids: list of record IDs on which composer runs;
 
-        :return dict results: for each res_id, the generated values used to
+        :returns: for each res_id, the generated values used to
           populate in '_prepare_mail_values';
+        :rtype: dict
         """
         self.ensure_one()
         RecordsModel = self.env[self.model].with_prefetch(res_ids)
@@ -1273,8 +1273,9 @@ class MailComposeMessage(models.TransientModel):
 
         :param list res_ids: list of record IDs on which composer runs;
 
-        :return dict results: for each res_id, the generated values used to
+        :returns: for each res_id, the generated values used to
           populate in '_prepare_mail_values';
+        :rtype: dict
         """
         self.ensure_one()
         email_mode = self.composition_mode == 'mass_mail'

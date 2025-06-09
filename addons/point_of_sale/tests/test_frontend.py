@@ -772,7 +772,7 @@ class TestUi(TestPointOfSaleHttpCommon):
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'PaymentScreenRoundingDown', login="pos_user")
-        self.env["pos.order"].search([]).write({'state': 'cancel'})
+        self.env["pos.order"].search([('state', '=', 'draft')]).write({'state': 'cancel'})
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'PaymentScreenTotalDueWithOverPayment', login="pos_user")
 
     def test_rounding_half_up(self):
@@ -1489,6 +1489,43 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour(f"/pos/ui/{self.main_pos_config.id}", 'ProductComboChangeFP', login="pos_user")
 
+    def test_product_combo_change_pricelist(self):
+        """
+        Verify than when we change the pricelist, the combo price is updated
+        """
+        setup_product_combo_items(self)
+
+        sale_10_pl = self.env['product.pricelist'].create({
+            'name': 'sale 10%',
+        })
+        self.env['product.pricelist.item'].create({
+            'pricelist_id': sale_10_pl.id,
+            'base': 'pricelist',
+            'compute_price': 'percentage',
+            'applied_on': '3_global',
+            'percent_price': 10,
+        })
+
+        self.main_pos_config.write({
+            'available_pricelist_ids': [(4, sale_10_pl.id)],
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour(f"/pos/ui?config_id={self.main_pos_config.id}", 'ProductComboChangePricelist', login="pos_user")
+
+    def test_product_combo_discount(self):
+        """
+        Verify that the combo product applies the correct discount and updates prices accordingly
+        """
+        setup_product_combo_items(self)
+        self.office_combo.write({'list_price': 100})
+        self.office_combo.combo_ids.combo_item_ids.product_id.taxes_id = False
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour(
+            f"/pos/ui?config_id={self.main_pos_config.id}",
+            'ProductComboDiscountTour',
+            login="pos_user",
+        )
+
     def test_cash_rounding_payment(self):
         """Verify than an error popup is shown if the payment value is more precise than the rounding method"""
         rounding_method = self.env['account.cash.rounding'].create({
@@ -1887,6 +1924,53 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.assertEqual(frontend_created_product_edited.barcode, '710535977348')
         self.assertEqual(frontend_created_product_edited.list_price, 50.0)
 
+    def test_one_attribute_value_scan_barcode(self):
+        product = self.env['product.template'].create({
+            'name': 'Product Test',
+            'available_in_pos': True,
+            'list_price': 10,
+            'taxes_id': False,
+            'barcode': '1234567',
+        })
+
+        size_attribute = self.env['product.attribute'].create({
+            'name': 'Size never',
+            'create_variant': 'no_variant',
+            'value_ids': [(0, 0, {
+                'name': 'Large',
+            })],
+        })
+
+        self.env['product.template.attribute.line'].create({
+            'product_tmpl_id': product.id,
+            'attribute_id': size_attribute.id,
+            'value_ids': [(6, 0, size_attribute.value_ids.ids)]
+        })
+
+        color_attribute = self.env['product.attribute'].create({
+            'name': 'Color always',
+            'create_variant': 'always',
+            'value_ids': [(0, 0, {
+                'name': 'Red',
+                'sequence': 1,
+            }), (0, 0, {
+                'name': 'Blue',
+                'sequence': 2,
+            })],
+        })
+
+        self.env['product.template.attribute.line'].create({
+            'product_tmpl_id': product.id,
+            'attribute_id': color_attribute.id,
+            'value_ids': [(6, 0, color_attribute.value_ids.ids)]
+        })
+
+        product.product_variant_ids[0].barcode = '1234567'
+        product.product_variant_ids[1].barcode = '1234568'
+
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_one_attribute_value_scan_barcode', login="pos_user")
+
     def test_fiscal_position_tax_group_labels(self):
         fiscal_position = self.env['account.fiscal.position'].create({
             'name': 'Fiscal Position Test',
@@ -1925,6 +2009,12 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'test_fiscal_position_tax_group_labels', login="pos_user")
 
+    def test_draft_orders_not_syncing(self):
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_draft_orders_not_syncing', login="pos_user")
+        n_draft_order = self.env['pos.order'].search_count([('state', '=', 'draft')], limit=1)
+        self.assertEqual(n_draft_order, 0, 'There should be no draft orders created')
+
     def test_product_long_press(self):
         """ Test the long press on product to open the product info """
         archive_products(self.env)
@@ -1957,6 +2047,123 @@ class TestUi(TestPointOfSaleHttpCommon):
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_zero_decimal_places_currency', login="pos_user")
+
+    def test_quantity_package_of_non_basic_unit(self):
+        inch = self.env.ref('uom.product_uom_inch')
+        inch.write({'active': True})
+        pack_of_12_inch = self.env['uom.uom'].create({
+            'name': 'Pack of 12_inch',
+            'relative_factor': 12,
+            'relative_uom_id': inch.id,
+            'is_pos_groupable': True,
+        })
+        product_cord = self.env['product.product'].create({
+            'name': 'Cord',
+            'is_storable': True,
+            'available_in_pos': True,
+            'uom_id': inch.id,
+            'uom_ids': [pack_of_12_inch.id],
+            'lst_price': 10.0,
+        })
+        self.env['product.uom'].create({
+            'barcode': '555555',
+            'product_id': product_cord.id,
+            'uom_id': pack_of_12_inch.id,
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_quantity_package_of_non_basic_unit', login="pos_user")
+
+    def test_attribute_order(self):
+        product = self.env['product.template'].create({
+            'name': 'Product Test',
+            'available_in_pos': True,
+            'list_price': 10,
+            'taxes_id': False,
+        })
+
+        attribute_3 = self.env['product.attribute'].create({
+            'name': 'Attribute 3',
+            'create_variant': 'no_variant',
+            'value_ids': [(0, 0, {
+                'name': 'Value 3',
+            }), (0, 0, {
+                'name': 'Value 4',
+            })],
+        })
+
+        self.env['product.template.attribute.line'].create({
+            'product_tmpl_id': product.id,
+            'attribute_id': attribute_3.id,
+            'value_ids': [(6, 0, attribute_3.value_ids.ids)],
+            'sequence': 3,
+        })
+
+        attribute_2 = self.env['product.attribute'].create({
+            'name': 'Attribute 2',
+            'create_variant': 'no_variant',
+            'value_ids': [(0, 0, {
+                'name': 'Value 2',
+            })],
+        })
+
+        self.env['product.template.attribute.line'].create({
+            'product_tmpl_id': product.id,
+            'attribute_id': attribute_2.id,
+            'value_ids': [(6, 0, attribute_2.value_ids.ids)],
+            'sequence': 2,
+        })
+
+        attribute_1 = self.env['product.attribute'].create({
+            'name': 'Attribute 1',
+            'create_variant': 'no_variant',
+            'value_ids': [(0, 0, {
+                'name': 'Value 1',
+            })],
+        })
+
+        self.env['product.template.attribute.line'].create({
+            'product_tmpl_id': product.id,
+            'attribute_id': attribute_1.id,
+            'value_ids': [(6, 0, attribute_1.value_ids.ids)],
+            'sequence': 1,
+        })
+
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_attribute_order', login="pos_user")
+
+    def test_preset_timing_retail(self):
+        """
+        Test to set order preset hour inside a tour
+        """
+        self.preset_dine_in = self.env['pos.preset'].create({
+            'name': 'Dine in',
+        })
+        self.preset_delivery = self.env['pos.preset'].create({
+            'name': 'Delivery',
+            'identification': 'address',
+        })
+        self.main_pos_config.write({
+            'use_presets': True,
+            'default_preset_id': self.preset_dine_in.id,
+            'available_preset_ids': [(6, 0, [self.preset_delivery.id])],
+        })
+        self.pos_user.street = 'Rue de Ramillies'
+        resource_calendar = self.env['resource.calendar'].create({
+            'name': 'Takeaway',
+            'attendance_ids': [(0, 0, {
+                'name': 'Takeaway',
+                'dayofweek': str(day),
+                'hour_from': 0,
+                'hour_to': 24,
+                'day_period': 'morning',
+            }) for day in range(7)],
+        })
+        self.preset_delivery.write({
+            'use_timing': True,
+            'resource_calendar_id': resource_calendar
+        })
+        self.start_pos_tour('test_preset_timing_retail')
+
 
 # This class just runs the same tests as above but with mobile emulation
 class MobileTestUi(TestUi):

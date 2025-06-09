@@ -8,7 +8,7 @@ from odoo import fields
 from odoo.addons.mail.tests.common import MailCommon
 from odoo.addons.mail.tools.discuss import Store
 from odoo.tests.common import tagged, users
-from odoo.tools.misc import limited_field_access_token, mute_logger
+from odoo.tools.misc import mute_logger
 
 
 @tagged("RTC", "post_install", "-at_install")
@@ -71,8 +71,8 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member.id,
-                                "persona": {"id": channel_member.partner_id.id, "type": "partner"},
-                                "thread": {
+                                "partner_id": {"id": channel_member.partner_id.id, "type": "partner"},
+                                "channel_id": {
                                     "id": channel_member.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -86,11 +86,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member.partner_id.id,
                                 "im_status": channel_member.partner_id.im_status,
+                                "im_status_access_token": channel_member.partner_id._get_im_status_access_token(),
                                 "name": channel_member.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member.partner_id.write_date
@@ -108,11 +107,11 @@ class TestChannelRTC(MailCommon):
                                 "message_unread_counter": 0,
                                 "message_unread_counter_bus_id": 0,
                                 "new_message_separator": channel_member.new_message_separator + 1,
-                                "persona": {
+                                "partner_id": {
                                     "id": channel_member.partner_id.id,
                                     "type": "partner"
                                 },
-                                "thread": { "id": channel.id, "model": "discuss.channel" }
+                                "channel_id": {"id": channel.id, "model": "discuss.channel"}
                             }
                         ]
                     },
@@ -137,8 +136,8 @@ class TestChannelRTC(MailCommon):
                 "discuss.channel.member": [
                     {
                         "id": channel_member.id,
-                        "persona": {"id": channel_member.partner_id.id, "type": "partner"},
-                        "thread": {
+                        "partner_id": {"id": channel_member.partner_id.id, "type": "partner"},
+                        "channel_id": {
                             "id": channel_member.channel_id.id,
                             "model": "discuss.channel",
                         },
@@ -152,11 +151,10 @@ class TestChannelRTC(MailCommon):
                 ],
                 "res.partner": self._filter_partners_fields(
                     {
-                        "avatar_128_access_token": limited_field_access_token(
-                            channel_member.partner_id, "avatar_128"
-                        ),
+                        "avatar_128_access_token": channel_member.partner_id._get_avatar_128_access_token(),
                         "id": channel_member.partner_id.id,
                         "im_status": channel_member.partner_id.im_status,
+                        "im_status_access_token": channel_member.partner_id._get_im_status_access_token(),
                         "name": channel_member.partner_id.name,
                         "write_date": fields.Datetime.to_string(
                             channel_member.partner_id.write_date
@@ -215,8 +213,8 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member.id,
-                                "persona": {"id": channel_member.partner_id.id, "type": "partner"},
-                                "thread": {
+                                "partner_id": {"id": channel_member.partner_id.id, "type": "partner"},
+                                "channel_id": {
                                     "id": channel_member.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -230,11 +228,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member.partner_id.id,
                                 "im_status": channel_member.partner_id.im_status,
+                                "im_status_access_token": channel_member.partner_id._get_im_status_access_token(),
                                 "name": channel_member.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member.partner_id.write_date
@@ -255,11 +252,11 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_user.id,
-                                "persona": {
+                                "partner_id": {
                                     "id": channel_member_test_user.partner_id.id,
                                     "type": "partner",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_user.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -267,11 +264,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_user.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_user.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_user.partner_id.id,
                                 "im_status": channel_member_test_user.partner_id.im_status,
+                                "im_status_access_token": channel_member_test_user.partner_id._get_im_status_access_token(),
                                 "name": channel_member_test_user.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_user.partner_id.write_date
@@ -335,8 +331,8 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member.id,
-                                "persona": {"id": channel_member.partner_id.id, "type": "partner"},
-                                "thread": {
+                                "partner_id": {"id": channel_member.partner_id.id, "type": "partner"},
+                                "channel_id": {
                                     "id": channel_member.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -350,11 +346,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member.partner_id.id,
                                 "im_status": channel_member.partner_id.im_status,
+                                "im_status_access_token":  channel_member.partner_id._get_im_status_access_token(),
                                 "name": channel_member.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member.partner_id.write_date
@@ -375,8 +370,8 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member.id,
-                                "persona": {"id": channel_member.partner_id.id, "type": "partner"},
-                                "thread": {
+                                "partner_id": {"id": channel_member.partner_id.id, "type": "partner"},
+                                "channel_id": {
                                     "id": channel_member.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -390,11 +385,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member.partner_id.id,
                                 "im_status": channel_member.partner_id.im_status,
+                                "im_status_access_token": channel_member.partner_id._get_im_status_access_token(),
                                 "name": channel_member.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member.partner_id.write_date
@@ -420,22 +414,22 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_user.id,
-                                "persona": {
+                                "partner_id": {
                                     "id": channel_member_test_user.partner_id.id,
                                     "type": "partner",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_user.channel_id.id,
                                     "model": "discuss.channel",
                                 },
                             },
                             {
                                 "id": channel_member_test_guest.id,
-                                "persona": {
+                                "guest_id": {
                                     "id": channel_member_test_guest.guest_id.id,
                                     "type": "guest",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_guest.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -443,11 +437,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "mail.guest": [
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_guest.guest_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_guest.guest_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_guest.guest_id.id,
                                 "im_status": channel_member_test_guest.guest_id.im_status,
+                                "im_status_access_token": channel_member_test_guest.guest_id._get_im_status_access_token(),
                                 "name": channel_member_test_guest.guest_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_guest.guest_id.write_date
@@ -456,11 +449,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_user.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_user.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_user.partner_id.id,
                                 "im_status": channel_member_test_user.partner_id.im_status,
+                                "im_status_access_token": channel_member_test_user.partner_id._get_im_status_access_token(),
                                 "name": channel_member_test_user.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_user.partner_id.write_date
@@ -515,11 +507,11 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_user.id,
-                                "persona": {
+                                "partner_id": {
                                     "id": channel_member_test_user.partner_id.id,
                                     "type": "partner",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_user.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -527,11 +519,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_user.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_user.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_user.partner_id.id,
                                 "im_status": channel_member_test_user.partner_id.im_status,
+                                "im_status_access_token": channel_member_test_user.partner_id._get_im_status_access_token(),
                                 "name": channel_member_test_user.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_user.partner_id.write_date
@@ -552,11 +543,11 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_user.id,
-                                "persona": {
+                                "partner_id": {
                                     "id": channel_member_test_user.partner_id.id,
                                     "type": "partner",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_user.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -570,11 +561,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_user.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_user.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_user.partner_id.id,
                                 "im_status": channel_member_test_user.partner_id.im_status,
+                                "im_status_access_token": channel_member_test_user.partner_id._get_im_status_access_token(),
                                 "name": channel_member_test_user.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_user.partner_id.write_date
@@ -617,11 +607,11 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_guest.id,
-                                "persona": {
+                                "guest_id": {
                                     "id": channel_member_test_guest.guest_id.id,
                                     "type": "guest",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_guest.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -629,11 +619,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "mail.guest": [
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_guest.guest_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_guest.guest_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_guest.guest_id.id,
                                 "im_status": channel_member_test_guest.guest_id.im_status,
+                                "im_status_access_token": channel_member_test_guest.guest_id._get_im_status_access_token(),
                                 "name": channel_member_test_guest.guest_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_guest.guest_id.write_date
@@ -648,17 +637,19 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel": [
                             {
                                 "id": channel.id,
-                                "rtc_session_ids": [("ADD", [channel_member.rtc_session_ids.id + 2])],
+                                "rtc_session_ids": [
+                                    ("ADD", [channel_member.rtc_session_ids.id + 2])
+                                ],
                             },
                         ],
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_guest.id,
-                                "persona": {
+                                "guest_id": {
                                     "id": channel_member_test_guest.guest_id.id,
                                     "type": "guest",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_guest.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -672,11 +663,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "mail.guest": [
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_guest.guest_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_guest.guest_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_guest.guest_id.id,
                                 "im_status": channel_member_test_guest.guest_id.im_status,
+                                "im_status_access_token": channel_member_test_guest.guest_id._get_im_status_access_token(),
                                 "name": channel_member_test_guest.guest_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_guest.guest_id.write_date
@@ -727,11 +717,11 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_user.id,
-                                "persona": {
+                                "partner_id": {
                                     "id": channel_member_test_user.partner_id.id,
                                     "type": "partner",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_user.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -739,11 +729,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_user.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_user.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_user.partner_id.id,
                                 "im_status": channel_member_test_user.partner_id.im_status,
+                                "im_status_access_token": channel_member_test_user.partner_id._get_im_status_access_token(),
                                 "name": channel_member_test_user.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_user.partner_id.write_date
@@ -784,11 +773,11 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_guest.id,
-                                "persona": {
+                                "guest_id": {
                                     "id": channel_member_test_guest.guest_id.id,
                                     "type": "guest",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_guest.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -796,11 +785,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "mail.guest": [
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_guest.guest_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_guest.guest_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_guest.guest_id.id,
                                 "im_status": channel_member_test_guest.guest_id.im_status,
+                                "im_status_access_token": channel_member_test_guest.guest_id._get_im_status_access_token(),
                                 "name": channel_member_test_guest.guest_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_guest.guest_id.write_date
@@ -875,22 +863,22 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_user.id,
-                                "persona": {
+                                "partner_id": {
                                     "id": channel_member_test_user.partner_id.id,
                                     "type": "partner",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_user.channel_id.id,
                                     "model": "discuss.channel",
                                 },
                             },
                             {
                                 "id": channel_member_test_guest.id,
-                                "persona": {
+                                "guest_id": {
                                     "id": channel_member_test_guest.guest_id.id,
                                     "type": "guest",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_guest.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -898,11 +886,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "mail.guest": [
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_guest.guest_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_guest.guest_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_guest.guest_id.id,
                                 "im_status": channel_member_test_guest.guest_id.im_status,
+                                "im_status_access_token": channel_member_test_guest.guest_id._get_im_status_access_token(),
                                 "name": channel_member_test_guest.guest_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_guest.guest_id.write_date
@@ -911,11 +898,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_user.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_user.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_user.partner_id.id,
                                 "im_status": channel_member_test_user.partner_id.im_status,
+                                "im_status_access_token": channel_member_test_user.partner_id._get_im_status_access_token(),
                                 "name": channel_member_test_user.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_user.partner_id.write_date
@@ -999,8 +985,8 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member.id,
-                                "persona": {"id": channel_member.partner_id.id, "type": "partner"},
-                                "thread": {
+                                "partner_id": {"id": channel_member.partner_id.id, "type": "partner"},
+                                "channel_id": {
                                     "id": channel_member.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -1018,11 +1004,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member.partner_id.id,
                                 "im_status": channel_member.partner_id.im_status,
+                                "im_status_access_token": channel_member.partner_id._get_im_status_access_token(),
                                 "name": channel_member.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member.partner_id.write_date
@@ -1043,8 +1028,8 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member.id,
-                                "persona": {"id": channel_member.partner_id.id, "type": "partner"},
-                                "thread": {
+                                "partner_id": {"id": channel_member.partner_id.id, "type": "partner"},
+                                "channel_id": {
                                     "id": channel_member.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -1062,11 +1047,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member.partner_id.id,
                                 "im_status": channel_member.partner_id.im_status,
+                                "im_status_access_token": channel_member.partner_id._get_im_status_access_token(),
                                 "name": channel_member.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member.partner_id.write_date
@@ -1092,22 +1076,22 @@ class TestChannelRTC(MailCommon):
                         "discuss.channel.member": [
                             {
                                 "id": channel_member_test_user.id,
-                                "persona": {
+                                "partner_id": {
                                     "id": channel_member_test_user.partner_id.id,
                                     "type": "partner",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_user.channel_id.id,
                                     "model": "discuss.channel",
                                 },
                             },
                             {
                                 "id": channel_member_test_guest.id,
-                                "persona": {
+                                "guest_id": {
                                     "id": channel_member_test_guest.guest_id.id,
                                     "type": "guest",
                                 },
-                                "thread": {
+                                "channel_id": {
                                     "id": channel_member_test_guest.channel_id.id,
                                     "model": "discuss.channel",
                                 },
@@ -1115,11 +1099,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "mail.guest": [
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_guest.guest_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_guest.guest_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_guest.guest_id.id,
                                 "im_status": channel_member_test_guest.guest_id.im_status,
+                                "im_status_access_token": channel_member_test_guest.guest_id._get_im_status_access_token(),
                                 "name": channel_member_test_guest.guest_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_guest.guest_id.write_date
@@ -1128,11 +1111,10 @@ class TestChannelRTC(MailCommon):
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    channel_member_test_user.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": channel_member_test_user.partner_id._get_avatar_128_access_token(),
                                 "id": channel_member_test_user.partner_id.id,
                                 "im_status": channel_member_test_user.partner_id.im_status,
+                                "im_status_access_token": channel_member_test_user.partner_id._get_im_status_access_token(),
                                 "name": channel_member_test_user.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     channel_member_test_user.partner_id.write_date

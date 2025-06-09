@@ -46,19 +46,28 @@ test("should make qweb tag italic", async () => {
     });
 });
 
+test.tags("desktop");
 test("should make a whole heading italic after a triple click", async () => {
     await testEditor({
-        contentBefore: `<h1>[ab</h1><p>]cd</p>`,
-        stepFunction: italic,
+        contentBefore: `<h1>ab</h1><p>cd</p>`,
+        stepFunction: async (editor) => {
+            await tripleClick(editor.editable.querySelector("h1"));
+            italic(editor);
+        },
         contentAfter: `<h1>${em(`[ab]`)}</h1><p>cd</p>`,
     });
 });
 
+test.tags("desktop");
 test("should make a whole heading not italic after a triple click", async () => {
-    const { el, editor } = await setupEditor(`<h1>${em(`[ab`)}</h1><p>]cd</p>`);
-    await tripleClick(el.querySelector("h1"));
-    italic(editor);
-    expect(getContent(el)).toBe(`<h1>[ab]</h1><p>cd</p>`);
+    await testEditor({
+        contentBefore: `<h1>${em(`ab`)}</h1><p>cd</p>`,
+        stepFunction: async (editor) => {
+            await tripleClick(editor.editable.querySelector("h1"));
+            italic(editor);
+        },
+        contentAfter: `<h1>[ab]</h1><p>cd</p>`,
+    });
 });
 
 test("should make a selection starting with italic text fully italic", async () => {
@@ -82,6 +91,55 @@ test("should make a selection ending with italic text fully italic", async () =>
         contentBefore: `<p>[ab</p><p>${em(`c]d`)}</p>`,
         stepFunction: italic,
         contentAfter: `<p>${em(`[ab`)}</p><p>${em(`c]d`)}</p>`,
+    });
+});
+
+test("should make two paragraphs (separated with whitespace) italic", async () => {
+    await testEditor({
+        contentBefore: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
+        stepFunction: italic,
+        contentAfter: `
+            <p><em>[abc</em></p>
+            <p><em>def]</em></p>
+        `,
+    });
+});
+
+test("should make two paragraphs (separated with whitespace) not italic", async () => {
+    await testEditor({
+        contentBefore: `
+            <p><em>[abc</em></p>
+            <p><em>def]</em></p>
+        `,
+        stepFunction: italic,
+        contentAfter: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
+    });
+});
+
+test("should make two paragraphs (separated with whitespace) italic, then not italic", async () => {
+    await testEditor({
+        contentBefore: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
+        stepFunction: async (editor) => {
+            italic(editor);
+            expect(getContent(editor.editable)).toBe(`
+            <p><em>[abc</em></p>
+            <p><em>def]</em></p>
+        `);
+            italic(editor);
+        },
+        contentAfter: `
+            <p>[abc</p>
+            <p>def]</p>
+        `,
     });
 });
 

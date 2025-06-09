@@ -255,7 +255,7 @@ class SmsComposer(models.TransientModel):
         sms_all = self._prepare_mass_sms(records_filtered, sms_record_values_filtered)
 
         if sms_all and self.mass_force_send:
-            sms_all.filtered(lambda sms: sms.state == 'outgoing').send(auto_commit=False, raise_exception=False)
+            sms_all.filtered(lambda sms: sms.state == 'outgoing').send(raise_exception=False)
             return self.env['sms.sms'].sudo().search([('id', 'in', sms_all.ids)])
         return sms_all
 
@@ -267,7 +267,8 @@ class SmsComposer(models.TransientModel):
         """Meant to be overridden to filter out and handle sms that must not be sent.
 
         :param dict sms_values_all: sms values by res_id
-        :return dict: filtered sms_vals_all
+        :returns: filtered sms_vals_all
+        :rtype: dict
         """
         return sms_values_all
 

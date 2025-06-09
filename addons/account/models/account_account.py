@@ -105,7 +105,7 @@ class AccountAccount(models.Model):
     tax_ids = fields.Many2many('account.tax', 'account_account_tax_default_rel',
         'account_id', 'tax_id', string='Default Taxes',
         check_company=True,
-        context={'append_type_to_tax_name': True})
+        context={'append_fields': ['type_tax_use', 'company_id']})
     note = fields.Text('Internal Notes', tracking=True)
     company_ids = fields.Many2many('res.company', string='Companies', required=True, readonly=False,
         default=lambda self: self.env.company)
@@ -145,29 +145,35 @@ class AccountAccount(models.Model):
         if field_expr == 'code':
             return self.with_company(self.env.company.root_id).sudo()._field_to_sql(alias, 'code_store', query, flush)
         if field_expr == 'placeholder_code':
-            # The placeholder_code is defined as the account's code in the first active company to
-            # which the account belongs.
-            query.add_join(
-                'LEFT JOIN',
-                'account_first_company',
-                SQL(
-                    """(
-                        SELECT DISTINCT ON (rel.account_account_id)
-                               rel.account_account_id AS account_id,
-                               rel.res_company_id AS company_id,
-                               SPLIT_PART(res_company.parent_path, '/', 1) AS root_company_id,
-                               res_company.name AS company_name
-                          FROM account_account_res_company_rel rel
-                          JOIN res_company
-                            ON res_company.id = rel.res_company_id
-                         WHERE rel.res_company_id IN %(authorized_company_ids)s
-                      ORDER BY rel.account_account_id, company_id
-                    )""",
-                    authorized_company_ids=self.env.user._get_company_ids(),
-                    to_flush=self._fields['company_ids'],
-                ),
-                SQL('account_first_company.account_id = %(account_id)s', account_id=SQL.identifier(alias, 'id')),
-            )
+            if 'account_first_company' not in query._joins:
+                # When multiple accounts are selected, ``placeholder_code`` is used for all of them
+                # as it is in the default ``_order`` (e.g., for ``account_asset_id`` and
+                # ``account_depreciation_id`` in ``account_assets``).
+
+                # As ``placeholder_code`` represents the account's code in the first active company
+                # to which the account belongs in the hierarchy, we must ensure that we do not introduce
+                # a second ``JOIN`` to the account-company relation to avoid redundancy in joins.
+                query.add_join(
+                    'LEFT JOIN',
+                    'account_first_company',
+                    SQL(
+                        """(
+                            SELECT DISTINCT ON (rel.account_account_id)
+                                rel.account_account_id AS account_id,
+                                rel.res_company_id AS company_id,
+                                SPLIT_PART(res_company.parent_path, '/', 1) AS root_company_id,
+                                res_company.name AS company_name
+                            FROM account_account_res_company_rel rel
+                            JOIN res_company
+                                ON res_company.id = rel.res_company_id
+                            WHERE rel.res_company_id IN %(authorized_company_ids)s
+                        ORDER BY rel.account_account_id, company_id
+                        )""",
+                        authorized_company_ids=self.env.user._get_company_ids(),
+                        to_flush=self._fields['company_ids'],
+                    ),
+                    SQL('account_first_company.account_id = %(account_id)s', account_id=SQL.identifier(alias, 'id')),
+                )
 
             return SQL(
                 """
@@ -395,11 +401,14 @@ class AccountAccount(models.Model):
                     record.placeholder_code = f'{code} ({company.name})'
 
     def _search_placeholder_code(self, operator, value):
-        if operator != '=ilike':
+        if operator not in ('=ilike', 'in'):
             return NotImplemented
         query = Query(self.env, 'account_account')
         placeholder_code_sql = self.env['account.account']._field_to_sql('account_account', 'placeholder_code', query)
-        query.add_where(SQL("%s ILIKE %s", placeholder_code_sql, value))
+        if operator == 'in':
+            query.add_where(SQL("%s IN %s", placeholder_code_sql, tuple(value)))
+        else:
+            query.add_where(SQL("%s ILIKE %s", placeholder_code_sql, value))
         return [('id', 'in', query)]
 
     @api.depends_context('company')
@@ -489,30 +498,41 @@ class AccountAccount(models.Model):
             company by starting from an existing code and incrementing it.
 
             Examples:
-                |  start_code  |  codes checked for availability                            |
-                +--------------+------------------------------------------------------------+
-                |    102100    |  102101, 102102, 102103, 102104, ...                       |
-                |     1598     |  1599, 1600, 1601, 1602, ...                               |
-                |   10.01.08   |  10.01.09, 10.01.10, 10.01.11, 10.01.12, ...               |
-                |   10.01.97   |  10.01.98, 10.01.99, 10.01.97.copy2, 10.01.97.copy3, ...   |
-                |    1021A     |  1021A, 1022A, 1023A, 1024A, ...                           |
-                |    hello     |  hello.copy, hello.copy2, hello.copy3, hello.copy4, ...    |
-                |     9998     |  9999, 9998.copy, 9998.copy2, 9998.copy3, ...              |
 
-            :param start_code str: the code to increment until an available one is found
+            +--------------+-----------------------------------------------------------+
+            |  start_code  | codes checked for availability                            |
+            +==============+===========================================================+
+            |    102100    | 102101, 102102, 102103, 102104, ...                       |
+            +--------------+-----------------------------------------------------------+
+            |     1598     | 1599, 1600, 1601, 1602, ...                               |
+            +--------------+-----------------------------------------------------------+
+            |   10.01.08   | 10.01.09, 10.01.10, 10.01.11, 10.01.12, ...               |
+            +--------------+-----------------------------------------------------------+
+            |   10.01.97   | 10.01.98, 10.01.99, 10.01.97.copy2, 10.01.97.copy3, ...   |
+            +--------------+-----------------------------------------------------------+
+            |    1021A     | 1021A, 1022A, 1023A, 1024A, ...                           |
+            +--------------+-----------------------------------------------------------+
+            |    hello     | hello.copy, hello.copy2, hello.copy3, hello.copy4, ...    |
+            +--------------+-----------------------------------------------------------+
+            |     9998     | 9999, 9998.copy, 9998.copy2, 9998.copy3, ...              |
+            +--------------+-----------------------------------------------------------+
+
+            :param str start_code: the code to increment until an available one is found
             :param set[str] cache: a set of codes which you know are already used
                                     (optional, to speed up the method).
-                                    If none is given, the method will use cache = {start_code}.
+                                    If none is given, the method will use cache = ``{start_code}``.
                                     i.e. the method will return the first available code
                                     *strictly* greater than start_code.
                                     If you want the method to start at start_code, you should
                                     explicitly pass cache={}.
 
-            :return str: an available new account code for the active company.
-                         It will normally have length `len(start_code)`.
-                         If incrementing the last digits starting from `start_code` does
-                         not work, the method will try as a fallback
-                         '{start_code}.copy', '{start_code}.copy2', ... '{start_code}.copy99'.
+            :return: an available new account code for the active company.
+                     It will normally have length ``len(start_code)``.
+                     If incrementing the last digits starting from ``start_code`` does
+                     not work, the method will try as a fallback
+                     ``'{start_code}.copy'``, ``'{start_code}.copy2'``, ...
+                     ``'{start_code}.copy99'``.
+            :rtype: str
         """
         if cache is None:
             cache = {start_code}
@@ -957,6 +977,7 @@ class AccountAccount(models.Model):
         '''
         if not self.ids:
             return None
+        self.env['account.move.line'].invalidate_model(['amount_residual', 'amount_residual_currency', 'reconciled'])
         query = """
             UPDATE account_move_line SET
                 reconciled = CASE WHEN debit = 0 AND credit = 0 AND amount_currency = 0
@@ -966,7 +987,6 @@ class AccountAccount(models.Model):
             WHERE full_reconcile_id IS NULL and account_id IN %s
         """
         self.env.cr.execute(query, [tuple(self.ids)])
-        self.env['account.move.line'].invalidate_model(['amount_residual', 'amount_residual_currency', 'reconciled'])
 
     def _toggle_reconcile_to_false(self):
         '''Toggle the `reconcile´ boolean from True -> False
@@ -985,6 +1005,8 @@ class AccountAccount(models.Model):
         if partial_lines_count > 0:
             raise UserError(_('You cannot switch an account to prevent the reconciliation '
                               'if some partial reconciliations are still pending.'))
+
+        self.env['account.move.line'].invalidate_model(['amount_residual', 'amount_residual_currency'])
         query = """
             UPDATE account_move_line
                 SET amount_residual = 0, amount_residual_currency = 0

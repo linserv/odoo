@@ -106,16 +106,21 @@ test("should make qweb tag strikeThrough", async () => {
     });
 });
 
+test.tags("desktop");
 test("should make a whole heading strikeThrough after a triple click", async () => {
     await testEditor({
-        contentBefore: `<h1>[ab</h1><p>]cd</p>`,
-        stepFunction: strikeThrough,
+        contentBefore: `<h1>ab</h1><p>cd</p>`,
+        stepFunction: async (editor) => {
+            await tripleClick(editor.editable.querySelector("h1"));
+            strikeThrough(editor);
+        },
         contentAfter: `<h1>${s(`[ab]`)}</h1><p>cd</p>`,
     });
 });
 
+test.tags("desktop");
 test("should make a whole heading not strikeThrough after a triple click", async () => {
-    const { el, editor } = await setupEditor(`<h1>${s(`[ab`)}</h1><p>]cd</p>`);
+    const { el, editor } = await setupEditor(`<h1>${s(`ab`)}</h1><p>cd</p>`);
     await tripleClick(el.querySelector("h1"));
     strikeThrough(editor);
     expect(getContent(el)).toBe(`<h1>[ab]</h1><p>cd</p>`);

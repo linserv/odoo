@@ -90,6 +90,9 @@ class FormatAddressMixin(models.AbstractModel):
                         self.env['ir.ui.view'].postprocess_and_fields(sub_arch, model=self._name)
                     except ValueError:
                         return arch
+                new_address_node = sub_arch.find('.//div[@class="o_address_format"]')
+                if new_address_node is not None:
+                    sub_arch = new_address_node
                 address_node.getparent().replace(address_node, sub_arch)
         elif address_format and not self._context.get('no_address_format'):
             # For the zip, city and state fields we need to move them around in order to follow the country address format.
@@ -389,7 +392,7 @@ class ResPartner(models.Model):
         """ While creating / updating child contact, take the parent lang by
         default if any. 0therwise, fallback to default context / DB lang """
         for partner in self.filtered('parent_id'):
-            partner.lang = partner.parent_id.lang or self.default_get(['lang'])['lang'] or self.env.lang
+            partner.lang = partner.parent_id.lang or self.default_get(['lang']).get('lang') or self.env.lang
 
     @api.depends('lang')
     def _compute_active_lang_count(self):
@@ -986,15 +989,13 @@ class ResPartner(models.Model):
     )
     def _compute_display_name(self):
         for partner in self:
-            name = partner.name
             if partner._context.get("formatted_display_name"):
+                name = partner.name or ''
                 if partner.parent_id or partner.company_name:
                     name = f"{partner.company_name or partner.parent_id.name} \t --{partner.name}--"
 
                 if partner._context.get('show_email') and partner.email:
                     name = f"{name} \t --{partner.email}--"
-                elif partner._context.get('show_vat') and partner.vat:
-                    name = f"{name} \t --{partner.vat}--"
                 elif partner._context.get('partner_show_db_id'):
                     name = f"{name} \t --{partner.id}--"
 
@@ -1040,12 +1041,12 @@ class ResPartner(models.Model):
 
     @api.model
     def find_or_create(self, email, assert_valid_email=False):
-        """ Find a partner with the given ``email`` or use :py:method:`~.name_create`
+        """ Find a partner with the given ``email`` or use :meth:`name_create`
         to create a new one.
 
         :param str email: email-like string, which should contain at least one email,
             e.g. ``"Raoul Grosbedon <r.g@grosbedon.fr>"``
-        :param boolean assert_valid_email: raise if no valid email is found
+        :param bool assert_valid_email: raise if no valid email is found
         :return: newly created record
         """
         if not email:

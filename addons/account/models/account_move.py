@@ -78,6 +78,7 @@ ALLOWED_MIMETYPES = {
 }
 
 EMPTY = object()
+BYPASS_LOCK_CHECK = object()
 
 
 class AccountMove(models.Model):
@@ -195,8 +196,16 @@ class AccountMove(models.Model):
     line_ids = fields.One2many(
         'account.move.line',
         'move_id',
-        string='Journal Items',
+        string='Account Move Line Items',
         copy=True,
+    )
+
+    journal_line_ids = fields.One2many(  # /!\ journal_line_ids is just a subset of line_ids.
+        comodel_name='account.move.line',
+        inverse_name='move_id',
+        string='Journal Items',
+        copy=False,
+        domain=[('display_type', 'not in', ('line_section', 'line_note'))],
     )
 
     # === Link to the partial that created this exchange move === #
@@ -633,7 +642,6 @@ class AccountMove(models.Model):
     is_move_sent = fields.Boolean(
         readonly=True,
         copy=False,
-        tracking=True,
         help="It indicates that the invoice/payment has been sent or the PDF has been generated.",
     )
     is_being_sent = fields.Boolean(
@@ -1813,21 +1821,17 @@ class AccountMove(models.Model):
     @api.depends('move_type', 'partner_id', 'company_id')
     def _compute_narration(self):
         use_invoice_terms = self.env['ir.config_parameter'].sudo().get_param('account.use_invoice_terms')
-        for move in self:
-            if not move.is_sale_document(include_receipts=True):
-                continue
-            if not use_invoice_terms:
-                move.narration = False
+        invoice_to_update_terms = self.filtered(lambda m: use_invoice_terms and m.is_sale_document(include_receipts=True))
+        for move in invoice_to_update_terms:
+            lang = move.partner_id.lang or self.env.user.lang
+            if move.company_id.terms_type != 'html':
+                narration = move.company_id.with_context(lang=lang).invoice_terms if not is_html_empty(move.company_id.invoice_terms) else ''
             else:
-                lang = move.partner_id.lang or self.env.user.lang
-                if not move.company_id.terms_type == 'html':
-                    narration = move.company_id.with_context(lang=lang).invoice_terms if not is_html_empty(move.company_id.invoice_terms) else ''
-                else:
-                    baseurl = self.env.company.get_base_url() + '/terms'
-                    context = {'lang': lang}
-                    narration = _('Terms & Conditions: %s', baseurl)
-                    del context
-                move.narration = narration or False
+                baseurl = self.env.company.get_base_url() + '/terms'
+                context = {'lang': lang}
+                narration = _('Terms & Conditions: %s', baseurl)
+                del context
+            move.narration = narration or False
 
     def _get_partner_credit_warning_exclude_amount(self):
         # to extend in module 'sale'; see there for details
@@ -1855,16 +1859,17 @@ class AccountMove(models.Model):
         """ Build the warning message that will be displayed in a yellow banner on top of the current record
             if the partner exceeds a credit limit (set on the company or the partner itself).
             :param record:                  The record where the warning will appear (Invoice, Sales Order...).
-            :param current_amount (float):  The partner's outstanding credit amount from the current document.
-            :param exclude_current (bool):  DEPRECATED in favor of parameter `exclude_amount`:
+            :param float current_amount:    The partner's outstanding credit amount from the current document.
+            :param bool exclude_current:    DEPRECATED in favor of parameter `exclude_amount`:
                                             Whether to exclude `current_amount` from the credit to invoice.
-            :param exclude_amount (float):  The amount to subtract from the partner's `credit_to_invoice`.
+            :param float exclude_amount:    The amount to subtract from the partner's `credit_to_invoice`.
                                             Consider the warning on a draft invoice created from a sales order.
                                             After confirming the invoice the (partial) amount (on the invoice)
                                             stemming from sales orders will be substracted from the `credit_to_invoice`.
                                             This will reduce the total credit of the partner.
                                             This parameter is used to reflect this amount.
-            :return (str):                  The warning message to be showed.
+            :return:                        The warning message to be showed.
+            :rtype: str
         """
         partner_id = record.partner_id.commercial_partner_id
         credit_to_invoice = partner_id.credit_to_invoice - exclude_amount
@@ -2464,6 +2469,8 @@ class AccountMove(models.Model):
         ''', tuple(moves.ids)))
 
     def _check_fiscal_lock_dates(self):
+        if self.env.context.get('bypass_lock_check') is BYPASS_LOCK_CHECK:
+            return
         for move in self:
             journal = move.journal_id
             violated_lock_dates = move.company_id._get_lock_date_violations(
@@ -3388,7 +3395,7 @@ class AccountMove(models.Model):
         return new_moves
 
     def _sanitize_vals(self, vals):
-        if vals.get('invoice_line_ids') and vals.get('line_ids'):
+        if vals.get('invoice_line_ids') and vals.get('journal_line_ids'):
             # values can sometimes be in only one of the two fields, sometimes in
             # both fields, sometimes one field can be explicitely empty while the other
             # one is not, sometimes not...
@@ -3397,15 +3404,15 @@ class AccountMove(models.Model):
                 for command, line_id, *line_vals in vals['invoice_line_ids']
                 if command == Command.UPDATE
             }
-            for command, line_id, *line_vals in vals['line_ids']:
+            for command, line_id, *line_vals in vals['journal_line_ids']:
                 if command == Command.UPDATE and line_id in update_vals:
                     line_vals[0].update(update_vals.pop(line_id))
             for line_id, line_vals in update_vals.items():
-                vals['line_ids'] += [Command.update(line_id, line_vals)]
+                vals['journal_line_ids'] += [Command.update(line_id, line_vals)]
             for command, line_id, *line_vals in vals['invoice_line_ids']:
                 assert command not in (Command.SET, Command.CLEAR)
-                if [command, line_id, *line_vals] not in vals['line_ids']:
-                    vals['line_ids'] += [(command, line_id, *line_vals)]
+                if [command, line_id, *line_vals] not in vals['journal_line_ids']:
+                    vals['journal_line_ids'] += [(command, line_id, *line_vals)]
             del vals['invoice_line_ids']
         return vals
 
@@ -4442,7 +4449,8 @@ class AccountMove(models.Model):
 
                         if success or file_data['type'] == 'pdf' or file_data['attachment'].mimetype in ALLOWED_MIMETYPES:
                             (invoice.invoice_line_ids - existing_lines).is_imported = True
-                            invoice._link_bill_origin_to_purchase_orders(timeout=4)
+                            if not extend_with_existing_lines:
+                                invoice._link_bill_origin_to_purchase_orders(timeout=4)
                             invoices |= invoice
                             current_invoice = self.env['account.move']
                             add_file_data_results(file_data, invoice)
@@ -5088,10 +5096,10 @@ class AccountMove(models.Model):
         If the journal is locked with a hash table, it will be impossible to change
         some fields afterwards.
 
-        :param soft (bool): if True, future documents are not immediately posted,
+        :param bool soft: if True, future documents are not immediately posted,
             but are set to be auto posted automatically at the set accounting date.
             Nothing will be performed on those documents before the accounting date.
-        :return Model<account.move>: the documents that have been posted
+        :returns: the Model<account.move> documents that have been posted
         """
         if not self.env.su and not self.env.user.has_group('account.group_account_invoice'):
             raise AccessError(_("You don't have the access rights to post an invoice."))
@@ -5222,9 +5230,9 @@ class AccountMove(models.Model):
                         if partial.exchange_move_id:
                             to_post |= partial.exchange_move_id
                             # If the draft invoice changed since it was reconciled, in a way that would affect the exchange diff,
-                            # any existing reconcilation and draft exchange move would be deleted already (to force the user to 
+                            # any existing reconcilation and draft exchange move would be deleted already (to force the user to
                             # re-do the reconciliation).
-                            # This is ensured by the the checks in env['account.move.line'].write(): 
+                            # This is ensured by the the checks in env['account.move.line'].write():
                             #     see env[account.move.line]._get_lock_date_protected_fields()['reconciliation']
 
                         if partial._get_draft_caba_move_vals() != partial.draft_caba_move_vals:
@@ -5306,7 +5314,7 @@ class AccountMove(models.Model):
 
     def _link_bill_origin_to_purchase_orders(self, timeout=10):
         for move in self.filtered(lambda m: m.move_type in self.get_purchase_types()):
-            references = [move.invoice_origin] if move.invoice_origin else []
+            references = move.invoice_origin.split() if move.invoice_origin else []
             move._find_and_set_purchase_orders(references, move.partner_id.id, move.amount_total, timeout=timeout)
         return self
 
@@ -5401,6 +5409,7 @@ class AccountMove(models.Model):
         }
 
     def action_update_fpos_values(self):
+        self.invoice_line_ids._compute_price_unit()
         self.invoice_line_ids._compute_tax_ids()
         self.line_ids._compute_account_id()
 
@@ -5491,6 +5500,7 @@ class AccountMove(models.Model):
         self.ensure_one()
 
         report_action = self.action_send_and_print()
+        report_action['context'].update({'allow_partners_without_mail': True})
         if self.env.is_admin() and not self.env.company.external_report_layout_id and not self.env.context.get('discard_logo_check'):
             report_action = self.env['ir.actions.report']._action_configure_external_report_layout(report_action, "account.action_base_document_layout_configurator")
             report_action['context']['default_from_invoice'] = self.move_type == 'out_invoice'
@@ -5921,9 +5931,9 @@ class AccountMove(models.Model):
             next_amount_to_pay = self.amount_residual
             next_payment_reference = self.name
             next_due_date = epd_installment['date_maturity']
-            discount_date = epd_installment['line'].discount_date
+            discount_date = epd_installment['line'].discount_date or fields.Date.context_today(self)
             discount_amount_currency = epd_installment['discount_amount_currency']
-            days_left = (discount_date - fields.Date.context_today(self)).days  # should never be lower than 0 since epd is valid
+            days_left = max(0, (discount_date - fields.Date.context_today(self)).days)  # should never be lower than 0 since epd is valid
             if days_left > 0:
                 discount_msg = _(
                     "Discount of %(amount)s if paid within %(days)s days",
@@ -5993,7 +6003,7 @@ class AccountMove(models.Model):
         :param has_tax (bool): Iff any taxes are involved in the lines of the invoice
         :param lock_dates: Like result from `_get_violated_lock_dates`;
                            Can be used to avoid recomputing them in case they are already known.
-        :return (datetime.date):
+        :rtype: datetime.date
         """
         self.ensure_one()
         lock_dates = lock_dates or self._get_violated_lock_dates(invoice_date, has_tax)

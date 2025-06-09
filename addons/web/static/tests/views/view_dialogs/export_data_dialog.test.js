@@ -19,6 +19,7 @@ import {
     onRpc,
     patchWithCleanup,
     serverState,
+    toggleSearchBarMenu,
 } from "@web/../tests/web_test_helpers";
 
 import { download } from "@web/core/network/download";
@@ -322,7 +323,7 @@ test("Export dialog: interacting with export templates", async () => {
 });
 
 test("Export dialog: interacting with export templates in debug", async () => {
-    serverState.debug = true;
+    serverState.debug = "1";
 
     onRpc("/web/export/formats", () => [{ tag: "csv", label: "CSV" }]);
     onRpc("/web/export/get_fields", () => [...fetchedFields.root]);
@@ -732,6 +733,65 @@ test("Direct export list", async () => {
     await exportAllAction();
 });
 
+test("Export list with modified context", async () => {
+    patchWithCleanup(download, {
+        _download: (options) => {
+            expect.step("Export records");
+            expect(options.url).toBe("/web/export/xlsx");
+            expect(JSON.parse(options.data.data)).toEqual({
+                context: {
+                    allowed_company_ids: [1],
+                    lang: "en",
+                    uid: 7,
+                    tz: "taht",
+                    yipi: true,
+                },
+                model: "partner",
+                domain: [["bar", "!=", "glou"]],
+                groupby: [],
+                ids: false,
+                import_compat: false,
+                fields: [
+                    {
+                        name: "foo",
+                        label: "Foo",
+                        store: true,
+                        type: "char",
+                    },
+                    {
+                        name: "bar",
+                        label: "Bar",
+                        store: true,
+                        type: "boolean",
+                    },
+                ],
+            });
+        },
+    });
+    onRpc("/web/export/formats", () => [{ tag: "xls", label: "Excel" }]);
+    onRpc("/web/export/get_fields", () => fetchedFields.root);
+
+    await mountView({
+        type: "list",
+        resModel: "partner",
+        arch: `
+        <list export_xlsx="1">
+            <field name="foo"/>
+            <field name="bar"/>
+        </list>`,
+        loadActionMenus: true,
+        domain: [["bar", "!=", "glou"]],
+        searchViewArch: `
+        <search>
+            <filter name="owo" string="OwO" context="{'yipi': True}"/>
+        </search>`,
+    });
+    await toggleSearchBarMenu();
+    await contains(".o-dropdown-item:contains(OwO)").click();
+    await exportAllAction();
+    expect.verifySteps(["Export records"]);
+});
+
 test("Direct export grouped list", async () => {
     patchWithCleanup(download, {
         _download: (options) => {
@@ -976,7 +1036,7 @@ test("Export dialog: expand subfields after search", async () => {
 });
 
 test("Export dialog: search in debug", async () => {
-    serverState.debug = true;
+    serverState.debug = "1";
 
     onRpc("/web/export/formats", () => [{ tag: "csv", label: "CSV" }]);
     onRpc("/web/export/get_fields", async (request) => {
@@ -1084,4 +1144,39 @@ test("Export dialog: fields displayed in same Order as list view when export", a
     expect(".modal .o_export_field:nth-child(2)").toHaveText("Abc", {
         message: "Field abc should appear second in the export list",
     });
+});
+
+test("Export dialog: no raw properties fields in default export list", async () => {
+    User._fields.properties_definition = fields.PropertiesDefinition();
+    Partner._fields.user_id = fields.Many2one({ relation: "res.users" });
+    Partner._fields.properties = fields.Properties({
+        definition_record: "user_id",
+        definition_record_field: "properties_definition",
+    });
+    onRpc("/web/export/formats", () => [{ tag: "csv", label: "CSV" }]);
+    onRpc("/web/export/get_fields", async (request) => [
+        ...fetchedFields.root,
+        {
+            field_type: "properties",
+            string: "Properties",
+            required: false,
+            value: "properties",
+            id: "properties",
+        },
+    ]);
+
+    await mountView({
+        type: "list",
+        resModel: "partner",
+        arch: `
+            <list>
+                <field name="foo"/>
+                <field name="properties"/>
+            </list>`,
+        loadActionMenus: true,
+    });
+
+    await openExportDialog();
+    expect(".modal .o_export_field").toHaveCount(1);
+    expect(".modal .o_export_field").toHaveText("Foo");
 });

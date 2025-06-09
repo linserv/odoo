@@ -189,6 +189,14 @@ class ResUsers(models.Model):
         """
         return ['signature', 'action_id', 'company_id', 'email', 'name', 'image_1920', 'lang', 'tz', 'api_key_ids', 'phone']
 
+    @api.model
+    @tools.ormcache()
+    def _self_accessible_fields(self) -> tuple[frozenset[str], frozenset[str]]:
+        """Readable and writable fields by portal users."""
+        readable = frozenset(self.SELF_READABLE_FIELDS)
+        writeable = frozenset(self.SELF_WRITEABLE_FIELDS)
+        return readable, writeable
+
     def _default_groups(self):
         """Default groups for employees
 
@@ -304,28 +312,35 @@ class ResUsers(models.Model):
 
         Overrides should:
 
-        * call `super` to delegate to parents for credentials-checking
-        * catch AccessDenied and perform their own checking
-        * (re)raise AccessDenied if the credentials are still invalid
-          according to their own validation method
-        * return the auth_info
+        * call ``super`` to delegate to parents for credentials-checking
+        * catch :class:`~odoo.exceptions.AccessDenied` and perform their
+          own checking
+        * (re)raise :class:`~odoo.exceptions.AccessDenied` if the
+          credentials are still invalid according to their own
+          validation method
+        * return the ``auth_info``
 
-        When trying to check for credentials validity, call _check_credentials
-        instead.
+        When trying to check for credentials validity, call
+        :meth:`_check_credentials` instead.
 
-        Credentials are considered to be untrusted user input, for more information please check :func:`~.authenticate`
+        Credentials are considered to be untrusted user input, for more
+        information please check :meth:`authenticate`
 
-        :returns: auth_info dictionary containing:
+        :returns: ``auth_info`` dictionary containing:
+
           - uid: the uid of the authenticated user
           - auth_method: which method was used during authentication
           - mfa: whether mfa should be skipped or not, possible values:
+
             - enforce: enforce mfa no matter what (not yet implemented)
             - default: delegate to auth_totp
             - skip: skip mfa no matter what
+
           Examples:
-          - { 'uid': 20, 'auth_method': 'password',      'mfa': 'default' }
-          - { 'uid': 17, 'auth_method': 'impersonation', 'mfa': 'enforce' }
-          - { 'uid': 32, 'auth_method': 'webauthn',      'mfa': 'skip'    }
+
+          - ``{ 'uid': 20, 'auth_method': 'password',      'mfa': 'default' }``
+          - ``{ 'uid': 17, 'auth_method': 'impersonation', 'mfa': 'enforce' }``
+          - ``{ 'uid': 32, 'auth_method': 'webauthn',      'mfa': 'skip'    }``
         :rtype: dict
         """
         if not (credential['type'] == 'password' and credential.get('password')):
@@ -527,11 +542,11 @@ class ResUsers(models.Model):
         # Hacky fix to access fields in `SELF_READABLE_FIELDS` in the onchange logic.
         # Put field values in the cache.
         if self == self.env.user:
-            [self.sudo()[field_name] for field_name in self.SELF_READABLE_FIELDS]
+            [self.sudo()[field_name] for field_name in self._self_accessible_fields()[0]]
         return super().onchange(values, field_names, fields_spec)
 
     def read(self, fields=None, load='_classic_read'):
-        readable = self.SELF_READABLE_FIELDS
+        readable, _ = self._self_accessible_fields()
         if fields and self == self.env.user and all(key in readable or key.startswith('context_') for key in fields):
             # safe fields only, so we read as super-user to bypass access rights
             self = self.sudo()
@@ -541,7 +556,7 @@ class ResUsers(models.Model):
         return super()._has_field_access(field, operation) or (
             operation == 'read'
             and self._origin == self.env.user
-            and field.name in self.SELF_READABLE_FIELDS
+            and field.name in self._self_accessible_fields()[0]
         )
 
     @api.model_create_multi
@@ -572,7 +587,7 @@ class ResUsers(models.Model):
             # unarchive partners before unarchiving the users
             self.partner_id.action_unarchive()
         if self == self.env.user:
-            writeable = self.SELF_WRITEABLE_FIELDS
+            writeable = self._self_accessible_fields()[1]
             for key in list(values):
                 if key not in writeable:
                     break
@@ -751,7 +766,6 @@ class ResUsers(models.Model):
         """Verifies and returns the user ID corresponding to the given
         ``credential``, or False if there was no matching user.
 
-        :param str db: the database on which user is trying to authenticate
         :param dict credential: a dictionary where the `type` key defines the authentication method and
             additional keys are passed as required per authentication method.
             For example:
@@ -1281,14 +1295,15 @@ class ResUsers(models.Model):
         res = super().fields_get(allfields, attributes=attributes)
 
         # add self readable/writable fields
-        missing = set(self.SELF_WRITEABLE_FIELDS).union(self.SELF_READABLE_FIELDS).difference(res.keys())
+        readable_fields, writeable_fields = self._self_accessible_fields()
+        missing = (writeable_fields | readable_fields).difference(res.keys())
         if allfields:
             missing = missing.intersection(allfields)
         if missing:
             self = self.sudo()  # noqa: PLW0642
             res.update({
-                key: dict(values, readonly=key not in self.SELF_WRITEABLE_FIELDS, searchable=False)
-                for key, values in super().fields_get(missing, attributes).items()
+                key: dict(values, readonly=key not in writeable_fields, searchable=False)
+                for key, values in super().fields_get(sorted(missing), attributes).items()
             })
         return res
 

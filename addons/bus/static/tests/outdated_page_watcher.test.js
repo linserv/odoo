@@ -4,6 +4,7 @@ import { runAllTimers, waitFor } from "@odoo/hoot-dom";
 import {
     asyncStep,
     contains,
+    getService,
     MockServer,
     mountWithCleanup,
     onRpc,
@@ -20,16 +21,20 @@ test("disconnect during vacuum should ask for reload", async () => {
     browser.location.addEventListener("reload", () => asyncStep("reload"));
     addBusServiceListeners(
         ["connect", () => asyncStep("connect")],
-        ["disconnect", () => asyncStep("disconnect")]
+        ["disconnect", () => asyncStep("disconnect")],
+        ["reconnecting", () => asyncStep("reconnecting")],
+        ["reconnect", () => asyncStep("reconnect")]
     );
     onRpc("/bus/has_missed_notifications", () => true);
     await mountWithCleanup(WebClient);
+    getService("multi_tab").setSharedValue("last_notification_id", 1);
     startBusService();
     await runAllTimers();
     await waitForSteps(["connect"]);
     MockServer.env["bus.bus"]._simulateDisconnection(WEBSOCKET_CLOSE_CODES.ABNORMAL_CLOSURE);
-    await waitForSteps(["disconnect"]);
+    await waitForSteps(["disconnect", "reconnecting"]);
     await runAllTimers();
+    await waitForSteps(["reconnect"]);
     await waitFor(".o_notification");
     expect(".o_notification_content:first").toHaveText(
         "Save your work and refresh to get the latest updates and avoid potential issues."
@@ -45,6 +50,7 @@ test("reconnect after going offline after bus gc should ask for reload", async (
     );
     onRpc("/bus/has_missed_notifications", () => true);
     await mountWithCleanup(WebClient);
+    getService("multi_tab").setSharedValue("last_notification_id", 1);
     startBusService();
     await runAllTimers();
     await waitForSteps(["connect"]);

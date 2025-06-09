@@ -3,7 +3,6 @@
 from odoo import models
 from odoo.http import request
 from odoo.tools import format_datetime, groupby
-from odoo.tools.misc import limited_field_access_token
 
 
 class MailMessage(models.Model):
@@ -20,8 +19,9 @@ class MailMessage(models.Model):
         :param dict options: options, used notably for inheritance and adding
           specific fields or properties to compute;
 
-        :return list: list of dict, one per message in self. Each dict contains
+        :returns: list of dict, one per message in self. Each dict contains
           values for either fields, either properties derived from fields.
+        :rtype: list[dict]
         """
         self.check_access('read')
         return self._portal_message_format(
@@ -35,7 +35,8 @@ class MailMessage(models.Model):
         :param dict options: options, used notably for inheritance and adding
           specific fields or properties to compute;
 
-        :return set: fields or properties derived from fields
+        :returns: fields or properties derived from fields
+        :rtype: set
         """
         return {
             'attachment_ids',
@@ -66,8 +67,9 @@ class MailMessage(models.Model):
         :param set properties_names: fields or properties derived from fields
           for which we are going to compute values;
 
-        :return list: list of dict, one per message in self. Each dict contains
+        :returns: list of dict, one per message in self. Each dict contains
           values for either fields, either properties derived from fields.
+        :rtype: list[dict]
         """
         message_to_attachments = {}
         if 'attachment_ids' in properties_names:
@@ -77,7 +79,7 @@ class MailMessage(models.Model):
             related_attachments = {
                 att_read_values["id"]: {
                     **att_read_values,
-                    "raw_access_token": limited_field_access_token(att, "raw"),
+                    "raw_access_token": att._get_raw_access_token(),
                 }
                 for att, att_read_values in zip(
                     attachments_sudo,
@@ -123,22 +125,22 @@ class MailMessage(models.Model):
                     {
                         "content": content,
                         "count": len(reactions),
-                        "personas": [
-                                        {"id": guest.id, "name": guest.name, "type": "guest"}
-                                        for guest in reactions.guest_id
-                                    ]
-                                    + [
-                                        # sudo: res.partner - reading partners of reaction on accessible message is allowed
-                                        {"id": partner.id, "name": partner.name, "type": "partner"}
-                                        for partner in reactions.partner_id.sudo()
-                                    ],
+                        "guest_ids": [
+                            {"id": guest.id, "name": guest.name, "type": "guest"}
+                            for guest in reactions.guest_id
+                        ],
+                        "partner_ids": [
+                            # sudo: res.partner - reading partners of reaction on accessible message is allowed
+                            {"id": partner.id, "name": partner.name, "type": "partner"}
+                            for partner in reactions.partner_id.sudo()
+                        ],
                         "message": message.id,
                     }
                 )
             values.update(
                 {
                     "reactions": reaction_groups,
-                    "author": {
+                    "author_id": {
                         "id": message.author_id.id,
                         "name": message.author_id.name,
                         "type": "partner",
@@ -155,7 +157,8 @@ class MailMessage(models.Model):
         :param dict attachment_values: values coming from reading attachments
           in database;
 
-        :return dict: updated attachment_values
+        :returns: updated attachment_values
+        :rtype: dict
         """
         safari = request and request.httprequest.user_agent and request.httprequest.user_agent.browser == 'safari'
         attachment_values['filename'] = attachment_values['name']

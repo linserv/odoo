@@ -12,6 +12,8 @@ class ProductCommon(UomCommon):
         super().setUpClass()
 
         cls.group_product_pricelist = cls.quick_ref('product.group_product_pricelist')
+        cls.group_product_variant = cls.quick_ref('product.group_product_variant')
+
         cls.product_category = cls.env['product.category'].create({
             'name': 'Test Category',
         })
@@ -44,6 +46,10 @@ class ProductCommon(UomCommon):
         cls.env.user.group_ids += cls.group_product_pricelist
 
     @classmethod
+    def _enable_variants(cls):
+        cls.env.user.group_ids += cls.group_product_variant
+
+    @classmethod
     def _create_pricelist(cls, **create_vals):
         return cls.env['product.pricelist'].create({
             'name': "Test Pricelist",
@@ -63,7 +69,7 @@ class ProductCommon(UomCommon):
         })
 
 
-class ProductAttributesCommon(ProductCommon):
+class ProductVariantsCommon(ProductCommon):
 
     @classmethod
     def setUpClass(cls):
@@ -119,13 +125,6 @@ class ProductAttributesCommon(ProductCommon):
             ]
         })
 
-
-class ProductVariantsCommon(ProductAttributesCommon):
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-
         cls.product_template_sofa = cls.env['product.template'].create({
             'name': 'Sofa',
             'uom_id': cls.uom_unit.id,
@@ -139,59 +138,3 @@ class ProductVariantsCommon(ProductAttributesCommon):
                 ])],
             })]
         })
-
-        cls.product_template_shirt = cls.env['product.template'].create({
-            'name': 'Shirt',
-            'categ_id': cls.product_category.id,
-            'attribute_line_ids': [
-                Command.create({
-                    'attribute_id': cls.size_attribute.id,
-                    'value_ids': [Command.set([cls.size_attribute_l.id])],
-                }),
-            ],
-        })
-
-
-class TestProductCommon(ProductVariantsCommon):
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-
-        # Product environment related data
-        cls.uom_dunit = cls.env['uom.uom'].create({
-            'name': 'DeciUnit',
-            'relative_factor': 10.0,
-            'relative_uom_id': cls.uom_unit.id,
-        })
-
-        cls.product_1, cls.product_2 = cls.env['product.product'].create([{
-            'name': 'Courage',  # product_1
-            'type': 'consu',
-            'default_code': 'PROD-1',
-            'uom_id': cls.uom_dunit.id,
-        }, {
-            'name': 'Wood',  # product_2
-        }])
-
-        # Kept for reduced diff in other modules (mainly stock & mrp)
-        cls.prod_att_1 = cls.color_attribute
-        cls.prod_attr1_v1 = cls.color_attribute_red
-        cls.prod_attr1_v2 = cls.color_attribute_blue
-        cls.prod_attr1_v3 = cls.color_attribute_green
-
-        cls.product_7_template = cls.product_template_sofa
-
-        cls.product_7_attr1_v1 = cls.product_7_template.attribute_line_ids[
-            0].product_template_value_ids[0]
-        cls.product_7_attr1_v2 = cls.product_7_template.attribute_line_ids[
-            0].product_template_value_ids[1]
-        cls.product_7_attr1_v3 = cls.product_7_template.attribute_line_ids[
-            0].product_template_value_ids[2]
-
-        cls.product_7_1 = cls.product_7_template._get_variant_for_combination(
-            cls.product_7_attr1_v1)
-        cls.product_7_2 = cls.product_7_template._get_variant_for_combination(
-            cls.product_7_attr1_v2)
-        cls.product_7_3 = cls.product_7_template._get_variant_for_combination(
-            cls.product_7_attr1_v3)

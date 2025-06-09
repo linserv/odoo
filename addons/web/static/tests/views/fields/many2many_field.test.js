@@ -1900,3 +1900,74 @@ test("`this` inside rendererProps should reference the component", async () => {
     await contains(".o_field_x2many_list_row_add a").click();
     expect.verifySteps(["onAdd", "selectCreate"]);
 });
+
+test("empty many2many tags field with no result", async () => {
+    patchWithCleanup(Many2XAutocomplete.prototype, {
+        getCreationContext(value){
+            expect(value).toBe("");
+            const context = super.getCreationContext(value);
+            expect(context[`default_${this.props.nameCreateField}`]).toBe(undefined);
+            return context;
+        }
+    });
+    class M2M extends models.Model {
+        m2m = fields.Many2many({ relation: "m2m" });
+    }
+    defineModels([M2M]);
+    await mountView({
+        type: "form",
+        resModel: "m2m",
+        arch: `
+            <form>
+                <sheet>
+                    <group>
+                        <field name="m2m" widget="many2many_tags"/>
+                    </group>
+                </sheet>
+            </form>`,
+    });
+
+    await contains(".o_field_many2many_selection input").click();
+    expect(".dropdown-menu li.o_m2o_dropdown_option").toHaveCount(1);
+    expect(".dropdown-menu li.o_m2o_dropdown_option").toHaveText("Create...");
+    expect(".dropdown-menu li.o_m2o_start_typing").toHaveCount(0);
+
+    await contains(".dropdown-menu li.o_m2o_dropdown_option").click();
+    expect(".o_dialog").toHaveCount(1);
+    expect(".o_dialog .o_field_many2many_selection input").toHaveValue("");
+    press("Esc");
+    await animationFrame();
+    expect(".o_dialog").toHaveCount(0);
+
+    await contains(".o_field_many2many_selection input").edit("abc", { confirm: false });
+    await runAllTimers();
+
+    expect(".dropdown-menu li.o_m2o_dropdown_option").toHaveCount(2);
+    expect(".dropdown-menu li.o_m2o_start_typing").toHaveCount(0);
+    expect(".dropdown-menu li.o_m2o_no_result").toHaveCount(0);
+});
+
+test("highlight search in many2many", async () => {
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        arch: `<form><field name="p" widget="many2many_tags"/></form>`,
+    });
+    await contains(".o_field_widget[name=p] input").edit("rec", { confirm: false });
+    await runAllTimers();
+    expect(`.o-autocomplete.dropdown li a > span`).toHaveCount(2);
+    expect(`.o-autocomplete.dropdown li:eq(0) a > span`).toHaveInnerHTML(`
+        first
+        <span class="text-primary fw-bold">
+            rec
+        </span>
+        ord
+    `);
+    expect(`.o-autocomplete.dropdown li:eq(1) a > span`).toHaveInnerHTML(`
+        second
+        <span class="text-primary fw-bold">
+            rec
+        </span>
+        ord
+    `);
+});

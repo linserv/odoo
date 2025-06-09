@@ -201,6 +201,8 @@
             'web/static/lib/hoot-dom/**/*',
 
             ('include', 'html_editor.assets_editor'),
+            'html_editor/static/src/others/dynamic_placeholder_plugin.js',
+            'html_editor/static/src/backend/**/*',
             'html_editor/static/src/fields/**/*',
 
             'mail/static/src/scss/variables/*.scss',
@@ -211,6 +213,7 @@
             'project/static/src/components/project_task_state_selection/*',
             'project/static/src/components/project_many2one_field/*',
             'project/static/src/views/project_task_form/*.scss',
+            'project/static/src/views/project_task_kanban/*.scss',
 
             ('include', 'portal.assets_chatter_helpers'),
             'portal/static/src/chatter/core/**/*',

@@ -361,6 +361,7 @@ export class DomPlugin extends Plugin {
             currentNode = nodeToInsert;
         }
         allInsertedNodes.push(...lastInsertedNodes);
+        this.getResource("after_insert_handlers").forEach((handler) => handler(allInsertedNodes));
         let insertedNodesParents = getConnectedParents(allInsertedNodes);
         for (const parent of insertedNodesParents) {
             if (
@@ -543,13 +544,13 @@ export class DomPlugin extends Plugin {
             newCandidate = baseContainer;
         }
         const cursors = this.dependencies.selection.preserveSelection();
-        const selectedBlocks = [...this.dependencies.selection.getTraversedBlocks()];
-        const deepestSelectedBlocks = selectedBlocks.filter(
+        const targetedBlocks = [...this.dependencies.selection.getTargetedBlocks()];
+        const deepestTargetedBlocks = targetedBlocks.filter(
             (block) =>
-                !descendants(block).some((descendant) => selectedBlocks.includes(descendant)) &&
+                !descendants(block).some((descendant) => targetedBlocks.includes(descendant)) &&
                 block.isContentEditable
         );
-        for (const block of deepestSelectedBlocks) {
+        for (const block of deepestTargetedBlocks) {
             if (
                 isParagraphRelatedElement(block) ||
                 block.nodeName === "PRE" || // TODO remove: PRE should be a paragraphRelatedElement

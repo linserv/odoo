@@ -44,9 +44,12 @@ class LangDataDict(ReadonlyDict):
     """
     __slots__ = ()
 
-    def __missing__(self, key: Any) -> LangData:
-        some_lang = next(iter(self.values()))  # should have at least one active language
-        return LangData(dict.fromkeys(some_lang, False))
+    def __getitem__(self, key: Any) -> LangData:
+        try:
+            return self._data__[key]
+        except KeyError:
+            some_lang = next(iter(self.values()))  # should have at least one active language
+            return LangData(dict.fromkeys(some_lang, False))
 
 
 class ResLang(models.Model):
@@ -264,18 +267,17 @@ class ResLang(models.Model):
         return OrderedSet(['id', 'name', 'code', 'iso_code', 'url_code', 'active', 'direction', 'date_format', 'short_date_format',
                            'time_format', 'short_time_format', 'week_start', 'grouping', 'decimal_point', 'thousands_sep', 'flag_image_url'])
 
-    def _get_data(self, **kwargs: Any) -> LangData:
+    def _get_data(self, **kwargs) -> LangData:
         """ Get the language data for the given field value in kwargs
         For example, get_data(code='en_US') will return the LangData
         for the res.lang record whose 'code' field value is 'en_US'
 
-        :param dict kwargs: {field_name: field_value}
+        :param dict kwargs: ``{field_name: field_value}``
                 field_name is the only key in kwargs and in ``self.CACHED_FIELDS``
-                Try to reuse the used ``field_name``s: 'id', 'code', 'url_code'
+                Try to reuse the used ``field_name``: 'id', 'code', 'url_code'
         :return: Valid LangData if (field_name, field_value) pair is for an
                 **active** language. Otherwise, Dummy LangData which will return
                 ``False`` for all ``self.CACHED_FIELDS``
-        :rtype: LangData
         :raise: UserError if field_name is not in ``self.CACHED_FIELDS``
         """
         [[field_name, field_value]] = kwargs.items()
@@ -300,7 +302,7 @@ class ResLang(models.Model):
         """ Return a LangDataDict mapping active languages' **unique**
         **required** ``self.CACHED_FIELDS`` values to their LangData.
         Its items are ordered by languages' names
-        Try to reuse the used ``field``s: 'id', 'code', 'url_code'
+        Try to reuse the used ``field``: 'id', 'code', 'url_code'
         """
         if field not in self.CACHED_FIELDS:
             raise UserError(_('Field "%s" is not cached', field))

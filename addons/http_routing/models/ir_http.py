@@ -107,18 +107,19 @@ class IrHttp(models.AbstractModel):
             canonical_domain: str | tuple[str, str, str, str, str] | None = None,
             prefetch_langs: bool = False, force_default_lang: bool = False) -> str:
         """ Returns the given URL adapted for the given lang, meaning that:
+
         1. It will have the lang suffixed to it
         2. The model converter parts will be translated
 
         If it is not possible to rebuild a path, use the current one instead.
-        `url_quote_plus` is applied on the returned path.
+        :func:`url_quote_plus` is applied on the returned path.
 
         It will also force the canonical domain is requested.
-        Eg:
-        - `_get_url_localized(lang_fr, '/shop/my-phone-14')` will return
-            `/fr/shop/mon-telephone-14`
-        - `_get_url_localized(lang_fr, '/shop/my-phone-14', True)` will return
-            `<base_url>/fr/shop/mon-telephone-14`
+
+        >>> _get_url_localized(lang_fr, '/shop/my-phone-14')
+        '/fr/shop/mon-telephone-14'
+        >>> _get_url_localized(lang_fr, '/shop/my-phone-14', True)
+        '<base_url>/fr/shop/mon-telephone-14'
         """
         if not lang_code:
             lang = request.lang
@@ -612,9 +613,10 @@ class IrHttp(models.AbstractModel):
         router = http.root.get_db_router(request.db).bind('')
         endpoint = False
         try:
-            endpoint = router.match(path, method='POST', query_args=query_args)
-        except werkzeug.exceptions.MethodNotAllowed:
-            endpoint = router.match(path, method='GET', query_args=query_args)
+            try:
+                endpoint = router.match(path, method='POST', query_args=query_args)
+            except werkzeug.exceptions.MethodNotAllowed:
+                endpoint = router.match(path, method='GET', query_args=query_args)
         except werkzeug.routing.RequestRedirect as e:
             new_url = e.new_url.split('?')[0][7:]  # remove scheme
             _, endpoint = self.url_rewrite(new_url, query_args)

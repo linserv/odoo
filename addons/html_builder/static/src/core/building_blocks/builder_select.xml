@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+<t t-name="html_builder.BuilderSelect">
+    <BuilderComponent>
+        <!-- Render the SelectItem(s) into an invisible node to ensure the label of the
+        button is being set. -->
+        <div t-ref="root" class="w-100">
+            <div t-att-class="'d-none ' + props.className" t-ref="content"><WithIgnoreItem><t t-slot="default" /></WithIgnoreItem></div>
+            <Dropdown state="this.dropdown">
+                <button class="btn btn-primary text-start o-dropdown-caret w-100 overflow-hidden" t-ref="button" t-att-id="props.id"
+                    style="min-width: 0; text-overflow: ellipsis;">
+                    <t t-slot="fixedButton"/>
+                </button>
+                <t t-set-slot="content">
+                    <div data-prevent-closing-overlay="true">
+                        <t t-slot="default" />
+                    </div>
+                </t>
+            </Dropdown>
+        </div>
+    </BuilderComponent>
+</t>
+
+</templates>

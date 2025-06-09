@@ -41,7 +41,7 @@ composerActionsRegistry
     .add("send-message", {
         btnClass: (component) => {
             if (component.sendMessageState.active) {
-                return "o-sendMessageActive o-text-white";
+                return "o-sendMessageActive o-text-white shadow-sm";
             }
             return "";
         },
@@ -96,15 +96,7 @@ composerActionsRegistry
         sequenceQuick: 20,
     })
     .add("upload-files", {
-        condition: (component) => {
-            const thread = component.thread ?? component.message?.thread;
-            return (
-                !(
-                    thread?.channel_type === "whatsapp" &&
-                    component.props.composer.attachments.length > 0
-                ) && !component.props.composer.portalComment
-            );
-        },
+        condition: (component) => component.allowUpload,
         icon: "fa fa-paperclip",
         name: _t("Attach Files"),
         onClick: (component, action, ev) => {
@@ -254,7 +246,7 @@ export function useComposerActions() {
             }
             const group = sortedGroups.map(([groupId, actions]) => actions);
             const other = actions
-                .filter((a) => !a.sequenceQuick & !a.sequenceGroup)
+                .filter((a) => !a.sequenceQuick && !a.sequenceGroup)
                 .sort((a1, a2) => a1.sequence - a2.sequence);
             return { quick, group, other, pickers };
         },

@@ -310,7 +310,6 @@ class StockRule(models.Model):
         ''' Returns a dictionary of values that will be used to create a stock move from a procurement.
         This function assumes that the given procurement has a rule (action == 'pull' or 'pull_push') set on it.
 
-        :param procurement: browse record
         :rtype: dictionary
         '''
         group_id = False
@@ -464,7 +463,7 @@ class ProcurementGroup(models.Model):
         type of documents).
 
         :param procurements: the description of the procurement
-        :type list: list of `~odoo.addons.stock.models.stock_rule.ProcurementGroup.Procurement`
+        :type procurements: list of `~odoo.addons.stock.models.stock_rule.ProcurementGroup.Procurement`
         :param raise_user_error: will raise either an UserError or a ProcurementException
         :type raise_user_error: boolan, optional
         :raises UserError: if `raise_user_error` is True and a procurement isn't fulfillable
@@ -691,17 +690,16 @@ class ProcurementGroup(models.Model):
 
     @api.model
     def _run_scheduler_tasks(self, use_new_cursor=False, company_id=False):
-        task_done = 0
+        if use_new_cursor:
+            self.env['ir.cron']._commit_progress(remaining=self._get_scheduler_tasks_to_do())
 
         # Minimum stock rules
         domain = self._get_orderpoint_domain(company_id=company_id)
         orderpoints = self.env['stock.warehouse.orderpoint'].search(domain)
         orderpoints.sudo()._procure_orderpoint_confirm(use_new_cursor=use_new_cursor, company_id=company_id, raise_user_error=False)
-        task_done += 1
 
         if use_new_cursor:
-            self.env['ir.cron']._notify_progress(done=task_done, remaining=self._get_scheduler_tasks_to_do() - task_done)
-            self._cr.commit()
+            self.env['ir.cron']._commit_progress(1)
 
         # Search all confirmed stock_moves and try to assign them
         domain = self._get_moves_to_assign_domain(company_id)
@@ -712,20 +710,15 @@ class ProcurementGroup(models.Model):
             if use_new_cursor:
                 self._cr.commit()
                 _logger.info("A batch of %d moves are assigned and committed", len(moves_chunk))
-        task_done += 1
 
         if use_new_cursor:
-            self.env['ir.cron']._notify_progress(done=task_done, remaining=self._get_scheduler_tasks_to_do() - task_done)
-            self._cr.commit()
+            self.env['ir.cron']._commit_progress(1)
 
         # Merge duplicated quants
         self.env['stock.quant']._quant_tasks()
 
-        task_done += 1
         if use_new_cursor:
-            self.env['ir.cron']._notify_progress(done=task_done, remaining=self._get_scheduler_tasks_to_do() - task_done)
-            self._cr.commit()
-        self._context.get('scheduler_task_done', {})['task_done'] = task_done
+            self.env['ir.cron']._commit_progress(1)
 
     @api.model
     def _get_scheduler_tasks_to_do(self):

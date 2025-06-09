@@ -1526,6 +1526,8 @@ class ChromeBrowser:
             except websocket.WebSocketTimeoutException:
                 continue
             except Exception as e:
+                if isinstance(e, ConnectionResetError) and self._result.done():
+                    return
                 # if the socket is still connected something bad happened,
                 # otherwise the client was just shut down
                 if self.ws.connected:
@@ -1610,6 +1612,8 @@ class ChromeBrowser:
 
         log_type = type
         _logger = self._logger.getChild('browser')
+        if self._result.done() and 'failed to fetch' in message.casefold():
+            log_type = 'dir'
         _logger.log(
             self._TO_LEVEL.get(log_type, logging.INFO),
             "%s%s",
@@ -1716,7 +1720,7 @@ which leads to stray network requests and inconsistencies."""
         # endGroup, assert, profile, profileEnd, count, timeEnd
     }
 
-    def take_screenshot(self, prefix='sc_'):
+    def take_screenshot(self, prefix='sc_') -> Future[dict]:
         def handler(f):
             try:
                 base_png = f.result(timeout=0)['data']
@@ -1974,6 +1978,7 @@ class Screencaster:
                 ffmpeg_path,
                 '-y', '-loglevel', 'warning',
                 '-f', 'concat', '-safe', '0', '-i', concat_script_path,
+                '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
                 '-pix_fmt', 'yuv420p', '-g', '0',
                 outfile,
             ], preexec_fn=_preexec, check=True)

@@ -4,9 +4,9 @@ import base64
 from datetime import datetime, timedelta
 from freezegun import freeze_time
 from unittest.mock import patch
+from markupsafe import Markup
 
 from odoo import Command, fields
-from odoo.tools.misc import limited_field_access_token
 from odoo.addons.mail.models.discuss.discuss_channel import channel_avatar, group_avatar
 from odoo.addons.mail.tests.common import mail_new_test_user
 from odoo.addons.mail.tests.common import MailCommon
@@ -87,13 +87,14 @@ class TestChannelInternals(MailCommon, HttpCase):
                                 "mail.message": self._filter_messages_fields(
                                     {
                                         "attachment_ids": [],
-                                        "author": {
+                                        "author_id": {
                                             "id": self.env.user.partner_id.id,
                                             "type": "partner",
                                         },
+                                        "author_guest_id": False,
                                         "body": [
                                             "markup",
-                                            f'<div class="o_mail_notification" data-oe-type=\"channel-joined\">invited <a href="#" data-oe-model="res.partner" data-oe-id="{self.test_partner.id}">@Test Partner</a> to the channel</div>',
+                                            f'<div class="o_mail_notification" data-oe-type="channel-joined">invited <a href="#" data-oe-model="res.partner" data-oe-id="{self.test_partner.id}">@Test Partner</a> to the channel</div>',
                                         ],
                                         "create_date": fields.Datetime.to_string(
                                             message.create_date
@@ -104,26 +105,27 @@ class TestChannelInternals(MailCommon, HttpCase):
                                         "id": message.id,
                                         "incoming_email_cc": False,
                                         "incoming_email_to": False,
-                                        "is_discussion": True,
-                                        "is_note": False,
                                         "message_link_preview_ids": [],
                                         "message_type": "notification",
                                         "model": "discuss.channel",
                                         "notification_ids": [],
                                         "parent_id": False,
+                                        "partner_ids": [],
                                         "pinned_at": False,
                                         "rating_id": False,
                                         "reactions": [],
-                                        "recipients": [],
                                         "record_name": "Channel",
                                         "res_id": channel.id,
                                         "scheduledDatetime": False,
                                         "subject": False,
-                                        "subtype_description": False,
+                                        "subtype_id": self.env.ref("mail.mt_comment").id,
                                         "thread": {"id": channel.id, "model": "discuss.channel"},
                                         "write_date": fields.Datetime.to_string(message.write_date),
                                     },
                                 ),
+                                "mail.message.subtype": [
+                                    {"description": False, "id": self.env.ref("mail.mt_comment").id}
+                                ],
                                 "mail.thread": self._filter_threads_fields(
                                     {
                                         "display_name": "Channel",
@@ -136,9 +138,7 @@ class TestChannelInternals(MailCommon, HttpCase):
                                 ),
                                 "res.partner": self._filter_partners_fields(
                                     {
-                                        "avatar_128_access_token": limited_field_access_token(
-                                            self.env.user.partner_id, "avatar_128"
-                                        ),
+                                        "avatar_128_access_token": self.env.user.partner_id._get_avatar_128_access_token(),
                                         "id": self.env.user.partner_id.id,
                                         "isInternalUser": True,
                                         "is_company": False,
@@ -161,20 +161,19 @@ class TestChannelInternals(MailCommon, HttpCase):
                                     "fetched_message_id": False,
                                     "id": member.id,
                                     "last_seen_dt": False,
-                                    "persona": {"id": self.test_partner.id, "type": "partner"},
+                                    "partner_id": {"id": self.test_partner.id, "type": "partner"},
                                     "seen_message_id": False,
-                                    "thread": {"id": channel.id, "model": "discuss.channel"},
+                                    "channel_id": {"id": channel.id, "model": "discuss.channel"},
                                 },
                             ],
                             "res.partner": self._filter_partners_fields(
                                 {
                                     "active": True,
-                                    "avatar_128_access_token": limited_field_access_token(
-                                        self.test_partner, "avatar_128"
-                                    ),
+                                    "avatar_128_access_token": self.test_partner._get_avatar_128_access_token(),
                                     "email": "test_customer@example.com",
                                     "id": self.test_partner.id,
                                     "im_status": "im_partner",
+                                    "im_status_access_token": self.test_partner._get_im_status_access_token(),
                                     "isInternalUser": False,
                                     "is_company": False,
                                     "name": "Test Partner",
@@ -208,20 +207,19 @@ class TestChannelInternals(MailCommon, HttpCase):
                                     "fetched_message_id": False,
                                     "id": member.id,
                                     "last_seen_dt": False,
-                                    "persona": {"id": self.test_partner.id, "type": "partner"},
+                                    "partner_id": {"id": self.test_partner.id, "type": "partner"},
                                     "seen_message_id": False,
-                                    "thread": {"id": channel.id, "model": "discuss.channel"},
+                                    "channel_id": {"id": channel.id, "model": "discuss.channel"},
                                 }
                             ],
                             "res.partner": self._filter_partners_fields(
                                 {
                                     "active": True,
-                                    "avatar_128_access_token": limited_field_access_token(
-                                        self.test_partner, "avatar_128"
-                                    ),
+                                    "avatar_128_access_token": self.test_partner._get_avatar_128_access_token(),
                                     "email": "test_customer@example.com",
                                     "id": self.test_partner.id,
                                     "im_status": "im_partner",
+                                    "im_status_access_token": self.test_partner._get_im_status_access_token(),
                                     "isInternalUser": False,
                                     "is_company": False,
                                     "name": "Test Partner",
@@ -429,8 +427,8 @@ class TestChannelInternals(MailCommon, HttpCase):
                                 "message_unread_counter": 0,
                                 "message_unread_counter_bus_id": 0,
                                 "new_message_separator": msg_1.id + 1,
-                                "persona": {"id": self.user_admin.partner_id.id, "type": "partner"},
-                                "thread": {
+                                "partner_id": {"id": self.user_admin.partner_id.id, "type": "partner"},
+                                "channel_id": {
                                     "id": chat.id,
                                     "model": "discuss.channel",
                                 },
@@ -444,18 +442,17 @@ class TestChannelInternals(MailCommon, HttpCase):
                         "discuss.channel.member": [
                             {
                                 "id": member.id,
-                                "persona": {"id": self.user_admin.partner_id.id, "type": "partner"},
+                                "partner_id": {"id": self.user_admin.partner_id.id, "type": "partner"},
                                 "seen_message_id": msg_1.id,
-                                "thread": {"id": chat.id, "model": "discuss.channel"},
+                                "channel_id": {"id": chat.id, "model": "discuss.channel"},
                             },
                         ],
                         "res.partner": self._filter_partners_fields(
                             {
-                                "avatar_128_access_token": limited_field_access_token(
-                                    self.user_admin.partner_id, "avatar_128"
-                                ),
+                                "avatar_128_access_token": self.user_admin.partner_id._get_avatar_128_access_token(),
                                 "id": self.user_admin.partner_id.id,
                                 "im_status": self.user_admin.im_status,
+                                "im_status_access_token": self.user_admin.partner_id._get_im_status_access_token(),
                                 "name": self.user_admin.partner_id.name,
                                 "write_date": fields.Datetime.to_string(
                                     self.user_admin.partner_id.write_date
@@ -877,3 +874,35 @@ class TestChannelInternals(MailCommon, HttpCase):
             ],
         ):
             test_group.execute_command_help()
+
+    @users('employee')
+    def test_message_update_content_bus(self):
+        self.maxDiff = None
+        channel = self.env["discuss.channel"].create({"name": "MyTestChannel"})
+        message = self.env['mail.message'].create({
+            "body": "Test",
+            "model": "discuss.channel",
+            "res_id": channel.id,
+        })
+        with self.assertBus(
+            [(self.cr.dbname, "discuss.channel", channel.id)],
+            [
+                {
+                    "type": "mail.record/insert",
+                    "payload": {
+                        "mail.message": [
+                            {
+                                "id": message.id,
+                                "attachment_ids": [],
+                                "body": ['markup', '<p>Test update</p><span class="o-mail-Message-edited"></span>'],
+                                "partner_ids": message.partner_ids.ids,
+                                "pinned_at": message.pinned_at,
+                                "write_date": fields.Datetime.to_string(message.write_date),
+                                "translationValue": False,
+                            }
+                        ],
+                    },
+                }
+            ],
+        ):
+            channel._message_update_content(message, Markup("<p>Test update</p>"), [])

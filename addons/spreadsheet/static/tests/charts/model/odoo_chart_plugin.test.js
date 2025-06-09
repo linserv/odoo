@@ -176,6 +176,7 @@ test("Odoo line chart runtime loads the data", async () => {
                 tension: 0,
                 fill: false,
                 pointBackgroundColor: "#4EA7F2",
+                pointRadius: 3,
                 yAxisID: "y",
                 hidden: undefined,
             },
@@ -652,6 +653,9 @@ test("cumulative line chart with past data before domain period without cumulate
     expect(model.getters.getChartRuntime(chartId).chartJsConfig.data.datasets[0].data).toEqual([
         3, 7, 12,
     ]);
+    const figure = model.exportData().sheets[0].figures[0];
+    expect(figure.data.cumulative).toBe(true);
+    expect(figure.data.cumulatedStart).toBe(undefined);
 });
 
 test("cumulative line chart with past data before domain period with cumulated start", async () => {
@@ -697,6 +701,9 @@ test("cumulative line chart with past data before domain period with cumulated s
     expect(model.getters.getChartRuntime(chartId).chartJsConfig.data.datasets[0].data).toEqual([
         15, 19, 24,
     ]);
+    const figure = model.exportData().sheets[0].figures[0];
+    expect(figure.data.cumulative).toBe(true);
+    expect(figure.data.cumulatedStart).toBe(true);
 });
 
 test("update existing chart to cumulate past data", async () => {
@@ -743,6 +750,9 @@ test("update existing chart to cumulate past data", async () => {
     expect(model.getters.getChartRuntime(chartId).chartJsConfig.data.datasets[0].data).toEqual([
         3, 7, 12,
     ]);
+    const figure = model.exportData().sheets[0].figures[0];
+    expect(figure.data.cumulative).toBe(true);
+    expect(figure.data.cumulatedStart).toBe(false);
 
     model.dispatch("UPDATE_CHART", {
         definition: {
@@ -793,7 +803,7 @@ test("Remove odoo chart when sheet is deleted", async () => {
     const { model } = await createSpreadsheetWithChart({ type: "odoo_line" });
     const sheetId = model.getters.getActiveSheetId();
     model.dispatch("CREATE_SHEET", {
-        sheetId: model.uuidGenerator.uuidv4(),
+        sheetId: model.uuidGenerator.smallUuid(),
         position: model.getters.getSheetIds().length,
     });
     expect(model.getters.getOdooChartIds().length).toBe(1);

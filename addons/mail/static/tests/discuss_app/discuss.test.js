@@ -37,7 +37,6 @@ import {
 } from "@web/../tests/web_test_helpers";
 
 import { OutOfFocusService } from "@mail/core/common/out_of_focus_service";
-import { EventBus } from "@odoo/owl";
 import { browser } from "@web/core/browser/browser";
 import { rpc } from "@web/core/network/rpc";
 
@@ -365,7 +364,7 @@ test("reply to message from inbox (message linked to document)", async () => {
     await contains(".o-mail-Message");
     await contains(".o-mail-Message-header small", { text: "on Refactoring" });
     await click("[title='Expand']");
-    await click("[title='Reply']");
+    await click(".o-dropdown-item:contains('Reply')");
     await contains(".o-mail-Message.o-selected");
     await contains(".o-mail-Composer");
     await contains(".o-mail-Composer-coreHeader", { text: "on: Refactoring" });
@@ -567,14 +566,10 @@ test("sidebar: basic channel rendering", async () => {
     await start();
     await openDiscuss();
     await contains(".o-mail-DiscussSidebarChannel", { text: "General" });
-    await contains(".o-mail-DiscussSidebarChannel img[data-alt='Thread Image']");
-    await contains(".o-mail-DiscussSidebarChannel .o-mail-DiscussSidebarChannel-commands.d-none");
-    await contains(
-        ".o-mail-DiscussSidebarChannel .o-mail-DiscussSidebarChannel-commands [title='Channel settings']"
-    );
-    await contains(
-        ".o-mail-DiscussSidebarChannel .o-mail-DiscussSidebarChannel-commands [title='Leave Channel']"
-    );
+    await contains(".o-mail-DiscussSidebarChannel img[alt='Thread Image']");
+    await contains(".o-mail-DiscussSidebarChannel .o-mail-DiscussSidebarChannel-actions.d-none");
+    await click("[title='Channel Actions']");
+    await contains(".o-dropdown-item:contains('Leave Channel')");
 });
 
 test("channel become active", async () => {
@@ -617,28 +612,6 @@ test("sidebar: channel rendering with needaction counter", async () => {
         contains: [
             ["span", { text: "general" }],
             [".badge", { text: "1" }],
-        ],
-    });
-});
-
-test("sidebar: chat rendering with unread counter", async () => {
-    const pyEnv = await startServer();
-    const channelId = pyEnv["discuss.channel"].create({ channel_type: "chat" });
-    for (let i = 0; i < 100; ++i) {
-        pyEnv["mail.message"].create({
-            author_id: serverState.partnerId,
-            body: `message ${i}`,
-            message_type: "comment",
-            model: "discuss.channel",
-            res_id: channelId,
-        });
-    }
-    await start();
-    await openDiscuss();
-    await contains(".o-mail-DiscussSidebarChannel", {
-        contains: [
-            [".badge", { text: "100" }],
-            [".o-mail-DiscussSidebarChannel-commands", { text: "Unpin Conversation", count: 0 }], // weak test, no guarantee this selector is valid in the first place
         ],
     });
 });
@@ -748,21 +721,20 @@ test("Unfollow message", async function () {
     await contains(".o-mail-Message:eq(0)", {
         contains: [[".o-mail-Message-header small", { text: "on Thread followed" }]],
     });
-    await contains(".o-mail-Message-moreMenu", { count: 1 });
-    await contains("[title='Unfollow']", { count: 1 });
+    await contains(".o-mail-Message-moreMenu");
+    await contains(".o-dropdown-item:contains('Unfollow')");
     await click(".o-mail-Message:eq(1) [title='Expand']");
     await contains(".o-mail-Message:eq(1)", {
         contains: [[".o-mail-Message-header small", { text: "on Thread followed" }]],
     });
-    await contains(".o-mail-Message-moreMenu", { count: 1 });
-    await contains("[title='Unfollow']", { count: 1 });
+    await contains(".o-dropdown-item:contains('Unfollow')");
     await contains(".o-mail-Message:eq(2) [title='Expand']", { count: 0 });
     await contains(".o-mail-Message:eq(2)", {
         contains: [[".o-mail-Message-header small", { text: "on Thread not followed" }]],
     });
     await contains(".o-mail-Message:eq(2) [title='Unfollow']", { count: 0 });
     await click(".o-mail-Message:eq(0) [title='Expand']");
-    await click("[title='Unfollow']");
+    await click(".o-dropdown-item:contains('Unfollow')");
     await contains(".o-mail-Message", { count: 2 }); // Unfollowing message 0 marks it as read -> Message removed
     await contains(".o-mail-Message:eq(0)", {
         contains: [[".o-mail-Message-header small", { text: "on Thread followed" }]],
@@ -1412,19 +1384,7 @@ test("receive new message plays sound", async () => {
     await waitForSteps(["sound:new-message"]);
 });
 
-test("message sound on receiving new message (push notif enabled)", async () => {
-    // Simulate push notification allowed
-    patchWithCleanup(window.navigator, {
-        serviceWorker: Object.assign(new EventBus(), {
-            register: () => Promise.resolve(),
-            ready: Promise.resolve(),
-            getRegistration: async () => ({
-                get pushManager() {
-                    return Promise.resolve({ getSubscription: async () => ({}) });
-                },
-            }),
-        }),
-    });
+test("message sound on receiving new message based on user preferences", async () => {
     const pyEnv = await startServer();
     const partnerId = pyEnv["res.partner"].create({ name: "Dumbledore" });
     const userId = pyEnv["res.users"].create({ partner_id: partnerId });
@@ -1456,7 +1416,7 @@ test("message sound on receiving new message (push notif enabled)", async () => 
             thread_model: "discuss.channel",
         })
     );
-    await waitFor(".o-mail-ChatBubble .badge:contains(1)");
+    await waitFor(".o-mail-ChatBubble .badge:contains(1)", { timeout: 3000 });
     await waitForSteps(["sound:new-message"]);
     // simulate message sound settings turned off
     browser.localStorage.setItem("mail.user_setting.message_sound", false);
@@ -1471,7 +1431,7 @@ test("message sound on receiving new message (push notif enabled)", async () => 
             thread_model: "discuss.channel",
         })
     );
-    await waitFor(".o-mail-ChatBubble .badge:contains(2)");
+    await waitFor(".o-mail-ChatBubble .badge:contains(2)", { timeout: 3000 });
     expect.verifySteps([]);
     // simulate message sound settings turned on
     browser.localStorage.setItem("mail.user_setting.message_sound", null);
@@ -1486,7 +1446,7 @@ test("message sound on receiving new message (push notif enabled)", async () => 
             thread_model: "discuss.channel",
         })
     );
-    await waitFor(".o-mail-ChatBubble .badge:contains(3)");
+    await waitFor(".o-mail-ChatBubble .badge:contains(3)", { timeout: 3000 });
     await waitForSteps(["sound:new-message"]);
 });
 
@@ -1991,7 +1951,9 @@ test("composer state: attachments save and restore", async () => {
         ".o-mail-Composer:has(textarea[placeholder='Message #Special…']) input[type=file]",
         files
     );
-    await contains(".o-mail-Composer .o-mail-AttachmentContainer:not(.o-isUploading)", { count: 3 });
+    await contains(".o-mail-Composer .o-mail-AttachmentContainer:not(.o-isUploading)", {
+        count: 3,
+    });
     // Switch back to #general
     await click("button", { text: "General" });
     await contains(".o-mail-Composer .o-mail-AttachmentCard");
@@ -2113,9 +2075,10 @@ test("Correct breadcrumb when open discuss from chat window then see settings", 
     await contains("[title='Open Actions Menu']");
     await click("[title='Open Actions Menu']");
     await click(".o-dropdown-item", { text: "Open in Discuss" });
-    await click("[title='Channel settings']", {
+    await click("[title='Channel Actions']", {
         parent: [".o-mail-DiscussSidebarChannel", { text: "General" }],
     });
+    await click(".o-dropdown-item:contains('Advanced Settings')");
     await contains(".o_breadcrumb", { text: "GeneralGeneral" });
 });
 

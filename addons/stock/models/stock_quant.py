@@ -677,7 +677,7 @@ class StockQuant(models.Model):
                 if pkg[0] is None:
                     # Lazily retrieve ids for single items
                     if not single_item_ids:
-                        single_item_ids = self.search(expression.AND([[('package_id', '=', None)], domain])).mapped('id')
+                        single_item_ids = self.search(expression.AND([[('package_id', '=', None)], domain])).ids
                     selected_single_items.append(single_item_ids.pop())
 
             expr = [('package_id', 'in', [elem[0] for elem in node.taken_packages if elem[0] is not None])]
@@ -1006,7 +1006,7 @@ class StockQuant(models.Model):
                                                      package_id=quant.package_id))
         moves = self.env['stock.move'].with_context(inventory_mode=False).create(move_vals)
         moves._action_done()
-        self.location_id.write({'last_inventory_date': fields.Date.today()})
+        self.location_id.sudo().write({'last_inventory_date': fields.Date.today()})
         date_by_location = {loc: loc._get_next_inventory_date() for loc in self.mapped('location_id')}
         for quant in self:
             quant.inventory_date = date_by_location[quant.location_id]
@@ -1288,7 +1288,6 @@ class StockQuant(models.Model):
         Depending of the context (user have right to be inventory mode or not),
         the list view will be editable or readonly.
 
-        :param domain: List for the domain, empty by default.
         :param extend: If True, enables form, graph and pivot views. False by default.
         """
         if not self.env['ir.config_parameter'].sudo().get_param('stock.skip_quant_tasks'):

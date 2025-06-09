@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
+# Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import re
 
 from odoo.addons.mail.tests.common import mail_new_test_user
-from odoo.addons.product.tests.common import TestProductCommon
+from odoo.addons.product.tests.common import ProductVariantsCommon
 
 
-class TestStockCommon(TestProductCommon):
+class TestStockCommon(ProductVariantsCommon):
     """
     This class provides some common resources for stock tests. Most notably, it
     provides a dedicated warehouse: `warehouse_1`, along with its own:
@@ -48,7 +48,26 @@ class TestStockCommon(TestProductCommon):
 
     @classmethod
     def setUpClass(cls):
-        super(TestStockCommon, cls).setUpClass()
+        super().setUpClass()
+
+        # Product environment related data
+        cls.uom_dunit = cls.env['uom.uom'].create({
+            'name': 'DeciUnit',
+            'relative_factor': 10.0,
+            'relative_uom_id': cls.uom_unit.id,
+        })
+
+        cls.product_1, cls.product_2, cls.product_3 = cls.env['product.product'].create([{
+            'name': 'Courage',  # product_1
+            'type': 'consu',
+            'default_code': 'PROD-1',
+            'uom_id': cls.uom_dunit.id,
+        }, {
+            'name': 'Wood',  # product_2
+        }, {
+            'name': 'Stone',  # product_3
+            'uom_id': cls.uom_dozen.id,
+        }])
 
         cls.ProductObj = cls.env['product.product']
         cls.UomObj = cls.env['uom.uom']
@@ -78,7 +97,6 @@ class TestStockCommon(TestProductCommon):
         cls.picking_type_out = cls.warehouse_1.out_type_id
         cls.picking_type_out.reservation_method = 'manual'
 
-        cls.supplier_location = cls.env.ref('stock.stock_location_suppliers')
         cls.stock_location = cls.warehouse_1.lot_stock_id
         cls.shelf_1, cls.shelf_2 = cls.StockLocationObj.create([{
             'name': 'Shelf 1',
@@ -94,31 +112,40 @@ class TestStockCommon(TestProductCommon):
         output_location = cls.warehouse_1.wh_output_stock_loc_id
         output_location.active = True
         cls.output_location = output_location
-        cls.customer_location = cls.env.ref('stock.stock_location_customers')
-        cls.inter_company_location = cls.env.ref('stock.stock_location_inter_company')
+
+        cls.supplier_location = cls.quick_ref('stock.stock_location_suppliers')
+        cls.customer_location = cls.quick_ref('stock.stock_location_customers')
+        cls.inter_company_location = cls.quick_ref('stock.stock_location_inter_company')
 
         # Product Created A, B, C, D
-        cls.productA = cls.ProductObj.create({'name': 'Product A', 'is_storable': True})
-        cls.productB = cls.ProductObj.create({'name': 'Product B', 'is_storable': True})
-        cls.productC = cls.ProductObj.create({'name': 'Product C', 'is_storable': True})
-        cls.productD = cls.ProductObj.create({'name': 'Product D', 'is_storable': True})
-        cls.productE = cls.ProductObj.create({'name': 'Product E', 'is_storable': True})
+        (
+            cls.productA,
+            cls.productB,
+            cls.productC,
+            cls.productD,
+            cls.productE,
+        ) = cls.ProductObj.create([
+            {'name': 'Product A', 'is_storable': True},
+            {'name': 'Product B', 'is_storable': True},
+            {'name': 'Product C', 'is_storable': True},
+            {'name': 'Product D', 'is_storable': True},
+            {'name': 'Product E', 'is_storable': True},
+        ])
 
         # Configure unit of measure.
-        cls.uom_kg = cls.env.ref('uom.product_uom_kgm')
-        cls.uom_gm = cls.env.ref('uom.product_uom_gram')
-        cls.uom_ton = cls.env.ref('uom.product_uom_ton')
-        # Check Unit
-        cls.uom_unit = cls.env.ref('uom.product_uom_unit')
-        cls.uom_dozen = cls.env.ref('uom.product_uom_dozen')
+        cls.uom_kg = cls.uom_kgm
+        cls.uom_gm = cls.uom_gram
 
-        cls.kgB = cls.ProductObj.create({'name': 'kg-B', 'is_storable': True, 'uom_id': cls.uom_kg.id})
-        cls.gB = cls.ProductObj.create({'name': 'g-B', 'is_storable': True, 'uom_id': cls.uom_gm.id})
+        cls.kgB, cls.gB = cls.ProductObj.create([
+            {'name': 'kg-B', 'is_storable': True, 'uom_id': cls.uom_kg.id},
+            {'name': 'g-B', 'is_storable': True, 'uom_id': cls.uom_gm.id}
+        ])
 
-        cls.env.ref('base.group_user').write({'implied_ids': [
-            (4, cls.env.ref('base.group_multi_company').id),
-            (4, cls.env.ref('stock.group_production_lot').id),
+        cls.group_user.write({'implied_ids': [
+            (4, cls.quick_ref('base.group_multi_company').id),
+            (4, cls.quick_ref('stock.group_production_lot').id),
         ]})
+
         # User Data: stock user and stock manager
         cls.user_stock_user = mail_new_test_user(
             cls.env,
@@ -141,12 +168,6 @@ class TestStockCommon(TestProductCommon):
         cls.partner_1 = cls.env['res.partner'].create({
             'name': 'Julia Agrolait',
             'email': 'julia@agrolait.example.com',
-        })
-
-        # Product
-        cls.product_3 = cls.env['product.product'].create({
-            'name': 'Stone',  # product_3
-            'uom_id': cls.uom_dozen.id,
         })
 
         # Existing data

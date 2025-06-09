@@ -53,9 +53,8 @@ test("can manually unpin a sub-thread", async () => {
     await click("button[title='Threads']");
     await click("button[aria-label='Create Thread']");
     await contains(".o-mail-Discuss-threadName", { value: "New Thread" });
-    await click("button[title='Unpin Thread']", {
-        parent: [".o-mail-DiscussSidebar-item", { text: "New Thread" }],
-    });
+    await click("[title='Threads Actions']");
+    await click(".o-dropdown-item:contains('Unpin Conversation')");
     await contains(".o-mail-DiscussSidebar-item", { text: "New Thread", count: 0 });
 });
 
@@ -70,15 +69,15 @@ test("create sub thread from existing message", async () => {
     await start();
     await openDiscuss(channelId);
     await click(".o-mail-Message-actions [title='Expand']");
-    await click("[title='Create Thread']");
+    await click(".o-dropdown-item:contains('Create Thread')");
     await contains(".o-mail-Discuss-threadName", { value: "Selling a training session and" });
     await contains(".o-mail-Message", {
         text: "Selling a training session and selling the products after the training session is more efficient.",
     });
     await click(".o-mail-DiscussSidebarChannel", { name: "General" });
     await click(".o-mail-Message-actions [title='Expand']");
-    await contains("[title='Create Thread']", { count: 0 });
-    await click("[title='View Thread']");
+    await contains(".o-dropdown-item:contains('Create Thread')", { count: 0 });
+    await click(".o-dropdown-item:contains('View Thread')");
     await contains(".o-mail-Discuss-threadName", { value: "Selling a training session and" });
 });
 
@@ -95,7 +94,7 @@ test("create sub thread from existing message (slow network)", async () => {
     await start();
     await openDiscuss(channelId);
     await click(".o-mail-Message-actions [title='Expand']");
-    await click("[title='Create Thread']");
+    await click(".o-dropdown-item:contains('Create Thread')");
     await animationFrame();
     createSubChannelDef.resolve();
     await contains(".o-mail-Discuss-threadName", { value: "Selling a training session and" });
@@ -270,4 +269,27 @@ test("muted channel hides sub-thread unless channel is selected or thread has un
         })
     );
     await contains(".o-mail-DiscussSidebar-item:contains('New Thread')");
+});
+
+test("show notification when clicking on deleted thread", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "Test Channel" });
+    const activeThreadId = pyEnv["discuss.channel"].create({
+        name: "Message 1",
+        parent_channel_id: channelId,
+    });
+    pyEnv["mail.message"].create({
+        author_id: serverState.partnerId,
+        body: `<div class="o_mail_notification"> started a thread:<a href="#" class="o_channel_redirect" data-oe-id="${activeThreadId}" data-oe-model="discuss.channel">Message 1</a></div>`,
+        message_type: "notification",
+        model: "discuss.channel",
+        res_id: channelId,
+    });
+    pyEnv["discuss.channel"].unlink(activeThreadId);
+    await start();
+    await openDiscuss(channelId);
+    await click(".o-mail-NotificationMessage a", { text: "Message 1" });
+    await contains(".o_notification:has(.o_notification_bar.bg-danger)", {
+        text: "This thread is no longer available.",
+    });
 });

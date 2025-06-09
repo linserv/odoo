@@ -26,12 +26,6 @@
     }
     &.invoice_note {
         tr {
-            td {
-                vertical-align: bottom;
-            }
-            &:nth-child(2) td {
-                vertical-align: top;
-            }
             .address, .information_block, .shipping_address, .invoice_address {
                 margin: 0;
             }
@@ -47,9 +41,7 @@
                 .colored_address {
                     color: $o-default-report-secondary-color;
                 }
-                > span {
-                    font-size: 0.8em;
-                }
+                font-size: 0.8em;
             }
             .information_block, .invoice_address {
                 width: 75mm;
@@ -82,11 +74,6 @@
                 }
             }
 
-            tr {
-                td {
-                    vertical-align: bottom;
-                }
-            }
         }
     }
     &.footer {

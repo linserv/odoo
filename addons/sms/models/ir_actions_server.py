@@ -25,19 +25,13 @@ class IrActionsServer(models.Model):
         readonly=False, store=True)
 
     def _name_depends(self):
-        return super()._name_depends() + ["sms_template_id", "sms_method"]
+        return [*super()._name_depends(), "sms_template_id"]
 
     def _generate_action_name(self):
         self.ensure_one()
-        match self.state:
-            case 'sms':
-                return _(
-                    'Send (%(method)s): %(template_name)s',
-                    method=self.sms_method,
-                    template_name=self.sms_template_id.name
-                )
-            case _:
-                return super()._generate_action_name()
+        if self.state == 'sms' and self.sms_template_id:
+            return _('Send %(template_name)s', template_name=self.sms_template_id.name)
+        return super()._generate_action_name()
 
     @api.depends('state')
     def _compute_available_model_ids(self):
@@ -80,7 +74,7 @@ class IrActionsServer(models.Model):
 
         if self.state == 'sms':
             if self.model_id.transient or not self.model_id.is_mail_thread:
-                warnings.append(_("Sending SMS can only be done on a mail.thread or a transient model"))
+                warnings.append(_("Sending SMS can only be done on a not transient mail.thread model"))
 
             if self.sms_template_id and self.sms_template_id.model_id != self.model_id:
                 warnings.append(

@@ -3,6 +3,8 @@ import { mailDataHelpers } from "@mail/../tests/mock_server/mail_mock_server";
 import { fields, getKwArgs, makeKwArgs, models } from "@web/../tests/web_test_helpers";
 import { serializeDateTime, today } from "@web/core/l10n/dates";
 
+const { DateTime } = luxon;
+
 export class DiscussChannelMember extends models.ServerModel {
     _name = "discuss.channel.member";
 
@@ -36,7 +38,11 @@ export class DiscussChannelMember extends models.ServerModel {
                 channel,
                 "mail.record/insert",
                 new mailDataHelpers.Store(DiscussChannelMember.browse(member.id))
-                    .add("discuss.channel.member", { id: member.id, isTyping: is_typing })
+                    .add("discuss.channel.member", {
+                        id: member.id,
+                        isTyping: is_typing,
+                        is_typing_dt: serializeDateTime(DateTime.now()),
+                    })
                     .get_result(),
             ]);
         }
@@ -99,14 +105,14 @@ export class DiscussChannelMember extends models.ServerModel {
                 false
             );
             if ("channel" in fields) {
-                data.thread = mailDataHelpers.Store.one(
+                data.channel_id = mailDataHelpers.Store.one(
                     this.env["discuss.channel"].browse(member.channel_id),
                     makeKwArgs({ as_thread: true, only_id: true })
                 );
             }
             if ("persona" in fields) {
                 if (member.partner_id) {
-                    data.persona = mailDataHelpers.Store.one(
+                    data.partner_id = mailDataHelpers.Store.one(
                         ResPartner.browse(member.partner_id),
                         makeKwArgs({
                             fields: this._get_store_partner_fields([member.id], fields["persona"]),
@@ -114,7 +120,7 @@ export class DiscussChannelMember extends models.ServerModel {
                     );
                 }
                 if (member.guest_id) {
-                    data.persona = mailDataHelpers.Store.one(
+                    data.guest_id = mailDataHelpers.Store.one(
                         MailGuest.browse(member.guest_id),
                         makeKwArgs({ fields: fields["persona"] })
                     );

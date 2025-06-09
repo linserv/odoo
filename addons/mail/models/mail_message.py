@@ -9,7 +9,7 @@ from collections import defaultdict
 
 from odoo import _, api, fields, models, modules, tools
 from odoo.exceptions import AccessError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools import clean_context, groupby, SQL
 from odoo.tools.misc import OrderedSet
 from odoo.addons.mail.tools.discuss import Store
@@ -288,7 +288,7 @@ class MailMessage(models.Model):
 
         # Non-employee see only messages with a subtype and not internal
         if not self.env.user._is_internal():
-            domain = self._get_search_domain_share() + domain
+            domain = self._get_search_domain_share() & Domain(domain)
 
         # make the search query with the default rules
         query = super()._search(domain, offset, limit, order)
@@ -344,7 +344,7 @@ class MailMessage(models.Model):
         return allowed._as_query(order)
 
     def _get_search_domain_share(self):
-        return ['&', '&', ('is_internal', '=', False), ('subtype_id', '!=', False), ('subtype_id.internal', '=', False)]
+        return Domain(['&', '&', ('is_internal', '=', False), ('subtype_id', '!=', False), ('subtype_id.internal', '=', False)])
 
     @api.model
     def _find_allowed_model_wise(self, doc_model, doc_dict):
@@ -848,26 +848,26 @@ class MailMessage(models.Model):
     @api.model
     def _message_fetch(self, domain, search_term=None, before=None, after=None, around=None, limit=30):
         res = {}
+        domain = Domain(domain)
         if search_term:
             # we replace every space by a % to avoid hard spacing matching
             search_term = search_term.replace(" ", "%")
-            domain = expression.AND([domain, expression.OR([
+            domain &= Domain.OR([
                 # sudo: access to attachment is allowed if you have access to the parent model
                 [("attachment_ids", "in", self.env["ir.attachment"].sudo()._search([("name", "ilike", search_term)]))],
                 [("body", "ilike", search_term)],
                 [("subject", "ilike", search_term)],
                 [("subtype_id.description", "ilike", search_term)],
-            ])])
-            domain = expression.AND([domain, [("message_type", "not in", ["user_notification", "notification"])]])
+            ])
             res["count"] = self.search_count(domain)
         if around is not None:
-            messages_before = self.search(domain=[*domain, ('id', '<=', around)], limit=limit // 2, order="id DESC")
-            messages_after = self.search(domain=[*domain, ('id', '>', around)], limit=limit // 2, order='id ASC')
+            messages_before = self.search(domain & Domain('id', '<=', around), limit=limit // 2, order="id DESC")
+            messages_after = self.search(domain & Domain('id', '>', around), limit=limit // 2, order='id ASC')
             return {**res, "messages": (messages_after + messages_before).sorted('id', reverse=True)}
         if before:
-            domain = expression.AND([domain, [('id', '<', before)]])
+            domain &= Domain('id', '<', before)
         if after:
-            domain = expression.AND([domain, [('id', '>', after)]])
+            domain &= Domain('id', '>', after)
         res["messages"] = self.search(domain, limit=limit, order='id ASC' if after else 'id DESC')
         if after:
             res["messages"] = res["messages"].sorted('id', reverse=True)
@@ -941,8 +941,6 @@ class MailMessage(models.Model):
         return [field_name]
 
     def _to_store_defaults(self):
-        com_id = self.env["ir.model.data"]._xmlid_to_res_id("mail.mt_comment")
-        note_id = self.env["ir.model.data"]._xmlid_to_res_id("mail.mt_note")
         field_names = [
             # sudo: mail.message - reading attachments on accessible message is allowed
             Store.Many("attachment_ids", sort="id", sudo=True),
@@ -951,29 +949,28 @@ class MailMessage(models.Model):
             "date",
             "incoming_email_cc",
             "incoming_email_to",
-            Store.Attr("is_note", lambda m: m.subtype_id.id == note_id),
-            Store.Attr("is_discussion", lambda m: m.subtype_id.id == com_id),
             # sudo: mail.message - reading link preview on accessible message is allowed
             "message_format",
             "message_link_preview_ids",
             "message_type",
             "model",  # keep for iOS app
+            # sudo: res.partner: reading limited data of recipients is acceptable
+            Store.Many("partner_ids", ["avatar_128", "name"], sort="id", sudo=True),
             "pinned_at",
             # sudo: mail.message - reading reactions on accessible message is allowed
             Store.Many("reaction_ids", rename="reactions", sudo=True),
-            # sudo: res.partner: reading limited data of recipients is acceptable
-            Store.Many("partner_ids", ["avatar_128", "name"], rename="recipients", sort="id", sudo=True),
             "res_id",  # keep for iOS app
             "subject",
-            # sudo: mail.message.subtype - reading description on accessible message is allowed
-            Store.Attr("subtype_description", lambda m: m.subtype_id.sudo().description),
+            # sudo: mail.message.subtype - reading subtype on accessible message is allowed
+            Store.One("subtype_id", ["description"], sudo=True),
             "write_date",
         ]
         if self.env.user._is_internal():
+            # sudo - mail.notification: internal users can access notifications.
             field_names.append(
                 Store.Many(
                     "notification_ids",
-                    value=lambda m: m.notification_ids._filtered_for_web_client(),
+                    value=lambda m: m.sudo().notification_ids._filtered_for_web_client(),
                 )
             )
         return field_names
@@ -1023,11 +1020,11 @@ class MailMessage(models.Model):
         current_partner = self.env.user.partner_id
         if for_current_user and add_followers and non_channel_records:
             if followers is None:
-                domain = expression.OR(
+                domain = Domain.OR(
                     [("res_model", "=", model), ("res_id", "in", [r.id for r in records])]
                     for model, records in groupby(non_channel_records, key=lambda r: r._name)
                 )
-                domain = expression.AND([domain, [("partner_id", "=", current_partner.id)]])
+                domain &= Domain("partner_id", "=", current_partner.id)
                 # sudo: mail.followers - reading followers of current partner
                 followers = self.env["mail.followers"].sudo().search(domain)
             follower_by_record_and_partner = {
@@ -1050,7 +1047,7 @@ class MailMessage(models.Model):
             record_fields.append(
                 Store.One(
                     "selfFollower",
-                    ["is_active", Store.One("partner_id", [], rename="partner")],
+                    ["is_active", Store.One("partner_id", [])],
                     value=lambda r: follower_by_record_and_partner.get((r, current_partner)),
                 )
             )
@@ -1111,15 +1108,16 @@ class MailMessage(models.Model):
     def _author_to_store(self, store: Store):
         for message in self:
             data = {
-                "author": False,
+                "author_id": False,
+                "author_guest_id": False,
                 "email_from": message.email_from,
             }
             # sudo: mail.message: access to author is allowed
             if guest_author := message.sudo().author_guest_id:
-                data["author"] = Store.One(guest_author, ["avatar_128", "name"])
+                data["author_guest_id"] = Store.One(guest_author, ["avatar_128", "name"])
             # sudo: mail.message: access to author is allowed
             elif author := message.sudo().author_id:
-                data["author"] = Store.One(author, ["avatar_128", "name", "is_company", "user"])
+                data["author_id"] = Store.One(author, ["avatar_128", "name", "is_company", "user"])
             store.add(message, data)
 
     def _extras_to_store(self, store: Store, format_reply):
@@ -1135,7 +1133,8 @@ class MailMessage(models.Model):
         store.add(
             self,
             [
-                Store.One("author_id", [], rename="author"),
+                Store.One("author_id", []),
+                Store.One("author_guest_id", []),
                 "body",
                 "date",
                 "message_type",

@@ -114,7 +114,7 @@ export class Record extends DataPoint {
         this._initialTextValues = { ...this._textValues };
 
         this._invalidFields.clear();
-        if (!this.isNew) {
+        if (!this.isNew && this.isInEdition && !this._parentRecord) {
             this._checkValidity();
         }
         this._savePoint = undefined;
@@ -1172,7 +1172,10 @@ export class Record extends DataPoint {
             );
         } catch (e) {
             if (onError) {
-                return onError(e, { discard: () => this._discard() });
+                return onError(e, {
+                    discard: () => this._discard(),
+                    retry: () => this._save(...arguments),
+                });
             }
             if (!this.isInEdition) {
                 await this._load({});

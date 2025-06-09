@@ -23,7 +23,7 @@ import {
     mountWithSearch,
     onRpc,
     openAddCustomFilterDialog,
-    patchWithCleanup,
+    serverState,
     toggleMenuItem,
     toggleMenuItemOption,
     toggleSearchBarMenu,
@@ -700,13 +700,13 @@ test("Add a custom filter", async () => {
     await clickOnButtonAddBranch(-1);
     await clickOnButtonAddRule(-1);
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Filter", "Id"]);
+    expect(getFacetTexts()).toEqual(["Filter", "Id = 1", "Id = 1", "Id = 1"]);
     expect(searchBar.env.searchModel.domain).toEqual([
         "&",
         ["foo", "=", "abc"],
         "&",
-        "&",
         ["id", "=", 1],
+        "&",
         ["id", "=", 1],
         "|",
         ["id", "=", 1],
@@ -719,7 +719,7 @@ test("Add a custom filter", async () => {
 });
 
 test("Add a custom filter containing an expression", async () => {
-    patchWithCleanup(odoo, { debug: "1" });
+    serverState.debug = "1";
 
     onRpc("/web/domain/validate", () => true);
     const searchBar = await mountWithSearch(SearchBar, {
@@ -737,14 +737,14 @@ test("Add a custom filter containing an expression", async () => {
         `[("foo", "in", [uid, 1, "a"])]`
     );
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`Foo\nuid\nor\n1\nor\n"a"`]);
+    expect(getFacetTexts()).toEqual([`Foo = uid or 1 or "a"`]);
     expect(searchBar.env.searchModel.domain).toEqual([
         ["foo", "in", [7, 1, "a"]], // uid = 7
     ]);
 });
 
 test("Add a custom filter containing a between operator", async () => {
-    patchWithCleanup(odoo, { debug: "1" });
+    serverState.debug = "1";
 
     onRpc("/web/domain/validate", () => true);
     const searchBar = await mountWithSearch(SearchBar, {
@@ -759,16 +759,15 @@ test("Add a custom filter containing a between operator", async () => {
     await toggleSearchBarMenu();
     await openAddCustomFilterDialog();
     await contains(`.o_domain_selector_debug_container textarea`).edit(
-        `[("id", ">=", 0), ("id", "<=", 10)]`
+        `[("id", "between", [0, 10])]`
     );
-
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`Id\n( 0 and 10 )`]);
+    expect(getFacetTexts()).toEqual([`Id between 0 and 10`]);
     expect(searchBar.env.searchModel.domain).toEqual(["&", ["id", ">=", 0], ["id", "<=", 10]]);
 });
 
 test("consistent display of ! in debug mode", async () => {
-    patchWithCleanup(odoo, { debug: "1" });
+    serverState.debug = "1";
 
     onRpc("/web/domain/validate", () => true);
     const searchBar = await mountWithSearch(SearchBar, {
@@ -785,7 +784,7 @@ test("consistent display of ! in debug mode", async () => {
     expect(SELECTORS.connectorValue).toHaveText("none");
 
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`Custom filter`]);
+    expect(getFacetTexts()).toEqual([`! ( Foo = 1 or Id = 2 )`]);
     expect(searchBar.env.searchModel.domain).toEqual(["!", "|", ["foo", "=", 1], ["id", "=", 2]]);
 });
 
@@ -805,31 +804,31 @@ test("display of (not) set in facets", async () => {
     await openAddCustomFilterDialog();
     await selectOperator("not_set");
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Id\nnot set"]);
+    expect(getFacetTexts()).toEqual(["Id not set"]);
     expect(searchBar.env.searchModel.domain).toEqual([["id", "=", false]]);
 
     await contains(".o_searchview_facet_label").click();
     await selectOperator("set");
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Id\nset"]);
+    expect(getFacetTexts()).toEqual(["Id set"]);
     expect(searchBar.env.searchModel.domain).toEqual([["id", "!=", false]]);
 
     await contains(".o_searchview_facet_label").click();
     await openModelFieldSelectorPopover();
     await contains(".o_model_field_selector_popover_item_name:contains(Boolean)").click();
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Boolean\nset"]);
+    expect(getFacetTexts()).toEqual(["Boolean set"]);
     expect(searchBar.env.searchModel.domain).toEqual([["boolean", "!=", false]]);
 
     await contains(".o_searchview_facet_label").click();
     await selectOperator("not_set");
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Boolean\nnot set"]);
+    expect(getFacetTexts()).toEqual(["Boolean not set"]);
     expect(searchBar.env.searchModel.domain).toEqual([["boolean", "=", false]]);
 });
 
 test("Add a custom filter: notification on invalid domain", async () => {
-    patchWithCleanup(odoo, { debug: "1" });
+    serverState.debug = "1";
     mockService("notification", {
         add(message, options) {
             expect.step("notification");
@@ -855,7 +854,7 @@ test("Add a custom filter: notification on invalid domain", async () => {
 });
 
 test("display names in facets", async () => {
-    patchWithCleanup(odoo, { debug: "1" });
+    serverState.debug = "1";
     Partner._records = [
         { id: 1, name: "John" },
         { id: 2, name: "David" },
@@ -871,22 +870,29 @@ test("display names in facets", async () => {
     await toggleSearchBarMenu();
     await openAddCustomFilterDialog();
     await contains(`.o_domain_selector_debug_container textarea`).edit(
-        `["|", ("bar", "=", 1 ), ("bar", "in", [2, 5555])]`
+        `[("bar", "=", 1 ), ("bar", "in", [2, 5555]), ("bar", "!=", false), ("id", "=", 2)]`
     );
     await contains(".modal footer button").click();
 
     expect(getFacetTexts()).toEqual([
-        "Bar\nJohn\nor\nDavid\nor\nInaccessible/missing record ID: 5555",
+        "Bar = John",
+        "Bar = David or Inaccessible/missing record ID: 5555",
+        "Bar set",
+        "Id = 2",
     ]);
     expect(searchBar.env.searchModel.domain).toEqual([
-        "|",
+        "&",
         ["bar", "=", 1],
+        "&",
         ["bar", "in", [2, 5555]],
+        "&",
+        ["bar", "!=", false],
+        ["id", "=", 2],
     ]);
 });
 
 test("display names in facets (with a property)", async () => {
-    patchWithCleanup(odoo, { debug: "1" });
+    serverState.debug = "1";
     Partner._records = [{ id: 1, name: "John" }];
 
     onRpc("/web/domain/validate", () => true);
@@ -920,7 +926,7 @@ test("display names in facets (with a property)", async () => {
     );
     await contains(".modal footer button").click();
 
-    expect(getFacetTexts()).toEqual(["M2O\nJohn"]);
+    expect(getFacetTexts()).toEqual(["Properties \u2794 M2O = John"]);
     expect(searchBar.env.searchModel.domain).toEqual([["properties.m2o", "=", 1]]);
 });
 
@@ -1015,7 +1021,7 @@ test("group by properties", async () => {
 });
 
 test("shorten descriptions of long lists", async function () {
-    patchWithCleanup(odoo, { debug: "1" });
+    serverState.debug = "1";
     onRpc("/web/domain/validate", () => true);
     const searchBar = await mountWithSearch(SearchBar, {
         resModel: "foo",
@@ -1033,6 +1039,6 @@ test("shorten descriptions of long lists", async function () {
         `[("id", "in", [${values}])]`
     );
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual([`Id\n${[...values.slice(0, 4), "..."].join("\nor\n")}`]);
+    expect(getFacetTexts()).toEqual([`Id = ${values.slice(0, 4).join(" or ")} or ...`]);
     expect(searchBar.env.searchModel.domain).toEqual([["id", "in", values]]);
 });

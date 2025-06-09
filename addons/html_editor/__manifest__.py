@@ -23,20 +23,28 @@ This addon provides an extensible, maintainable editor.
         ],
         'web.assets_backend': [
             ('include', 'html_editor.assets_editor'),
+            'html_editor/static/src/others/dynamic_placeholder_plugin.js',
+            'html_editor/static/src/backend/**/*',
             'html_editor/static/src/fields/**/*',
         ],
         'html_editor.assets_editor': [
+            'web/static/lib/dompurify/DOMpurify.js',
             ('include', 'html_editor.assets_media_dialog'),
             ('include', 'html_editor.assets_readonly'),
             'html_editor/static/src/*',
             'html_editor/static/src/components/history_dialog/**/*',
             'html_editor/static/src/core/**/*',
             'html_editor/static/src/main/**/*',
-            'html_editor/static/src/others/**/*',
+            'html_editor/static/src/others/collaboration/**/*',
+            'html_editor/static/src/others/embedded_components/**/*',
+            'html_editor/static/src/others/embedded_component*',
+            'html_editor/static/src/others/qweb_picker*',
+            'html_editor/static/src/others/qweb_plugin*',
             'html_editor/static/src/services/**/*',
             ('remove', 'html_editor/static/src/components/history_dialog/history_dialog.dark.scss'),
             ('remove', 'html_editor/static/src/main/movenode.dark.scss'),
             ('remove', 'html_editor/static/src/main/toolbar/toolbar.dark.scss'),
+            ('remove', 'html_editor/static/src/main/chatgpt/language_selector.dark.scss'),
         ],
         'html_editor.assets_media_dialog': [
             # Bundle to use the media dialog in the backend and the frontend
@@ -58,6 +66,7 @@ This addon provides an extensible, maintainable editor.
             'html_editor/static/src/components/history_dialog/history_dialog.dark.scss',
             'html_editor/static/src/main/movenode.dark.scss',
             'html_editor/static/src/main/toolbar/toolbar.dark.scss',
+            'html_editor/static/src/main/chatgpt/language_selector.dark.scss',
         ],
         'web.assets_unit_tests': [
             'html_editor/static/tests/**/*',
@@ -68,6 +77,7 @@ This addon provides an extensible, maintainable editor.
         'html_editor.assets_image_cropper': [
             'html_editor/static/lib/cropperjs/cropper.css',
             'html_editor/static/lib/cropperjs/cropper.js',
+            'html_editor/static/lib/webgl-image-filter/webgl-image-filter.js',
         ],
     },
     'license': 'LGPL-3'

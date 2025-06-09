@@ -46,6 +46,8 @@ registry.category("web_tour.tours").add("GiftCardWithRefundtTour", {
             }),
             ProductScreen.clickNumpad("1"),
             TicketScreen.confirmRefund(),
+            PaymentScreen.isShown(),
+            PaymentScreen.clickBack(),
             ProductScreen.isShown(),
             ProductScreen.clickLine("Magnetic Board", "-1"),
             ProductScreen.selectedOrderlineHas("Magnetic Board", "-1"),
@@ -172,5 +174,15 @@ registry.category("web_tour.tours").add("test_physical_gift_card_invoiced", {
             PaymentScreen.clickInvoiceButton(),
             PaymentScreen.clickValidate(),
             ReceiptScreen.isShown(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("EmptyProductScreenTour", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.isEmpty(),
+            ProductScreen.loadSampleButtonIsThere(),
         ].flat(),
 });

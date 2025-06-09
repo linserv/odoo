@@ -47,6 +47,7 @@ export class Thread extends Record {
         return thread;
     }
 
+    autofocus = 0;
     /** @type {number} */
     id;
     /** @type {string} */
@@ -74,16 +75,23 @@ export class Thread extends Record {
          */
         sort: (a1, a2) => (a1.id < a2.id ? 1 : -1),
     });
+    get allowedToLeaveChannelTypes() {
+        return ["channel", "group"];
+    }
     get canLeave() {
         return (
-            ["channel", "group"].includes(this.channel_type) &&
-            !this.message_needaction_counter &&
+            this.allowedToLeaveChannelTypes.includes(this.channel_type) &&
             !this.group_based_subscription &&
             this.store.self?.type === "partner"
         );
     }
+    get allowedToUnpinChannelTypes() {
+        return ["chat"];
+    }
     get canUnpin() {
-        return this.channel_type === "chat" && this.importantCounter === 0;
+        return (
+            this.parent_channel_id || this.allowedToUnpinChannelTypes.includes(this.channel_type)
+        );
     }
     /** @type {boolean} */
     can_react = true;
@@ -104,15 +112,6 @@ export class Thread extends Record {
         inverse: "thread",
         onDelete: (r) => r.delete(),
     });
-    correspondentCountry = fields.One("res.country", {
-        /** @this {import("models").Thread} */
-        compute() {
-            return this.correspondent?.persona?.country ?? this.country_id;
-        },
-    });
-    get showCorrespondentCountry() {
-        return false;
-    }
     counter = 0;
     counter_bus_id = 0;
     /** @type {string} */
@@ -170,7 +169,13 @@ export class Thread extends Record {
     get isFocused() {
         return this.isFocusedCounter !== 0;
     }
-    isFocusedCounter = 0;
+    isFocusedCounter = fields.Attr(0, {
+        onUpdate() {
+            if (this.isFocusedCounter < 0) {
+                this.isFocusedCounter = 0;
+            }
+        },
+    });
     isLoadingAttachments = false;
     isLoadedDeferred = new Deferred();
     isLoaded = fields.Attr(false, {
@@ -287,11 +292,11 @@ export class Thread extends Record {
     pid;
 
     get accessRestrictedToGroupText() {
-        if (!this.authorizedGroupFullName) {
+        if (!this.group_public_id?.full_name) {
             return false;
         }
         return _t('Access restricted to group "%(groupFullName)s"', {
-            groupFullName: this.authorizedGroupFullName,
+            groupFullName: this.group_public_id.full_name,
         });
     }
 
@@ -352,6 +357,9 @@ export class Thread extends Record {
         return ["chat", "group"].includes(this.channel_type);
     }
 
+    get supportsCustomChannelName() {
+        return this.isChatChannel && this.channel_type !== "group";
+    }
     get displayName() {
         return this.display_name;
     }
@@ -765,9 +773,7 @@ export class Thread extends Record {
         const newName = name.trim();
         if (
             newName !== this.displayName &&
-            ((newName && this.channel_type === "channel") ||
-                this.channel_type === "chat" ||
-                this.channel_type === "group")
+            ((newName && this.channel_type === "channel") || this.isChatChannel)
         ) {
             if (this.channel_type === "channel" || this.channel_type === "group") {
                 this.name = newName;
@@ -777,7 +783,7 @@ export class Thread extends Record {
                     [[this.id]],
                     { name: newName }
                 );
-            } else if (this.channel_type === "chat") {
+            } else if (this.supportsCustomChannelName) {
                 this.custom_channel_name = newName;
                 await this.store.env.services.orm.call(
                     "discuss.channel",
@@ -823,7 +829,12 @@ export class Thread extends Record {
                 res_id: this.id,
                 model: "discuss.channel",
             };
-            tmpData.author = this.store.self;
+            if (this.store.self.type === "partner") {
+                tmpData.author_id = this.store.self;
+            }
+            if (this.store.self.type === "guest") {
+                tmpData.author_guest_id = this.store.self;
+            }
             if (parentId) {
                 tmpData.parent_id = this.store["mail.message"].get(parentId);
             }

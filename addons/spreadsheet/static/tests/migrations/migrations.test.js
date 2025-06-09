@@ -123,9 +123,9 @@ test("Global filters: date is correctly migrated", () => {
     };
     const migratedData = load(data);
     const [f1, f2, f3] = migratedData.globalFilters;
-    expect(f1.defaultValue).toEqual({ yearOffset: -1 });
-    expect(f2.defaultValue).toEqual({ yearOffset: -2 });
-    expect(f3.defaultValue).toEqual({ yearOffset: 0 });
+    expect(f1.defaultValue).toBe(undefined);
+    expect(f2.defaultValue).toBe(undefined);
+    expect(f3.defaultValue).toBe(undefined);
 });
 
 test("List name default is model name", () => {
@@ -221,7 +221,7 @@ test("fieldMatchings are moved from filters to their respective datasources", ()
                         tag: "chart",
                         data: {
                             type: "odoo_bar",
-                            metaData: {}
+                            metaData: {},
                         },
                     },
                 ],
@@ -292,7 +292,7 @@ test("fieldMatchings offsets are correctly preserved after migration", () => {
                         tag: "chart",
                         data: {
                             type: "odoo_bar",
-                            metaData: {}
+                            metaData: {},
                         },
                     },
                 ],
@@ -574,10 +574,10 @@ test("Chart cumulatedStart is set to true if cumulative at migration", () => {
                             type: "odoo_bar",
                             metaData: {
                                 cumulative: true,
-                                cumulatedStart: false
+                                cumulatedStart: false,
                             },
                             cumulative: true,
-                            cumulatedStart: false
+                            cumulatedStart: false,
                         },
                     },
                 ],
@@ -592,4 +592,61 @@ test("Chart cumulatedStart is set to true if cumulative at migration", () => {
     expect(sheet.figures[1].data.cumulatedStart).toBe(false);
     expect(sheet.figures[2].data.metaData.cumulatedStart).toBe(false);
     expect(sheet.figures[2].data.cumulatedStart).toBe(false);
+});
+
+test("text global filter default value is now an array of strings", () => {
+    const data = {
+        version: "18.3.0",
+        globalFilters: [
+            {
+                id: "1",
+                type: "text",
+                defaultValue: "foo",
+                rangeOfAllowedValues: "Sheet1!A1:A2",
+            },
+            {
+                id: "2",
+                type: "text",
+            },
+        ],
+    };
+    const migratedData = load(data);
+    expect(migratedData.globalFilters[0].defaultValue).toEqual(["foo"]);
+    expect(migratedData.globalFilters[0].rangeOfAllowedValues).toBe(undefined);
+    expect(migratedData.globalFilters[0].rangesOfAllowedValues).toEqual(["Sheet1!A1:A2"]);
+    expect(migratedData.globalFilters[1].defaultValue).toBe(undefined);
+    expect(migratedData.globalFilters[1].rangeOfAllowedValues).toBe(undefined);
+    expect(migratedData.globalFilters[1].rangesOfAllowedValues).toBe(undefined);
+});
+
+test("Date with antepenultimate_year is not supported anymore", () => {
+    const data = {
+        version: "1",
+        globalFilters: [
+            {
+                id: "1",
+                type: "date",
+                defaultValue: { year: "antepenultimate_year" },
+                rangeType: "fixedPeriod",
+            },
+        ],
+    };
+    const migratedData = load(data);
+    expect(migratedData.globalFilters[0].defaultValue).toBe(undefined);
+});
+
+test("Default value is now undefined", () => {
+    const data = {
+        version: "1",
+        globalFilters: [
+            {
+                id: "1",
+                type: "relation",
+                label: "a relation filter",
+                defaultValue: [],
+            },
+        ],
+    };
+    const migratedData = load(data);
+    expect(migratedData.globalFilters[0].defaultValue).toBe(undefined);
 });

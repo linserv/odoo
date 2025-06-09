@@ -32,6 +32,7 @@ import {
     serverState,
     toggleMenuItem,
     toggleSearchBarMenu,
+    patchWithCleanup,
     validateSearch,
 } from "@web/../tests/web_test_helpers";
 
@@ -39,6 +40,7 @@ import { user } from "@web/core/user";
 import { Record } from "@web/model/record";
 import { Field } from "@web/views/fields/field";
 import { WebClient } from "@web/webclient/webclient";
+import { Many2XAutocomplete } from "@web/views/fields/relational_utils";
 
 describe.current.tags("desktop");
 
@@ -945,6 +947,52 @@ test("empty readonly many2one field", async () => {
 
     expect("div.o_field_widget[name=trululu]").toHaveCount(1);
     expect(".o_field_widget[name=trululu] .o_many2one").toHaveText("");
+});
+
+test("empty many2one field with no result", async () => {
+    patchWithCleanup(Many2XAutocomplete.prototype, {
+        getCreationContext(value){
+            expect(value).toBe("");
+            const context = super.getCreationContext(value);
+            expect(context[`default_${this.props.nameCreateField}`]).toBe(undefined);
+            return context;
+        }
+    });
+    class M2O extends models.Model {
+        m2o = fields.Many2one({ relation: "m2o" });
+    }
+    defineModels([M2O]);
+    await mountView({
+        type: "form",
+        resModel: "m2o",
+        arch: `
+            <form>
+                <sheet>
+                    <group>
+                        <field name="m2o" />
+                    </group>
+                </sheet>
+            </form>`,
+    });
+
+    await contains(".o_field_many2one input").click();
+    expect(".dropdown-menu li.o_m2o_dropdown_option").toHaveCount(1);
+    expect(".dropdown-menu li.o_m2o_dropdown_option").toHaveText("Create...");
+    expect(".dropdown-menu li.o_m2o_start_typing").toHaveCount(0);
+
+    await contains(".dropdown-menu li.o_m2o_dropdown_option").click();
+    expect(".o_dialog").toHaveCount(1);
+    expect(".o_dialog .o_field_many2one[name=m2o] input").toHaveValue("");
+    press("Esc");
+    await animationFrame();
+    expect(".o_dialog").toHaveCount(0);
+
+    await contains(".o_field_many2one input").edit("abc", { confirm: false });
+    await runAllTimers();
+
+    expect(".dropdown-menu li.o_m2o_dropdown_option").toHaveCount(2);
+    expect(".dropdown-menu li.o_m2o_start_typing").toHaveCount(0);
+    expect(".dropdown-menu li.o_m2o_no_result").toHaveCount(0);
 });
 
 test("empty many2one field with node options", async () => {
@@ -3865,7 +3913,7 @@ test("many2one search with formatted name", async () => {
     expect(
         ".o_field_many2one[name='trululu'] .dropdown-menu a.dropdown-item:eq(0)"
     ).toHaveInnerHTML(
-        `Test: <b>Paul</b> <span class="text-muted">Eric</span> <span class="o_tag position-relative d-inline-flex align-items-center mw-100 o_badge badge rounded-pill lh-1 text-white bg-primary">good guy</span><br/>&nbsp;&nbsp;&nbsp;&nbsp;More text`
+        `Test: <b>Paul</b> <span class="text-muted">Eric</span> <span class="o_tag position-relative d-inline-flex align-items-center mw-100 o_badge badge rounded-pill lh-1 o_tag_color_0">good guy</span><br/><span style="margin-left: 2em"></span>More text`
     );
     await contains(
         ".o_field_many2one[name='trululu'] .dropdown-menu a.dropdown-item:eq(0)"
@@ -3920,4 +3968,29 @@ test("search typeahead", async () => {
         "Create and edit...",
         "Search more...",
     ]);
+});
+
+test("highlight search in many2one", async () => {
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        arch: `<form><field name="trululu"/></form>`,
+    });
+    await contains(".o_field_widget[name=trululu] input").edit("rec", { confirm: false });
+    await runAllTimers();
+    expect(`.o-autocomplete.dropdown li:not(.o_m2o_dropdown_option) a`).toHaveCount(2);
+    expect(`.o-autocomplete.dropdown li:eq(0) a`).toHaveInnerHTML(`
+        first
+        <span class="text-primary fw-bold">
+            rec
+        </span>
+        ord
+    `);
+    expect(`.o-autocomplete.dropdown li:eq(1) a`).toHaveInnerHTML(`
+        second
+        <span class="text-primary fw-bold">
+            rec
+        </span>
+        ord
+    `);
 });

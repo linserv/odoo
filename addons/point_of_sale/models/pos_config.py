@@ -23,10 +23,7 @@ class PosConfig(models.Model):
     _check_company_auto = True
 
     def _default_warehouse_id(self):
-        warehouse = self.env['stock.warehouse'].search(self.env['stock.warehouse']._check_company_domain(self.env.company), limit=1).id
-        if not warehouse:
-            self.env['stock.warehouse']._warehouse_redirect_warning()
-        return warehouse
+        return self.env['stock.warehouse'].search(self.env['stock.warehouse']._check_company_domain(self.env.company), limit=1).id
 
     def _default_picking_type_id(self):
         return self.env['stock.warehouse'].with_context(active_test=False).search(self.env['stock.warehouse']._check_company_domain(self.env.company), limit=1).pos_type_id.id
@@ -219,16 +216,29 @@ class PosConfig(models.Model):
             'records': records
         })
 
-    def read_config_open_orders(self, domain, record_ids):
-        all_domain = expression.OR([domain, [('id', 'in', record_ids.get('pos.order')), ('config_id', '=', self.id)]])
-        all_orders = self.env['pos.order'].search(all_domain)
+    def read_config_open_orders(self, domain, record_ids=[]):
         delete_record_ids = {}
+        dynamic_records = {}
 
-        for model, ids in record_ids.items():
+        for model, domain in domain.items():
+            ids = record_ids[model]
             delete_record_ids[model] = [id for id in ids if not self.env[model].browse(id).exists()]
+            dynamic_records[model] = self.env[model].search(domain)
+
+        pos_order_data = dynamic_records.get('pos.order') or self.env['pos.order']
+        data = pos_order_data.read_pos_data([], self.id)
+
+        for key, records in dynamic_records.items():
+            fields = self.env[key]._load_pos_data_fields(self.id)
+            ids = list(set(records.ids + [record['id'] for record in data.get(key, [])]))
+            dynamic_records[key] = self.env[key].browse(ids).read(fields, load=False)
+
+        for key, value in data.items():
+            if key not in dynamic_records:
+                dynamic_records[key] = value
 
         return {
-            'dynamic_records': all_orders.filtered_domain(domain).read_pos_data([], self.id),
+            'dynamic_records': dynamic_records,
             'deleted_record_ids': delete_record_ids,
         }
 
@@ -416,6 +426,11 @@ class PosConfig(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        if not self._default_warehouse_id():
+            self.env['stock.warehouse'].create({
+                'code': vals_list[0].get('name')[:3],  # first 3 characters of pos.config name
+                'company_id': self.env.company.id,
+            })
         for vals in vals_list:
             self._check_header_footer(vals)
             IrSequence = self.env['ir.sequence'].sudo()
@@ -643,7 +658,9 @@ class PosConfig(models.Model):
             raise UserError(_("You do not have permission to open a POS session. Please try opening a session with a different user"))
 
         if not self.current_session_id:
-            self._check_before_creating_new_session()
+            res = self._check_before_creating_new_session()
+            if res:
+                return res
         self._validate_fields(self._fields)
 
         return self._action_to_open_ui()

@@ -5,11 +5,11 @@ import { reactive, toRaw } from "@odoo/owl";
 /** @typedef {import("./record_list").RecordList} RecordList */
 
 export const storeInsertFns = {
-    makeContext() {},
-    getActualModelName(ctx, pyOrJsModelName) {
+    makeContext(store) {},
+    getActualModelName(store, ctx, pyOrJsModelName) {
         return pyOrJsModelName;
     },
-    getExtraFieldsFromModel() {},
+    getExtraFieldsFromModel(store) {},
 };
 
 export class Store extends Record {
@@ -30,6 +30,8 @@ export class Store extends Record {
     handleError(err) {
         this._.ERRORS.push(err);
     }
+
+    warnErrors = true;
 
     /** @param {() => any} fn */
     MAKE_UPDATE(fn) {
@@ -175,9 +177,11 @@ export class Store extends Record {
             }
             this._.UPDATE--;
             if (this._.ERRORS.length) {
-                console.warn("Store data insert aborted due to following errors:");
-                for (const err of this._.ERRORS) {
-                    console.warn(err);
+                if (this.warnErrors) {
+                    console.warn("Store data insert aborted due to following errors:");
+                    for (const err of this._.ERRORS) {
+                        console.warn(err);
+                    }
                 }
                 const [error1] = this._.ERRORS;
                 this._.ERRORS = [];
@@ -194,19 +198,22 @@ export class Store extends Record {
      */
     insert(dataByModelName = {}, options = {}) {
         const store = this;
-        const ctx = storeInsertFns.makeContext();
+        const ctx = storeInsertFns.makeContext(store);
         return Record.MAKE_UPDATE(function storeInsert() {
             const res = {};
             const recordsDataToDelete = [];
             for (const [pyOrJsModelName, data] of Object.entries(dataByModelName)) {
-                const modelName = storeInsertFns.getActualModelName(ctx, pyOrJsModelName);
+                const modelName = storeInsertFns.getActualModelName(store, ctx, pyOrJsModelName);
                 if (!store[modelName]) {
                     console.warn(`store.insert() received data for unknown model “${modelName}”.`);
                     continue;
                 }
                 const insertData = [];
                 for (const vals of Array.isArray(data) ? data : [data]) {
-                    const extraFields = storeInsertFns.getExtraFieldsFromModel(pyOrJsModelName);
+                    const extraFields = storeInsertFns.getExtraFieldsFromModel(
+                        store,
+                        pyOrJsModelName
+                    );
                     if (extraFields) {
                         Object.assign(vals, extraFields);
                     }

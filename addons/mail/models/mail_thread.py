@@ -32,7 +32,7 @@ from odoo.addons.mail.tools.web_push import (
     ENCRYPTION_BLOCK_OVERHEAD, ENCRYPTION_HEADER_SIZE, MAX_PAYLOAD_SIZE
 )
 from odoo.exceptions import MissingError, AccessError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools import (
     is_html_empty, html_escape, html2plaintext,
     clean_context, split_every, Query, SQL,
@@ -176,7 +176,8 @@ class MailThread(models.AbstractModel):
 
     @api.model
     def _search_message_partner_ids(self, operator, operand):
-        if operator in expression.NEGATIVE_TERM_OPERATORS:
+        """Search function for message_follower_ids"""
+        if Domain.is_negative_operator(operator):
             return NotImplemented
         if not (self.env.su or self.env.user._is_internal()):
             user_partner = self.env.user.partner_id
@@ -606,7 +607,8 @@ class MailThread(models.AbstractModel):
 
         :param List[str] tracked_fields: Name of the tracked fields being evaluated;
 
-        :return str: A message to log when these changes happen for this record;
+        :return: A message to log when these changes happen for this record;
+        :rtype: str
         """
         return ''
 
@@ -936,8 +938,7 @@ class MailThread(models.AbstractModel):
         address. The model is here hardcoded because we cannot know with which model the
         incomming mail match. We consider that if a mail arrives, we have to clear bounce for
         each model having bounce count.
-
-        :param email_from: email address that sent the incoming email."""
+        """
         valid_email = message_dict['email_from']
         if valid_email:
             bl_models = self.env['ir.model'].sudo().search(['&', ('is_mail_blacklist', '=', True), ('model', '!=', 'mail.thread.blacklist')])
@@ -1035,7 +1036,7 @@ class MailThread(models.AbstractModel):
                 base_domain = model._detect_loop_sender_domain(email_from_normalized)
                 if base_domain:
                     mail_new_count = model.sudo().search_count(
-                        expression.AND([
+                        Domain.AND([
                             [('create_date', '>=', create_date_limit)],
                             base_domain,
                         ]),
@@ -1044,11 +1045,11 @@ class MailThread(models.AbstractModel):
 
             # search messages linked to email -> alias updating records
             if doc_ids and not loop_new:
-                base_msg_domain = [('model', '=', model._name), ('res_id', 'in', doc_ids), ('create_date', '>=', create_date_limit)]
+                base_msg_domain = Domain([('model', '=', model._name), ('res_id', 'in', doc_ids), ('create_date', '>=', create_date_limit)])
                 if author_id:
-                    msg_domain = expression.AND([[('author_id', '=', author_id)], base_msg_domain])
+                    msg_domain = Domain('author_id', '=', author_id) & base_msg_domain
                 else:
-                    msg_domain = expression.AND([[('email_from', 'in', [email_from, email_from_normalized])], base_msg_domain])
+                    msg_domain = Domain('email_from', 'in', [email_from, email_from_normalized]) & base_msg_domain
                 mail_update_groups = self.env['mail.message'].sudo()._read_group(msg_domain, ['res_id'], ['__count'])
                 if mail_update_groups:
                     loop_update = any(
@@ -1126,15 +1127,16 @@ class MailThread(models.AbstractModel):
          * fallback on provided ``model``, ``thread_id`` and ``custom_values``;
          * raise an exception as no route has been found
 
-        :param string message: an email.message instance
+        :param str message: an email.message instance
         :param dict message_dict: dictionary holding parsed message variables
-        :param string model: the fallback model to use if the message does not match
+        :param str model: the fallback model to use if the message does not match
             any of the currently configured mail aliases (may be None if a matching
             alias is supposed to be present)
-        :type dict custom_values: optional dictionary of default field values
-            to pass to ``message_new`` if a new record needs to be created.
-            Ignored if the thread record already exists, and also if a matching
-            mail.alias was found (aliases define their own defaults)
+        :param custom_values: dictionary mapping field names
+            to default values to be passed to ``message_new`` if a new record needs
+            to be created. Ignored if the thread record already exists, and also
+            if a matching mail.alias was found (aliases define their own defaults)
+        :type custom_values: dict[str, Any] | None
         :param int thread_id: optional ID of the record/thread from ``model`` to
             which this mail should be attached. Only used if the message does not
             reply to an existing thread and does not match any mail alias.
@@ -1413,15 +1415,16 @@ class MailThread(models.AbstractModel):
             is called with the new message (if the thread record did not exist)
             or its ``message_update`` method (if it did).
 
-           :param string model: the fallback model to use if the message
+           :param str model: the fallback model to use if the message
                does not match any of the currently configured mail aliases
                (may be None if a matching alias is supposed to be present)
            :param message: source of the RFC2822 message
-           :type message: string or xmlrpclib.Binary
-           :type dict custom_values: optional dictionary of field values
+           :type message: str | xmlrpclib.Binary
+           :param custom_values: optional dictionary of field values
                 to pass to ``message_new`` if a new record needs to be created.
                 Ignored if the thread record already exists, and also if a
                 matching mail.alias was found (aliases define their own defaults)
+           :type custom_values: dict | None
            :param bool save_original: whether to keep a copy of the original
                 email source attached to the message after it is imported.
            :param bool strip_attachments: whether to strip all attachments
@@ -1674,7 +1677,7 @@ class MailThread(models.AbstractModel):
         :param email_message: an email.message instance;
         :param message_dict: dictionary holding already-parsed values;
 
-        :return dict: bounce-related values will be added, containing
+        :return: a dict with bounce-related values will be added, containing
 
           * is_bounce: whether the email is recognized as a bounce email;
           * bounced_email: email that bounced (normalized);
@@ -1954,7 +1957,7 @@ class MailThread(models.AbstractModel):
             self.ensure_one()
         return self._partner_find_from_emails(
             {self: emails}, avoid_alias=avoid_alias, filter_found=filter_found, additional_values=additional_values, no_create=no_create
-        )[self.id]
+        )[self._origin.id]
 
     def _partner_find_from_emails(self, records_emails, avoid_alias=True, ban_emails=None,
                                   filter_found=None, additional_values=None, no_create=False):
@@ -2071,7 +2074,8 @@ class MailThread(models.AbstractModel):
         :param mail.alias alias: optional alias, used to link to a owner document
           for followers;
 
-        :return res.user user: user matching email or void recordset if none found
+        :return: user matching email or void recordset if none found
+        :rtype: models.Model
         """
         # find normalized emails and exclude aliases (to avoid subscribing alias emails to records)
         normalized_email = email_normalize(email_value)
@@ -2092,9 +2096,10 @@ class MailThread(models.AbstractModel):
         '_partner_find_from_emails' for more details. Main change is return
         type, which follows given input.
 
-        :return list partners: a list of partner records ordered as given emails.
+        :return: a list of partner records ordered as given emails.
           If no partner has been found and/or created for a given emails its
           matching partner is an empty record.
+        :rtype: list[models.Model]
         """
         if records and isinstance(records, self.pool['mail.thread']):
             results = records._partner_find_from_emails(
@@ -2127,7 +2132,8 @@ class MailThread(models.AbstractModel):
         for retrieving initial values from a record to populate related
         customers record (res_partner).
 
-        :return dict: normalized email -> dict of initial res_partner values
+        :return: normalized email -> dict of initial res_partner values
+        :rtype: dict
         """
         return {}
 
@@ -2178,7 +2184,7 @@ class MailThread(models.AbstractModel):
             mail.message fields;
           * propagated to notification methods if not;
 
-        :return record: newly create mail.message
+        :return: newly create mail.message record
         """
         self.ensure_one()  # should always be posted on a record, use message_notify if no record
 
@@ -2349,8 +2355,9 @@ class MailThread(models.AbstractModel):
         :param message_values: dictionary of values that will be used to create the
           message. It is used to find back record- or content- context;
 
-        :return dict: new values for message: 'attachment_ids' and optionally
+        :return: new values for message: 'attachment_ids' and optionally
           'body' if CIDs have been transformed;
+        :rtype: dict
         """
         # allow calling as a model method using model/res_id
         if 'res_id' in message_values:
@@ -2475,9 +2482,10 @@ class MailThread(models.AbstractModel):
         :param mail.template mail_template: a mail.template record used to generate
           message or emails on self;
 
-        :return dict: a dictionary based on self.ids (optional). For each given
+        :return: a dictionary based on self.ids (optional). For each given
           key, value should be a dict holding 'attachments' and 'attachment_ids'
           keys;
+        :rtype: dict
         """
         return {}
 
@@ -2894,7 +2902,9 @@ class MailThread(models.AbstractModel):
 
         :param raise_on_email: if email_from is not found, raise an UserError
 
-        :return tuple: res.partner ID (may be False or None), email_from
+        :return: a 2-values tuple with res.partner ID (may be False or None),
+            and email_from
+        :rtype: tuple[int | False | None, str | None]
         """
         if author_id is None:
             if email_from:
@@ -2961,7 +2971,9 @@ class MailThread(models.AbstractModel):
         """ Get the default subject for a message posted in this record's
         discussion thread.
 
-        :return str: default subject """
+        :return: default subject
+        :rtype: str
+        """
         self.ensure_one()
         return self.display_name
 
@@ -3041,10 +3053,11 @@ class MailThread(models.AbstractModel):
         """ From a source_reference, return either a mail template, either
         an ir ui view.
 
-        :return tuple(template, view): one is a recordset (may be void if
-          source_ref is a void recordset, or a singleton), the other one is
-          False. Always only one is set, as source is either a template,
-          either a view.
+        :return: a 2-items tuple ``(template, view)`` where one is a recordset
+          (may be void if ``source_ref`` is a void recordset, or a singleton)
+          and the other one is ``False``. Always only one is set, as source is
+          either a template, either a view.
+        :rtype: tuple[BaseModel, Literal[False]] | tuple[Literal[False], BaseModel]
         """
         template, view = False, False
         if isinstance(source_ref, models.BaseModel):
@@ -3123,8 +3136,9 @@ class MailThread(models.AbstractModel):
           notification parameters: arbitrary datetime (as a date, datetime or
           a string), may be void. See 'MailMail._parse_scheduled_datetime()';
 
-        :return bool: True if a valid datetime has been found and is in the
-          future; False otherwise.
+        :return: True if a valid datetime has been found and is in the future;
+          False otherwise.
+        :rtype: bool
         """
         if notify_scheduled_date:
             parsed_datetime = self.env['mail.mail']._parse_scheduled_datetime(notify_scheduled_date)
@@ -3655,7 +3669,8 @@ class MailThread(models.AbstractModel):
           recipients_group: active, button_access, has_button_access,
                             notification_group_name, recipients
 
-        :return str: rendered complete layout;
+        :return: rendered complete layout;
+        :rtype: str
         """
         if render_values is None:
             render_values = {}
@@ -3924,7 +3939,7 @@ class MailThread(models.AbstractModel):
         TDE/XDO TODO: flag rdata directly, for example r['notif'] = 'ocn_client'
         and r['needaction']=False and correctly override _notify_get_recipients
 
-        :return list recipients_data: list of recipients information (see
+        :return: list of recipients information (see
           ``MailFollowers._get_recipient_data()`` for more details) formatted
           like [
           {
@@ -3943,6 +3958,7 @@ class MailThread(models.AbstractModel):
                 by ID);)
             'ushare': are users shared (if users, all users are shared);
           }, {...}]
+        :rtype: list[dict]
         """
         msg_vals = msg_vals or {}
         msg_sudo = message.sudo()
@@ -4139,7 +4155,7 @@ class MailThread(models.AbstractModel):
         :param dict msg_vals: values dict used to create the message, allows to
           skip message usage and spare some queries if given;
 
-        :return list: list of groups (see '_notify_get_recipients_groups')
+        :return: list of groups (see '_notify_get_recipients_groups')
           with 'recipients' key filled with matching partners, like
             [{
                 'active': True,
@@ -4149,6 +4165,7 @@ class MailThread(models.AbstractModel):
                 'recipients_data': [{...}],
                 'recipients_ids': [11],
              }, {...}]
+        :rtype: list[dict]
         """
         # keep a local copy of msg_vals as it may be modified to include more
         # information about groups or links
@@ -4575,20 +4592,19 @@ class MailThread(models.AbstractModel):
 
     def _message_followers_to_store(self, store: Store, after=None, limit=100, filter_recipients=False, reset=False):
         self.ensure_one()
-        domain = [
+        domain = Domain([
             ("res_id", "=", self.id),
             ("res_model", "=", self._name),
             ("partner_id", "!=", self.env.user.partner_id.id),
-        ]
+        ])
         if filter_recipients:
             subtype_id = self.env["ir.model.data"]._xmlid_to_res_id("mail.mt_comment")
-            subtype_domain = [
+            domain &= Domain([
                 ("subtype_ids", "=", subtype_id),
                 ("partner_id.active", "=", True),
-            ]
-            domain = expression.AND([domain, subtype_domain])
+            ])
         if after:
-            domain = expression.AND([domain, [("id", ">", after)]])
+            domain &= Domain("id", ">", after)
         store.add(
             self,
             {
@@ -4711,7 +4727,7 @@ class MailThread(models.AbstractModel):
         res = [
             Store.Many("attachment_ids", sort="id"),
             "body",
-            Store.Many("partner_ids", ["avatar_128", "name"], rename="recipients"),
+            Store.Many("partner_ids", ["avatar_128", "name"]),
             "pinned_at",
             "write_date",
         ]

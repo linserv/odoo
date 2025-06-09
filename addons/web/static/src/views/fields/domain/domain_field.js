@@ -7,9 +7,14 @@ import { _t } from "@web/core/l10n/translation";
 import { rpc } from "@web/core/network/rpc";
 import { EvaluationError } from "@web/core/py_js/py_builtin";
 import { registry } from "@web/core/registry";
+import {
+    constructTree,
+    domainContainsExpresssions,
+    treeFromDomain,
+} from "@web/core/tree_editor/condition_tree";
+import { useGetTreeDescription, useMakeGetFieldDef } from "@web/core/tree_editor/utils";
 import { useBus, useOwnedDialogs, useService } from "@web/core/utils/hooks";
 import { useRecordObserver } from "@web/model/relational_model/utils";
-import { useGetDomainFacets } from "@web/search/utils/misc";
 import { SelectCreateDialog } from "@web/views/view_dialogs/select_create_dialog";
 import { standardFieldProps } from "../standard_field_props";
 
@@ -25,16 +30,20 @@ export class DomainField extends Component {
         resModel: { type: String, optional: true },
         isFoldable: { type: Boolean, optional: true },
         countLimit: { type: Number, optional: true },
+        allowExpressions: { type: Boolean, optional: true },
     };
     static defaultProps = {
         editInDialog: false,
         isFoldable: false,
         countLimit: 10000,
+        allowExpressions: false,
     };
 
     setup() {
         this.orm = useService("orm");
-        this.getDomainFacets = useGetDomainFacets();
+        this.getDomainTreeDescription = useGetTreeDescription();
+        this.makeGetFieldDef = useMakeGetFieldDef();
+        this.notification = useService("notification");
         this.getDefaultLeafDomain = useGetDefaultLeafDomain();
         this.addDialog = useOwnedDialogs();
 
@@ -85,6 +94,10 @@ export class DomainField extends Component {
         });
     }
 
+    allowExpressions(props) {
+        return props.allowExpressions;
+    }
+
     getContext(props = this.props) {
         return props.context;
     }
@@ -96,6 +109,20 @@ export class DomainField extends Component {
     getEvaluatedDomain(props = this.props) {
         const domainStringRepr = this.getDomain(props);
         const evalContext = this.getContext(props);
+        if (domainContainsExpresssions(domainStringRepr)) {
+            const allowExpressions = this.allowExpressions(props);
+            if (domainStringRepr !== this.lastDomainChecked) {
+                this.lastDomainChecked = domainStringRepr;
+                this.notification.add(
+                    allowExpressions
+                        ? _t("The domain involves non-literals. Their evaluation might fail.")
+                        : _t("The domain should not involve non-literals")
+                );
+            }
+            if (!allowExpressions) {
+                return { isInvalid: true };
+            }
+        }
         try {
             const domain = new Domain(domainStringRepr).toList(evalContext);
             // Here, there is still some incertitude on the domain validity.
@@ -141,7 +168,10 @@ export class DomainField extends Component {
         let promises = [];
         const domain = this.getDomain(props);
         try {
-            promises = await this.getDomainFacets(resModel, domain, { splitAndConnector: true });
+            const getFieldDef = await this.makeGetFieldDef(resModel, constructTree(domain));
+            const tree = treeFromDomain(domain, { distributeNot: !this.env.debug, getFieldDef });
+            const trees = !tree.negate && tree.value === "&" ? tree.children : [tree];
+            promises = trees.map((tree) => this.getDomainTreeDescription(resModel, tree));
         } catch (error) {
             if (error.data?.name === "builtins.KeyError" && error.data.message === resModel) {
                 // we don't want to support invalid models
@@ -283,6 +313,12 @@ export const domainField = {
             help: _t("Display the domain using facets"),
         },
         {
+            label: _t("Allow expressions"),
+            name: "allow_expressions",
+            type: "boolean",
+            help: _t("If true, non-literals are accepted"),
+        },
+        {
             label: _t("Model"),
             name: "model",
             type: "string",
@@ -299,6 +335,7 @@ export const domainField = {
         return {
             editInDialog: options.in_dialog,
             isFoldable: options.foldable,
+            allowExpressions: options.allow_expressions,
             resModel: options.model,
             countLimit: options.count_limit,
             context: dynamicInfo.context,

@@ -63,6 +63,13 @@ import { normalizeDeepCursorPosition, normalizeFakeBR } from "@html_editor/utils
  * @property { DeletePlugin['deleteSelection'] } deleteSelection
  */
 
+// @todo @phoenix: move these predicates to different plugins
+export const unremovableNodePredicates = [
+    (node) => node.classList?.contains("oe_unremovable"),
+    // Monetary field
+    (node) => node.matches?.("[data-oe-type='monetary'] > span"),
+];
+
 export class DeletePlugin extends Plugin {
     static dependencies = ["baseContainer", "selection", "history", "input"];
     static id = "delete";
@@ -99,12 +106,7 @@ export class DeletePlugin extends Plugin {
         delete_forward_word_overrides: this.deleteForwardUnmergeable.bind(this),
         delete_forward_line_overrides: this.deleteForwardUnmergeable.bind(this),
 
-        // @todo @phoenix: move these predicates to different plugins
-        unremovable_node_predicates: [
-            (node) => node.classList?.contains("oe_unremovable"),
-            // Monetary field
-            (node) => node.matches?.("[data-oe-type='monetary'] > span"),
-        ],
+        unremovable_node_predicates: unremovableNodePredicates,
         invalid_for_base_container_predicates: (node) => this.isUnremovable(node, this.editable),
     };
 
@@ -143,7 +145,20 @@ export class DeletePlugin extends Plugin {
         // see collapseIfZWS
 
         let range = this.getNormalizedRange(selection);
-        if (range.collapsed || !closestElement(range.commonAncestorContainer).isContentEditable) {
+        if (range.collapsed) {
+            return;
+        }
+        // Delete only if the targeted nodes are all editable or if every
+        // non-editable node's editable ancestor is fully selected. We use the
+        // targeted nodes here to be sure to include a partial text node
+        // selection.
+        const selectedNodes = this.dependencies.selection.getTargetedNodes();
+        const canBeDeleted = (node) =>
+            this.dependencies.selection.isNodeEditable(node) ||
+            selectedNodes.includes(
+                closestElement(node, (node) => this.dependencies.selection.isNodeEditable(node))
+            );
+        if (selectedNodes.some((node) => !canBeDeleted(node))) {
             return;
         }
         range = this.adjustRange(range, [

@@ -28,7 +28,6 @@ class AccountReconcileModelLine(models.Model):
             ('percentage', 'Percentage of balance'),
             ('percentage_st_line', 'Percentage of statement line'),
             ('regex', 'From label'),
-            ('from_transaction_details', 'From Transaction Details'),
         ],
         required=True,
         default='percentage',
@@ -51,7 +50,7 @@ class AccountReconcileModelLine(models.Model):
         self.amount_string = ''
         if self.amount_type in ('percentage', 'percentage_st_line'):
             self.amount_string = '100'
-        elif self.amount_type == 'regex':
+        elif self.amount_type in ('regex', 'from_transaction_details'):
             self.amount_string = r'([\d,]+)'
 
     @api.depends('amount_string')
@@ -71,7 +70,7 @@ class AccountReconcileModelLine(models.Model):
                 raise UserError(_("Balance percentage can't be 0"))
             if record.amount_type == 'percentage' and record.amount == 0:
                 raise UserError(_("Statement line percentage can't be 0"))
-            if record.amount_type in {'regex', 'from_transaction_details'}:
+            if record.amount_type == 'regex':
                 try:
                     re.compile(record.amount_string)
                 except re.error:
@@ -131,7 +130,7 @@ class AccountReconcileModel(models.Model):
         ('contains', 'Contains'),
         ('not_contains', 'Not Contains'),
         ('match_regex', 'Match Regex'),
-    ], string='Label', tracking=True, help='''The reconciliation model will only be applied when either the statement line label or transaction details matches the following:
+    ], string='Label', tracking=True, help='''The reconciliation model will only be applied when either the statement line label, the transaction details or the note matches the following:
         * Contains: The statement line must contains this string (case insensitive).
         * Not Contains: Negation of "Contains".
         * Match Regex: Define your own regular expression.''')
@@ -140,6 +139,15 @@ class AccountReconcileModel(models.Model):
         help='The reconciliation model will only be applied to the selected customers/vendors.')
 
     line_ids = fields.One2many('account.reconcile.model.line', 'model_id', copy=True)
+
+    @api.constrains('match_label', 'match_label_param')
+    def _check_match_label_param(self):
+        for record in self:
+            if record.match_label == 'match_regex':
+                try:
+                    re.compile(record.match_label_param)
+                except re.error:
+                    raise UserError(_('The regex is not valid'))
 
     @api.depends('mapped_partner_id', 'match_label', 'match_partner_ids', 'trigger')
     def _compute_can_be_proposed(self):

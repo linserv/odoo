@@ -185,7 +185,7 @@ class MailMail(models.Model):
         return self.write({'state': 'cancel'})
 
     @api.model
-    def process_email_queue(self, ids=None, batch_size=1000):
+    def process_email_queue(self, ids=(), batch_size=1000):
         """Send immediately queued messages, committing after each
            message is sent - this is not transactional and should
            not be called during another transaction!
@@ -196,11 +196,6 @@ class MailMail(models.Model):
         :param list ids: optional list of emails ids to send. If given only
                          scheduled and outgoing emails within this ids list
                          are sent;
-        :param dict context: if a 'filters' key is present in context,
-                             this value will be used as an additional
-                             filter to further restrict the outgoing
-                             messages to send (by default all 'outgoing'
-                             'scheduled' messages are sent).
         """
         domain = [
             '&',
@@ -219,8 +214,11 @@ class MailMail(models.Model):
 
             def post_send_callback(ids):
                 """ Track mail ids that have been sent, and notify cron progress accordingly. """
-                ids_done.update(send_ids)
-                self.env['ir.cron']._notify_progress(done=len(ids_done), remaining=total - len(ids_done))
+                processed = set(ids) - ids_done
+                ids_done.update(processed)
+                if self.env.get('ir_cron'):
+                    # commit progress only when running from a cron job
+                    self.env['ir.cron']._commit_progress(len(processed), remaining=total - len(ids_done))
         else:
             send_ids = list(set(send_ids) & set(ids))
             post_send_callback = None
@@ -291,7 +289,8 @@ class MailMail(models.Model):
         dealing with the hard-to-parse trio (01/04/09 -> ?). In most use cases
         year will be given first as this is the expected default formatting.
 
-        :return datetime: parsed datetime (or False if parser failed)
+        :returns: parsed datetime (or False if parser failed)
+        :rtype: datetime.datetime | bool
         """
         if isinstance(scheduled_datetime, datetime.datetime):
             parsed_datetime = scheduled_datetime
@@ -369,7 +368,8 @@ class MailMail(models.Model):
         :param mail_server: <ir.mail_server> mail server that will be used to send the mails,
           False if it is the default one
         :param dict doc_to_followers: see ``Followers._get_mail_doc_to_followers()``
-        :return list: list of dicts used in IrMailServer.build_email()
+        :returns: list of dicts used in IrMailServer.build_email()
+        :rtype: list[dict]
         """
         self.ensure_one()
         body = self._prepare_outgoing_body()
@@ -621,7 +621,12 @@ class MailMail(models.Model):
                         len(batch_ids), mail_server_id)
             finally:
                 if smtp_session:
-                    smtp_session.quit()
+                    try:
+                        smtp_session.quit()
+                    except smtplib.SMTPServerDisconnected:
+                        _logger.info(
+                            "Ignoring SMTPServerDisconnected while trying to quit non open session"
+                        )
 
     def action_send_and_close(self):
         """ An action sending the selected mail and redirecting to mail.mail list view. """

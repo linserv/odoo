@@ -17,12 +17,16 @@ export class ChannelMember extends Record {
     id;
     last_interest_dt = fields.Datetime();
     last_seen_dt = fields.Datetime();
-    persona = fields.One("Persona", { inverse: "channelMembers" });
-    thread = fields.One("Thread", { inverse: "channel_member_ids" });
+    guest_id = fields.One("Persona");
+    partner_id = fields.One("Persona");
+    get persona() {
+        return this.guest_id || this.partner_id;
+    }
+    channel_id = fields.One("Thread", { inverse: "channel_member_ids" });
     threadAsSelf = fields.One("Thread", {
         compute() {
             if (this.store.self?.eq(this.persona)) {
-                return this.thread;
+                return this.channel_id;
             }
         },
     });
@@ -34,10 +38,10 @@ export class ChannelMember extends Record {
         onUpdate() {
             if (
                 this.message_unread_counter === 0 ||
-                !this.thread?.isDisplayed ||
-                this.thread?.scrollTop !== "bottom" ||
-                this.thread.markedAsUnread ||
-                !this.thread.isFocused
+                !this.channel_id?.isDisplayed ||
+                this.channel_id?.scrollTop !== "bottom" ||
+                this.channel_id.markedAsUnread ||
+                !this.channel_id.isFocused
             ) {
                 this.message_unread_counter_ui = this.message_unread_counter;
             }
@@ -48,24 +52,35 @@ export class ChannelMember extends Record {
     new_message_separator = fields.Attr(null, {
         /** @this {import("models").ChannelMember} */
         onUpdate() {
-            if (!this.thread?.isDisplayed) {
+            if (!this.channel_id?.isDisplayed) {
                 this.new_message_separator_ui = this.new_message_separator;
             }
         },
     });
     new_message_separator_ui = null;
+    isTyping = false;
+    is_typing_dt = fields.Datetime({
+        onUpdate() {
+            browser.clearTimeout(this.typingTimeoutId);
+            if (
+                !this.is_typing_dt ||
+                DateTime.now().diff(this.is_typing_dt).milliseconds > Store.OTHER_LONG_TYPING
+            ) {
+                this.isTyping = false;
+            }
+            if (this.isTyping) {
+                this.typingTimeoutId = browser.setTimeout(
+                    () => (this.isTyping = false),
+                    Store.OTHER_LONG_TYPING
+                );
+            }
+        },
+    });
     threadAsTyping = fields.One("Thread", {
         compute() {
-            return this.isTyping ? this.thread : undefined;
+            return this.isTyping ? this.channel_id : undefined;
         },
         eager: true,
-        onAdd() {
-            browser.clearTimeout(this.typingTimeoutId);
-            this.typingTimeoutId = browser.setTimeout(
-                () => (this.isTyping = false),
-                Store.OTHER_LONG_TYPING
-            );
-        },
         onDelete() {
             browser.clearTimeout(this.typingTimeoutId);
         },
@@ -74,7 +89,7 @@ export class ChannelMember extends Record {
     typingTimeoutId;
 
     get name() {
-        return this.thread.getPersonaName(this.persona);
+        return this.channel_id.getPersonaName(this.persona);
     }
 
     /**

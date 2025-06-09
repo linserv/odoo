@@ -187,7 +187,6 @@ class PosOrder(models.Model):
     def _prepare_tax_base_line_values(self):
         """ Convert pos order lines into dictionaries that would be used to compute taxes later.
 
-        :param sign: An optional parameter to force the sign of amounts.
         :return: A list of python dictionaries (see '_prepare_base_line_for_taxes_computation' in account.tax).
         """
         result = []
@@ -521,6 +520,9 @@ class PosOrder(models.Model):
                         country=order.partner_id.country_id or self.env.company.country_id)
             if vals.get('has_deleted_line') is not None and self.has_deleted_line:
                 del vals['has_deleted_line']
+            allowed_vals = ['paid', 'done', 'invoiced']
+            if vals.get('state') and vals['state'] not in allowed_vals and order.state in allowed_vals:
+                raise UserError(_('This order has already been paid. You cannot set it back to draft or edit it.'))
 
         list_line = self._create_pm_change_log(vals)
         res = super().write(vals)
@@ -803,6 +805,11 @@ class PosOrder(models.Model):
         rounding_method = pos_config.rounding_method
         amount_total = sum(order.amount_total for order in self)
         move_type = 'out_invoice' if amount_total >= 0 else 'out_refund'
+        invoice_payment_term_id = (
+            self.partner_id.property_payment_term_id.id
+            if self.partner_id.property_payment_term_id and any(p.payment_method_id.type == 'pay_later' for p in self.payment_ids)
+            else False
+        )
 
         vals = {
             'invoice_origin': ', '.join(ref or '' for ref in self.mapped('pos_reference')),
@@ -817,7 +824,7 @@ class PosOrder(models.Model):
             'invoice_user_id': self.user_id.id,
             'fiscal_position_id': fiscal_position.id,
             'invoice_line_ids': self._prepare_invoice_lines(move_type),
-            'invoice_payment_term_id': False,
+            'invoice_payment_term_id': invoice_payment_term_id,
             'invoice_cash_rounding_id': rounding_method.id,
         }
         if is_single_order and self.refunded_order_id.account_move:
@@ -1076,7 +1083,7 @@ class PosOrder(models.Model):
         }
 
     def _get_open_order(self, order):
-        return self.env["pos.order"].search([('uuid', '=', order.get('uuid'))], limit=1)
+        return self.env["pos.order"].search([('uuid', '=', order.get('uuid'))], limit=1, order='id desc')
 
     @staticmethod
     def _get_order_log_representation(order):
@@ -1092,14 +1099,13 @@ class PosOrder(models.Model):
 
         :param orders: dictionary with the orders to be created.
         :type orders: dict.
-        :param draft: Indicate if the orders are meant to be finalized or temporarily saved.
-        :type draft: bool.
-        :Returns: list -- list of db-ids for the created and updated orders.
+        :returns: list of db-ids for the created and updated orders.
+        :rtype: list
         """
         sync_token = randrange(100_000_000)  # Use to differentiate 2 parallels calls to this function in the logs
         _logger.info("PoS synchronisation #%d started for PoS orders references: %s", sync_token, [self._get_order_log_representation(order) for order in orders])
         order_ids = []
-        session_ids = set({order.get('session_id') for order in orders})
+
         for order in orders:
             order_log_name = self._get_order_log_representation(order)
             _logger.debug("PoS synchronisation #%d processing order %s order full data: %s", sync_token, order_log_name, pformat(order))
@@ -1433,9 +1439,12 @@ class PosOrderLine(models.Model):
     @api.model
     def _load_pos_data_fields(self, config_id):
         return [
-            'qty', 'attribute_value_ids', 'custom_attribute_value_ids', 'price_unit', 'uuid', 'price_subtotal', 'price_subtotal_incl', 'order_id', 'note', 'price_type',
-            'product_id', 'discount', 'tax_ids', 'pack_lot_ids', 'customer_note', 'refunded_qty', 'price_extra', 'full_product_name', 'refunded_orderline_id', 'combo_parent_id', 'combo_line_ids', 'combo_item_id', 'refund_orderline_ids',
-            'extra_tax_data',
+            'qty', 'attribute_value_ids', 'custom_attribute_value_ids', 'price_unit',
+            'uuid', 'price_subtotal', 'price_subtotal_incl', 'order_id', 'note', 'price_type',
+            'product_id', 'discount', 'tax_ids', 'pack_lot_ids', 'customer_note',
+            'refunded_qty', 'price_extra', 'full_product_name', 'refunded_orderline_id',
+            'combo_parent_id', 'combo_line_ids', 'combo_item_id', 'refund_orderline_ids',
+            'extra_tax_data', 'write_date',
         ]
 
     @api.model
@@ -1669,6 +1678,8 @@ class PosOrderLine(models.Model):
             product = line.product_id
             if line._is_product_storable_fifo_avco() and stock_moves:
                 product_cost = product._compute_average_price(0, line.qty, line._get_stock_moves_to_consider(stock_moves, product))
+                if (product.cost_currency_id.is_zero(product_cost) and self.order_id.shipping_date and self.refunded_orderline_id):
+                    product_cost = self.refunded_orderline_id.total_cost / self.refunded_orderline_id.qty
             else:
                 product_cost = product.standard_price
             line.total_cost = line.qty * product.cost_currency_id._convert(
@@ -1738,7 +1749,6 @@ class PosOrderLine(models.Model):
     def _prepare_tax_base_line_values(self):
         """ Convert pos order lines into dictionaries that would be used to compute taxes later.
 
-        :param sign: An optional parameter to force the sign of amounts.
         :return: A list of python dictionaries (see '_prepare_base_line_for_taxes_computation' in account.tax).
         """
         return [line._prepare_base_line_for_taxes_computation() for line in self]
@@ -1775,7 +1785,7 @@ class PosPackOperationLot(models.Model):
 
     @api.model
     def _load_pos_data_fields(self, config_id):
-        return ['lot_name', 'pos_order_line_id']
+        return ['lot_name', 'pos_order_line_id', 'write_date']
 
 
 class AccountCashRounding(models.Model):

@@ -320,14 +320,15 @@ class ResUsers(models.Model):
             action_discuss_id=xmlid_to_res_id("mail.action_discuss"),
             hasLinkPreviewFeature=self.env["mail.link.preview"]._is_link_preview_enabled(),
             internalUserGroupId=self.env.ref("base.group_user").id,
-            mt_comment_id=xmlid_to_res_id("mail.mt_comment"),
+            mt_comment=xmlid_to_res_id("mail.mt_comment"),
+            mt_note=xmlid_to_res_id("mail.mt_note"),
             # sudo: res.partner - exposing OdooBot data is considered acceptable
             odoobot=Store.One(self.env.ref("base.partner_root").sudo()),
         )
         if not self.env.user._is_public():
             settings = self.env["res.users.settings"]._find_or_create_for_user(self.env.user)
             store.add_global_values(
-                store_self=Store.One(
+                self_partner=Store.One(
                     self.env.user.partner_id,
                     [
                         "active",
@@ -342,8 +343,8 @@ class ResUsers(models.Model):
                 ),
                 settings=settings._res_users_settings_format(),
             )
-        elif guest := self.env["mail.guest"]._get_guest_from_context():
-            store.add_global_values(store_self=Store.One(guest, ["avatar_128", "name"]))
+        if guest := self.env["mail.guest"]._get_guest_from_context():
+            store.add_global_values(self_guest=Store.One(guest, ["avatar_128", "name"]))
 
     def _init_messaging(self, store: Store):
         self.ensure_one()
@@ -385,7 +386,7 @@ class ResUsers(models.Model):
             if activity.res_model:
                 activities_rec_groups[activity.res_model][activity.res_id] += activity
             else:
-                activities_model_groups["mail.activity"] += activity
+                activities_rec_groups["mail.activity"][False] += activity
         model_activity_states = {
             'mail.activity': {'overdue_count': 0, 'today_count': 0, 'planned_count': 0, 'total_count': 0}
         }
@@ -404,23 +405,23 @@ class ResUsers(models.Model):
                     allowed_company_ids=user_company_ids)._filtered_access('read')
             model_activity_states[model_name] = {'overdue_count': 0, 'today_count': 0, 'planned_count': 0, 'total_count': 0}
             for record_id, activities in activities_by_record.items():
-                if record_id in unallowed_records.ids:
+                if record_id in unallowed_records.ids or not record_id:
                     model_key = 'mail.activity'
                     activities_model_groups['mail.activity'] += activities
                 elif record_id in allowed_records.ids:
                     model_key = model_name
                     activities_model_groups[model_name] += activities
-                else:
+                elif record_id:
                     continue
 
                 if 'overdue' in activities.mapped('state'):
                     model_activity_states[model_key]['overdue_count'] += 1
                     model_activity_states[model_key]['total_count'] += 1
-                if 'today' in activities.mapped('state'):
+                elif 'today' in activities.mapped('state'):
                     model_activity_states[model_key]['today_count'] += 1
                     model_activity_states[model_key]['total_count'] += 1
                 else:
-                    model_activity_states[model_name]['planned_count'] += 1
+                    model_activity_states[model_key]['planned_count'] += 1
 
         model_ids = [self.env["ir.model"]._get_id(name) for name in activities_model_groups]
         user_activities = {}

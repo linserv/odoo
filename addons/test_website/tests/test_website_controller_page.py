@@ -3,6 +3,7 @@ from lxml import html
 from odoo.tools import mute_logger
 from odoo.exceptions import AccessError
 from odoo.tests import HttpCase, tagged
+import unittest
 
 from odoo.addons.website.controllers.model_page import ModelPageController
 

@@ -134,8 +134,9 @@ class MailTrackingValue(models.Model):
         to display tracking values. Order it according to asked display, aka
         ascending sequence (and field name).
 
-        :return list: for each tracking value in self, their formatted display
+        :return: for each tracking value in self, their formatted display
           values given as a dict;
+        :rtype: list[dict]
         """
         model_map = {}
         for tracking in self:
@@ -152,8 +153,9 @@ class MailTrackingValue(models.Model):
         to display tracking values. Order it according to asked display, aka
         ascending sequence (and field name).
 
-        :return list: for each tracking value in self, their formatted display
+        :returns: for each tracking value in self, their formatted display
           values given as a dict;
+        :rtype: list[dict]
         """
         if not self:
             return []
@@ -161,7 +163,7 @@ class MailTrackingValue(models.Model):
         # fetch model-based information
         if model:
             TrackedModel = self.env[model]
-            tracked_fields = TrackedModel.fields_get(self.field_id.mapped('name'), attributes={'string', 'type'})
+            tracked_fields = TrackedModel.fields_get(self.field_id.mapped('name'), attributes={'digits', 'string', 'type'})
             model_sequence_info = dict(TrackedModel._mail_track_order_fields(tracked_fields)) if model else {}
         else:
             tracked_fields, model_sequence_info = {}, {}
@@ -190,10 +192,12 @@ class MailTrackingValue(models.Model):
                 'fieldType': col_info['type'],
                 'newValue': {
                     'currencyId': tracking.currency_id.id,
+                    'floatPrecision': col_info.get('digits'),
                     'value': tracking._format_display_value(col_info['type'], new=True)[0],
                 },
                 'oldValue': {
                     'currencyId': tracking.currency_id.id,
+                    'floatPrecision': col_info.get('digits'),
                     'value': tracking._format_display_value(col_info['type'], new=False)[0],
                 },
             }

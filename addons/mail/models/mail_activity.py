@@ -369,7 +369,7 @@ class MailActivity(models.Model):
 
         allowed_ids = defaultdict(set)
         for res_model, res_ids in model_ids.items():
-            records = self.env[res_model].browse(res_ids)
+            records = self.env[res_model].browse(res_ids).exists()
             # fall back on related document access right checks. Use the same as defined for mail.thread
             # if available; otherwise fall back on read
             operation = getattr(records, '_mail_post_access', 'read')
@@ -585,6 +585,7 @@ class MailActivity(models.Model):
             'views': [(False, 'form')],
         }
 
+    # Deprecated in 18.3 onwards
     def action_snooze(self):
         today = date.today()
         for activity in self:
@@ -612,11 +613,11 @@ class MailActivity(models.Model):
     def _to_store_defaults(self):
         return [
             "activity_category",
-            "activity_type_id",
+            Store.One("activity_type_id", "name"),
             "can_write",
             "chaining_type",
             "create_date",
-            "create_uid",
+            Store.One("create_uid", "name"),
             "date_deadline",
             "date_done",
             "icon",
@@ -626,10 +627,7 @@ class MailActivity(models.Model):
             "state",
             "summary",
             Store.Many("attachment_ids", ["name"]),
-            Store.Attr(
-                "mail_template_ids",
-                lambda activity: activity.mail_template_ids._read_format(["name"]),
-            ),
+            Store.Many("mail_template_ids", ["name"]),
             Store.One("persona", value=lambda activity: activity.user_id.partner_id),
         ]
 
@@ -650,7 +648,7 @@ class MailActivity(models.Model):
         :param int offset: offset of the first record to fetch
         :param bool fetch_done: determines if "done" activities are integrated in the
             aggregated data or not.
-        :return dict: {'activity_types': dict of activity type info
+        :returns: {'activity_types': dict of activity type info
                             {id: int, name: str, mail_template: list of {id:int, name:str}}
                        'activity_res_ids': list<int> of record id ordered by closest date
                             (deadline for ongoing activities, and done date for done activities)
@@ -667,6 +665,7 @@ class MailActivity(models.Model):
                                 attachments_info: dict with information about the attachments
                                     {'count': int, 'most_recent_id': int, 'most_recent_name': str}
                        }
+        :rtype: dict
         """
         user_tz = self.user_id.sudo().tz
         DocModel = self.env[res_model]
@@ -778,11 +777,12 @@ class MailActivity(models.Model):
         are classified by model. Activities not linked to a valid record through
         res_model / res_id are ignored.
 
-        :return dict: for each model having at least one activity in self, have
+        :returns: for each model having at least one activity in self, have
           a sub-dict containing
             * activities: activities related to that model;
             * record IDs: record linked to the activities of that model, in same
               order;
+        :rtype: dict
         """
         data_by_model = {}
         for activity in self.filtered(lambda act: act.res_model and act.res_id):

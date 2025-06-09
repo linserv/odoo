@@ -29,7 +29,7 @@
                     <group expand="0" string="Group By...">
                         <filter name="group_by_channel" string="Channel" domain="[]" context="{'group_by':'livechat_channel_id'}"/>
                         <filter name="group_by_agent" string="Agent" domain="[]" context="{'group_by':'livechat_agent_partner_ids'}"/>
-                        <filter name="group_by_rating" string="Rating" domain="[]" context="{'group_by':'rating_last_value'}"/>
+                        <filter name="group_by_rating" string="Rating" domain="[]" context="{'group_by':'rating_last_text'}"/>
                         <filter name="group_by_country" string="Country" domain="[]" context="{'group_by':'country_id'}"/>
                         <filter name="group_by_customer_partner" string="Customer" domain="[]" context="{'group_by':'livechat_customer_partner_ids'}"/>
                         <separator orientation="vertical"/>
@@ -69,7 +69,7 @@
                         <t t-name="card">
                             <div class="d-flex">
                                 <div class="d-flex flex-column">
-                                    <field class="fw-bolder" name="name"/>
+                                    <field class="fw-bolder" name="livechat_customer_history_ids" widget="im_livechat.one2many_names"/>
                                     <span class="fw-bold">Date: <field name="create_date" class="fw-normal"/></span>
                                     <span class="fw-bold">Duration: <field class="d-inline fw-normal" name="duration" widget="float_time" options="{'displaySeconds': True}"/></span>
                                     <span class="fw-bold">Messages: <field name="message_count" class="fw-normal"/></span>

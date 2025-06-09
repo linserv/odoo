@@ -15,8 +15,6 @@ export class MailMessage extends models.ServerModel {
     _name = "mail.message";
 
     author_id = fields.Generic({ default: () => serverState.partnerId });
-    is_discussion = fields.Boolean({ string: "Discussion" });
-    is_note = fields.Boolean({ string: "Note" });
     pinned_at = fields.Generic({ default: false });
 
     /** @param {DomainListRepr} [domain] */
@@ -103,14 +101,11 @@ export class MailMessage extends models.ServerModel {
                 "body",
                 "create_date",
                 "date",
-                "is_discussion",
-                "is_note",
                 "message_type",
                 "model",
                 "pinned_at",
                 "res_id",
                 "subject",
-                "subtype_description",
                 "write_date",
             ];
         }
@@ -170,12 +165,12 @@ export class MailMessage extends models.ServerModel {
                     MailMessage.browse(message.parent_id),
                     makeKwArgs({ format_reply: false })
                 ),
-                reactions: mailDataHelpers.Store.many(
-                    MailMessageReaction.browse(message.reaction_ids)
-                ),
-                recipients: mailDataHelpers.Store.many(
+                partner_ids: mailDataHelpers.Store.many(
                     ResPartner.browse(message.partner_ids),
                     makeKwArgs({ fields: ["name"] })
+                ),
+                reactions: mailDataHelpers.Store.many(
+                    MailMessageReaction.browse(message.reaction_ids)
                 ),
                 record_name: thread?.name ?? thread?.display_name,
                 scheduledDatetime: false,
@@ -185,8 +180,10 @@ export class MailMessage extends models.ServerModel {
                 ),
             });
             if (message.subtype_id) {
-                const [subtype] = MailMessageSubtype.browse(message.subtype_id);
-                data.subtype_description = subtype.description;
+                data.subtype_id = mailDataHelpers.Store.one(
+                    MailMessageSubtype.browse(message.subtype_id),
+                    makeKwArgs({ fields: ["description"] })
+                );
             }
             if (for_current_user) {
                 data["needaction"] = Boolean(
@@ -217,14 +214,18 @@ export class MailMessage extends models.ServerModel {
         const ResPartner = this.env["res.partner"];
 
         for (const message of MailMessage.browse(ids)) {
-            const data = { author: false, email_from: message.email_from };
+            const data = {
+                author_id: false,
+                author_guest_id: false,
+                email_from: message.email_from,
+            };
             if (message.author_guest_id) {
-                data.author = mailDataHelpers.Store.one(
+                data.author_guest_id = mailDataHelpers.Store.one(
                     MailGuest.browse(message.author_guest_id),
                     makeKwArgs({ fields: ["avatar_128", "name"] })
                 );
             } else if (message.author_id) {
-                data.author = mailDataHelpers.Store.one(
+                data.author_id = mailDataHelpers.Store.one(
                     ResPartner.browse(message.author_id),
                     makeKwArgs({ fields: ["avatar_128", "is_company", "name", "user"] })
                 );
@@ -505,7 +506,7 @@ export class MailMessage extends models.ServerModel {
 
         for (const message of this.browse(ids)) {
             store.add(this.browse(message.id), {
-                author: mailDataHelpers.Store.one(
+                author_id: mailDataHelpers.Store.one(
                     this.env["res.partner"].browse(message.author_id),
                     makeKwArgs({ only_id: true })
                 ),

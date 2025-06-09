@@ -30,6 +30,7 @@ class IrAttachment(models.Model):
             attachment.res_model == 'account.move'
             and attachment.res_id
             and attachment.raw
+            and attachment.company_id.restrictive_audit_trail
             and guess_mimetype(attachment.raw) in (
                 'application/pdf',
                 'application/xml',
@@ -205,14 +206,23 @@ class IrAttachment(models.Model):
         """Decodes ir.attachment and unwrap sub-attachment into a sorted list of
         dictionary each representing an attachment.
 
-        :returns:           A list of dictionary for each attachment.
-        * filename:         The name of the attachment.
-        * content:          The content of the attachment.
-        * type:             The type of the attachment.
-        * xml_tree:         The tree of the xml if type is xml.
-        * pdf_reader:       The pdf_reader if type is pdf.
-        * attachment:       The associated ir.attachment if any
-        * sort_weight:      The associated weigth used for sorting the arrays
+        :rtype: list[dict[str, Any]]
+        :returns: A list of dictionary for each attachment with the following keys:
+
+            filename
+                The name of the attachment.
+            content
+                The content of the attachment.
+            type
+                The type of the attachment.
+            xml_tree
+                The tree of the xml if type is xml.
+            pdf_reader
+                The pdf_reader if type is pdf.
+            attachment
+                The associated ir.attachment if any
+            sort_weight
+                The associated weigth used for sorting the arrays
         """
         to_process = []
 

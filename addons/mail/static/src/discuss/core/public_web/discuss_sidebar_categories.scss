@@ -27,12 +27,27 @@ $o-mail-DiscussSidebarChannel-borderOpacity: .05;
     --border-opacity: 0.5;
 }
 
+.o-mail-DiscussSidebarChannel-floatingName {
+    --border-opacity: 0.5;
+    background-color: var(---mail-DiscussSidebarChannel-floatingNameBgColor, mix($gray-100, $gray-200));
+}
+
 .o-mail-DiscussSidebar-item {
     line-height: 2; // so that same height as actions
     background-color: inherit !important;
 
-    &:hover .o-mail-DiscussSidebarChannel-commands {
+    &:hover .o-mail-DiscussSidebarChannel-actions {
         display: flex !important;
+    }
+}
+
+.o-mail-DiscussSidebarChannel-actions button {
+    opacity: 35%;
+    --border-opacity: .15;
+
+    &:hover, &.o-showingActions {
+        opacity: 100%;
+        --border-opacity: .25;
     }
 }
 
@@ -69,7 +84,12 @@ $o-mail-DiscussSidebarChannel-borderOpacity: .05;
 .o-mail-DiscussSidebar-unreadIndicator {
     font-size: 0.4rem;
     left: -3px;
-    opacity: 50%;
+
+    .o-mail-DiscussSidebarChannel-container.o-bordered & {
+        &.o-mail-DiscussSidebarChannel, &.o-compact {
+            filter: drop-shadow(1px 2px 0px $white) drop-shadow(-1px 1px 0px $white) drop-shadow(1px -1px 0px $white) drop-shadow(-1px -2px 0px $white);
+        }
+    }
 
     .o-mail-DiscussSidebarSubchannel &:not(.o-compact) {
         left: map-get($spacers, 2) + map-get($spacers, 1) / 2;

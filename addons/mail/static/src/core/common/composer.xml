@@ -7,7 +7,8 @@
     <t t-set="compact" t-value="props.mode === 'compact'"/>
     <t t-set="normal" t-value="props.mode === 'normal'"/>
     <t t-set="extended" t-value="props.mode === 'extended'"/>
-    <t t-set="actionsContainerClass" t-value="'o-mail-Composer-actions d-flex rounded-3'"/>
+    <t t-set="roundedClass" t-value="env.inChatter or props.composer.message ? 'o-rounded-bubble' : 'rounded-4'"/>
+    <t t-set="actionsContainerClass" t-value="'o-mail-Composer-actions d-flex ' + roundedClass"/>
     <div t-ref="root">
         <div class="o-mail-Composer d-grid flex-shrink-0 pt-0"
                 t-att-class="{
@@ -28,7 +29,7 @@
                     <button t-att-disabled="!state.active or areAllActionsDisabled" class="d-none" title="Attach files" aria-label="Attach files" t-ref="file-uploader"><i class="fa fa-fw fa-paperclip"/></button>
                 </t>
             </FileUploader>
-            <div t-if="showComposerAvatar" class="o-mail-Composer-sidebarMain flex-shrink-0">
+            <div t-if="showComposerAvatar" class="o-mail-Composer-sidebarMain flex-shrink-0 d-flex">
                 <img class="o-mail-Composer-avatar mx-auto o_avatar rounded-3" t-att-src="store.self.avatarUrl" alt="Avatar of user"/>
             </div>
             <div class="o-mail-Composer-coreHeader text-truncate small p-2" t-if="props.composer.replyToMessage">
@@ -41,8 +42,9 @@
                 <i class="fa fa-lg fa-times-circle rounded-circle p-0 ms-1 cursor-pointer" title="Stop replying" t-on-click="() => (props.composer.replyToMessage = undefined)"/>
             </div>
             <div class="o-mail-Composer-coreMain d-flex flex-nowrap align-items-start flex-grow-1" t-att-class="{ 'flex-column' : extended or props.composer.message }">
-                <div class="o-mail-Composer-inputContainer o-mail-Composer-bg d-flex flex-grow-1 border border-secondary rounded-3"
+                <div class="o-mail-Composer-inputContainer o-mail-Composer-bg d-flex flex-grow-1 border border-secondary shadow-sm"
                     t-att-class="{
+                        [roundedClass]: true,
                         'o-iosPwa': isIosPwa,
                         'align-self-stretch' : extended,
                         'w-100': props.composer.message,
@@ -58,8 +60,12 @@
                         </Dropdown>
                     </div>
                     <div class="position-relative flex-grow-1">
-                        <t t-set="inputClasses" t-value="{'o-mail-Composer-inputStyle form-control border-0 rounded-3': true, 'ps-2': partitionedActions.other.length === 0}"/>
-                        <textarea class="o-mail-Composer-input o-mail-Composer-bg shadow-none overflow-auto text-body"
+                        <t t-set="inputClasses" t-value="{
+                            [roundedClass]: true,
+                            'o-mail-Composer-inputStyle form-control border-0': true,
+                            'ps-2': partitionedActions.other.length === 0
+                        }"/>
+                        <textarea class="o-mail-Composer-input o-mail-Composer-bg shadow-none overflow-auto o-scrollbar-thin text-body"
                             t-att-class="inputClasses"
                             t-ref="textarea"
                             t-on-keydown="onKeydown"
@@ -88,9 +94,9 @@
                     <t t-call="mail.Composer.quickActions"/>
                 </div>
             </div>
-            <div class="o-mail-Composer-footer overflow-auto">
+            <div class="o-mail-Composer-footer overflow-auto o-scrollbar-thin">
                 <AttachmentList
-                    t-if="allowUpload and props.composer.attachments.length > 0"
+                    t-if="props.composer.attachments.length > 0"
                     attachments="props.composer.attachments"
                     unlinkAttachment.bind="(...args) => attachmentUploader.unlink(...args)"/>
                 <div t-if="!extended and !props.composer.message" class="o-mail-Composer-pickerContainer" t-att-class="{ 'o-active': composerActions.activePicker and ui.isSmall }" t-ref="picker-container">

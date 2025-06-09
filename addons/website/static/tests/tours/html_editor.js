@@ -50,13 +50,13 @@ registerWebsitePreviewTour('html_editor_multiple_templates', {
     () => [
         {
             content: "drop a snippet group",
-            trigger: "#oe_snippets .oe_snippet[name=Intro].o_we_draggable .oe_snippet_thumbnail",
+            trigger: ".o-website-builder_sidebar .o_snippet[name=Intro].o_draggable .o_snippet_thumbnail",
             // id starting by 'oe_structure..' will actually create an inherited view
             run: "drag_and_drop :iframe #oe_structure_test_ui",
         },
         {
             content: "Click on the s_cover snippet",
-            trigger: ':iframe .o_snippet_preview_wrap[data-snippet-id="s_cover"]',
+            trigger: ":iframe .o_snippet_preview_wrap .s_cover",
             run: "click",
         },
         ...clickOnSave(),
@@ -235,7 +235,7 @@ registerWebsitePreviewTour('test_html_editor_scss_2', {
 
         // 4. Open Html Editor and select a scss file
         {
-            trigger: "[is-ready=true]:iframe #wrapwrap",
+            trigger: ":iframe [is-ready=true] #wrapwrap",
         },
         {
             content: "open site menu",

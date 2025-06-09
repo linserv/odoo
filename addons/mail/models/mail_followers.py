@@ -129,7 +129,7 @@ class MailFollowers(models.Model):
         :param pids: additional set of partner IDs from which to fetch recipient
           data independently from following status;
 
-        :return dict: recipients data based on record.ids if given, else a generic
+        :returns: recipients data based on record.ids if given, else a generic
           '0' key to keep a dict-like return format. Each item is a dict based on
           recipients partner ids formatted like {
             'active': partner.active;
@@ -150,6 +150,7 @@ class MailFollowers(models.Model):
             'uid': linked 'res.users' ID. If several users exist preference is
                 given to internal user, then share users;
           }
+        :rtype: dict
         """
         self.env['mail.followers'].flush_model(['partner_id', 'subtype_ids'])
         self.env['mail.message.subtype'].flush_model(['internal'])
@@ -205,17 +206,28 @@ class MailFollowers(models.Model):
       JOIN sub_followers ON sub_followers.pid = partner.id
                         AND (sub_followers.internal IS NOT TRUE OR partner.partner_share IS NOT TRUE)
  LEFT JOIN LATERAL (
-        SELECT users.id AS uid,
-               users.share AS share,
-               users.notification_type AS notification_type,
-               ARRAY_AGG(groups_rel.gid) FILTER (WHERE groups_rel.gid IS NOT NULL) AS groups
-          FROM res_users users
-     LEFT JOIN res_groups_users_rel groups_rel ON groups_rel.uid = users.id
-         WHERE users.partner_id = partner.id AND users.active
-      GROUP BY users.id,
-               users.share,
-               users.notification_type
-      ORDER BY users.share ASC NULLS FIRST, users.id ASC
+        WITH RECURSIVE all_groups AS (
+            SELECT users.id AS uid,
+                   users.share AS share,
+                   users.notification_type AS notification_type,
+                   groups_rel.gid
+              FROM res_users users
+         LEFT JOIN res_groups_users_rel groups_rel ON groups_rel.uid = users.id
+             WHERE users.partner_id = partner.id AND users.active
+          UNION
+            SELECT ag.uid, ag.share, ag.notification_type, implied.hid
+              FROM all_groups ag
+              JOIN res_groups_implied_rel implied ON ag.gid = implied.gid
+        )
+        SELECT uid,
+               share,
+               notification_type,
+               ARRAY_AGG(DISTINCT gid) AS groups
+          FROM all_groups
+      GROUP BY uid,
+               share,
+               notification_type
+      ORDER BY share ASC NULLS FIRST, uid ASC
          FETCH FIRST ROW ONLY
          ) sub_user ON TRUE
 
@@ -244,17 +256,28 @@ class MailFollowers(models.Model):
                               AND fol.res_model = %s
                               AND fol.res_id IN %s
  LEFT JOIN LATERAL (
-        SELECT users.id AS uid,
-               users.share AS share,
-               users.notification_type AS notification_type,
-               ARRAY_AGG(groups_rel.gid) FILTER (WHERE groups_rel.gid IS NOT NULL) AS groups
-          FROM res_users users
-     LEFT JOIN res_groups_users_rel groups_rel ON groups_rel.uid = users.id
-         WHERE users.partner_id = partner.id AND users.active
-      GROUP BY users.id,
-               users.share,
-               users.notification_type
-      ORDER BY users.share ASC NULLS FIRST, users.id ASC
+        WITH RECURSIVE all_groups AS (
+            SELECT users.id AS uid,
+                   users.share AS share,
+                   users.notification_type AS notification_type,
+                   groups_rel.gid
+              FROM res_users users
+         LEFT JOIN res_groups_users_rel groups_rel ON groups_rel.uid = users.id
+             WHERE users.partner_id = partner.id AND users.active
+          UNION
+            SELECT ag.uid, ag.share, ag.notification_type, implied.hid
+              FROM all_groups ag
+              JOIN res_groups_implied_rel implied ON ag.gid = implied.gid
+        )
+        SELECT uid,
+               share,
+               notification_type,
+               ARRAY_AGG(DISTINCT gid) AS groups
+          FROM all_groups
+      GROUP BY uid,
+               share,
+               notification_type
+      ORDER BY share ASC NULLS FIRST, uid ASC
          FETCH FIRST ROW ONLY
          ) sub_user ON TRUE
 
@@ -296,17 +319,28 @@ class MailFollowers(models.Model):
            FALSE as is_follower
       FROM res_partner partner
  LEFT JOIN LATERAL (
-        SELECT users.id AS uid,
-               users.share AS share,
-               users.notification_type AS notification_type,
-               ARRAY_AGG(groups_rel.gid) FILTER (WHERE groups_rel.gid IS NOT NULL) AS groups
-          FROM res_users users
-     LEFT JOIN res_groups_users_rel groups_rel ON groups_rel.uid = users.id
-         WHERE users.partner_id = partner.id AND users.active
-      GROUP BY users.id,
-               users.share,
-               users.notification_type
-      ORDER BY users.share ASC NULLS FIRST, users.id ASC
+        WITH RECURSIVE all_groups AS (
+            SELECT users.id AS uid,
+                   users.share AS share,
+                   users.notification_type AS notification_type,
+                   groups_rel.gid
+              FROM res_users users
+         LEFT JOIN res_groups_users_rel groups_rel ON groups_rel.uid = users.id
+             WHERE users.partner_id = partner.id AND users.active
+          UNION
+            SELECT ag.uid, ag.share, ag.notification_type, implied.hid
+              FROM all_groups ag
+              JOIN res_groups_implied_rel implied ON ag.gid = implied.gid
+        )
+        SELECT uid,
+               share,
+               notification_type,
+               ARRAY_AGG(DISTINCT gid) AS groups
+          FROM all_groups
+      GROUP BY uid,
+               share,
+               notification_type
+      ORDER BY share ASC NULLS FIRST, uid ASC
          FETCH FIRST ROW ONLY
          ) sub_user ON TRUE
 
@@ -487,14 +521,11 @@ GROUP BY fol.id%s%s""" % (
         :param subtypes: optional subtypes for new partner followers. This
           is a dict whose keys are partner IDs and value subtype IDs for that
           partner.
-        :param channel_subtypes: optional subtypes for new channel followers. This
-          is a dict whose keys are channel IDs and value subtype IDs for that
-          channel.
         :param check_existing: if True, check for existing followers for given
           documents and handle them according to existing_policy parameter.
           Setting to False allows to save some computation if caller is sure
           there are no conflict for followers;
-        :param existing policy: if check_existing, tells what to do with already
+        :param existing_policy: if check_existing, tells what to do with already
           existing followers:
 
           * skip: simply skip existing followers, do not touch them;
@@ -550,6 +581,6 @@ GROUP BY fol.id%s%s""" % (
             "name",
             # sudo: res.partner - can read partners of found followers, in particular allows
             # by-passing multi-company ACL for portal partners
-            Store.One("partner_id", rename="partner", sudo=True),
+            Store.One("partner_id", sudo=True),
             Store.One("thread", [], as_thread=True),
         ]

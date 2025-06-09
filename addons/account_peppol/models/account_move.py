@@ -23,6 +23,11 @@ class AccountMove(models.Model):
         copy=False,
     )
 
+    def action_send_and_print(self):
+        for move in self:
+            move.commercial_partner_id.button_account_peppol_check_partner_endpoint(company=move.company_id)
+        return super().action_send_and_print()
+
     def action_cancel_peppol_documents(self):
         # if the peppol_move_state is processing/done
         # then it means it has been already sent to peppol proxy and we can't cancel
@@ -60,9 +65,12 @@ class AccountMove(models.Model):
         invoice = render_context['record']
         invoice_country = invoice.commercial_partner_id.country_code
         company_country = invoice.company_id.country_code
-        if company_country in PEPPOL_MAILING_COUNTRIES and invoice_country in PEPPOL_MAILING_COUNTRIES:
+        can_send = self.env['account_edi_proxy_client.user']._get_can_send_domain()
+        company_on_peppol = invoice.company_id.account_peppol_proxy_state in can_send
+        if company_on_peppol and company_country in PEPPOL_MAILING_COUNTRIES and invoice_country in PEPPOL_MAILING_COUNTRIES:
             render_context['peppol_info'] = {
                 'peppol_country': invoice_country,
                 'is_peppol_sent': invoice.peppol_move_state in ('processing', 'done'),
+                'partner_on_peppol': invoice.commercial_partner_id.peppol_verification_state in ('valid', 'not_valid_format'),
             }
         return render_context

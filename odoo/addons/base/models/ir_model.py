@@ -1,5 +1,4 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
-import inspect
 import itertools
 import logging
 import random
@@ -496,7 +495,7 @@ class IrModel(models.Model):
 
 
 # retrieve field types defined by the framework only (not extensions)
-FIELD_TYPES = [(key, key) for key in sorted(fields.Field.by_type)]
+FIELD_TYPES = [(key, key) for key in sorted(fields.Field._by_type__)]
 
 
 class IrModelFields(models.Model):
@@ -1379,12 +1378,6 @@ class IrModelInherit(models.Model):
                 ] + [
                     (model_id, get_model_id(parent_name), get_field_id(field))
                     for parent_name, field in cls._inherits.items()
-                ] + [
-                    (model_id, get_model_id(field.comodel_name), get_field_id(field_name))
-                    for (field_name, field) in inspect.getmembers(cls)
-                    if isinstance(field, fields.Many2one)
-                    if field.type == 'many2one' and not field.related and field.delegate
-                    if field_name not in cls._inherits.values()
                 ]
 
                 for item in items:
@@ -2413,7 +2406,7 @@ class IrModelData(models.Model):
                     else:
                         # the field is shared across registries; don't modify it
                         Field = type(field)
-                        field_ = Field(_base_fields=[field, Field(prefetch=False)])
+                        field_ = Field(_base_fields__=(field, Field(prefetch=False)))
                         add_field(self.env[ir_field.model], ir_field.name, field_)
                         field_.setup(model)
                         has_shared_field = True

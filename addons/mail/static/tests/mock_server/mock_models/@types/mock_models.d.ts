@@ -21,6 +21,8 @@ declare module "mock_models" {
     import { MailThread as MailThread2 } from "@mail/../tests/mock_server/mock_models/mail_thread";
     import { MailTrackingValue as MailTrackingValue2 } from "@mail/../tests/mock_server/mock_models/mail_tracking_value";
     import { ResFake as ResFake2 } from "@mail/../tests/mock_server/mock_models/res_fake";
+    import { ResGroups as ResGroups2 } from "@mail/../tests/mock_server/mock_models/res_groups";
+    import { ResLang as ResLang2 } from "@mail/../tests/mock_server/mock_models/res_lang";
     import { ResRole as ResRole2 } from "addons/mail/static/tests/mock_server/mock_models/res_role";
     import { ResPartner as ResPartner2 } from "@mail/../tests/mock_server/mock_models/res_partner";
     import { ResUsers as ResUsers2 } from "@mail/../tests/mock_server/mock_models/res_users";
@@ -49,6 +51,8 @@ declare module "mock_models" {
     export interface MailThread extends MailThread2 {}
     export interface MailTrackingValue extends MailTrackingValue2 {}
     export interface ResFake extends ResFake2 {}
+    export interface ResGroups extends ResGroups2 {}
+    export interface ResLang extends ResLang2 {}
     export interface ResPartner extends ResPartner2 {}
     export interface ResRole extends ResRole2 {}
     export interface ResUsers extends ResUsers2 {}
@@ -78,6 +82,8 @@ declare module "mock_models" {
         "mail.thread": MailThread,
         "mail.tracking.value": MailTrackingValue,
         "res.fake": ResFake,
+        "res.groups": ResGroups,
+        "res.lang": ResLang,
         "res.partner": ResPartner,
         "res.role": ResRole,
         "res.users": ResUsers,

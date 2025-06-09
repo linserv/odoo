@@ -8,10 +8,11 @@ import * as ReceiptScreen from "@point_of_sale/../tests/pos/tours/utils/receipt_
 import { registry } from "@web/core/registry";
 import * as Order from "@point_of_sale/../tests/generic_helpers/order_widget_util";
 import { back, inLeftSide, selectButton } from "@point_of_sale/../tests/pos/tours/utils/common";
-import { scan_barcode, negateStep } from "@point_of_sale/../tests/generic_helpers/utils";
+import { scan_barcode, negateStep, refresh } from "@point_of_sale/../tests/generic_helpers/utils";
 import * as ProductConfiguratorPopup from "@point_of_sale/../tests/pos/tours/utils/product_configurator_util";
 import * as Numpad from "@point_of_sale/../tests/generic_helpers/numpad_util";
 import * as OfflineUtil from "@point_of_sale/../tests/generic_helpers/offline_util";
+import * as TicketScreen from "@point_of_sale/../tests/pos/tours/utils/ticket_screen_util";
 
 registry.category("web_tour.tours").add("ProductScreenTour", {
     steps: () =>
@@ -283,6 +284,10 @@ registry.category("web_tour.tours").add("limitedProductPricelistLoading", {
 
             scan_barcode("0100202"),
             ProductScreen.selectedOrderlineHas("Test Product 2", "1", "120.0", "Red"),
+
+            refresh(),
+            scan_barcode("0100100"),
+            ProductScreen.selectedOrderlineHas("Test Product 1", "2", "160.0"),
 
             scan_barcode("0100300"),
             ProductScreen.selectedOrderlineHas("Test Product 3", "1", "50.0"),
@@ -664,6 +669,23 @@ registry.category("web_tour.tours").add("test_product_create_update_from_fronten
         ].flat(),
 });
 
+registry.category("web_tour.tours").add("test_draft_orders_not_syncing", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.orderIsEmpty(),
+            ProductScreen.clickDisplayedProduct("Desk Pad"),
+            Chrome.createFloatingOrder(),
+            ProductScreen.clickDisplayedProduct("Desk Pad"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.clickPaymentMethod("Bank"),
+            PaymentScreen.clickValidate(),
+            ReceiptScreen.isShown(),
+            Chrome.endTour(),
+        ].flat(),
+});
+
 registry.category("web_tour.tours").add("test_fiscal_position_tax_group_labels", {
     steps: () =>
         [
@@ -688,6 +710,22 @@ registry.category("web_tour.tours").add("test_fiscal_position_tax_group_labels",
         ].flat(),
 });
 
+registry.category("web_tour.tours").add("test_one_attribute_value_scan_barcode", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+
+            scan_barcode("1234567"),
+            ProductScreen.selectedOrderlineHas("Product Test", "1.0", "10", "Large, Red"),
+
+            scan_barcode("1234568"),
+            ProductScreen.selectedOrderlineHas("Product Test", "1.0", "10", "Large, Blue"),
+
+            Chrome.endTour(),
+        ].flat(),
+});
+
 registry.category("web_tour.tours").add("test_product_long_press", {
     steps: () =>
         [
@@ -696,5 +734,29 @@ registry.category("web_tour.tours").add("test_product_long_press", {
             ProductScreen.longPressProduct("Test Product"),
             Dialog.is(),
             Chrome.endTour(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_preset_timing_retail", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickDisplayedProduct("Desk Organizer"),
+            ProductScreen.selectPreset("Dine in", "Delivery"),
+            PartnerList.clickPartner("A simple PoS man!"),
+            Chrome.selectPresetTimingSlotHour("12:00"),
+            Chrome.presetTimingSlotIs("12:00"),
+            Chrome.isSynced(),
+            Chrome.clickPresetTimingSlot(),
+            Chrome.selectPresetTimingSlotHour("15:00"),
+            Chrome.presetTimingSlotIs("15:00"),
+            Chrome.createFloatingOrder(),
+            ProductScreen.clickDisplayedProduct("Desk Organizer"),
+            Chrome.clickOrders(),
+            TicketScreen.nthRowContains(1, "A simple PoS man!"),
+            TicketScreen.nthRowContains(1, "Delivery", false),
+            TicketScreen.nthRowContains(2, "002"),
+            TicketScreen.nthRowContains(2, "Dine in", false),
         ].flat(),
 });

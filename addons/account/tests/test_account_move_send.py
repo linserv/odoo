@@ -9,7 +9,7 @@ from odoo import Command
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.addons.mail.tests.common import MailCommon
 from odoo.exceptions import UserError
-from odoo.tests import users, warmup, tagged
+from odoo.tests import users, warmup, tagged, Form
 from odoo.tools import formataddr, mute_logger
 
 
@@ -236,8 +236,8 @@ class TestAccountComposerPerformance(AccountTestInvoicingCommon, MailCommon):
             composer.action_send_and_print(allow_fallback_pdf=True)
             self.env.cr.flush()  # force tracking message
 
-        self.assertEqual(len(self._new_msgs), 2, 'Should produce 2 messages: one for posting template, one for tracking')
-        print_msg, track_msg = self._new_msgs[0], self._new_msgs[1]
+        self.assertEqual(len(self._new_msgs), 1, 'Should produce 1 message (for posting template)')
+        print_msg = self._new_msgs[0]
         self.assertNotified(
             print_msg,
             [{
@@ -257,10 +257,6 @@ class TestAccountComposerPerformance(AccountTestInvoicingCommon, MailCommon):
                          'Should take invoice_user_id email')
         self.assertEqual(print_msg.notified_partner_ids, test_customer + self.user_accountman.partner_id)
         self.assertEqual(print_msg.subject, f'{self.env.user.company_id.name} Invoice (Ref {test_move.name})')
-        # tracking: is_move_sent
-        self.assertEqual(track_msg.author_id, self.env.user.partner_id)
-        self.assertEqual(track_msg.email_from, self.env.user.email_formatted)
-        self.assertTrue('is_move_sent' in track_msg.tracking_value_ids.field_id.mapped('name'))
         # sent email
         self.assertMailMail(
             test_customer,
@@ -323,8 +319,8 @@ class TestAccountComposerPerformance(AccountTestInvoicingCommon, MailCommon):
             composer.action_send_and_print()
             self.env.cr.flush()  # force tracking message
 
-        self.assertEqual(len(self._new_msgs), 2, 'Should produce 2 messages: one for posting template, one for tracking')
-        print_msg, track_msg = self._new_msgs[0], self._new_msgs[1]
+        self.assertEqual(len(self._new_msgs), 1, 'Should produce 1 message (for posting template)')
+        print_msg = self._new_msgs[0]
         self.assertNotified(
             print_msg,
             [{
@@ -344,10 +340,6 @@ class TestAccountComposerPerformance(AccountTestInvoicingCommon, MailCommon):
                          'Should take invoice_user_id email')
         self.assertEqual(print_msg.notified_partner_ids, test_customer + self.user_accountman.partner_id)
         self.assertEqual(print_msg.subject, f'SpanishSubject for {test_move.name}')
-        # tracking: is_move_sent
-        self.assertEqual(track_msg.author_id, self.env.user.partner_id)
-        self.assertEqual(track_msg.email_from, self.env.user.email_formatted)
-        self.assertTrue('is_move_sent' in track_msg.tracking_value_ids.field_id.mapped('name'))
         # sent email
         self.assertMailMail(
             test_customer,
@@ -507,15 +499,13 @@ class TestAccountMoveSendCommon(AccountTestInvoicingCommon):
             )
 
     def create_send_and_print(self, invoices, default=False, **kwargs):
-        wizard_model = 'account.move.send.wizard' if len(invoices) == 1 else 'account.move.send.batch.wizard'
-        if wizard_model == 'account.move.send.wizard' and not default and not kwargs.get('sending_methods'):
+        action_send_and_print = invoices.action_send_and_print()
+        if action_send_and_print['res_model'] == 'account.move.send.wizard' and not default and not kwargs.get('sending_methods'):
             # In most cases, for testing purpose you only want to try to generate the document, no need to send it.
             # Therefore by default we deactivate sending methods, unless default parameter is set to True,
             # or they are explicitly given.
             kwargs['sending_methods'] = []
-        return self.env[wizard_model]\
-            .with_context(active_model='account.move', active_ids=invoices.ids)\
-            .create(kwargs)
+        return self.env[action_send_and_print['res_model']].with_context(action_send_and_print['context']).create(kwargs)
 
     def _get_mail_message(self, move, limit=1):
         return self.env['mail.message'].search([('model', '=', move._name), ('res_id', '=', move.id)], limit=limit)
@@ -678,6 +668,19 @@ class TestAccountMoveSend(TestAccountMoveSendCommon):
             ('res_field', '=', 'invoice_pdf_report_file'),
         ])
         self.assertEqual(len(invoice_attachments), 1)
+
+    def test_compute_value_of_send_invoice_batch_wizard(self):
+        invoices = (
+            self.init_invoice("out_invoice", partner=self.partner_a, amounts=[1000], post=True) +
+            self.init_invoice("out_invoice", partner=self.partner_b, amounts=[1000], post=True)
+        )
+
+        move_send_batch_wizard = Form(self.env['account.move.send.batch.wizard'].with_context(
+            active_model='account.move', active_ids=invoices.ids))
+
+        self.assertEqual(move_send_batch_wizard.move_ids.ids, invoices.ids)
+        self.assertEqual(move_send_batch_wizard.summary_data, {'email': {'count': len(invoices), 'label': 'by Email'}})
+        self.assertFalse(move_send_batch_wizard.alerts)
 
     def test_invoice_multi_email_missing(self):
         invoice1 = self.init_invoice("out_invoice", partner=self.partner_a, amounts=[1000], post=True)

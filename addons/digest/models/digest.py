@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import logging
@@ -12,7 +11,7 @@ from werkzeug.urls import url_encode, url_join
 from odoo import api, fields, models, tools, _
 from odoo.addons.base.models.ir_mail_server import MailDeliveryException
 from odoo.exceptions import AccessError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools.float_utils import float_round
 
 _logger = logging.getLogger(__name__)
@@ -247,7 +246,7 @@ class DigestDigest(models.Model):
         """ Compute KPIs to display in the digest template. It is expected to be
         a list of KPIs, each containing values for 3 columns display.
 
-        :return list: result [{
+        :return: result [{
             'kpi_name': 'kpi_mail_message',
             'kpi_fullname': 'Messages',  # translated
             'kpi_action': 'crm.crm_lead_action_pipeline',  # xml id of an action to execute
@@ -330,15 +329,17 @@ class DigestDigest(models.Model):
     def _compute_kpis_actions(self, company, user):
         """ Give an optional action to display in digest email linked to some KPIs.
 
-        :return dict: key: kpi name (field name), value: an action that will be
+        :returns: key: kpi name (field name), value: an action that will be
           concatenated with /odoo/action-{action}
+        :rtype: dict
         """
         return {}
 
     def _compute_preferences(self, company, user):
         """ Give an optional text for preferences, like a shortcut for configuration.
 
-        :return string: html to put in template
+        :returns: html to put in template
+        :rtype: str
         """
         preferences = []
         if self._context.get('digest_slowdown'):
@@ -410,14 +411,14 @@ class DigestDigest(models.Model):
         """
         start, end, companies = self._get_kpi_compute_parameters()
 
-        base_domain = [
+        base_domain = Domain([
             ('company_id', 'in', companies.ids),
             (date_field, '>=', start),
             (date_field, '<', end),
-        ]
+        ])
 
         if additional_domain:
-            base_domain = expression.AND([base_domain, additional_domain])
+            base_domain &= Domain(additional_domain)
 
         values = self.env[model]._read_group(
             domain=base_domain,

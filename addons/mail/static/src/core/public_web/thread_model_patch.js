@@ -27,7 +27,7 @@ patch(Thread.prototype, {
                 (this.channel_type === "channel" &&
                     (channel_notifications === "all" ||
                         (channel_notifications === "mentions" &&
-                            message.recipients?.includes(this.store.self)))))
+                            message.partner_ids?.includes(this.store.self)))))
         ) {
             if (this.model === "discuss.channel") {
                 await this.store.chatHub.initPromise;
@@ -43,12 +43,6 @@ patch(Thread.prototype, {
                     } else {
                         chatWindow.fold();
                     }
-                }
-                if (
-                    this.store.env.services["multi_tab"].isOnMainTab() &&
-                    this.store.settings.messageSound
-                ) {
-                    this.store.env.services["mail.sound_effects"].play("new-message");
                 }
             }
             this.store.env.services["mail.out_of_focus"].notify(message, this);

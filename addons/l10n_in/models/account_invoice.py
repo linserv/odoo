@@ -596,7 +596,7 @@ class AccountMove(models.Model):
                 self.amount_residual,
                 self.payment_reference or self.name,
                 ("Payment for %s" % self.name))
-            barcode = self.env['ir.actions.report'].barcode(barcode_type="QR", value=payment_url, width=120, height=120)
+            barcode = self.env['ir.actions.report'].barcode(barcode_type="QR", value=payment_url, width=120, height=120, quiet=False)
             return image_data_uri(base64.b64encode(barcode))
         return super()._generate_qr_code(silent_errors)
 
@@ -701,29 +701,3 @@ class AccountMove(models.Model):
             url,
             _("Buy Credits")
         )
-
-    def _get_l10n_in_customer_invoice_title(self, proforma=False):
-        """
-        Get the title to display in front of a customer invoice number.
-        The title is generated based on the state of the invoice and the `proforma` parameter.
-
-        :param proforma: Is the invoice a proforma one, defaults to False
-        :type proforma: bool, optional
-        :return: A customer invoice title
-        :rtype: str
-        """
-        self.ensure_one()
-        if not proforma:
-            if self.state == 'posted':
-                return self.journal_id.name
-            elif self.state == 'draft':
-                return _("Draft %(journal_name)s", journal_name=self.journal_id.name)
-            elif self.state == 'cancel':
-                return _("Cancelled %(journal_name)s", journal_name=self.journal_id.name)
-        else:
-            if self.state == 'posted':
-                return _("Proforma %(journal_name)s", journal_name=self.journal_id.name)
-            elif self.state == 'draft':
-                return _("Draft Proforma %(journal_name)s", journal_name=self.journal_id.name)
-            elif self.state == 'cancel':
-                return _("Cancelled Proforma %(journal_name)s", journal_name=self.journal_id.name)

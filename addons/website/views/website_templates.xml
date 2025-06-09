@@ -289,6 +289,7 @@
 
     <!-- Page options -->
     <xpath expr="//div[@id='wrapwrap']" position="before">
+        <!-- Todo: Refactor this part. These inputs were initially used for multiple use cases but are now only used to determine if a given option is activated on the page. We should probably implement the feature using an RPC. -->        
         <t groups="website.group_website_restricted_editor">
             <t t-foreach="['header_overlay', 'header_color', 'header_text_color', 'header_visible', 'footer_visible']" t-as="optionName">
                 <!-- Firefox autocomplete is too aggressive and works on hidden inputs,
@@ -1242,7 +1243,7 @@
                     <t t-call="website.placeholder_header_brand">
                         <t t-set="_link_class" t-valuef="me-4"/>
                     </t>
-                    <div class="ms-auto">
+                    <div class="flex-fill min-w-0">
                         <ul class="o_header_sales_three_small_links navbar-nav justify-content-end align-items-center gap-2 w-100 o_header_separator">
                             <!-- Language Selector -->
                             <t t-call="website.placeholder_header_language_selector">

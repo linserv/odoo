@@ -24,19 +24,23 @@ export class ResUsers extends webModels.ResUsers {
         const ResPartner = this.env["res.partner"];
         /** @type {import("mock_models").ResUsersSettings} */
         const ResUsersSettings = this.env["res.users.settings"];
-
+        /** @type {import("mock_models").MailMessageSubtype} */
+        const MailMessageSubtype = this.env["mail.message.subtype"];
         store.add({
             action_discuss_id: DISCUSS_ACTION_ID,
             channel_types_with_seen_infos: DiscussChannel._types_allowing_seen_infos(),
             hasGifPickerFeature: true,
             hasLinkPreviewFeature: true,
             hasMessageTranslationFeature: true,
+            mt_comment: MailMessageSubtype._filter([["subtype_xmlid", "=", "mail.mt_comment"]])[0]
+                .id,
+            mt_note: MailMessageSubtype._filter([["subtype_xmlid", "=", "mail.mt_note"]])[0].id,
             odoobot: mailDataHelpers.Store.one(ResPartner.browse(serverState.odoobotId)),
         });
         if (!this._is_public(this.env.uid)) {
             const userSettings = ResUsersSettings._find_or_create_for_user(this.env.uid);
             store.add({
-                self: mailDataHelpers.Store.one(
+                self_partner: mailDataHelpers.Store.one(
                     ResPartner.browse(this.env.user.partner_id),
                     makeKwArgs({
                         fields: [
@@ -53,7 +57,7 @@ export class ResUsers extends webModels.ResUsers {
             });
         } else if (this.env.cookie.get("dgid")) {
             store.add({
-                self: mailDataHelpers.Store.one(
+                self_guest: mailDataHelpers.Store.one(
                     MailGuest.browse(this.env.cookie.get("dgid")),
                     makeKwArgs({ fields: ["avatar_128", "name"] })
                 ),

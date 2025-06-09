@@ -279,6 +279,12 @@ class AccountMoveLine(models.Model):
         comodel_name='account.move.line',
         compute='_compute_reconciled_lines_ids', inverse='_inverse_reconciled_lines_ids',
     )
+    # Technical field that filters the reconciled_lines_ids to remove the exchange diff line.
+    reconciled_lines_excluding_exchange_diff_ids = fields.Many2many(
+        comodel_name='account.move.line',
+        compute='_compute_reconciled_lines_excluding_exchange_diff_ids',
+    )
+
     matching_number = fields.Char(
         string="Matching #",
         copy=False,
@@ -332,6 +338,7 @@ class AccountMoveLine(models.Model):
         inverse='_inverse_product_id',
         ondelete='restrict',
         check_company=True,
+        index=True,
     )
     allowed_uom_ids = fields.Many2many('uom.uom', compute='_compute_allowed_uom_ids')
     product_uom_id = fields.Many2one(
@@ -404,7 +411,8 @@ class AccountMoveLine(models.Model):
     discount_date = fields.Date(
         string='Discount Date',
         store=True,
-        help='Last date at which the discounted amount must be paid in order for the Early Payment Discount to be granted'
+        help='Last date at which the discounted amount must be paid in order for the Early Payment Discount to be granted',
+        readonly=True
     )
     # Discounted amount to pay when the early payment discount is applied
     discount_amount_currency = fields.Monetary(
@@ -1081,6 +1089,16 @@ class AccountMoveLine(models.Model):
         for line in self:
             line.reconciled_lines_ids = line.matched_debit_ids.debit_move_id + line.matched_credit_ids.credit_move_id
 
+    @api.depends('matched_debit_ids', 'matched_credit_ids')
+    def _compute_reconciled_lines_excluding_exchange_diff_ids(self):
+        for line in self:
+            all_lines = line.matched_debit_ids.debit_move_id + line.matched_credit_ids.credit_move_id
+            excluded_ids = (
+                line.matched_debit_ids.exchange_move_id.line_ids +
+                line.matched_credit_ids.exchange_move_id.line_ids
+            )
+            line.reconciled_lines_excluding_exchange_diff_ids = all_lines - excluded_ids
+
     def _search_payment_date(self, operator, value):
         if operator == 'in':
             # recursive call with operator '='
@@ -1202,7 +1220,6 @@ class AccountMoveLine(models.Model):
         # Avoid using api.constrains for fields journal_id and account_id as in case of a write on
         # account move and account move line in the same operation, the check would be done
         # before all write are complete, causing a false positive
-        self.flush_recordset()
         for line in self.filtered(lambda x: x.display_type not in ('line_section', 'line_note')):
             account = line.account_id
             journal = line.move_id.journal_id
@@ -1219,9 +1236,9 @@ class AccountMoveLine(models.Model):
 
     @api.constrains('account_id', 'tax_ids', 'tax_line_id', 'reconciled')
     def _check_off_balance(self):
-        for line in self:
+        for line in self.move_id.line_ids:
             if line.account_id.account_type == 'off_balance':
-                if any(a.internal_group != line.account_id.internal_group for a in line.move_id.line_ids.account_id):
+                if any(a.account_type != line.account_id.account_type for a in line.move_id.line_ids.account_id):
                     raise UserError(_('If you want to use "Off-Balance Sheet" accounts, all the accounts of the journal entry must be of this type'))
                 if line.tax_ids or line.tax_line_id:
                     raise UserError(_('You cannot use taxes on lines with an Off-Balance account'))
@@ -1543,6 +1560,7 @@ class AccountMoveLine(models.Model):
 
         line_to_write = self
         vals = self._sanitize_vals(vals)
+        matching2lines = None  # lazy cache
         lines_to_unreconcile = self.env['account.move.line']
         st_lines_to_unreconcile = self.env['account.bank.statement.line']
         for line in self:
@@ -1562,9 +1580,26 @@ class AccountMoveLine(models.Model):
                 line._check_tax_lock_date()
 
             # Break the reconciliation.
-            if any(self.env['account.move']._field_will_change(line, vals, field_name) for field_name in protected_fields['reconciliation']) and (line.matched_debit_ids or line.matched_credit_ids):
-                lines_to_unreconcile += line
-                st_lines_to_unreconcile += (line.matched_debit_ids.debit_move_id + line.matched_credit_ids.credit_move_id).statement_line_id
+            if (
+                line.matching_number
+                and (changing_fields := {
+                    field_name
+                    for field_name in protected_fields['reconciliation']
+                    if self.env['account.move']._field_will_change(line, vals, field_name)
+                })
+            ):
+                matching2lines = dict(self.env['account.move.line'].sudo()._read_group(
+                    domain=[('matching_number', 'in', [n for n in self.mapped('matching_number') if n])],
+                    groupby=['matching_number'],
+                    aggregates=['id:recordset'],
+                )) if matching2lines is None else matching2lines
+                if (
+                    # allow changing the partner or/and the account on all the lines of a reconciliation together
+                    changing_fields - {'partner_id', 'account_id'}
+                    or not all(reconciled_line in self for reconciled_line in matching2lines[line.matching_number])
+                ):
+                    lines_to_unreconcile += line
+                    st_lines_to_unreconcile += (line.matched_debit_ids.debit_move_id + line.matched_credit_ids.credit_move_id).statement_line_id
 
         lines_to_unreconcile.remove_move_reconcile()
         for st_line in st_lines_to_unreconcile:
@@ -1622,6 +1657,18 @@ class AccountMoveLine(models.Model):
                             )
 
         return result
+
+    def _parse_flush_fnames(self, fnames):
+        if fnames and {'balance', 'amount_currency'} & set(fnames):
+            # flush the amount currency to avoid triggering check_amount_currency_balance_sign
+            fnames = {'balance', 'amount_currency'} | set(fnames)
+        return fnames
+
+    def flush_recordset(self, fnames=None):
+        return super().flush_recordset(self._parse_flush_fnames(fnames))
+
+    def flush_model(self, fnames=None):
+        return super().flush_model(self._parse_flush_fnames(fnames))
 
     def _valid_field_parameter(self, field, name):
         # EXTENDS models
@@ -3011,17 +3058,24 @@ class AccountMoveLine(models.Model):
         return self._filter_reconciled_by_number(self._reconciled_by_number())
 
     def _get_attachment_domains(self):
-        self.ensure_one()
         domains = [[
             ('res_model', '=', 'account.move'),
-            ('res_id', '=', self.move_id.id),
+            ('res_id', 'in', self.move_id.ids),
             ('res_field', 'in', (False, 'invoice_pdf_report_file')),
         ]]
         if self.statement_id:
-            domains.append([('res_model', '=', 'account.bank.statement'), ('res_id', '=', self.statement_id.id)])
+            domains.append([('res_model', '=', 'account.bank.statement'), ('res_id', 'in', self.statement_id.ids)])
         if self.payment_id:
-            domains.append([('res_model', '=', 'account.payment'), ('res_id', '=', self.payment_id.id)])
+            domains.append([('res_model', '=', 'account.payment'), ('res_id', 'in', self.payment_id.ids)])
         return domains
+
+    @api.model
+    def _get_attachment_by_record(self, id_model2attachments, move_line):
+        return (
+            id_model2attachments.get(('account.move', move_line.move_id.id))
+            or id_model2attachments.get(('account.bank.statement', move_line.statement_id.id))
+            or id_model2attachments.get(('account.payment', move_line.payment_id.id))
+        )
 
     @api.model
     def _get_tax_exigible_domain(self):

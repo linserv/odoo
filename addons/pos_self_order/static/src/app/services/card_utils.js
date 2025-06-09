@@ -18,7 +18,7 @@ export function computeProductPrice(selfOrder, productTemplate, selectedAttribut
 
 export function computeTotalComboPrice(selfOrder, productTemplate, comboValues, qty) {
     if (!comboValues || !comboValues.length) {
-        return computeInitialComboPrice(selfOrder, productTemplate);
+        return selfOrder.getProductDisplayPrice(productTemplate);
     }
 
     const baseLineValues = getOrderLineValues(
@@ -48,17 +48,6 @@ export function computeTotalComboPrice(selfOrder, productTemplate, comboValues, 
         : order.getTotalWithoutTaxOfLines(transientLines);
 }
 
-export function computeInitialComboPrice(selfOrder, productTemplate) {
-    const comboValues = productTemplate.combo_ids.map((combo) => {
-        const defaultItem = combo.combo_item_ids.find((item) => item.extra_price === 0);
-        return {
-            combo_item_id: defaultItem,
-            qty: 1,
-        };
-    });
-    return computeTotalComboPrice(selfOrder, productTemplate, comboValues, 1);
-}
-
 export function getOrderLineValues(
     selfOrder,
     productTemplate,
@@ -80,6 +69,7 @@ export function getOrderLineValues(
         note: customer_note || "",
         price_unit: productPrice.pricelist_price,
         price_extra: 0,
+        price_type: "original",
     };
 
     if (Object.entries(selectedValues).length > 0) {

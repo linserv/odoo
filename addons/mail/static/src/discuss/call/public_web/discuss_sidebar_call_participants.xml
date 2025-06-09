@@ -2,7 +2,7 @@
 <templates xml:space="preserve">
     <t t-name="mail.DiscussSidebarCallParticipants">
         <t t-if="sessions.length gt 0">
-            <Dropdown t-if="compact" state="floating" position="'right-start'" manual="true" menuClass="'o-mail-DiscussSidebar-floatingMenu bg-100 border border-secondary py-0 shadow-sm'">
+            <Dropdown t-if="compact" state="floating" position="'right-start'" manual="true" menuClass="'o-mail-DiscussSidebar-floatingMenu bg-100 border border-secondary py-0 shadow-sm o-rounded-bubble'">
                 <t t-call="mail.DiscussSidebarCallParticipants.main"/>
                 <t t-set-slot="content">
                     <div class="p-2" t-ref="floating">
@@ -19,7 +19,7 @@
     <t t-name="mail.DiscussSidebarCallParticipants.main">
         <div class="o-mail-DiscussSidebarCallParticipants d-flex py-1 bg-inherit" t-ref="root" t-att-class="{
             'justify-content-center': compact,
-            'ps-4 pe-2': props.compact === undefined and !compact,
+            'ps-3 pe-2': props.compact === undefined and !compact,
             'px-2': props.compact === false,
             'rounded-3': props.compact === undefined,
             'opacity-75': props.thread.notEq(rtc.channel) and compact,

@@ -44,11 +44,11 @@ export class OutOfFocusService {
             icon = author.avatarUrl;
             if (message.thread?.channel_type === "channel") {
                 notificationTitle = _t("%(author name)s from %(channel name)s", {
-                    "author name": author.name,
+                    "author name": message.authorName,
                     "channel name": message.thread.displayName,
                 });
             } else {
-                notificationTitle = author.name;
+                notificationTitle = message.authorName;
             }
         }
         const notificationContent = message.previewText
@@ -91,6 +91,9 @@ export class OutOfFocusService {
      */
     sendNotification({ message, sound = true, title, type, icon }) {
         if (!this.canSendNativeNotification || !this.multiTab.isOnMainTab()) {
+            if (sound) {
+                this._playSound();
+            }
             return;
         }
         try {

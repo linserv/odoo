@@ -7,6 +7,7 @@ from odoo.tests import tagged
 
 from odoo.addons.point_of_sale.tests.test_frontend import TestPointOfSaleHttpCommon
 from odoo.addons.point_of_sale.tests.common_setup_methods import setup_product_combo_items
+from odoo.addons.point_of_sale.tests.common import archive_products
 
 
 @tagged("post_install", "-at_install")
@@ -1258,6 +1259,27 @@ class TestUi(TestPointOfSaleHttpCommon):
                 'discount_mode': 'percent',
                 'discount_applicability': 'specific',
                 'discount_product_domain': '["&", ("categ_id", "ilike", "office"), ("name", "ilike", "Product B")]',
+            })],
+            'pos_config_ids': [Command.link(self.main_pos_config.id)],
+        })
+
+        # Adding a test to check if pos screen loads properly when there is a reward having an invalid domain
+        # The invalid reward should not be used in the store and an alert dialog should be displayed
+        self.env['loyalty.program'].create({
+            'name': '10% Discount Coupon Program - Discount on Specific Products',
+            'program_type': 'coupons',
+            'trigger': 'with_code',
+            'applies_on': 'current',
+            'rule_ids': [(0, 0, {
+                 'minimum_qty': 1
+            })],
+            'reward_ids': [(0, 0, {
+                'reward_type': 'discount',
+                'required_points': 1,
+                'discount': 10,
+                'discount_mode': 'percent',
+                'discount_applicability': 'specific',
+                'discount_product_domain': '[("product_variant_ids", "ilike", "screen")]',
             })],
             'pos_config_ids': [Command.link(self.main_pos_config.id)],
         })
@@ -2691,3 +2713,63 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.assertEqual(len(gift_card_program.coupon_ids), 1, "Gift card not generated")
         self.assertEqual(gift_card_program.coupon_ids[0].code, "test-card-1234", "Gift card code not correct")
         self.assertEqual(gift_card_program.coupon_ids[0].partner_id, partner, "Gift card partner id not correct")
+
+    def test_empty_product_screen_when_no_regular_products(self):
+        """
+        Verify that the product screen remains empty when no regular products are available,
+        ensuring that special products are hidden.
+        """
+        archive_products(self.env)
+        self.env.ref('loyalty.gift_card_product_50').product_tmpl_id.write({'active': True})
+        self.create_programs([('Special Gift Card Program', 'gift_card')])
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour("EmptyProductScreenTour")
+
+    def test_two_variant_same_discount(self):
+        # test that if a product has two variants with the same discount, the selector widget does not appear (nor an error window in debug mode)
+        colors = ['red', 'blue']
+        prod_attr = self.env['product.attribute'].create({'name': 'Color', 'create_variant': 'dynamic'})
+        prod_attr_values = self.env['product.attribute.value'].create([{'name': color, 'attribute_id': prod_attr.id, 'sequence': 1} for color in colors])
+
+        product_template = self.env['product.template'].create({
+            'name': 'Sofa',
+            'available_in_pos': True,
+            'attribute_line_ids': [(0, 0, {
+                'attribute_id': prod_attr.id,
+                'value_ids': [(6, 0, prod_attr_values.ids)]
+            })]
+        })
+        prod_tmpl_attrs = self.env['product.template.attribute.value'].search([
+            ('attribute_line_id', '=', product_template.attribute_line_ids.id),
+            ('product_attribute_value_id', 'in', prod_attr_values.ids)
+        ])
+
+        product_1 = product_template._create_product_variant(prod_tmpl_attrs[0])
+        product_2 = product_template._create_product_variant(prod_tmpl_attrs[1])
+
+        self.env['loyalty.program'].create({
+            'name': 'Test Loyalty Program',
+            'program_type': 'promotion',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [
+                (0, 0, {
+                    'reward_point_mode': 'money',
+                    'minimum_amount': 1,
+                    'reward_point_amount': 1,
+                    'product_ids': [product_1.id, product_2.id]
+                }),
+            ],
+            'reward_ids': [
+                (0, 0, {
+                    'reward_type': 'discount',
+                    'discount': 1,
+                    'required_points': 1000,
+                    'discount_mode': 'percent',
+                    'discount_applicability': 'order',
+                }),
+            ],
+
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_two_variant_same_discount', login="pos_user")

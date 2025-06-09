@@ -17,15 +17,6 @@ export class DiscussCoreCommon {
     }
 
     setup() {
-        this.busService.addEventListener(
-            "connect",
-            () =>
-                this.store.imStatusTrackedPersonas.forEach((p) => {
-                    const model = p.type === "partner" ? "res.partner" : "mail.guest";
-                    this.busService.addChannel(`odoo-presence-${model}_${p.id}`);
-                }),
-            { once: true }
-        );
         this.busService.subscribe("discuss.channel/delete", (payload, metadata) => {
             const thread = this.store.Thread.insert({
                 id: payload.id,
@@ -44,10 +35,10 @@ export class DiscussCoreCommon {
             const { body, channel_id } = payload;
             const lastMessageId = this.store.getLastMessageId();
             const message = this.store["mail.message"].insert({
-                author: this.store.odoobot,
+                author_id: this.store.odoobot,
                 body: markup(body),
                 id: lastMessageId + 0.01,
-                is_note: true,
+                subtype_id: this.store.mt_note,
                 is_transient: true,
                 thread: { id: channel_id, model: "discuss.channel" },
             });
@@ -59,7 +50,7 @@ export class DiscussCoreCommon {
             this.store["discuss.channel.member"].insert({
                 id,
                 fetched_message_id: { id: last_message_id },
-                persona: { type: "partner", id: partner_id },
+                partner_id: { type: "partner", id: partner_id },
                 thread: { id: channel_id, model: "discuss.channel" },
             });
         });

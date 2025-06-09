@@ -9,7 +9,7 @@
                     placeholder="Enter a description"
                     rows="1"
                     t-att-class="sectionAndNoteClasses"
-                    t-att-readonly="props.readonly and isProductClickable ? '1' : ''"
+                    t-att-readonly="sectionAndNoteIsReadonly"
                     t-att-value="label"
                     t-on-change="(ev) => this.updateLabel(ev.target.value)"
                     t-ref="labelNodeRef"
@@ -21,7 +21,7 @@
                     class="o_input text-wrap border-0 fst-italic fw-bold"
                     placeholder="Enter a description"
                     t-att-class="sectionAndNoteClasses"
-                    t-att-readonly="props.readonly and isProductClickable ? '1' : ''"
+                    t-att-readonly="sectionAndNoteIsReadonly"
                     t-att-value="label"
                     t-on-change="(ev) => this.updateLabel(ev.target.value)"
                     t-ref="labelNodeRef"
@@ -29,8 +29,8 @@
             </t>
             <t t-else="">
                 <div class="d-flex align-items-center gap-1">
-                    <Many2One t-props="this.m2oProps" cssClass="'w-100'"/>
-                    <t t-if="!props.readonly and columnIsProductAndLabel.value and !label">
+                    <Many2One t-props="this.m2oProps" cssClass="'w-100'" t-on-keydown="onM2oInputKeydown"/>
+                    <t t-if="showLabelVisibilityToggler">
                         <button
                             class="btn fa fa-bars text-start o_external_button px-1"
                             type="button"

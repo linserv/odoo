@@ -1474,6 +1474,10 @@ class BaseModel(metaclass=MetaModel):
                 with contextlib.suppress(ValueError):
                     typed_value = field.convert_to_write(value, self)
                     domains.append([(field_name, operator, typed_value)])
+                continue
+            with contextlib.suppress(ValueError, TypeError):
+                # ignore that case if the value doesn't match the field type
+                domains.append([(field_name, operator, field.convert_to_write(value, self))])
         return aggregator(domains)
 
     @api.model
@@ -2216,13 +2220,9 @@ class BaseModel(metaclass=MetaModel):
     @api.model
     def _read_group_format_result(self, rows_dict, lazy_groupby):
         """
-            Helper method to format the data contained in the dictionary data by
-            adding the domain corresponding to its values, the groupbys in the
-            context and by properly formatting the date/datetime values.
-
-        :param data: a single group
-        :param annotated_groupbys: expanded grouping metainformation
-        :param groupby: original grouping metainformation
+        Helper method to format the data contained in the dictionary data by
+        adding the domain corresponding to its values, the groupbys in the
+        context and by properly formatting the date/datetime values.
         """
         for group in lazy_groupby:
             field_name = group.split(':')[0].split('.')[0]
@@ -3128,7 +3128,6 @@ class BaseModel(metaclass=MetaModel):
 
         :param operation: one of ``create``, ``read``, ``write``, ``unlink``
         :param field_names: names of the fields
-        :type field_names: list or None
         :return: provided fields if fields is truthy (or the fields
           readable by the current user).
         :raise AccessError: if the user is not allowed to access
@@ -3203,24 +3202,40 @@ class BaseModel(metaclass=MetaModel):
         """ Update the translations for a given field, with support for handling
         old terms using an optional digest function.
 
-        :param str field_name: The name of the field to update.
-        :param dict translations: The translations to apply.
-            If `field.translate` is `True`, the dictionary should be in the format:
+        :param field_name: The name of the field to update.
+        :param translations: The translations to apply.
+            If ``field.translate`` is ``True``, the dictionary should be in the
+            format::
+
                 {lang: new_value}
-                where
-                    new_value (str): The new translation for the specified language.
-                    new_value (False): Removes the translation for the specified
-                        language and falls back to the latest 'en_US' value.
-            If `field.translate` is a callable, the dictionary should be in the format:
-                {lang: {old_source_lang_term: new_term}} or
-                {lang: {digest(old_source_lang_term): new_term}} when `digest` is callable.
-                where
-                    new_value (str): The new translation of old_term for the specified language.
-                    new_value (False/''): Removes the translation for the specified
-                        language and falls back to the old source_lang_term.
-        :param callable digest: An optional function to generate identifiers for old terms.
-        :param str source_lang: The language of old_source_lang_term in translations.
-            Defaults to 'en_US' if not specified.
+
+            where ``new_value`` can either be:
+
+            * a ``str``, in which case the new translation for the specified
+              language.
+            * ``False``, in which case it removes the translation for the
+                specified language and falls back to the latest en_US value.
+
+            If ``field.translate`` is a callable, the dictionary should be in
+            the format::
+
+                {lang: {old_source_lang_term: new_term}}
+
+            or (when ``digest`` is callable)::
+
+                {lang: {digest(old_source_lang_term): new_term}}.
+
+            where ``new_term`` can either be:
+
+            * a non-empty ``str``, in which case the new translation of
+              ``old_term`` for the specified language.
+            * ``False`` or ``''``, in which case it removes the translation for
+                the specified language and falls back to the old
+                ``source_lang_term``.
+
+        :param digest: An optional function to generate identifiers for old terms.
+        :param source_lang: The language of ``old_source_lang_term`` in
+            translations. Assumes ``'en_US'`` when it is not set / empty.
         """
         self.ensure_one()
 
@@ -3603,8 +3618,7 @@ class BaseModel(metaclass=MetaModel):
     def get_metadata(self) -> list[ValuesType]:
         """Return some metadata about the given records.
 
-        :return: list of ownership dictionaries for each requested record
-        :rtype: list of dictionaries with the following keys:
+        :returns: list of ownership dictionaries for each requested record with the following keys:
 
             * id: object id
             * create_uid: user who created the record
@@ -4438,7 +4452,7 @@ class BaseModel(metaclass=MetaModel):
         * discarded forbidden values (magic fields),
         * precomputed fields.
 
-        :param list vals_list: List of create values
+        :param vals_list: List of create values
         :returns: new list of completed create values
         """
         bad_names = ['id', 'parent_path']
@@ -4478,8 +4492,6 @@ class BaseModel(metaclass=MetaModel):
     def _add_precomputed_values(self, vals_list: list[ValuesType]) -> None:
         """ Add missing precomputed fields to ``vals_list`` values.
         Only applies for precompute=True fields.
-
-        :param dict vals_list: list(dict) of create values
         """
         precomputable = {
             fname: field
@@ -4755,7 +4767,7 @@ class BaseModel(metaclass=MetaModel):
             if fname not in self._fields or self._fields[fname].type != 'properties':
                 continue
             field_converter = self._fields[fname].convert_to_cache
-            to_write[fname] = dict(self[fname]._values, **field_converter(values.pop(fname), self, validate=False))
+            to_write[fname] = dict(self[fname]._values or {}, **field_converter(values.pop(fname), self, validate=False))
 
         self.write(values)
         if to_write:
@@ -5453,9 +5465,9 @@ class BaseModel(metaclass=MetaModel):
             Defaults to an empty domain that will match all records.
         :param fields: List of fields to read, see ``fields`` parameter in :meth:`read`.
             Defaults to all fields.
-        :param int offset: Number of records to skip, see ``offset`` parameter in :meth:`search`.
+        :param offset: Number of records to skip, see ``offset`` parameter in :meth:`search`.
             Defaults to 0.
-        :param int limit: Maximum number of records to return, see ``limit`` parameter in :meth:`search`.
+        :param limit: Maximum number of records to return, see ``limit`` parameter in :meth:`search`.
             Defaults to no limit.
         :param order: Columns to sort result, see ``order`` parameter in :meth:`search`.
             Defaults to no sort.
@@ -5538,6 +5550,7 @@ class BaseModel(metaclass=MetaModel):
         record ``self``, even if ``self`` is not accessible to the current user.
         If so, the record will be ``sudo()``-ed to access the corresponding file
         or image.
+
         :param field_name: image field name to check the access to
         :param access_token: access token to use instead of the
             access rights and access rules
@@ -5979,9 +5992,24 @@ class BaseModel(metaclass=MetaModel):
                 except KeyError as e:
                     raise ValueError(f"Invalid field in filter of {self._name}: {domain!r}") from e
 
-                if comparator in ('any', 'not any') and isinstance(value, Query):
-                    comparator = 'in' if comparator == 'any' else 'not in'
-                    value = set(value)
+                if comparator in ('any', 'not any'):
+                    if isinstance(value, Query):
+                        comparator = 'in' if comparator == 'any' else 'not in'
+                        value = set(value)
+                    else:
+                        # handle sub-domain in batch
+                        corecords = self.mapped(key)
+                        if not isinstance(corecords, BaseModel):
+                            raise ValueError(f"Invalid relational field {key} for {domain!r}")  # noqa: TRY004
+                        valid_ids = set(corecords.filtered_domain(value)._ids)
+                        is_any = comparator == 'any'
+                        stack.append({
+                            record.id
+                            for record in self
+                            if valid_ids.isdisjoint(record.mapped(key)._ids) != is_any
+                        })
+                        continue
+
                 if comparator.endswith('like'):
                     if comparator.endswith('ilike'):
                         # ilike uses unaccent and lower-case comparison
@@ -6079,10 +6107,6 @@ class BaseModel(metaclass=MetaModel):
                         ok = any(like_regex.match(unaccent(x)) for x in data)
                         if comparator.startswith('not'):
                             ok = not ok
-                    elif comparator == 'any':
-                        ok = data.filtered_domain(value)
-                    elif comparator == 'not any':
-                        ok = not data.filtered_domain(value)
                     else:
                         raise ValueError(f"Invalid term domain '{leaf}', operator '{comparator}' doesn't exist.")
 

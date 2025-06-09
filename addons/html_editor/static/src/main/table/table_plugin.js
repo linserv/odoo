@@ -117,7 +117,7 @@ export class TablePlugin extends Plugin {
         unsplittable_node_predicates: (node) =>
             node.nodeName === "TABLE" || tableInnerComponents.has(node.nodeName),
         fully_selected_node_predicates: (node) => !!closestElement(node, ".o_selected_td"),
-        traversed_nodes_processors: this.adjustTraversedNodes.bind(this),
+        targeted_nodes_processors: this.adjustTargetedNodes.bind(this),
         move_node_whitelist_selectors: "table",
     };
 
@@ -670,12 +670,12 @@ export class TablePlugin extends Plugin {
      */
     shiftCursorToTableCell(shiftIndex) {
         const sel = this.dependencies.selection.getEditableSelection();
-        const currentTd = closestElement(sel.anchorNode, "td");
+        const currentTd = closestElement(sel.anchorNode, "td, th");
         const closestTable = closestElement(currentTd, "table");
         if (!currentTd || !closestTable) {
             return false;
         }
-        const tds = [...closestTable.querySelectorAll("td")];
+        const tds = [...closestTable.querySelectorAll("td, th")];
         const cursorDestination = tds[tds.findIndex((td) => currentTd === td) + shiftIndex];
         if (!cursorDestination) {
             return false;
@@ -882,7 +882,7 @@ export class TablePlugin extends Plugin {
             .filter((node) => node.nodeName === "TABLE")
             .pop();
 
-        const traversedNodes = this.dependencies.selection.getTraversedNodes();
+        const targetedNodes = this.dependencies.selection.getTargetedNodes();
         if ((startTd !== endTd || selectSingleCell) && startTable === endTable) {
             if (!isProtected(startTable) && !isProtecting(startTable)) {
                 // The selection goes through at least two different cells ->
@@ -891,13 +891,13 @@ export class TablePlugin extends Plugin {
                 // one using shift + arrow key.
                 this.selectTableCells(selection);
             }
-        } else if (!traversedNodes.every((node) => closestElement(node.parentElement, "table"))) {
+        } else if (!targetedNodes.every((node) => closestElement(node.parentElement, "table"))) {
             const endSelectionTable = closestElement(selection.focusNode, "table");
             const endSelectionTableTds = endSelectionTable && getTableCells(endSelectionTable);
-            const traversedTds = new Set(traversedNodes.map((node) => closestElement(node, "td")));
-            const isTableFullySelected = endSelectionTableTds?.every((td) => traversedTds.has(td));
+            const targetedTds = new Set(targetedNodes.map((node) => closestElement(node, "td")));
+            const isTableFullySelected = endSelectionTableTds?.every((td) => targetedTds.has(td));
             if (endSelectionTable && !isTableFullySelected) {
-                // Make sure all the cells are traversed in actual selection
+                // Make sure all the cells are targeted in actual selection
                 // when selecting full table. If not, they will be selected
                 // forcefully and updateSelectionTable will be called again.
                 const targetTd =
@@ -911,14 +911,14 @@ export class TablePlugin extends Plugin {
                     focusOffset: selection.direction === DIRECTIONS.RIGHT ? nodeSize(targetTd) : 0,
                 });
             }
-            const traversedTables = new Set(
-                traversedNodes
+            const targetedTables = new Set(
+                targetedNodes
                     .map((node) => closestElement(node, "table"))
                     .filter((node) => node && !isProtected(node) && !isProtecting(node))
             );
-            for (const table of traversedTables) {
+            for (const table of targetedTables) {
                 // Don't apply several nested levels of selection.
-                if (!ancestors(table, this.editable).some((node) => traversedTables.has(node))) {
+                if (!ancestors(table, this.editable).some((node) => targetedTables.has(node))) {
                     table.classList.toggle("o_selected_table", true);
                     for (const td of getTableCells(table)) {
                         td.classList.toggle("o_selected_td", true);
@@ -965,6 +965,7 @@ export class TablePlugin extends Plugin {
     }
 
     onMouseup(ev) {
+        delete this._mouseMovePositionWhenAllContentsSelected;
         this._currentMouseState = ev.type;
         this.editable.removeEventListener("mousemove", this.onMousemove);
     }
@@ -1000,22 +1001,23 @@ export class TablePlugin extends Plugin {
             return;
         }
         const selection = this.dependencies.selection.getEditableSelection();
-        const docSelection = this.document.getSelection();
-        const range = docSelection.rangeCount && docSelection.getRangeAt(0);
         const startTd = closestElement(selection.startContainer, "td");
         const endTd = closestElement(selection.endContainer, "td");
         if (startTd && startTd === endTd && !isProtected(startTd) && !isProtecting(startTd)) {
-            const selectedNodes = this.dependencies.selection.getSelectedNodes();
+            const targetedNodes = this.dependencies.selection.getTargetedNodes();
             const cellContents = descendants(startTd);
+            /** @todo Test. Should probably use areNodeContentsFullySelected. */
             const areCellContentsFullySelected = cellContents
                 .filter((d) => !isBlock(d))
-                .every((child) => selectedNodes.includes(child));
+                .every((child) => targetedNodes.includes(child));
             if (areCellContentsFullySelected) {
                 const SENSITIVITY = 5;
-                const rangeRect = range.getBoundingClientRect();
+                if (!this._mouseMovePositionWhenAllContentsSelected) {
+                    this._mouseMovePositionWhenAllContentsSelected = [ev.clientX, ev.clientY];
+                }
                 const isMovingAwayFromSelection =
-                    ev.clientX > rangeRect.x + rangeRect.width + SENSITIVITY || // moving right
-                    ev.clientX < rangeRect.x - SENSITIVITY; // moving left
+                    Math.abs(ev.clientX - this._mouseMovePositionWhenAllContentsSelected[0]) >=
+                    SENSITIVITY;
                 if (isMovingAwayFromSelection) {
                     // A cell is fully selected and the mouse is moving away
                     // from the selection, within said cell -> select the cell.
@@ -1164,10 +1166,10 @@ export class TablePlugin extends Plugin {
         }
     }
 
-    adjustTraversedNodes(traversedNodes) {
-        const modifiedTraversedNodes = [];
+    adjustTargetedNodes(targetedNodes) {
+        const modifiedTargetedNodes = [];
         const visitedTables = new Set();
-        for (const node of traversedNodes) {
+        for (const node of targetedNodes) {
             const selectedTable = closestElement(node, ".o_selected_table");
             if (selectedTable) {
                 if (visitedTables.has(selectedTable)) {
@@ -1175,13 +1177,13 @@ export class TablePlugin extends Plugin {
                 }
                 visitedTables.add(selectedTable);
                 for (const selectedTd of selectedTable.querySelectorAll(".o_selected_td")) {
-                    modifiedTraversedNodes.push(selectedTd, ...descendants(selectedTd));
+                    modifiedTargetedNodes.push(selectedTd, ...descendants(selectedTd));
                 }
             } else {
-                modifiedTraversedNodes.push(node);
+                modifiedTargetedNodes.push(node);
             }
         }
-        return modifiedTraversedNodes;
+        return modifiedTargetedNodes;
     }
 
     resetTableSelection() {

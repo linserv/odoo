@@ -156,6 +156,7 @@ apt-get update
 # This will be modified by a unique password on the first start of Odoo
 password="$(openssl rand -base64 12)"
 echo "pi:${password}" | chpasswd
+echo TrustedUserCAKeys /etc/ssh/ca.pub >> /etc/ssh/sshd_config
 
 # Prevent Wi-Fi blocking
 apt-get -y remove rfkill
@@ -169,6 +170,9 @@ apt-get -y autoremove
 apt-get clean
 localepurge
 rm -rfv /usr/share/doc
+
+# Remove the default nginx website, we have our own config in /etc/nginx/conf.d/
+rm /etc/nginx/sites-enabled/default
 
 pip3 install -r /home/pi/odoo/addons/iot_box_image/configuration/requirements.txt --break-system-package
 

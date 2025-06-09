@@ -2,6 +2,7 @@ import { patch } from "@web/core/utils/patch";
 import { PosStore } from "@point_of_sale/app/services/pos_store";
 import { ConnectionLostError } from "@web/core/network/rpc";
 import { _t } from "@web/core/l10n/translation";
+import { EditOrderNamePopup } from "@pos_restaurant/app/components/popup/edit_order_name_popup/edit_order_name_popup";
 import { NumberPopup } from "@point_of_sale/app/components/popups/number_popup/number_popup";
 import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
@@ -503,7 +504,9 @@ patch(PosStore.prototype, {
     //@override
     addNewOrder(data = {}) {
         const order = super.addNewOrder(...arguments);
-        this.addPendingOrder([order.id]);
+        if (this.config.module_pos_restaurant) {
+            this.addPendingOrder([order.id]);
+        }
         return order;
     },
     createOrderIfNeeded(data) {
@@ -520,6 +523,7 @@ patch(PosStore.prototype, {
         let currentCourse;
         if (this.config.module_pos_restaurant) {
             const order = this.getOrder();
+            this.addPendingOrder([order.id]);
             if (!order.uiState.booked) {
                 order.setBooked(true);
             }
@@ -586,6 +590,22 @@ patch(PosStore.prototype, {
             }
         }
     },
+    async editFloatingOrderName(order) {
+        const payload = await makeAwaitable(this.dialog, EditOrderNamePopup, {
+            title: _t("Edit Order Name"),
+            placeholder: _t("18:45 John 4P"),
+            startingValue: order.floating_order_name || "",
+        });
+        if (payload) {
+            if (typeof order.id == "number") {
+                this.data.write("pos.order", [order.id], {
+                    floating_order_name: payload,
+                });
+            } else {
+                order.floating_order_name = payload;
+            }
+        }
+    },
     setFloatingOrder(floatingOrder) {
         if (this.getOrder()?.isFilledDirectSale) {
             this.transferOrder(this.getOrder().uuid, null, floatingOrder);
@@ -597,6 +617,24 @@ patch(PosStore.prototype, {
         this.navigate(screenName || "ProductScreen", {
             orderUuid: floatingOrder.uuid,
         });
+    },
+    async handleSelectNamePreset(order) {
+        if (this.config.module_pos_restaurant) {
+            const orderPreset = order.preset_id;
+            if (orderPreset && !order.floating_order_name && !order.table_id) {
+                order.floating_order_name = order.getPartner()?.name;
+                if (!order.floating_order_name) {
+                    await this.editFloatingOrderName(order);
+                    //re-set the order in case an order was selected from the current orders list in the EditOrderNamePopup
+                    order = this.getOrder();
+                    if (!order.floating_order_name) {
+                        return;
+                    }
+                }
+            }
+        } else {
+            return super.handleSelectNamePreset(...arguments);
+        }
     },
     findTable(tableNumber) {
         const find_table = (t) => t.table_number === parseInt(tableNumber);

@@ -7,7 +7,6 @@ from odoo.addons.base.tests.common import HttpCaseWithUserDemo
 from odoo.addons.mail.tools.discuss import Store
 from odoo.addons.website_livechat.tests.common import TestLivechatCommon
 from odoo.tests.common import new_test_user
-from odoo.tools.misc import limited_field_access_token
 
 
 @tests.tagged('post_install', '-at_install')
@@ -103,7 +102,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
             f"{self.livechat_base_url}/mail/data", {"fetch_params": ["channels_as_member"]}
         )
         livechat_info = next(c for c in init_messaging["discuss.channel"] if c["id"] == channel.id)
-        self.assertIn('visitor', livechat_info)
+        self.assertIn("livechat_visitor_id", livechat_info)
 
         # Remove access to visitors and try again, visitors info shouldn't be included
         self.operator.group_ids -= self.group_livechat_user
@@ -111,7 +110,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
             f"{self.livechat_base_url}/mail/data", {"fetch_params": ["channels_as_member"]}
         )
         livechat_info = next(c for c in init_messaging["discuss.channel"] if c["id"] == channel.id)
-        self.assertNotIn('visitor', livechat_info)
+        self.assertNotIn("livechat_visitor_id", livechat_info)
 
     def _common_basic_flow(self):
         # Open a new live chat
@@ -182,7 +181,6 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                 "discuss.channel": self._filter_channels_fields(
                     {
                         "anonymous_name": f"Visitor #{self.visitor.id}",
-                        "authorizedGroupFullName": False,
                         "avatar_cache_key": "no-avatar",
                         "channel_type": "livechat",
                         "country_id": False,
@@ -192,6 +190,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "fetchChannelInfoState": "fetched",
                         "from_message_id": False,
                         "group_based_subscription": False,
+                        "group_public_id": False,
                         "id": channel.id,
                         "invited_member_ids": [("ADD", [])],
                         "is_editable": True,
@@ -202,6 +201,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                             "id": self.operator.partner_id.id,
                             "type": "partner",
                         },
+                        "livechat_visitor_id": self.visitor.id,
                         "member_count": 2,
                         "message_needaction_counter": 0,
                         "message_needaction_counter_bus_id": 0,
@@ -210,7 +210,6 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "requested_by_operator": False,
                         "rtc_session_ids": [("ADD", [])],
                         "uuid": channel.uuid,
-                        "visitor": {"id": self.visitor.id, "type": "visitor"},
                         "wa_account_id": False,
                         "whatsapp_channel_valid_until": False,
                         "whatsapp_partner_id": False,
@@ -221,21 +220,21 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "create_date": fields.Datetime.to_string(operator_member.create_date),
                         "fetched_message_id": False,
                         "id": operator_member.id,
-                        "is_bot": False,
+                        "livechat_member_type": "agent",
                         "last_seen_dt": False,
-                        "persona": {"id": self.operator.partner_id.id, "type": "partner"},
+                        "partner_id": {"id": self.operator.partner_id.id, "type": "partner"},
                         "seen_message_id": False,
-                        "thread": {"id": channel.id, "model": "discuss.channel"},
+                        "channel_id": {"id": channel.id, "model": "discuss.channel"},
                     },
                     {
                         "create_date": fields.Datetime.to_string(guest_member.create_date),
                         "fetched_message_id": False,
                         "id": guest_member.id,
-                        "is_bot": False,
+                        "livechat_member_type": "visitor",
                         "last_seen_dt": False,
-                        "persona": {"id": guest.id, "type": "guest"},
+                        "guest_id": {"id": guest.id, "type": "guest"},
                         "seen_message_id": False,
-                        "thread": {"id": channel.id, "model": "discuss.channel"},
+                        "channel_id": {"id": channel.id, "model": "discuss.channel"},
                     },
                 ],
                 "im_livechat.channel": [
@@ -243,10 +242,11 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                 ],
                 "mail.guest": [
                     {
-                        "avatar_128_access_token": limited_field_access_token(guest, "avatar_128"),
-                        "country": False,
+                        "avatar_128_access_token": guest._get_avatar_128_access_token(),
+                        "country_id": False,
                         "id": guest.id,
                         "im_status": "offline",
+                        "im_status_access_token": guest._get_im_status_access_token(),
                         "name": f"Visitor #{self.visitor.id}",
                         "offline_since": False,
                         "write_date": fields.Datetime.to_string(guest.write_date),
@@ -255,15 +255,15 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                 "res.country": [
                     {"code": "BE", "id": self.env["ir.model.data"]._xmlid_to_res_id("base.be")}
                 ],
+                "res.lang": [{"id": self.env.ref("base.lang_en").id, "name": "English (US)"}],
                 "res.partner": self._filter_partners_fields(
                     {
                         "active": True,
-                        "avatar_128_access_token": limited_field_access_token(
-                            self.operator.partner_id, "avatar_128"
-                        ),
-                        "country": False,
+                        "avatar_128_access_token": self.operator.partner_id._get_avatar_128_access_token(),
+                        "country_id": False,
                         "id": self.operator.partner_id.id,
                         "im_status": "online",
+                        "im_status_access_token": self.operator.partner_id._get_im_status_access_token(),
                         "is_public": False,
                         "user_livechat_username": "El Deboulonnator",
                         "write_date": fields.Datetime.to_string(
@@ -271,16 +271,18 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         ),
                     }
                 ),
+                "website": [
+                    {"id": self.env.ref("website.default_website").id, "name": "My Website"}
+                ],
                 "website.visitor": [
                     {
-                        "country": self.env["ir.model.data"]._xmlid_to_res_id("base.be"),
+                        "country_id": self.env["ir.model.data"]._xmlid_to_res_id("base.be"),
+                        "display_name": f"Website Visitor #{self.visitor.id}",
                         "history": "",
                         "id": self.visitor.id,
-                        "is_connected": True,
-                        "lang_name": "English (US)",
-                        "name": f"Website Visitor #{self.visitor.id}",
+                        "lang_id": self.env.ref("base.lang_en").id,
                         "partner_id": False,
-                        "website_name": "My Website",
+                        "website_id": self.env.ref("website.default_website").id,
                     }
                 ],
             },
@@ -299,7 +301,6 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
             self._filter_channels_fields(
                 {
                     "anonymous_name": f"Visitor #{self.visitor.id}",
-                    "authorizedGroupFullName": False,
                     "avatar_cache_key": "no-avatar",
                     "channel_type": "livechat",
                     "country_id": False,
@@ -311,6 +312,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                     "fetchChannelInfoState": "fetched",
                     "from_message_id": False,
                     "group_based_subscription": False,
+                    "group_public_id": False,
                     "id": channel.id,
                     "invited_member_ids": [("ADD", [])],
                     "is_editable": False,

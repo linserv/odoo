@@ -26,14 +26,13 @@ patch(Thread.prototype, {
     get hasMemberList() {
         return this.channel_type === "livechat" || super.hasMemberList;
     },
-    get canLeave() {
-        if (this.channel_type === "livechat") {
-            return !this.selfMember || this.selfMember.message_unread_counter === 0;
-        }
-        return super.canLeave;
+    get allowedToLeaveChannelTypes() {
+        return [...super.allowedToLeaveChannelTypes, "livechat"];
     },
     get correspondents() {
-        return super.correspondents.filter((correspondent) => !correspondent.is_bot);
+        return super.correspondents.filter(
+            (correspondent) => correspondent.livechat_member_type !== "bot"
+        );
     },
 
     computeCorrespondent() {
@@ -45,7 +44,7 @@ patch(Thread.prototype, {
     },
 
     get displayName() {
-        if (this.channel_type !== "livechat" || !this.correspondent) {
+        if (this.channel_type !== "livechat" || !this.correspondent || this.custom_channel_name) {
             return super.displayName;
         }
         if (!this.correspondent.persona.is_public && this.correspondent.persona.country) {

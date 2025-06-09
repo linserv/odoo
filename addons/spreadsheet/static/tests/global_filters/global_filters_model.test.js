@@ -43,11 +43,7 @@ import {
     getCellValue,
     getEvaluatedCell,
 } from "@spreadsheet/../tests/helpers/getters";
-import {
-    LAST_YEAR_GLOBAL_FILTER,
-    NEXT_YEAR_GLOBAL_FILTER,
-    THIS_YEAR_GLOBAL_FILTER,
-} from "@spreadsheet/../tests/helpers/global_filter";
+import { THIS_YEAR_GLOBAL_FILTER } from "@spreadsheet/../tests/helpers/global_filter";
 import {
     createSpreadsheetWithList,
     insertListInSpreadsheet,
@@ -57,7 +53,6 @@ import {
     insertPivotInSpreadsheet,
 } from "@spreadsheet/../tests/helpers/pivot";
 import { toRangeData } from "@spreadsheet/../tests/helpers/zones";
-import { FILTER_DATE_OPTION } from "@spreadsheet/assets_backend/constants";
 import { GlobalFiltersCoreViewPlugin } from "@spreadsheet/global_filters/plugins/global_filters_core_view_plugin";
 import { RELATIVE_DATE_RANGE_TYPES } from "@spreadsheet/helpers/constants";
 import { waitForDataLoaded } from "@spreadsheet/helpers/model";
@@ -73,15 +68,6 @@ const { toZone } = helpers;
  * @typedef {import("@spreadsheet").GlobalFilter} GlobalFilter
  *
  */
-
-/** @type FilterPayload */
-const LAST_YEAR_LEGACY_FILTER = {
-    id: "41",
-    type: "date",
-    rangeType: "fixedPeriod",
-    label: "Legacy Last Year",
-    defaultValue: { year: "last_year" },
-};
 
 const DEFAULT_FIELD_MATCHINGS = {
     "PIVOT#1": { chain: "date", type: "date" },
@@ -102,7 +88,7 @@ function getFiltersMatchingPivot(model, formula) {
 test("Can add a global filter", async function () {
     const { model } = await createSpreadsheetWithPivotAndList();
     expect(model.getters.getGlobalFilters().length).toBe(0);
-    await addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {
+    await addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {
         pivot: DEFAULT_FIELD_MATCHINGS,
     });
     expect(model.getters.getGlobalFilters().length).toBe(1);
@@ -114,7 +100,7 @@ test("Can add a global filter", async function () {
 test("Can add a global filter with an empty field matching (no field chain)", async function () {
     const { model } = await createSpreadsheetWithPivotAndList();
     expect(model.getters.getGlobalFilters().length).toBe(0);
-    await addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {
+    await addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {
         pivot: { "PIVOT#1": {} },
     });
     expect(model.getters.getGlobalFilters().length).toBe(1);
@@ -126,7 +112,7 @@ test("Can delete a global filter", async function () {
     const { model } = await createSpreadsheetWithPivotAndList();
     let result = await removeGlobalFilter(model, 1);
     expect(result.reasons).toEqual([CommandResult.FilterNotFound]);
-    await addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER);
+    await addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER);
     const gf = model.getters.getGlobalFilters()[0];
     result = await removeGlobalFilter(model, gf.id);
     expect(result).toBe(DispatchResult.Success);
@@ -142,14 +128,15 @@ test("Can edit a global filter", async function () {
         id: 1,
     });
     expect(result.reasons).toEqual([CommandResult.FilterNotFound]);
-    await addGlobalFilter(model, { ...LAST_YEAR_GLOBAL_FILTER, id: 1 });
+    await addGlobalFilter(model, { ...THIS_YEAR_GLOBAL_FILTER, id: 1 });
     result = await editGlobalFilter(model, {
         ...THIS_YEAR_GLOBAL_FILTER,
+        label: "Another label",
         id: 1,
     });
     expect(result).toBe(DispatchResult.Success);
     expect(model.getters.getGlobalFilters().length).toBe(1);
-    expect(model.getters.getGlobalFilters()[0].defaultValue.yearOffset).toBe(0);
+    expect(model.getters.getGlobalFilters()[0].defaultValue).toBe("this_year");
 });
 
 test("A global filter with an empty field can be evaluated", async function () {
@@ -266,27 +253,32 @@ test("Adding new DataSource with a different model won't set up its field matchi
 });
 test("Can save a value to an existing global filter", async function () {
     const { model } = await createSpreadsheetWithPivotAndList();
-    await addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {
+    await addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {
         pivot: DEFAULT_FIELD_MATCHINGS,
         list: DEFAULT_LIST_FIELD_MATCHINGS,
     });
     const gf = model.getters.getGlobalFilters()[0];
+    const year = DateTime.local().year;
     let result = await setGlobalFilterValue(model, {
         id: gf.id,
-        value: { period: "february", yearOffset: 0 },
+        value: { type: "month", period: { month: 2, year } },
     });
     expect(result).toBe(DispatchResult.Success);
     expect(model.getters.getGlobalFilters().length).toBe(1);
-    expect(model.getters.getGlobalFilterDefaultValue(gf.id).yearOffset).toBe(-1);
-    expect(model.getters.getGlobalFilterValue(gf.id).period).toBe("february");
-    expect(model.getters.getGlobalFilterValue(gf.id).yearOffset).toBe(0);
+    expect(model.getters.getGlobalFilterDefaultValue(gf.id)).toBe("this_year");
+    expect(model.getters.getGlobalFilterValue(gf.id)).toEqual({
+        type: "month",
+        period: { month: 2, year },
+    });
     result = await setGlobalFilterValue(model, {
         id: gf.id,
-        value: { period: "march", yearOffset: 0 },
+        value: { type: "month", period: { month: 3, year } },
     });
     expect(result).toBe(DispatchResult.Success);
-    expect(model.getters.getGlobalFilterValue(gf.id).period).toBe("march");
-    expect(model.getters.getGlobalFilterValue(gf.id).yearOffset).toBe(0);
+    expect(model.getters.getGlobalFilterValue(gf.id)).toEqual({
+        type: "month",
+        period: { month: 3, year },
+    });
     const computedDomain = model.getters.getPivotComputedDomain("PIVOT#1");
     expect(computedDomain.length).toBe(3);
     const listDomain = model.getters.getListComputedDomain("1");
@@ -298,11 +290,16 @@ test("Domain of simple date filter", async function () {
     const { model } = await createSpreadsheetWithPivotAndList();
     insertChartInSpreadsheet(model);
     const chartId = model.getters.getOdooChartIds()[0];
-    await addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {
+    await addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {
         pivot: { "PIVOT#1": { chain: "date", type: "date" } },
         list: { 1: { chain: "date", type: "date" } },
         chart: { [chartId]: { chain: "date", type: "date" } },
     });
+    const result = await setGlobalFilterValue(model, {
+        id: THIS_YEAR_GLOBAL_FILTER.id,
+        value: { type: "year", period: { year: 2021 } },
+    });
+    console.log(result);
     const pivotDomain = model.getters.getPivotComputedDomain("PIVOT#1");
     expect(pivotDomain[0]).toBe("&");
     expect(pivotDomain[1]).toEqual(["date", ">=", "2021-01-01"]);
@@ -335,7 +332,7 @@ test("Domain of date filter with quarter offset on list field", async function (
     /** @type GlobalFilter */
     const filter = {
         ...THIS_YEAR_GLOBAL_FILTER,
-        defaultValue: { yearOffset: 0, period: "third_quarter" },
+        defaultValue: "this_quarter",
     };
     await addGlobalFilter(model, filter, {
         list: { 1: { chain: "date", type: "date", offset: 2 } },
@@ -353,7 +350,7 @@ test("Domain of date filter with month offset on graph field", async function ()
     /** @type GlobalFilter */
     const filter = {
         ...THIS_YEAR_GLOBAL_FILTER,
-        defaultValue: { yearOffset: 0, period: "july" },
+        defaultValue: "this_month",
     };
     await addGlobalFilter(model, filter, {
         chart: { [chartId]: { chain: "date", type: "date", offset: -2 } },
@@ -365,8 +362,8 @@ test("Domain of date filter with month offset on graph field", async function ()
 });
 
 test("Can import/export filters", async function () {
+    mockDate("2022-07-14 00:00:00");
     const spreadsheetData = {
-        version: 16,
         sheets: [
             {
                 id: "sheet1",
@@ -377,12 +374,12 @@ test("Can import/export filters", async function () {
         ],
         pivots: {
             1: {
-                id: 1,
-                colGroupBys: ["foo"],
+                type: "ODOO",
+                columns: [{ fieldName: "foo" }],
                 domain: [],
-                measures: [{ field: "probability", operator: "avg" }],
+                measures: [{ id: "probability:avg", fieldName: "probability", aggregator: "avg" }],
                 model: "partner",
-                rowGroupBys: ["bar"],
+                rows: [{ fieldName: "bar" }],
                 context: {},
                 fieldMatching: {
                     41: { type: "date", chain: "date" },
@@ -404,19 +401,36 @@ test("Can import/export filters", async function () {
                 },
             },
         },
-        globalFilters: [LAST_YEAR_LEGACY_FILTER, LAST_YEAR_GLOBAL_FILTER],
+        globalFilters: [
+            {
+                id: "41",
+                type: "date",
+                label: "This Year",
+                rangeType: "fixedPeriod",
+                defaultValue: "this_year",
+            },
+            {
+                id: "42",
+                type: "date",
+                label: "This Month",
+                rangeType: "fixedPeriod",
+                defaultValue: "this_month",
+            },
+        ],
     };
     const { model } = await createModelWithDataSource({ spreadsheetData });
 
     expect(model.getters.getGlobalFilters().length).toBe(2);
     let [filter1, filter2] = model.getters.getGlobalFilters();
-    expect(filter1.defaultValue.yearOffset).toBe(-1);
-    expect(model.getters.getGlobalFilterValue(filter1.id).yearOffset).toBe(-1, {
-        message: "it should have applied the default value",
+    expect(filter1.defaultValue).toBe("this_year");
+    expect(model.getters.getGlobalFilterValue(filter1.id)).toEqual({
+        type: "year",
+        period: { year: 2022 },
     });
-    expect(filter2.defaultValue.yearOffset).toBe(-1);
-    expect(model.getters.getGlobalFilterValue(filter2.id).yearOffset).toBe(-1, {
-        message: "it should have applied the default value",
+    expect(filter2.defaultValue).toBe("this_month");
+    expect(model.getters.getGlobalFilterValue(filter2.id)).toEqual({
+        type: "month",
+        period: { month: 7, year: 2022 },
     });
 
     let computedDomain = model.getters.getPivotComputedDomain("1");
@@ -433,14 +447,16 @@ test("Can import/export filters", async function () {
     });
 
     expect(newModel.getters.getGlobalFilters().length).toBe(2);
-    [filter1, filter2] = newModel.getters.getGlobalFilters();
-    expect(filter1.defaultValue.yearOffset).toBe(-1);
-    expect(newModel.getters.getGlobalFilterValue(filter1.id).yearOffset).toBe(-1, {
-        message: "it should have applied the default value",
+    [filter1, filter2] = model.getters.getGlobalFilters();
+    expect(filter1.defaultValue).toBe("this_year");
+    expect(model.getters.getGlobalFilterValue(filter1.id)).toEqual({
+        type: "year",
+        period: { year: 2022 },
     });
-    expect(filter2.defaultValue.yearOffset).toBe(-1);
-    expect(newModel.getters.getGlobalFilterValue(filter2.id).yearOffset).toBe(-1, {
-        message: "it should have applied the default value",
+    expect(filter2.defaultValue).toBe("this_month");
+    expect(model.getters.getGlobalFilterValue(filter2.id)).toEqual({
+        type: "month",
+        period: { month: 7, year: 2022 },
     });
 
     computedDomain = newModel.getters.getPivotComputedDomain("1");
@@ -454,8 +470,8 @@ test("Can import/export filters", async function () {
 });
 
 test("Can import/export filters of only list", async function () {
+    mockDate("2022-07-14 00:00:00");
     const spreadsheetData = {
-        version: 16,
         lists: {
             1: {
                 id: 1,
@@ -470,7 +486,22 @@ test("Can import/export filters of only list", async function () {
                 },
             },
         },
-        globalFilters: [LAST_YEAR_LEGACY_FILTER, LAST_YEAR_GLOBAL_FILTER],
+        globalFilters: [
+            {
+                id: "41",
+                type: "date",
+                label: "This Year",
+                rangeType: "fixedPeriod",
+                defaultValue: "this_year",
+            },
+            {
+                id: "42",
+                type: "date",
+                label: "This Month",
+                rangeType: "fixedPeriod",
+                defaultValue: "this_month",
+            },
+        ],
     };
     const { model } = await createModelWithDataSource({ spreadsheetData });
 
@@ -561,7 +592,7 @@ test("Relational filter default to current user", async function () {
     expect(model.getters.getGlobalFilterValue(filter.id)).toEqual([7]);
 
     model.dispatch("SET_GLOBAL_FILTER_VALUE", { id: filter.id });
-    expect(model.getters.getGlobalFilterValue(filter.id)).toEqual([], {
+    expect(model.getters.getGlobalFilterValue(filter.id)).toBe(undefined, {
         message: "can clear automatic value",
     });
 });
@@ -588,7 +619,7 @@ test("Get active filters with multiple filters", async function () {
     expect(model.getters.getActiveFilterCount()).toBe(0);
     await setGlobalFilterValue(model, {
         id: text.id,
-        value: "Hello",
+        value: ["Hello"],
     });
     expect(model.getters.getActiveFilterCount()).toBe(1);
 });
@@ -604,9 +635,40 @@ test("Get active filters with text filter enabled", async function () {
     expect(model.getters.getActiveFilterCount()).toBe(0);
     await setGlobalFilterValue(model, {
         id: filter.id,
-        value: "Hello",
+        value: ["Hello"],
     });
     expect(model.getters.getActiveFilterCount()).toBe(1);
+});
+
+test("domain generated with text filter", async function () {
+    const { model } = await createSpreadsheetWithPivot();
+    await addGlobalFilter(
+        model,
+        {
+            id: "42",
+            type: "text",
+            label: "Text Filter",
+        },
+        {
+            pivot: { "PIVOT#1": { chain: "name", type: "char" } },
+        }
+    );
+    const [filter] = model.getters.getGlobalFilters();
+    expect(model.getters.getPivotComputedDomain("PIVOT#1")).toEqual([]);
+    await setGlobalFilterValue(model, {
+        id: filter.id,
+        value: ["Hello"],
+    });
+    expect(model.getters.getPivotComputedDomain("PIVOT#1")).toEqual([["name", "ilike", "Hello"]]);
+    await setGlobalFilterValue(model, {
+        id: filter.id,
+        value: ["Hello", "World"],
+    });
+    expect(model.getters.getPivotComputedDomain("PIVOT#1")).toEqual([
+        "|",
+        ["name", "ilike", "Hello"],
+        ["name", "ilike", "World"],
+    ]);
 });
 
 test("restrict text filter to a range of values", async function () {
@@ -618,7 +680,7 @@ test("restrict text filter to a range of values", async function () {
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1:A2"),
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1:A2")],
     });
 
     expect(model.getters.getTextFilterOptions("42")).toEqual([
@@ -636,7 +698,7 @@ test("duplicated values appear once in text filter with range", async function (
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1:A2"),
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1:A2")],
     });
 
     expect(model.getters.getTextFilterOptions("42")).toEqual([{ value: "3", formattedValue: "3" }]);
@@ -653,7 +715,7 @@ test("numbers and dates are formatted in text filter with range", async function
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1:A2"),
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1:A2")],
     });
 
     expect(model.getters.getTextFilterOptions("42")).toEqual([
@@ -672,7 +734,7 @@ test("falsy values appears (but not empty string) in text filter with range", as
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1:A3"),
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1:A3")],
     });
 
     expect(model.getters.getTextFilterOptions("42")).toEqual([
@@ -689,8 +751,8 @@ test("default value appears in text filter with range", async function () {
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1"),
-        defaultValue: "World",
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1")],
+        defaultValue: ["World"],
     });
 
     expect(model.getters.getTextFilterOptions("42")).toEqual([
@@ -708,11 +770,11 @@ test("current value appears in text filter with range", async function () {
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1:A2"),
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1:A2")],
     });
     await setGlobalFilterValue(model, {
         id: "42",
-        value: "World", // set the value to one of the allowed values
+        value: ["World"], // set the value to one of the allowed values
     });
 
     setCellContent(model, "A2", "Bob"); // change the value of the cell
@@ -731,8 +793,8 @@ test("default value appears once if the same value is in the text filter range",
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1"),
-        defaultValue: "Hello", // same value as in A1
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1")],
+        defaultValue: ["Hello"], // same value as in A1
     });
     expect(model.getters.getTextFilterOptions("42")).toEqual([
         { value: "Hello", formattedValue: "Hello" },
@@ -748,12 +810,12 @@ test("formatted default value appears once if the same value is in the text filt
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1"),
-        defaultValue: "0.3",
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1")],
+        defaultValue: ["0.3"],
     });
     await setGlobalFilterValue(model, {
         id: "42",
-        value: "0.3",
+        value: ["0.3"],
     });
     expect(model.getters.getTextFilterOptions("42")).toEqual([
         { value: "0.3", formattedValue: "30.00%" },
@@ -770,8 +832,8 @@ test("errors and empty cells if the same value is in the text filter range", asy
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1:A3"),
-        defaultValue: "Hello", // same value as in A1
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1:A3")],
+        defaultValue: ["Hello"], // same value as in A1
     });
     expect(model.getters.getTextFilterOptions("42")).toEqual([
         { value: "Hello", formattedValue: "Hello" },
@@ -785,11 +847,13 @@ test("add column before a text filter range", async function () {
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1:A2"),
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1:A2")],
     });
     addColumns(model, "before", "A", 1);
 
-    expect(model.getters.getGlobalFilter("42").rangeOfAllowedValues.zone).toEqual(toZone("B1:B2"));
+    expect(model.getters.getGlobalFilter("42").rangesOfAllowedValues[0].zone).toEqual(
+        toZone("B1:B2")
+    );
 });
 
 test("delete a text filter range", async function () {
@@ -799,11 +863,11 @@ test("delete a text filter range", async function () {
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1:A2"),
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1:A2")],
     });
     deleteColumns(model, ["A"]);
 
-    expect(model.getters.getGlobalFilter("42").rangeOfAllowedValues).toBe(undefined);
+    expect(model.getters.getGlobalFilter("42").rangesOfAllowedValues).toBe(undefined);
 });
 
 test("import/export a text filter range", async function () {
@@ -813,16 +877,17 @@ test("import/export a text filter range", async function () {
         id: "42",
         type: "text",
         label: "Text Filter",
-        rangeOfAllowedValues: toRangeData(sheetId, "A1:A2"),
+        rangesOfAllowedValues: [toRangeData(sheetId, "A1:A2")],
     });
     // export
     const data = model.exportData();
-    expect(data.globalFilters[0].rangeOfAllowedValues).toBe("Sheet1!A1:A2");
+    expect(data.globalFilters[0].rangesOfAllowedValues).toEqual(["Sheet1!A1:A2"]);
     // import
     const newModel = new Model(data);
-    const range = newModel.getters.getGlobalFilter("42").rangeOfAllowedValues;
-    expect(range.zone).toEqual(toZone("A1:A2"));
-    expect(range.sheetId).toBe(sheetId);
+    const ranges = newModel.getters.getGlobalFilter("42").rangesOfAllowedValues;
+    expect(ranges.length).toBe(1);
+    expect(ranges[0].zone).toEqual(toZone("A1:A2"));
+    expect(ranges[0].sheetId).toBe(sheetId);
 });
 
 test("Get active filters with relation filter enabled", async function () {
@@ -851,26 +916,28 @@ test("Get active filters with date filter enabled", async function () {
     });
     const [filter] = model.getters.getGlobalFilters();
     expect(model.getters.getActiveFilterCount()).toBe(0);
+    const year = DateTime.now().year;
     await setGlobalFilterValue(model, {
         id: filter.id,
         value: {
-            yearOffset: 0,
-            period: undefined,
+            type: "year",
+            period: { year },
         },
     });
     expect(model.getters.getActiveFilterCount()).toBe(1);
     await setGlobalFilterValue(model, {
         id: filter.id,
         value: {
-            period: "first_quarter",
+            type: "quarter",
+            period: { year, quarter: 1 },
         },
     });
     expect(model.getters.getActiveFilterCount()).toBe(1);
     await setGlobalFilterValue(model, {
         id: filter.id,
         value: {
-            yearOffset: 0,
-            period: "first_quarter",
+            type: "quarter",
+            period: { year, quarter: 1 },
         },
     });
     expect(model.getters.getActiveFilterCount()).toBe(1);
@@ -891,10 +958,15 @@ test("ODOO.FILTER.VALUE text filter", async function () {
     const [filter] = model.getters.getGlobalFilters();
     await setGlobalFilterValue(model, {
         id: filter.id,
-        value: "Hello",
+        value: ["Hello"],
     });
     await animationFrame();
     expect(getCellValue(model, "A10")).toBe("Hello");
+    await setGlobalFilterValue(model, {
+        id: filter.id,
+        value: ["Hello", "World"],
+    });
+    expect(getCellValue(model, "A10")).toBe("Hello, World");
 });
 
 test("ODOO.FILTER.VALUE date filter", async function () {
@@ -905,42 +977,40 @@ test("ODOO.FILTER.VALUE date filter", async function () {
         id: "42",
         type: "date",
         label: "Date Filter",
+        rangeType: "fixedPeriod",
     });
     await animationFrame();
     const [filter] = model.getters.getGlobalFilters();
+    const year = DateTime.local().year;
     await setGlobalFilterValue(model, {
         id: filter.id,
-        rangeType: "fixedPeriod",
         value: {
-            yearOffset: 0,
-            period: "first_quarter",
+            type: "quarter",
+            period: { year, quarter: 1 },
         },
     });
     await animationFrame();
-    expect(getCellValue(model, "A10")).toBe(`Q1/${DateTime.now().year}`);
+    expect(getCellValue(model, "A10")).toBe(`Q1/${year}`);
     await setGlobalFilterValue(model, {
         id: filter.id,
-        rangeType: "fixedPeriod",
         value: {
-            yearOffset: 0,
+            type: "year",
+            period: { year },
         },
     });
     await animationFrame();
-    expect(getCellValue(model, "A10")).toBe(`${DateTime.now().year}`);
+    expect(getCellValue(model, "A10")).toBe(`${year}`);
     await setGlobalFilterValue(model, {
         id: filter.id,
-        rangeType: "fixedPeriod",
         value: {
-            period: "january",
-            yearOffset: 0,
+            type: "month",
+            period: { year, month: 1 },
         },
     });
     await animationFrame();
-    expect(getCellValue(model, "A10")).toBe(`01/${DateTime.now().year}`);
+    expect(getCellValue(model, "A10")).toBe(`01/${year}`);
     await setGlobalFilterValue(model, {
         id: filter.id,
-        rangeType: "fixedPeriod",
-        value: {},
     });
     await animationFrame();
     expect(getCellValue(model, "A10")).toBe(``);
@@ -1084,7 +1154,7 @@ test("ODOO.FILTER.VALUE with escaped quotes in the filter label", async function
         id: "42",
         type: "text",
         label: 'my "special" filter',
-        defaultValue: "Jean-Jacques",
+        defaultValue: ["Jean-Jacques"],
     });
     setCellContent(model, "A1", '=ODOO.FILTER.VALUE("my \\"special\\" filter")');
     expect(getCellValue(model, "A1")).toBe("Jean-Jacques");
@@ -1123,12 +1193,12 @@ test("Exporting data does not remove value from model", async function () {
     });
     await setGlobalFilterValue(model, {
         id: "42",
-        value: "Hello export bug",
+        value: ["Hello export bug"],
     });
     const [filter] = model.getters.getGlobalFilters();
-    expect(model.getters.getGlobalFilterValue(filter.id)).toBe("Hello export bug");
+    expect(model.getters.getGlobalFilterValue(filter.id)).toEqual(["Hello export bug"]);
     model.exportData();
-    expect(model.getters.getGlobalFilterValue(filter.id)).toBe("Hello export bug");
+    expect(model.getters.getGlobalFilterValue(filter.id)).toEqual(["Hello export bug"]);
 });
 
 test("Can undo-redo a ADD_GLOBAL_FILTER", async function () {
@@ -1181,20 +1251,33 @@ test("Can undo-redo a EDIT_GLOBAL_FILTER", async function () {
 
 test("Can undo-redo a MOVE_GLOBAL_FILTER", async function () {
     const { model } = await createModelWithDataSource();
-    addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {});
-    addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {});
-    addGlobalFilter(model, NEXT_YEAR_GLOBAL_FILTER, {});
+    const filter1 = {
+        id: 1,
+        type: "text",
+        label: "Filter 1",
+    };
+    const filter2 = {
+        id: 2,
+        type: "text",
+        label: "Filter 2",
+    };
+    const filter3 = {
+        id: 3,
+        type: "text",
+        label: "Filter 3",
+    };
+    addGlobalFilter(model, filter1, {});
+    addGlobalFilter(model, filter2, {});
+    addGlobalFilter(model, filter3, {});
 
-    const lastYearFilterId = LAST_YEAR_GLOBAL_FILTER.id;
-
-    moveGlobalFilter(model, lastYearFilterId, 1);
-    expect(model.getters.getGlobalFilters()[1].id).toBe(lastYearFilterId);
+    moveGlobalFilter(model, filter1.id, 1);
+    expect(model.getters.getGlobalFilters()[1].id).toBe(filter1.id);
 
     model.dispatch("REQUEST_UNDO");
-    expect(model.getters.getGlobalFilters()[0].id).toBe(lastYearFilterId);
+    expect(model.getters.getGlobalFilters()[0].id).toBe(filter1.id);
 
     model.dispatch("REQUEST_REDO");
-    expect(model.getters.getGlobalFilters()[1].id).toBe(lastYearFilterId);
+    expect(model.getters.getGlobalFilters()[1].id).toBe(filter1.id);
 });
 
 test("pivot headers won't change when adding a filter ", async function () {
@@ -1251,7 +1334,6 @@ test("load data only once if filter is not active (without default value)", asyn
                 id: "filterId",
                 type: "date",
                 label: "my filter",
-                defaultValue: {},
                 rangeType: "fixedPeriod",
             },
         ],
@@ -1301,7 +1383,7 @@ test("load data only once if filter is active (with a default value)", async fun
                 id: "filterId",
                 type: "date",
                 label: "my filter",
-                defaultValue: { yearOffset: 0 },
+                defaultValue: "this_year",
                 rangeType: "fixedPeriod",
             },
         ],
@@ -1362,7 +1444,7 @@ test("don't reload data if an empty filter is added", async function () {
         type: "date",
         rangeType: "fixedPeriod",
         label: "This month",
-        defaultValue: {}, // no default value!
+        defaultValue: undefined, // no default value!
     });
     expect(getCellValue(model, "A1")).toBe(131);
     expect.verifySteps([]);
@@ -1398,7 +1480,7 @@ test("don't load data if a filter is added but the data is not needed", async fu
             type: "date",
             rangeType: "fixedPeriod",
             label: "This month",
-            defaultValue: { period: "january", yearOffset: 0 },
+            defaultValue: "this_month",
         },
         pivot: {
             1: { chain: "date", type: "date" },
@@ -1431,7 +1513,6 @@ test("don't load data if a filter is activated but the data is not needed", asyn
                 id: "filterId",
                 type: "date",
                 label: "my filter",
-                defaultValue: {},
                 rangeType: "fixedPeriod",
             },
         ],
@@ -1445,9 +1526,10 @@ test("don't load data if a filter is activated but the data is not needed", asyn
         },
     });
     expect.verifySteps([]);
+    const year = DateTime.now().year;
     model.dispatch("SET_GLOBAL_FILTER_VALUE", {
         id: "filterId",
-        value: { yearOffset: 0 },
+        value: { type: "year", period: { year } },
     });
 
     expect.verifySteps([]);
@@ -1461,7 +1543,7 @@ test("don't load data if a filter is activated but the data is not needed", asyn
 test("Default value defines value", async function () {
     const { model } = await createSpreadsheetWithPivot();
     const label = "This year";
-    const defaultValue = "value";
+    const defaultValue = ["value"];
     await addGlobalFilter(model, {
         id: "42",
         type: "text",
@@ -1469,17 +1551,17 @@ test("Default value defines value", async function () {
         defaultValue,
     });
     const [filter] = model.getters.getGlobalFilters();
-    expect(model.getters.getGlobalFilterValue(filter.id)).toBe(defaultValue);
+    expect(model.getters.getGlobalFilterValue(filter.id)).toEqual(defaultValue);
 });
 
 test("Default value defines value at model loading", async function () {
     const label = "This year";
-    const defaultValue = "value";
+    const defaultValue = ["value"];
     const model = new Model({
         globalFilters: [{ type: "text", label, defaultValue, fields: {}, id: "1" }],
     });
     const [filter] = model.getters.getGlobalFilters();
-    expect(model.getters.getGlobalFilterValue(filter.id)).toBe(defaultValue);
+    expect(model.getters.getGlobalFilterValue(filter.id)).toEqual(defaultValue);
 });
 
 test("filter display value of year filter is a string", async function () {
@@ -1562,7 +1644,10 @@ test("Date filter automatic default value for years filter", async function () {
         rangeType: "fixedPeriod",
     });
     expect(model.getters.getGlobalFilterValue("1")).toEqual({
-        yearOffset: 0,
+        type: "year",
+        period: {
+            year: DateTime.local().year,
+        },
     });
 });
 
@@ -1578,8 +1663,11 @@ test("Date filter automatic default value for month filter", async function () {
         rangeType: "fixedPeriod",
     });
     expect(model.getters.getGlobalFilterValue("1")).toEqual({
-        yearOffset: 0,
-        period: "march",
+        type: "month",
+        period: {
+            year: 2022,
+            month: 3,
+        },
     });
 });
 
@@ -1595,8 +1683,11 @@ test("Date filter automatic default value for quarter filter", async function ()
         rangeType: "fixedPeriod",
     });
     expect(model.getters.getGlobalFilterValue("1")).toEqual({
-        yearOffset: 0,
-        period: FILTER_DATE_OPTION.quarter[3],
+        type: "quarter",
+        period: {
+            year: 2022,
+            quarter: 4,
+        },
     });
 });
 
@@ -1609,10 +1700,7 @@ test("Date filter automatic undefined values for from_to filter", async function
         label,
         rangeType: "from_to",
     });
-    expect(model.getters.getGlobalFilterValue("1")).toEqual({
-        from: undefined,
-        to: undefined,
-    });
+    expect(model.getters.getGlobalFilterValue("1")).toBe(undefined);
 });
 
 test("Date filter automatic default value at model loading", async function () {
@@ -1623,14 +1711,16 @@ test("Date filter automatic default value at model loading", async function () {
                 type: "date",
                 label,
                 defaultValue: "this_year",
-                fields: {},
                 id: "1",
                 rangeType: "fixedPeriod",
             },
         ],
     });
     expect(model.getters.getGlobalFilterValue("1")).toEqual({
-        yearOffset: 0,
+        type: "year",
+        period: {
+            year: DateTime.local().year,
+        },
     });
 });
 
@@ -1779,10 +1869,7 @@ test("from_to date filter at model loading", async function () {
             },
         ],
     });
-    expect(model.getters.getGlobalFilterValue("1")).toEqual({
-        from: undefined,
-        to: undefined,
-    });
+    expect(model.getters.getGlobalFilterValue("1")).toBe(undefined);
 });
 
 test("from_to date filter domain value on a date field", async function () {
@@ -1933,7 +2020,7 @@ test("can clear 'from_to' date filter values", async function () {
     });
 });
 
-test("A date filter without a yearOffset value yields an empty domain", async function () {
+test("A date filter without a year value yields an empty domain", async function () {
     mockDate("2022-05-16 00:00:00");
     const { model } = await createSpreadsheetWithPivot();
     const filter = {
@@ -1953,7 +2040,7 @@ test("A date filter without a yearOffset value yields an empty domain", async fu
     expect(computedDomain).toEqual([]);
 });
 
-test("Date filter with automatic default without a yearOffset value yields an empty domain", async function () {
+test("Date filter with automatic default without a year value yields an empty domain", async function () {
     mockDate("2022-05-16 00:00:00");
     const { model } = await createSpreadsheetWithPivot();
     const filter = {
@@ -1962,7 +2049,6 @@ test("Date filter with automatic default without a yearOffset value yields an em
         label: "This Year",
         rangeType: "fixedPeriod",
         defaultValue: "this_year",
-        defaultsToCurrentPeriod: true,
     };
     await addGlobalFilter(model, filter, {
         pivot: { "PIVOT#1": { chain: "date", type: "date", offset: 0 } },
@@ -1993,7 +2079,7 @@ test("Can set a value to a relation filter from the SET_MANY_GLOBAL_FILTER_VALUE
     model.dispatch("SET_MANY_GLOBAL_FILTER_VALUE", {
         filters: [{ filterId: "42" }],
     });
-    expect(model.getters.getGlobalFilterValue("42")).toEqual([]);
+    expect(model.getters.getGlobalFilterValue("42")).toBe(undefined);
 });
 
 test("Can set a value to a date filter from the SET_MANY_GLOBAL_FILTER_VALUE command", async function () {
@@ -2005,7 +2091,7 @@ test("Can set a value to a date filter from the SET_MANY_GLOBAL_FILTER_VALUE com
         defaultValue: "this_month",
         rangeType: "fixedPeriod",
     });
-    const newValue = { yearOffset: -6, period: "may" };
+    const newValue = { year: 2016, period: 5 };
     model.dispatch("SET_MANY_GLOBAL_FILTER_VALUE", {
         filters: [{ filterId: "42", value: newValue }],
     });
@@ -2033,6 +2119,7 @@ test("getFiltersMatchingPivot return correctly matching filter according to cell
                     <field name="probability" type="measure"/>
                     <field name="date" interval="year" type="col"/>
                     <field name="date" interval="month" type="col"/>
+                    <field name="date" interval="quarter" type="col"/>
                 </pivot>`,
     });
     await addGlobalFilter(
@@ -2068,9 +2155,21 @@ test("getFiltersMatchingPivot return correctly matching filter according to cell
     );
     expect(relationalFiltersWithNoneValue).toEqual([{ filterId: "42", value: undefined }]);
     const dateFilters1 = getFiltersMatchingPivot(model, '=PIVOT.HEADER(1,"date:month","08/2016")');
-    expect(dateFilters1).toEqual([{ filterId: "43", value: { yearOffset: -6, period: "august" } }]);
+    expect(dateFilters1).toEqual([
+        { filterId: "43", value: { type: "month", period: { year: 2016, month: 8 } } },
+    ]);
+    const december = getFiltersMatchingPivot(model, '=PIVOT.HEADER(1,"date:month","12/2016")');
+    expect(december).toEqual([
+        { filterId: "43", value: { type: "month", period: { year: 2016, month: 12 } } },
+    ]);
+    const q4 = getFiltersMatchingPivot(model, '=PIVOT.HEADER(1,"date:quarter","4/2016")');
+    expect(q4).toEqual([
+        { filterId: "43", value: { type: "quarter", period: { year: 2016, quarter: 4 } } },
+    ]);
     const dateFilters2 = getFiltersMatchingPivot(model, '=PIVOT.HEADER(1,"date:year","2016")');
-    expect(dateFilters2).toEqual([{ filterId: "43", value: { yearOffset: -6 } }]);
+    expect(dateFilters2).toEqual([
+        { filterId: "43", value: { type: "year", period: { year: 2016 } } },
+    ]);
 });
 
 test("getFiltersMatchingPivot return an empty array if there is no pivot formula", async function () {
@@ -2233,7 +2332,7 @@ test("getFiltersMatchingPivot return empty filter when no records is related to 
 
 test("field matching is removed when pivot is deleted", async function () {
     const { model } = await createSpreadsheetWithPivot();
-    await addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {
+    await addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {
         pivot: DEFAULT_FIELD_MATCHINGS,
     });
     const [pivotId] = model.getters.getPivotIds();
@@ -2257,7 +2356,7 @@ test("field matching is removed when pivot is deleted", async function () {
 
 test("field matching is removed when list is deleted", async function () {
     const { model } = await createSpreadsheetWithList();
-    await addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {
+    await addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {
         list: DEFAULT_LIST_FIELD_MATCHINGS,
     });
     const [listId] = model.getters.getListIds();
@@ -2283,7 +2382,7 @@ test("field matching is removed when an Odoo chart is deleted", async function (
     const { model } = await createSpreadsheetWithChart({ type: "odoo_pie" });
     const sheetId = model.getters.getActiveSheetId();
     const [chartId] = model.getters.getChartIds(sheetId);
-    await addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {
+    await addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {
         chart: { [chartId]: { chain: "date", type: "date" } },
     });
     const [filter] = model.getters.getGlobalFilters();
@@ -2362,35 +2461,58 @@ test("Can create a relative date filter with an empty default value", async () =
 
 test("allowDispatch of MOVE_GLOBAL_FILTERS", function () {
     const model = new Model();
-    addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {});
-    addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {});
+    const filter1 = {
+        id: "1",
+        type: "text",
+        label: "Filter 1",
+    };
+    const filter2 = {
+        id: "2",
+        type: "text",
+        label: "Filter 2",
+    };
+    addGlobalFilter(model, filter1, {});
+    addGlobalFilter(model, filter2, {});
 
     let result = moveGlobalFilter(model, "notAnId", 1);
     expect(result.reasons).toEqual([CommandResult.FilterNotFound]);
 
-    result = moveGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER.id, -1);
+    result = moveGlobalFilter(model, filter1.id, -1);
     expect(result.reasons).toEqual([CommandResult.InvalidFilterMove]);
 
-    result = moveGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER.id, 1);
+    result = moveGlobalFilter(model, filter2.id, 1);
     expect(result.reasons).toEqual([CommandResult.InvalidFilterMove]);
 });
 
 test("can move a global filter", function () {
     const model = new Model();
-    addGlobalFilter(model, LAST_YEAR_GLOBAL_FILTER, {});
-    addGlobalFilter(model, THIS_YEAR_GLOBAL_FILTER, {});
-    addGlobalFilter(model, NEXT_YEAR_GLOBAL_FILTER, {});
+    const filter1 = {
+        id: 1,
+        type: "text",
+        label: "Filter 1",
+    };
+    const filter2 = {
+        id: 2,
+        type: "text",
+        label: "Filter 2",
+    };
+    const filter3 = {
+        id: 3,
+        type: "text",
+        label: "Filter 3",
+    };
+    addGlobalFilter(model, filter1, {});
+    addGlobalFilter(model, filter2, {});
+    addGlobalFilter(model, filter3, {});
 
-    const lastYearFilterId = LAST_YEAR_GLOBAL_FILTER.id;
+    moveGlobalFilter(model, filter1.id, 1);
+    expect(model.getters.getGlobalFilters()[1].id).toBe(filter1.id);
 
-    moveGlobalFilter(model, lastYearFilterId, 1);
-    expect(model.getters.getGlobalFilters()[1].id).toBe(lastYearFilterId);
+    moveGlobalFilter(model, filter1.id, 1);
+    expect(model.getters.getGlobalFilters()[2].id).toBe(filter1.id);
 
-    moveGlobalFilter(model, lastYearFilterId, 1);
-    expect(model.getters.getGlobalFilters()[2].id).toBe(lastYearFilterId);
-
-    moveGlobalFilter(model, lastYearFilterId, -2);
-    expect(model.getters.getGlobalFilters()[0].id).toBe(lastYearFilterId);
+    moveGlobalFilter(model, filter1.id, -2);
+    expect(model.getters.getGlobalFilters()[0].id).toBe(filter1.id);
 });
 
 test("Spreadsheet pivot are not impacted by global filter", function () {
@@ -2431,7 +2553,7 @@ test("Cannot create a fixedPeriod date filter with a disabled value", async () =
         id: "42",
         label: "test",
         type: "date",
-        defaultValue: { period: "fourth_quarter", yearOffset: 0 },
+        defaultValue: "this_quarter",
         rangeType: "fixedPeriod",
         disabledPeriods: ["quarter"],
     });
@@ -2455,7 +2577,7 @@ test("Cannot set the value of a fixedPeriod date filter to a disabled value", as
     model.dispatch("ADD_GLOBAL_FILTER", { filter });
     const result = model.dispatch("SET_GLOBAL_FILTER_VALUE", {
         id: "42",
-        value: { yearOffset: 0, period: "january" },
+        value: { year: DateTime.local().year, period: 1 },
     });
     expect(result.isCancelledBecause(CommandResult.InvalidValueTypeCombination)).toBe(true);
 });
@@ -2470,7 +2592,7 @@ test("Modifying fixedPeriod date filter disabled periods remove invalid filter v
         disabledPeriods: [],
     });
     model.dispatch("ADD_GLOBAL_FILTER", { filter });
-    const filterValue = { yearOffset: 0, period: "march" };
+    const filterValue = { year: DateTime.local().year, period: 3 };
 
     model.dispatch("SET_GLOBAL_FILTER_VALUE", { id: "42", value: filterValue });
     expect(model.getters.getGlobalFilterValue("42")).toEqual(filterValue);
@@ -2490,7 +2612,6 @@ test("Updating the pivot domain should keep the global filter domain", async () 
         label: "This Year",
         rangeType: "fixedPeriod",
         defaultValue: "this_year",
-        defaultsToCurrentPeriod: true,
     };
     await addGlobalFilter(model, filter, {
         pivot: { [pivotId]: { chain: "date", type: "date", offset: 0 } },
@@ -2523,7 +2644,6 @@ test("Updating the pivot should keep the global filter domain", async () => {
         label: "This Year",
         rangeType: "fixedPeriod",
         defaultValue: "this_year",
-        defaultsToCurrentPeriod: true,
     };
     await addGlobalFilter(model, filter, {
         pivot: { [pivotId]: { chain: "date", type: "date", offset: 0 } },
@@ -2595,7 +2715,6 @@ test("Updating the list domain should keep the global filter domain", async () =
         label: "This Year",
         rangeType: "fixedPeriod",
         defaultValue: "this_year",
-        defaultsToCurrentPeriod: true,
     };
     await addGlobalFilter(model, filter, {
         list: { 1: { chain: "date", type: "date", offset: 0 } },
@@ -2692,7 +2811,6 @@ test("Undo/Redo of global filter update", async () => {
         label: "This Year",
         rangeType: "fixedPeriod",
         defaultValue: "this_year",
-        defaultsToCurrentPeriod: true,
     };
     await addGlobalFilter(model, filter, {
         pivot: { [pivotId]: { chain: "date", type: "date", offset: 0 } },

@@ -23,7 +23,7 @@ import { callbacksForCursorUpdate } from "@html_editor/utils/selection";
 export class FeffPlugin extends Plugin {
     static id = "feff";
     static dependencies = ["selection"];
-    static shared = ["addFeff"];
+    static shared = ["addFeff", "removeFeffs"];
 
     resources = {
         normalize_handlers: this.updateFeffs.bind(this),
@@ -93,7 +93,9 @@ export class FeffPlugin extends Plugin {
             return [];
         }
         const elements = [...selectElements(root, combinedSelector)];
+        const isEditable = (node) => node.parentElement?.isContentEditable;
         const feffNodes = elements
+            .filter(isEditable)
             .flatMap((el) => {
                 const addFeff = (position) => this.addFeff(el, position, cursors);
                 return [

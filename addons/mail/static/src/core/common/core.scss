@@ -1,7 +1,7 @@
 $o-discuss-talkingColor: lighten($success, 10%);
 
 .o-mail-discussSidebarBgColor {
-    background-color: $white;
+    background-color: $white !important;
 }
 
 .o-mail-brighter {
@@ -87,9 +87,18 @@ $o-discuss-talkingColor: lighten($success, 10%);
     margin-top: map-get($spacers, 1) / 2;
 }
 
+.o-px-0_5 {
+    padding-left: map-get($spacers, 1) / 2;
+    padding-right: map-get($spacers, 1) / 2;
+}
+
 .o-py-0_5 {
     padding-top: map-get($spacers, 1) / 2;
     padding-bottom: map-get($spacers, 1) / 2;
+}
+
+.o-ps-1_5 {
+    padding-left: map-get($spacers, 1) + map-get($spacers, 1) / 2 !important;
 }
 
 .o-py-1_5 {
@@ -110,27 +119,32 @@ $o-discuss-talkingColor: lighten($success, 10%);
 }
 
 .o-rounded-bubble {
-    border-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
+    border-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4) !important;
 }
 
 .o-rounded-top-bubble {
-    border-top-left-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
-    border-top-right-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
+    border-top-left-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4) !important;
+    border-top-right-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4) !important;
 }
 
 .o-rounded-end-bubble {
-    border-top-right-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
-    border-bottom-right-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
+    border-top-right-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4) !important;
+    border-bottom-right-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4) !important;
 }
 
 .o-rounded-bottom-bubble {
-    border-bottom-right-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
-    border-bottom-left-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
+    border-bottom-right-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4) !important;
+    border-bottom-left-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4) !important;
 }
 
 .o-rounded-start-bubble {
-    border-bottom-left-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
-    border-top-left-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
+    border-bottom-left-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4) !important;
+    border-top-left-radius: calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4) !important;
+}
+
+.o-scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: $gray-400 transparent;
 }
 
 .o-text-white {
@@ -169,7 +183,7 @@ $o-discuss-talkingColor: lighten($success, 10%);
     $disabled-border: $border,
     $disabled-color: color-contrast($disabled-background)
 ) {
-    color: #{$color};
+    color: #{$color} !important;
     background-color: #{$background};
     border-color: #{$border};
     &:hover {

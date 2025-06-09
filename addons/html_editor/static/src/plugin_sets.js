@@ -19,6 +19,7 @@ import { SplitPlugin } from "./core/split_plugin";
 import { UserCommandPlugin } from "./core/user_command_plugin";
 import { AlignPlugin } from "./main/align/align_plugin";
 import { BannerPlugin } from "./main/banner_plugin";
+import { ChatGPTTranslatePlugin } from "./main/chatgpt/chatgpt_translate_plugin";
 import { ColumnPlugin } from "./main/column_plugin";
 import { EmojiPlugin } from "./main/emoji_plugin";
 import { ColorPlugin } from "./main/font/color_plugin";
@@ -57,7 +58,6 @@ import { CollaborationOdooPlugin } from "./others/collaboration/collaboration_od
 import { CollaborationPlugin } from "./others/collaboration/collaboration_plugin";
 import { CollaborationSelectionAvatarPlugin } from "./others/collaboration/collaboration_selection_avatar_plugin";
 import { CollaborationSelectionPlugin } from "./others/collaboration/collaboration_selection_plugin";
-import { DynamicPlaceholderPlugin } from "./others/dynamic_placeholder_plugin";
 import { EmbeddedComponentPlugin } from "./others/embedded_component_plugin";
 import { TableOfContentPlugin } from "@html_editor/others/embedded_components/plugins/table_of_content_plugin/table_of_content_plugin";
 import { ToggleBlockPlugin } from "@html_editor/others/embedded_components/plugins/toggle_block_plugin/toggle_block_plugin";
@@ -65,6 +65,9 @@ import { VideoPlugin } from "@html_editor/others/embedded_components/plugins/vid
 import { CaptionPlugin } from "@html_editor/others/embedded_components/plugins/caption_plugin/caption_plugin";
 import { QWebPlugin } from "./others/qweb_plugin";
 import { EditorVersionPlugin } from "./core/editor_version_plugin";
+import { ImagePostProcessPlugin } from "./main/media/image_post_process_plugin";
+import { DoubleClickImagePreviewPlugin } from "./main/media/dblclick_image_preview_plugin";
+import { StylePlugin } from "./core/style_plugin";
 
 /**
  * @typedef { Object } SharedMethods
@@ -121,11 +124,13 @@ export const CORE_PLUGINS = [
     SelectionPlugin,
     SplitPlugin,
     UserCommandPlugin,
+    StylePlugin,
 ];
 
 export const MAIN_PLUGINS = [
     ...CORE_PLUGINS,
     BannerPlugin,
+    ChatGPTTranslatePlugin,
     ColorPlugin,
     SeparatorPlugin,
     ColumnPlugin,
@@ -148,7 +153,9 @@ export const MAIN_PLUGINS = [
     YoutubePlugin,
     IconPlugin,
     ImagePlugin,
+    ImagePostProcessPlugin,
     ImageCropPlugin,
+    DoubleClickImagePreviewPlugin,
     LinkPlugin,
     LinkPastePlugin,
     FeffPlugin,
@@ -179,8 +186,6 @@ export const EMBEDDED_COMPONENT_PLUGINS = [
     VideoPlugin,
     CaptionPlugin,
 ];
-
-export const DYNAMIC_PLACEHOLDER_PLUGINS = [DynamicPlaceholderPlugin, QWebPlugin];
 
 export const EXTRA_PLUGINS = [
     ...COLLABORATION_PLUGINS,

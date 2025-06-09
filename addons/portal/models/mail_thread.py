@@ -13,7 +13,7 @@ class MailThread(models.AbstractModel):
     _mail_post_token_field = 'access_token' # token field for external posts, to be overridden
 
     website_message_ids = fields.One2many('mail.message', 'res_id', string='Website Messages',
-        domain=lambda self: [('model', '=', self._name), ('message_type', 'in', ('comment', 'email', 'email_outgoing'))],
+        domain=lambda self: [('model', '=', self._name), ('message_type', 'in', ('comment', 'email', 'email_outgoing', 'auto_comment'))],
         auto_join=True,
         help="Website communication history")
 
@@ -67,9 +67,6 @@ class MailThread(models.AbstractModel):
 
         This is used to determine who is opening the link
         to be able for the recipient to post messages on the document's portal view.
-
-        :param str email:
-            Email of the recipient that opened the link.
         """
         self.ensure_one()
         # check token field exists

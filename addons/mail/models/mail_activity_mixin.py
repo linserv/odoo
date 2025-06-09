@@ -275,6 +275,11 @@ class MailActivityMixin(models.AbstractModel):
             return super()._read_group_groupby(groupby_spec, query)
         self._check_field_access(self._fields['activity_state'], 'read')
 
+        # if already grouped by activity_state, do not add the join again
+        alias = query.make_alias(self._table, 'last_activity_state')
+        if alias in query._joins:
+            return SQL.identifier(alias, 'activity_state')
+
         self.env['mail.activity'].flush_model(['res_model', 'res_id', 'user_id', 'date_deadline'])
         self.env['res.users'].flush_model(['partner_id'])
         self.env['res.partner'].flush_model(['tz'])
@@ -317,6 +322,24 @@ class MailActivityMixin(models.AbstractModel):
                 ('res_id', 'in', records.ids)
             ]).unlink()
         return res
+
+    # Reschedules next my activity to Today
+    def action_reschedule_my_next_today(self):
+        self.ensure_one()
+        my_next_activity = self.activity_ids.filtered(lambda activity: activity.user_id == self.env.user)[:1]
+        my_next_activity.action_reschedule_today()
+
+    # Reschedules next my activity to Tomorrow
+    def action_reschedule_my_next_tomorrow(self):
+        self.ensure_one()
+        my_next_activity = self.activity_ids.filtered(lambda activity: activity.user_id == self.env.user)[:1]
+        my_next_activity.action_reschedule_tomorrow()
+
+    # Reschedules next my activity to Next Monday
+    def action_reschedule_my_next_nextweek(self):
+        self.ensure_one()
+        my_next_activity = self.activity_ids.filtered(lambda activity: activity.user_id == self.env.user)[:1]
+        my_next_activity.action_reschedule_nextweek()
 
     def activity_send_mail(self, template_id):
         """ Automatically send an email based on the given mail.template, given

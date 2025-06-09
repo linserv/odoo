@@ -136,9 +136,9 @@ class StockMove(models.Model):
 
     created_production_id = fields.Many2one('mrp.production', 'Created Production Order', check_company=True, index=True)
     production_id = fields.Many2one(
-        'mrp.production', 'Production Order for finished products', check_company=True, index='btree_not_null')
+        'mrp.production', 'Production Order for finished products', check_company=True, index='btree_not_null', ondelete="cascade")
     raw_material_production_id = fields.Many2one(
-        'mrp.production', 'Production Order for components', check_company=True, index='btree_not_null')
+        'mrp.production', 'Production Order for components', check_company=True, index='btree_not_null', ondelete="cascade")
     unbuild_id = fields.Many2one(
         'mrp.unbuild', 'Disassembly Order', check_company=True, index='btree_not_null')
     consume_unbuild_id = fields.Many2one(
@@ -223,6 +223,7 @@ class StockMove(models.Model):
         for bom in self.bom_line_id.bom_id:
             if bom.type != 'phantom':
                 continue
+            # mapped('id') to keep NewId
             line_ids = self.bom_line_id.filtered(lambda line: line.bom_id == bom).mapped('id')
             total = len(line_ids)
             for i, line_id in enumerate(line_ids):
@@ -454,11 +455,11 @@ class StockMove(models.Model):
                                                'workorder_id': move.workorder_id.id,})
         return res
 
-    def _action_confirm(self, merge=True, merge_into=False):
+    def _action_confirm(self, merge=True, merge_into=False, create_proc=True):
         moves = self.action_explode()
         merge_into = merge_into and merge_into.action_explode()
         # we go further with the list of ids potentially changed by action_explode
-        return super(StockMove, moves)._action_confirm(merge=merge, merge_into=merge_into)
+        return super(StockMove, moves)._action_confirm(merge=merge, merge_into=merge_into, create_proc=create_proc)
 
     def _action_done(self, cancel_backorder=False):
         # explode kit moves that avoided the action_explode of any confirmation process
@@ -468,7 +469,7 @@ class StockMove(models.Model):
         return super(StockMove, moves)._action_done(cancel_backorder)
 
     def _should_bypass_reservation(self, forced_location=False):
-        return super()._should_bypass_reservation(forced_location) or self.product_id.is_kits
+        return super()._should_bypass_reservation(forced_location) or self.product_id.with_company(self.company_id).is_kits
 
     def action_explode(self):
         """ Explodes pickings """

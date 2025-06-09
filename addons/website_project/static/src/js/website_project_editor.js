@@ -1,7 +1,7 @@
 import { _t } from "@web/core/l10n/translation";
-import FormEditorRegistry from "@website/js/form_editor_registry";
+import { registry } from '@web/core/registry';
 
-FormEditorRegistry.add('create_task', {
+registry.category("website.form_editor_actions").add('create_task', {
     formFields: [{
         type: 'char',
         required: true,
@@ -43,6 +43,7 @@ FormEditorRegistry.add('create_task', {
     fields: [{
         name: 'project_id',
         type: 'many2one',
+        required: true,
         relation: 'project.project',
         string: _t('Project'),
         createAction: 'project.open_view_project_all',

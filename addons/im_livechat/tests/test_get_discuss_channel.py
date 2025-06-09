@@ -5,7 +5,6 @@ from freezegun import freeze_time
 from unittest.mock import patch, PropertyMock
 
 from odoo import fields
-from odoo.tools.misc import limited_field_access_token
 from odoo.addons.im_livechat.tests.common import TestImLivechatCommon
 from odoo.addons.mail.tests.common import MailCommon
 from odoo.tests import new_test_user, tagged
@@ -53,10 +52,11 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
             data["mail.guest"],
             [
                 {
-                    "avatar_128_access_token": limited_field_access_token(guest, "avatar_128"),
-                    "country": belgium.id,
+                    "avatar_128_access_token": guest._get_avatar_128_access_token(),
+                    "country_id": belgium.id,
                     "id": guest.id,
                     "im_status": "offline",
+                    "im_status_access_token": guest._get_im_status_access_token(),
                     "name": "Visitor",
                     "offline_since": False,
                     "write_date": fields.Datetime.to_string(guest.write_date),
@@ -68,11 +68,10 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
             self._filter_partners_fields(
               {
                     "active": False,
-                    "avatar_128_access_token": limited_field_access_token(
-                        self.partner_root, "avatar_128"
-                    ),
+                    "avatar_128_access_token": self.partner_root._get_avatar_128_access_token(),
                     "id": self.user_root.partner_id.id,
                     "im_status": "bot",
+                    "im_status_access_token": self.partner_root._get_im_status_access_token(),
                     "isInternalUser": True,
                     "is_company": False,
                     "name": "OdooBot",
@@ -82,12 +81,11 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                 },
                 {
                     "active": True,
-                    "avatar_128_access_token": limited_field_access_token(
-                        operator.partner_id, "avatar_128"
-                    ),
-                    "country": False,
+                    "avatar_128_access_token": operator.partner_id._get_avatar_128_access_token(),
+                    "country_id": False,
                     "id": operator.partner_id.id,
                     "im_status": "offline",
+                    "im_status_access_token": operator.partner_id._get_im_status_access_token(),
                     "is_public": False,
                     "user_livechat_username": "Michel Operator",
                     "write_date": fields.Datetime.to_string(operator.write_date),
@@ -121,12 +119,11 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
             self._filter_partners_fields(
                 {
                     "active": False,
-                    "avatar_128_access_token": limited_field_access_token(
-                        self.partner_root, "avatar_128"
-                    ),
+                    "avatar_128_access_token": self.partner_root._get_avatar_128_access_token(),
                     "email": "odoobot@example.com",
                     "id": self.user_root.partner_id.id,
                     "im_status": "bot",
+                    "im_status_access_token": self.partner_root._get_im_status_access_token(),
                     "isInternalUser": True,
                     "is_company": False,
                     "name": "OdooBot",
@@ -136,12 +133,11 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                 },
                 {
                     "active": True,
-                    "avatar_128_access_token": limited_field_access_token(
-                        test_user.partner_id, "avatar_128"
-                    ),
-                    "country": belgium.id,
+                    "avatar_128_access_token": test_user.partner_id._get_avatar_128_access_token(),
+                    "country_id": belgium.id,
                     "id": test_user.partner_id.id,
                     "im_status": "offline",
+                    "im_status_access_token": test_user.partner_id._get_im_status_access_token(),
                     "isAdmin": False,
                     "isInternalUser": True,
                     "is_public": False,
@@ -155,12 +151,11 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                 },
                {
                     "active": True,
-                    "avatar_128_access_token": limited_field_access_token(
-                        operator.partner_id, "avatar_128"
-                    ),
-                    "country": False,
+                    "avatar_128_access_token": operator.partner_id._get_avatar_128_access_token(),
+                    "country_id": False,
                     "id": operator.partner_id.id,
                     "im_status": "offline",
+                    "im_status_access_token": operator.partner_id._get_im_status_access_token(),
                     "is_public": False,
                     "user_livechat_username": "Michel Operator",
                     "write_date": fields.Datetime.to_string(operator.write_date),
@@ -174,25 +169,25 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                     "create_date": fields.Datetime.to_string(operator_member.create_date),
                     "fetched_message_id": False,
                     "id": operator_member.id,
-                    "is_bot": False,
+                    "livechat_member_type": "agent",
                     "last_seen_dt": False,
-                    "persona": {"id": operator.partner_id.id, "type": "partner"},
+                    "partner_id": {"id": operator.partner_id.id, "type": "partner"},
                     "seen_message_id": False,
-                    "thread": {"id": channel_info["id"], "model": "discuss.channel"},
+                    "channel_id": {"id": channel_info["id"], "model": "discuss.channel"},
                 },
                 {
                     "create_date": fields.Datetime.to_string(visitor_member.create_date),
                     "fetched_message_id": False,
                     "id": visitor_member.id,
-                    "is_bot": False,
+                    "livechat_member_type": "visitor",
                     "last_interest_dt": fields.Datetime.to_string(visitor_member.last_interest_dt),
                     "last_seen_dt": False,
                     "message_unread_counter": 0,
                     "message_unread_counter_bus_id": self.env["bus.bus"]._bus_last_id() - 1,
                     "new_message_separator": 0,
-                    "persona": {"id": test_user.partner_id.id, "type": "partner"},
+                    "partner_id": {"id": test_user.partner_id.id, "type": "partner"},
                     "seen_message_id": False,
-                    "thread": {"id": channel_info["id"], "model": "discuss.channel"},
+                    "channel_id": {"id": channel_info["id"], "model": "discuss.channel"},
                 },
             ],
         )
@@ -222,12 +217,11 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
             self._filter_partners_fields(
                 {
                     "active": False,
-                    "avatar_128_access_token": limited_field_access_token(
-                        self.partner_root, "avatar_128"
-                    ),
+                    "avatar_128_access_token": self.partner_root._get_avatar_128_access_token(),
                     "email": "odoobot@example.com",
                     "id": self.user_root.partner_id.id,
                     "im_status": "bot",
+                    "im_status_access_token": self.partner_root._get_im_status_access_token(),
                     "isInternalUser": True,
                     "is_company": False,
                     "name": "OdooBot",
@@ -237,12 +231,11 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                 },
                 {
                     "active": True,
-                    "avatar_128_access_token": limited_field_access_token(
-                        operator.partner_id, "avatar_128"
-                    ),
-                    "country": False,
+                    "avatar_128_access_token": operator.partner_id._get_avatar_128_access_token(),
+                    "country_id": False,
                     "id": operator.partner_id.id,
                     "im_status": "offline",
+                    "im_status_access_token": operator.partner_id._get_im_status_access_token(),
                     "isAdmin": False,
                     "isInternalUser": True,
                     "is_public": False,
@@ -262,15 +255,15 @@ class TestGetDiscussChannel(TestImLivechatCommon, MailCommon):
                     "create_date": fields.Datetime.to_string(operator_member.create_date),
                     "fetched_message_id": False,
                     "id": operator_member.id,
-                    "is_bot": False,
+                    "livechat_member_type": "agent",
                     "last_interest_dt": fields.Datetime.to_string(operator_member.last_interest_dt),
                     "last_seen_dt": False,
                     "message_unread_counter": 0,
                     "message_unread_counter_bus_id": self.env["bus.bus"]._bus_last_id() - 1,
                     "new_message_separator": 0,
-                    "persona": {"id": operator.partner_id.id, "type": "partner"},
+                    "partner_id": {"id": operator.partner_id.id, "type": "partner"},
                     "seen_message_id": False,
-                    "thread": {"id": channel_info["id"], "model": "discuss.channel"},
+                    "channel_id": {"id": channel_info["id"], "model": "discuss.channel"},
                 },
             ],
         )

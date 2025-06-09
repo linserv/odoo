@@ -17,6 +17,7 @@ import { registry } from "@web/core/registry";
 import * as Numpad from "@point_of_sale/../tests/generic_helpers/numpad_util";
 import { renderToElement } from "@web/core/utils/render";
 import { delay } from "@odoo/hoot-dom";
+import * as TextInputPopup from "@point_of_sale/../tests/generic_helpers/text_input_popup_util";
 
 const ProductScreen = { ...ProductScreenPos, ...ProductScreenResto };
 
@@ -430,6 +431,9 @@ registry.category("web_tour.tours").add("PreparationPrinterContent", {
                     if (!rendered.innerHTML.includes("14:20")) {
                         throw new Error("14:20 not found in printed receipt");
                     }
+                    if (rendered.innerHTML.includes("DUPLICATA!")) {
+                        throw new Error("DUPLICATA! should not be present in printed receipt");
+                    }
                 },
             },
         ].flat(),
@@ -566,5 +570,87 @@ registry.category("web_tour.tours").add("test_multiple_preparation_printer_diffe
             ProductScreen.clickOrderButton(),
             Dialog.bodyIs("Failed in printing Printer 1, Printer 2 changes of the order"),
             Dialog.confirm(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_preset_timing_restaurant", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            FloorScreen.clickNewOrder(),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.selectPreset("Eat in", "Takeaway"),
+            TextInputPopup.inputText("John"),
+            Dialog.confirm(),
+            Chrome.selectPresetTimingSlotHour("12:00"),
+            Chrome.presetTimingSlotIs("12:00"),
+            Chrome.clickPresetTimingSlot(),
+            Chrome.selectPresetTimingSlotHour("15:00"),
+            Chrome.presetTimingSlotIs("15:00"),
+            Chrome.clickPlanButton(),
+            FloorScreen.clickTable("4"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            Chrome.clickOrders(),
+            TicketScreen.nthRowContains(1, "John"),
+            TicketScreen.nthRowContains(1, "Takeaway", false),
+            TicketScreen.nthRowContains(2, "002"),
+            TicketScreen.nthRowContains(2, "Eat in", false),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_combo_preparation_receipt_layout", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickDisplayedProduct("Office Combo"),
+            combo.select("Combo Product 2"),
+            combo.select("Combo Product 4"),
+            combo.select("Combo Product 6"),
+            Dialog.confirm(),
+            {
+                trigger: "body",
+                run: async () => {
+                    const order = posmodel.getOrder();
+                    const orderChange = posmodel.changesToOrder(
+                        order,
+                        posmodel.config.preparationCategories,
+                        false
+                    );
+                    const { orderData, changes } = posmodel.generateOrderChange(
+                        order,
+                        orderChange,
+                        Array.from(posmodel.config.preparationCategories),
+                        false
+                    );
+
+                    orderData.changes = {
+                        title: "new",
+                        data: changes.new,
+                    };
+
+                    const printed = renderToElement("point_of_sale.OrderChangeReceipt", {
+                        data: orderData,
+                    });
+                    const comboItemLines = [...printed.querySelectorAll(".orderline.ms-5")].map(
+                        (el) => el.innerText
+                    );
+                    const expectedComboItemLines = [
+                        "1 Combo Product 2",
+                        "1 Combo Product 4",
+                        "1 Combo Product 6",
+                    ];
+                    if (
+                        comboItemLines.length !== expectedComboItemLines.length ||
+                        !comboItemLines.every((line, index) =>
+                            line.includes(expectedComboItemLines[index])
+                        )
+                    ) {
+                        throw new Error("Order line mismatch");
+                    }
+                },
+            },
         ].flat(),
 });

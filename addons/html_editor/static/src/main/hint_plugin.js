@@ -19,11 +19,15 @@ export class HintPlugin extends Plugin {
         content_updated_handlers: this.updateHints.bind(this),
 
         hint_targets_providers: (selectionData, editable) => {
-            if (!selectionData.documentSelectionIsInEditable) {
+            if (!selectionData.currentSelectionIsInEditable) {
                 return [];
             }
             const blockEl = closestBlock(selectionData.editableSelection.anchorNode);
-            return [blockEl];
+            if (this.dependencies.selection.isNodeEditable(blockEl)) {
+                return [blockEl];
+            } else {
+                return [];
+            }
         },
         system_classes: ["o-we-hint"],
         system_attributes: ["o-we-hint-text"],

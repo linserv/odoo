@@ -1,7 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import api, fields, models
-from odoo.osv import expression
+from odoo.fields import Domain
 
 
 class CalendarRecurrence(models.Model):
@@ -136,8 +136,7 @@ class CalendarRecurrence(models.Model):
 
     def _get_microsoft_sync_domain(self):
         # Do not sync Odoo recurrences with Outlook Calendar anymore.
-        domain = expression.FALSE_DOMAIN
-        return self._extend_microsoft_domain(domain)
+        return self._extend_microsoft_domain(Domain.FALSE)
 
     def _cancel_microsoft(self):
         self.calendar_event_ids.with_context(dont_notify=True)._cancel_microsoft()
@@ -189,3 +188,9 @@ class CalendarRecurrence(models.Model):
         if event:
             return event._get_event_user_m(user_id)
         return self.env.user
+
+    def _is_microsoft_insertion_blocked(self, sender_user):
+        self.ensure_one()
+        has_base_event = self.base_event_id
+        has_different_owner = self.base_event_id.user_id and self.base_event_id.user_id != sender_user
+        return has_base_event and has_different_owner

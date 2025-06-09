@@ -8,8 +8,8 @@ from dateutil.parser import parse
 from datetime import timedelta
 
 from odoo import api, fields, models
+from odoo.fields import Domain
 from odoo.modules.registry import Registry
-from odoo.osv import expression
 from odoo.sql_db import BaseCursor
 
 from odoo.addons.microsoft_calendar.utils.microsoft_event import MicrosoftEvent
@@ -140,9 +140,7 @@ class MicrosoftCalendarSync(models.AbstractModel):
         for record in new_records:
             values = record._microsoft_values(self._get_microsoft_synced_fields())
             sender_user = record._get_event_user_m()
-            # Prevent current user to synchronize new events of non-synchronized users, otherwise the event
-            # ownership will be lost in Outlook and it will block the future event sync for the original owner.
-            if record.user_id and record.user_id != self.env.user and sender_user == self.env.user:
+            if record._is_microsoft_insertion_blocked(sender_user):
                 continue
             if isinstance(values, dict):
                 record._microsoft_insert(values)
@@ -487,23 +485,19 @@ class MicrosoftCalendarSync(models.AbstractModel):
         """
         raise NotImplementedError()
 
-    def _extend_microsoft_domain(self, domain):
+    def _extend_microsoft_domain(self, domain: Domain):
         """ Extends the sync domain based on the full_sync_m context parameter.
         In case of full sync it shouldn't include already synced events.
         """
         if self._context.get('full_sync_m', True):
-            domain = expression.AND([domain, [('ms_universal_event_id', '=', False)]])
+            domain &= Domain('ms_universal_event_id', '=', False)
         else:
-            is_active_clause = (self._active_name, '=', True) if self._active_name else expression.TRUE_LEAF
-            domain = expression.AND([domain, [
-                '|',
-                '&', ('ms_universal_event_id', '=', False), is_active_clause,
-                ('need_sync_m', '=', True),
-            ]])
+            is_active_clause = Domain(self._active_name, '=', True) if self._active_name else Domain.TRUE
+            domain &= (Domain('ms_universal_event_id', '=', False) & is_active_clause) | Domain('need_sync_m', '=', True)
         # Sync only events created/updated after last sync date (with 5 min of time acceptance).
         if self.env.user.microsoft_last_sync_date:
             time_offset = timedelta(minutes=5)
-            domain = expression.AND([domain, [('write_date', '>=', self.env.user.microsoft_last_sync_date - time_offset)]])
+            domain &= Domain('write_date', '>=', self.env.user.microsoft_last_sync_date - time_offset)
         return domain
 
     def _get_event_user_m(self, user_id=None):
@@ -521,3 +515,13 @@ class MicrosoftCalendarSync(models.AbstractModel):
         """
         self.ensure_one()
         return True
+
+    def _is_microsoft_insertion_blocked(self, sender_user):
+        """
+        Returns True if the record insertion to Microsoft should be blocked.
+        This is a necessary step for ensuring data match between Odoo and Microsoft,
+        as it prevents attendees to synchronize new records on behalf of the owners,
+        otherwise the event ownership would be lost in Outlook and it would block the
+        future record synchronization for the original owner.
+        """
+        raise NotImplementedError()

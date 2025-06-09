@@ -106,6 +106,10 @@ class PosConfig(models.Model):
 
     @api.model
     def _prepare_self_order_splash_screen(self, vals_list):
+        def read_image_datas(image_name):
+            with file_open(opj("pos_self_order/static/img", image_name), "rb") as f:
+                return base64.b64encode(f.read())
+
         for vals in vals_list:
             if not vals.get('self_ordering_mode'):
                 return True
@@ -113,7 +117,7 @@ class PosConfig(models.Model):
             if not vals.get('self_ordering_image_home_ids'):
                 vals['self_ordering_image_home_ids'] = [(0, 0, {
                     'name': image_name,
-                    'datas': base64.b64encode(file_open(opj("pos_self_order/static/img", image_name), "rb").read()),
+                    'datas': read_image_datas(image_name),
                     'res_model': 'pos.config',
                     'type': 'binary',
                 }) for image_name in ['landing_01.jpg', 'landing_02.jpg', 'landing_03.jpg']]
@@ -121,7 +125,7 @@ class PosConfig(models.Model):
             if not vals.get('self_ordering_image_background_ids'):
                 vals['self_ordering_image_background_ids'] = [(0, 0, {
                     'name': "background.jpg",
-                    'datas': base64.b64encode(file_open(opj("pos_self_order/static/img", "kiosk_background.jpg"), "rb").read()),
+                    'datas': read_image_datas("kiosk_background.jpg"),
                     'res_model': 'pos.config',
                     'type': 'binary',
                 })]
@@ -267,10 +271,6 @@ class PosConfig(models.Model):
                 'id': image.id,
                 'data': image.sudo().datas.decode('utf-8'),
             })
-
-            # Only one image is needed for the mobile mode
-            if self.self_ordering_mode == 'mobile':
-                break
         return encoded_images
 
     def _load_self_data_models(self):
@@ -358,7 +358,9 @@ class PosConfig(models.Model):
         self.ensure_one()
 
         if not self.current_session_id:
-            self._check_before_creating_new_session()
+            res = self._check_before_creating_new_session()
+            if res:
+                return res
             session = self.env['pos.session'].create({'user_id': self.env.uid, 'config_id': self.id})
             session.set_opening_control(0, "")
             self._notify('STATUS', {'status': 'open'})

@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from odoo import exceptions, Command, fields
-from odoo.tests import Form
+from odoo import exceptions, fields
+from odoo.fields import Command
+from odoo.tests import Form, HttpCase, freeze_time, tagged
+from odoo.tools import float_compare, float_repr, float_round
+
 from odoo.addons.mrp.tests.common import TestMrpCommon
-from odoo.tests.common import HttpCase, tagged, freeze_time
-from odoo.tools import float_compare, float_round, float_repr
 
 
 @freeze_time(fields.Date.today())
@@ -14,10 +14,17 @@ class TestBoM(TestMrpCommon):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.env.ref('base.group_user').write({'implied_ids': [
-            Command.link(cls.env.ref('product.group_product_variant').id),
-            Command.link(cls.env.ref('mrp.group_mrp_routings').id),
+        cls.group_user.write({'implied_ids': [
+            Command.link(cls.group_product_variant.id),
+            Command.link(cls.group_mrp_routings.id),
         ]})
+
+    @classmethod
+    def make_prods(cls, n):
+        return cls.env['product.product'].create([
+            {'name': f"p{k + 1}", 'is_storable': True}
+            for k in range(n)
+        ])
 
     def test_01_explode(self):
         boms, lines = self.bom_1.explode(self.product_4, 3)
@@ -2628,3 +2635,32 @@ class TestTourBoM(HttpCase):
         """
         url = '/odoo/action-mrp.mrp_bom_form_action'
         self.start_tour(url, 'test_manufacture_from_bom', login='admin', timeout=100)
+
+    def test_bom_kit_rounding(self):
+        """ Checks that the available quantity is rounded down for kit products to not over-promise availability
+        """
+        integer_unit = self.env['uom.uom'].create({
+            'name': 'unit_int',
+            'rounding': 1.0,
+        })
+        prod, comp = self.env["product.product"].create([{
+            "name": name,
+            "uom_id": integer_unit.id
+        } for name in ["prod", "comp"]])
+        comp.is_storable = True
+
+        self.env['mrp.bom'].create({
+            'product_tmpl_id': prod.product_tmpl_id.id,
+            'product_uom_id': integer_unit.id,
+            'product_qty': 1.0,
+            'type': 'phantom',
+            'bom_line_ids': [Command.create({
+                'product_id': comp.id,
+                'product_qty': 2.0,
+            })],
+        })
+
+        location = self.env.ref('stock.stock_location_stock')
+        self.env['stock.quant']._update_available_quantity(comp, location, 3.0)
+        # With 3 components on hand, 1.5 products could be created, rounded down to 1.0 due to the integer uom
+        self.assertEqual(prod.qty_available, 1.0)

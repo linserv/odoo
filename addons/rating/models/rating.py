@@ -59,6 +59,9 @@ class RatingRating(models.Model):
         'Rating should be between 0 and 5',
     )
 
+    _consumed_idx = models.Index('(res_model, res_id, write_date) WHERE consumed IS TRUE')
+    _parent_consumed_idx = models.Index('(parent_res_model, parent_res_id, write_date) WHERE consumed IS TRUE')
+
     @api.depends('res_model', 'res_id')
     def _compute_res_name(self):
         for rating in self:
@@ -105,9 +108,9 @@ class RatingRating(models.Model):
             image_path = f'rating/static/src/img/{rating._get_rating_image_filename()}'
             rating.rating_image_url = f'/{image_path}'
             try:
-                rating.rating_image = base64.b64encode(
-                    file_open(image_path, 'rb', filter_ext=('.png',)).read())
-            except (IOError, OSError, FileNotFoundError):
+                with file_open(image_path, 'rb', filter_ext=('.png',)) as f:
+                    rating.rating_image = base64.b64encode(f.read())
+            except OSError:
                 rating.rating_image = False
 
     @api.depends('rating')
@@ -187,11 +190,12 @@ class RatingRating(models.Model):
         are classified by model. Ratings not linked to a valid record through
         res_model / res_id are ignored.
 
-        :return dict: for each model having at least one rating in self, have
+        :returns: for each model having at least one rating in self, have
           a sub-dict containing
             * ratings: ratings related to that model;
             * record IDs: records linked to the ratings of that model, in same
               order;
+        :rtype: dict
         """
         data_by_model = {}
         for rating in self.filtered(lambda act: act.res_model and act.res_id):

@@ -6,8 +6,8 @@ import {
     treeFromDomain,
     formatValue,
     condition,
+    constructTree,
 } from "@web/core/tree_editor/condition_tree";
-import { useLoadFieldInfo } from "@web/core/model_field_selector/utils";
 import { CheckBox } from "@web/core/checkbox/checkbox";
 import { deepEqual } from "@web/core/utils/objects";
 import { getDomainDisplayedOperators } from "@web/core/domain_selector/domain_selector_operator_editor";
@@ -30,19 +30,20 @@ export class DomainSelector extends Component {
         className: { type: String, optional: true },
         defaultConnector: { type: [{ value: "&" }, { value: "|" }], optional: true },
         isDebugMode: { type: Boolean, optional: true },
+        allowExpressions: { type: Boolean, optional: true },
         readonly: { type: Boolean, optional: true },
         update: { type: Function, optional: true },
         debugUpdate: { type: Function, optional: true },
     };
     static defaultProps = {
         isDebugMode: false,
+        allowExpressions: true,
         readonly: true,
         update: () => {},
     };
 
     setup() {
         this.fieldService = useService("field");
-        this.loadFieldInfo = useLoadFieldInfo(this.fieldService);
         this.makeGetFieldDef = useMakeGetFieldDef(this.fieldService);
 
         this.tree = null;
@@ -68,9 +69,9 @@ export class DomainSelector extends Component {
             return;
         }
 
-        const tree = treeFromDomain(domain);
-
-        const getFieldDef = await this.makeGetFieldDef(p.resModel, tree, ["active"]);
+        const getFieldDef = await this.makeGetFieldDef(p.resModel, constructTree(domain), [
+            "active",
+        ]);
 
         this.tree = treeFromDomain(domain, {
             getFieldDef,
@@ -107,11 +108,15 @@ export class DomainSelector extends Component {
     }
 
     getDefaultOperator(fieldDef) {
-        return getDomainDisplayedOperators(fieldDef)[0];
+        return getDomainDisplayedOperators(fieldDef, {
+            allowExpressions: this.props.allowExpressions,
+        })[0];
     }
 
     getOperatorEditorInfo(fieldDef) {
-        const operators = getDomainDisplayedOperators(fieldDef);
+        const operators = getDomainDisplayedOperators(fieldDef, {
+            allowExpressions: this.props.allowExpressions,
+        });
         return getOperatorEditorInfo(operators, fieldDef);
     }
 
@@ -119,15 +124,13 @@ export class DomainSelector extends Component {
         const { isDebugMode } = this.props;
         return {
             component: ModelFieldSelector,
-            extractProps: ({ update, value: path }) => {
-                return {
-                    path,
-                    update,
-                    resModel,
-                    isDebugMode,
-                    readonly: false,
-                };
-            },
+            extractProps: ({ update, value: path }) => ({
+                path,
+                update,
+                resModel,
+                isDebugMode,
+                readonly: false,
+            }),
             isSupported: (path) => [0, 1].includes(path) || typeof path === "string",
             defaultValue: () => defaultCondition.path,
             stringify: (path) => formatValue(path),

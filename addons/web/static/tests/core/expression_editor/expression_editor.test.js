@@ -28,7 +28,7 @@ import {
     defineModels,
     fields,
     mountWithCleanup,
-    patchWithCleanup,
+    serverState,
 } from "@web/../tests/web_test_helpers";
 import { ExpressionEditor } from "@web/core/expression_editor/expression_editor";
 
@@ -88,7 +88,7 @@ async function makeExpressionEditor(params = {}) {
 defineModels([Partner, Product, Team, Player, Country, Stage]);
 
 beforeEach(() => {
-    patchWithCleanup(odoo, { debug: "1" });
+    serverState.debug = "1";
 });
 
 test("rendering of truthy values", async () => {
@@ -107,13 +107,13 @@ test("rendering of falsy values", async () => {
         await parent.set(expr);
         expect(getTreeEditorContent()).toEqual([
             { value: "all", level: 0 },
-            { value: ["0", "is equal", "1"], level: 1 },
+            { value: ["0", "equals", "1"], level: 1 },
         ]);
     }
 });
 
 test("rendering of 'expr'", async () => {
-    patchWithCleanup(odoo, { debug: "" });
+    serverState.debug = "";
     await makeExpressionEditor({ expression: "expr" });
     expect(getTreeEditorContent()).toEqual([
         { value: "all", level: 0 },
@@ -180,11 +180,11 @@ test("copy a complex condition", async () => {
 });
 
 test("change path, operator and value", async () => {
-    patchWithCleanup(odoo, { debug: "" });
+    serverState.debug = "";
     await makeExpressionEditor({ expression: `bar != "blabla"` });
     expect(getTreeEditorContent()).toEqual([
         { level: 0, value: "all" },
-        { level: 1, value: ["Bar", "is not equal", "blabla"] },
+        { level: 1, value: ["Bar", "not equals", "blabla"] },
     ]);
     const tree = getTreeEditorContent({ node: true });
     await openModelFieldSelectorPopover();
@@ -217,8 +217,8 @@ test("rendering of a valid fieldName in fields", async () => {
 
     const toTests = [
         { expr: `foo`, condition: ["Foo", "set"] },
-        { expr: `foo == "a"`, condition: ["Foo", "is equal", "a"] },
-        { expr: `foo != "a"`, condition: ["Foo", "is not equal", "a"] },
+        { expr: `foo == "a"`, condition: ["Foo", "equals", "a"] },
+        { expr: `foo != "a"`, condition: ["Foo", "not equals", "a"] },
         // { expr: `foo is "a"`, complexCondition: `foo is "a"` },
         // { expr: `foo is not "a"`, complexCondition: `foo is not "a"` },
         { expr: `not foo`, condition: ["Foo", "not set"] },
@@ -248,18 +248,18 @@ test("rendering of simple conditions", async () => {
     const parent = await makeExpressionEditor({ fieldFilters: ["foo", "bar"] });
 
     const toTests = [
-        { expr: `bar == "a"`, condition: ["Bar", "is equal", "a"] },
-        { expr: `foo == expr`, condition: ["Foo", "is equal", "expr"] },
-        { expr: `"a" == foo`, condition: ["Foo", "is equal", "a"] },
-        { expr: `expr == foo`, condition: ["Foo", "is equal", "expr"] },
+        { expr: `bar == "a"`, condition: ["Bar", "equals", "a"] },
+        { expr: `foo == expr`, condition: ["Foo", "equals", "expr"] },
+        { expr: `"a" == foo`, condition: ["Foo", "equals", "a"] },
+        { expr: `expr == foo`, condition: ["Foo", "equals", "expr"] },
         { expr: `foo == bar`, complexCondition: `foo == bar` },
         { expr: `"a" == "b"`, complexCondition: `"a" == "b"` },
         { expr: `expr1 == expr2`, complexCondition: `expr1 == expr2` },
 
-        { expr: `foo < "a"`, condition: ["Foo", "is lower", "a"] },
-        { expr: `foo < expr`, condition: ["Foo", "is lower", "expr"] },
-        { expr: `"a" < foo`, condition: ["Foo", "is greater", "a"] },
-        { expr: `expr < foo`, condition: ["Foo", "is greater", "expr"] },
+        { expr: `foo < "a"`, condition: ["Foo", "lower", "a"] },
+        { expr: `foo < expr`, condition: ["Foo", "lower", "expr"] },
+        { expr: `"a" < foo`, condition: ["Foo", "greater", "a"] },
+        { expr: `expr < foo`, condition: ["Foo", "greater", "expr"] },
         { expr: `foo < bar`, complexCondition: `foo < bar` },
         { expr: `"a" < "b"`, complexCondition: `"a" < "b"` },
         { expr: `expr1 < expr2`, complexCondition: `expr1 < expr2` },
@@ -298,7 +298,7 @@ test("rendering of connectors", async () => {
         { level: 0, value: "any" },
         { level: 1, value: "all" },
         { level: 2, value: "expr" },
-        { level: 2, value: ["Foo", "is equal", "abc"] },
+        { level: 2, value: ["Foo", "equals", "abc"] },
         { level: 1, value: ["Bar", "not set"] },
     ]);
 });
@@ -314,7 +314,7 @@ test("rendering of connectors (2)", async () => {
     expect(getTreeEditorContent()).toEqual([
         { level: 0, value: "none" },
         { level: 1, value: "expr" },
-        { level: 1, value: ["Foo", "is equal", "abc"] },
+        { level: 1, value: ["Foo", "equals", "abc"] },
     ]);
     expect.verifySteps([]);
     expect(queryOne(SELECTORS.debugArea)).toHaveValue(`not (expr or foo == "abc")`);
@@ -323,7 +323,7 @@ test("rendering of connectors (2)", async () => {
     expect(getTreeEditorContent()).toEqual([
         { level: 0, value: "all" },
         { level: 1, value: "expr" },
-        { level: 1, value: ["Foo", "is equal", "abc"] },
+        { level: 1, value: ["Foo", "equals", "abc"] },
     ]);
     expect.verifySteps([`expr and foo == "abc"`]);
     expect(queryOne(SELECTORS.debugArea)).toHaveValue(`expr and foo == "abc"`);
@@ -334,23 +334,23 @@ test("rendering of if else", async () => {
     expect(getTreeEditorContent()).toEqual([
         { level: 0, value: "any" },
         { level: 1, value: "all" },
-        { level: 2, value: ["0", "is equal", "1"] },
-        { level: 2, value: ["1", "is equal", "1"] },
+        { level: 2, value: ["0", "equals", "1"] },
+        { level: 2, value: ["1", "equals", "1"] },
         { level: 1, value: "all" },
-        { level: 2, value: ["1", "is equal", "1"] },
-        { level: 2, value: ["0", "is equal", "1"] },
+        { level: 2, value: ["1", "equals", "1"] },
+        { level: 2, value: ["0", "equals", "1"] },
     ]);
 });
 
 test("check condition by default when creating a new rule", async () => {
-    patchWithCleanup(odoo, { debug: "" });
+    serverState.debug = "";
     Partner._fields.country_id = fields.Char({ string: "Country ID" });
     await makeExpressionEditor({ expression: "expr" });
     await contains("a[role='button']").click();
     expect(getTreeEditorContent()).toEqual([
         { level: 0, value: "all" },
         { level: 1, value: "expr" },
-        { level: 1, value: ["Country ID", "is equal", ""] },
+        { level: 1, value: ["Country ID", "equals", ""] },
     ]);
 });
 
@@ -370,14 +370,14 @@ test("allow selection of boolean field", async () => {
 
 test("render false and true leaves", async () => {
     await makeExpressionEditor({ expression: `False and True` });
-    expect(getOperatorOptions()).toEqual(["is equal"]);
+    expect(getOperatorOptions()).toEqual(["equals"]);
     expect(getValueOptions()).toEqual(["1"]);
-    expect(getOperatorOptions(-1)).toEqual(["is equal"]);
+    expect(getOperatorOptions(-1)).toEqual(["equals"]);
     expect(getValueOptions(-1)).toEqual(["1"]);
 });
 
 test("no field of type properties in model field selector", async () => {
-    patchWithCleanup(odoo, { debug: "" });
+    serverState.debug = "";
     Partner._fields.properties = fields.Properties({
         string: "Properties",
         definition_record: "product_id",
@@ -404,7 +404,7 @@ test("no field of type properties in model field selector", async () => {
 });
 
 test("no special fields in fields", async () => {
-    patchWithCleanup(odoo, { debug: "" });
+    serverState.debug = "";
     await makeExpressionEditor({
         expression: `True`,
         fieldFilters: ["foo", "bar", "properties"],
@@ -416,7 +416,7 @@ test("no special fields in fields", async () => {
     await addNewRule();
     expect(getTreeEditorContent()).toEqual([
         { level: 0, value: "all" },
-        { level: 1, value: ["Foo", "is equal", ""] },
+        { level: 1, value: ["Foo", "equals", ""] },
     ]);
     expect.verifySteps([`foo == ""`]);
 });
@@ -429,14 +429,12 @@ test("between operator", async () => {
         },
     });
     expect(getOperatorOptions()).toEqual([
-        "is equal",
-        "is not equal",
-        "is greater",
-        "is greater or equal",
-        "is lower",
-        "is lower or equal",
-        "is between",
-        "is not between",
+        "equals",
+        "not equals",
+        "greater",
+        "lower",
+        "between",
+        "not between",
         "set",
         "not set",
     ]);
@@ -455,14 +453,12 @@ test("next operator", async () => {
     expect(getOperatorOptions()).toEqual([
         "today",
         "not today",
-        "is equal",
-        "is not equal",
-        "is greater",
-        "is greater or equal",
-        "is lower",
-        "is lower or equal",
-        "is between",
-        "is not between",
+        "equals",
+        "not equals",
+        "greater",
+        "lower",
+        "between",
+        "not between",
         "next",
         "not next",
         "last",
@@ -487,14 +483,12 @@ test("not_next operator", async () => {
     expect(getOperatorOptions()).toEqual([
         "today",
         "not today",
-        "is equal",
-        "is not equal",
-        "is greater",
-        "is greater or equal",
-        "is lower",
-        "is lower or equal",
-        "is between",
-        "is not between",
+        "equals",
+        "not equals",
+        "greater",
+        "lower",
+        "between",
+        "not between",
         "next",
         "not next",
         "last",
@@ -519,14 +513,12 @@ test("last operator", async () => {
     expect(getOperatorOptions()).toEqual([
         "today",
         "not today",
-        "is equal",
-        "is not equal",
-        "is greater",
-        "is greater or equal",
-        "is lower",
-        "is lower or equal",
-        "is between",
-        "is not between",
+        "equals",
+        "not equals",
+        "greater",
+        "lower",
+        "between",
+        "not between",
         "next",
         "not next",
         "last",
@@ -551,14 +543,12 @@ test("not_last operator", async () => {
     expect(getOperatorOptions()).toEqual([
         "today",
         "not today",
-        "is equal",
-        "is not equal",
-        "is greater",
-        "is greater or equal",
-        "is lower",
-        "is lower or equal",
-        "is between",
-        "is not between",
+        "equals",
+        "not equals",
+        "greater",
+        "lower",
+        "between",
+        "not between",
         "next",
         "not next",
         "last",

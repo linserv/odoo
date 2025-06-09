@@ -191,3 +191,47 @@ registry.category("web_tour.tours").add("ProductComboMaxFreeQtyTour", {
             ReceiptScreen.isShown(),
         ].flat(),
 });
+
+registry.category("web_tour.tours").add("ProductComboChangePricelist", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickDisplayedProduct("Office Combo"),
+            combo.select("Combo Product 2"),
+            combo.select("Combo Product 4"),
+            combo.select("Combo Product 6"),
+            Dialog.confirm(),
+            inLeftSide([
+                ...ProductScreen.orderComboLineHas("Combo Product 2", "1.0"),
+                ...ProductScreen.orderComboLineHas("Combo Product 4", "1.0"),
+                ...ProductScreen.orderComboLineHas("Combo Product 6", "1.0"),
+            ]),
+            ProductScreen.totalAmountIs("47.33"),
+            ProductScreen.clickPriceList("sale 10%"),
+            inLeftSide([
+                ...ProductScreen.orderComboLineHas("Combo Product 2", "1.0"),
+                ...ProductScreen.orderComboLineHas("Combo Product 4", "1.0"),
+                ...ProductScreen.orderComboLineHas("Combo Product 6", "1.0"),
+            ]),
+            ProductScreen.totalAmountIs("42.60"),
+            ProductScreen.isShown(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("ProductComboDiscountTour", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickDisplayedProduct("Office Combo"),
+            ProductScreen.checkProductExtraPrice("Combo Product 3", "2"),
+            combo.select("Combo Product 2"),
+            combo.select("Combo Product 4"),
+            combo.select("Combo Product 6"),
+            Dialog.confirm(),
+            inLeftSide([Numpad.click("%"), Numpad.click("2"), Numpad.click("0")]),
+            ProductScreen.totalAmountIs("80.00"),
+            ProductScreen.isShown(),
+        ].flat(),
+});

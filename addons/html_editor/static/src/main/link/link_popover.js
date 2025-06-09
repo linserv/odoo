@@ -3,10 +3,15 @@ import { Component, useState, onMounted, useRef, useEffect, useExternalListener 
 import { useService } from "@web/core/utils/hooks";
 import { browser } from "@web/core/browser/browser";
 import { cleanZWChars, deduceURLfromText } from "./utils";
+import { useColorPicker } from "@web/core/color_picker/color_picker";
+
+const DEFAULT_CUSTOM_TEXT_COLOR = "#714B67";
+const DEFAULT_CUSTOM_FILL_COLOR = "#ffffff";
 
 export class LinkPopover extends Component {
     static template = "html_editor.linkPopover";
     static props = {
+        document: { validate: (p) => p.nodeType === Node.DOCUMENT_NODE },
         linkElement: { validate: (el) => el.nodeType === Node.ELEMENT_NODE },
         onApply: Function,
         onChange: Function,
@@ -14,15 +19,20 @@ export class LinkPopover extends Component {
         onRemove: Function,
         onCopy: Function,
         onClose: Function,
+        onEdit: Function,
         getInternalMetaData: Function,
         getExternalMetaData: Function,
         getAttachmentMetadata: Function,
         isImage: Boolean,
+        showReplaceTitleBanner: Boolean,
         type: String,
+        LinkPopoverState: Object,
         recordInfo: Object,
         canEdit: { type: Boolean, optional: true },
         canUpload: { type: Boolean, optional: true },
         onUpload: { type: Function, optional: true },
+        allowCustomStyle: { type: Boolean, optional: true },
+        allowTargetBlank: { type: Boolean, optional: true },
     };
     static defaultProps = {
         canEdit: true,
@@ -37,6 +47,17 @@ export class LinkPopover extends Component {
         // alpha -> epsilon classes. This is currently done by removing
         // all btn-* classes anyway.
     ];
+    buttonSizesData = [
+        { size: "sm", label: _t("Small") },
+        { size: "", label: _t("Medium") },
+        { size: "lg", label: _t("Large") },
+    ];
+    borderData = [
+        { style: "solid", label: "━━━" },
+        { style: "dashed", label: "╌╌╌" },
+        { style: "dotted", label: "┄┄┄" },
+        { style: "double", label: "═══" },
+    ];
     setup() {
         this.ui = useService("ui");
         this.notificationService = useService("notification");
@@ -46,8 +67,11 @@ export class LinkPopover extends Component {
         const labelEqualsUrl =
             textContent === this.props.linkElement.href ||
             textContent + "/" === this.props.linkElement.href;
+        const computedStyle = this.props.document.defaultView.getComputedStyle(
+            this.props.linkElement
+        );
         this.state = useState({
-            editing: this.props.linkElement.href ? false : true,
+            editing: this.props.LinkPopoverState.editing,
             url: this.props.linkElement.href || "",
             label: labelEqualsUrl ? "" : textContent,
             previewIcon: {
@@ -62,14 +86,76 @@ export class LinkPopover extends Component {
             type:
                 this.props.type ||
                 this.props.linkElement.className
-                    .match(/btn(-[a-z0-9_-]*)(primary|secondary)/)
+                    .match(/btn(-[a-z0-9_-]*)(primary|secondary|custom)/)
                     ?.pop() ||
                 "",
+            linkTarget: this.props.linkElement.target === "_blank" ? "_blank" : "",
+            buttonSize: this.props.linkElement.className.match(/btn-(sm|lg)/)?.[1] || "",
+            customBorderSize: computedStyle.borderWidth.replace("px", "") || "1",
+            customBorderStyle: computedStyle.borderStyle || "solid",
             isImage: this.props.isImage,
+            showReplaceTitleBanner: this.props.showReplaceTitleBanner,
+            isLabelHidden: !!this.props.linkElement.childElementCount,
         });
 
+        this.customTextColorState = useState({
+            selectedColor: computedStyle.color || DEFAULT_CUSTOM_TEXT_COLOR,
+            defaultTab: "solid",
+        });
+        this.customTextResetPreviewColor = this.customTextColorState.selectedColor;
+        this.customFillColorState = useState({
+            selectedColor: computedStyle.backgroundColor || DEFAULT_CUSTOM_FILL_COLOR,
+            defaultTab: "solid",
+        });
+        this.customFillResetPreviewColor = this.customFillColorState.selectedColor;
+        this.customBorderColorState = useState({
+            selectedColor: computedStyle.borderColor || DEFAULT_CUSTOM_TEXT_COLOR,
+            defaultTab: "solid",
+        });
+        this.customBorderResetPreviewColor = this.customBorderColorState.selectedColor;
+
+        if (this.props.allowCustomStyle) {
+            const createCustomColorPicker = (refName, colorStateRef, resetValueRef) =>
+                useColorPicker(
+                    refName,
+                    {
+                        state: this[colorStateRef],
+                        getUsedCustomColors: () => [],
+                        colorPrefix: "",
+                        applyColor: (colorValue) => {
+                            this[colorStateRef].selectedColor = colorValue;
+                            this[resetValueRef] = colorValue;
+                        },
+                        applyColorPreview: (colorValue) => {
+                            this[colorStateRef].selectedColor = colorValue;
+                        },
+                        applyColorResetPreview: () => {
+                            this[colorStateRef].selectedColor = this[resetValueRef];
+                        },
+                    },
+                    {
+                        onClose: this.onChange.bind(this),
+                    }
+                );
+            this.customTextColorPicker = createCustomColorPicker(
+                "customTextColorButton",
+                "customTextColorState",
+                "customTextResetPreviewColor"
+            );
+            this.customFillColorPicker = createCustomColorPicker(
+                "customFillColorButton",
+                "customFillColorState",
+                "customFillResetPreviewColor"
+            );
+            this.customBorderColorPicker = createCustomColorPicker(
+                "customBorderColorButton",
+                "customBorderColorState",
+                "customBorderResetPreviewColor"
+            );
+        }
+
         this.editingWrapper = useRef("editing-wrapper");
-        this.inputRef = useRef(this.state.isImage || "label");
+        this.inputRef = useRef(this.state.isImage ? "url" : "label");
         useEffect(
             (el) => {
                 if (el) {
@@ -83,23 +169,46 @@ export class LinkPopover extends Component {
                 this.loadAsyncLinkPreview();
             }
         });
-        useExternalListener(document, "pointerdown", (ev) => {
-            if (
+        const onPointerDown = (ev) => {
+            if (!this.state.url) {
+                this.onClickRemove();
+            } else if (
                 this.editingWrapper?.el &&
                 !this.state.isImage &&
                 !this.editingWrapper.el.contains(ev.target)
             ) {
                 this.onClickApply();
             }
-        });
+        };
+        useExternalListener(this.props.document, "pointerdown", onPointerDown);
+        if (this.props.document !== document) {
+            // Listen to pointerdown outside the iframe
+            useExternalListener(document, "pointerdown", onPointerDown);
+        }
     }
 
     onChange() {
         // Apply changes to update the link preview.
-        this.props.onChange(this.state.url, this.state.label, this.classes);
+        this.props.onChange(
+            this.state.url,
+            this.state.label,
+            this.classes,
+            this.customStyles,
+            this.state.linkTarget
+        );
     }
     onClickApply() {
         this.state.editing = false;
+        this.applyDeducedUrl();
+        this.props.onApply(
+            this.state.url,
+            this.state.label,
+            this.classes,
+            this.customStyles,
+            this.state.linkTarget
+        );
+    }
+    applyDeducedUrl() {
         if (this.state.label === "") {
             this.state.label = this.state.url;
         }
@@ -107,11 +216,13 @@ export class LinkPopover extends Component {
         this.state.url = deducedUrl
             ? this.correctLink(deducedUrl)
             : this.correctLink(this.state.url);
-        this.loadAsyncLinkPreview();
-        this.props.onApply(this.state.url, this.state.label, this.classes);
     }
     onClickEdit() {
         this.state.editing = true;
+        this.props.onEdit();
+        this.updateUrlAndLabel();
+    }
+    updateUrlAndLabel() {
         this.state.url = this.props.linkElement.href;
 
         const textContent = cleanZWChars(this.props.linkElement.textContent);
@@ -134,7 +245,7 @@ export class LinkPopover extends Component {
 
     onKeydownEnter(ev) {
         const isAutoCompleteDropdownOpen = document.querySelector(".o-autocomplete--dropdown-menu");
-        if (ev.key === "Enter" && !isAutoCompleteDropdownOpen) {
+        if (ev.key === "Enter" && !isAutoCompleteDropdownOpen && this.state.url) {
             ev.preventDefault();
             this.onClickApply();
         }
@@ -143,6 +254,7 @@ export class LinkPopover extends Component {
     onKeydown(ev) {
         if (ev.key === "Escape") {
             ev.preventDefault();
+            ev.stopImmediatePropagation();
             this.props.onClose();
         }
     }
@@ -150,6 +262,20 @@ export class LinkPopover extends Component {
     onClickReplaceTitle() {
         this.state.label = this.state.urlTitle;
         this.onClickApply();
+    }
+
+    onClickForceEditMode(ev) {
+        if (this.props.linkElement.href) {
+            const currentUrl = new URL(this.props.linkElement.href);
+            if (
+                browser.location.hostname === currentUrl.hostname &&
+                !currentUrl.pathname.startsWith("/@/")
+            ) {
+                ev.preventDefault();
+                currentUrl.pathname = `/@${currentUrl.pathname}`;
+                browser.open(currentUrl);
+            }
+        }
     }
 
     /**
@@ -166,6 +292,9 @@ export class LinkPopover extends Component {
             !url.startsWith("${")
         ) {
             url = "https://" + url;
+        }
+        if (url && (url.startsWith("http:") || url.startsWith("https:"))) {
+            url = URL.parse(url) ? url : "";
         }
         return url;
     }
@@ -201,7 +330,6 @@ export class LinkPopover extends Component {
             this.state.previewIcon = { type: "mimetype", value: mimetype };
             return;
         }
-
         try {
             url = new URL(this.state.url); // relative to absolute
         } catch {
@@ -285,10 +413,32 @@ export class LinkPopover extends Component {
     }
 
     get classes() {
-        if (!this.state.type) {
-            return "";
+        let classes = [...this.props.linkElement.classList]
+            .filter((value) => !value.match(/btn(-[a-z0-9]+)*/))
+            .join(" ");
+
+        if (this.state.type) {
+            classes += ` btn btn-fill-${this.state.type}`;
         }
-        return `btn btn-fill-${this.state.type}`;
+
+        if (this.state.buttonSize) {
+            classes += ` btn-${this.state.buttonSize}`;
+        }
+
+        return classes.trim();
+    }
+
+    get customStyles() {
+        if (!this.props.allowCustomStyle || this.state.type !== "custom") {
+            return false;
+        }
+        let customStyles = `color: ${this.customTextColorState.selectedColor}; `;
+        customStyles += `background-color: ${this.customFillColorState.selectedColor}; `;
+        customStyles += `border-width: ${this.state.customBorderSize}px; `;
+        customStyles += `border-color: ${this.customBorderColorState.selectedColor}; `;
+        customStyles += `border-style: ${this.state.customBorderStyle}; `;
+
+        return customStyles;
     }
 
     async uploadFile() {

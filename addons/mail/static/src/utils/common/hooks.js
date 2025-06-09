@@ -143,7 +143,7 @@ export function useHover(refNames, { onHover, onAway, stateObserver, onHovering 
                 awayTimeout = setTimeout(() => {
                     clearTimeout(hoveringTimeout);
                     onAway();
-                }, 200);
+                }, 100);
             }
         }
         wasHovering = hovering;
@@ -195,8 +195,11 @@ export function useHover(refNames, { onHover, onAway, stateObserver, onHovering 
     }
 
     if (stateObserver) {
-        useEffect(() => {
-            if (lastHoveredTarget && !lastHoveredTarget.ref.el) {
+        useEffect((open) => {
+            // Note: stateObserver is essentially used with useDropdownState()?.isOpen.
+            // While isOpen can become false, the ref.el can still be there for a short period of time.
+            // Relying on isOpen becoming false forces good syncing of isHover state on dropdown close.
+            if ((lastHoveredTarget && !lastHoveredTarget.ref.el) || !open) {
                 setHover(false);
                 lastHoveredTarget = null;
             }
@@ -471,7 +474,7 @@ export function useDiscussSystray() {
         class: "o-mail-DiscussSystray-class",
         get contentClass() {
             return `d-flex flex-column flex-grow-1 ${
-                ui.isSmall ? "overflow-auto w-100 mh-100" : ""
+                ui.isSmall ? "overflow-auto o-scrollbar-thin w-100 mh-100" : ""
             }`;
         },
         get menuClass() {
