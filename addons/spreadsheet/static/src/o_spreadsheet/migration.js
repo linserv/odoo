@@ -95,6 +95,37 @@ migrationStepRegistry.add("18.4.12", {
     },
 });
 
+const defaultValueMap = {
+    last_week: "last_7_days",
+    last_month: "last_30_days",
+    last_three_months: "last_90_days",
+    last_year: "last_12_months",
+};
+
+migrationStepRegistry.add("18.4.13", {
+    migrate(data) {
+        for (const globalFilter of data.globalFilters || []) {
+            if (["last_six_month", "last_three_years"].includes(globalFilter.defaultValue)) {
+                delete globalFilter.defaultValue;
+            }
+            if (globalFilter.defaultValue in defaultValueMap) {
+                globalFilter.defaultValue = defaultValueMap[globalFilter.defaultValue];
+            }
+        }
+        return data;
+    },
+});
+
+migrationStepRegistry.add("18.4.14", {
+    migrate(data) {
+        for (const globalFilter of data.globalFilters || []) {
+            delete globalFilter.rangeType;
+            delete globalFilter.disabledPeriods;
+        }
+        return data;
+    },
+});
+
 function migrateOdooData(data) {
     const version = data.odooVersion || 0;
     if (version < 1) {
@@ -451,14 +482,19 @@ function migrate12to13(data) {
             if (!pivot.sortedColumn) {
                 continue;
             }
+            const measure = pivot.measures.find(
+                (measure) => measure.fieldName === pivot.sortedColumn.measure
+            );
             // We're missing some information to convert the sortedColumn (fieldType), so we'll drop the sorted columns
             // that are not on the total column
-            if (pivot.sortedColumn.groupId[1]?.length) {
+            // Also, a previous bug allowed to have a sortedColumn measure that is not in the measures,
+            // in this case we also drop the sortedColumn because we can't sort a measure that is not there
+            if (pivot.sortedColumn.groupId[1]?.length || !measure) {
                 pivot.sortedColumn = undefined;
                 continue;
             }
             pivot.sortedColumn = {
-                measure: pivot.sortedColumn.measure,
+                measure: measure.id,
                 order: pivot.sortedColumn.order,
                 domain: [],
             };

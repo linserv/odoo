@@ -95,7 +95,7 @@ test("Numeric/monetary fields are correctly loaded and displayed", async () => {
         field_with_array_agg: 0,
         currency_id: 2,
         pognon: 0,
-    })
+    });
     const { model } = await createSpreadsheetWithList({
         columns: ["pognon", "probability", "field_with_array_agg"],
     });
@@ -722,7 +722,6 @@ test("field matching is removed when filter is deleted", async function () {
             label: "test",
             defaultValue: [41],
             modelName: undefined,
-            rangeType: undefined,
         },
         {
             list: { 1: { chain: "product_id", type: "many2one" } },

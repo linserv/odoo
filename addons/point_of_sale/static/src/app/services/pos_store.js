@@ -880,8 +880,11 @@ export class PosStore extends WithLazyGetterTrap {
                 .reduce((acc, attr) => acc + attr.price_extra, 0);
 
             values.price_extra += priceExtra;
-            values.attribute_value_ids = values.product_id.product_template_variant_value_ids.map(
-                (attr) => ["link", attr]
+            if (!values.attribute_value_ids) {
+                values.attribute_value_ids = [];
+            }
+            values.attribute_value_ids = values.attribute_value_ids.concat(
+                values.product_id.product_template_variant_value_ids.map((attr) => ["link", attr])
             );
         }
 
@@ -996,7 +999,7 @@ export class PosStore extends WithLazyGetterTrap {
                 const weight = await makeAwaitable(this.env.services.dialog, ScaleScreen);
                 if (weight) {
                     values.qty = weight;
-                } else {
+                } else if (weight !== null) {
                     return;
                 }
             } else {
@@ -2087,7 +2090,9 @@ export class PosStore extends WithLazyGetterTrap {
     }
     // There for override to do something before adding partner to current order from partner list
     setPartnerToCurrentOrder(partner) {
-        this.getOrder().setPartner(partner);
+        const order = this.getOrder();
+        order.setPartner(partner);
+        this.addPendingOrder([order.id]);
     }
     async selectPartner(currentOrder = this.getOrder()) {
         // FIXME, find order to refund when we are in the ticketscreen.

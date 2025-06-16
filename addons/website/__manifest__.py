@@ -58,6 +58,7 @@
         'views/snippets/s_key_benefits.xml',
         'views/snippets/s_picture.xml',
         'views/snippets/s_image_punchy.xml',
+        'views/snippets/s_bento_grid.xml',
         'views/snippets/s_carousel.xml',
         'views/snippets/s_carousel_intro.xml',
         'views/snippets/s_carousel_cards.xml',
@@ -287,9 +288,9 @@
             ('prepend', 'website/static/src/scss/secondary_variables.scss'),
         ],
         'web.assets_tests': [
-            'website/static/tests/tour_utils/focus_blur_snippets_options.js',
             'website/static/tests/tour_utils/lifecycle_dep_interaction.js',
             'website/static/tests/tours/**/*',
+            'html_builder/static/src/utils/utils_css.js',
         ],
         'web.assets_backend': [
             ('include', 'website.assets_editor'),

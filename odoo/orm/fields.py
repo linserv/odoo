@@ -16,7 +16,7 @@ from psycopg2.extras import Json as PsycopgJson
 from odoo.exceptions import AccessError, MissingError
 from odoo.tools import Query, SQL, sql
 from odoo.tools.constants import PREFETCH_MAX
-from odoo.tools.misc import SENTINEL, OrderedSet, ReadonlyDict, Sentinel, unique
+from odoo.tools.misc import SENTINEL, ReadonlyDict, Sentinel, unique
 
 from .domains import NEGATIVE_CONDITION_OPERATORS, Domain
 from .utils import COLLECTION_TYPES, SQL_OPERATORS, SUPERUSER_ID, expand_ids
@@ -398,9 +398,11 @@ class Field(typing.Generic[T]):
         if self._direct or self._toplevel:
             self._setup_attrs__(owner, name)
             if self._toplevel:
-                # free memory, self._args__ and self._base_fields__ are no longer useful
+                # free memory from stuff that is no longer useful
                 self.__dict__.pop('_args__', None)
-                self.__dict__.pop('_base_fields__', None)
+                if not self.related:
+                    # keep _base_fields__ on related fields for incremental model setup
+                    self.__dict__.pop('_base_fields__', None)
 
     #
     # Setup field parameter attributes
@@ -428,7 +430,8 @@ class Field(typing.Generic[T]):
         attrs['model_name'] = model_class._name
         attrs['name'] = name
         attrs['_module'] = modules[-1] if modules else None
-        attrs['_modules'] = tuple(OrderedSet(modules))
+        # the following is faster than calling unique or using OrderedSet
+        attrs['_modules'] = tuple(unique(modules) if len(modules) > 1 else modules)
 
         # initialize ``self`` with ``attrs``
         if name == 'state':
@@ -615,6 +618,9 @@ class Field(typing.Generic[T]):
             raise TypeError("Type of related field %s is inconsistent with %s" % (self, field))
 
         self.related_field = field
+
+        # if field's setup is invalidated, then self's setup must be invalidated, too
+        model.pool.field_setup_dependents.add(field, self)
 
         # determine dependencies, compute, inverse, and search
         self.compute = self._compute_related

@@ -1,9 +1,10 @@
 import { Plugin } from "@html_editor/plugin";
 import { isBlock, closestBlock } from "@html_editor/utils/blocks";
-import { fillEmpty } from "@html_editor/utils/dom";
+import { fillEmpty, unwrapContents } from "@html_editor/utils/dom";
 import { leftLeafOnlyNotBlockPath } from "@html_editor/utils/dom_state";
 import {
     isParagraphRelatedElement,
+    isRedundantElement,
     isEmptyBlock,
     isVisibleTextNode,
     isZWS,
@@ -14,6 +15,7 @@ import {
     closestElement,
     createDOMPathGenerator,
     descendants,
+    selectElements,
 } from "@html_editor/utils/dom_traversal";
 import {
     convertNumericToUnit,
@@ -88,10 +90,7 @@ export const fontItems = [
 ];
 
 export const fontSizeItems = [
-    {
-        variableName: "display-1-font-size",
-        className: "display-1-fs",
-    },
+    { variableName: "display-1-font-size", className: "display-1-fs" },
     { variableName: "display-2-font-size", className: "display-2-fs" },
     { variableName: "display-3-font-size", className: "display-3-fs" },
     { variableName: "display-4-font-size", className: "display-4-fs" },
@@ -268,6 +267,7 @@ export class FontPlugin extends Plugin {
             this.updateFontSelectorParams.bind(this),
             this.updateFontSizeSelectorParams.bind(this),
         ],
+        normalize_handlers: this.normalize.bind(this),
 
         /** Overrides */
         split_element_block_overrides: [
@@ -287,6 +287,14 @@ export class FontPlugin extends Plugin {
     setup() {
         this.fontSize = reactive({ displayName: "" });
         this.font = reactive({ displayName: "" });
+    }
+
+    normalize(root) {
+        for (const el of selectElements(root, "strong, b, span[style*='font-weight: bolder']")) {
+            if (isRedundantElement(el)) {
+                unwrapContents(el);
+            }
+        }
     }
 
     get fontName() {

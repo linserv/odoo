@@ -15,7 +15,7 @@ import typing
 import warnings
 from collections import defaultdict, deque
 from collections.abc import Mapping
-from contextlib import closing, contextmanager, nullcontext
+from contextlib import closing, contextmanager, nullcontext, ExitStack
 from functools import partial
 from operator import attrgetter
 
@@ -26,6 +26,7 @@ from odoo.tools import (
     SQL,
     OrderedSet,
     config,
+    gc,
     lazy_classproperty,
     remove_accents,
     sql,
@@ -149,6 +150,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
         registry: Registry = object.__new__(cls)
         registry.init(db_name)
         registry.new = registry.init = registry.registries = None  # type: ignore
+        first_registry = not cls.registries
 
         # Initializing a registry will call general code which will in
         # turn call Registry() to obtain the registry being initialized.
@@ -160,12 +162,17 @@ class Registry(Mapping[str, type["BaseModel"]]):
             registry.setup_signaling()
             # This should be a method on Registry
             from odoo.modules.loading import load_modules, reset_modules_state  # noqa: PLC0415
+            exit_stack = ExitStack()
             try:
+                if upgrade_modules or install_modules:
+                    update_module = True
                 if new_db_demo is None:
                     new_db_demo = config['with_demo']
+                if first_registry and not update_module:
+                    exit_stack.enter_context(gc.disabling_gc())
                 load_modules(
                     registry,
-                    update_module=update_module or bool(upgrade_modules or install_modules),
+                    update_module=update_module,
                     upgrade_modules=upgrade_modules,
                     install_modules=install_modules,
                     new_db_demo=new_db_demo,
@@ -173,6 +180,8 @@ class Registry(Mapping[str, type["BaseModel"]]):
             except Exception:
                 reset_modules_state(db_name)
                 raise
+            finally:
+                exit_stack.close()
         except Exception:
             _logger.error('Failed to load registry')
             del cls.registries[db_name]     # pylint: disable=unsupported-delete-operation
@@ -225,7 +234,14 @@ class Registry(Mapping[str, type["BaseModel"]]):
         # field dependencies
         self.field_depends: Collector[Field, Field] = Collector()
         self.field_depends_context: Collector[Field, str] = Collector()
-        self.field_inverses: Collector[Field, Field] = Collector()
+
+        # field inverses
+        self.many2many_relations: defaultdict[tuple[str, str, str], OrderedSet[tuple[str, str]]] = defaultdict(OrderedSet)
+
+        # field setup dependents: this enables to invalidate the setup of
+        # related fields when some of their dependencies are invalidated
+        # (for incremental model setup)
+        self.field_setup_dependents: Collector[Field, Field] = Collector()
 
         # company dependent
         self.many2one_company_dependents: Collector[str, Field] = Collector()  # {model_name: (field1, field2, ...)}
@@ -310,7 +326,9 @@ class Registry(Mapping[str, type["BaseModel"]]):
         models: OrderedSet[str] = OrderedSet()
         queue = deque(model_names)
         while queue:
-            model = self[queue.popleft()]
+            model = self.get(queue.popleft())
+            if model is None or model._name in models:
+                continue
             models.add(model._name)
             for func in funcs:
                 queue.extend(func(model))
@@ -349,9 +367,13 @@ class Registry(Mapping[str, type["BaseModel"]]):
         return model_names
 
     @locked
-    def _setup_models__(self, cr: BaseCursor) -> None:
-        """ Complete the setup of models.
-            This must be called after loading modules and before using the ORM.
+    def _setup_models__(self, cr: BaseCursor, model_names: Iterable[str] | None = None) -> None:  # noqa: PLW3201
+        """ Perform the setup of models.
+        This must be called after loading modules and before using the ORM.
+
+        When given ``model_names``, it performs an incremental setup: only the
+        models impacted by the given ``model_names`` and all the already-marked
+        models will be set up. Otherwise, all models are set up.
         """
         from .environments import Environment  # noqa: PLC0415
         env = Environment(cr, SUPERUSER_ID, {})
@@ -374,7 +396,43 @@ class Registry(Mapping[str, type["BaseModel"]]):
 
         self.field_depends.clear()
         self.field_depends_context.clear()
-        self.field_inverses.clear()
+
+        if model_names is None:
+            self.many2many_relations.clear()
+            self.field_setup_dependents.clear()
+
+            # mark all models for setup
+            for model_cls in self.models.values():
+                model_cls._setup_done__ = False
+
+        else:
+            # only mark impacted models for setup
+            for model_name in self.descendants(model_names, '_inherit', '_inherits'):
+                self[model_name]._setup_done__ = False
+
+            # recursively mark fields to re-setup
+            todo = [
+                field
+                for model_cls in self.models.values()
+                if not model_cls._setup_done__
+                for field in model_cls._fields.values()
+            ]
+            for field in todo:
+                if field._setup_done and field._base_fields__:
+                    # the field has been created by model_classes._setup() as
+                    # Field(_base_fields__=...); restore it to force its setup
+                    base_fields = field._base_fields__
+                    model_cls = self[field.model_name]
+                    name = field.name
+
+                    field.__dict__.clear()
+                    field.__init__(_base_fields__=base_fields)
+                    field._toplevel = True
+                    field.__set_name__(model_cls, name)
+                    field._setup_done = False
+
+                todo.extend(self.field_setup_dependents.pop(field, ()))
+
         self.many2one_company_dependents.clear()
 
         model_classes.setup_model_classes(env)
@@ -395,6 +453,15 @@ class Registry(Mapping[str, type["BaseModel"]]):
             for model in env.values():
                 model._register_hook()
             env.flush_all()
+
+    @functools.cached_property
+    def field_inverses(self) -> Collector[Field, Field]:
+        result = Collector()
+        for model_cls in self.models.values():
+            for field in model_cls._fields.values():
+                if field.relational:
+                    field.setup_inverses(self, result)
+        return result
 
     @functools.cached_property
     def field_computed(self) -> dict[Field, list[Field]]:

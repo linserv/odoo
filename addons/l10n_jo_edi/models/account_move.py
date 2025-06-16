@@ -98,7 +98,7 @@ class AccountMove(models.Model):
         self.ensure_one()
         encoded_params = url_encode({
             'barcode_type': 'QR',
-            'quiet': False,
+            'quiet': 0,
             'value': self.l10n_jo_edi_qr,
             'width': 200,
             'height': 200,
@@ -159,7 +159,10 @@ class AccountMove(models.Model):
             return _("Invalid request: %s", e)
 
         if not response.ok:
-            return _("Request failed: %s", response.content.decode())
+            content = response.content.decode()
+            if response.status_code == 403:
+                content = _("Access forbidden. Please verify your JoFotara credentials.")
+            return _("Request failed: %s", content)
         dict_response = response.json()
         self.l10n_jo_edi_qr = str(dict_response.get('EINV_QR', ''))
         self.invoice_pdf_report_id.res_field = False
@@ -233,7 +236,7 @@ class AccountMove(models.Model):
         else:
             self.l10n_jo_edi_error = False
             self.l10n_jo_edi_state = 'sent'
-            self.with_context(no_new_invoice=True).message_post(
+            self.message_post(
                 body=_("E-invoice (JoFotara) submitted successfully."),
                 attachment_ids=self.l10n_jo_edi_xml_attachment_id.ids,
             )

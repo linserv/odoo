@@ -51,10 +51,10 @@ export class ProjectRightSidePanel extends Component {
         switch (this.uiService.size) {
             case SIZES.XS:
                 return 2;
-            case SIZES.VSM:
+            case SIZES.SM:
                 return 3;
             case SIZES.XXL:
-                return 6;
+                return 5;
             default:
                 return 4;
         }

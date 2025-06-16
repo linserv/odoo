@@ -5,24 +5,25 @@
  * @typedef {import("@spreadsheet").FieldMatching} FieldMatching
  * @typedef {import("@spreadsheet").DateGlobalFilter} DateGlobalFilter
  * @typedef {import("@spreadsheet").RelationalGlobalFilter} RelationalGlobalFilter
+ * @typedef {import("@spreadsheet").DateValue} DateValue
+ * @typedef {import("@spreadsheet").DateDefaultValue} DateDefaultValue
  */
 
 import { _t } from "@web/core/l10n/translation";
 import { Domain } from "@web/core/domain";
 import { user } from "@web/core/user";
-import { constructDateRange } from "@web/search/utils/dates";
 
 import { EvaluationError, helpers } from "@odoo/o-spreadsheet";
 import { CommandResult } from "@spreadsheet/o_spreadsheet/cancelled_reason";
 
 import {
     checkFilterValueIsValid,
-    getRelativeDateDomain,
+    getDateDomain,
+    getDateRange,
 } from "@spreadsheet/global_filters/helpers";
-import { RELATIVE_DATE_RANGE_TYPES } from "@spreadsheet/helpers/constants";
 import { OdooCoreViewPlugin } from "@spreadsheet/plugins";
 import { getItemId } from "../../helpers/model";
-import { serializeDateTime, serializeDate } from "@web/core/l10n/dates";
+import { serializeDate } from "@web/core/l10n/dates";
 
 const { DateTime } = luxon;
 
@@ -88,21 +89,12 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
             case "EDIT_GLOBAL_FILTER": {
                 const filter = cmd.filter;
                 const id = filter.id;
-                if (
-                    filter.type === "date" &&
-                    this.values[id] &&
-                    this.values[id].rangeType !== filter.rangeType
-                ) {
-                    delete this.values[id];
-                } else if (!checkFilterValueIsValid(filter, this.values[id]?.value)) {
-                    delete this.values[id];
-                }
                 this.recordsDisplayName[id] = filter.defaultValueDisplayNames;
                 break;
             }
             case "SET_GLOBAL_FILTER_VALUE":
                 this.recordsDisplayName[cmd.id] = cmd.displayNames;
-                if (!cmd.value) {
+                if (cmd.value === undefined) {
                     this._clearGlobalFilterValue(cmd.id);
                 } else {
                     this._setGlobalFilterValue(cmd.id, cmd.value);
@@ -166,13 +158,7 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
             case "boolean":
                 return filter.defaultValue;
             case "date":
-                if (filter.rangeType === "fixedPeriod") {
-                    return this._getValueOfCurrentPeriod(filterId);
-                }
-                if (filter.rangeType === "relative") {
-                    return filter.defaultValue;
-                }
-                throw new Error("from_to should not have a default value");
+                return this._getDateValueFromDefaultValue(filter.defaultValue);
             case "relation":
                 if (filter.defaultValue === "current_user") {
                     return [user.userId];
@@ -214,7 +200,7 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
             case "boolean":
                 return [[{ value: value?.length ? value.join(", ") : "" }]];
             case "date":
-                return this._getDateFilterDisplayValue(filter, value);
+                return this._getDateFilterDisplayValue(filter);
             case "relation":
                 return this._getRelationFilterDisplayValue(filter, value);
         }
@@ -293,39 +279,10 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
      * @param {string|Array<string>|Object} value Current value to set
      */
     _setGlobalFilterValue(id, value) {
-        const filter = this.getters.getGlobalFilter(id);
         this.values[id] = {
             preventDefaultValue: false,
             value,
-            rangeType: filter.type === "date" ? filter.rangeType : undefined,
         };
-    }
-
-    /**
-     * Get the filter value corresponding to the current period, depending of the type of range of the filter.
-     * For example if rangeType === "month", the value will be the current month of the current year.
-     *
-     * @param {string} filterId a global filter
-     * @return {Object} filter value
-     */
-    _getValueOfCurrentPeriod(filterId) {
-        const filter = this.getters.getGlobalFilter(filterId);
-        const year = DateTime.local().year;
-        switch (filter.defaultValue) {
-            case "this_year":
-                return { type: "year", period: { year } };
-            case "this_month": {
-                const month = DateTime.local().month;
-                return { type: "month", period: { year, month } };
-            }
-            case "this_quarter": {
-                const quarter = Math.floor(new Date().getMonth() / 3) + 1;
-                return { type: "quarter", period: { year, quarter } };
-            }
-        }
-        throw new Error(
-            "Unsupported default value for fixed period date filter: " + filter.defaultValue
-        );
     }
 
     /**
@@ -334,11 +291,9 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
      * @param {string} id Id of the filter
      */
     _clearGlobalFilterValue(id) {
-        const filter = this.getters.getGlobalFilter(id);
         this.values[id] = {
             preventDefaultValue: true,
             value: undefined,
-            rangeType: filter.type === "date" ? filter.rangeType : undefined,
         };
     }
 
@@ -346,61 +301,52 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
     // Private
     // -------------------------------------------------------------------------
 
-    _getDateFilterDisplayValue(filter, value) {
-        switch (filter.rangeType) {
-            case "from_to": {
-                const locale = this.getters.getLocale();
-                const from = {
-                    value: value?.from ? toNumber(value.from, locale) : "",
-                    format: locale.dateFormat,
+    _getDateFilterDisplayValue(filter) {
+        const { from, to } = getDateRange(this.getGlobalFilterValue(filter.id));
+        const locale = this.getters.getLocale();
+        const _from = {
+            value: from ? toNumber(serializeDate(from), locale) : "",
+            format: locale.dateFormat,
+        };
+        const _to = {
+            value: to ? toNumber(serializeDate(to), locale) : "",
+            format: locale.dateFormat,
+        };
+        return [[_from], [_to]];
+    }
+
+    /**
+     * Get the value derived from the default value of a date filter.
+     * e.g. if the default value is "this_year", it returns the actual current
+     * year. If it's a relative period, it returns the period as value.
+     *
+     * @param {DateDefaultValue} defaultValue
+     * @returns {DateValue|undefined}
+     */
+    _getDateValueFromDefaultValue(defaultValue) {
+        const year = DateTime.local().year;
+        switch (defaultValue) {
+            case "this_year":
+                return { type: "year", year };
+            case "this_month": {
+                const month = DateTime.local().month;
+                return { type: "month", year, month };
+            }
+            case "this_quarter": {
+                const quarter = Math.floor(new Date().getMonth() / 3) + 1;
+                return { type: "quarter", year, quarter };
+            }
+            case "last_7_days":
+            case "last_30_days":
+            case "last_90_days":
+            case "last_12_months":
+            case "year_to_date":
+                return {
+                    type: "relative",
+                    period: defaultValue,
                 };
-                const to = {
-                    value: value?.to ? toNumber(value.to, locale) : "",
-                    format: locale.dateFormat,
-                };
-                return [[from], [to]];
-            }
-            case "fixedPeriod": {
-                if (!value || value.period?.year === undefined) {
-                    return [[{ value: "" }]];
-                }
-                const yearString = String(value.period.year);
-                switch (value.type) {
-                    case "year":
-                        return [[{ value: yearString }]];
-                    case "month": {
-                        if (value.period.month === undefined) {
-                            return [[{ value: yearString }]];
-                        }
-                        return [
-                            [
-                                {
-                                    value:
-                                        String(value.period.month).padStart(2, "0") +
-                                        "/" +
-                                        yearString,
-                                },
-                            ],
-                        ];
-                    }
-                    case "quarter": {
-                        if (value.period.quarter === undefined) {
-                            return [[{ value: yearString }]];
-                        }
-                        // we do not want the translated value (like T1 in French)
-                        return [[{ value: "Q" + String(value.period.quarter) + "/" + yearString }]];
-                    }
-                }
-                return [[{ value: "" }]];
-            }
-            case "relative": {
-                const type = RELATIVE_DATE_RANGE_TYPES.find((type) => type.type === value);
-                if (!type) {
-                    return [[{ value: "" }]];
-                }
-                return [[{ value: type.description.toString() }]];
-            }
         }
+        return undefined;
     }
 
     _getRelationFilterDisplayValue(filter, value) {
@@ -430,35 +376,14 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
      * @returns {Domain}
      */
     _getDateDomain(filter, fieldMatching) {
-        const value = this.getGlobalFilterValue(filter.id);
-        if (!value || !fieldMatching.chain) {
+        if (!fieldMatching.chain) {
             return new Domain();
         }
         const field = fieldMatching.chain;
         const type = /** @type {"date" | "datetime"} */ (fieldMatching.type);
         const offset = fieldMatching.offset || 0;
-        const now = DateTime.local();
-
-        if (filter.rangeType === "from_to") {
-            const serialize = type === "datetime" ? serializeDateTime : serializeDate;
-            const from = value.from && serialize(DateTime.fromISO(value.from).startOf("day"));
-            const to = value.to && serialize(DateTime.fromISO(value.to).endOf("day"));
-            if (from && to) {
-                return new Domain(["&", [field, ">=", from], [field, "<=", to]]);
-            }
-            if (from) {
-                return new Domain([[field, ">=", from]]);
-            }
-            if (to) {
-                return new Domain([[field, "<=", to]]);
-            }
-            return new Domain();
-        }
-
-        if (filter.rangeType === "relative") {
-            return getRelativeDateDomain(now, offset, value, field, type);
-        }
-        return this._getFixedPeriodDomain(now, offset, value, field, type);
+        const { from, to } = getDateRange(this.getGlobalFilterValue(filter.id), offset);
+        return getDateDomain(from, to, field, type);
     }
 
     /**
@@ -510,43 +435,6 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
             return new Domain([[field, "=", toBoolean(value[0])]]);
         }
         return new Domain([[field, "in", [toBoolean(value[0]), toBoolean(value[1])]]]);
-    }
-
-    _getFixedPeriodDomain(now, offset, value, field, type) {
-        let granularity = "year";
-        const noYear = value.period.year === undefined;
-        if (noYear) {
-            return new Domain();
-        }
-        const setParam = { year: value.period.year };
-        const plusParam = {};
-        switch (value.type) {
-            case "year":
-                plusParam.year = offset;
-                break;
-            case "month":
-                if (value.period.month !== undefined) {
-                    granularity = "month";
-                    setParam.month = value.period.month;
-                    plusParam.month = offset;
-                }
-                break;
-            case "quarter":
-                if (value.period.quarter !== undefined) {
-                    granularity = "quarter";
-                    setParam.quarter = value.period.quarter;
-                    plusParam.quarter = offset;
-                }
-                break;
-        }
-        return constructDateRange({
-            referenceMoment: now,
-            fieldName: field,
-            fieldType: type,
-            granularity,
-            setParam,
-            plusParam,
-        }).domain;
     }
 
     /**

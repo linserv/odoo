@@ -19,10 +19,12 @@ class DiscussChannel(models.Model):
     anonymous_name = fields.Char('Anonymous Name')
     channel_type = fields.Selection(selection_add=[('livechat', 'Livechat Conversation')], ondelete={'livechat': 'cascade'})
     duration = fields.Float('Duration', compute='_compute_duration', help='Duration of the session in hours')
+    livechat_lang_id = fields.Many2one("res.lang", string="Language", help="Lang of the visitor of the channel.")
     livechat_active = fields.Boolean('Is livechat ongoing?', help='Livechat session is active until visitor or operator leaves the conversation.')
     livechat_channel_id = fields.Many2one('im_livechat.channel', 'Channel', index='btree_not_null')
     livechat_operator_id = fields.Many2one('res.partner', string='Operator', index='btree_not_null')
     livechat_channel_member_history_ids = fields.One2many("im_livechat.channel.member.history", "channel_id")
+    livechat_expertise_ids = fields.Many2many("im_livechat.expertise", related="livechat_agent_history_ids.agent_expertise_ids")
     livechat_agent_history_ids = fields.One2many(
         "im_livechat.channel.member.history",
         string="Agents (History)",
@@ -63,6 +65,18 @@ class DiscussChannel(models.Model):
         "mail.guest",
         string="Customers (Guests)",
         compute="_compute_livechat_customer_guest_ids",
+    )
+    livechat_agent_requesting_help_history = fields.Many2one(
+        "im_livechat.channel.member.history",
+        string="Help Requested (Agent)",
+        compute="_compute_livechat_agent_requesting_help_history",
+        store=True,
+    )
+    livechat_agent_providing_help_history = fields.Many2one(
+        "im_livechat.channel.member.history",
+        string="Help Provided (Agent)",
+        compute="_compute_livechat_agent_providing_help_history",
+        store=True,
     )
     chatbot_current_step_id = fields.Many2one('chatbot.script.step', string='Chatbot Current Step')
     chatbot_message_ids = fields.One2many('chatbot.message', 'discuss_channel_id', string='Chatbot Messages')
@@ -152,12 +166,17 @@ class DiscussChannel(models.Model):
             )
 
     def _search_livechat_agent_history_ids(self, operator, value):
-        if operator != "in":
+        if operator not in ("any", "in"):
             return NotImplemented
+        query = (
+            self.env["im_livechat.channel.member.history"]._search(value)
+            if isinstance(value, fields.Domain)
+            else value
+        )
         agent_history_query = self.env["im_livechat.channel.member.history"]._search(
             [
                 ("livechat_member_type", "=", "agent"),
-                ("id", "in", value),
+                ("id", "in", query),
             ],
         )
         return [("id", "in", agent_history_query.subselect("channel_id"))]
@@ -183,18 +202,37 @@ class DiscussChannel(models.Model):
                 channel.livechat_customer_history_ids.guest_id
             )
 
-    def _sync_field_names(self):
-        return super()._sync_field_names() + ["livechat_operator_id"]
+    @api.depends("livechat_agent_history_ids")
+    def _compute_livechat_agent_requesting_help_history(self):
+        for channel in self:
+            channel.livechat_agent_requesting_help_history = (
+                channel.livechat_agent_history_ids.sorted(lambda h: (h.create_date, h.id))[0]
+                if channel.livechat_is_escalated
+                else None
+            )
 
-    def _field_store_repr(self, field_name):
-        if field_name == "livechat_operator_id":
-            return [
-                # sudo - res.partner: accessing livechat operator is allowed
-                Store.One(
-                    "livechat_operator_id", ["avatar_128", "user_livechat_username"], sudo=True
-                )
-            ]
-        return super()._field_store_repr(field_name)
+    @api.depends("livechat_agent_history_ids")
+    def _compute_livechat_agent_providing_help_history(self):
+        for channel in self:
+            channel.livechat_agent_providing_help_history = (
+                channel.livechat_agent_history_ids.sorted(
+                    lambda h: (h.create_date, h.id), reverse=True
+                )[0]
+                if channel.livechat_is_escalated
+                else None
+            )
+
+    def _sync_field_names(self):
+        return super()._sync_field_names() + [
+            Store.One(
+                "livechat_operator_id",
+                self.env["discuss.channel"]._store_livechat_operator_id_fields(),
+            ),
+        ]
+
+    def _store_livechat_operator_id_fields(self):
+        """Return the standard fields to include in Store for livechat_operator_id."""
+        return ["avatar_128", *self.env["res.partner"]._get_store_livechat_username_fields()]
 
     def _to_store_defaults(self, for_current_user=True):
         fields = [
@@ -202,7 +240,12 @@ class DiscussChannel(models.Model):
             "chatbot_current_step",
             Store.One("country_id", ["code", "name"]),
             "livechat_active",
-            "livechat_operator_id",
+            # sudo - res.partner: accessing livechat operator is allowed
+            Store.One(
+                "livechat_operator_id",
+                self.env["discuss.channel"]._store_livechat_operator_id_fields(),
+                sudo=True,
+            ),
         ]
         if self.env.user._is_internal():
             fields.append(Store.One("livechat_channel_id", ["name"], sudo=True))

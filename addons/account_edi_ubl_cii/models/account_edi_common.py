@@ -3,7 +3,7 @@ from markupsafe import Markup
 from odoo import _, models, Command
 from odoo.addons.base.models.res_bank import sanitize_account_number
 from odoo.exceptions import UserError, ValidationError
-from odoo.tools import float_repr
+from odoo.tools import float_is_zero, float_repr
 from odoo.tools.float_utils import float_round
 from odoo.tools.misc import clean_context, formatLang, html_escape
 from odoo.tools.xml_utils import find_xml_value
@@ -283,6 +283,9 @@ class AccountEdiCommon(models.AbstractModel):
     # -------------------------------------------------------------------------
 
     def _import_invoice_ubl_cii(self, invoice, file_data, new=False):
+        if invoice.invoice_line_ids:
+            return invoice._reason_cannot_decode_has_invoice_lines()
+
         tree = file_data['xml_tree']
 
         # Not able to decode the move_type from the xml.
@@ -332,9 +335,7 @@ class AccountEdiCommon(models.AbstractModel):
 
         attachments = self._import_attachments(invoice, tree)
         if attachments:
-            invoice.with_context(no_new_invoice=True).message_post(attachment_ids=attachments.ids)
-
-        return True
+            invoice.message_post(attachment_ids=attachments.ids)
 
     def _import_attachments(self, invoice, tree):
         # Import the embedded PDF in the xml if some are found
@@ -669,7 +670,8 @@ class AccountEdiCommon(models.AbstractModel):
         # discount
         discount = 0
         if delivered_qty * price_unit != 0 and price_subtotal is not None:
-            discount = 100 * (1 - (price_subtotal - charge_amount) / (delivered_qty * price_unit))
+            inferred_discount = 100 * (1 - (price_subtotal - charge_amount) / (delivered_qty * price_unit))
+            discount = inferred_discount if not float_is_zero(inferred_discount, 2) else 0.0
 
         # Sometimes, the xml received is very bad; e.g.:
         #   * unit price = 0, qty = 0, but price_subtotal = -200

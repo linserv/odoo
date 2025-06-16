@@ -1,9 +1,7 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from contextlib import nullcontext
+from contextlib import nullcontext, ExitStack
 from datetime import datetime
-import gc
 import json
 import logging
 import sys
@@ -16,6 +14,8 @@ from psycopg2 import OperationalError
 
 from odoo import tools
 from odoo.tools import SQL
+
+from .gc import disabling_gc
 
 
 _logger = logging.getLogger(__name__)
@@ -302,57 +302,6 @@ class SyncCollector(Collector):
 
 class QwebTracker():
 
-    @classmethod
-    def wrap_render(cls, method_render):
-        @functools.wraps(method_render)
-        def _tracked_method_render(self, template, values=None, **options):
-            current_thread = threading.current_thread()
-            execution_context_enabled = getattr(current_thread, 'profiler_params', {}).get('execution_context_qweb')
-            qweb_hooks = getattr(current_thread, 'qweb_hooks', ())
-            if execution_context_enabled or qweb_hooks:
-                # To have the new compilation cached because the generated code will change.
-                # Therefore 'profile' is a key to the cache.
-                options['profile'] = True
-            return method_render(self, template, values, **options)
-        return _tracked_method_render
-
-    @classmethod
-    def wrap_compile(cls, method_compile):
-        @functools.wraps(method_compile)
-        def _tracked_compile(self, template):
-            if not self.env.context.get('profile'):
-                return method_compile(self, template)
-
-            template_functions, def_name = method_compile(self, template)
-            render_template = template_functions[def_name]
-
-            def profiled_method_compile(self, values):
-                options = template_functions['options']
-                ref = options.get('ref')
-                ref_xml = options.get('ref_xml')
-                qweb_tracker = QwebTracker(ref, ref_xml, self.env.cr)
-                self = self.with_context(qweb_tracker=qweb_tracker)
-                if qweb_tracker.execution_context_enabled:
-                    with ExecutionContext(template=ref):
-                        return render_template(self, values)
-                return render_template(self, values)
-            template_functions[def_name] = profiled_method_compile
-
-            return (template_functions, def_name)
-        return _tracked_compile
-
-    @classmethod
-    def wrap_compile_directive(cls, method_compile_directive):
-        @functools.wraps(method_compile_directive)
-        def _tracked_compile_directive(self, el, options, directive, level):
-            if not options.get('profile') or directive in ('inner-content', 'tag-open', 'tag-close'):
-                return method_compile_directive(self, el, options, directive, level)
-            enter = f"{' ' * 4 * level}self.env.context['qweb_tracker'].enter_directive({directive!r}, {el.attrib!r}, {options['_qweb_error_path_xml'][0]!r})"
-            leave = f"{' ' * 4 * level}self.env.context['qweb_tracker'].leave_directive({directive!r}, {el.attrib!r}, {options['_qweb_error_path_xml'][0]!r})"
-            code_directive = method_compile_directive(self, el, options, directive, level)
-            return [enter, *code_directive, leave] if code_directive else []
-        return _tracked_compile_directive
-
     def __init__(self, view_id, arch, cr):
         current_thread = threading.current_thread()  # don't store current_thread on self
         self.execution_context_enabled = getattr(current_thread, 'profiler_params', {}).get('execution_context_qweb')
@@ -558,6 +507,7 @@ class Profiler:
         self.sub_profilers = []
         self.entry_count_limit = int(self.params.get("entry_count_limit",0)) # the limit could be set using a smarter way
         self.done = False
+        self.exit_stack = ExitStack()
 
         if db is ...:
             # determine database from current thread
@@ -604,8 +554,8 @@ class Profiler:
             self.description = f"{frame.f_code.co_name} ({code.co_filename}:{frame.f_lineno})"
         if self.params:
             self.init_thread.profiler_params = self.params
-        if self.disable_gc and gc.isenabled():
-            gc.disable()
+        if self.disable_gc:
+            self.exit_stack.enter_context(disabling_gc())
         self.start_time = real_time()
         self.start_cpu_time = real_cpu_time()
         for collector in self.collectors:
@@ -654,8 +604,7 @@ class Profiler:
         except OperationalError:
             _logger.exception("Could not save profile in database")
         finally:
-            if self.disable_gc:
-                gc.enable()
+            self.exit_stack.close()
             if self.params:
                 del self.init_thread.profiler_params
             if self.log:
