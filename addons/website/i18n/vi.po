@@ -13,7 +13,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-23 18:38+0000\n"
+"POT-Creation-Date: 2025-06-06 18:37+0000\n"
 "PO-Revision-Date: 2024-09-25 09:42+0000\n"
 "Last-Translator: Thi Huong Nguyen, 2025\n"
 "Language-Team: Vietnamese (https://app.transifex.com/odoo/teams/41243/vi/)\n"
@@ -3614,7 +3614,7 @@ msgstr "Đặt bàn ngay hôm nay"
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_numbers_showcase
 msgid "Boost your pipeline with an increase in potential leads."
-msgstr "Thúc đẩy chu trình của bạn bằng cách tăng số lượng lead tiềm năng."
+msgstr "Thúc đẩy quy trình của bạn bằng cách tăng số lượng lead tiềm năng."
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_showcase
@@ -9518,6 +9518,7 @@ msgstr "Trò chuyện trực tiếp Widget"
 #: code:addons/website/static/src/client_actions/website_preview/website_preview.xml:0
 #: code:addons/website/static/src/components/dialog/add_page_dialog.js:0
 #: code:addons/website/static/src/components/dialog/seo.xml:0
+#: code:addons/website/static/src/js/editor/html_editor.js:0
 #: code:addons/website/static/src/xml/web_editor.xml:0
 #: code:addons/website/static/src/xml/website.background.video.xml:0
 msgid "Loading..."
@@ -11941,7 +11942,7 @@ msgstr "Hình ảnh mạnh mẽ"
 #. module: website
 #: model:ir.model.fields,field_description:website.field_website__domain_punycode
 msgid "Punycode Domain"
-msgstr ""
+msgstr "Miền Punycode"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.cookie_policy
@@ -14064,7 +14065,7 @@ msgstr "Giới hạn phải từ 1 đến 16."
 #. odoo-javascript
 #: code:addons/website/static/src/client_actions/configurator/configurator.js:0
 msgid "The logo is too large. Please upload a logo smaller than 2.5 MB."
-msgstr ""
+msgstr "Logo quá lớn. Vui lòng tải lên logo có kích thước nhỏ hơn 2,5 MB."
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_website_form_options
@@ -14905,6 +14906,12 @@ msgstr ""
 "        404 Không tìm thấy: Nếu bạn muốn xóa một trang / bộ điều khiển cụ thể (ví dụ: Thương mại điện tử đã được cài đặt, nhưng bạn không muốn / mua sắm trên một trang web cụ thể)\n"
 "        308 Chuyển hướng / Viết lại: Nếu bạn muốn đổi tên bộ điều khiển bằng url mới. (Ví dụ: / shop -> / garden - Cả hai url đều có thể truy cập được nhưng / shop sẽ tự động được chuyển hướng đến / garden)\n"
 "    "
+
+#. module: website
+#. odoo-javascript
+#: code:addons/website/static/src/xml/html_editor.xml:0
+msgid "Type your URL"
+msgstr "Nhập URL của bạn"
 
 #. module: website
 #: model:ir.model.fields,field_description:website.field_website_controller_page__name_slugified

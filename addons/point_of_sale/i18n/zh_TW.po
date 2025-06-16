@@ -1983,7 +1983,7 @@ msgstr "公司"
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_config__company_has_template
 #: model:ir.model.fields,field_description:point_of_sale.field_res_config_settings__pos_company_has_template
 msgid "Company has chart of accounts"
-msgstr "公司有會計科目表"
+msgstr "公司有會計賬目總表"
 
 #. module: point_of_sale
 #. odoo-javascript
@@ -2425,7 +2425,7 @@ msgstr "每日時段記載你銷售點進行的銷售。"
 #. module: point_of_sale
 #: model:ir.ui.menu,name:point_of_sale.menu_pos_dashboard
 msgid "Dashboard"
-msgstr "儀表板"
+msgstr "Dashboard"
 
 #. module: point_of_sale
 #. odoo-javascript
@@ -7941,7 +7941,7 @@ msgstr "此訂單已有 %s 的退款項目。我們無法更改與其關聯的�
 msgid ""
 "This order has already been paid. You cannot set it back to draft or edit "
 "it."
-msgstr ""
+msgstr "此訂單已經完成付款，不可編輯或還原為草稿。"
 
 #. module: point_of_sale
 #. odoo-javascript

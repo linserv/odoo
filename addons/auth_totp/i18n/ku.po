@@ -74,7 +74,7 @@ msgstr ""
 #. module: auth_totp
 #: model_terms:ir.ui.view,arch_db:auth_totp.view_totp_wizard
 msgid "Activate"
-msgstr ""
+msgstr "چالاک بکە"
 
 #. module: auth_totp
 #: model_terms:ir.ui.view,arch_db:auth_totp.view_totp_field
@@ -140,7 +140,7 @@ msgstr "دروستکراوە لە"
 #. module: auth_totp
 #: model:ir.model.fields,field_description:auth_totp.field_auth_totp_device__create_date
 msgid "Creation Date"
-msgstr ""
+msgstr "بەرواری دروستکردن"
 
 #. module: auth_totp
 #: model:ir.model.fields,field_description:auth_totp.field_auth_totp_device__name
