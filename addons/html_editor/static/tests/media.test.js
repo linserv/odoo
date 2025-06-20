@@ -7,6 +7,7 @@ import { getContent } from "./_helpers/selection";
 import { deleteBackward, deleteForward, insertText } from "./_helpers/user_actions";
 import { cleanHints } from "./_helpers/dispatch";
 import { EDITABLE_MEDIA_CLASS } from "@html_editor/utils/dom_info";
+import { expectElementCount } from "./_helpers/ui_expectations";
 
 test("Can replace an image", async () => {
     onRpc("/web/dataset/call_kw/ir.attachment/search_read", () => [
@@ -77,7 +78,7 @@ test("Can insert an image, and selection should be collapsed after it", async ()
     const { editor, el } = await setupEditor("<p>a[]bc</p>", { env });
     await insertText(editor, "/image");
     await animationFrame();
-    expect(".o-we-powerbox").toHaveCount(1);
+    await expectElementCount(".o-we-powerbox", 1);
     await press("Enter");
     await animationFrame();
     await click("img.o_we_attachment_highlight");
@@ -127,7 +128,7 @@ describe("(non-)editable media", () => {
             );
             await click("img");
             await animationFrame();
-            expect(".o-we-toolbar").toHaveCount(1);
+            await expectElementCount(".o-we-toolbar", 1);
             // Now pressing the delete button should remove the image.
             await click(".o-we-toolbar button[name='image_delete']");
             cleanHints(editor);
@@ -141,7 +142,7 @@ describe("(non-)editable media", () => {
             );
             await click("img");
             await animationFrame();
-            expect(".o-we-toolbar").toHaveCount(0);
+            await expectElementCount(".o-we-toolbar", 0);
             expect(getContent(editor.editable)).toBe(
                 `<div contenteditable="false">[<img src="${base64Img}">]</div>`
             );
@@ -152,7 +153,7 @@ describe("(non-)editable media", () => {
             );
             await click("img");
             await animationFrame();
-            expect(".o-we-toolbar").toHaveCount(1);
+            await expectElementCount(".o-we-toolbar", 1);
             // Now pressing the delete button should remove the image.
             await click(".o-we-toolbar button[name='image_delete']");
             expect(getContent(editor.editable)).toBe(`<div contenteditable="false">[]<br></div>`);
@@ -227,4 +228,22 @@ describe("(non-)editable media", () => {
             });
         });
     });
+});
+
+test("cropper should not open for external image", async () => {
+    onRpc("/html_editor/get_image_info", () => ({
+        original: false,
+    }));
+
+    await setupEditor(
+        `<p>[<img src="https://download.odoocdn.com/icons/website/static/description/icon.png">]</p>`
+    );
+    await waitFor('button[name="image_transform"]');
+
+    await click('button[name="image_transform"]');
+    await animationFrame();
+
+    await click('.btn[name="image_crop"]');
+    await waitFor(".o_notification_manager .o_notification", { timeout: 1000 });
+    expect("img.o_we_cropper_img").toHaveCount(0);
 });

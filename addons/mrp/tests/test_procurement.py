@@ -229,7 +229,6 @@ class TestProcurement(TestMrpCommon):
         # create a move for product_1 from stock to output and reserve to trigger the
         # rule
         move_dest = self.env['stock.move'].create({
-            'name': 'move_orig',
             'product_id': product_1.id,
             'product_uom': self.uom_unit.id,
             'location_id': self.stock_location.id,
@@ -289,7 +288,6 @@ class TestProcurement(TestMrpCommon):
             ]})
 
         move_dest = self.env['stock.move'].create({
-            'name': 'move_bottle',
             'product_id': product_bottle.id,
             'product_uom': self.uom_unit.id,
             'location_id': self.stock_location.id,
@@ -326,7 +324,6 @@ class TestProcurement(TestMrpCommon):
             'type': 'normal',
         })
         move_dest = self.env['stock.move'].create({
-            'name': 'Customer MTO Move',
             'product_id': product.id,
             'product_uom': self.uom_unit.id,
             'location_id': self.stock_location.id,
@@ -457,7 +454,6 @@ class TestProcurement(TestMrpCommon):
             'location_id': self.stock_location.id,
             'location_dest_id': self.customer_location.id,
             'move_ids': [Command.create({
-                'name': '/',
                 'product_id': product_1.id,
                 'product_uom': product_1.uom_id.id,
                 'product_uom_qty': 10.00,
@@ -990,7 +986,6 @@ class TestProcurement(TestMrpCommon):
                     'state': 'draft',
                     'location_id': self.stock_location.id,
                     'location_dest_id': self.customer_location.id,
-                    'name': 'picking move',
                     'product_id': product_1.id,
                     'product_uom_qty': 15,
                     'product_uom': self.uom_unit.id,

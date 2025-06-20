@@ -514,6 +514,20 @@ export class SearchModel extends EventBus {
     }
 
     /**
+     * Removes filter, field and favorite facets but keeps groupBy ones
+     */
+    clearFilters() {
+        this.blockNotification = true;
+        this.facets.forEach((facet) => {
+            if (facet.type !== "groupBy") {
+                this.deactivateGroup(facet.groupId);
+            }
+        });
+        this.blockNotification = false;
+        this._notify();
+    }
+
+    /**
      * Create a new filter of type 'favorite' and activate it.
      * A new group containing only that filter is created.
      * The query is emptied before activating the new favorite.
@@ -714,7 +728,8 @@ export class SearchModel extends EventBus {
 
         const getFieldDef = await this.makeGetFieldDef(this.resModel, constructTree(domain));
         const tree = treeFromDomain(domain, { distributeNot: !this.isDebugMode, getFieldDef });
-        const trees = !tree.negate && tree.value === "&" ? tree.children : [tree];
+        const trees =
+            !tree.negate && tree.value === "&" && tree.children.length > 0 ? tree.children : [tree];
         const promises = trees.map(async (tree) => {
             const [description, tooltip] = await Promise.all([
                 this.getDomainTreeDescription(this.resModel, tree),
@@ -1085,7 +1100,7 @@ export class SearchModel extends EventBus {
                         relatedPropertyField: field,
                     };
 
-                    if (!searchItemsNames.includes(fullName)) {
+                    if (!searchItemsNames.includes(fullName) && definition.type !== "html") {
                         const groupByItem = {
                             description: definition.string,
                             definitionRecordId,

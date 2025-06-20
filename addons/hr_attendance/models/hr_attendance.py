@@ -54,8 +54,7 @@ class HrAttendance(models.Model):
     no_validated_overtime_hours = fields.Boolean(compute='_compute_no_validated_overtime_hours')
     in_latitude = fields.Float(string="Latitude", digits=(10, 7), readonly=True, aggregator=None)
     in_longitude = fields.Float(string="Longitude", digits=(10, 7), readonly=True, aggregator=None)
-    in_country_name = fields.Char(string="Country", help="Based on IP Address", readonly=True)
-    in_city = fields.Char(string="City", readonly=True)
+    in_location = fields.Char(help="Based on GPS-Coordinates if available or on IP Address")
     in_ip_address = fields.Char(string="IP Address", readonly=True)
     in_browser = fields.Char(string="Browser", readonly=True)
     in_mode = fields.Selection(string="Mode",
@@ -67,8 +66,7 @@ class HrAttendance(models.Model):
                                default='manual')
     out_latitude = fields.Float(digits=(10, 7), readonly=True, aggregator=None)
     out_longitude = fields.Float(digits=(10, 7), readonly=True, aggregator=None)
-    out_country_name = fields.Char(help="Based on IP Address", readonly=True)
-    out_city = fields.Char(readonly=True)
+    out_location = fields.Char(help="Based on GPS-Coordinates if available or on IP Address")
     out_ip_address = fields.Char(readonly=True)
     out_browser = fields.Char(readonly=True)
     out_mode = fields.Selection(selection=[('kiosk', "Kiosk"),
@@ -344,21 +342,14 @@ class HrAttendance(models.Model):
                 overtime_duration_real = 0
                 # Overtime is not counted if any shift is not closed or if there are no attendances for that day,
                 # this could happen when deleting attendances.
-                if not unfinished_shifts and attendances:
-                    # The employee is working flexible hours
-                    if emp.is_flexible:
-                        work_duration = 0
-                        for attendance in attendances:
-                            local_check_in = pytz.utc.localize(attendance.check_in)
-                            local_check_out = pytz.utc.localize(attendance.check_out)
-                            work_duration += (local_check_out - local_check_in).total_seconds() / 3600.0
-                        # In case of fully flexible employee, no overtime is computed
-                        if not emp.is_fully_flexible:
-                            overtime_duration = work_duration - emp.resource_id.calendar_id.hours_per_day
-                            overtime_duration_real = overtime_duration
 
+                # No overtime computed for fully flexible employees
+                if emp.sudo().is_fully_flexible:
+                    continue
+
+                if not unfinished_shifts and attendances:
                     # The employee usually doesn't work on that day
-                    elif not working_times[attendance_date]:
+                    if not working_times[attendance_date]:
                         # User does not have any resource_calendar_attendance for that day (week-end for example)
                         overtime_duration = sum(attendances.mapped('worked_hours'))
                         overtime_duration_real = overtime_duration
@@ -451,8 +442,9 @@ class HrAttendance(models.Model):
                 stop_dt = min(planned_end_dt, local_check_out)
                 work_duration += (stop_dt - start_dt).total_seconds() / 3600.0
                 # remove lunch time from work duration
-                lunch_intervals = employee._employee_attendance_intervals(start_dt, stop_dt, lunch=True)
-                work_duration -= sum((i[1] - i[0]).total_seconds() / 3600.0 for i in lunch_intervals)
+                if not employee.is_flexible:
+                    lunch_intervals = employee._employee_attendance_intervals(start_dt, stop_dt, lunch=True)
+                    work_duration -= sum((i[1] - i[0]).total_seconds() / 3600.0 for i in lunch_intervals)
 
             # There is an overtime at the end of the day
             if local_check_out > planned_end_dt:
@@ -600,8 +592,8 @@ class HrAttendance(models.Model):
                 'out_longitude': city_data['longitude'],
                 'in_latitude': city_data['latitude'],
                 'out_latitude': city_data['latitude'],
-                'in_city': city_data['city'],
-                'out_city': city_data['city'],
+                'in_location': city_data['city'],
+                'out_location': city_data['city'],
                 'in_ip_address': "127.0.0.1",
                 'out_ip_address': "127.0.0.1",
                 'in_browser': 'chrome',
@@ -616,8 +608,8 @@ class HrAttendance(models.Model):
                 'out_longitude': city_data['longitude'],
                 'in_latitude': city_data['latitude'],
                 'out_latitude': city_data['latitude'],
-                'in_city': city_data['city'],
-                'out_city': city_data['city'],
+                'in_location': city_data['city'],
+                'out_location': city_data['city'],
                 'in_ip_address': "127.0.0.1",
                 'out_ip_address': "127.0.0.1",
                 'in_browser': 'chrome',

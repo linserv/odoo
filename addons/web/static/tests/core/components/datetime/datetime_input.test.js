@@ -60,14 +60,15 @@ describe("DateTimeInput (date)", () => {
             date: [
                 {
                     cells: [
-                        [0, 0, 0, 1, 2, 3, 4],
+                        [29, 30, 31, 1, 2, 3, 4],
                         [5, 6, 7, 8, [9], 10, 11],
                         [12, 13, 14, 15, 16, 17, 18],
                         [19, 20, 21, 22, 23, 24, 25],
-                        [26, 27, 28, 29, 30, 31, 0],
+                        [26, 27, 28, 29, 30, 31, 1],
+                        [2, 3, 4, 5, 6, 7, 8],
                     ],
                     daysOfWeek: ["#", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-                    weekNumbers: [1, 2, 3, 4, 5],
+                    weekNumbers: [1, 2, 3, 4, 5, 6],
                 },
             ],
         });
@@ -196,7 +197,7 @@ describe("DateTimeInput (date)", () => {
         await click(".o_datetime_input");
         await animationFrame();
 
-        expect(getPickerCell("8")).toHaveClass("o_selected");
+        expect(getPickerCell("8", true)).toHaveClass("o_selected");
     });
 
     test("Date format is correctly set", async () => {
@@ -273,14 +274,15 @@ describe("DateTimeInput (datetime)", () => {
             date: [
                 {
                     cells: [
-                        [0, 0, 0, 1, 2, 3, 4],
+                        [29, 30, 31, 1, 2, 3, 4],
                         [5, 6, 7, 8, [9], 10, 11],
                         [12, 13, 14, 15, 16, 17, 18],
                         [19, 20, 21, 22, 23, 24, 25],
-                        [26, 27, 28, 29, 30, 31, 0],
+                        [26, 27, 28, 29, 30, 31, 1],
+                        [2, 3, 4, 5, 6, 7, 8],
                     ],
                     daysOfWeek: ["#", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-                    weekNumbers: [1, 2, 3, 4, 5],
+                    weekNumbers: [1, 2, 3, 4, 5, 6],
                 },
             ],
             time: ["12:30"],
@@ -399,7 +401,7 @@ describe("DateTimeInput (datetime)", () => {
         await contains(".o_datetime_input").click();
 
         expect(".o_datetime_input").toHaveValue("08/02/1997 15:45:05");
-        expect(getPickerCell("8")).toHaveClass("o_selected");
+        expect(getPickerCell("8", true)).toHaveClass("o_selected");
 
         expect(".o_time_picker_input").toHaveValue("15:45");
     });
@@ -510,6 +512,20 @@ describe("DateTimeInput (datetime)", () => {
         await contains(".o_datetime_picker .o_datetime_buttons .btn-secondary").click();
 
         expect(".o_datetime_picker").toHaveCount(1);
+    });
+
+    test("Clicking apply button closes datetime picker", async () => {
+        await mountWithCleanup(DateTimeInputComp, {
+            props: {
+                value: DateTime.fromFormat("09/01/1997 12:30:01", "dd/MM/yyyy HH:mm:ss"),
+                type: "datetime",
+                format: "dd MMM, yyyy HH:mm:ss",
+            },
+        });
+        await contains(".o_datetime_input").click();
+        await contains(".o_datetime_picker .o_datetime_buttons .btn-primary").click();
+
+        expect(".o_datetime_picker").toHaveCount(0);
     });
 
     test("check datepicker in localization with textual month format", async () => {

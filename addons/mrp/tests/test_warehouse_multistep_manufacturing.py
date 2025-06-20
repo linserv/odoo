@@ -193,7 +193,6 @@ class TestMultistepManufacturingWarehouse(TestMrpCommon):
         })
 
         self.env['stock.move'].create({
-            'name': self.finished_product.name,
             'product_id': self.finished_product.id,
             'product_uom_qty': 2,
             'product_uom': self.uom_unit.id,
@@ -272,7 +271,6 @@ class TestMultistepManufacturingWarehouse(TestMrpCommon):
             'state': 'draft',
         })
         self.env['stock.move'].create({
-            'name': self.finished_product.name,
             'product_id': self.finished_product.id,
             'product_uom_qty': 2,
             'picking_id': picking_customer.id,
@@ -502,7 +500,6 @@ class TestMultistepManufacturingWarehouse(TestMrpCommon):
                 'location_dest_id': component_move.location_dest_id.id,
                 'picking_type_id': component_move.picking_type_id.id,
                 'product_id': self.product_2.id,
-                'name': self.product_2.display_name,
                 'product_uom_qty': 1,
                 'product_uom': self.product_2.uom_id.id,
                 'warehouse_id': component_move.warehouse_id.id,

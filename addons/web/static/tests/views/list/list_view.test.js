@@ -2435,7 +2435,6 @@ test(`enabling archive in list when groupby m2m field`, async () => {
     await contains(`.o_group_name:eq(1)`).click(); // open group "Value 2"
     // Check for the initial number of records
     expect(`.o_data_row`).toHaveCount(5, { message: "Checking initial number of records" });
-
     await clickRecordSelector(); // select first task
     await contains(`div.o_control_panel .o_cp_action_menus .dropdown-toggle`).click(); // click on actions
     // check that all the options are available
@@ -3607,10 +3606,7 @@ test("group order by count", async () => {
         if (readGroupCount < 2) {
             readGroupCount++;
         } else {
-            expect(kwargs.groupby).toHaveLength(1);
-            expect.step(`web_read_group ${kwargs.groupby[0]} order by ${kwargs.order}`);
-            // TODO: The mock server cannot handle order count
-            kwargs.order = "";
+            expect.step(`web_read_group ${kwargs.groupby} order by ${kwargs.order}`);
             return parent();
         }
     });
@@ -3627,19 +3623,13 @@ test("group order by count", async () => {
     await selectGroup("currency_id");
     expect("tr.o_group_header").toHaveCount(3, { message: "list should be grouped" });
     await contains(".o_searchview_facet_label").click();
-    expect.verifySteps(["web_read_group foo order by __count DESC, foo ASC"]);
+    expect.verifySteps(["web_read_group foo,currency_id order by __count DESC"]);
     await contains("tr.o_group_header:eq(0)").click();
-    expect.verifySteps(["web_read_group currency_id order by __count DESC, currency_id ASC"]);
+    expect.verifySteps(["web_read_group currency_id order by __count DESC"]);
     await contains(".o_searchview_facet_label").click();
-    expect.verifySteps([
-        "web_read_group foo order by __count ASC, foo ASC",
-        "web_read_group currency_id order by __count ASC, currency_id ASC",
-    ]);
+    expect.verifySteps(["web_read_group foo,currency_id order by __count ASC"]);
     await contains(".o_searchview_facet_label").click();
-    expect.verifySteps([
-        "web_read_group foo order by __count DESC, foo ASC",
-        "web_read_group currency_id order by __count DESC, currency_id ASC",
-    ]);
+    expect.verifySteps(["web_read_group foo,currency_id order by __count DESC"]);
 });
 
 test("order by count reset", async () => {
@@ -3648,10 +3638,7 @@ test("order by count reset", async () => {
         if (readGroupCount < 2) {
             readGroupCount++;
         } else {
-            expect(kwargs.groupby).toHaveLength(1);
-            expect.step(`web_read_group ${kwargs.groupby[0]} order by ${kwargs.order}`);
-            // TODO: The mock server cannot handle order count
-            kwargs.order = "";
+            expect.step(`web_read_group ${kwargs.groupby} order by ${kwargs.order}`);
             return parent();
         }
     });
@@ -3674,16 +3661,16 @@ test("order by count reset", async () => {
     await toggleMenuItem("My Filter");
     await contains(".o_searchview_facet_label").click();
     expect.verifySteps([
-        "web_read_group foo order by ",
-        "web_read_group foo order by __count DESC, foo ASC",
+        "web_read_group foo,currency_id order by ",
+        "web_read_group foo,currency_id order by __count DESC",
     ]);
     await toggleSearchBarMenu();
     await toggleMenuItem("My Filter");
-    expect.verifySteps(["web_read_group foo order by __count DESC, foo ASC"]);
+    expect.verifySteps(["web_read_group foo,currency_id order by __count DESC"]);
     await toggleMenuItem("My Filter");
-    expect.verifySteps(["web_read_group foo order by __count DESC, foo ASC"]);
+    expect.verifySteps(["web_read_group foo,currency_id order by __count DESC"]);
     await toggleMenuItem("Currency");
-    expect.verifySteps(["web_read_group foo order by __count DESC, foo ASC"]);
+    expect.verifySteps(["web_read_group foo order by __count DESC"]);
     await toggleMenuItem("Foo");
     await toggleMenuItem("Foo");
     expect.verifySteps(["web_read_group foo order by "]);
@@ -4562,6 +4549,37 @@ test(`monetary aggregates in grouped list (different currencies in same group)`,
     );
 });
 
+test(`handle false values in aggregates`, async () => {
+    Foo._fields.false_amount = fields.Monetary({ currency_field: "currency_test" });
+    Foo._fields.currency_test = fields.Many2one({ relation: "res.currency", default: 1 });
+    onRpc("web_read_group", async ({ parent }) => {
+        expect.step("web_read_group");
+        const res = await parent();
+        expect(res.groups[1]["amount:sum"]).toBe(false);
+        res.groups[1]["qux:sum"] = false;
+        res.groups[1]["false_amount:sum"] = false;
+        return res;
+    });
+    await mountView({
+        resModel: "foo",
+        type: "list",
+        arch: `
+            <list>
+                <field name="foo"/>
+                <field name="qux" sum="Sum"/>
+                <field name="amount"/>
+                <field name="false_amount"/>
+            </list>
+        `,
+        groupBy: ["bar"],
+    });
+    expect.verifySteps(["web_read_group"]);
+    expect(`.o_group_header:first`).toHaveText("No (1)\n 9.00 $ 0.00 $ 0.00");
+    expect(`.o_group_header:last`).toHaveText("Yes (3)\n —", {
+        message: "false values are just hidden except for monetary field with multiple currencies",
+    });
+});
+
 test(`aggregates in grouped lists with buttons`, async () => {
     await mountView({
         resModel: "foo",
@@ -4843,24 +4861,10 @@ test(`currency_field is taken into account when formatting monetary values`, asy
     });
 });
 
-test(`groups can not be sorted on a different field than the first field of the groupBy - 1`, async () => {
-    onRpc("web_read_group", ({ kwargs }) => {
-        expect.step("web_read_group");
-        expect(kwargs.order).toBe("", { message: "order should not contains foo" });
-    });
-    await mountView({
-        resModel: "foo",
-        type: "list",
-        arch: `<list default_order="foo"><field name="foo"/><field name="bar"/></list>`,
-        groupBy: ["bar"],
-    });
-    expect.verifySteps(["web_read_group"]);
-});
-
 test(`groups can be sorted on the first field of the groupBy`, async () => {
     onRpc("web_read_group", ({ kwargs }) => {
         expect.step("web_read_group");
-        expect(kwargs.order).toBe("bar DESC", { message: "should have an order" });
+        expect(kwargs.order).toEqual("bar DESC");
     });
 
     await mountView({
@@ -4876,7 +4880,7 @@ test(`groups can be sorted on the first field of the groupBy`, async () => {
 
 test(`groups can be sorted on aggregates`, async () => {
     onRpc("web_read_group", ({ kwargs }) => {
-        expect.step(kwargs.order || "default order");
+        expect.step(kwargs.order);
     });
 
     await mountView({
@@ -4906,11 +4910,7 @@ test(`groups can be sorted on aggregates`, async () => {
         message: "initial order should be 17, 10, 5",
     });
     expect(`tfoot td:eq(-1)`).toHaveText("32", { message: "total should still be 32" });
-    expect.verifySteps([
-        "default order",
-        "int_field:sum ASC, foo ASC",
-        "int_field:sum DESC, foo ASC",
-    ]);
+    expect.verifySteps(["", "int_field ASC", "int_field DESC"]);
 });
 
 test(`groups cannot be sorted on non-aggregable fields if every group is folded`, async () => {
@@ -4920,7 +4920,7 @@ test(`groups cannot be sorted on non-aggregable fields if every group is folded`
     });
 
     onRpc("web_read_group", ({ kwargs }) => {
-        expect.step(kwargs.order || "default order");
+        expect.step(kwargs.order);
     });
 
     await mountView({
@@ -4935,7 +4935,7 @@ test(`groups cannot be sorted on non-aggregable fields if every group is folded`
             </list>
         `,
     });
-    expect.verifySteps(["default order"]);
+    expect.verifySteps([""]);
 
     // we cannot sort by sort_field since it doesn't have a aggregator
     await contains(`.o_column_sortable[data-name='sort_field']`).click();
@@ -4943,7 +4943,7 @@ test(`groups cannot be sorted on non-aggregable fields if every group is folded`
 
     // we can sort by int_field since it has a aggregator
     await contains(`.o_column_sortable[data-name='int_field']`).click();
-    expect.verifySteps(["int_field:sum ASC, foo ASC"]);
+    expect.verifySteps(["int_field ASC"]);
 
     // we keep previous order
     await contains(`.o_column_sortable[data-name='sort_field']`).click();
@@ -4951,15 +4951,16 @@ test(`groups cannot be sorted on non-aggregable fields if every group is folded`
 
     // we can sort on foo since we are groupped by foo + previous order
     await contains(`.o_column_sortable[data-name='foo']`).click();
-    expect.verifySteps(["foo ASC, int_field:sum ASC"]);
+    expect.verifySteps(["foo ASC, int_field ASC"]);
 });
 
 test(`groups can be sorted on non-aggregable fields if a group isn't folded`, async () => {
     onRpc("web_read_group", ({ kwargs }) => {
-        expect.step(`web_read_group.order: ${kwargs.order || "default order"}`);
+        const order = kwargs.order || "default order";
+        expect.step(`web_read_group: ${order}`);
     });
     onRpc("web_search_read", ({ kwargs }) => {
-        expect.step(`web_search_read.order: ${kwargs.order || "default order"}`);
+        expect.step(`web_search_read: ${kwargs.order || "default order"}`);
     });
 
     await mountView({
@@ -4970,22 +4971,17 @@ test(`groups can be sorted on non-aggregable fields if a group isn't folded`, as
     });
     await contains(`.o_group_header:eq(1)`).click();
     expect(queryAllTexts(`.o_data_cell[name='foo']`)).toEqual(["yop", "blip", "gnap"]);
-    expect.verifySteps([
-        "web_read_group.order: default order",
-        "web_search_read.order: default order",
-    ]);
+    expect.verifySteps(["web_read_group: default order", "web_search_read: default order"]);
 
     await contains(`.o_column_sortable[data-name='foo']`).click();
     expect(queryAllTexts(`.o_data_cell[name='foo']`)).toEqual(["blip", "gnap", "yop"]);
-    expect.verifySteps(["web_read_group.order: default order", "web_search_read.order: foo ASC"]);
+    expect.verifySteps(["web_read_group: foo ASC"]);
 });
 
 test(`groups can be sorted on non-aggregable fields if a group isn't folded with expand='1'`, async () => {
     onRpc("web_read_group", ({ kwargs }) => {
-        expect.step(`web_read_group.order: ${kwargs.order || "default order"}`);
-    });
-    onRpc("web_search_read", ({ kwargs }) => {
-        expect.step(`web_search_read.order: ${kwargs.order || "default order"}`);
+        const order = kwargs.order || "default order";
+        expect.step(`web_read_group: ${order}`);
     });
 
     await mountView({
@@ -4995,19 +4991,11 @@ test(`groups can be sorted on non-aggregable fields if a group isn't folded with
         groupBy: ["bar"],
     });
     expect(queryAllTexts(`.o_data_cell[name='foo']`)).toEqual(["blip", "yop", "blip", "gnap"]);
-    expect.verifySteps([
-        "web_read_group.order: default order",
-        "web_search_read.order: default order",
-        "web_search_read.order: default order",
-    ]);
+    expect.verifySteps(["web_read_group: default order"]);
 
     await contains(`.o_column_sortable[data-name='foo']`).click();
     expect(queryAllTexts(`.o_data_cell[name='foo']`)).toEqual(["blip", "blip", "gnap", "yop"]);
-    expect.verifySteps([
-        "web_read_group.order: default order",
-        "web_search_read.order: foo ASC",
-        "web_search_read.order: foo ASC",
-    ]);
+    expect.verifySteps(["web_read_group: foo ASC"]);
 });
 
 test(`properly apply onchange in simple case`, async () => {
@@ -7010,6 +6998,34 @@ test(`no nocontent helper when no data and no help`, async () => {
     expect(`.o_list_view table`).toHaveCount(1, { message: "should have a table in the dom" });
 });
 
+test.tags("desktop");
+test("reset filter button should appear when no data corresponding to facets", async () => {
+    await mountView({
+        type: "list",
+        resModel: "foo",
+        arch: `<list><field name="foo"/></list>`,
+        searchViewArch: `
+            <search>
+                <filter name="no_match" string="Match nothing" domain="[['id', '=', 0]]"/>
+            </search>`,
+        noContentHelp: "click to add a partnerReset Filters",
+    });
+
+    await contains(".o_list_view").click();
+    await toggleSearchBarMenu();
+    await toggleMenuItem("Match nothing");
+
+    expect(".o_view_nocontent").toHaveCount(1);
+    expect(getFacetTexts()).not.toEqual([]);
+    expect(".o_reset_filter_button").toHaveCount(1);
+    expect(".o_reset_filter_button").toHaveText("Reset Filters");
+    expect(".o_facet_value").toHaveText("Match nothing");
+
+    await contains(".o_reset_filter_button").click();
+    expect(getFacetTexts()).toEqual([]);
+    expect(".o_reset_filter_button").not.toHaveCount(1);
+});
+
 test(`empty list with sample data`, async () => {
     await mountView({
         resModel: "foo",
@@ -7039,6 +7055,8 @@ test(`empty list with sample data`, async () => {
     expect(`.o_list_table`).toHaveCount(1);
     expect(`.o_data_row`).toHaveCount(10);
     expect(`.o_nocontent_help`).toHaveCount(1);
+    expect(".ribbon").toHaveCount(1);
+    expect(".ribbon").toHaveText("SAMPLE DATA");
 
     // Check list sample data
     expect(`.o_data_row .o_data_cell:eq(0)`).toHaveText("", {
@@ -7067,6 +7085,7 @@ test(`empty list with sample data`, async () => {
     expect(`.o_list_view .o_content`).not.toHaveClass("o_view_sample_data");
     expect(`.o_list_table`).toHaveCount(1);
     expect(`.o_nocontent_help`).toHaveCount(1);
+    expect(".ribbon").toHaveCount(0);
 
     await toggleMenuItem("False Domain");
     await toggleMenuItem("True Domain");
@@ -7074,6 +7093,7 @@ test(`empty list with sample data`, async () => {
     expect(`.o_list_table`).toHaveCount(1);
     expect(`.o_data_row`).toHaveCount(4);
     expect(`.o_nocontent_help`).toHaveCount(0);
+    expect(".ribbon").toHaveCount(0);
 });
 
 test(`refresh empty list with sample data`, async () => {
@@ -7224,6 +7244,7 @@ test(`non empty list with sample data`, async () => {
     expect(`.o_list_table`).toHaveCount(1);
     expect(`.o_data_row`).toHaveCount(4);
     expect(`.o_list_view .o_content`).not.toHaveClass("o_view_sample_data");
+    expect(".ribbon").toHaveCount(0);
 
     await toggleSearchBarMenu();
     await toggleMenuItem("true_domain");
@@ -7231,6 +7252,7 @@ test(`non empty list with sample data`, async () => {
     expect(`.o_list_table`).toHaveCount(1);
     expect(`.o_data_row`).toHaveCount(0);
     expect(`.o_list_view .o_content`).not.toHaveClass("o_view_sample_data");
+    expect(".ribbon").toHaveCount(0);
 });
 
 test(`click on header in empty list with sample data`, async () => {
@@ -7529,11 +7551,6 @@ test(`groupby node with a button in inner groupbys`, async () => {
 
 test(`groupby node with a button with modifiers`, async () => {
     stepAllNetworkCalls();
-    onRpc("res.currency", "web_read", ({ args, kwargs }) => {
-        expect.step("res.currency:web_read");
-        expect(args).toEqual([[1, 2]]);
-        expect(kwargs.specification).toEqual({ position: {} });
-    });
 
     await mountView({
         type: "list",
@@ -7555,8 +7572,6 @@ test(`groupby node with a button with modifiers`, async () => {
         "get_views",
         "web_read_group",
         "has_group",
-        "web_read",
-        "res.currency:web_read",
     ]);
     expect(`.o_group_header button`).toHaveCount(0);
     expect(`.o_data_row`).toHaveCount(0);
@@ -7600,9 +7615,6 @@ test(`groupby node with a button with modifiers using a many2one`, async () => {
         "get_views",
         "web_read_group",
         "has_group",
-        "web_search_read",
-        "web_search_read",
-        "web_read",
     ]);
 });
 
@@ -8260,7 +8272,7 @@ test(`list view with nested groups`, async () => {
 
     // sort by int_field (ASC) and check that open groups are still open
     await contains(`.o_list_view thead [data-name='int_field']`).click();
-    expect.verifySteps(["web_read_group", "web_read_group", "web_search_read"]);
+    expect.verifySteps(["web_read_group"]);
     expect(`.o_group_header`).toHaveCount(5);
     expect(`.o_data_row`).toHaveCount(2);
     expect(queryAllTexts(`.o_data_row .o_data_cell`)).toEqual(["5", "-7", "4", "-4"]);
@@ -10480,8 +10492,6 @@ test(`reference field batched in grouped list`, async () => {
         "get_views",
         "web_read_group",
         "has_group",
-        "web_search_read",
-        "web_search_read",
     ]);
     expect(`.o_group_header`).toHaveCount(2);
     expect(queryAllTexts(`.o_data_cell`)).toEqual([
@@ -10561,8 +10571,6 @@ test(`multi edit reference field batched in grouped list`, async () => {
         "get_views",
         "web_read_group",
         "has_group",
-        "web_search_read",
-        "web_search_read",
     ]);
     await contains(`.o_data_row .o_list_record_selector input:eq(0)`).click();
     await contains(`.o_data_row .o_list_record_selector input:eq(1)`).click();
@@ -10625,8 +10633,9 @@ test(`multi edit field with daterange widget`, async () => {
     await contains(`.o_data_row .o_data_cell .o_field_daterange input`).click();
 
     // change dates range
-    await contains(getPickerCell("16").at(0)).click();
-    await contains(getPickerCell("12").at(1)).click();
+    await contains(getPickerCell("16")).click();
+    await contains("button.o_next").click();
+    await contains(getPickerCell("12")).click();
 
     // Apply the changes
     await contains(`.o_list_view`).click();
@@ -12259,13 +12268,9 @@ test(`list view move to previous page when all records from last page deleted`, 
 
 test.tags("desktop");
 test(`grouped list view move to previous page of group when all records from last page deleted`, async () => {
-    let checkSearchRead = false;
     onRpc("web_search_read", ({ kwargs }) => {
-        if (checkSearchRead) {
-            expect.step(`web_search_read (limit: ${kwargs.limit}, offset: ${kwargs.offset})`);
-        }
+        expect.step(`web_search_read ${kwargs.limit} - ${kwargs.offset}`);
     });
-
     await mountView({
         resModel: "foo",
         type: "list",
@@ -12283,24 +12288,21 @@ test(`grouped list view move to previous page of group when all records from las
     await contains(`.o_group_header:eq(0)`).click();
     expect(getPagerValue(queryFirst(`.o_group_header`))).toEqual([1, 2]);
     expect(getPagerLimit(queryFirst(`.o_group_header`))).toBe(3);
+    expect.verifySteps(["web_search_read 2 - 0"]);
 
     // move to next page
     await pagerNext(queryFirst(`.o_group_header`));
     expect(getPagerValue(queryFirst(`.o_group_header`))).toEqual([3, 3]);
     expect(getPagerLimit(queryFirst(`.o_group_header`))).toBe(3);
+    expect.verifySteps(["web_search_read 2 - 2"]);
 
     // delete a record
     await contains(`.o_data_row .o_list_record_selector input`).click();
-    checkSearchRead = true;
     await contains(`.o_cp_action_menus .dropdown-toggle`).click();
     await contains(`.dropdown-item:contains(Delete)`).click();
     await contains(`.modal .btn-primary`).click();
     expect(`th.o_group_name:eq(0) .o_pager_counter`).toHaveCount(0);
     expect(`.o_data_row`).toHaveCount(2);
-    expect.verifySteps([
-        "web_search_read (limit: 2, offset: 2)",
-        "web_search_read (limit: 2, offset: 0)",
-    ]);
 });
 
 test.tags("desktop");
@@ -12654,8 +12656,6 @@ test(`grouped list with expand attribute`, async () => {
         "get_views",
         "web_read_group",
         "has_group",
-        "web_search_read",
-        "web_search_read",
     ]);
 });
 
@@ -12704,8 +12704,6 @@ test(`grouped list (two levels) with expand attribute`, async () => {
         "get_views",
         "web_read_group", // global
         "has_group",
-        "web_read_group", // first group
-        "web_read_group", // second group
     ]);
 });
 
@@ -16410,7 +16408,7 @@ test(`list view with multi-fields default_group_by`, async () => {
         expect.step(`web_read_group${readGroupCount}`);
         switch (readGroupCount) {
             case 1: {
-                expect(kwargs.groupby).toEqual(["foo"]);
+                expect(kwargs.groupby).toEqual(["foo", "bar"]);
                 break;
             }
             case 2: {
@@ -18307,4 +18305,79 @@ test(`cell-level keyboard navigation in multiple grouped list`, async () => {
 
     await animationFrame();
     expect(`tbody tr:nth-child(3) td:nth-child(3)`).toBeFocused();
+});
+
+test(`list with custom cog action that has a confirmation target="new" action`, async () => {
+    const contextualAction = {
+        id: 80,
+        name: "Sort of confirmation dialog",
+        res_model: "foo",
+        context: "{}",
+        views: [[false, "form"]],
+        type: "ir.actions.act_window",
+        target: "new",
+    };
+    Foo._toolbar = {
+        action: [contextualAction],
+        print: [],
+    };
+    Foo._views = {
+        list: `<list><field name="foo"/></list>`,
+        search: `<search/>`,
+        form: `
+            <form>
+                Are you sure blablabla
+                <footer>
+                    <button name="my_action" type="action" string="Do it"/>
+                </footer>
+            </form>`,
+    };
+    defineActions([
+        {
+            id: 1,
+            name: "Foo",
+            res_model: "foo",
+            views: [[false, "list"]],
+        },
+        {
+            id: 2,
+            name: "Foo",
+            res_model: "foo",
+            views: [[false, "form"]],
+            res_id: 1,
+            xml_id: "my_action",
+        },
+        contextualAction,
+    ]);
+
+    stepAllNetworkCalls();
+    await mountWithCleanup(WebClient);
+    await getService("action").doAction(1);
+    expect(".o_list_view").toHaveCount(1);
+
+    await selectAllRecords();
+    await contains(`.o_cp_action_menus button:has(.fa-cog)`).click();
+    await contains(`.o-dropdown-item:contains(Sort of confirmation dialog)`).click();
+    expect(".o_dialog").toHaveCount(1);
+
+    await contains(".o_dialog footer button:contains(Do it)").click();
+    expect(".o_dialog").toHaveCount(0);
+    expect(".o_form_view").toHaveCount(1);
+
+    // should not reload the list view when confirming with Do it
+    expect.verifySteps([
+        "/web/webclient/translations",
+        "/web/webclient/load_menus",
+        "/web/action/load",
+        "get_views",
+        "web_search_read",
+        "has_group",
+        "/web/action/load",
+        "get_views",
+        "onchange",
+        "web_save",
+        "/web/action/load",
+        "get_views",
+        "web_read",
+    ]);
 });

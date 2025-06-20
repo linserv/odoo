@@ -119,7 +119,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
                 'holiday_status_id': self.holidays_type_2.id,
                 'number_of_days': 2,
                 'state': 'confirm',
-                'date_from': time.strftime('%Y-1-1'),
+                'date_from': time.strftime('%Y-01-01'),
                 'date_to': time.strftime('%Y-12-31'),
             })
 
@@ -159,7 +159,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
                 'holiday_status_id': self.holidays_type_2.id,
                 'number_of_days': 2,
                 'state': 'confirm',
-                'date_from': time.strftime('%Y-1-1'),
+                'date_from': time.strftime('%Y-01-01'),
                 'date_to': time.strftime('%Y-12-31'),
             })
             allocation.action_approve()
@@ -354,8 +354,8 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'number_of_days': 20,
             'employee_id': employee.id,
             'state': 'confirm',
-            'date_from': time.strftime('2018-1-1'),
-            'date_to': time.strftime('%Y-1-1'),
+            'date_from': time.strftime('2018-01-01'),
+            'date_to': time.strftime('%Y-01-01'),
         })
 
         leave1 = self.env['hr.leave'].create({
@@ -418,23 +418,24 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'number_of_days': 20,
             'employee_id': employee.id,
             'state': 'confirm',
-            'date_from': time.strftime('2018-1-1'),
-            'date_to': time.strftime('%Y-1-1'),
+            'date_from': time.strftime('2018-01-01'),
+            'date_to': time.strftime('%Y-01-01'),
         })
 
         leave0 = self.env['hr.leave'].create({
             'name': 'Holiday 1 day',
             'employee_id': employee.id,
             'holiday_status_id': leave_type.id,
-            'request_date_from': fields.Date.from_string('2019-12-9'),
-            'request_date_to': fields.Date.from_string('2019-12-9'),
+            'request_date_from': fields.Date.from_string('2019-12-09'),
+            'request_date_to': fields.Date.from_string('2019-12-09'),
         })
 
         self.assertAlmostEqual(leave0.number_of_hours, 24, 2)
 
         calendar.write({
             'flexible_hours': True,
-            'hours_per_day': 8.0
+            'hours_per_day': 8.0,
+            'full_time_required_hours': 40
         })
 
         leave1 = self.env['hr.leave'].create({
@@ -1223,6 +1224,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
         calendar = self.env['resource.calendar'].create({
             'name': 'Flexible 40h/week',
             'hours_per_day': 8.0,
+            'full_time_required_hours': 40,
             'flexible_hours': True,
         })
         employee.resource_calendar_id = calendar
@@ -1244,8 +1246,8 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'request_date_to': '2024-01-27',
         })
         holiday_status = self.holidays_type_4.with_user(self.user_employee_id)
-        self._check_holidays_status(holiday_status, employee, 20.0, 0.0, 20.0, 15.0)
-        self.assertEqual(leave.duration_display, '5 days')
+        self._check_holidays_status(holiday_status, employee, 20.0, 0.0, 20.0, 16.0)
+        self.assertEqual(leave.duration_display, '4 days')
 
     def test_default_request_date_timezone(self):
         """
@@ -1389,6 +1391,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
         calendar = self.env['resource.calendar'].create({
             'name': 'Test calendar',
             'hours_per_day': 8,
+            'full_time_required_hours': 56,
             'flexible_hours': True
         })
         self.employee_emp.resource_calendar_id = calendar

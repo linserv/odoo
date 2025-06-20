@@ -336,7 +336,7 @@ class HrEmployee(models.Model):
                 version = employee.current_version_id
             employee.version_id = version
 
-    @api.depends('version_ids.date_version')
+    @api.depends('version_ids.date_version', 'version_ids.active')
     def _compute_current_version_id(self):
         for employee in self:
             version = self.env['hr.version'].search(
@@ -859,6 +859,19 @@ class HrEmployee(models.Model):
         # the result is expected from this table, so we should link tables
         return super(HrEmployee, self.sudo())._search([('id', 'in', ids)], order=order)
 
+    def _load_demo_data(self):
+        dep_rd = self.env.ref('hr.dep_rd', raise_if_not_found=False)
+        action_reload = {
+            'type': 'ir.actions.client',
+            'tag': 'reload',
+        }
+        if dep_rd:
+            return action_reload
+        convert.convert_file(env=self.env, module='hr', filename='data/scenarios/hr_scenario.xml', idref=None, mode='init', kind="data")
+        if 'resume_line_ids' in self:
+            convert.convert_file(env=self.env, module='hr_skills', filename='data/scenarios/hr_skills_scenario.xml', idref=None, mode='init', kind="data")
+        return action_reload
+
     def get_formview_id(self, access_uid=None):
         """ Override this method in order to redirect many2one towards the right model depending on access_uid """
         user = self.env.user
@@ -1021,6 +1034,7 @@ class HrEmployee(models.Model):
         # Only one write call for all the fields from hr.version
         new_vals = vals.copy()
         version_vals = {val: new_vals.pop(val) for val in vals if val in self._fields and self._fields[val].inherited}
+        res = super().write(new_vals)
         if version_vals:
             version_vals['last_modified_date'] = fields.Datetime.now()
             version_vals['last_modified_uid'] = self.env.uid
@@ -1028,7 +1042,6 @@ class HrEmployee(models.Model):
 
             for employee in self:
                 employee._track_set_log_message(Markup("<b>Modified on the Version '%s'</b>") % employee.version_id.display_name)
-        res = super().write(new_vals)
         if res and 'resource_calendar_id' in vals:
             resources_per_calendar_id = defaultdict(lambda: self.env['resource.resource'])
             for employee in self:
@@ -1354,3 +1367,14 @@ class HrEmployee(models.Model):
             'domain': [('employee_id', '=', self.employee_id.id)],
             'search_view_id': self.env.ref('hr.hr_version_search_view').id
         }
+
+    def action_new_contract(self):
+        self.ensure_one()
+        if not self.contract_date_end:
+            raise UserError(self.env._("Before creating a new contract, close the current one by setting an end date."))
+        if self.current_date_version <= self.contract_date_end:
+            raise UserError(self.env._("Before creating a new contract, create a version that is set after the contract end date"))
+        self.write({
+            'contract_date_start': False,
+            'contract_date_end': False,
+        })

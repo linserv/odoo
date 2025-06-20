@@ -414,7 +414,7 @@ class StockQuant(models.Model):
             ctx['search_default_my_count'] = True
         view_id = self.env.ref('stock.view_stock_quant_tree_inventory_editable').id
         action = {
-            'name': _('Inventory Adjustments'),
+            'name': _('Physical Inventory'),
             'view_mode': 'list',
             'res_model': 'stock.quant',
             'type': 'ir.actions.act_window',
@@ -1014,6 +1014,7 @@ class StockQuant(models.Model):
                                                      package_id=quant.package_id))
         moves = self.env['stock.move'].with_context(inventory_mode=False).create(move_vals)
         moves._action_done()
+        moves._trigger_assign()
         self.location_id.sudo().write({'last_inventory_date': fields.Date.today()})
         date_by_location = {loc: loc._get_next_inventory_date() for loc in self.mapped('location_id')}
         for quant in self:
@@ -1242,17 +1243,8 @@ class StockQuant(models.Model):
         :return: dict with all values needed to create a new `stock.move` with its move line.
         """
         self.ensure_one()
-        if self.env.context.get('inventory_name'):
-            name = self.env.context.get('inventory_name')
-        elif fields.Float.is_zero(qty, precision_rounding=self.product_uom_id.rounding):
-            name = _('Product Quantity Confirmed')
-        else:
-            name = _('Product Quantity Updated')
-        if self.user_id and self.user_id.id != SUPERUSER_ID:
-            name += f' ({self.user_id.display_name})'
 
-        return {
-            'name': name,
+        res = {
             'product_id': self.product_id.id,
             'product_uom': self.product_uom_id.id,
             'product_uom_qty': qty,
@@ -1276,6 +1268,10 @@ class StockQuant(models.Model):
                 'owner_id': self.owner_id.id,
             })]
         }
+        if self.env.context.get('inventory_name'):
+            res['inventory_name'] = self.env.context.get('inventory_name')
+
+        return res
 
     def _set_view_context(self):
         """ Adds context when opening quants related views. """

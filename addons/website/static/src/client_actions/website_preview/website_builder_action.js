@@ -33,7 +33,7 @@ import { isBrowserMicrosoftEdge } from "@web/core/browser/feature_detection";
 const websiteSystrayRegistry = registry.category("website_systray");
 
 export class WebsiteBuilder extends Component {
-    static template = "html_builder.WebsiteBuilder";
+    static template = "website.WebsiteBuilder";
     static components = { LazyComponent, LocalOverlayContainer, ResizablePanel, ResourceEditor };
     static props = { ...standardActionServiceProps };
 
@@ -125,6 +125,7 @@ export class WebsiteBuilder extends Component {
         onWillDestroy(() => {
             websiteSystrayRegistry.remove("website.WebsiteSystrayItem");
             this.websiteService.currentWebsiteId = null;
+            websiteSystrayRegistry.trigger("EDIT-WEBSITE");
         });
 
         effect(

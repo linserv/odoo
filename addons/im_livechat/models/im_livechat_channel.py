@@ -3,9 +3,10 @@
 from datetime import timedelta
 import random
 import re
+from urllib.parse import urlparse
 
 from odoo import api, Command, fields, models, _
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, ValidationError
 from odoo.addons.bus.websocket import WebsocketConnectionHandler
 from odoo.addons.mail.tools.discuss import Store
 
@@ -54,6 +55,13 @@ class Im_LivechatChannel(models.Model):
         help="Maximum number of concurrent sessions per operator.",
     )
     block_assignment_during_call = fields.Boolean("No Chats During Call", help="While on a call, agents will not receive new conversations.")
+    review_link = fields.Char("Review Link", help="Visitors who leave a positive review will be redirected to this optional link.")
+    buffer_time = fields.Integer(
+        string="Individual Buffer Time (sec)",
+        help="Time in seconds between two sessions of the same operator."
+            "This will not be enforced if the operator is the best suited for the session"
+            "(e.g. the only one available with the right language or set of skills)"
+    )
 
     # computed fields
     web_page = fields.Char('Web Page', compute='_compute_web_page_link', store=False, readonly=True,
@@ -94,6 +102,15 @@ class Im_LivechatChannel(models.Model):
         operators_by_livechat_channel = self._get_available_operators_by_livechat_channel()
         for livechat_channel in self:
             livechat_channel.available_operator_ids = operators_by_livechat_channel[livechat_channel]
+
+    @api.constrains("review_link")
+    def _check_review_link(self):
+        for record in self.filtered("review_link"):
+            url = urlparse(record.review_link)
+            if url.scheme not in ("http", "https") or not url.netloc:
+                raise ValidationError(
+                    self.env._("Invalid URL '%s'. The Review Link must start with 'http://' or 'https://'.") % record.review_link
+                )
 
     def _get_available_operators_by_livechat_channel(self, users=None):
         """Return a dictionary mapping each livechat channel in self to the users that are available
@@ -219,6 +236,9 @@ class Im_LivechatChannel(models.Model):
         self, anonymous_name, previous_operator_id=None, chatbot_script=None, user_id=None, country_id=None, lang=None
     ):
         user_operator = self.env["res.users"]
+        # use the same "now" in the whole function to ensure unpin_dt > last_interest_dt
+        now = fields.Datetime.now()
+        last_interest_dt = now - timedelta(seconds=1)
         if chatbot_script:
             if chatbot_script.id not in self.browse(self.ids).mapped('rule_ids.chatbot_script_id.id'):
                 return False
@@ -232,12 +252,13 @@ class Im_LivechatChannel(models.Model):
         members_to_add = [
             Command.create(
                 {
-                    "livechat_member_type": "agent" if user_operator else "bot",
                     "chatbot_script_id": chatbot_script.id if not user_operator else False,
+                    "last_interest_dt": last_interest_dt,
+                    "livechat_member_type": "agent" if user_operator else "bot",
                     "partner_id": operator_partner_id,
-                    "unpin_dt": fields.Datetime.now(),
-                }
-            )
+                    "unpin_dt": now,
+                },
+            ),
         ]
         visitor_user = False
         if user_id and user_id != user_operator.id:
@@ -383,6 +404,23 @@ class Im_LivechatChannel(models.Model):
                 )
                 return previous_operator_user
 
+        agents_failing_buffer = {
+                group[0]
+                for group in self.env["im_livechat.channel.member.history"]._read_group(
+                    [
+                        ("livechat_member_type", "=", "agent"),
+                        ("partner_id", "in", users.partner_id.ids),
+                        ("channel_id.livechat_active", "=", True),
+                        (
+                            "create_date",
+                            ">",
+                            fields.Datetime.now() - timedelta(seconds=self.buffer_time),
+                        ),
+                    ],
+                    groupby=["partner_id"],
+                )
+            } if self.buffer_time else set()
+
         def same_language(operator):
             return operator.partner_id.lang == lang or lang in operator.livechat_lang_ids.mapped("code")
 
@@ -412,6 +450,10 @@ class Im_LivechatChannel(models.Model):
             for preference in preferences:
                 operators = operators.filtered(preference)
             if operators:
+                if agents_respecting_buffer := operators.filtered(
+                    lambda op: op.partner_id not in agents_failing_buffer
+                ):
+                    operators = agents_respecting_buffer
                 return self._get_less_active_operator(operator_statuses, operators)
         return self._get_less_active_operator(operator_statuses, users)
 
@@ -428,6 +470,7 @@ class Im_LivechatChannel(models.Model):
             'default_message': self.default_message,
             "channel_name": self.name,
             "channel_id": self.id,
+            "review_link": self.review_link,
         }
 
     def get_livechat_info(self, username=None):

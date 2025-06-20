@@ -34,13 +34,6 @@ function isLinkActive(selection) {
 }
 
 /**
- * @param {EditorSelection} selection
- */
-function isSelectionHasLink(selection) {
-    return findInSelection(selection, "a") ? true : false;
-}
-
-/**
  * @param { HTMLAnchorElement } link
  * @param {number} offset
  * @returns {"start"|"end"|false}
@@ -114,14 +107,11 @@ async function fetchAttachmentMetaData(url, ormService) {
     try {
         const urlParsed = new URL(url, window.location.origin);
         const attachementId = parseInt(urlParsed.pathname.split("/").pop());
-        const [{ name, mimetype }] = await ormService.read(
-            "ir.attachment",
-            [attachementId],
-            ["name", "mimetype"]
-        );
-        return { name, mimetype };
+        return (
+            await ormService.read("ir.attachment", [attachementId], ["name", "mimetype", "type"])
+        )[0];
     } catch {
-        return { name: url, mimetype: undefined };
+        return { name: url };
     }
 }
 
@@ -156,13 +146,22 @@ export class LinkPlugin extends Plugin {
                 description: _t("Add a link"),
                 icon: "fa-link",
                 run: ({ link, type } = {}) => this.openLinkTools(link, type),
+                isAvailable: (selection) => {
+                    const linkEl = findInSelection(selection, "a");
+                    return linkEl
+                        ? this.getResource("link_popovers").some((p) => p.isAvailable(linkEl))
+                        : true;
+                },
             },
             {
                 id: "removeLinkFromSelection",
                 title: _t("Remove Link"),
                 description: _t("Remove Link"),
                 icon: "fa-unlink",
-                isAvailable: isSelectionHasLink,
+                isAvailable: (selection) => {
+                    const linkEl = findInSelection(selection, "a");
+                    return !!linkEl && !this.isLinkImmutable(linkEl);
+                },
                 run: this.removeLinkFromSelection.bind(this),
             },
         ],
@@ -224,9 +223,18 @@ export class LinkPlugin extends Plugin {
             withSequence(50, {
                 //Default option
                 PopoverClass: LinkPopover,
-                isAvailable: () => true,
+                isAvailable: (linkEl) => !linkEl || !this.isLinkImmutable(linkEl),
                 getProps: (props) => props,
             }),
+        ],
+
+        immutable_link_selectors: [
+            '[data-bs-toggle="tab"]',
+            '[data-bs-toggle="collapse"]',
+            '[data-bs-toggle="dropdown"]',
+            ".dropdown-item",
+            "[data-oe-model]",
+            ":has(>[data-oe-model])",
         ],
 
         /** Handlers */
@@ -431,7 +439,7 @@ export class LinkPlugin extends Plugin {
         const selectionTextContent = selection?.textContent();
         const isImage = !!findInSelection(selection, "img");
 
-        const applyCallback = (url, label, classes, customStyle, linkTarget) => {
+        const applyCallback = (url, label, classes, customStyle, linkTarget, attachmentId) => {
             if (this.linkInDocument) {
                 if (url) {
                     this.linkInDocument.href = url;
@@ -519,6 +527,9 @@ export class LinkPlugin extends Plugin {
                     this.dependencies.dom.insert(link);
                 }
             }
+            if (attachmentId) {
+                this.linkInDocument.dataset.attachmentId = attachmentId;
+            }
         };
 
         this.restoreSavePoint = this.dependencies.history.makeSavePoint();
@@ -574,14 +585,16 @@ export class LinkPlugin extends Plugin {
         };
 
         const popover = this.getActivePopover(linkElement);
-        this.currentOverlay = popover.overlay;
-        if (!linkElement.href) {
-            this.LinkPopoverState.editing = true;
-        }
-        this.currentOverlay.open({ props: popover.getProps(props) });
-        if (this.linkInDocument) {
-            if (this.newlyInsertedLinks.has(this.linkInDocument)) {
-                this.newlyInsertedLinks.delete(this.linkInDocument);
+        if (popover) {
+            this.currentOverlay = popover.overlay;
+            if (!linkElement.href) {
+                this.LinkPopoverState.editing = true;
+            }
+            this.currentOverlay.open({ props: popover.getProps(props) });
+            if (this.linkInDocument) {
+                if (this.newlyInsertedLinks.has(this.linkInDocument)) {
+                    this.newlyInsertedLinks.delete(this.linkInDocument);
+                }
             }
         }
     }
@@ -1105,6 +1118,10 @@ export class LinkPlugin extends Plugin {
 
     getActivePopover(linkElement) {
         return this.overlays.find((overlay) => overlay.isAvailable(linkElement));
+    }
+
+    isLinkImmutable(linkEl) {
+        return this.getResource("immutable_link_selectors").some((s) => linkEl.matches(s));
     }
 }
 

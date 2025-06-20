@@ -36,7 +36,7 @@ import {
 import { _t } from "@web/core/l10n/translation";
 import { exprToBoolean } from "@web/core/utils/strings";
 import { MOVABLE_RECORD_TYPES } from "@web/model/relational_model/dynamic_group_list";
-
+import { ActionHelper } from "@web/views/action_helper";
 /**
  * @typedef {import('@web/model/relational_model/dynamic_list').DynamicList} DynamicList
  * @typedef {import('@web/model/relational_model/group').Group} Group
@@ -96,8 +96,18 @@ export class ListRenderer extends Component {
     static groupRowTemplate = "web.ListRenderer.GroupRow";
     static useMagicColumnWidths = true;
     static LONG_TOUCH_THRESHOLD = 400;
-    static components = { DropdownItem, Field, ViewButton, CheckBox, Dropdown, Pager, Widget };
+    static components = {
+        DropdownItem,
+        Field,
+        ViewButton,
+        CheckBox,
+        Dropdown,
+        Pager,
+        Widget,
+        ActionHelper,
+    };
     static defaultProps = { allowSelectors: false, cycleOnTab: true };
+
     static props = [
         "activeActions?",
         "list",
@@ -711,12 +721,6 @@ export class ListRenderer extends Component {
         const { widget, attrs } = column;
         const field = this.props.list.fields[column.name];
         const aggregateValue = group.aggregates[column.name];
-        if (aggregateValue === false) {
-            return {
-                help: _t("Different currencies cannot be aggregated"),
-                value: "—",
-            };
-        }
         if (
             !(column.name in group.aggregates) ||
             widget === "handle" ||
@@ -732,7 +736,14 @@ export class ListRenderer extends Component {
             escape: true,
         };
         if (field.type === "monetary") {
-            formatOptions.currencyId = group.aggregates[field.currency_field][0];
+            const currencies = group.aggregates[field.currency_field];
+            if (currencies.length > 1) {
+                return {
+                    help: _t("Different currencies cannot be aggregated"),
+                    value: "—",
+                };
+            }
+            formatOptions.currencyId = currencies[0];
         }
         return {
             value: formatter ? formatter(aggregateValue, formatOptions) : aggregateValue,

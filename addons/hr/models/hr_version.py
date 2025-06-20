@@ -7,6 +7,7 @@ from dateutil.relativedelta import relativedelta
 from odoo import _, api, fields, models
 from odoo.fields import Domain
 from odoo.exceptions import ValidationError
+from odoo.tools import format_date
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -58,18 +59,18 @@ class HrVersion(models.Model):
         ('male', 'Male'),
         ('female', 'Female'),
         ('other', 'Other'),
-    ], groups="hr.group_hr_user", tracking=True, help="This is the legal sex recognized by the state.")
+    ], groups="hr.group_hr_user", tracking=True, help="This is the legal sex recognized by the state.", string='Gender')
 
-    private_street = fields.Char(string="Private Street", groups="hr.group_hr_user")
-    private_street2 = fields.Char(string="Private Street2", groups="hr.group_hr_user")
-    private_city = fields.Char(string="Private City", groups="hr.group_hr_user")
+    private_street = fields.Char(string="Private Street", groups="hr.group_hr_user", tracking=True)
+    private_street2 = fields.Char(string="Private Street2", groups="hr.group_hr_user", tracking=True)
+    private_city = fields.Char(string="Private City", groups="hr.group_hr_user", tracking=True)
     private_state_id = fields.Many2one(
         "res.country.state", string="Private State",
         domain="[('country_id', '=?', private_country_id)]",
-        groups="hr.group_hr_user")
-    private_zip = fields.Char(string="Private Zip", groups="hr.group_hr_user")
+        groups="hr.group_hr_user", tracking=True)
+    private_zip = fields.Char(string="Private Zip", groups="hr.group_hr_user", tracking=True)
     private_country_id = fields.Many2one("res.country", string="Private Country",
-                                         groups="hr.group_hr_user")
+                                         groups="hr.group_hr_user", tracking=True)
 
     distance_home_work = fields.Integer(string="Home-Work Distance", groups="hr.group_hr_user", tracking=True)
     km_home_work = fields.Integer(string="Home-Work Distance in Km", groups="hr.group_hr_user",
@@ -98,26 +99,29 @@ class HrVersion(models.Model):
             ('trainee', 'Trainee'),
             ('contractor', 'Contractor'),
             ('freelance', 'Freelancer'),
-        ], string='Employee Type', default='employee', required=True, groups="hr.group_hr_user")
+        ], string='Employee Type', default='employee', required=True, groups="hr.group_hr_user", tracking=True)
     department_id = fields.Many2one('hr.department', check_company=True, tracking=True)
     member_of_department = fields.Boolean("Member of department", compute='_compute_part_of_department', search='_search_part_of_department',
         help="Whether the employee is a member of the active user's department or one of it's child department.")
     job_id = fields.Many2one('hr.job', check_company=True, tracking=True)
-    job_title = fields.Char(related='job_id.name', readonly=False, string="Job Title", groups="hr.group_hr_user")
+    job_title = fields.Char(compute="_compute_job_title", inverse="_inverse_job_title", store=True, readonly=False,
+        string="Job Title", tracking=True, groups="hr.group_hr_user")
+    is_custom_job_title = fields.Boolean(default=False, groups="hr.group_hr_user")
     address_id = fields.Many2one(
         'res.partner',
         string='Work Address',
         default=_get_default_address_id,
         store=True,
         readonly=False,
-        check_company=True)
+        check_company=True,
+        tracking=True)
     work_location_id = fields.Many2one('hr.work.location', 'Work Location',
-                                       domain="[('address_id', '=', address_id)]")
+                                       domain="[('address_id', '=', address_id)]", tracking=True)
     work_location_name = fields.Char("Work Location Name", compute="_compute_work_location_name_type")
     work_location_type = fields.Selection([
         ("home", "Home"),
         ("office", "Office"),
-        ("other", "Other")], compute="_compute_work_location_name_type", groups="hr.group_hr_user")
+        ("other", "Other")], compute="_compute_work_location_name_type", groups="hr.group_hr_user", tracking=True)
 
     departure_reason_id = fields.Many2one("hr.departure.reason", string="Departure Reason",
                                           groups="hr.group_hr_user", copy=False, ondelete='restrict', tracking=True)
@@ -145,7 +149,7 @@ class HrVersion(models.Model):
 
     contract_template_id = fields.Many2one(
         'hr.version', string="Contract Template", groups="hr.group_hr_user",
-        domain="[('company_id', '=', company_id), ('employee_id', '=', False)]",
+        domain="[('company_id', '=', company_id), ('employee_id', '=', False)]", tracking=True,
         help="Select a contract template to auto-fill the contract form with predefined values. You can still edit the fields as needed after applying the template.")
     structure_type_id = fields.Many2one('hr.payroll.structure.type', string="Salary Structure Type",
                                         compute="_compute_structure_type_id", readonly=False, store=True, tracking=True,
@@ -155,7 +159,6 @@ class HrVersion(models.Model):
     wage = fields.Monetary('Wage', tracking=True, help="Employee's monthly gross wage.", aggregator="avg",
                            groups="hr.group_hr_user")
     contract_wage = fields.Monetary('Contract Wage', compute='_compute_contract_wage', groups="hr.group_hr_user")
-    notes = fields.Html('Notes', groups="hr.group_hr_user")
     company_country_id = fields.Many2one('res.country', string="Company country",
                                          related='company_id.country_id', readonly=True)
     country_code = fields.Char(related='company_country_id.code', depends=['company_country_id'], readonly=True)
@@ -185,6 +188,16 @@ class HrVersion(models.Model):
         for version in self:
             if version.employee_id:
                 version.company_id = version.employee_id.company_id
+
+    @api.depends('job_id.name')
+    def _compute_job_title(self):
+        for version in self.filtered('job_id'):
+            if version._origin.job_id != version.job_id or not version.is_custom_job_title:
+                version.job_title = version.job_id.name
+
+    def _inverse_job_title(self):
+        for version in self:
+            version.is_custom_job_title = version.job_title != version.job_id.name
 
     @api.constrains('employee_id', 'contract_date_start', 'contract_date_end')
     def _check_dates(self):
@@ -308,10 +321,11 @@ class HrVersion(models.Model):
                     version.with_context(sync_contract_dates=True).write(dates_vals)
         return super().write(new_vals)
 
+    @api.depends_context('lang')
     @api.depends('date_version')
     def _compute_display_name(self):
         for version in self:
-            version.display_name = version.name if not version.employee_id else date.strftime(version.date_version, '%-d %b %Y')
+            version.display_name = version.name if not version.employee_id else format_date(version.env, version.date_version, date_format='dd MMM yyyy')
 
     def _compute_state(self):
         for version in self:

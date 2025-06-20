@@ -82,7 +82,7 @@ beforeEach(() => onRpc("has_group", () => true));
 
 test.tags("desktop");
 test("SelectCreateDialog use domain, group_by and search default on desktop", async () => {
-    expect.assertions(3);
+    expect.assertions(4);
     Partner._views["list"] = /* xml */ `
         <list string="Partner">
             <field name="name"/>
@@ -99,33 +99,14 @@ test("SelectCreateDialog use domain, group_by and search default on desktop", as
     `;
     let search = 0;
     onRpc("web_read_group", ({ kwargs }) => {
-        expect(kwargs).toEqual(
-            {
-                context: {
-                    allowed_company_ids: [1],
-                    lang: "en",
-                    read_group_expand: true,
-                    tz: "taht",
-                    uid: 7,
-                }, // not part of the test, may change
-                domain: [
-                    "&",
-                    ["name", "like", "a"],
-                    "&",
-                    ["name", "ilike", "piou"],
-                    ["foo", "ilike", "piou"],
-                ],
-                aggregates: ["__count"],
-                groupby: ["bar"],
-                order: "",
-                limit: 80,
-                offset: 0,
-            },
-            {
-                message:
-                    "should search with the complete domain (domain + search), and group by 'bar'",
-            }
-        );
+        expect(kwargs.domain).toEqual([
+            "&",
+            ["name", "like", "a"],
+            "&",
+            ["name", "ilike", "piou"],
+            ["foo", "ilike", "piou"],
+        ]);
+        expect(kwargs.groupby).toEqual(["bar"]);
     });
     onRpc("web_search_read", ({ kwargs }) => {
         if (search === 0) {
@@ -196,7 +177,7 @@ test("SelectCreateDialog use domain, group_by and search default on desktop", as
 
 test.tags("mobile");
 test("SelectCreateDialog use domain, group_by and search default on mobile", async () => {
-    expect.assertions(3);
+    expect.assertions(4);
     Partner._views["search"] = /* xml */ `
         <search>
             <field name="foo" filter_domain="[('name','ilike',self), ('foo','ilike',self)]"/>
@@ -210,32 +191,14 @@ test("SelectCreateDialog use domain, group_by and search default on mobile", asy
     ] = /* xml */ `<kanban><templates><t t-name="card"><field name="name"/><field name="foo"/></t></templates></kanban>`;
     let search = 0;
     onRpc("web_read_group", ({ kwargs }) => {
-        expect(kwargs).toEqual(
-            {
-                context: {
-                    allowed_company_ids: [1],
-                    lang: "en",
-                    tz: "taht",
-                    uid: 7,
-                    read_group_expand: true,
-                }, // not part of the test, may change
-                domain: [
-                    "&",
-                    ["name", "like", "a"],
-                    "&",
-                    ["name", "ilike", "piou"],
-                    ["foo", "ilike", "piou"],
-                ],
-                groupby: ["bar"],
-                aggregates: ["__count"],
-                offset: 0,
-                order: "",
-            },
-            {
-                message:
-                    "should search with the complete domain (domain + search), and group by 'bar'",
-            }
-        );
+        expect(kwargs.domain).toEqual([
+            "&",
+            ["name", "like", "a"],
+            "&",
+            ["name", "ilike", "piou"],
+            ["foo", "ilike", "piou"],
+        ]);
+        expect(kwargs.groupby).toEqual(["bar"]);
     });
     onRpc("web_search_read", ({ kwargs }) => {
         if (search === 0) {
@@ -335,7 +298,7 @@ test.tags("desktop");
 test("SelectCreateDialog list view is readonly", async () => {
     Partner._fields.sequence = fields.Integer();
     Partner._views["list"] = /* xml */ `
-        <list string="Partner" editable="bottom">
+        <list string="Partner" editable="bottom" multi_edit="1">
             <field name="sequence" widget="handle"/>
             <field name="name"/>
             <field name="foo"/>
@@ -348,9 +311,13 @@ test("SelectCreateDialog list view is readonly", async () => {
         resModel: "partner",
     });
     await animationFrame();
-
-    // click on the first row to see if the list is editable
+    // select first row
     await contains(".o_list_view tbody tr td:first").click();
+    expect(".o_data_row_selected").toHaveCount(1);
+    // click on it to see if the list is editable
+    await contains(".o_list_view tbody tr:first .o_list_char").click();
+    expect(".o_data_row_selected").toHaveCount(0);
+    expect(".o_selected_row").toHaveCount(0);
 
     expect(".o_list_view tbody tr td .o_field_char input").toHaveCount(0, {
         message: "list view should not be editable in a SelectCreateDialog",
@@ -758,7 +725,7 @@ test("SelectCreateDialog: default props, create a record on desktop", async () =
 
 test.tags("desktop");
 test("SelectCreateDialog: click on row once in selection", async () => {
-    Partner._views["list"] = `<list><field name="name"/></list>`;
+    Partner._views["list"] = `<list multi_edit="1"><field name="name"/></list>`;
     Partner._views["search"] = `
         <search>
             <filter name="bar" help="Bar" domain="[('bar', '=', True)]"/>
@@ -778,6 +745,10 @@ test("SelectCreateDialog: click on row once in selection", async () => {
     await contains(".o_data_row .o_list_record_selector").click();
     expect(".o_dialog .o_data_row_selected").toHaveCount(1);
 
+    await contains(".o_data_row:eq(1) .o_data_cell").click();
+    expect(".o_dialog .o_data_row_selected").toHaveCount(2);
+    await contains(".o_data_row:eq(1) .o_data_cell").click();
+    expect(".o_dialog .o_data_row_selected").toHaveCount(1);
     await contains(".o_data_row:eq(1) .o_data_cell").click();
     expect(".o_dialog .o_data_row_selected").toHaveCount(2);
 
@@ -840,7 +811,10 @@ test("SelectCreateDialog empty list, default no content helper", async () => {
     expect(".o_dialog .o_list_view .o_data_row").toHaveCount(0);
     expect(".o_dialog .o_list_view .o_view_nocontent").toHaveCount(1);
     expect(queryOne(".o_dialog .o_list_view .o_view_nocontent")).toHaveInnerHTML(
-        `<div class="o_nocontent_help"><p>No record found</p><p>Adjust your filters or create a new record.</p></div>`
+        `<div class="o_nocontent_help">
+            <p>No record found</p>
+            <p>Adjust your filters or create a new record.</p>
+        </div>`
     );
 });
 test.tags("mobile");
@@ -857,7 +831,10 @@ test("SelectCreateDialog empty kanban, default no content helper", async () => {
     expect(".o_dialog .o_kanban_view .o_kanban_record[data-id]").toHaveCount(0);
     expect(".o_dialog .o_kanban_view .o_view_nocontent").toHaveCount(1);
     expect(queryOne(".o_dialog .o_kanban_view .o_view_nocontent")).toHaveInnerHTML(
-        `<div class="o_nocontent_help"><p>No record found</p><p>Adjust your filters or create a new record.</p></div>`
+        `<div class="o_nocontent_help">
+            <p>No record found</p>
+            <p>Adjust your filters or create a new record.</p>
+        </div>`
     );
 });
 
@@ -886,7 +863,10 @@ test("SelectCreateDialog empty list, noContentHelp props", async () => {
     expect(".o_dialog .o_list_view .o_data_row").toHaveCount(0);
     expect(".o_dialog .o_list_view .o_view_nocontent").toHaveCount(1);
     expect(queryOne(".o_dialog .o_list_view .o_view_nocontent")).toHaveInnerHTML(
-        `<div class="o_nocontent_help"><p class="custom_classname">Hello</p><p>I'm an helper</p></div>`
+        `<div class="o_nocontent_help">
+            <p class="custom_classname">Hello</p>
+            <p>I'm an helper</p>
+        </div>`
     );
 });
 

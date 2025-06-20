@@ -2,7 +2,7 @@
 <templates xml:space="preserve">
     <t t-name="discuss.GifPicker">
         <div class="o-discuss-GifPicker d-flex flex-column" t-attf-class="{{ props.className }}" t-att-class="{ 'h-100': props.mobile }" t-on-focusin="() => state.focused = true" t-on-focusout="() => state.focused = false">
-            <div t-if="!store.hasGifPickerFeature and store.self.isAdmin" class="d-flex flex-column align-items-center justify-content-center m-3 h-100">
+            <div t-if="!store.hasGifPickerFeature and store.self.main_user_id?.is_admin" class="d-flex flex-column align-items-center justify-content-center m-3 h-100">
                 <span class="o-discuss-GifPicker-bigEmoji">🧑‍🍳🌶️</span>
                 <span class="fs-5 text-muted">Want to spice up your conversations with GIFs? Activate the feature in the settings!</span>
             </div>
@@ -75,7 +75,7 @@
                         <div t-if="state.loadingGif" class="text-center fs-6 h-100 d-flex flex-column justify-content-center">
                             <i class="fa fa-spin fa-circle-o-notch"/>
                         </div>
-                        <div t-elif="showFavorite and state.evenGif.gifs.length === 0 and state.oddGif.gifs.length === 0" class="d-flex flex-column h-100 align-items-center justify-content-center text-center text-muted gap-2">
+                        <div t-elif="showFavorite and state.evenGif.gifs.size === 0 and state.oddGif.gifs.size === 0" class="d-flex flex-column h-100 align-items-center justify-content-center text-center text-muted gap-2">
                             <i class="o-discuss-GifPicker-noFavoritesIcon fa fa-star fs-1"/>
                             <span class="fs-5">So uhh... maybe go favorite some GIFs?</span>
                         </div>

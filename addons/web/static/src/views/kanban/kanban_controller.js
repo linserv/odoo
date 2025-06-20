@@ -253,7 +253,11 @@ export class KanbanController extends Component {
             items: this.actionMenuItems,
             isDomainSelected: this.model.root.isDomainSelected,
             resModel: this.model.root.resModel,
-            onActionExecuted: () => this.model.load(),
+            onActionExecuted: ({ noReload } = {}) => {
+                if (!noReload) {
+                    return this.model.load();
+                }
+            },
         };
     }
 
@@ -306,7 +310,12 @@ export class KanbanController extends Component {
     }
 
     get modelOptions() {
-        return { lazy: !this.env.inDialog && !!this.props.display.controlPanel };
+        return {
+            lazy:
+                !this.env.config.isReloadingController &&
+                !this.env.inDialog &&
+                !!this.props.display.controlPanel,
+        };
     }
 
     get progressBarAggregateFields() {

@@ -123,7 +123,6 @@ class TestCreatePicking(ProductVariantsCommon):
         })
 
         customer_move = self.env['stock.move'].create({
-            'name': 'move out',
             'location_id': stock_location.id,
             'location_dest_id': customer_location.id,
             'product_id': product.id,
@@ -187,6 +186,8 @@ class TestCreatePicking(ProductVariantsCommon):
         uom_dozen = self.env.ref('uom.product_uom_dozen')
 
         self.assertEqual(self.product_id_1.uom_id.id, uom_unit.id)
+
+        self.env.user.group_ids += self.env.ref('uom.group_uom')
 
         # buy a dozen
         po_form = Form(self.env['purchase.order'])
@@ -341,7 +342,6 @@ class TestCreatePicking(ProductVariantsCommon):
         })
 
         customer_move = self.env['stock.move'].create({
-            'name': 'move out',
             'location_id': stock_location.id,
             'location_dest_id': customer_location.id,
             'product_id': product.id,
@@ -364,7 +364,6 @@ class TestCreatePicking(ProductVariantsCommon):
         purchase_order.button_confirm()
 
         customer_move_2 = self.env['stock.move'].create({
-            'name': 'move out',
             'location_id': stock_location.id,
             'location_dest_id': customer_location.id,
             'product_id': product.id,
@@ -490,7 +489,6 @@ class TestCreatePicking(ProductVariantsCommon):
         })
 
         customer_move = self.env['stock.move'].create({
-            'name': 'move out',
             'location_id': stock_location.id,
             'location_dest_id': customer_location.id,
             'product_id': product.id,
@@ -800,7 +798,6 @@ class TestCreatePicking(ProductVariantsCommon):
             'location_dest_id': self.env.ref('stock.stock_location_stock').id,
             'picking_type_id': self.env.ref('stock.picking_type_out').id,
             'move_ids': [(0, 0, {
-                'name': 'outgoing_shipment_avg_move',
                 'product_id': self.product_id_2.id,
                 'product_uom_qty': 10,
                 'product_uom': self.product_id_2.uom_id.id,

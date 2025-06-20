@@ -280,7 +280,7 @@ test("hide empty OptionContainer and display OptionContainer with content (with 
 test("fallback on the 'Blocks' tab if no option match the selected element", async () => {
     await setupWebsiteBuilder(`<div class="parent-target"><div class="child-target">b</div></div>`);
     await contains(":iframe .parent-target > div").click();
-    expect(".o-snippets-tabs button:contains('BLOCKS')").toHaveClass("active");
+    expect(".o-snippets-tabs button:contains('Add')").toHaveClass("active");
 });
 
 test("display empty message if no option container is visible", async () => {
@@ -438,7 +438,7 @@ test("useDomState callback shouldn't be called when the editingElement is remove
                 testEl.classList.add("s_test", "alert-info");
                 testEl.textContent = "test";
                 editingElement.after(testEl);
-                editor.shared["builder-options"].setNextTarget(testEl);
+                editor.shared["builderOptions"].setNextTarget(testEl);
             },
         },
     });

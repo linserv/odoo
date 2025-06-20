@@ -62,13 +62,16 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from odoo.exceptions import UserError
 from odoo.tools import SQL, OrderedSet, Query, classproperty, partition, str2bool
+
 from .identifiers import NewId
-from .utils import COLLECTION_TYPES
+from .utils import COLLECTION_TYPES, parse_field_expr
 
 if typing.TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable
     from odoo.fields import Field
     from odoo.models import BaseModel
+
+    M = typing.TypeVar('M', bound=BaseModel)
 
 
 _logger = logging.getLogger('odoo.domains')
@@ -364,6 +367,15 @@ class Domain:
         # just execute the optimization code that goes through all the fields
         self.optimize(model, full=True)
 
+    def _as_predicate(self, records: M) -> Callable[[M], bool]:
+        """Return a predicate function from the domain (bound to records).
+        The predicate function return whether its argument (a single record)
+        satisfies the domain.
+
+        This is used to implement ``Model.filtered_domain``.
+        """
+        raise NotImplementedError
+
     def optimize(self, model: BaseModel, *, full: bool = False) -> Domain:
         """Perform optimizations of the node given a model.
 
@@ -467,6 +479,9 @@ class DomainBool(Domain):
     def __iter__(self):
         yield _TRUE_LEAF if self.value else _FALSE_LEAF
 
+    def _as_predicate(self, records):
+        return lambda _: self.value
+
     def _to_sql(self, model: BaseModel, alias: str, query: Query) -> SQL:
         return SQL("TRUE") if self.value else SQL("FALSE")
 
@@ -511,6 +526,10 @@ class DomainNot(Domain):
 
     def __hash__(self):
         return ~hash(self.child)
+
+    def _as_predicate(self, records):
+        predicate = self.child._as_predicate(records)
+        return lambda rec: not predicate(rec)
 
     def _to_sql(self, model: BaseModel, alias: str, query: Query) -> SQL:
         condition = self.child._to_sql(model, alias, query)
@@ -631,6 +650,18 @@ class DomainAnd(DomainNary):
             return DomainAnd(self.children + other.children)
         return super().__and__(other)
 
+    def _as_predicate(self, records):
+        # For the sake of performance, the list of predicates is generated
+        # lazily with a generator, which is memoized with `itertools.tee`
+        all_predicates = (child._as_predicate(records) for child in self.children)
+
+        def and_predicate(record):
+            nonlocal all_predicates
+            all_predicates, predicates = itertools.tee(all_predicates)
+            return all(pred(record) for pred in predicates)
+
+        return and_predicate
+
 
 class DomainOr(DomainNary):
     """Domain: OR with multiple children"""
@@ -648,6 +679,18 @@ class DomainOr(DomainNary):
         if isinstance(other, DomainOr):
             return DomainOr(self.children + other.children)
         return super().__or__(other)
+
+    def _as_predicate(self, records):
+        # For the sake of performance, the list of predicates is generated
+        # lazily with a generator, which is memoized with `itertools.tee`
+        all_predicates = (child._as_predicate(records) for child in self.children)
+
+        def or_predicate(record):
+            nonlocal all_predicates
+            all_predicates, predicates = itertools.tee(all_predicates)
+            return any(pred(record) for pred in predicates)
+
+        return or_predicate
 
 
 class DomainCondition(Domain):
@@ -777,14 +820,14 @@ class DomainCondition(Domain):
 
     def __get_field(self, model: BaseModel) -> tuple[Field, str]:
         """Get the field or raise an exception"""
-        field_name, *props = self.field_expr.split('.', 1)
+        field_name, property_name = parse_field_expr(self.field_expr)
         try:
             field = model._fields[field_name]
         except KeyError:
             self._raise("Invalid field %s.%s", model._name, field_name)
         # cache field value, with this hack to bypass immutability
         object.__setattr__(self, '_field_instance', field)
-        return field, (props[0] if props else '')
+        return field, property_name or ''
 
     def _optimize(self, model: BaseModel, full: bool) -> Domain:
         """Optimization step.
@@ -896,6 +939,56 @@ class DomainCondition(Domain):
             field_label=self._field(model).get_description(model.env, ['string'])['string'],
             model_label=f"{model.env['ir.model']._get(model._name).name!r} ({model._name})",
         ))
+
+    def _as_predicate(self, records):
+        if not records:
+            return lambda _: False
+
+        if self._opt_level < OptimizationLevel.BASIC:
+            return self.optimize(records, full=False)._as_predicate(records)
+
+        operator = self.operator
+        if operator in ('child_of', 'parent_of'):
+            # TODO have a specific implementation for these
+            return self.optimize(records, full=True)._as_predicate(records)
+
+        assert operator in STANDARD_CONDITION_OPERATORS, "Expecting a sub-set of operators"
+        field_expr, value = self.field_expr, self.value
+        positive_operator = NEGATIVE_CONDITION_OPERATORS.get(operator, operator)
+
+        if isinstance(value, SQL):
+            # transform into an Query value
+            if positive_operator == operator:
+                condition = self
+                operator = 'any'
+            else:
+                condition = ~self
+                operator = 'not any'
+            positive_operator = 'any'
+            field_expr = 'id'
+            value = records.with_context(active_test=False)._search(DomainCondition('id', 'in', OrderedSet(records.ids)) & condition)
+            assert isinstance(value, Query)
+
+        if isinstance(value, Query):
+            # rebuild a domain with an 'in' values
+            if positive_operator not in ('in', 'any'):
+                self._raise("Cannot filter using Query without the 'any' or 'in' operator")
+            if positive_operator == 'any':
+                operator = 'in' if positive_operator == operator else 'not in'
+                positive_operator = 'in'
+            value = set(value.get_result_ids())
+            return DomainCondition(field_expr, operator, value)._as_predicate(records)
+
+        field = self._field(records)
+        if field_expr == 'display_name':
+            # when searching by name, ignore AccessError
+            field_expr = 'display_name.no_error'
+        elif field_expr == 'id':
+            # for new records, compare to their origin
+            field_expr = 'id.origin'
+
+        func = field.filter_function(records, field_expr, positive_operator, value)
+        return func if positive_operator == operator else lambda rec: not func(rec)
 
     def _to_sql(self, model: BaseModel, alias: str, query: Query) -> SQL:
         return model._condition_to_sql(alias, self.field_expr, self.operator, self.value, query)
@@ -1104,6 +1197,8 @@ def _optimize_in_required(condition, model):
         field.falsy_value is None
         and field.required
         and field in model.env.registry.not_null_fields
+        # only optimize if there are no NewId's
+        and all(model._ids)
     ):
         value = OrderedSet(v for v in value if v is not False)
     if len(value) == len(condition.value):
@@ -1254,17 +1349,8 @@ def _value_to_date(value):
     if isinstance(value, (SQL, date)) or value is False:
         return value
     if isinstance(value, str):
-        # TODO can we use fields.Date.to_date? same for datetime
-        if len(value) == 10:
+        if len(value) <= 10:
             return date.fromisoformat(value)
-        if len(value) < 10:
-            # TODO deprecate or raise error
-            # probably the value is missing zeroes
-            try:
-                parts = value.split('-')
-                return date(*[int(part) for part in parts])
-            except (ValueError, TypeError):
-                raise ValueError(f"Invalid isoformat string {value!r}")
         return datetime.fromisoformat(value).date()
     if isinstance(value, COLLECTION_TYPES):
         return OrderedSet(_value_to_date(v) for v in value)
@@ -1285,22 +1371,30 @@ def _optimize_type_date(condition, _):
 
 
 def _value_to_datetime(value):
+    """Convert a value(s) to datetime.
+
+    :returns: A tuple containing the converted value and a boolean indicating
+              that all input values were dates.
+              These are handled differently during rewrites.
+    """
     if isinstance(value, datetime):
         if value.tzinfo:
             # cast to a naive datetime
             warnings.warn("Use naive datetimes in domains")
             value = value.astimezone(timezone.utc).replace(tzinfo=None)
         return value, False
-    if isinstance(value, SQL) or value is False:
-        return value, False
+    if value is False:
+        return False, True
     if isinstance(value, str):
         dt, _ = _value_to_datetime(datetime.fromisoformat(value))
         return dt, len(value) == 10
     if isinstance(value, date):
         return datetime.combine(value, time.min), True
     if isinstance(value, COLLECTION_TYPES):
-        value, is_day = zip(*(_value_to_datetime(v) for v in value))
-        return OrderedSet(value), any(is_day)
+        value, is_date = zip(*(_value_to_datetime(v) for v in value))
+        return OrderedSet(value), all(is_date)
+    if isinstance(value, SQL):
+        return value, False
     raise ValueError(f'Failed to cast {value!r} into a datetime')
 
 
@@ -1309,32 +1403,53 @@ def _optimize_type_datetime(condition, _):
     """Make sure we have a datetime type in the value"""
     if condition.operator.endswith('like') or "." in condition.field_expr:
         return condition
+    field_expr = condition.field_expr
     operator = condition.operator
-    value, is_day = _value_to_datetime(condition.value)
-    if value is False and operator[0] in ('<', '>'):
-        # comparison to False results in an empty domain
-        return _FALSE_DOMAIN
-    if value == condition.value:
-        assert not is_day
-        return condition
+    value, is_date = _value_to_datetime(condition.value)
 
-    # if we get a day we may need to add 1 depending on the operator
-    if is_day and operator == '>':
-        try:
-            value += timedelta(1)
-        except OverflowError:
-            # higher than max, not possible
+    # Handle inequality
+    if operator[0] in ('<', '>'):
+        if value is False:
             return _FALSE_DOMAIN
-        operator = '>='
-    elif is_day and operator == '<=':
-        try:
-            value += timedelta(1)
-        except OverflowError:
-            # lower than max, just check if field is set
-            return DomainCondition(condition.field_expr, '!=', False)
-        operator = '<'
+        if not isinstance(value, datetime):
+            return condition
+        if value.microsecond:
+            assert not is_date, "date don't have microseconds"
+            value = value.replace(microsecond=0)
+        delta = timedelta(days=1) if is_date else timedelta(seconds=1)
+        if operator == '>':
+            try:
+                value += delta
+            except OverflowError:
+                # higher than max, not possible
+                return _FALSE_DOMAIN
+            operator = '>='
+        elif operator == '<=':
+            try:
+                value += delta
+            except OverflowError:
+                # lower than max, just check if field is set
+                return DomainCondition(field_expr, '!=', False)
+            operator = '<'
 
-    return DomainCondition(condition.field_expr, operator, value)
+    # Handle equality: compare to the whole second
+    if (
+        operator in ('in', 'not in')
+        and isinstance(value, COLLECTION_TYPES)
+        and any(isinstance(v, datetime) for v in value)
+    ):
+        delta = timedelta(seconds=1)
+        domain = DomainOr.apply(
+            DomainCondition(field_expr, '>=', v.replace(microsecond=0))
+            & DomainCondition(field_expr, '<', v.replace(microsecond=0) + delta)
+            if isinstance(v, datetime) else DomainCondition(field_expr, '=', v)
+            for v in value
+        )
+        if operator == 'not in':
+            domain = ~domain
+        return domain
+
+    return DomainCondition(field_expr, operator, value)
 
 
 @field_type_optimization(['binary'])

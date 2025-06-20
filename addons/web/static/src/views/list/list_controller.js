@@ -221,7 +221,7 @@ export class ListController extends Component {
             countLimit: this.archInfo.countLimit,
             defaultOrderBy: this.archInfo.defaultOrder,
             groupsLimit: this.archInfo.groupsLimit,
-            multiEdit: this.archInfo.multiEdit,
+            multiEdit: !this.props.readonly && this.archInfo.multiEdit,
             activeIdsLimit: session.active_ids_limit,
             hooks: {
                 onRecordSaved: this.onRecordSaved.bind(this),
@@ -233,7 +233,12 @@ export class ListController extends Component {
     }
 
     get modelOptions() {
-        return { lazy: !this.env.inDialog && !!this.props.display.controlPanel };
+        return {
+            lazy:
+                !this.env.config.isReloadingController &&
+                !this.env.inDialog &&
+                !!this.props.display.controlPanel,
+        };
     }
 
     get actionMenuProps() {
@@ -244,7 +249,11 @@ export class ListController extends Component {
             items: this.actionMenuItems,
             isDomainSelected: this.model.root.isDomainSelected,
             resModel: this.model.root.resModel,
-            onActionExecuted: () => this.model.load(),
+            onActionExecuted: ({ noReload } = {}) => {
+                if (!noReload) {
+                    return this.model.load();
+                }
+            },
         };
     }
 

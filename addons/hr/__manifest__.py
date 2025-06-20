@@ -24,6 +24,7 @@
         'data/digest_data.xml',
         'data/report_paperformat.xml',
         'wizard/hr_departure_wizard_views.xml',
+        'wizard/hr_contract_template_wizard.views.xml',
         'wizard/mail_activity_schedule_views.xml',
         'views/mail_activity_plan_views.xml',
         'views/hr_version_views.xml',
@@ -55,16 +56,6 @@
     'assets': {
         'web.assets_backend': [
             'hr/static/src/**/*',
-            ('remove', 'hr/static/src/views/hr_graph_view.js'),
-            ('remove', 'hr/static/src/views/hr_graph_controller.xml'),
-            ('remove', 'hr/static/src/views/hr_pivot_view.js'),
-            ('remove', 'hr/static/src/views/hr_pivot_controller.xml'),
-        ],
-        'web.assets_backend_lazy': [
-            'hr/static/src/views/hr_graph_view.js',
-            'hr/static/src/views/hr_graph_controller.xml',
-            'hr/static/src/views/hr_pivot_view.js',
-            'hr/static/src/views/hr_pivot_controller.xml',
         ],
         'web.qunit_suite_tests': [
             'hr/static/tests/legacy/**/*',

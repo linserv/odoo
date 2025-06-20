@@ -395,8 +395,6 @@ test("switching into a view with mode=edit lands in edit mode", async () => {
         "get_views",
         "web_read_group",
         "has_group",
-        "web_search_read",
-        "web_search_read",
         "onchange",
         "name_create",
         "web_read",
@@ -822,6 +820,41 @@ test("there is no flickering when switching between views", async () => {
     expect(".o_list_view").toHaveCount(1, { message: "should display the list view" });
     expect(".o_list_view table .o_data_row").toHaveCount(5);
     expect(queryAllTexts(".breadcrumb-item, .o_breadcrumb .active")).toEqual(["Partners"]);
+});
+
+test.tags("desktop");
+test("there is no flickering when reloading a view", async () => {
+    let def;
+    onRpc(() => def);
+
+    await mountWithCleanup(WebClient);
+    await getService("action").doAction(3);
+    expect(".o_list_view").toHaveCount(1);
+    expect(".o_list_view .o_data_row").toHaveCount(5);
+
+    MockServer.env["partner"].create([{ foo: "a new record" }]);
+    // reload the list view
+    def = new Deferred();
+    await switchView("list");
+    expect(".o_list_view .o_data_row").toHaveCount(5);
+
+    def.resolve();
+    await animationFrame();
+    expect(".o_list_view .o_data_row").toHaveCount(6);
+
+    // do the same in kanban view
+    await switchView("kanban");
+    expect(".o_kanban_view").toHaveCount(1);
+    expect(".o_kanban_view .o_kanban_record:not(.o_kanban_ghost)").toHaveCount(6);
+
+    MockServer.env["partner"].create([{ foo: "yet another record" }]);
+    def = new Deferred();
+    await switchView("kanban");
+    expect(".o_kanban_view .o_kanban_record:not(.o_kanban_ghost)").toHaveCount(6);
+
+    def.resolve();
+    await animationFrame();
+    expect(".o_kanban_view .o_kanban_record:not(.o_kanban_ghost)").toHaveCount(7);
 });
 
 test.tags("desktop");
@@ -2291,6 +2324,7 @@ test("executing a window action with onchange warning does not hide it", async (
     await mountWithCleanup(WebClient);
     await getService("action").doAction(3);
     await clickListNew();
+    await waitFor(".modal.o_technical_modal");
     expect(".modal.o_technical_modal").toHaveCount(1, {
         message: "Warning modal should be opened",
     });
