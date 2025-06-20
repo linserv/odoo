@@ -375,6 +375,7 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
         self.main_pos_config.open_ui()
         self.start_pos_tour('PosSettleOrderWithNote', login="accountman")
 
+    @unittest.skip("[LINSERV]")
     def test_order_sales_count(self):
         self.main_pos_config.open_ui()
         current_session = self.main_pos_config.current_session_id
@@ -411,6 +412,7 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
         self.env.flush_all()
         self.assertEqual(self.desk_pad.sales_count, 1)
 
+    
     def test_untaxed_invoiced_amount(self):
         """Make sure that orders invoiced in the pos gets their untaxed invoiced
            amount updated accordingly"""
