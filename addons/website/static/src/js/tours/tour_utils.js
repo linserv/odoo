@@ -366,7 +366,7 @@ export function insertSnippet(snippet, { position = "bottom", ignoreLoading = fa
     if (snippet.groupName) {
         insertSnippetSteps.push({
             content: markup(_t("Click on the <b>%s</b> category.", blockEl)),
-            trigger: `#snippet_groups .o_snippet[name="${blockEl}"].o_draggable .o_snippet_thumbnail:not(.o_we_ongoing_insertion) .o_snippet_thumbnail_area`,
+            trigger: `.o_block_tab:not(.o_we_ongoing_insertion) #snippet_groups .o_snippet[name="${blockEl}"].o_draggable .o_snippet_thumbnail_area`,
             tooltipPosition: position,
             run: "click",
         },
@@ -382,7 +382,7 @@ export function insertSnippet(snippet, { position = "bottom", ignoreLoading = fa
     } else {
         insertSnippetSteps.push({
             content: markup(_t("Drag the <b>%s</b> block and drop it at the bottom of the page.", blockEl)),
-            trigger: `#snippet_content .o_snippet[name="${blockEl}"].o_draggable .o_snippet_thumbnail:not(.o_we_ongoing_insertion)`,
+            trigger: `.o_block_tab:not(.o_we_ongoing_insertion) #snippet_content .o_snippet[name="${blockEl}"].o_draggable .o_snippet_thumbnail`,
             tooltipPosition: position,
             run: "drag_and_drop :iframe #wrapwrap > footer",
         });
@@ -671,4 +671,32 @@ export function selectFullText(elementName, selector) {
             selection.addRange(range);
         },
     };
+}
+
+/**
+ * Click button from the toolbar, if expand is true, it will
+ * first expand the toolbar.
+ * @param {string} elementName
+ * @param {string} selector
+ * @param {string} button
+ * @param {boolean} expand - Whether to expand the toolbar for more buttons.
+ * @returns {Array} The steps to click the toolbar button.
+ */
+export function clickToolbarButton(elementName, selector, button, expand = false) {
+    const steps = [
+        selectFullText(`${elementName}`, selector),
+        {
+            content: `Click on the ${button} from toolbar`,
+            trigger: `.o-we-toolbar button[title="${button}"]`,
+            run: "click",
+        },
+    ];
+    if (expand) {
+        steps.splice(1, 0, {
+            content: "Expand the toolbar for more buttons",
+            trigger: ".o-we-toolbar button[name='expand_toolbar']",
+            run: "click",
+        });
+    }
+    return steps;
 }

@@ -503,11 +503,7 @@ class CalendarEvent(models.Model):
                 start, stop)
             for event in events:
                 for partner in event.partner_ids:
-                    if any(
-                        intervals_overlap(
-                            (event.start, event.stop), (other_event.start, other_event.stop))
-                        for other_event in events_by_partner_id.get(partner._origin.id, []) if other_event != event
-                    ):
+                    if event._is_partner_unavailable(partner, events_by_partner_id.get(partner._origin.id, self.env["calendar.event"])):
                         event.unavailable_partner_ids |= partner
 
     @api.depends('videocall_source', 'access_token')
@@ -515,6 +511,14 @@ class CalendarEvent(models.Model):
         for event in self:
             if event.videocall_source == 'discuss':
                 event._set_discuss_videocall_location()
+
+    def _is_partner_unavailable(self, partner, partner_events):
+        self.ensure_one()
+        return any(
+            intervals_overlap((self.start, self.stop), (partner_event.start, partner_event.stop))
+            for partner_event in partner_events
+            if partner_event != self
+        )
 
     @api.model
     def _set_videocall_location(self, vals_list):
@@ -1118,7 +1122,8 @@ class CalendarEvent(models.Model):
                     activity_values['summary'] = event.name
                 if 'description' in fields:
                     activity_values['note'] = event.description
-                if 'start' in fields:
+                # protect against loops in case of ill-managed timezones
+                if 'start' in fields and not self.env.context.get('mail_activity_meeting_update'):
                     # self.start is a datetime UTC *only when the event is not allday*
                     # activty.date_deadline is a date (No TZ, but should represent the day in which the user's TZ is)
                     # See 72254129dbaeae58d0a2055cba4e4a82cde495b7 for the same issue, but elsewhere
@@ -1128,6 +1133,8 @@ class CalendarEvent(models.Model):
                         deadline = pytz.utc.localize(deadline)
                         deadline = deadline.astimezone(pytz.timezone(user_tz))
                     activity_values['date_deadline'] = deadline.date()
+                    # also protect against loops in case of ill-managed timezones
+                    event = event.with_context(calendar_event_meeting_update=True)
                 if 'user_id' in fields:
                     activity_values['user_id'] = event.user_id.id
                 if activity_values.keys():

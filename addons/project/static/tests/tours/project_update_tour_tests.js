@@ -83,7 +83,7 @@ registry.category("web_tour.tours").add('project_update_tour', {
     trigger: ".o_kanban_group:nth-child(2) .o_kanban_header",
     run: "hover && click .o_kanban_group:nth-child(2) .o_kanban_header .dropdown-toggle",
 }, {
-    trigger: ".dropdown-item.o_column_edit",
+    trigger: ".dropdown-item.o_group_edit",
     run: "click",
 }, {
     trigger: ".modal .o_field_widget[name=fold] input",
@@ -104,6 +104,9 @@ registry.category("web_tour.tours").add('project_update_tour', {
 }, {
     trigger: ".o_control_panel_navigation button i.fa-sliders",
     content: 'Open embedded actions',
+    run: "click",
+}, {
+    trigger: "span.o-dropdown-item:contains('Top Menu')",
     run: "click",
 }, {
     trigger: ".o_embedded_actions button i.fa-sliders",

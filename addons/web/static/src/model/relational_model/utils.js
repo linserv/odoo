@@ -70,6 +70,9 @@ export function addFieldDependencies(activeFields, fields, fieldDependencies = [
             patchActiveFields(activeFields[field.name], makeActiveField(field));
         } else {
             activeFields[field.name] = makeActiveField(field);
+            if (["one2many", "many2many"].includes(field.type)) {
+                activeFields[field.name].related = { activeFields: {}, fields: {} };
+            }
         }
         if (!fields[field.name]) {
             const newField = omit(field, [
@@ -523,6 +526,9 @@ export function parseServerValue(field, value) {
                 ? value.map((property) => {
                       if (property.value !== undefined) {
                           property.value = parseServerValue(property, property.value ?? false);
+                      }
+                      if (property.default !== undefined) {
+                          property.default = parseServerValue(property, property.default ?? false);
                       }
                       return property;
                   })

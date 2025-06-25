@@ -148,9 +148,6 @@ class TestSaEdiCommon(AccountEdiTestCommon):
             <xpath expr="(//*[local-name()='Contact']/*[local-name()='ID'])[2]" position="replace">
                 <ID>___ignore___</ID>
             </xpath>
-            <xpath expr="(//*[local-name()='OrderReference']/*[local-name()='ID'])[1]" position="replace">
-                <ID>___ignore___</ID>
-            </xpath>
             <xpath expr="(//*[local-name()='InvoiceDocumentReference']/*[local-name()='ID'])[1]" position="replace">
                 <ID>___ignore___</ID>
             </xpath>
@@ -176,9 +173,6 @@ class TestSaEdiCommon(AccountEdiTestCommon):
                     <ID>___ignore___</ID>
                 </xpath>
                 <xpath expr="(//*[local-name()='Contact']/*[local-name()='ID'])[2]" position="replace">
-                    <ID>___ignore___</ID>
-                </xpath>
-                <xpath expr="(//*[local-name()='OrderReference']/*[local-name()='ID'])[1]" position="replace">
                     <ID>___ignore___</ID>
                 </xpath>
                 <xpath expr="(//*[local-name()='InvoiceDocumentReference']/*[local-name()='ID'])[1]" position="replace">
@@ -207,12 +201,13 @@ class TestSaEdiCommon(AccountEdiTestCommon):
             'invoice_date': kwargs['date'],
             'invoice_date_due': kwargs['date_due'],
             'currency_id': self.company.currency_id.id,
-            'invoice_line_ids': [Command.create({
-                'product_id': kwargs['product_id'].id,
-                'price_unit': kwargs['price'],
-                'quantity': kwargs.get('quantity', 1.0),
-                'tax_ids': [Command.set(self.tax_15.ids)],
-            }),
+            'invoice_line_ids': kwargs.get('invoice_line_ids') or [
+                Command.create({
+                    'product_id': kwargs['product_id'].id,
+                    'price_unit': kwargs['price'],
+                    'quantity': kwargs.get('quantity', 1.0),
+                    'tax_ids': [Command.set(self.tax_15.ids)],
+                }),
             ],
         }
         move = self.env['account.move'].create(vals)
@@ -226,7 +221,7 @@ class TestSaEdiCommon(AccountEdiTestCommon):
 
         debit_note_wizard = self.env['account.debit.note'].with_context(
             {'active_ids': [invoice.id], 'active_model': 'account.move', 'default_copy_lines': True}).create({
-                'reason': 'Totes forgot'})
+                'l10n_sa_reason': 'BR-KSA-17-reason-3'})
         res = debit_note_wizard.create_debit()
         debit_note = self.env['account.move'].browse(res['res_id'])
         debit_note.l10n_sa_confirmation_datetime = datetime.now()
@@ -236,7 +231,7 @@ class TestSaEdiCommon(AccountEdiTestCommon):
     def _create_credit_note(self, **kwargs):
         move = self._create_invoice(**kwargs)
         move_reversal = self.env['account.move.reversal'].with_context(active_model="account.move", active_ids=move.ids).create({
-            'reason': 'no reason',
+            'l10n_sa_reason': 'BR-KSA-17-reason-4',
             'journal_id': move.journal_id.id,
         })
         reversal = move_reversal.reverse_moves()

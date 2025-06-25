@@ -661,31 +661,25 @@ class SaleOrder(models.Model):
                 total += (line.price_subtotal * 100)/(100-line.discount) if line.discount != 100 else (line.price_unit * line.product_uom_qty)
             order.amount_undiscounted = total
 
-    @api.depends('client_order_ref', 'date_order', 'origin', 'partner_id')
+    @api.depends('client_order_ref', 'origin', 'partner_id')
     def _compute_duplicated_order_ids(self):
-        order_to_duplicate_orders = self._fetch_duplicate_orders()
-        for order in self:
+        draft_orders = self.filtered(lambda o: o.state == 'draft')
+        order_to_duplicate_orders = draft_orders._fetch_duplicate_orders()
+        for order in draft_orders:
             order.duplicated_order_ids = [Command.set(order_to_duplicate_orders.get(order.id, []))]
+        (self - draft_orders).duplicated_order_ids = False
 
     def _fetch_duplicate_orders(self):
-        """ Fectch duplicated orders.
+        """ Fetch duplicated orders.
 
-        :return: Dictionary mapping order to it's related duplicated orders.
+        :return: Dictionary mapping order to its related duplicated orders.
         :rtype: dict
         """
         orders = self.filtered(lambda order: order.id and order.client_order_ref)
         if not orders:
             return {}
 
-        used_fields = (
-            'company_id',
-            'partner_id',
-            'client_order_ref',
-            'origin',
-            'date_order',
-            'state',
-        )
-        self.env['sale.order'].flush_model(used_fields)
+        self.env['sale.order'].flush_model(['company_id', 'partner_id', 'client_order_ref', 'origin', 'state'])
 
         result = self.env.execute_query(SQL("""
             SELECT
@@ -697,11 +691,9 @@ class SaleOrder(models.Model):
                  AND sale_order.id != duplicate_order.id
                  AND duplicate_order.state != 'cancel'
                  AND sale_order.partner_id = duplicate_order.partner_id
-                 AND sale_order.date_order = duplicate_order.date_order
-                 AND sale_order.client_order_ref = duplicate_order.client_order_ref
                  AND (
-                    sale_order.origin = duplicate_order.origin
-                    OR (sale_order.origin IS NULL AND duplicate_order.origin IS NULL)
+                    sale_order.origin = duplicate_order.name
+                    OR sale_order.client_order_ref = duplicate_order.client_order_ref
                 )
              WHERE sale_order.id IN %(orders)s
              GROUP BY sale_order.id
@@ -1160,7 +1152,7 @@ class SaleOrder(models.Model):
             and not line.product_id
             for line in self.order_line
         ):
-            return _("A line on these orders missing a product, you cannot confirm it.")
+            return _("Some order lines are missing a product, you need to correct them before going further.")
 
         return False
 
@@ -1763,32 +1755,28 @@ class SaleOrder(models.Model):
         return self.order_line.filtered(show_line)
 
     def _get_default_payment_link_values(self):
+        """ Override of `payment` to compute the default values of the payment link wizard. """
         self.ensure_one()
-        amount_max = self.amount_total - self.amount_paid
 
-        # Always default to the minimum value needed to confirm the order:
-        # - order is not confirmed yet
-        # - can be confirmed online
-        # - we have still not paid enough for confirmation.
         prepayment_amount = self._get_prepayment_required_amount()
-        if (
-            self.state in ('draft', 'sent')
-            and self.require_payment
-            and self.currency_id.compare_amounts(prepayment_amount, self.amount_paid) > 0
-        ):
-            amount = prepayment_amount - self.amount_paid
-        else:
-            amount = amount_max
-
+        remaining_balance = self.amount_total - self.amount_paid
+        if self.state in ('draft', 'sent') and self.require_payment:
+            suggested_amount = prepayment_amount  # Suggest the amount needed to confirm the quote.
+        else:  # The order is confirmed or doesn't require payment.
+            suggested_amount = remaining_balance
         return {
             'currency_id': self.currency_id.id,
             'partner_id': self.partner_invoice_id.id,
-            'amount': amount,
-            'amount_max': amount_max,
+            'amount': suggested_amount,
+            'amount_max': remaining_balance,
             'amount_paid': self.amount_paid,
+            'prepayment_amount': prepayment_amount,
         }
 
     # EDI #
+
+    def _get_edi_builders(self):
+        return []
 
     def create_document_from_attachment(self, attachment_ids):
         """ Create the sale orders from given attachment_ids and redirect newly create order view.
@@ -2017,16 +2005,17 @@ class SaleOrder(models.Model):
         }
 
     def _get_prepayment_required_amount(self):
-        """ Return the minimum amount needed to confirm automatically the quotation.
+        """ Return the minimum amount needed to automatically confirm the quotation.
 
         Note: self.ensure_one()
 
-        :return: The minimum amount needed to confirm automatically the quotation.
+        :return: The minimum amount needed to automatically confirm the quotation.
         :rtype: float
         """
         self.ensure_one()
-        if self.prepayment_percent == 1.0 or not self.require_payment:
-            return self.amount_total
+
+        if not self.require_payment:
+            return 0
         else:
             return self.currency_id.round(self.amount_total * self.prepayment_percent)
 

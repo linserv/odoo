@@ -79,6 +79,12 @@ class Im_LivechatChannel(models.Model):
     channel_ids = fields.One2many('discuss.channel', 'livechat_channel_id', 'Sessions')
     chatbot_script_count = fields.Integer(string='Number of Chatbot', compute='_compute_chatbot_script_count')
     rule_ids = fields.One2many('im_livechat.channel.rule', 'channel_id', 'Rules')
+    ongoing_session_count = fields.Integer(
+        "Number of Ongoing Sessions", compute="_compute_ongoing_sessions_count"
+    )
+    remaining_session_capacity = fields.Integer(
+        "Remaining Session Capacity", compute="_compute_remaining_session_capacity"
+    )
 
     _max_sessions_mode_greater_than_zero = models.Constraint(
         "CHECK(max_sessions > 0)", "Concurrent session number should be greater than zero."
@@ -88,9 +94,39 @@ class Im_LivechatChannel(models.Model):
         for channel in self:
             channel.are_you_inside = self.env.user in channel.user_ids
 
+    @api.depends("channel_ids.livechat_end_dt")
+    def _compute_ongoing_sessions_count(self):
+        count_by_channel = self.env["discuss.channel"]._read_group(
+            [
+                ("channel_type", "=", "livechat"),
+                ("livechat_end_dt", "=", False),
+                ("livechat_channel_id", "in", self.ids),
+            ],
+            ["livechat_channel_id"],
+            ["__count"],
+        )
+        for channel in self:
+            channel.ongoing_session_count = count_by_channel.get(channel, 0)
+
+    @api.depends(
+        "block_assignment_during_call",
+        "max_sessions",
+        "user_ids.livechat_is_in_call",
+        "user_ids.livechat_ongoing_session_count",
+    )
+    def _compute_remaining_session_capacity(self):
+        for channel in self:
+            total_capacity = channel.max_sessions * len(channel.user_ids)
+            capacity = total_capacity - sum(channel.user_ids.mapped("livechat_ongoing_session_count"))
+            if channel.block_assignment_during_call:
+                users_in_call = channel.user_ids.filtered(lambda u: u.livechat_is_in_call)
+                for user in users_in_call:
+                    capacity -= channel.max_sessions - user.livechat_ongoing_session_count
+            channel.remaining_session_capacity = max(capacity, 0)
+
     @api.depends(
         "user_ids.channel_ids.last_interest_dt",
-        "user_ids.channel_ids.livechat_active",
+        "user_ids.channel_ids.livechat_end_dt",
         "user_ids.channel_ids.livechat_channel_id",
         "user_ids.channel_ids.livechat_operator_id",
         "user_ids.channel_member_ids",
@@ -128,7 +164,7 @@ class Im_LivechatChannel(models.Model):
                 for (partner, livechat_channels, count) in self.env["discuss.channel"]._read_group(
                     [
                         ("livechat_operator_id", "in", limited_users.partner_id.ids),
-                        ("livechat_active", "=", True),
+                        ("livechat_end_dt", "=", False),
                         ("last_interest_dt", ">=", fields.Datetime.now() - timedelta(minutes=15)),
                     ],
                     groupby=["livechat_operator_id", "livechat_channel_id"],
@@ -282,11 +318,12 @@ class Im_LivechatChannel(models.Model):
 
         return {
             'channel_member_ids': members_to_add,
+            "last_interest_dt": last_interest_dt,
             "livechat_lang_id": self.env["res.lang"].search([("code", "=", lang)]).id,
-            'livechat_active': True,
             'livechat_operator_id': operator_partner_id,
             'livechat_channel_id': self.id,
             "livechat_failure": "no_answer" if user_operator else "no_failure",
+            "livechat_status": "in_progress",
             'chatbot_current_step_id': chatbot_script._get_welcome_steps()[-1].id if chatbot_script else False,
             'anonymous_name': False if user_id else anonymous_name,
             'country_id': country_id,
@@ -381,7 +418,7 @@ class Im_LivechatChannel(models.Model):
             LEFT OUTER JOIN operator_rtc_session rtc ON rtc.partner_id = c.livechat_operator_id
             WHERE c.channel_type = 'livechat' AND c.create_date > ((now() at time zone 'UTC') - interval '24 hours')
             AND (
-                c.livechat_active IS TRUE
+                c.livechat_end_dt IS NULL
                 OR m.create_date > ((now() at time zone 'UTC') - interval '30 minutes')
             )
             AND c.livechat_operator_id in %s
@@ -410,7 +447,7 @@ class Im_LivechatChannel(models.Model):
                     [
                         ("livechat_member_type", "=", "agent"),
                         ("partner_id", "in", users.partner_id.ids),
-                        ("channel_id.livechat_active", "=", True),
+                        ("channel_id.livechat_end_dt", "=", False),
                         (
                             "create_date",
                             ">",

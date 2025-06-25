@@ -27,6 +27,7 @@ registry.category("web_tour.tours").add('google_analytics_view_item', {
         content: "select Colored T-Shirt",
         trigger: '.oe_product_cart a:contains("Colored T-Shirt")',
         run: "click",
+        expectUnloadPage: true,
     },
     {
         content: "wait until `_getCombinationInfo()` rpc is done",
@@ -39,7 +40,7 @@ registry.category("web_tour.tours").add('google_analytics_view_item', {
     {
         content: 'select another variant',
         trigger:
-            "ul.js_add_cart_variants ul.list-inline li:has(label.active) + li:has(label) input:not(:visible)",
+            "ul.js_add_cart_variants ul.d-flex li:has(label.active) + li:has(label) input:not(:visible)",
         run: "click",
     },
     {
@@ -53,7 +54,7 @@ registry.category("web_tour.tours").add('google_analytics_view_item', {
 registry.category("web_tour.tours").add('google_analytics_add_to_cart', {
     url: '/shop?search=Basic Shirt',
     steps: () => [
-    ...tourUtils.addToCart({productName: 'Basic Shirt', search: false}),
+    ...tourUtils.addToCart({productName: 'Basic Shirt', search: false, expectUnloadPage: true}),
     {
         trigger: "body[cart-event-id]",
     },

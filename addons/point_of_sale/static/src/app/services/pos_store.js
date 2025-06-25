@@ -190,16 +190,10 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     get defaultPage() {
-        let openOrder = this.models["pos.order"].find((o) => o.state === "draft");
-
-        if (!openOrder) {
-            openOrder = this.addNewOrder();
-        }
-
         return {
             page: "ProductScreen",
             params: {
-                orderUuid: openOrder?.uuid,
+                orderUuid: this.openOrder.uuid,
             },
         };
     }
@@ -1241,6 +1235,9 @@ export class PosStore extends WithLazyGetterTrap {
             return this.addNewOrder();
         }
     }
+    get openOrder() {
+        return this.models["pos.order"].find((o) => o.state === "draft") || this.addNewOrder();
+    }
     getEmptyOrder() {
         const orders = this.models["pos.order"].filter(
             (order) => !order.finalized && order.isEmpty()
@@ -1733,7 +1730,7 @@ export class PosStore extends WithLazyGetterTrap {
             tracking_number: order.tracking_number,
             preset_name: order.preset_id?.name || "",
             employee_name: order.employee_id?.name || order.user_id?.name,
-            internal_note: order.internal_note,
+            internal_note: this.getStrNotes(order.internal_note),
             general_customer_note: order.general_customer_note,
             changes: {
                 title: "",
@@ -1814,7 +1811,7 @@ export class PosStore extends WithLazyGetterTrap {
             }
 
             if (orderChange.internal_note || orderChange.general_customer_note) {
-                orderData.changes = {};
+                orderData.changes = { title: "", data: [] };
                 const result = await this.printOrderChanges(orderData, printer);
                 if (!result.successful) {
                     unsuccedPrints.push(printer.config.name);
@@ -1856,6 +1853,9 @@ export class PosStore extends WithLazyGetterTrap {
             const product = this.models["product.product"].get(change["product_id"]);
             const categoryIds = product.parentPosCategIds;
 
+            if (change.isCombo) {
+                return true;
+            }
             for (const categoryId of categoryIds) {
                 if (categories.includes(categoryId)) {
                     return true;
@@ -2405,35 +2405,36 @@ export class PosStore extends WithLazyGetterTrap {
         if (!list || list.length === 0) {
             return [];
         }
-        const excludedProductIds = this.getExcludedProductIds();
 
-        list = list
-            .filter((product) => !excludedProductIds.includes(product.id) && product.canBeDisplayed)
-            .sort((a, b) => {
-                // Sort in the same order as what we receive (look _load_product_with_domain)
-                if (a.sequence !== b.sequence) {
-                    return a.sequence - b.sequence;
-                }
-                if (a.default_code !== b.default_code) {
-                    if (!b.default_code) {
-                        return -1;
-                    }
-                    if (!a.default_code) {
-                        return 1;
-                    }
-                    return a.default_code.localeCompare(b.default_code);
-                }
-                return a.name.localeCompare(b.name);
-            })
-            .slice(0, 100);
+        const filteredList = [];
+        const excludedProductIds = new Set(this.getExcludedProductIds());
+        const availableCateg = new Set(
+            (this.config.iface_available_categ_ids || []).map((c) => c.id)
+        );
 
-        if (this.areAllProductsSpecial(list)) {
+        for (const p of list) {
+            if (filteredList.length >= 100) {
+                break;
+            }
+
+            if (excludedProductIds.has(p.id) || !p.canBeDisplayed) {
+                continue;
+            }
+
+            if (availableCateg.size && !p.pos_categ_ids.some((c) => availableCateg.has(c.id))) {
+                continue;
+            }
+
+            filteredList.push(p);
+        }
+
+        if (this.areAllProductsSpecial(filteredList)) {
             return [];
         }
 
         return searchWord !== ""
-            ? list.sort((a, b) => b.is_favorite - a.is_favorite)
-            : list.sort((a, b) => {
+            ? filteredList.sort((a, b) => b.is_favorite - a.is_favorite)
+            : filteredList.sort((a, b) => {
                   if (b.is_favorite !== a.is_favorite) {
                       return b.is_favorite - a.is_favorite;
                   } else if (a.pos_sequence !== b.pos_sequence) {

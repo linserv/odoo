@@ -7,7 +7,7 @@ registerWebsitePreviewTour('category_page_and_products_snippet_edition', {
 }, () => [
     {
         content: "Navigate to category",
-        trigger: ':iframe .o_wsale_filmstip > li:contains("Test Category") > a',
+        trigger: ':iframe .o_wsale_filmstrip > li:contains("Test Category") > a',
         run: "click",
     },
     {
@@ -20,7 +20,7 @@ registerWebsitePreviewTour('category_page_and_products_snippet_edition', {
     },
     {
         content: "Drag and drop the Products snippet group inside the category area.",
-        trigger: ".o-website-builder_sidebar .o_snippet[name='Catalog'] .o_snippet_thumbnail:not(.o_we_ongoing_insertion)",
+        trigger: ".o_block_tab:not(.o_we_ongoing_insertion) .o_snippet[name='Catalog'] .o_snippet_thumbnail",
         run: "drag_and_drop :iframe #category_header",
     },
     {
@@ -54,8 +54,9 @@ registry.category("web_tour.tours").add('category_page_and_products_snippet_use'
     steps: () => [
     {
         content: "Navigate to category",
-        trigger: '.o_wsale_filmstip > li:contains("Test Category") > a',
+        trigger: '.o_wsale_filmstrip > li:contains("Test Category") > a',
         run: "click",
+        expectUnloadPage: true,
     },
     {
         content: "Check that the snippet displays the right products",

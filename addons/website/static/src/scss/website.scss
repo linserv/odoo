@@ -313,6 +313,10 @@ body {
     }
 }
 
+.o_navlink_no_background .navbar-light {
+    --NavLinkWithBackground-bg-color: transparent;
+}
+
 .navbar {
 
     .navbar-collapse {
@@ -396,8 +400,14 @@ body {
 .o_navlink_background {
     background: var(--NavLinkWithBackground-bg-color, rgba(var(--#{$variable-prefix}emphasis-color-rgb), .05));
 
-    &:hover {
+    &:hover, .o_navlink_trigger_hover:hover & {
         background: var(--NavLinkWithBackground-bg-color--hover, rgba(var(--#{$variable-prefix}emphasis-color-rgb), .1));
+    }
+}
+
+.o_navlink_background, .o_navlink_trigger_hover {
+    &:focus-visible {
+        --#{$prefix}btn-focus-box-shadow: #{$nav-link-focus-box-shadow};
     }
 }
 
@@ -1799,7 +1809,7 @@ header {
     .o_mega_nav {
         padding-left: $grid-gutter-width * .5;
         height: $o-mega-menu-nav-height;
-        background-color: inherit;
+        background-color: o-color('menu-custom') or o-color('menu');
     }
 
     // Div needed for selector specificity to apply mh
@@ -1865,6 +1875,17 @@ header {
         z-index: -1;
         pointer-events: none;
         background: rgba(0, 0, 0, .05);
+    }
+}
+
+// For the "hamburger" and "sidebar" header, we set the mega menu columns to
+// 100% width when the breakpoint is above lg, because the menu keeps its mobile
+// width when displayed on desktop.
+@if index(("sidebar", "hamburger"), o-website-value("header-template")) {
+    @include media-breakpoint-up(lg) {
+        .o_mega_menu [class*="col-"] {
+            width: 100%;
+        }
     }
 }
 

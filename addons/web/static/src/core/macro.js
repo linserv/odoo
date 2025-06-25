@@ -13,7 +13,6 @@ const macroSchema = {
                 action: { type: [Function, String], optional: true },
                 timeout: { type: Number, optional: true },
                 trigger: { type: [Function, String], optional: true },
-                value: { type: [String, Number], optional: true },
             },
             validate: (step) => step.action || step.trigger,
         },
@@ -135,17 +134,17 @@ export class Macro {
         }
         try {
             const currentStep = this.steps[this.currentIndex];
+            const timeoutDelay = currentStep.timeout || this.timeout || 10000;
             const executeStep = async () => {
                 const trigger = await waitForTrigger(currentStep.trigger);
                 await this.onStep(currentStep, trigger, this.currentIndex);
                 return await performAction(trigger, currentStep.action);
             };
             const launchTimer = async () => {
-                const timeout_delay = currentStep.timeout || this.timeout || 10000;
-                await delay(timeout_delay);
+                await delay(timeoutDelay);
                 throw new MacroError(
                     "Timeout",
-                    `TIMEOUT step failed to complete within ${timeout_delay} ms.`
+                    `TIMEOUT step failed to complete within ${timeoutDelay} ms.`
                 );
             };
             // If falsy action result, it means the action worked properly.

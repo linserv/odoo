@@ -557,6 +557,8 @@ class AccountMove(models.Model):
 
     @api.model
     def _l10n_it_edi_grouping_function_base_lines(self, base_line, tax_data):
+        if not tax_data:
+            return None
         tax = tax_data['tax']
         return {
             'tax_amount_field': -23.0 if tax.amount == -11.5 else tax.amount,
@@ -566,6 +568,8 @@ class AccountMove(models.Model):
 
     @api.model
     def _l10n_it_edi_grouping_function_tax_lines(self, base_line, tax_data):
+        if not tax_data:
+            return None
         tax = tax_data['tax']
 
         if tax._l10n_it_is_split_payment():
@@ -588,6 +592,8 @@ class AccountMove(models.Model):
 
     @api.model
     def _l10n_it_edi_grouping_function_total(self, base_line, tax_data):
+        if not tax_data:
+            return None
         skip = tax_data['is_reverse_charge'] or self._l10n_it_edi_is_neg_split_payment(tax_data)
         return not skip
 
@@ -679,7 +685,7 @@ class AccountMove(models.Model):
             importo_totale_documento += values['base_amount_currency']
             importo_totale_documento += values['tax_amount_currency']
 
-        company = self.company_id
+        company = self.company_id._l10n_it_get_edi_company()
         partner = self.commercial_partner_id
         sender = company
         buyer = partner if not is_self_invoice else company
@@ -830,6 +836,7 @@ class AccountMove(models.Model):
             'services_or_goods': services_or_goods,
             'goods_in_italy': services_or_goods == 'consu' and self._l10n_it_edi_goods_in_italy(),
             'professional_fees': self._l10n_it_edi_is_professional_fees(),
+            **({'debit_note': True} if self.debit_origin_id else {}),
         }
 
     def _l10n_it_edi_document_type_mapping(self):
@@ -840,7 +847,8 @@ class AccountMove(models.Model):
                      'self_invoice': False,
                      'simplified': False,
                      'downpayment': False,
-                     'professional_fees': False},
+                     'professional_fees': False,
+                     'debit_note': False},
             'TD02': {'move_types': ['out_invoice'],
                      'import_type': 'in_invoice',
                      'self_invoice': False,
@@ -860,7 +868,8 @@ class AccountMove(models.Model):
             'TD05': {'move_types': ['in_invoice', 'out_invoice'],
                      'import_type': 'in_invoice',
                      'self_invoice': False,
-                     'simplified': False},
+                     'simplified': False,
+                     'debit_note': True},
             'TD06': {'move_types': ['out_invoice'],
                      'import_type': 'in_invoice',
                      'self_invoice': False,

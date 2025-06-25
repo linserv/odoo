@@ -84,7 +84,7 @@
             <field name="name">hr.employee.form</field>
             <field name="model">hr.employee</field>
             <field name="arch" type="xml">
-                <form string="Employee" js_class="hr_employee_form">
+                <form string="Employee" js_class="hr_employee_form" duplicate="false">
                     <header groups="hr.group_hr_user">
                         <button string="Create User" name="action_create_user" type="object"
                                 class="btn btn-primary" invisible="user_id" groups="hr.group_hr_user"
@@ -188,7 +188,7 @@
                                         <field name="bank_account_id" context="{'default_partner_id': work_contact_id}"
                                                options="{'no_quick_create': True}" readonly="not id"/>
                                     </group>
-                                    <group string="Birth Information">
+                                    <group string="Birth Information" name="hr_birth_group">
                                         <field name="legal_name"/>
                                         <label for="birthday"/>
                                         <div class="o_row" name="div_km_home_work">
@@ -226,7 +226,7 @@
                                         <field name="ssnid"/>
                                         <field name="passport_id"/>
                                     </group>
-                                    <group string="Location">
+                                    <group string="Location" name="hr_location_group">
                                         <label for="private_street" string="Private Address"/>
                                         <div class="o_address_format">
                                             <field name="private_street" placeholder="Street..." class="o_address_street"/>
@@ -244,13 +244,13 @@
                                             <span><field name="distance_home_work_unit"/></span>
                                         </div>
                                     </group>
-                                    <group string="Family">
+                                    <group string="Family" name="hr_family_group">
                                         <field name="marital"/>
                                         <field name="spouse_complete_name" invisible="marital not in ['married', 'cohabitant']"/>
                                         <field name="spouse_birthdate" invisible="marital not in ['married', 'cohabitant']"/>
                                         <field name="children"/>
                                     </group>
-                                    <group string="Education">
+                                    <group string="Education" name="hr_education_group">
                                         <field name="certificate"/>
                                         <field name="study_field"/>
                                     </group>
@@ -368,7 +368,7 @@
             <field name="name">hr.employee.list</field>
             <field name="model">hr.employee</field>
             <field name="arch" type="xml">
-                <list string="Employees" expand="context.get('expand', False)" multi_edit="1" sample="1" js_class="hr_employee_list">
+                <list string="Employees" expand="context.get('expand', False)" multi_edit="1" duplicate="false" sample="1" js_class="hr_employee_list">
                     <header>
                         <button name="%(plan_wizard_action)d" string="Launch Plan" type="action" groups="hr.group_hr_user"/>
                     </header>
@@ -407,7 +407,7 @@
             <field name="name">hr.employee.list</field>
             <field name="model">hr.employee</field>
             <field name="arch" type="xml">
-                <list string="Employees" multi_edit="1" editable="bottom" sample="1" js_class="hr_employee_list">
+                <list string="Employees" multi_edit="1" editable="bottom" duplicate="false" sample="1" js_class="hr_employee_list">
                     <field name="name" readonly="1"/>
                     <field name="company_id" optional="hide"/>
                     <field name="department_id" optional="hide"/>
@@ -424,7 +424,7 @@
             <field name="model">hr.employee</field>
             <field name="priority">10</field>
             <field name="arch" type="xml">
-                <kanban class="o_hr_employee_kanban" sample="1">
+                <kanban class="o_hr_employee_kanban" sample="1" duplicate="false">
                     <field name="show_hr_icon_display"/>
                     <field name="image_128" />
                     <field name="company_id"/>

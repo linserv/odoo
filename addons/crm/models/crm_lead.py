@@ -414,7 +414,7 @@ class CrmLead(models.Model):
     @api.onchange('commercial_partner_id')
     def _onchange_commercial_partner_id(self):
         for lead in self:
-            if lead.partner_id and lead.commercial_partner_id != lead.partner_id.commercial_partner_id:
+            if lead.partner_id and lead.commercial_partner_id and lead.commercial_partner_id != lead.partner_id.commercial_partner_id:
                 # writing to partner will invalidate and recompute
                 # re-write the original value to keep user selection
                 commercial_partner = lead.commercial_partner_id
@@ -1339,13 +1339,6 @@ class CrmLead(models.Model):
             'create': False
         }
         return action
-
-    # Deprecated in 18.3 onwards
-    def action_snooze(self):
-        self.ensure_one()
-        my_next_activity = self.activity_ids.filtered(lambda activity: activity.user_id == self.env.user)[:1]
-        my_next_activity.action_snooze()
-        return True
 
     # ------------------------------------------------------------
     # VIEWS

@@ -192,8 +192,6 @@ class TestUiHtmlEditor(HttpCaseWithUserDemo):
 
 @odoo.tests.tagged('external', '-standard', '-at_install', 'post_install')
 class TestUiHtmlEditorWithExternal(HttpCaseWithUserDemo):
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_media_dialog_external_library(self):
         self.start_tour("/", 'website_media_dialog_external_library', login='admin')
 
@@ -439,8 +437,6 @@ class TestUi(HttpCaseWithWebsiteUser):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'conditional_visibility_4', login='admin')
         self.start_tour(self.env['website'].get_client_action_url('/'), 'conditional_visibility_5', login='admin')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_11_website_snippet_background_edition(self):
         self.env['ir.attachment'].create({
             'public': True,
@@ -483,8 +479,6 @@ class TestUi(HttpCaseWithWebsiteUser):
     def test_19_website_page_options(self):
         self.start_tour("/odoo", "website_page_options", login="admin")
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_20_snippet_editor_panel_options(self):
         self.start_tour('/@/', 'snippet_editor_panel_options', login='admin')
 
@@ -551,8 +545,6 @@ class TestUi(HttpCaseWithWebsiteUser):
         self.assertFalse(menu_root.action, 'The top menu should not have an action (or the test/tour will not test anything).')
         self.start_tour('/', 'website_backend_menus_redirect', login='admin')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_30_website_text_animations(self):
         self.start_tour("/", 'text_animations', login='admin')
 

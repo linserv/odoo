@@ -148,84 +148,78 @@ class AccountEdiCommon(models.AbstractModel):
                 error_msg = _("Tax '%(tax_name)s' is invalid: %(error_message)s", tax_name=tax.name, error_message=e.args[0])  # args[0] gives the error message
                 raise ValidationError(error_msg)
 
-    def _get_tax_unece_codes(self, customer, supplier, tax):
+    def _get_tax_category_code(self, customer, supplier, tax):
         """
+        Predict the tax category code of a tax applied on a given base line.
+        These are reasonable defaults, but may not always be correct. For a per-tax configuration of
+        tax category code, install the `account_edi_ubl_cii_tax_extension` module.
+
         Source: doc of Peppol (but the CEF norm is also used by factur-x, yet not detailed)
         https://docs.peppol.eu/poacc/billing/3.0/syntax/ubl-invoice/cac-TaxTotal/cac-TaxSubtotal/cac-TaxCategory/cbc-TaxExemptionReasonCode/
         https://docs.peppol.eu/poacc/billing/3.0/codelist/vatex/
         https://docs.peppol.eu/poacc/billing/3.0/codelist/UNCL5305/
-        :returns: {
-            tax_category_code: str,
-            tax_exemption_reason_code: str,
-            tax_exemption_reason: str,
-        }
         """
-
-        def create_dict(tax_category_code=None, tax_exemption_reason_code=None, tax_exemption_reason=None):
-            return {
-                'tax_category_code': tax_category_code,
-                'tax_exemption_reason_code': tax_exemption_reason_code,
-                'tax_exemption_reason': tax_exemption_reason,
-            }
-
         # add Norway, Iceland, Liechtenstein
         european_economic_area = self.env.ref('base.europe').country_ids.mapped('code') + ['NO', 'IS', 'LI']
+
+        if not tax:
+            return 'E'
 
         if customer.country_id.code == 'ES' and customer.zip:
             if customer.zip[:2] in ('35', '38'):  # Canary
                 # [BR-IG-10]-A VAT breakdown (BG-23) with VAT Category code (BT-118) "IGIC" shall not have a VAT
                 # exemption reason code (BT-121) or VAT exemption reason text (BT-120).
-                return create_dict(tax_category_code='L')
+                return 'L'
             if customer.zip[:2] in ('51', '52'):
-                return create_dict(tax_category_code='M')  # Ceuta & Mellila
+                return 'M'  # Ceuta & Mellila
 
         if supplier.country_id == customer.country_id:
             if not tax or tax.amount == 0:
                 # in theory, you should indicate the precise law article
-                return create_dict(tax_category_code='E', tax_exemption_reason=_('Articles 226 items 11 to 15 Directive 2006/112/EN'))
+                return 'E'
             else:
-                return create_dict(tax_category_code='S')  # standard VAT
+                return 'S'  # standard VAT
 
         if supplier.country_id.code in european_economic_area and supplier.vat:
             if tax.amount != 0:
                 # otherwise, the validator will complain because G and K code should be used with 0% tax
-                return create_dict(tax_category_code='S')
+                return 'S'
             if customer.country_id.code not in european_economic_area:
-                return create_dict(
-                    tax_category_code='G',
-                    tax_exemption_reason_code='VATEX-EU-G',
-                    tax_exemption_reason=_('Export outside the EU'),
-                )
+                return 'G'
             if customer.country_id.code in european_economic_area:
-                return create_dict(
-                    tax_category_code='K',
-                    tax_exemption_reason_code='VATEX-EU-IC',
-                    tax_exemption_reason=_('Intra-Community supply'),
-                )
+                return 'K'
 
         if tax.amount != 0:
-            return create_dict(tax_category_code='S')
+            return 'S'
         else:
-            return create_dict(tax_category_code='E', tax_exemption_reason=_('Articles 226 items 11 to 15 Directive 2006/112/EN'))
+            return 'E'
 
-    def _get_tax_category_list(self, customer, supplier, taxes):
-        """ Full list: https://unece.org/fileadmin/DAM/trade/untdid/d16b/tred/tred5305.htm
-        Subset: https://docs.peppol.eu/poacc/billing/3.0/codelist/UNCL5305/
+    def _get_tax_exemption_reason(self, customer, supplier, tax):
+        """ These are the default tax exemption reasons given for each tax category code.
+            For a per-tax configuration of tax exemption reasons, see the
+            `account_edi_ubl_cii_tax_extension` module.
 
-        :param taxes:   account.tax records.
-        :return:        A list of values to fill the TaxCategory foreach template.
+            Note: In Peppol, taxes should be grouped by tax category code but *not* by
+            exemption reason, see https://docs.peppol.eu/poacc/billing/3.0/bis/#_calculation_of_vat
         """
-        res = []
-        for tax in taxes:
-            tax_unece_codes = self._get_tax_unece_codes(customer, supplier, tax)
-            res.append({
-                'id': tax_unece_codes.get('tax_category_code'),
-                'percent': tax.amount if tax.amount_type == 'percent' else False,
-                'name': tax_unece_codes.get('tax_exemption_reason'),
-                'tax_scheme_vals': {'id': 'VAT'},
-                **tax_unece_codes,
-            })
-        return res
+        tax_category_code = self._get_tax_category_code(customer, supplier, tax)
+        tax_exemption_reason = tax_exemption_reason_code = None
+
+        if not tax:
+            tax_exemption_reason = _("Exempt from tax")
+        elif tax_category_code == 'E':
+            tax_exemption_reason = _('Articles 226 items 11 to 15 Directive 2006/112/EN')
+        elif tax_category_code == 'G':
+            tax_exemption_reason = _('Export outside the EU')
+            tax_exemption_reason_code = 'VATEX-EU-G'
+        elif tax_category_code == 'K':
+            tax_exemption_reason = _('Intra-Community supply')
+            tax_exemption_reason_code = 'VATEX-EU-IC'
+
+        return {
+            'tax_exemption_reason': tax_exemption_reason,
+            'tax_exemption_reason_code': tax_exemption_reason_code,
+        }
 
     # -------------------------------------------------------------------------
     # CONSTRAINTS
@@ -395,6 +389,9 @@ class AccountEdiCommon(models.AbstractModel):
             if vat:
                 partner.vat, _country_code = self.env['res.partner']._run_vat_checks(country, vat, validation='setnull')
             logs.append(_("Could not retrieve a partner corresponding to '%s'. A new partner was created.", name))
+        elif not partner and not logs:
+            logs.append(_("Could not retrieve partner with details: Name: %(name)s, Vat: %(vat)s, Phone: %(phone)s, Email: %(email)s",
+                  name=name, vat=vat, phone=phone, email=email))
         if not partner.country_id and not partner.street and not partner.street2 and not partner.city and not partner.zip and not partner.state_id:
             partner.write({
                 'country_id': country.id,
@@ -508,19 +505,17 @@ class AccountEdiCommon(models.AbstractModel):
             logs.append(_("A payment of %s was detected.", formatted_amount))
         return logs
 
-    def _import_invoice_lines(self, invoice, tree, xpath, qty_factor):
+    def _import_lines(self, record, tree, xpath, document_type=False, tax_type=False, qty_factor=1):
         logs = []
         lines_values = []
         for line_tree in tree.iterfind(xpath):
-            line_values = self.with_company(invoice.company_id)._retrieve_invoice_line_vals(line_tree, invoice.move_type, qty_factor)
-            line_values['tax_ids'], tax_logs = self._retrieve_taxes(
-                invoice, line_values, invoice.journal_id.type,
-            )
+            line_values = self.with_company(record.company_id)._retrieve_invoice_line_vals(line_tree, document_type, qty_factor)
+            line_values['tax_ids'], tax_logs = self._retrieve_taxes(record, line_values, tax_type)
             logs += tax_logs
             if not line_values['product_uom_id']:
                 line_values.pop('product_uom_id')  # if no uom, pop it so it's inferred from the product_id
             lines_values.append(line_values)
-            lines_values += self._retrieve_line_charges(invoice, line_values, line_values['tax_ids'])
+            lines_values += self._retrieve_line_charges(record, line_values, line_values['tax_ids'])
         return lines_values, logs
 
     def _retrieve_invoice_line_vals(self, tree, document_type=False, qty_factor=1):

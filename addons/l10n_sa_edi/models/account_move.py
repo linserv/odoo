@@ -19,6 +19,13 @@ class AccountMove(models.Model):
         string="ZATCA chain index", copy=False, readonly=True,
         help="Invoice index in chain, set if and only if an in-chain XML was submitted and did not error",
     )
+    l10n_sa_edi_chain_head_id = fields.Many2one(
+      'account.move',
+      string="ZATCA chain stopping move",
+      copy=False,
+      readonly=True,
+      help="Technical field to know if the chain has been stopped by a previous invoice",
+  )
 
     def _l10n_sa_is_simplified(self):
         """
@@ -65,12 +72,12 @@ class AccountMove(models.Model):
         company_name_length_encoding = len(field).to_bytes(length=int_length, byteorder='big')
         return company_name_tag_encoding + company_name_length_encoding + field
 
-    def _l10n_sa_check_refund_reason(self):
+    def _l10n_sa_check_billing_reference(self):
         """
-            Make sure credit/debit notes have a valid reason and reversal reference
+            Make sure credit/debit notes have a either a reveresed move or debited move or a customer reference
         """
         self.ensure_one()
-        return self.reversed_entry_id or self.ref
+        return self.debit_origin_id or self.reversed_entry_id or self.ref
 
     @api.model
     def _l10n_sa_get_qr_code(self, journal_id, unsigned_xml, certificate, signature, is_b2c=False):
@@ -258,11 +265,25 @@ class AccountMove(models.Model):
 
     def _get_l10n_sa_totals(self):
         self.ensure_one()
-        invoice_vals = self.env['account.edi.xml.ubl_21.zatca']._export_invoice_vals(self)
+        invoice_node = self.env['account.edi.xml.ubl_21.zatca']._get_invoice_node({'invoice': self})
         return {
-            'total_amount': invoice_vals['vals']['monetary_total_vals']['tax_inclusive_amount'],
-            'total_tax': invoice_vals['vals']['tax_total_vals'][-1]['tax_amount'],
+            'total_amount': invoice_node['cac:LegalMonetaryTotal']['cbc:TaxInclusiveAmount']['_text'],
+            'total_tax': invoice_node['cac:TaxTotal'][-1]['cbc:TaxAmount']['_text'],
         }
+
+    def _retry_edi_documents_error(self):
+        """
+            Hook to reset the chain head error prior to retrying the submission
+        """
+        self.filtered(lambda m: m.country_code == 'SA').write({'l10n_sa_edi_chain_head_id': False})
+        return super()._retry_edi_documents_error()
+
+    def action_show_chain_head(self):
+        """
+            Action to show the chain head of the invoice
+        """
+        self.ensure_one()
+        return self.l10n_sa_edi_chain_head_id._get_records_action(name=_("Chain Head"))
 
 
 class AccountMoveLine(models.Model):

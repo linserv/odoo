@@ -320,8 +320,9 @@ class AccountEdiFormat(models.Model):
         # to the taxpayer for clarifications
         chain_head = invoice.journal_id._l10n_sa_get_last_posted_invoice()
         if chain_head and chain_head != invoice and not chain_head._l10n_sa_is_in_chain():
+            invoice.l10n_sa_edi_chain_head_id = chain_head
             return {invoice: {
-                'error': f"ZATCA: Cannot post invoice while chain head ({chain_head.name}) has not been posted",
+                'error': _("Error: This invoice is blocked due to %s. Please check it.", chain_head.name),
                 'blocking_level': 'error',
                 'response': None,
             }}
@@ -365,6 +366,7 @@ class AccountEdiFormat(models.Model):
 
         # Save the submitted/returned invoice XML content once the submission has been completed successfully
         invoice._l10n_sa_log_results(cleared_xml.encode(), response_data)
+        invoice.journal_id._l10n_sa_reset_chain_head_error()
         return {
             invoice: {
                 'success': True,
@@ -443,9 +445,11 @@ class AccountEdiFormat(models.Model):
             )
         if invoice.invoice_date > fields.Date.context_today(self.with_context(tz='Asia/Riyadh')):
             errors.append(_("- Please, make sure the invoice date is set to either the same as or before Today."))
-        if invoice.move_type in ('in_refund', 'out_refund') and not invoice._l10n_sa_check_refund_reason():
-            errors.append(
-                _("- Please, make sure either the Reversed Entry or the Reversal Reason are specified when confirming a Credit/Debit note"))
+
+        if invoice.l10n_sa_show_reason and not invoice.l10n_sa_reason:
+            errors.append(_("- Please make sure the 'ZATCA Reason' for the issuance of the Credit/Debit Note is specified."))
+        if invoice.l10n_sa_show_reason and not invoice._l10n_sa_check_billing_reference():
+            errors.append(_("- Please make sure the 'Customer Reference' contains the sequential number of the original invoice(s) that the Credit/Debit Note is related to."))
         return errors
 
     def _needs_web_services(self):

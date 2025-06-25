@@ -68,7 +68,6 @@ async function get_session(request) {
             fetchChannelInfoState: "fetched",
             id: -1,
             isLoaded: true,
-            livechat_active: true,
             livechat_operator_id: mailDataHelpers.Store.one(
                 ResPartner.browse(channelVals.livechat_operator_id),
                 makeKwArgs({ fields: ["avatar_128", "user_livechat_username"] })
@@ -161,6 +160,25 @@ registerRoute("/im_livechat/emoji_bundle", get_emoji_bundle);
 async function get_emoji_bundle(request) {
     await loadBundle("web.assets_emoji");
     return new Response();
+}
+
+registerRoute("/im_livechat/session/update_note", session_update_note);
+/** @type {RouteCallback} */
+async function session_update_note(request) {
+    /** @type {import("mock_models").DiscussChannel} */
+    const DiscussChannel = this.env["discuss.channel"];
+    const { channel_id, note } = await parseRequestParams(request);
+    if (this.env.user.share) {
+        return false;
+    }
+    const [channel] = DiscussChannel.search_read([["id", "=", channel_id]]);
+    if (!channel) {
+        return false;
+    }
+    DiscussChannel.write([channel_id], {
+        livechat_note: note,
+    });
+    return true;
 }
 
 patch(mailDataHelpers, {

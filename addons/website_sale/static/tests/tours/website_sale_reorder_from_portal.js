@@ -10,9 +10,15 @@ registry.category("web_tour.tours").add('website_sale_reorder_from_portal', {
             content: 'Select first order',
             trigger: '.o_portal_my_doc_table a:first',
             run: "click",
+            expectUnloadPage: true,
         },
         clickOnElement('Reorder Again', '.o_wsale_reorder_button'),
-        clickOnElement('Confirm', '.o_wsale_reorder_confirm'),
+        {
+            content: "Confirm",
+            trigger: ".o_wsale_reorder_confirm",
+            run: "click",
+            expectUnloadPage: true,
+        },
         assertCartContains({productName: 'Reorder Product 1'}),
         assertCartContains({productName: 'Reorder Product 2'}),
         {
@@ -26,16 +32,27 @@ registry.category("web_tour.tours").add('website_sale_reorder_from_portal', {
             trigger: "body",
             run() {
                 window.location = "/my/orders";
-            }
+            },
+            expectUnloadPage: true,
         },
         {
             content: 'Select first order',
             trigger: '.o_portal_my_doc_table a:first',
             run: "click",
+            expectUnloadPage: true,
         },
         clickOnElement('Reorder Again', '.o_wsale_reorder_button'),
-        clickOnElement('Confirm', '.o_wsale_reorder_confirm'),
-        clickOnElement('No', 'button:contains(No)'),
+        {
+            content: "Confirm",
+            trigger: ".modal .o_wsale_reorder_confirm",
+            run: "click",
+        },
+        {
+            content: "No",
+            trigger: ".modal button:contains(No)",
+            run: "click",
+            expectUnloadPage: true,
+        },
         assertCartContains({productName: 'Reorder Product 1'}),
         assertCartContains({productName: 'Reorder Product 2'}),
         {
@@ -49,16 +66,27 @@ registry.category("web_tour.tours").add('website_sale_reorder_from_portal', {
             trigger: "body",
             run() {
                 window.location = "/my/orders";
-            }
+            },
+            expectUnloadPage: true,
         },
         {
             content: 'Select first order',
             trigger: '.o_portal_my_doc_table a:first',
             run: "click",
+            expectUnloadPage: true,
         },
         clickOnElement('Reorder Again', '.o_wsale_reorder_button'),
-        clickOnElement('Confirm', '.o_wsale_reorder_confirm'),
-        clickOnElement('Yes', 'button:contains(Yes)'),
+        {
+            content: "Confirm",
+            trigger: ".o_wsale_reorder_confirm",
+            run: "click",
+        },
+        {
+            content: "Yes",
+            trigger: ".modal button:contains(Yes)",
+            run: "click",
+            expectUnloadPage: true,
+        },
         assertCartContains({productName: 'Reorder Product 1'}),
         assertCartContains({productName: 'Reorder Product 2'}),
         {
@@ -70,14 +98,12 @@ registry.category("web_tour.tours").add('website_sale_reorder_from_portal', {
             content: "Deleting All products from cart",
             trigger: 'div.js_cart_lines',
             run: async () => {
-                $('a.js_delete_product:first').click();
-                await new Promise((r) => setTimeout(r, 1000));
-                $('a.js_delete_product:first').click();
-                await new Promise((r) => setTimeout(r, 1000));
-                $('a.js_delete_product:first').click();
-                await new Promise((r) => setTimeout(r, 1000));
-                $('a.js_delete_product:first').click();
-                await new Promise((r) => setTimeout(r, 1000));
+
+                // Keep clicking delete buttons until none are left
+                while ($('a.js_delete_product').length > 0) {
+                    $('a.js_delete_product:first').click();
+                    await new Promise(resolve => setTimeout(resolve, 1200)); 
+                }
             }
         },
         {
@@ -85,15 +111,22 @@ registry.category("web_tour.tours").add('website_sale_reorder_from_portal', {
             trigger: 'body',
             run: () => {
                 window.location = '/my/orders';
-            }
+            },
+            expectUnloadPage: true,
         },
         {
             content: "Select first order",
             trigger: '.o_portal_my_doc_table a:first',
             run: "click",
+            expectUnloadPage: true,
         },
         clickOnElement('Reorder Again', '.o_wsale_reorder_button'),
-        clickOnElement('Confirm', '.o_wsale_reorder_confirm'),
+        {
+            content: "Confirm",
+            trigger: ".o_wsale_reorder_confirm",
+            run: "click",
+            expectUnloadPage: true,
+        },
         assertCartContains({productName: 'Reorder Product 1'}),
         {
             content: "Check that quantity is 1",

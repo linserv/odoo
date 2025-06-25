@@ -67,7 +67,7 @@ describe("DateTimeInput (date)", () => {
                         [26, 27, 28, 29, 30, 31, 1],
                         [2, 3, 4, 5, 6, 7, 8],
                     ],
-                    daysOfWeek: ["#", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+                    daysOfWeek: ["", "S", "M", "T", "W", "T", "F", "S"],
                     weekNumbers: [1, 2, 3, 4, 5, 6],
                 },
             ],
@@ -99,7 +99,6 @@ describe("DateTimeInput (date)", () => {
         await contains(getPickerCell("8")).click();
 
         expect(".o_datetime_input").toHaveValue("08/02/1997");
-        // the onchange is called twice (when clicking and whe the popover is closing)
         expect.verifySteps(["datetime-changed"]);
     });
 
@@ -281,7 +280,7 @@ describe("DateTimeInput (datetime)", () => {
                         [26, 27, 28, 29, 30, 31, 1],
                         [2, 3, 4, 5, 6, 7, 8],
                     ],
-                    daysOfWeek: ["#", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+                    daysOfWeek: ["", "S", "M", "T", "W", "T", "F", "S"],
                     weekNumbers: [1, 2, 3, 4, 5, 6],
                 },
             ],

@@ -68,19 +68,41 @@ class DiscussChannelMember(models.Model):
         for member in self:
             member.agent_expertise_ids = member.livechat_member_history_ids.agent_expertise_ids
 
-    def _create_or_update_history(self, values_by_member=None):
-        if not values_by_member:
-            values_by_member = {}
-        member_without_history = self.filtered(lambda m: not m.livechat_member_history_ids)
-        self.env["im_livechat.channel.member.history"].create(
+    def _create_or_update_history(self, values_by_member):
+        members_without_history = self.filtered(lambda m: not m.livechat_member_history_ids)
+        history_domain = Domain.OR(
             [
-                {"member_id": member.id, **values_by_member.get(member, {})}
-                for member in member_without_history
+                [
+                    ("channel_id", "=", member.channel_id.id),
+                    ("partner_id", "=", member.partner_id.id)
+                    if member.partner_id
+                    else ("guest_id", "=", member.guest_id.id),
+                ]
+                for member in members_without_history
             ]
         )
-        for member in (self - member_without_history):
+        history_by_channel_persona = {}
+        for history in self.env["im_livechat.channel.member.history"].search_fetch(
+            history_domain, ["channel_id", "guest_id", "member_id", "partner_id"]
+        ):
+            persona = history.partner_id or history.guest_id
+            history_by_channel_persona[history.channel_id, persona] = history
+        to_create = members_without_history.filtered(
+            lambda m: (m.channel_id, m.partner_id or m.guest_id) not in history_by_channel_persona
+        )
+        self.env["im_livechat.channel.member.history"].create(
+            [{"member_id": member.id, **values_by_member[member]} for member in to_create]
+        )
+        for member in self - to_create:
+            persona = member.partner_id or member.guest_id
+            history = (
+                member.livechat_member_history_ids
+                or history_by_channel_persona[member.channel_id, persona]
+            )
+            if history.member_id != member:
+                values_by_member[member]["member_id"] = member.id
             if member in values_by_member:
-                member.livechat_member_history_ids.update(values_by_member[member])
+                history.write(values_by_member[member])
 
     def _inverse_livechat_member_type(self):
         # sudo - im_livechat.channel.member: creating/updating history following
@@ -114,10 +136,15 @@ class DiscussChannelMember(models.Model):
         ])
         sessions_to_be_unpinned = members.filtered(lambda m: m.message_unread_counter == 0)
         sessions_to_be_unpinned.write({'unpin_dt': fields.Datetime.now()})
-        sessions_to_be_unpinned.channel_id.livechat_active = False
+        sessions_to_be_unpinned.channel_id.livechat_end_dt = fields.Datetime.now()
         for member in sessions_to_be_unpinned:
             member._bus_send_store(
-                member.channel_id, {"close_chat_window": True, "is_pinned": False, "livechat_active": False}
+                member.channel_id,
+                {
+                    "close_chat_window": True,
+                    "is_pinned": False,
+                    "livechat_end_dt": fields.Datetime.now(),
+                },
             )
 
     def _to_store_defaults(self):

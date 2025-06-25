@@ -100,8 +100,6 @@ class TestSnippets(HttpCase):
     def test_10_parallax(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'test_parallax', login='admin')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_11_snippet_popup_display_on_click(self):
         # To make the tour reliable we need to wait a field using data-fill-with
         # to be patched, the step however relies on the company field being
@@ -126,8 +124,6 @@ class TestSnippets(HttpCase):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'snippet_popup_and_scrollbar', login='admin')
         self.start_tour(self.env['website'].get_client_action_url('/'), 'snippet_popup_and_animations', login='admin', timeout=90)
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_drag_and_drop_on_non_editable(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'test_drag_and_drop_on_non_editable', login='admin')
 

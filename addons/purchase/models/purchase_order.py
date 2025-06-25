@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
+import logging
+
 from collections import defaultdict
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -8,16 +9,18 @@ from ast import literal_eval
 from markupsafe import escape, Markup
 from werkzeug.urls import url_encode
 
-from odoo import api, Command, fields, models, _
-from odoo.osv import expression
+from odoo import api, fields, models, _
+from odoo.fields import Command, Domain
 from odoo.tools import format_amount, format_date, formatLang, groupby, OrderedSet, SQL
 from odoo.tools.float_utils import float_is_zero, float_repr
 from odoo.exceptions import UserError, ValidationError
 
+_logger = logging.getLogger(__name__)
+
 
 class PurchaseOrder(models.Model):
     _name = 'purchase.order'
-    _inherit = ['portal.mixin', 'product.catalog.mixin', 'mail.thread', 'mail.activity.mixin']
+    _inherit = ['portal.mixin', 'product.catalog.mixin', 'mail.thread', 'mail.activity.mixin', 'account.document.import.mixin']
     _description = "Purchase Order"
     _rec_names_search = ['name', 'partner_ref']
     _order = 'priority desc, id desc'
@@ -108,7 +111,7 @@ class PurchaseOrder(models.Model):
     acknowledged = fields.Boolean(
         'Acknowledged', copy=False, tracking=True,
         help="It indicates that the vendor has acknowledged the receipt of the purchase order.")
-    notes = fields.Html('Terms and Conditions')
+    note = fields.Html('Terms and Conditions')
 
     partner_bill_count = fields.Integer(related='partner_id.supplier_invoice_count')
     invoice_count = fields.Integer(compute="_compute_invoice", string='Bill Count', copy=False, default=0, store=True)
@@ -157,6 +160,7 @@ class PurchaseOrder(models.Model):
         store=True,
         precompute=True,
     )
+    duplicated_order_ids = fields.Many2many(comodel_name='purchase.order', compute='_compute_duplicated_order_ids')
 
     receipt_reminder_email = fields.Boolean('Receipt Reminder Email', compute='_compute_receipt_reminder_email', store=True, readonly=False)
     reminder_date_before_receipt = fields.Integer('Days Before Receipt', compute='_compute_receipt_reminder_email', store=True, readonly=False)
@@ -289,6 +293,58 @@ class PurchaseOrder(models.Model):
                     warnings.add(line.product_id.display_name + ' - ' + product_msg)
             order.purchase_warning_text = '\n'.join(warnings)
 
+    @api.depends('partner_ref', 'origin', 'partner_id')
+    def _compute_duplicated_order_ids(self):
+        """Compute duplicated purchase orders based on key fields."""
+        draft_orders = self.filtered(lambda o: o.state == 'draft')
+        order_to_duplicate_orders = draft_orders._fetch_duplicate_orders()
+        for order in draft_orders:
+            duplicate_ids = order_to_duplicate_orders.get(order.id, [])
+            order.duplicated_order_ids = [Command.set(duplicate_ids)]
+        (self - draft_orders).duplicated_order_ids = False
+
+    def _fetch_duplicate_orders(self):
+        """ Fetch duplicated orders.
+
+        :return: Dictionary mapping order to its related duplicated orders.
+        :rtype: dict
+        """
+        orders = self.filtered(lambda order: order.id and order.partner_ref)
+        if not orders:
+            return {}
+
+        self.env['purchase.order'].flush_model(['company_id', 'partner_id', 'partner_ref', 'origin', 'state'])
+
+        result = self.env.execute_query(SQL("""
+            SELECT
+                po.id AS order_id,
+                array_agg(duplicate_po.id) AS duplicate_ids
+            FROM purchase_order po
+            JOIN purchase_order AS duplicate_po
+                ON po.company_id = duplicate_po.company_id
+                AND po.id != duplicate_po.id
+                AND duplicate_po.state != 'cancel'
+                AND po.partner_id = duplicate_po.partner_id
+                AND (
+                    po.origin = duplicate_po.name
+                    OR po.partner_ref = duplicate_po.partner_ref
+                )
+            WHERE po.id IN %(orders)s
+            GROUP BY po.id
+        """, orders=tuple(orders.ids)))
+
+        return {order_id: set(duplicate_ids) for order_id, duplicate_ids in result}
+
+    def action_open_business_doc(self):
+        self.ensure_one()
+        return {
+            'name': _("Order"),
+            'type': 'ir.actions.act_window',
+            'res_model': 'purchase.order',
+            'res_id': self.id,
+            'views': [(False, 'form')],
+        }
+
     @api.onchange('date_planned')
     def onchange_date_planned(self):
         if self.date_planned:
@@ -297,8 +353,15 @@ class PurchaseOrder(models.Model):
     def _search_is_late(self, operator, value):
         if operator != 'in':
             return NotImplemented
-        purchase_domain = [('state', '=', 'purchase'), ('date_planned', '<=', fields.Datetime.now())]
-        return [('order_line', 'any', [('order_id', 'any', purchase_domain), ('qty_received', '<', SQL('product_qty'))])]
+        purchase_domain = Domain('state', '=', 'purchase') & Domain('date_planned', '<=', fields.Datetime.now())
+        line_domain = Domain('order_id', 'any', purchase_domain) & Domain.custom(
+            to_sql=lambda model, alias, query: SQL(
+                "%s < %s",
+                model._field_to_sql(alias, 'qty_received', query),
+                model._field_to_sql(alias, 'product_qty', query),
+            )
+        )
+        return Domain('order_line', 'any', line_domain)
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -328,10 +391,7 @@ class PurchaseOrder(models.Model):
         new_pos = super().copy(default=default)
         for line in new_pos.order_line:
             if line.product_id:
-                seller = line.product_id._select_seller(
-                    partner_id=line.partner_id, quantity=line.product_qty,
-                    date=line.order_id.date_order and line.order_id.date_order.date(), uom_id=line.product_uom_id)
-                line.date_planned = line._get_date_planned(seller)
+                line.date_planned = line._get_date_planned(line.selected_seller_id)
         return new_pos
 
     def _must_delete_date_planned(self, field_name):
@@ -529,6 +589,9 @@ class PurchaseOrder(models.Model):
         for order in self:
             if order.state not in ['draft', 'sent']:
                 continue
+            error_msg = order._confirmation_error_message()
+            if error_msg:
+                raise UserError(error_msg)
             order.order_line._validate_analytic_distribution()
             order._add_supplier_to_product()
             # Deal with double validation process
@@ -551,6 +614,19 @@ class PurchaseOrder(models.Model):
         if self.lock_confirmed_po == 'lock':
             raise UserError(_("Unlocking the order is not allowed as 'Lock Confirmed Orders' is enabled."))
         self.locked = False
+
+    def _confirmation_error_message(self):
+        """ Return whether order can be confirmed or not if not then return error message. """
+        self.ensure_one()
+        if any(
+            not line.display_type
+            and not line.is_downpayment
+            and not line.product_id
+            for line in self.order_line
+        ):
+            return _("Some order lines are missing a product, you need to correct them before going further.")
+
+        return False
 
     def _prepare_supplier_info(self, partner, line, price, currency):
         # Prepare supplierinfo data when adding a product
@@ -582,14 +658,9 @@ class PurchaseOrder(models.Model):
                 supplierinfo = self._prepare_supplier_info(partner, line, price, line.currency_id)
                 # In case the order partner is a contact address, a new supplierinfo is created on
                 # the parent company. In this case, we keep the product name and code.
-                seller = line.product_id._select_seller(
-                    partner_id=line.partner_id,
-                    quantity=line.product_qty,
-                    date=line.order_id.date_order and line.order_id.date_order.date(),
-                    uom_id=line.product_uom_id)
-                if seller:
-                    supplierinfo['product_name'] = seller.product_name
-                    supplierinfo['product_code'] = seller.product_code
+                if line.selected_seller_id:
+                    supplierinfo['product_name'] = line.selected_seller_id.product_name
+                    supplierinfo['product_code'] = line.selected_seller_id.product_code
                     supplierinfo['product_uom_id'] = line.product_uom.id
                 vals = {
                     'seller_ids': [(0, 0, supplierinfo)],
@@ -816,7 +887,7 @@ class PurchaseOrder(models.Model):
 
         invoice_vals = {
             'move_type': move_type,
-            'narration': self.notes,
+            'narration': self.note,
             'currency_id': self.currency_id.id,
             'partner_id': partner_invoice.id,
             'fiscal_position_id': (self.fiscal_position_id or self.fiscal_position_id._get_fiscal_position(partner_invoice)).id,
@@ -1046,7 +1117,7 @@ class PurchaseOrder(models.Model):
         }
 
     def _get_product_catalog_domain(self):
-        return expression.AND([super()._get_product_catalog_domain(), [('purchase_ok', '=', True)]])
+        return Domain.AND([super()._get_product_catalog_domain(), [('purchase_ok', '=', True)]])
 
     def _get_product_catalog_order_data(self, products, **kwargs):
         res = super()._get_product_catalog_order_data(products, **kwargs)
@@ -1180,14 +1251,9 @@ class PurchaseOrder(models.Model):
                 'product_qty': quantity,
                 'sequence': ((self.order_line and self.order_line[-1].sequence + 1) or 10),  # put it at the end of the order
             })
-            seller = pol.product_id._select_seller(
-                partner_id=pol.partner_id,
-                quantity=pol.product_qty,
-                date=pol.order_id.date_order and pol.order_id.date_order.date() or fields.Date.context_today(pol),
-                uom_id=pol.product_uom_id)
-            if seller:
+            if pol.selected_seller_id:
                 # Fix the PO line's price on the seller's one.
-                pol.price_unit = seller.price_discounted
+                pol.price_unit = pol.selected_seller_id.price_discounted
         return pol.price_unit_discounted
 
     def _create_update_date_activity(self, updated_dates):
@@ -1229,5 +1295,24 @@ class PurchaseOrder(models.Model):
         self.ensure_one()
         return self.state == 'cancel'
 
+    # ------------------------------------------------------------
+    # EDI
+    # ------------------------------------------------------------
+
     def _get_edi_builders(self):
         return []
+
+    def create_document_from_attachment(self, attachment_ids):
+        """ Create the purchase orders from given attachment_ids
+        and redirect newly create order view.
+
+        :param list attachment_ids: List of attachments process.
+        :return: An action redirecting to related sale order view.
+        :rtype: dict
+        """
+        attachments = self.env['ir.attachment'].browse(attachment_ids)
+        if not attachments:
+            raise UserError(_("No attachment was provided"))
+
+        orders = self.with_context(default_partner_id=self.env.user.partner_id.id)._create_records_from_attachments(attachments)
+        return orders._get_records_action(name=_("Generated Orders"))

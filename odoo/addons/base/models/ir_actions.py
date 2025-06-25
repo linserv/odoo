@@ -9,7 +9,6 @@ from collections import defaultdict
 from functools import reduce
 from operator import getitem
 
-import requests
 from pytz import timezone
 
 from odoo import api, fields, models, tools
@@ -328,6 +327,7 @@ class IrActionsAct_Window(models.Model):
     search_view_id = fields.Many2one('ir.ui.view', string='Search View Ref.')
     embedded_action_ids = fields.One2many('ir.embedded.actions', compute="_compute_embedded_actions")
     filter = fields.Boolean()
+    cache = fields.Boolean(string="Data Caching", default=True, help="If enabled, this action will cache the related data used in list, Kanban and form views with the aim to increase the loading speed")
 
     def _compute_embedded_actions(self):
         embedded_actions = self.env["ir.embedded.actions"].search([('parent_action_id', 'in', self.ids)]).filtered(lambda x: x.is_visible)
@@ -376,7 +376,7 @@ class IrActionsAct_Window(models.Model):
 
     def _get_readable_fields(self):
         return super()._get_readable_fields() | {
-            "context", "mobile_view_mode", "domain", "filter", "group_ids", "limit",
+            "context", "cache", "mobile_view_mode", "domain", "filter", "group_ids", "limit",
             "res_id", "res_model", "search_view_id", "target", "view_id", "view_mode", "views", "embedded_action_ids",
             # this is used by frontend, with the document layout wizard before send and print
             "close_on_report_download",
@@ -951,6 +951,7 @@ class IrActionsServer(models.Model):
         json_values = json.dumps(vals, sort_keys=True, default=str)
         _logger.info("Webhook call to %s", url)
         _logger.debug("POST JSON data for webhook call: %s", json_values)
+        import requests  # noqa: PLC0415
         try:
             # 'send and forget' strategy, and avoid locking the user if the webhook
             # is slow or non-functional (we still allow for a 1s timeout so that
