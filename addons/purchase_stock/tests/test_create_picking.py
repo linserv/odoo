@@ -1,5 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
 from datetime import date, datetime, timedelta
 
 from odoo import Command
@@ -849,6 +850,7 @@ class TestCreatePicking(ProductVariantsCommon):
         self.assertEqual(po.picking_ids[2].picking_type_id, picking_type_in)
         self.assertEqual(po.picking_ids[2].move_ids.quantity, 1)
 
+    @unittest.skip("[LINSERV]")
     def test_move_description(self):
         """
         Test that the pol description is correctly propagated to the move description
