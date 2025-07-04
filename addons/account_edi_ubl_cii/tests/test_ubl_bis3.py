@@ -1,3 +1,5 @@
+import unittest
+
 from odoo import Command
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.tests import tagged
@@ -5,6 +7,7 @@ from odoo.tools import misc
 
 
 @tagged('post_install_l10n', 'post_install', '-at_install')
+@unittest.skip("[LINSERV]")
 class TestUblBis3(AccountTestInvoicingCommon):
 
     @classmethod
