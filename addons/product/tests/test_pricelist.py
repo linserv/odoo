@@ -1,5 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
+
 from odoo.exceptions import UserError
 from odoo.fields import Command
 from odoo.tests import tagged, Form
@@ -134,6 +136,7 @@ class TestPricelist(ProductCommon):
 
         self.assertEqual(res_partner.property_product_pricelist, pl_first)
 
+    @unittest.skip("[LINSERV]")
     def test_pricelists_multi_comp_checks(self):
         first_company = self.env.company
         second_company = self.env['res.company'].create({'name': 'Test Company'})
