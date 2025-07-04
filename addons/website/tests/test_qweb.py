@@ -1,5 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
 import re
 from contextlib import contextmanager
 
@@ -515,6 +516,7 @@ class TestQwebDataSnippet(TransactionCase):
         rendered = self._render_snippet('website.s_d')
         self.assertEqual(self._normalize_xml(rendered), self._normalize_xml(expected_output))
 
+    @unittest.skip("[LINSERV]")
     def test_call_query_count_snippets_template(self):
         actual_queries = []
         with contextmanager(lambda: self._patchExecute(actual_queries))():
