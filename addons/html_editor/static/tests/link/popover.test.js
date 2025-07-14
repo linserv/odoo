@@ -790,13 +790,14 @@ describe("link preview", () => {
         expect.verifySteps([]);
     });
     test("test external metadata cached correctly", async () => {
+        const title = "Open Source ERP and CRM | Odoo";
+        const description = "From ERP to CRM, eCommerce and CMS. Download Odoo or use it in the cloud. Grow Your Business.";
         onRpc("/html_editor/link_preview_external", () => {
             expect.step("/html_editor/link_preview_external");
             return {
-                og_description:
-                    "From ERP to CRM, eCommerce and CMS. Download Odoo or use it in the cloud. Grow Your Business.",
+                og_description: description,
                 og_image: "https://www.odoo.com/web/image/41207129-1abe7a15/homepage-seo.png",
-                og_title: "Open Source ERP and CRM | Odoo",
+                og_title: title,
                 og_type: "website",
                 og_site_name: "Odoo",
                 source_url: "http://odoo.com/",
@@ -809,7 +810,9 @@ describe("link preview", () => {
         await contains(".o-we-linkpopover input.o_we_href_input_link").fill("http://odoo.com/");
         await animationFrame();
         expect.verifySteps(["/html_editor/link_preview_external"]);
-        expect(".o_we_url_link").toHaveText("Open Source ERP and CRM | Odoo");
+        await waitFor(".o_we_description_link_preview");
+        expect(".o_we_description_link_preview").toHaveText(description);
+        expect(".o_we_url_link").toHaveText(title);
 
         const pNode = queryOne("p");
         setSelection({
@@ -951,6 +954,17 @@ describe("links with inline image", () => {
             `<p>ab<a href="#">c</a>]d<img src="${base64Img}">exxf<img src="${base64Img}">g[<a href="#">h</a>i</p>`
         );
     });
+    test("link elelment should be removed and popover should close when image is deleted from a image link ", async () => {
+        const { el } = await setupEditor(`<p>ab<a href="#"><img src="${base64Img}">[]</a>c</p>`);
+        await click("img");
+        await waitFor(".o-we-toolbar");
+        await waitFor(".o-we-linkpopover");
+
+        await click("button[name='image_delete']");
+        await waitForNone(".o-we-linkpopover", { timeout: 1500 });
+
+        expect(cleanLinkArtifacts(getContent(el))).toBe(`<p>ab[]c</p>`);
+    });
 });
 
 describe("readonly mode", () => {
@@ -1036,5 +1050,20 @@ describe("upload file via link popover", () => {
         );
         const favIcon = await waitFor(".o_we_preview_favicon span.o_image");
         expect(favIcon).toHaveAttribute("data-mimetype", "text/plain");
+    });
+
+    describe("hidden label field", () => {
+        test("label field should be hidden if <a> content is not text only", async () => {
+            await setupEditor(
+                `<p><a href="http://test.com/"><img src="${base64Img}">te[]xt</a></p>`
+            );
+            await waitFor(".o-we-linkpopover");
+            expect(".o-we-linkpopover").toHaveCount(1);
+            // open edit mode and check if label input is hidden
+            await click(".o_we_edit_link");
+            await waitFor(".o_we_href_input_link", { timeout: 1500 });
+            expect(".o_we_label_link").not.toBeVisible();
+            expect(".o_we_href_input_link").toHaveValue("http://test.com/");
+        });
     });
 });

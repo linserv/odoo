@@ -943,6 +943,15 @@ class AccountPayment(models.Model):
             })
         return vals_list
 
+    def _message_mail_after_hook(self, mails):
+        for payment, mail in zip(self, mails):
+            if (
+                not payment.message_main_attachment_id
+                and (attachments_to_link := mail.attachment_ids.filtered(lambda a: a.res_model == 'mail.message'))
+            ):
+                attachments_to_link.write({'res_model': self._name, 'res_id': payment.id})
+        return super()._message_mail_after_hook(mails)
+
     # -------------------------------------------------------------------------
     # SYNCHRONIZATION account.payment -> account.move
     # -------------------------------------------------------------------------
@@ -980,17 +989,19 @@ class AccountPayment(models.Model):
                 line_ids_commands.append((0, 0, extra_line_vals))
             # Update the existing journal items.
             # If dealing with multiple write-off lines, they are dropped and a new one is generated.
-            pay.move_id \
-                .with_context(skip_invoice_sync=True) \
-                .write({
-                'name': '/',  # Set the name to '/' to allow it to be changed
+            to_write = {
                 'date': pay.date,
                 'partner_id': pay.partner_id.id,
                 'currency_id': pay.currency_id.id,
                 'partner_bank_id': pay.partner_bank_id.id,
                 'line_ids': line_ids_commands,
-                'journal_id': pay.journal_id.id,
-            })
+            }
+            if 'journal_id' in changed_fields:
+                to_write.update({
+                    'name': '/',  # Set the name to '/' to allow it to be changed
+                    'journal_id': pay.journal_id.id
+                })
+            pay.move_id.with_context(skip_invoice_sync=True).write(to_write)
 
     @api.model
     def _get_trigger_fields_to_synchronize(self):

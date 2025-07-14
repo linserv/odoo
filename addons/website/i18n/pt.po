@@ -3,7 +3,6 @@
 # 	* website
 # 
 # Translators:
-# Maitê Dietze, 2025
 # Marta Marouço, 2025
 # cafonso <cafonso62@gmail.com>, 2025
 # Samuel Afonso, 2025
@@ -12,18 +11,19 @@
 # Vasco Rodrigues, 2025
 # NumerSpiral HBG, 2025
 # Manuela Silva <mmsrs@sky.com>, 2025
-# Rita Bastos, 2025
 # Peter Lawrence Romão <peterromao@yahoo.co.uk>, 2025
 # Wil Odoo, 2025
 # J Ponte, 2025
 # Arxi, 2025
+# Rita Bastos, 2025
+# Maitê Dietze, 2025
 # Daniel Reis, 2025
 # 
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-13 18:36+0000\n"
+"POT-Creation-Date: 2025-06-27 18:38+0000\n"
 "PO-Revision-Date: 2024-09-25 09:42+0000\n"
 "Last-Translator: Daniel Reis, 2025\n"
 "Language-Team: Portuguese (https://app.transifex.com/odoo/teams/41243/pt/)\n"
@@ -1120,6 +1120,8 @@ msgid ""
 "<i class=\"fa fa-phone fa-fw me-2\"/><span class=\"o_force_ltr\">+1 "
 "555-555-5556</span>"
 msgstr ""
+"<i class=\"fa fa-phone fa-fw me-2\"/><span class=\"o_force_ltr\">+1 "
+"555-555-5556</span>"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_comparisons
@@ -1715,6 +1717,16 @@ msgid ""
 msgstr ""
 
 #. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_numbers_charts
+msgid "<span class=\"s_progress_bar_text small d-none\">25%</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_numbers_charts
+msgid "<span class=\"s_progress_bar_text small d-none\">80%</span>"
+msgstr ""
+
+#. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_progress_bar
 msgid "<span class=\"s_progress_bar_text small\">80%</span>"
 msgstr ""
@@ -2290,7 +2302,7 @@ msgstr ""
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_media_list_options
 msgid "Add Media"
-msgstr ""
+msgstr "Adicionar mídia"
 
 #. module: website
 #. odoo-javascript
@@ -11658,7 +11670,7 @@ msgstr ""
 #: model:ir.model.fields,help:website.field_website_published_multi_mixin__website_id
 #: model:ir.model.fields,help:website.field_website_snippet_filter__website_id
 msgid "Restrict to a specific website."
-msgstr ""
+msgstr "Restringir a um website específico."
 
 #. module: website
 #: model:res.groups,name:website.group_website_restricted_editor
@@ -12951,7 +12963,7 @@ msgstr ""
 #. odoo-python
 #: code:addons/website/controllers/form.py:0
 msgid "Suspicious activity detected by Google reCaptcha."
-msgstr ""
+msgstr "Atividade suspeita detetada pelo Google reCaptcha."
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.snippet_options
@@ -12973,7 +12985,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/website/static/src/components/website_loader/website_loader.xml:0
 msgid "TIP"
-msgstr ""
+msgstr "DICA"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.snippets
@@ -13858,7 +13870,7 @@ msgstr ""
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.bs_debug_view
 msgid "Toggle"
-msgstr ""
+msgstr "Alternar"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.bs_debug_view

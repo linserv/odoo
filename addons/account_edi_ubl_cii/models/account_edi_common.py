@@ -207,6 +207,23 @@ class AccountEdiCommon(models.AbstractModel):
         else:
             return create_dict(tax_category_code='E', tax_exemption_reason=_('Articles 226 items 11 to 15 Directive 2006/112/EN'))
 
+    def _get_tax_category_code(self, customer, supplier, tax):
+        if not tax:
+            return 'E'
+        return self._get_tax_unece_codes(customer, supplier, tax).get('tax_category_code')
+
+    def _get_tax_exemption_reason(self, customer, supplier, tax):
+        if not tax:
+            return {
+                'tax_exemption_reason': _("Exempt from tax"),
+                'tax_exemption_reason_code': None,
+            }
+        res = self._get_tax_unece_codes(customer, supplier, tax)
+        return {
+            'tax_exemption_reason': res.get('tax_exemption_reason'),
+            'tax_exemption_reason_code': res.get('tax_exemption_reason_code'),
+        }
+
     def _get_tax_category_list(self, customer, supplier, taxes):
         """ Full list: https://unece.org/fileadmin/DAM/trade/untdid/d16b/tred/tred5305.htm
         Subset: https://docs.peppol.eu/poacc/billing/3.0/codelist/UNCL5305/
@@ -492,6 +509,41 @@ class AccountEdiCommon(models.AbstractModel):
             formatted_amount = formatLang(self.env, amount, currency_obj=invoice.currency_id)
             logs.append(_("A payment of %s was detected.", formatted_amount))
         return logs
+
+    def _import_rounding_amount(self, invoice, tree, xpath, qty_factor):
+        """
+        Add an invoice line representing the rounding amount given in the document.
+        - The amount is assumed to be in document currency
+        """
+        logs = []
+        line_vals = []
+
+        currency = invoice.currency_id
+        rounding_amount_currency = currency.round(qty_factor * float(tree.findtext(xpath) or 0))
+
+        if invoice.currency_id.is_zero(rounding_amount_currency):
+            return line_vals, logs
+
+        inverse_rate = abs(invoice.amount_total_signed) / invoice.amount_total if invoice.amount_total else 0
+        rounding_amount = invoice.company_id.currency_id.round(rounding_amount_currency * inverse_rate)
+
+        line_vals.append({
+            'display_type': 'product',
+            'name': _('Rounding'),
+            'quantity': 1,
+            'product_id': False,
+            'price_unit': rounding_amount_currency,
+            'amount_currency': invoice.direction_sign * rounding_amount_currency,
+            'balance': invoice.direction_sign * rounding_amount,
+            'company_id': invoice.company_id.id,
+            'move_id': invoice.id,
+            'tax_ids': False,
+        })
+
+        formatted_amount = formatLang(self.env, rounding_amount_currency, currency_obj=currency)
+        logs.append(_("A rounding amount of %s was detected.", formatted_amount))
+
+        return line_vals, logs
 
     def _import_invoice_lines(self, invoice, tree, xpath, qty_factor):
         logs = []

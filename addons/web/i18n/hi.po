@@ -35,7 +35,7 @@ msgstr ""
 #. odoo-python
 #: code:addons/web/controllers/export.py:0
 msgid "%(property_string)s (%(parent_name)s)"
-msgstr ""
+msgstr "%(property_string)s (%(parent_name)s)"
 
 #. module: web
 #. odoo-javascript
@@ -481,6 +481,8 @@ msgid ""
 "<span class=\"text-nowrap\">$ <span "
 "class=\"oe_currency_value\">11,750.00</span></span>"
 msgstr ""
+"<span class=\"text-nowrap\">$ <span "
+"class=\"oe_currency_value\">11,750.00</span></span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
@@ -526,12 +528,12 @@ msgstr ""
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span>$ <span class=\"oe_currency_value\">19,250.00</span></span>"
-msgstr ""
+msgstr "<span>$ <span class=\"oe_currency_value\">19,250.00</span></span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span>5.00</span>"
-msgstr ""
+msgstr "<span>5.00</span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
@@ -541,7 +543,7 @@ msgstr "<span>रकम</span>"
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span>Description</span>"
-msgstr ""
+msgstr "<span>विवरण</span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
@@ -558,17 +560,17 @@ msgstr ""
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span>Quantity</span>"
-msgstr ""
+msgstr "<span>क्वांटिटी</span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span>Taxes</span>"
-msgstr ""
+msgstr "<span>टैक्स</span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<span>Unit Price</span>"
-msgstr ""
+msgstr "<span>यूनिट की कीमत</span>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
@@ -621,7 +623,7 @@ msgstr ""
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<strong>Due Date</strong>"
-msgstr ""
+msgstr "<strong>आखिरी दिन</strong>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.address_layout
@@ -631,12 +633,12 @@ msgstr ""
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<strong>Invoice Date</strong>"
-msgstr ""
+msgstr "<strong>इनवॉइस की तारीख</strong>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
 msgid "<strong>Total</strong>"
-msgstr ""
+msgstr "<strong>कुल</strong>"
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
@@ -883,7 +885,7 @@ msgstr ""
 #: code:addons/web/static/src/views/list/list_renderer.js:0
 #: code:addons/web/static/src/views/list/list_renderer.xml:0
 msgid "Add a line"
-msgstr ""
+msgstr "लाइन जोड़ें"
 
 #. module: web
 #. odoo-javascript
@@ -936,7 +938,7 @@ msgstr ""
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.view_base_document_layout
 msgid "Address"
-msgstr ""
+msgstr "पता"
 
 #. module: web
 #. odoo-javascript
@@ -974,7 +976,7 @@ msgstr ""
 #: code:addons/web/static/src/search/search_panel/search_panel.xml:0
 #: code:addons/web/static/src/views/list/list_controller.xml:0
 msgid "All"
-msgstr ""
+msgstr "सभी "
 
 #. module: web
 #. odoo-javascript
@@ -1064,7 +1066,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/datetime/datetime_picker_popover.xml:0
 msgid "Apply"
-msgstr ""
+msgstr "अप्लाई करें"
 
 #. module: web
 #. odoo-javascript
@@ -1122,7 +1124,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/list/list_controller.js:0
 msgid "Are you sure you want to delete these records?"
-msgstr ""
+msgstr "क्या आप वाकई इन रिकॉर्ड को मिटाना चाहते हैं?"
 
 #. module: web
 #. odoo-javascript
@@ -1193,7 +1195,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/kanban/kanban_cover_image_dialog.xml:0
 msgid "Attachment"
-msgstr ""
+msgstr "अटैचमेंट"
 
 #. module: web
 #. odoo-javascript
@@ -1205,7 +1207,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/debug_items.js:0
 msgid "Attachments"
-msgstr ""
+msgstr "अटैचमेंट"
 
 #. module: web
 #. odoo-javascript
@@ -1332,7 +1334,7 @@ msgstr ""
 #. module: web
 #: model:ir.model,name:web.model_base
 msgid "Base"
-msgstr ""
+msgstr "बेस"
 
 #. module: web
 #. odoo-javascript
@@ -1745,7 +1747,7 @@ msgstr ""
 #: code:addons/web/static/src/webclient/burger_menu/mobile_switch_company_menu/mobile_switch_company_menu.xml:0
 #: model:ir.model,name:web.model_res_company
 msgid "Companies"
-msgstr ""
+msgstr "कंपनियां"
 
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__company_id
@@ -1760,7 +1762,7 @@ msgstr ""
 #. module: web
 #: model:ir.model,name:web.model_base_document_layout
 msgid "Company Document Layout"
-msgstr ""
+msgstr "कंपनी के दस्तावेज़ का लेआउ"
 
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__logo
@@ -1827,12 +1829,12 @@ msgstr ""
 #. module: web
 #: model:ir.model,name:web.model_res_config_settings
 msgid "Config Settings"
-msgstr ""
+msgstr "कॉन्फ़िगरेशन सेटिंग"
 
 #. module: web
 #: model:ir.actions.act_window,name:web.action_base_document_layout_configurator
 msgid "Configure your document layout"
-msgstr ""
+msgstr "अपने दस्तावेज़ के लेआउट को कॉन्फ़िगर करें"
 
 #. module: web
 #. odoo-javascript
@@ -2050,7 +2052,7 @@ msgstr "द्वारा निर्मित"
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__create_date
 msgid "Created on"
-msgstr ""
+msgstr "इस तारीख को बनाया गया"
 
 #. module: web
 #. odoo-javascript
@@ -2074,7 +2076,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/monetary/monetary_field.js:0
 msgid "Currency"
-msgstr ""
+msgstr "करेंसी"
 
 #. module: web
 #. odoo-javascript
@@ -2169,7 +2171,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
 msgid "Date Range"
-msgstr ""
+msgstr "तारीख का रेंज"
 
 #. module: web
 #. odoo-javascript
@@ -2188,7 +2190,7 @@ msgstr "दिन"
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
 msgid "Days"
-msgstr ""
+msgstr "दिन"
 
 #. module: web
 #. odoo-javascript
@@ -2231,7 +2233,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/webclient/debug/profiling/profiling_item.xml:0
 msgid "Default"
-msgstr ""
+msgstr "डिफ़ॉल्ट"
 
 #. module: web
 #. odoo-javascript
@@ -2391,7 +2393,7 @@ msgstr ""
 #: code:addons/web/static/src/webclient/settings_form_view/settings_confirmation_dialog.xml:0
 #: model_terms:ir.ui.view,arch_db:web.view_base_document_layout
 msgid "Discard"
-msgstr ""
+msgstr "खारिज करें"
 
 #. module: web
 #. odoo-javascript
@@ -2410,7 +2412,7 @@ msgstr ""
 #: code:addons/web/static/src/views/kanban/kanban_record_quick_create.js:0
 #: model:ir.model.fields,field_description:web.field_base_document_layout__display_name
 msgid "Display Name"
-msgstr ""
+msgstr "डिस्प्ले नाम"
 
 #. module: web
 #. odoo-javascript
@@ -2493,7 +2495,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/domain/domain_field.xml:0
 #: code:addons/web/static/src/views/fields/properties/property_definition.xml:0
 msgid "Domain"
-msgstr ""
+msgstr "डोमेन"
 
 #. module: web
 #. odoo-javascript
@@ -2842,7 +2844,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/tree_editor/tree_editor_value_editors.js:0
 msgid "False"
-msgstr ""
+msgstr "गलत"
 
 #. module: web
 #. odoo-javascript
@@ -2866,7 +2868,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/search/search_bar_menu/search_bar_menu.xml:0
 msgid "Favorites"
-msgstr ""
+msgstr "पसंदीदा"
 
 #. module: web
 #. odoo-javascript
@@ -2936,7 +2938,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/float/float_field.js:0
 msgid "Float"
-msgstr ""
+msgstr "फ्लोट"
 
 #. module: web
 #. odoo-javascript
@@ -2954,7 +2956,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/domain/domain_field.js:0
 msgid "Foldable"
-msgstr ""
+msgstr "फोल्डेबल"
 
 #. module: web
 #. odoo-javascript
@@ -3122,7 +3124,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/search/search_bar_menu/search_bar_menu.xml:0
 msgid "Group By"
-msgstr ""
+msgstr "इन्होंने ग्रुप किया"
 
 #. module: web
 #: model:ir.model,name:web.model_ir_http
@@ -3223,7 +3225,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #: model:ir.model.fields,field_description:web.field_base_document_layout__id
 msgid "ID"
-msgstr ""
+msgstr "आईडी"
 
 #. module: web
 #. odoo-javascript
@@ -3253,7 +3255,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/boolean_icon/boolean_icon_field.js:0
 msgid "Icon"
-msgstr ""
+msgstr "आइकॉन"
 
 #. module: web
 #. odoo-javascript
@@ -3390,14 +3392,14 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/integer/integer_field.js:0
 #: code:addons/web/static/src/views/fields/properties/property_definition.js:0
 msgid "Integer"
-msgstr ""
+msgstr "पूर्णांक"
 
 #. module: web
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/many2one/many2one_field.xml:0
 #: code:addons/web/static/src/views/fields/properties/property_value.xml:0
 msgid "Internal link"
-msgstr ""
+msgstr "इंटरनल लिंक"
 
 #. module: web
 #. odoo-javascript
@@ -3742,7 +3744,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/properties/property_definition.xml:0
 msgid "Label"
-msgstr ""
+msgstr "लेबल"
 
 #. module: web
 #. odoo-javascript
@@ -3780,12 +3782,12 @@ msgstr ""
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__write_uid
 msgid "Last Updated by"
-msgstr ""
+msgstr "इन्होंने आखिरी बार अपडेट किया"
 
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__write_date
 msgid "Last Updated on"
-msgstr ""
+msgstr "आखिरी बार अपडेट हुआ"
 
 #. module: web
 #. odoo-javascript
@@ -3935,7 +3937,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:web.login_layout
 #: model_terms:ir.ui.view,arch_db:web.view_base_document_layout
 msgid "Logo"
-msgstr ""
+msgstr "लोगो"
 
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__logo_primary_color
@@ -4085,7 +4087,7 @@ msgstr ""
 #: code:addons/web/static/src/webclient/burger_menu/burger_menu.xml:0
 #: model:ir.model,name:web.model_ir_ui_menu
 msgid "Menu"
-msgstr ""
+msgstr "मेन्यू"
 
 #. module: web
 #. odoo-javascript
@@ -4166,7 +4168,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/dynamic_widget/dynamic_model_field_selector_char.js:0
 #: code:addons/web/static/src/views/fields/properties/property_definition.xml:0
 msgid "Model"
-msgstr ""
+msgstr "मॉडल"
 
 #. module: web
 #. odoo-javascript
@@ -4201,7 +4203,7 @@ msgstr ""
 #. module: web
 #: model:ir.model,name:web.model_ir_model
 msgid "Models"
-msgstr ""
+msgstr "मॉडल"
 
 #. module: web
 #. odoo-javascript
@@ -4225,20 +4227,20 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/monetary/monetary_field.js:0
 msgid "Monetary"
-msgstr ""
+msgstr "मॉनेटरी"
 
 #. module: web
 #. odoo-javascript
 #: code:addons/web/static/src/search/utils/dates.js:0
 #: code:addons/web/static/src/views/calendar/calendar_controller.js:0
 msgid "Month"
-msgstr ""
+msgstr "महीना"
 
 #. module: web
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
 msgid "Months"
-msgstr ""
+msgstr "महीने"
 
 #. module: web
 #. odoo-javascript
@@ -4524,7 +4526,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/no_content_helpers.xml:0
 msgid "No data to display"
-msgstr ""
+msgstr "दिखाने के लिए कोई डेटा मौजूद नहीं है"
 
 #. module: web
 #. odoo-javascript
@@ -4620,7 +4622,7 @@ msgstr ""
 #: code:addons/web/static/src/views/pivot/pivot_model.js:0
 #: code:addons/web/static/src/webclient/debug/profiling/profiling_item.xml:0
 msgid "None"
-msgstr ""
+msgstr "कोई नहीं"
 
 #. module: web
 #. odoo-python
@@ -4901,7 +4903,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/list/list_renderer.xml:0
 msgid "Open in form view"
-msgstr ""
+msgstr "फ़ॉर्म व्यू में खोलें"
 
 #. module: web
 #. odoo-javascript
@@ -4950,7 +4952,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/kanban/progress_bar_hook.js:0
 msgid "Other"
-msgstr ""
+msgstr "अन्य"
 
 #. module: web
 #. odoo-javascript
@@ -5042,7 +5044,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/percentage/percentage_field.js:0
 msgid "Percentage"
-msgstr ""
+msgstr "प्रतिशत"
 
 #. module: web
 #. odoo-javascript
@@ -5156,7 +5158,7 @@ msgstr ""
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__preview
 msgid "Preview"
-msgstr ""
+msgstr "प्रीव्यू"
 
 #. module: web
 #: model:ir.actions.report,name:web.action_report_externalpreview
@@ -5279,7 +5281,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/properties/properties_field.js:0
 msgid "Properties"
-msgstr ""
+msgstr "प्रॉपर्टीज़"
 
 #. module: web
 #. odoo-javascript
@@ -5333,7 +5335,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/search/utils/dates.js:0
 msgid "Quarter"
-msgstr ""
+msgstr "क्वार्टर"
 
 #. module: web
 #. odoo-javascript
@@ -5347,7 +5349,7 @@ msgstr ""
 #: code:addons/web/static/src/views/calendar/filter_panel/calendar_filter_panel.js:0
 #: code:addons/web/static/src/views/fields/relational_utils.js:0
 msgid "Quick search: %s"
-msgstr ""
+msgstr "क्विक सर्च: %s"
 
 #. module: web
 #: model:ir.model,name:web.model_ir_qweb_field_image
@@ -5406,7 +5408,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/debug/debug_menu_basic.js:0
 msgid "Record"
-msgstr ""
+msgstr "रिकॉर्ड करें"
 
 #. module: web
 #. odoo-javascript
@@ -5442,7 +5444,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/debug/debug_menu_basic.js:0
 msgid "Records"
-msgstr ""
+msgstr "रिकॉर्ड करें"
 
 #. module: web
 #. odoo-javascript
@@ -5460,7 +5462,7 @@ msgstr "संदर्भ"
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/domain/domain_field.xml:0
 msgid "Refresh"
-msgstr ""
+msgstr "रीफ्रेश करें"
 
 #. module: web
 #. odoo-javascript
@@ -5490,7 +5492,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/image/image_field.js:0
 msgid "Reload"
-msgstr ""
+msgstr "रीलोड करें"
 
 #. module: web
 #. odoo-javascript
@@ -5548,7 +5550,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/webclient/actions/action_service.js:0
 msgid "Report"
-msgstr ""
+msgstr "रिपोर्ट करें"
 
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__report_footer
@@ -5704,14 +5706,14 @@ msgstr "सहेज"
 #: code:addons/web/static/src/views/fields/relational_utils.xml:0
 #: code:addons/web/static/src/views/view_dialogs/form_view_dialog.xml:0
 msgid "Save & Close"
-msgstr ""
+msgstr "सेव करें और बंद करें"
 
 #. module: web
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/relational_utils.xml:0
 #: code:addons/web/static/src/views/view_dialogs/form_view_dialog.xml:0
 msgid "Save & New"
-msgstr ""
+msgstr "सेव और नया"
 
 #. module: web
 #. odoo-javascript
@@ -5825,7 +5827,7 @@ msgstr ""
 #: code:addons/web/static/src/views/calendar/filter_panel/calendar_filter_panel.js:0
 #: code:addons/web/static/src/views/fields/relational_utils.js:0
 msgid "Search: %s"
-msgstr ""
+msgstr "खोजें: %s"
 
 #. module: web
 #. odoo-javascript
@@ -6401,7 +6403,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:web.external_layout_striped
 #: model_terms:ir.ui.view,arch_db:web.external_layout_wave
 msgid "Tax ID"
-msgstr ""
+msgstr "टैक्स आईडी"
 
 #. module: web
 #. odoo-javascript
@@ -6442,6 +6444,9 @@ msgid ""
 "country format. You can use '/' to indicate that the partner is not subject "
 "to tax."
 msgstr ""
+"यह टैक्स पहचान नंबर हैय आप जो भी नंबर डालेंगे, उसकी जांच देश के नियमों के "
+"हिसाब से होगी. अगर कोई पार्टनर टैक्स नहीं देता, तो आप '/' का निशान लगा सकते "
+"हैं."
 
 #. module: web
 #. odoo-python
@@ -6692,7 +6697,7 @@ msgstr ""
 #: code:addons/web/static/src/views/calendar/calendar_controller.xml:0
 #: code:addons/web/static/src/views/fields/remaining_days/remaining_days_field.js:0
 msgid "Today"
-msgstr ""
+msgstr "आज"
 
 #. module: web
 #. odoo-javascript
@@ -6759,7 +6764,7 @@ msgstr ""
 #: code:addons/web/static/src/views/graph/graph_model.js:0
 #: code:addons/web/static/src/views/pivot/pivot_model.js:0
 msgid "Total"
-msgstr ""
+msgstr "कुल"
 
 #. module: web
 #. odoo-javascript
@@ -6789,7 +6794,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/tree_editor/tree_editor_value_editors.js:0
 msgid "True"
-msgstr ""
+msgstr "सही"
 
 #. module: web
 #. odoo-javascript
@@ -7173,7 +7178,7 @@ msgstr ""
 #: code:addons/web/static/src/views/list/list_renderer.xml:0
 #: model:ir.model,name:web.model_ir_ui_view
 msgid "View"
-msgstr ""
+msgstr "देखें"
 
 #. module: web
 #. odoo-javascript
@@ -7237,7 +7242,7 @@ msgstr ""
 #: code:addons/web/static/src/search/search_bar_menu/search_bar_menu.js:0
 #: code:addons/web/static/src/views/fields/domain/domain_field.xml:0
 msgid "Warning"
-msgstr ""
+msgstr "चेतावनी"
 
 #. module: web
 #. odoo-javascript
@@ -7249,7 +7254,7 @@ msgstr ""
 #. odoo-python
 #: code:addons/web/models/models.py:0
 msgid "Warnings"
-msgstr ""
+msgstr "चेतावनी"
 
 #. module: web
 #. odoo-javascript
@@ -7368,13 +7373,13 @@ msgstr ""
 #: code:addons/web/static/src/search/utils/dates.js:0
 #: code:addons/web/static/src/views/calendar/calendar_controller.js:0
 msgid "Year"
-msgstr ""
+msgstr "साल"
 
 #. module: web
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
 msgid "Years"
-msgstr ""
+msgstr "साल"
 
 #. module: web
 #. odoo-javascript
@@ -7740,7 +7745,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/tree_editor/tree_editor.xml:0
 msgid "all"
-msgstr ""
+msgstr "सभी"
 
 #. module: web
 #. odoo-javascript
@@ -12301,7 +12306,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 msgid "entry"
-msgstr ""
+msgstr "एंट्री"
 
 #. module: web
 #. odoo-javascript
@@ -13447,7 +13452,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 msgid "forever"
-msgstr ""
+msgstr "हमेशा"
 
 #. module: web
 #. odoo-javascript
@@ -18772,7 +18777,7 @@ msgstr ""
 #: code:addons/web/static/src/search/search_model.js:0
 #: code:addons/web/static/src/views/fields/dynamic_placeholder_popover.xml:0
 msgid "or"
-msgstr ""
+msgstr " "
 
 #. module: web
 #. odoo-javascript
@@ -19216,7 +19221,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 msgid "pause"
-msgstr ""
+msgstr "रोकें"
 
 #. module: web
 #. odoo-javascript

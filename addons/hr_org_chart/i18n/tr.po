@@ -83,7 +83,8 @@ msgstr "Çalışanlar"
 #: code:addons/hr_org_chart/static/src/fields/hr_org_chart.xml:0
 msgid "In order to get an organigram, set a manager and save the record."
 msgstr ""
-"Organizasyon şemasını alabilmek için bir yönetici belirleyin ve kaydedin."
+"Organizasyon şemasına erişmek için bir yönetici belirleyin ve kaydı "
+"kaydedin."
 
 #. module: hr_org_chart
 #. odoo-javascript
@@ -92,6 +93,8 @@ msgid ""
 "In the Organigram you will have a clear overview of the hierarchy of "
 "employees."
 msgstr ""
+"Organizasyon şemasında çalışanların hiyerarşisini net bir şekilde "
+"görebilirsiniz."
 
 #. module: hr_org_chart
 #: model:ir.model.fields,field_description:hr_org_chart.field_hr_employee__child_all_count
