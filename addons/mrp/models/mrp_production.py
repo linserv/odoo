@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import json
@@ -10,11 +9,11 @@ from ast import literal_eval
 from collections import defaultdict
 from dateutil.relativedelta import relativedelta
 
-from odoo import api, fields, models, _, Command, SUPERUSER_ID
+from odoo import api, fields, models, _
 from odoo.addons.web.controllers.utils import clean_action
 from odoo.exceptions import UserError, ValidationError
-from odoo.osv import expression
-from odoo.tools import float_compare, float_round, float_is_zero, format_datetime
+from odoo.fields import Command, Domain
+from odoo.tools import format_datetime
 from odoo.tools.misc import OrderedSet, format_date, groupby as tools_groupby, topological_sort
 
 from odoo.addons.stock.models.stock_move import PROCUREMENT_PRIORITIES
@@ -258,6 +257,7 @@ class MrpProduction(models.Model):
         help='Technical Field used to decide whether the button "Allocation" should be displayed.')
     allow_workorder_dependencies = fields.Boolean('Allow Work Order Dependencies')
     show_produce = fields.Boolean(compute='_compute_show_produce', help='Technical field to check if produce button can be shown')
+    show_generate_bom = fields.Boolean('Show Generate BOM', compute='_compute_show_generate_bom')
     show_produce_all = fields.Boolean(compute='_compute_show_produce', help='Technical field to check if produce all button can be shown')
     is_outdated_bom = fields.Boolean("Outdated BoM", help="The BoM has been updated since creation of the MO")
     is_delayed = fields.Boolean(compute='_compute_is_delayed', search='_search_is_delayed')
@@ -306,10 +306,10 @@ class MrpProduction(models.Model):
         ]
         picking_types = self.env['stock.picking.type'].search_read(domain, ['company_id'], load=False, limit=1)
         picking_type_by_company = {pt['company_id']: pt['id'] for pt in picking_types}
-        default_picking_type_id = self._context.get('default_picking_type_id')
+        default_picking_type_id = self.env.context.get('default_picking_type_id')
         default_picking_type = default_picking_type_id and self.env['stock.picking.type'].browse(default_picking_type_id)
         if not default_picking_type:
-            default_warehouse_id = self._context.get('force_warehouse_id')
+            default_warehouse_id = self.env.context.get('force_warehouse_id')
             default_picking_type = default_warehouse_id and self.env['stock.warehouse'].browse(default_warehouse_id).manu_type_id
         for mo in self:
             if default_picking_type and default_picking_type.company_id == mo.company_id:
@@ -405,7 +405,7 @@ class MrpProduction(models.Model):
             mo_by_company_id[mo.company_id.id] |= mo
 
         for company_id, productions in mo_by_company_id.items():
-            picking_type_id = self._context.get('default_picking_type_id')
+            picking_type_id = self.env.context.get('default_picking_type_id')
             picking_type = picking_type_id and self.env['stock.picking.type'].browse(picking_type_id)
             boms_by_product = self.env['mrp.bom'].with_context(active_test=True)._bom_find(productions.product_id, picking_type=picking_type, company_id=company_id, bom_type='normal')
             for production in productions:
@@ -728,7 +728,7 @@ class MrpProduction(models.Model):
 
     @api.model
     def _search_delay_alert_date(self, operator, value):
-        if operator in expression.NEGATIVE_TERM_OPERATORS:
+        if Domain.is_negative_operator(operator):
             return NotImplemented
         late_stock_moves = self.env['stock.move'].search([('delay_alert_date', operator, value)])
         return ['|', ('move_raw_ids', 'in', late_stock_moves.ids), ('move_finished_ids', 'in', late_stock_moves.ids)]
@@ -741,7 +741,7 @@ class MrpProduction(models.Model):
             days_delay = production.bom_id.produce_delay
             date_finished = production.date_start + relativedelta(days=days_delay)
             if production._should_postpone_date_finished(date_finished):
-                workorder_expected_duration = sum(self.workorder_ids.mapped('duration_expected'))
+                workorder_expected_duration = sum(production.workorder_ids.mapped('duration_expected'))
                 date_finished = date_finished + relativedelta(minutes=workorder_expected_duration or 60)
             production.date_finished = date_finished
 
@@ -802,6 +802,14 @@ class MrpProduction(models.Model):
                     Command.delete(move.id) for move in production.move_finished_ids if move.bom_line_id
                 ]
 
+    @api.depends('bom_id', 'product_id', 'move_raw_ids.product_id', 'workorder_ids')
+    def _compute_show_generate_bom(self):
+        for production in self:
+            production.show_generate_bom = not production.bom_id and production.product_id and (
+                (production.move_raw_ids and production.product_id not in production.move_raw_ids.product_id)
+                or (not production.move_raw_ids and production.workorder_ids)
+            )
+
     @api.depends('state', 'product_qty', 'qty_producing')
     def _compute_show_produce(self):
         for production in self:
@@ -834,7 +842,7 @@ class MrpProduction(models.Model):
         if operator != 'in':
             return NotImplemented
         dates = value
-        return expression.OR(
+        return Domain.OR(
             self.env['stock.picking'].date_category_to_domain('date_start', date)
             for date in dates
         )
@@ -856,19 +864,11 @@ class MrpProduction(models.Model):
     def _can_produce_serial_number(self, sn=None):
         self.ensure_one()
         sn = sn or self.lot_producing_id
-        if self.product_id.tracking == 'serial' and sn:
+        if self.product_id.tracking == 'serial' and sn and sn.id not in self.move_raw_ids.lot_ids.ids:
             message, dummy = self.env['stock.quant'].sudo()._check_serial_number(self.product_id, sn, self.company_id)
             if message:
                 return {'warning': {'title': _('Warning'), 'message': message}}
         return True
-
-    @api.onchange('product_id', 'move_raw_ids', 'never_product_template_attribute_value_ids')
-    def _onchange_product_id(self):
-        for move in self.move_raw_ids:
-            if self.product_id == move.product_id:
-                message = _("The component %s should not be the same as the product to produce.", self.product_id.display_name)
-                self.move_raw_ids = self.move_raw_ids - move
-                return {'warning': {'title': _('Warning'), 'message': message}}
 
     @api.constrains('move_finished_ids')
     def _check_byproducts(self):
@@ -1061,7 +1061,7 @@ class MrpProduction(models.Model):
             picking_form = self.env.ref('stock.view_picking_form', False)
             picking_form_view = [(picking_form and picking_form.id or False, 'form')]
             action['views'] = picking_form_view + [(state, view) for state, view in action.get('views', []) if view != 'form']
-        action['context'] = dict(self._context, default_origin=self.name)
+        action['context'] = dict(self.env.context, default_origin=self.name)
         return action
 
     def action_toggle_is_locked(self):
@@ -2210,6 +2210,8 @@ class MrpProduction(models.Model):
             elif mo_ids_always:
                 # we have to pass all the MOs that the nevers/no issue MOs are also passed to be "mark done" without a backorder
                 res = self.with_context(skip_backorder=True, mo_ids_to_backorder=mo_ids_always).button_mark_done()
+                if res is not True:
+                    res['context'] = dict(res.get('context', {}), marked_as_done=all(mo.state == 'done' for mo in self))
                 return res if self._should_return_records() else True
         return True
 
@@ -2249,7 +2251,7 @@ class MrpProduction(models.Model):
         self.ensure_one()
         action = self.env["ir.actions.actions"]._for_xml_id("stock.action_stock_scrap")
         action['domain'] = [('production_id', '=', self.id)]
-        action['context'] = dict(self._context, default_origin=self.name)
+        action['context'] = dict(self.env.context, default_origin=self.name)
         return action
 
     def action_view_reception_report(self):
@@ -2589,6 +2591,8 @@ class MrpProduction(models.Model):
             byproduct_values.append(move_byproduct_vals)
         self.move_finished_ids += self.env['stock.move'].create(byproduct_values)
 
+        if self.warehouse_id.manufacture_steps in ('pbm', 'pbm_sam'):
+            moves_to_unlink.product_uom_qty = 0
         moves_to_unlink._action_cancel()
         moves_to_unlink.unlink()
         workorders_to_unlink.unlink()
@@ -2611,7 +2615,8 @@ class MrpProduction(models.Model):
 
     def _check_sn_uniqueness(self):
         """ Alert the user if the serial number as already been consumed/produced """
-        if self.product_tracking == 'serial' and self.lot_producing_id:
+        self.ensure_one()
+        if self.product_tracking == 'serial' and self.lot_producing_id and self.lot_producing_id.id not in self.move_raw_ids.lot_ids.ids:
             if self._is_finished_sn_already_produced(self.lot_producing_id):
                 raise UserError(_('This serial number for product %s has already been produced', self.product_id.name))
 
@@ -2664,7 +2669,11 @@ class MrpProduction(models.Model):
             ('quantity', '=', 1),
             ('state', '=', 'done'),
             ('location_id.usage', '=', 'production'),
-            ('move_id.production_id', '=', False),
+            '|',
+                ('move_id.production_id', '=', False),
+                '&',
+                    ('move_id.production_id', '!=', False),
+                    ('move_id.production_id.product_id', '=', self.product_id.id),
         ], ['lot_id'], ['quantity:sum'])
         cancelled_qties = defaultdict(float, {lot.id: qty for lot, qty in cancelled_sml_groups})
 
@@ -2949,9 +2958,6 @@ class MrpProduction(models.Model):
 
         return self.env['product.product'].browse(product_id).standard_price
 
-    def _get_product_catalog_domain(self):
-        return expression.AND([super()._get_product_catalog_domain(), [('id', '!=', self.product_id.id)]])
-
     def _update_catalog_line_quantity(self, line, quantity, **kwargs):
         line.product_uom_qty = quantity
 
@@ -2969,7 +2975,7 @@ class MrpProduction(models.Model):
         for production in self:
             orderpoint = production.orderpoint_id
             origin_production = production.move_dest_ids.raw_material_production_id
-            if orderpoint and orderpoint.create_uid.id == SUPERUSER_ID and orderpoint.trigger == 'manual':
+            if orderpoint and orderpoint.create_uid.id == api.SUPERUSER_ID and orderpoint.trigger == 'manual':
                 production.message_post(
                     body=_('This production order has been created from Replenishment Report.'),
                     message_type='comment',

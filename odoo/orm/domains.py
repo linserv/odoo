@@ -78,6 +78,7 @@ _logger = logging.getLogger('odoo.domains')
 
 STANDARD_CONDITION_OPERATORS = frozenset([
     'any', 'not any',
+    'any!', 'not any!',
     'in', 'not in',
     '<', '>', '<=', '>=',
     'like', 'not like',
@@ -90,12 +91,13 @@ This should be supported in the framework at all levels.
 
 - `any` works for relational fields and `id` to check if a record matches
   the condition
-  - if value is SQL or Query, bypass record rules
-  - if auto_join is set on the field, bypass record rules
+  - if value is SQL or Query, see `any!`
+  - if auto_join is set on the field, see `any!`
   - if value is a Domain for a many2one (or `id`),
     _search with active_test=False
   - if value is a Domain for a x2many,
     _search on the comodel of the field (with its context)
+- `any!` works like `any` but bypass adding record rules on the comodel
 - `in` for equality checks where the given value is a collection of values
   - the collection is transformed into OrderedSet
   - False value indicates that the value is *not set*
@@ -121,6 +123,7 @@ details.
 
 NEGATIVE_CONDITION_OPERATORS = {
     'not any': 'any',
+    'not any!': 'any!',
     'not in': 'in',
     'not like': 'like',
     'not ilike': 'ilike',
@@ -135,6 +138,7 @@ NEGATIVE_CONDITION_OPERATORS = {
 _INVERSE_OPERATOR = {
     # from NEGATIVE_CONDITION_OPERATORS
     'not any': 'any',
+    'not any!': 'any!',
     'not in': 'in',
     'not like': 'like',
     'not ilike': 'ilike',
@@ -144,6 +148,7 @@ _INVERSE_OPERATOR = {
     '<>': '=',
     # positive to negative
     'any': 'not any',
+    'any!': 'not any!',
     'in': 'not in',
     'like': 'not like',
     'ilike': 'not ilike',
@@ -189,7 +194,7 @@ class Domain:
     __slots__ = ('_opt_level',)
     _opt_level: OptimizationLevel
 
-    def __new__(cls, *args):
+    def __new__(cls, *args, internal: bool = False):
         """Build a domain AST.
 
         ```
@@ -201,6 +206,10 @@ class Domain:
         If we have one argument, it is a `Domain`, or a list representation, or a bool.
         In case we have multiple ones, there must be 3 of them:
         a field (str), the operator (str) and a value for the condition.
+
+        By default, the special operators ``'any!'`` and ``'not any!'`` are
+        allowed in domain conditions (``Domain('a', 'any!', dom)``) but not in
+        domain lists (``Domain([('a', 'any!', dom)])``).
         """
         if len(args) > 1:
             if isinstance(args[0], str):
@@ -231,6 +240,13 @@ class Domain:
         try:
             for item in reversed(arg):
                 if isinstance(item, (tuple, list)) and len(item) == 3:
+                    if internal:
+                        # process subdomains when processing internal operators
+                        if item[1] in ('any', 'any!', 'not any', 'not any!') and isinstance(item[2], (list, tuple)):
+                            item = (item[0], item[1], Domain(item[2], internal=True))
+                    elif item[1] in ('any!', 'not any!'):
+                        # internal operators are not accepted
+                        raise ValueError(f"Domain() invalid item in domain: {item!r}")
                     stack.append(Domain(*item))
                 elif item == DomainAnd.OPERATOR:
                     stack.append(stack.pop() & stack.pop())
@@ -379,7 +395,7 @@ class Domain:
     def validate(self, model: BaseModel) -> None:
         """Validates that the current domain is correct or raises an exception"""
         # just execute the optimization code that goes through all the fields
-        self.optimize(model, full=True)
+        self._optimize(model, OptimizationLevel.FULL)
 
     def _as_predicate(self, records: M) -> Callable[[M], bool]:
         """Return a predicate function from the domain (bound to records).
@@ -390,58 +406,56 @@ class Domain:
         """
         raise NotImplementedError
 
-    def optimize(self, model: BaseModel, *, full: bool = False) -> Domain:
+    def optimize(self, model: BaseModel) -> Domain:
         """Perform optimizations of the node given a model.
 
         It is a pre-processing step to rewrite the domain into a logically
         equivalent domain that is a more canonical representation of the
         predicate. Multiple conditions can be merged together.
 
-        By default, ``full=False`` applies basic optimizations only. Those are
-        transaction-independent; they only depend on the model's fields
-        definitions. No model-specific override is used, and the resulting
-        domain may be reused in another transaction without semantic impact.
+        It applies basic optimizations only. Those are transaction-independent;
+        they only depend on the model's fields definitions. No model-specific
+        override is used, and the resulting domain may be reused in another
+        transaction without semantic impact.
         The model's fields are used to validate conditions and apply
         type-dependent optimizations. This optimization level may be useful to
         simplify a domain that is sent to the client-side, thereby reducing its
         payload/complexity.
+        """
+        return self._optimize(model, OptimizationLevel.BASIC)
 
-        With ``full=True``, basic and advanced optimizations are applied.
-        Additional optimizations may rely on model specific overrides
+    def optimize_full(self, model: BaseModel) -> Domain:
+        """Perform optimizations of the node given a model.
+
+        Basic and advanced optimizations are applied.
+        Advanced optimizations may rely on model specific overrides
         (search methods of fields, etc.) and the semantic equivalence is only
         guaranteed at the given point in a transaction. We resolve inherited
         and non-stored fields (using their search method) to transform the
         conditions.
         """
-        level = OptimizationLevel.FULL if full else OptimizationLevel.BASIC
-        if self._opt_level >= level:
-            return self
+        return self._optimize(model, OptimizationLevel.FULL)
 
-        domain = self
+    @typing.final
+    def _optimize(self, model: BaseModel, level: OptimizationLevel) -> Domain:
+        """Perform optimizations of the node given a model.
 
-        if domain._opt_level < OptimizationLevel.BASIC:
-            # determine a fixpoint for _optimize() for level BASIC
-            previous, count = None, 0
-            while domain != previous:
-                if (count := count + 1) > MAX_OPTIMIZE_ITERATIONS:
-                    raise RecursionError("Domain.optimize: too many loops")
-                previous, domain = domain, domain._optimize(model, False)
-
-        if full and domain._opt_level < OptimizationLevel.FULL:
-            # determine a fixpoint for _optimize() for level FULL
-            previous, count = None, 0
-            while domain != previous:
-                if (count := count + 1) > MAX_OPTIMIZE_ITERATIONS:
-                    raise RecursionError("Domain.optimize: too many loops")
-                previous, domain = domain, domain._optimize(model, True)
-
-        # set the optimization level if necessary (unlike DomainBool, for instance)
-        if domain._opt_level < level:
-            object.__setattr__(domain, '_opt_level', level)
+        Reach a fixed-point by applying the optimizations for the next level
+        on the node until we reach a stable node at the given level.
+        """
+        domain, previous, count = self, None, 0
+        while domain._opt_level < level:
+            if (count := count + 1) > MAX_OPTIMIZE_ITERATIONS:
+                raise RecursionError("Domain.optimize: too many loops")
+            next_level = OptimizationLevel(domain._opt_level + 1)
+            previous, domain = domain, domain._optimize_step(model, next_level)
+            # set the optimization level if necessary (unlike DomainBool, for instance)
+            if domain == previous and domain._opt_level < next_level:
+                object.__setattr__(domain, '_opt_level', next_level)  # noqa: PLC2801
         return domain
 
-    def _optimize(self, model: BaseModel, full: bool) -> Domain:
-        """Implementation of domain optimizations."""
+    def _optimize_step(self, model: BaseModel, level: OptimizationLevel) -> Domain:
+        """Implementation of domain for one level of optimizations."""
         return self
 
     def _to_sql(self, model: BaseModel, alias: str, query: Query) -> SQL:
@@ -532,8 +546,8 @@ class DomainNot(Domain):
     def map_conditions(self, function) -> Domain:
         return ~(self.child.map_conditions(function))
 
-    def _optimize(self, model: BaseModel, full: bool) -> Domain:
-        return self.child.optimize(model, full=full)._negate(model)
+    def _optimize_step(self, model: BaseModel, level: OptimizationLevel) -> Domain:
+        return self.child._optimize(model, level)._negate(model)
 
     def __eq__(self, other):
         return self is other or (isinstance(other, DomainNot) and self.child == other.child)
@@ -626,9 +640,9 @@ class DomainNary(Domain):
     def map_conditions(self, function) -> Domain:
         return self.apply(child.map_conditions(function) for child in self.children)
 
-    def _optimize(self, model: BaseModel, full: bool) -> Domain:
+    def _optimize_step(self, model: BaseModel, level: OptimizationLevel) -> Domain:
         # optimize children
-        children = self._flatten(child.optimize(model, full=full) for child in self.children)
+        children = self._flatten(child._optimize(model, level) for child in self.children)
         size = len(children)
         if size > 1:
             # sort children in order to ease their grouping by field and operator
@@ -806,7 +820,8 @@ class DomainCondition(Domain):
         elif isinstance(value, BaseModel):
             _logger.warning("The domain condition %r should not have a value which is a model", (self.field_expr, self.operator, self.value))
             value = value.ids
-        elif isinstance(value, (Domain, Query, SQL)) and operator not in ('any', 'not any', 'in', 'not in'):
+        elif isinstance(value, (Domain, Query, SQL)) and operator not in ('any', 'not any', 'any!', 'not any!', 'in', 'not in'):
+            # accept SQL object in the right part for simple operators
             # use case: compare 2 fields
             _logger.warning("The domain condition %r should use the 'any' or 'not any' operator.", (self.field_expr, self.operator, self.value))
         if value is not self.value:
@@ -887,7 +902,7 @@ class DomainCondition(Domain):
         object.__setattr__(self, '_field_instance', field)
         return field, property_name or ''
 
-    def _optimize(self, model: BaseModel, full: bool) -> Domain:
+    def _optimize_step(self, model: BaseModel, level: OptimizationLevel) -> Domain:
         """Optimization step.
 
         Apply some generic optimizations and then dispatch optimizations
@@ -900,60 +915,43 @@ class DomainCondition(Domain):
         - Run optimizations.
         - Check the output.
         """
+        assert level == self._opt_level + 1, f"Trying to skip optimization level after {self._opt_level}"
+
         # optimize path
         field, property_name = self.__get_field(model)
         if property_name and field.relational:
             sub_domain = DomainCondition(property_name, self.operator, self.value)
             return DomainCondition(field.name, 'any', sub_domain)
 
-        # optimizations based on operator
-        for opt in _OPTIMIZATIONS_BY_OPERATOR[self.operator]:
-            if opt.level == OptimizationLevel.BASIC:
-                domain = opt(self, model)
+        if level == OptimizationLevel.FULL:
+            # resolve inherited fields
+            # inherits implies both Field.delegate=True and Field.auto_join=True
+            # so no additional permissions will be added by the 'any' operator below
+            if field.inherited:
+                parent_fname = field.related.split('.')[0]
+                parent_domain = DomainCondition(self.field_expr, self.operator, self.value)
+                return DomainCondition(parent_fname, 'any', parent_domain)
+
+            # handle searchable fields
+            if field.search and field.name == self.field_expr:
+                domain = self._optimize_field_search_method(model).optimize(model)
+                # the domain is optimized so that value data types are already comparable
                 if domain != self:
                     return domain
 
-        # optimizations based on field type
-        for opt in _OPTIMIZATIONS_BY_FIELD_TYPE[field.type]:
-            if opt.level == OptimizationLevel.BASIC:
-                domain = opt(self, model)
-                if domain != self:
-                    return domain
-
-        if not full:
-            return self
-
-        # resolve inherited fields
-        # inherits implies both Field.delegate=True and Field.auto_join=True
-        # so no additional permissions will be added by the 'any' operator below
-        if field.inherited:
-            parent_fname = field.related.split('.')[0]
-            parent_domain = DomainCondition(self.field_expr, self.operator, self.value)
-            return DomainCondition(parent_fname, 'any', parent_domain)
-
-        # handle searchable fields
-        if field.search and field.name == self.field_expr:
-            domain = self._optimize_field_search_method(model).optimize(model)
-            # the domain is optimized so that value data types are already comparable
+        # apply optimizations of the level for operator and type
+        optimizations = _OPTIMIZATIONS_FOR[level]
+        for opt in optimizations.get(self.operator, ()):
+            domain = opt(self, model)
+            if domain != self:
+                return domain
+        for opt in optimizations.get(field.type, ()):
+            domain = opt(self, model)
             if domain != self:
                 return domain
 
-        # optimizations based on operator
-        for opt in _OPTIMIZATIONS_BY_OPERATOR[self.operator]:
-            if opt.level == OptimizationLevel.FULL:
-                domain = opt(self, model)
-                if domain != self:
-                    return domain
-
-        # optimizations based on field type
-        for opt in _OPTIMIZATIONS_BY_FIELD_TYPE[field.type]:
-            if opt.level == OptimizationLevel.FULL:
-                domain = opt(self, model)
-                if domain != self:
-                    return domain
-
         # final checks
-        if self.operator not in STANDARD_CONDITION_OPERATORS:
+        if self.operator not in STANDARD_CONDITION_OPERATORS and level == OptimizationLevel.FULL:
             self._raise("Not standard operator left")
 
         return self
@@ -970,7 +968,7 @@ class DomainCondition(Domain):
             original_exception = e
         else:
             if computed_domain is not NotImplemented:
-                return Domain(computed_domain)
+                return Domain(computed_domain, internal=True)
         # try with the positive operator
         if (
             original_exception is None
@@ -978,13 +976,24 @@ class DomainCondition(Domain):
         ):
             computed_domain = field.determine_domain(model, inversed_opeator, value)
             if computed_domain is not NotImplemented:
-                return ~Domain(computed_domain)
+                return ~Domain(computed_domain, internal=True)
+        # compatibility for any!
+        try:
+            if operator in ('any!', 'not any!'):
+                # Not strictly equivalent! If a search is executed, it will be done using sudo.
+                computed_domain = DomainCondition(self.field_expr, operator.rstrip('!'), value)
+                computed_domain = computed_domain._optimize_field_search_method(model.sudo())
+                _logger.warning("Field %s should implement any! operator", field)
+                return computed_domain
+        except (NotImplementedError, UserError) as e:
+            if original_exception is None:
+                original_exception = e
         # backward compatibility to implement only '=' or '!='
         try:
             if operator == 'in':
-                return Domain.OR(field.determine_domain(model, '=', v) for v in value)
+                return Domain.OR(Domain(field.determine_domain(model, '=', v), internal=True) for v in value)
             elif operator == 'not in':
-                return Domain.AND(field.determine_domain(model, '!=', v) for v in value)
+                return Domain.AND(Domain(field.determine_domain(model, '!=', v), internal=True) for v in value)
         except (NotImplementedError, UserError) as e:
             if original_exception is None:
                 original_exception = e
@@ -1003,12 +1012,12 @@ class DomainCondition(Domain):
             return lambda _: False
 
         if self._opt_level < OptimizationLevel.BASIC:
-            return self.optimize(records, full=False)._as_predicate(records)
+            return self._optimize(records, OptimizationLevel.BASIC)._as_predicate(records)
 
         operator = self.operator
         if operator in ('child_of', 'parent_of'):
             # TODO have a specific implementation for these
-            return self.optimize(records, full=True)._as_predicate(records)
+            return self._optimize(records, OptimizationLevel.FULL)._as_predicate(records)
 
         assert operator in STANDARD_CONDITION_OPERATORS, "Expecting a sub-set of operators"
         field_expr, value = self.field_expr, self.value
@@ -1018,20 +1027,20 @@ class DomainCondition(Domain):
             # transform into an Query value
             if positive_operator == operator:
                 condition = self
-                operator = 'any'
+                operator = 'any!'
             else:
                 condition = ~self
-                operator = 'not any'
-            positive_operator = 'any'
+                operator = 'not any!'
+            positive_operator = 'any!'
             field_expr = 'id'
             value = records.with_context(active_test=False)._search(DomainCondition('id', 'in', OrderedSet(records.ids)) & condition)
             assert isinstance(value, Query)
 
         if isinstance(value, Query):
             # rebuild a domain with an 'in' values
-            if positive_operator not in ('in', 'any'):
+            if positive_operator not in ('in', 'any', 'any!'):
                 self._raise("Cannot filter using Query without the 'any' or 'in' operator")
-            if positive_operator == 'any':
+            if positive_operator != 'in':
                 operator = 'in' if positive_operator == operator else 'not in'
                 positive_operator = 'in'
             value = set(value.get_result_ids())
@@ -1053,7 +1062,8 @@ class DomainCondition(Domain):
         assert operator in STANDARD_CONDITION_OPERATORS, \
             f"Invalid operator {operator!r} for SQL in domain term {(field_expr, operator, value)!r}"
 
-        field = model._fields[parse_field_expr(field_expr)[0]]
+        field = self._field(model)
+        model._check_field_access(field, 'read')
         return field.condition_to_sql(field_expr, operator, value, model, alias, query)
 
 
@@ -1067,8 +1077,8 @@ if typing.TYPE_CHECKING:
     ConditionOptimization = Callable[[DomainCondition, BaseModel], Domain]
     MergeOptimization = Callable[[type[DomainNary], list[Domain], BaseModel], Iterable[Domain]]
 
-_OPTIMIZATIONS_BY_OPERATOR: dict[str, list[ConditionOptimization]] = collections.defaultdict(list)
-_OPTIMIZATIONS_BY_FIELD_TYPE: dict[str, list[ConditionOptimization]] = collections.defaultdict(list)
+_OPTIMIZATIONS_FOR: dict[OptimizationLevel, dict[str, list[ConditionOptimization]]] = {
+    level: collections.defaultdict(list) for level in OptimizationLevel if level != OptimizationLevel.NONE}
 _MERGE_OPTIMIZATIONS: list[MergeOptimization] = list()
 
 
@@ -1078,9 +1088,9 @@ def operator_optimization(operators: Collection[str], level: OptimizationLevel =
     CONDITION_OPERATORS.update(operators)
 
     def register(optimization: ConditionOptimization):
-        optimization.level = level
-        for operator in operators:
-            _OPTIMIZATIONS_BY_OPERATOR[operator].append(optimization)
+        mapping = _OPTIMIZATIONS_FOR[level]
+        for operator in operators:  # noqa: F402
+            mapping[operator].append(optimization)
         return optimization
 
     return register
@@ -1089,9 +1099,9 @@ def operator_optimization(operators: Collection[str], level: OptimizationLevel =
 def field_type_optimization(field_types: Collection[str], level: OptimizationLevel = OptimizationLevel.BASIC):
     """Register a condition optimization by field type for (condition, model)"""
     def register(optimization: ConditionOptimization):
-        optimization.level = level
+        mapping = _OPTIMIZATIONS_FOR[level]
         for field_type in field_types:
-            _OPTIMIZATIONS_BY_FIELD_TYPE[field_type].append(optimization)
+            mapping[field_type].append(optimization)
         return optimization
 
     return register
@@ -1117,6 +1127,8 @@ def _optimize_nary_sort_key(domain: Domain) -> tuple[str, str, str]:
             order = "0in"
         elif positive_op == 'any':
             order = "1any"
+        elif positive_op == 'any!':
+            order = "2any"
         elif positive_op.endswith('like'):
             order = "like"
         else:
@@ -1259,7 +1271,7 @@ def _optimize_in_required(condition, model):
     field = condition._field(model)
     if (
         field.falsy_value is None
-        and field.required
+        and (field.required or field.name == 'id')
         and field in model.env.registry.not_null_fields
         # only optimize if there are no NewId's
         and all(model._ids)
@@ -1270,33 +1282,36 @@ def _optimize_in_required(condition, model):
     return DomainCondition(condition.field_expr, condition.operator, value)
 
 
-@operator_optimization(['any', 'not any'])
+@operator_optimization(['any', 'not any', 'any!', 'not any!'])
 def _optimize_any_domain(condition, model):
     """Make sure the value is an optimized domain (or Query or SQL)"""
     value = condition.value
     if isinstance(value, ANY_TYPES) and not isinstance(value, Domain):
+        if '!' not in condition.operator:
+            # update operator to 'any!'
+            return DomainCondition(condition.field_expr, condition.operator + '!', condition.value)
         return condition
     domain = Domain(value)
     field = condition._field(model)
     if field.name == 'id':
         # id ANY domain  <=>  domain
         # id NOT ANY domain  <=>  ~domain
-        return domain if condition.operator == 'any' else ~domain
+        return domain if condition.operator in ('any', 'any!') else ~domain
     # get the model to optimize with
     try:
         comodel = model.env[field.comodel_name]
     except KeyError:
         condition._raise("Cannot determine the comodel relation")
-    domain = domain.optimize(comodel)
+    domain = domain._optimize(comodel, OptimizationLevel.BASIC)
     # const if the domain is empty, the result is a constant
     # if the domain is True, we keep it as is
     if domain.is_false():
-        return _FALSE_DOMAIN if condition.operator == 'any' else _TRUE_DOMAIN
+        return _FALSE_DOMAIN if condition.operator in ('any', 'any!') else _TRUE_DOMAIN
     return DomainCondition(condition.field_expr, condition.operator, domain)
 
 
-@operator_optimization(['any', 'not any'], OptimizationLevel.FULL)
-def _optimize_any_domain_for_sql(condition, model):
+# register and bind multiple levels later
+def _optimize_any_domain_at_level(level: OptimizationLevel, condition, model):
     domain = condition.value
     if not isinstance(domain, Domain):
         return condition
@@ -1307,8 +1322,15 @@ def _optimize_any_domain_for_sql(condition, model):
         comodel = model.env[field.comodel_name]
     except KeyError:
         condition._raise("Cannot determine the comodel relation")
-    domain = domain.optimize(comodel, full=True)
+    domain = domain._optimize(comodel, level)
     return DomainCondition(condition.field_expr, condition.operator, domain)
+
+
+[
+    operator_optimization(('any', 'not any', 'any!', 'not any!'), level)(functools.partial(_optimize_any_domain_at_level, level))
+    for level in OptimizationLevel
+    if level > OptimizationLevel.BASIC
+]
 
 
 @operator_optimization([op for op in CONDITION_OPERATORS if op.endswith('like')])
@@ -1734,6 +1756,7 @@ def _optimize_merge_set_conditions_x2many_not_in(cls: type[DomainNary], conditio
 
 
 @nary_condition_optimization(['any'], ['many2one', 'one2many', 'many2many'])
+@nary_condition_optimization(['any!'], ['many2one', 'one2many', 'many2many'])
 def _optimize_merge_any(cls, conditions, model):
     """Merge domains of 'any' conditions for relational fields.
 
@@ -1749,12 +1772,13 @@ def _optimize_merge_any(cls, conditions, model):
     merge_conditions, other_conditions = partition(lambda c: isinstance(c.value, Domain), conditions)
     if len(merge_conditions) < 2:
         return conditions
-    field_expr = merge_conditions[0].field_expr
+    base = merge_conditions[0]
     sub_domain = cls([c.value for c in merge_conditions])
-    return [DomainCondition(field_expr, 'any', sub_domain), *other_conditions]
+    return [DomainCondition(base.field_expr, base.operator, sub_domain), *other_conditions]
 
 
 @nary_condition_optimization(['not any'], ['many2one', 'one2many', 'many2many'])
+@nary_condition_optimization(['not any!'], ['many2one', 'one2many', 'many2many'])
 def _optimize_merge_not_any(cls, conditions, model):
     """Merge domains of 'not any' conditions for relational fields.
 
@@ -1770,9 +1794,9 @@ def _optimize_merge_not_any(cls, conditions, model):
     merge_conditions, other_conditions = partition(lambda c: isinstance(c.value, Domain), conditions)
     if len(merge_conditions) < 2:
         return conditions
-    field_expr = merge_conditions[0].field_expr
+    base = merge_conditions[0]
     sub_domain = cls.INVERSE([c.value for c in merge_conditions])
-    return [DomainCondition(field_expr, 'not any', sub_domain), *other_conditions]
+    return [DomainCondition(base.field_expr, base.operator, sub_domain), *other_conditions]
 
 
 @nary_optimization

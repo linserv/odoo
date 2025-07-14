@@ -23,7 +23,7 @@ class ChatbotScriptAnswer(models.Model):
     @api.depends('script_step_id')
     @api.depends_context('chatbot_script_answer_display_short_name')
     def _compute_display_name(self):
-        if self._context.get('chatbot_script_answer_display_short_name'):
+        if self.env.context.get('chatbot_script_answer_display_short_name'):
             return super()._compute_display_name()
 
         for answer in self:
@@ -53,5 +53,5 @@ class ChatbotScriptAnswer(models.Model):
 
         return domain
 
-    def _to_store_defaults(self):
+    def _to_store_defaults(self, target):
         return ["name", "redirect_link"]

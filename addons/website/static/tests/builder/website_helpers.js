@@ -1,16 +1,13 @@
+import { patchWithCleanupImg } from "@html_builder/../tests/helpers";
 import { Builder } from "@html_builder/builder";
 import { SetupEditorPlugin } from "@html_builder/core/setup_editor_plugin";
 import { VersionControlPlugin } from "@html_builder/core/version_control_plugin";
-import { EditInteractionPlugin } from "@website/builder/plugins/edit_interaction_plugin";
-import { WebsiteSessionPlugin } from "@website/builder/plugins/website_session_plugin";
-import { WebsiteBuilder } from "@website/client_actions/website_preview/website_builder_action";
-import { WebsiteSystrayItem } from "@website/client_actions/website_preview/website_systray_item";
 import { setContent } from "@html_editor/../tests/_helpers/selection";
 import { insertText } from "@html_editor/../tests/_helpers/user_actions";
 import { Plugin } from "@html_editor/plugin";
 import { withSequence } from "@html_editor/utils/resource";
 import { defineMailModels, startServer } from "@mail/../tests/mail_test_helpers";
-import { after, before, describe } from "@odoo/hoot";
+import { after, describe } from "@odoo/hoot";
 import {
     advanceTime,
     animationFrame,
@@ -35,9 +32,12 @@ import { isBrowserFirefox } from "@web/core/browser/feature_detection";
 import { registry } from "@web/core/registry";
 import { uniqueId } from "@web/core/utils/functions";
 import { WebClient } from "@web/webclient/webclient";
-import { patchWithCleanupImg } from "@html_builder/../tests/helpers";
-import { getWebsiteSnippets } from "./snippets_getter.hoot";
+import { EditInteractionPlugin } from "@website/builder/plugins/edit_interaction_plugin";
+import { WebsiteSessionPlugin } from "@website/builder/plugins/website_session_plugin";
+import { WebsiteBuilderClientAction } from "@website/client_actions/website_preview/website_builder_action";
+import { WebsiteSystrayItem } from "@website/client_actions/website_preview/website_systray_item";
 import { mockImageRequests } from "./image_test_helpers";
+import { getWebsiteSnippets } from "./snippets_getter.hoot";
 
 class Website extends models.Model {
     _name = "website";
@@ -64,9 +64,18 @@ export function defineWebsiteModels() {
     describe.current.tags("desktop");
     defineMailModels();
     defineModels([Website, IrUiView]);
-    before(() => {
-        onRpc("/website/theme_customize_data_get", () => []);
-    });
+    onRpc("/website/theme_customize_data_get", () => []);
+    onRpc("website", "web_search_read", () => ({
+        length: 1,
+        records: [
+            {
+                id: 1,
+                default_lang_id: {
+                    code: "en_US",
+                },
+            },
+        ],
+    }));
 }
 
 /**
@@ -85,6 +94,8 @@ export async function setupWebsiteBuilder(
         styleContent,
         headerContent = "",
         beforeWrapwrapContent = "",
+        translateMode = false,
+        onIframeLoaded = () => {},
     } = {}
 ) {
     // TODO: fix when the iframe is reloaded and become empty (e.g. discard button)
@@ -114,6 +125,12 @@ export async function setupWebsiteBuilder(
             iframe.contentDocument.body.innerHTML = `
                 ${beforeWrapwrapContent}
                 <div id="wrapwrap">${headerContent} <div id="wrap" class="oe_structure oe_empty" data-oe-model="ir.ui.view" data-oe-id="539" data-oe-field="arch">${websiteContent}</div></div>`;
+            // we artificially set the is-ready attribute to trick the rest of
+            // the code into thinking that the js inside the iframe is properly
+            // loaded
+            iframe.contentDocument.body.setAttribute("is-ready", "true");
+
+            onIframeLoaded(iframe);
             resolve(el);
         };
     });
@@ -122,7 +139,7 @@ export async function setupWebsiteBuilder(
         resolveEditAssetsLoaded = () => resolve();
     });
 
-    patchWithCleanup(WebsiteBuilder.prototype, {
+    patchWithCleanup(WebsiteBuilderClientAction.prototype, {
         setIframeLoaded() {
             super.setIframeLoaded();
             this.publicRootReady.resolve();
@@ -143,6 +160,9 @@ export async function setupWebsiteBuilder(
             }
             await resolveEditAssetsLoaded();
         },
+        get translation() {
+            return translateMode;
+        },
     });
     patchWithCleanup(WebsiteSystrayItem.prototype, {
         get isRestrictedEditor() {
@@ -161,7 +181,8 @@ export async function setupWebsiteBuilder(
     patchWithCleanup(EditInteractionPlugin.prototype, {
         setup() {
             super.setup();
-            // See loadAssetsEditBundle override in WebsiteBuilder patch.
+            // See loadAssetsEditBundle override in WebsiteBuilderClientAction
+            // patch.
             this.websiteEditService = {
                 update: () => {},
                 refresh: () => {},
@@ -170,9 +191,24 @@ export async function setupWebsiteBuilder(
         },
     });
 
+    let lastUpdatePromise;
+    const waitDomUpdated = async () => {
+        // The tick ensures that lastUpdatePromise has correctly been assigned
+        await tick();
+        await lastUpdatePromise;
+        await animationFrame();
+    };
     patchWithCleanup(Builder.prototype, {
         setup() {
             super.setup();
+            patchWithCleanup(this.env.editorBus, {
+                trigger(eventName, detail) {
+                    if (eventName === "DOM_UPDATED") {
+                        lastUpdatePromise = detail.updatePromise;
+                    }
+                    return super.trigger(eventName, detail);
+                },
+            });
             editor = this.editor;
         },
     });
@@ -227,23 +263,24 @@ export async function setupWebsiteBuilder(
         getEditor: () => editor,
         getEditableContent: () => editableContent,
         openBuilderSidebar: async () => await openBuilderSidebar(editAssetsLoaded),
-        getIframeEl: () => iframe,
+        waitDomUpdated,
     };
 }
 
 async function openBuilderSidebar(editAssetsLoaded) {
     // The next line allow us to await asynchronous fetches and cache them before it is used
-    await Promise.all([getWebsiteSnippets(), loadBundle("html_builder.assets")]);
+    await Promise.all([getWebsiteSnippets(), loadBundle("website.website_builder_assets")]);
 
     await click(".o-website-btn-custo-primary");
     await editAssetsLoaded;
-    // animationFrame linked to state.isEditing rendering the WebsiteBuilder.
+    // animationFrame linked to state.isEditing rendering the
+    // WebsiteBuilderClientAction.
     await animationFrame();
-    // tick needed to wait for the timeout in the WebsiteBuilder useEffect to be
-    // called before advancing time.
+    // tick needed to wait for the timeout in the WebsiteBuilderClientAction
+    // useEffect to be called before advancing time.
     await tick();
-    // advanceTime linked to the setTimeout in the WebsiteBuilder component that
-    // removes the systray items.
+    // advanceTime linked to the setTimeout in the WebsiteBuilderClientAction
+    // component that removes the systray items.
     await advanceTime(200);
     await animationFrame();
 }
@@ -383,9 +420,10 @@ export function getSnippetStructure({
     groupName,
     imagePreview = "",
     moduleId = "",
+    moduleDisplayName = "",
 }) {
     keywords = keywords.join(", ");
-    return `<div name="${name}" data-oe-snippet-id="123" data-o-image-preview="${imagePreview}" data-oe-keywords="${keywords}" data-o-group="${groupName}"  data-module-id="${moduleId}">${content}</div>`;
+    return `<div name="${name}" data-oe-snippet-id="123" data-o-image-preview="${imagePreview}" data-oe-keywords="${keywords}" data-o-group="${groupName}" data-module-id="${moduleId}" data-module-display-name="${moduleDisplayName}">${content}</div>`;
 }
 
 export function getInnerContent({
@@ -468,6 +506,9 @@ export async function setupWebsiteBuilderWithSnippet(snippetName, options = {}) 
                     defaultLangName: "English (US)",
                 },
                 id: 1,
+                default_lang_id: {
+                    code: "en_US",
+                },
             };
         },
     });

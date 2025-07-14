@@ -1,5 +1,8 @@
 import { beforeEach, expect, test } from "@odoo/hoot";
 import {
+    Deferred,
+    advanceTime,
+    animationFrame,
     click,
     hover,
     pointerDown,
@@ -10,15 +13,9 @@ import {
     queryFirst,
     queryOne,
     queryRect,
-} from "@odoo/hoot-dom";
-import {
-    Deferred,
-    advanceTime,
-    animationFrame,
-    mockDate,
-    mockTimeZone,
     runAllTimers,
-} from "@odoo/hoot-mock";
+} from "@odoo/hoot-dom";
+import { mockDate, mockTimeZone } from "@odoo/hoot-mock";
 import { Component, onRendered, onWillStart, xml } from "@odoo/owl";
 import {
     MockServer,
@@ -428,7 +425,7 @@ test(`simple calendar rendering on desktop`, async () => {
 
     // test filters
     expect(`.o_calendar_sidebar .o_calendar_filter`).toHaveCount(2);
-    expect(`.o_calendar_filter:eq(1)`).toBeDisplayed();
+    expect(`.o_calendar_filter:eq(1)`).toBeVisible();
     expect(`.o_calendar_filter:eq(1) .o_calendar_filter_item`).toHaveCount(3);
 
     expect(`.o_calendar_filter:eq(1) .o_calendar_filter_item:eq(-1)`).not.toHaveAttribute(
@@ -437,7 +434,7 @@ test(`simple calendar rendering on desktop`, async () => {
     expect(`.o_calendar_filter:eq(1) .o_calendar_filter_item:eq(-1)`).toHaveText("Undefined");
     expect(`.o_calendar_filter:eq(1) .o_calendar_filter_item:eq(-1) label img`).toHaveCount(0);
 
-    expect(`.o_calendar_filter:eq(0)`).toBeDisplayed();
+    expect(`.o_calendar_filter:eq(0)`).toBeVisible();
     expect(`.o_calendar_filter:eq(0) .o_calendar_filter_item`).toHaveCount(2);
     expect(`.o_calendar_filter:eq(0) .o-autocomplete`).toHaveCount(1);
 
@@ -529,7 +526,7 @@ test(`simple calendar rendering on mobile`, async () => {
     // test filters
     await displayCalendarPanel();
     expect(`.o_calendar_sidebar .o_calendar_filter`).toHaveCount(2);
-    expect(`.o_calendar_filter:eq(1)`).toBeDisplayed();
+    expect(`.o_calendar_filter:eq(1)`).toBeVisible();
     expect(`.o_calendar_filter:eq(1) .o_calendar_filter_item`).toHaveCount(3);
 
     expect(`.o_calendar_filter:eq(1) .o_calendar_filter_item:eq(-1)`).not.toHaveAttribute(
@@ -538,7 +535,7 @@ test(`simple calendar rendering on mobile`, async () => {
     expect(`.o_calendar_filter:eq(1) .o_calendar_filter_item:eq(-1)`).toHaveText("Undefined");
     expect(`.o_calendar_filter:eq(1) .o_calendar_filter_item:eq(-1) label img`).toHaveCount(0);
 
-    expect(`.o_calendar_filter:eq(0)`).toBeDisplayed();
+    expect(`.o_calendar_filter:eq(0)`).toBeVisible();
     expect(`.o_calendar_filter:eq(0) .o_calendar_filter_item`).toHaveCount(2);
     expect(`.o_calendar_filter:eq(0) .o-autocomplete`).toHaveCount(1);
     await hideCalendarPanel();
@@ -1621,7 +1618,6 @@ test(`render popover: inside fullcalendar popover`, async () => {
         },
     });
 
-    onRpc("get_formview_id", () => false);
     await mountView({
         resModel: "event",
         type: "calendar",
@@ -2139,7 +2135,7 @@ test(`open form view`, async () => {
         },
     });
 
-    onRpc("get_formview_id", () => "A view");
+    onRpc("get_formview_id", () => expect.step("get_formview_id")); // should not be called
     await mountView({
         resModel: "event",
         type: "calendar",
@@ -2150,7 +2146,7 @@ test(`open form view`, async () => {
         type: "ir.actions.act_window",
         res_id: 4,
         res_model: "event",
-        views: [["A view", "form"]],
+        views: [[false, "form"]],
         target: "current",
         context: {},
     };
@@ -2278,7 +2274,6 @@ test(`readonly date_start field`, async () => {
         },
     });
 
-    onRpc("get_formview_id", () => false);
     await mountView({
         resModel: "event",
         type: "calendar",
@@ -2330,7 +2325,6 @@ test(`readonly calendar view`, async () => {
         },
     });
 
-    onRpc("get_formview_id", () => false);
     await mountView({
         resModel: "event",
         type: "calendar",
@@ -5300,7 +5294,7 @@ test(`check if active fields are fetched in addition to field names in record da
 
     onRpc("event", "search_read", ({ kwargs }) => {
         expect.step("event.search_read");
-        expect(kwargs.fields.includes("delay")).toBe(true);
+        expect(kwargs.fields).toInclude("delay");
     });
 
     await mountView({

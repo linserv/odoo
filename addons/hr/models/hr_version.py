@@ -106,7 +106,7 @@ class HrVersion(models.Model):
     job_id = fields.Many2one('hr.job', check_company=True, tracking=True)
     job_title = fields.Char(compute="_compute_job_title", inverse="_inverse_job_title", store=True, readonly=False,
         string="Job Title", tracking=True)
-    is_custom_job_title = fields.Boolean(default=False, groups="hr.group_hr_user")
+    is_custom_job_title = fields.Boolean(compute='_compute_is_custom_job_title', store=True, default=False, groups="hr.group_hr_user")
     address_id = fields.Many2one(
         'res.partner',
         string='Work Address',
@@ -142,10 +142,10 @@ class HrVersion(models.Model):
                                  groups="hr.group_hr_user")
     date_start = fields.Date(compute='_compute_dates', groups="hr.group_hr_user")
     date_end = fields.Date(compute='_compute_dates', groups="hr.group_hr_user")
-    is_current = fields.Boolean(compute='_compute_state', groups="hr.group_hr_user")
-    is_past = fields.Boolean(compute='_compute_state', groups="hr.group_hr_user")
-    is_future = fields.Boolean(compute='_compute_state', groups="hr.group_hr_user")
-    is_in_contract = fields.Boolean(compute='_compute_state', groups="hr.group_hr_user")
+    is_current = fields.Boolean(compute='_compute_is_current', groups="hr.group_hr_user")
+    is_past = fields.Boolean(compute='_compute_is_past', groups="hr.group_hr_user")
+    is_future = fields.Boolean(compute='_compute_is_future', groups="hr.group_hr_user")
+    is_in_contract = fields.Boolean(compute='_compute_is_in_contract', groups="hr.group_hr_user")
 
     contract_template_id = fields.Many2one(
         'hr.version', string="Contract Template", groups="hr.group_hr_user",
@@ -164,6 +164,7 @@ class HrVersion(models.Model):
     country_code = fields.Char(related='company_country_id.code', depends=['company_country_id'], readonly=True)
     contract_type_id = fields.Many2one('hr.contract.type', "Contract Type", tracking=True,
                                        groups="hr.group_hr_user")
+    additional_note = fields.Text(string='Additional Note', groups="hr.group_hr_user", tracking=True)
 
     def _get_hr_responsible_domain(self):
         return "[('share', '=', False), ('company_ids', 'in', company_id), ('all_group_ids', 'in', %s)]" % self.env.ref('hr.group_hr_user').id
@@ -199,6 +200,12 @@ class HrVersion(models.Model):
         for version in self:
             version.is_custom_job_title = version.job_title != version.job_id.name
 
+    @api.depends('job_id')
+    def _compute_is_custom_job_title(self):
+        for version in self.filtered('job_id'):
+            if version._origin.job_id != version.job_id:
+                version.is_custom_job_title = False
+
     @api.constrains('employee_id', 'contract_date_start', 'contract_date_end')
     def _check_dates(self):
         version_read_group = self.env['hr.version']._read_group(
@@ -232,11 +239,13 @@ class HrVersion(models.Model):
                     continue
                 if date_start <= contract_date_end and version.contract_date_start <= date_to:
                     raise ValidationError(_(
-                        'You have some overlapping contracts for %(employee)s:\n%(overlaps)s',
+                        'Overlapping contracts for %(employee)s:\n%(overlaps)s',
                         employee=version.employee_id.display_name,
                         overlaps='\n'.join(
-                            [f'Version ({version.display_name}): {version.contract_date_start} - {version.contract_date_end}'] +
-                            [f'Version ({version.display_name}): {date_start} - {date_end}' for version in versions])))
+                            [f'Version {format_date(v.env, v.date_version, date_format="MMM d, y")}: '
+                             f'from {format_date(v.env, v.contract_date_start, date_format="MMM d, y")} '
+                             f'to {format_date(v.env, v.contract_date_end, date_format="MMM d, y") if v.contract_date_end else "Indefinite"}'
+                             for v in (versions | version)])))
             if not contract_period_exists:
                 dates_per_employee[version.employee_id].append((version.contract_date_start, version.contract_date_end, version))
 
@@ -327,21 +336,24 @@ class HrVersion(models.Model):
         for version in self:
             version.display_name = version.name if not version.employee_id else format_date(version.env, version.date_version, date_format='dd MMM yyyy')
 
-    def _compute_state(self):
+    def _compute_is_current(self):
+        today = fields.Date.today()
         for version in self:
-            version.is_current = version._is_current()
-            version.is_past = version._is_past()
-            version.is_future = version._is_future()
+            version.is_current = version.date_start <= today and (not version.date_end or version.date_end >= today)
+
+    def _compute_is_past(self):
+        today = fields.Date.today()
+        for version in self:
+            version.is_past = version.date_end and version.date_end < today
+
+    def _compute_is_future(self):
+        today = fields.Date.today()
+        for version in self:
+            version.is_future = version.date_start > today
+
+    def _compute_is_in_contract(self):
+        for version in self:
             version.is_in_contract = version._is_in_contract()
-
-    def _is_current(self, date=fields.Date.today()):
-        return self.date_start <= date and (not self.date_end or self.date_end >= date)
-
-    def _is_past(self, date=fields.Date.today()):
-        return self.date_end and self.date_end < date
-
-    def _is_future(self, date=fields.Date.today()):
-        return self.date_start > date
 
     def _is_in_contract(self, date=fields.Date.today()):
         # Return True if the employee is in contract on a given date

@@ -9,9 +9,8 @@ from itertools import groupby
 
 from odoo import SUPERUSER_ID, _, api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
-from odoo.fields import Command
+from odoo.fields import Command, Domain
 from odoo.http import request
-from odoo.osv import expression
 from odoo.tools import OrderedSet, SQL, float_is_zero, format_amount, is_html_empty
 from odoo.tools.mail import html_keep_url
 from odoo.tools.misc import str2bool
@@ -47,7 +46,7 @@ class SaleOrder(models.Model):
 
     @property
     def _rec_names_search(self):
-        if self._context.get('sale_show_partner_name'):
+        if self.env.context.get('sale_show_partner_name'):
             return ['name', 'partner_id.name']
         return ['name']
 
@@ -322,7 +321,7 @@ class SaleOrder(models.Model):
     @api.depends('partner_id')
     @api.depends_context('sale_show_partner_name')
     def _compute_display_name(self):
-        if not self._context.get('sale_show_partner_name'):
+        if not self.env.context.get('sale_show_partner_name'):
             return super()._compute_display_name()
         for order in self:
             name = order.name
@@ -556,7 +555,7 @@ class SaleOrder(models.Model):
             order.invoice_count = len(invoices)
 
     def _search_invoice_ids(self, operator, value):
-        if operator in expression.NEGATIVE_TERM_OPERATORS:
+        if Domain.is_negative_operator(operator):
             return NotImplemented
         if operator == 'in' and value:
             falsy_domain = []
@@ -707,7 +706,7 @@ class SaleOrder(models.Model):
 
     @api.depends('order_line.customer_lead', 'date_order', 'state')
     def _compute_expected_date(self):
-        """ For service and consumable, we only take the min dates. This method is extended in sale_stock to
+        """ For service and combo (non-goods) products, we avoid computing the expected date. This method is extended in sale_stock to
             take the picking_policy of SO into account.
         """
         self.mapped("order_line")  # Prefetch indication
@@ -716,7 +715,7 @@ class SaleOrder(models.Model):
                 order.expected_date = False
                 continue
             dates_list = order.order_line.filtered(
-                lambda line: not line.display_type and not line._is_delivery()
+                lambda line: line.product_id.type == 'consu' and not line.display_type and not line._is_delivery()
             ).mapped(lambda line: line and line._expected_date())
             if dates_list:
                 order.expected_date = order._select_expected_date(dates_list)
@@ -1125,8 +1124,9 @@ class SaleOrder(models.Model):
 
         # Context key 'default_name' is sometimes propagated up to here.
         # We don't need it and it creates issues in the creation of linked records.
-        context = self._context.copy()
+        context = self.env.context.copy()
         context.pop('default_name', None)
+        context.pop('default_user_id', None)
 
         self.with_context(context)._action_confirm()
         self.filtered(lambda so: so._should_be_locked()).action_lock()
@@ -1326,7 +1326,7 @@ class SaleOrder(models.Model):
         }
 
     def _get_product_catalog_domain(self):
-        return expression.AND([super()._get_product_catalog_domain(), [('sale_ok', '=', True)]])
+        return super()._get_product_catalog_domain() & Domain('sale_ok', '=', True)
 
     @api.readonly
     def action_open_business_doc(self):
@@ -1528,7 +1528,7 @@ class SaleOrder(models.Model):
             invoice_vals['invoice_line_ids'] += invoice_line_vals
             invoice_vals_list.append(invoice_vals)
 
-        if not invoice_vals_list and self._context.get('raise_if_nothing_to_invoice', True):
+        if not invoice_vals_list and self.env.context.get('raise_if_nothing_to_invoice', True):
             raise UserError(self._nothing_to_invoice_error_message())
 
         # 2) Manage 'grouped' parameter: group by (partner_id, partner_shipping_id, currency_id).
@@ -1645,7 +1645,7 @@ class SaleOrder(models.Model):
             return groups
 
         self.ensure_one()
-        if self._context.get('proforma'):
+        if self.env.context.get('proforma'):
             for group in [g for g in groups if g[0] in ('portal_customer', 'portal', 'follower', 'customer')]:
                 group[2]['has_button_access'] = False
             return groups
@@ -1672,10 +1672,12 @@ class SaleOrder(models.Model):
         return groups
 
     def _notify_by_email_prepare_rendering_context(self, message, msg_vals=False, model_description=False,
-                                                   force_email_company=False, force_email_lang=False):
+                                                   force_email_company=False, force_email_lang=False,
+                                                   force_record_name=False):
         render_context = super()._notify_by_email_prepare_rendering_context(
             message, msg_vals=msg_vals, model_description=model_description,
-            force_email_company=force_email_company, force_email_lang=force_email_lang
+            force_email_company=force_email_company, force_email_lang=force_email_lang,
+            force_record_name=force_record_name,
         )
         lang_code = render_context.get('lang')
         record = render_context['record']

@@ -55,8 +55,8 @@ class PosOrder(models.Model):
         raise UserError(_('No open session available. Please open a new session to capture the order.'))
 
     @api.model
-    def _load_pos_data_domain(self, data):
-        return [('state', '=', 'draft'), ('config_id', '=', data['pos.config'][0]['id'])]
+    def _load_pos_data_domain(self, data, config):
+        return [('state', '=', 'draft'), ('config_id', '=', config.id)]
 
     @api.model
     def _process_order(self, order, existing_order):
@@ -353,6 +353,12 @@ class PosOrder(models.Model):
         ('invoiced', 'Fully Invoiced'),
         ('to_invoice', 'To Invoice'),
     ], string='Invoice Status', compute='_compute_invoice_status')
+    reversed_move_ids = fields.One2many(
+        'account.move',
+        'reversed_pos_order_id',
+        string="Reversal Account Moves",
+        help="List of account moves created when this POS order was reversed and invoiced after session close."
+    )
 
     @api.depends('account_move')
     def _compute_invoice_status(self):
@@ -788,7 +794,7 @@ class PosOrder(models.Model):
         """We have orders filtered by company > config > partners > fiscal_positions so it won't make any issue
         when we access user, partner, bank or similar directly.
         """
-        timezone = pytz.timezone(self._context.get('tz') or self.env.user.tz or 'UTC')
+        timezone = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'UTC')
         invoice_date = fields.Datetime.now()
         is_single_order = len(self) == 1
 
@@ -836,6 +842,24 @@ class PosOrder(models.Model):
 
         return vals
 
+    def _prepare_product_aml_dict(self, base_line_vals, update_base_line_vals, rate, sign):
+        amount_currency = update_base_line_vals['amount_currency']
+        balance = self.company_id.currency_id.round(amount_currency * rate)
+        order_line = base_line_vals['record']
+        return {
+            'name': order_line.full_product_name,
+            'product_id': order_line.product_id.id,
+            'quantity': order_line.qty * sign,
+            'account_id': base_line_vals['account_id'].id,
+            'partner_id': base_line_vals['partner_id'].id,
+            'currency_id': base_line_vals['currency_id'].id,
+            'tax_ids': [(6, 0, base_line_vals['tax_ids'].ids)],
+            'tax_tag_ids': update_base_line_vals['tax_tag_ids'],
+            'amount_currency': amount_currency,
+            'balance': balance,
+            'tax_tag_invert': not base_line_vals['is_refund'],
+        }
+
     def _prepare_aml_values_list_per_nature(self):
         AccountTax = self.env['account.tax']
         sign = 1 if self.amount_total < 0 else -1
@@ -860,30 +884,17 @@ class PosOrder(models.Model):
             aml_vals_list_per_nature['tax'].append({
                 **tax_line,
                 'tax_tag_invert': tax_rep.document_type == 'invoice',
+                'display_type': 'tax',
             })
             total_amount_currency += tax_line['amount_currency']
             total_balance += tax_line['balance']
 
         # Create the aml values for order lines.
         for base_line_vals, update_base_line_vals in tax_results['base_lines_to_update']:
-            order_line = base_line_vals['record']
-            amount_currency = update_base_line_vals['amount_currency']
-            balance = company_currency.round(amount_currency * rate)
-            aml_vals_list_per_nature['product'].append({
-                'name': order_line.full_product_name,
-                'product_id': order_line.product_id.id,
-                'quantity': order_line.qty * sign,
-                'account_id': base_line_vals['account_id'].id,
-                'partner_id': base_line_vals['partner_id'].id,
-                'currency_id': base_line_vals['currency_id'].id,
-                'tax_ids': [(6, 0, base_line_vals['tax_ids'].ids)],
-                'tax_tag_ids': update_base_line_vals['tax_tag_ids'],
-                'amount_currency': amount_currency,
-                'balance': balance,
-                'tax_tag_invert': not base_line_vals['is_refund'],
-            })
-            total_amount_currency += amount_currency
-            total_balance += balance
+            product_dict = self._prepare_product_aml_dict(base_line_vals, update_base_line_vals, rate, sign)
+            aml_vals_list_per_nature['product'].append(product_dict)
+            total_amount_currency += product_dict['amount_currency']
+            total_balance += product_dict['balance']
 
         # Cash rounding.
         cash_rounding = self.config_id.rounding_method
@@ -965,6 +976,7 @@ class PosOrder(models.Model):
                     'currency_id': self.currency_id.id,
                     'amount_currency': payment_id.amount,
                     'balance': self.session_id._amount_converter(payment_id.amount, self.date_order, False),
+                    'display_type': 'payment_term',
                 })
 
         return aml_vals_list_per_nature
@@ -1074,12 +1086,12 @@ class PosOrder(models.Model):
             if order_is_in_futur:
                 raise UserError(_('The order delivery / pickup date is in the future. You cannot cancel it.'))
 
-        today_orders = self.filtered(lambda order: order.state == 'draft' and (not order.preset_time or order.preset_time.date() == fields.Date.today()))
+        today_orders = self.filtered(lambda order: order.state == 'draft' and (not order.preset_time or order.preset_time.date() <= fields.Date.today()))
         next_days_orders = self.filtered(lambda order: order.preset_time and order.preset_time.date() > fields.Date.today() and order.state == 'draft')
         next_days_orders.session_id = False
         today_orders.write({'state': 'cancel'})
         return {
-            'pos.order': today_orders.read(self._load_pos_data_fields(self.config_id.ids[0]), load=False)
+            'pos.order': self._load_pos_data_read(today_orders, self.config_id)
         }
 
     def _get_open_order(self, order):
@@ -1131,7 +1143,7 @@ class PosOrder(models.Model):
 
         # Sometime pos_orders_ids can be empty.
         pos_order_ids = self.env['pos.order'].browse(order_ids)
-        config_id = pos_order_ids.config_id.ids[0] if pos_order_ids else False
+        config = pos_order_ids.config_id[0] if pos_order_ids else False
 
         for order in pos_order_ids:
             order._ensure_access_token()
@@ -1139,25 +1151,23 @@ class PosOrder(models.Model):
                 order.config_id.notify_synchronisation(order.config_id.current_session_id.id, self.env.context.get('login_number', 0))
 
         _logger.info("PoS synchronisation #%d finished", sync_token)
-        return pos_order_ids.read_pos_data(orders, config_id)
+        return pos_order_ids.read_pos_data(orders, config)
 
     @api.model
     def read_pos_data_uuid(self, uuid):
         order = self.search([('uuid', '=', uuid)], limit=1)
         if not order:
             return {}
-        return order.read_pos_data([], order.config_id.id)
+        return order.read_pos_data([], order.config_id)
 
-    def read_pos_data(self, data, config_id):
-        # If the previous session is closed, the order will get a new session_id due to _get_valid_session in _process_order
-
+    def read_pos_data(self, data, config):
         return {
-            'pos.order': self.read(self._load_pos_data_fields(config_id), load=False) if config_id else [],
+            'pos.order': self._load_pos_data_read(self, config) if config else [],
             'pos.session': [],
-            'pos.payment': self.payment_ids.read(self.payment_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
-            'pos.order.line': self.lines.read(self.lines._load_pos_data_fields(config_id), load=False) if config_id else [],
-            'pos.pack.operation.lot': self.lines.pack_lot_ids.read(self.lines.pack_lot_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
-            "product.attribute.custom.value": self.lines.custom_attribute_value_ids.read(self.lines.custom_attribute_value_ids._load_pos_data_fields(config_id), load=False) if config_id else [],
+            'pos.payment': self.env['pos.payment']._load_pos_data_read(self.payment_ids, config) if config else [],
+            'pos.order.line': self.env['pos.order.line']._load_pos_data_read(self.lines, config) if config else [],
+            'pos.pack.operation.lot': self.env['pos.pack.operation.lot']._load_pos_data_read(self.lines.pack_lot_ids, config) if config else [],
+            'product.attribute.custom.value': self.env['product.attribute.custom.value']._load_pos_data_read(self.lines.custom_attribute_value_ids, config) if config else [],
         }
 
     @api.model
@@ -1433,11 +1443,11 @@ class PosOrderLine(models.Model):
     extra_tax_data = fields.Json()
 
     @api.model
-    def _load_pos_data_domain(self, data):
+    def _load_pos_data_domain(self, data, config):
         return [('order_id', 'in', [order['id'] for order in data['pos.order']])]
 
     @api.model
-    def _load_pos_data_fields(self, config_id):
+    def _load_pos_data_fields(self, config):
         return [
             'qty', 'attribute_value_ids', 'custom_attribute_value_ids', 'price_unit',
             'uuid', 'price_subtotal', 'price_subtotal_incl', 'order_id', 'note', 'price_type',
@@ -1605,7 +1615,7 @@ class PosOrderLine(models.Model):
             # get timezone from user
             # and convert to UTC to avoid any timezone issue
             # because shipping_date is date and date_planned is datetime
-            from_zone = pytz.timezone(self._context.get('tz') or self.env.user.tz or 'UTC')
+            from_zone = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'UTC')
             shipping_date = fields.Datetime.to_datetime(self.order_id.shipping_date)
             shipping_date = from_zone.localize(shipping_date)
             date_deadline = shipping_date.astimezone(pytz.UTC).replace(tzinfo=None)
@@ -1780,11 +1790,11 @@ class PosPackOperationLot(models.Model):
     product_id = fields.Many2one('product.product', related='pos_order_line_id.product_id', readonly=False)
 
     @api.model
-    def _load_pos_data_domain(self, data):
+    def _load_pos_data_domain(self, data, config):
         return [('pos_order_line_id', 'in', [line['id'] for line in data['pos.order.line']])]
 
     @api.model
-    def _load_pos_data_fields(self, config_id):
+    def _load_pos_data_fields(self, config):
         return ['lot_name', 'pos_order_line_id', 'write_date']
 
 
@@ -1800,9 +1810,9 @@ class AccountCashRounding(models.Model):
                 _("You are not allowed to change the cash rounding configuration while a pos session using it is already opened."))
 
     @api.model
-    def _load_pos_data_domain(self, data):
-        return [('id', '=', data['pos.config'][0]['rounding_method'])]
+    def _load_pos_data_domain(self, data, config):
+        return [('id', '=', config.rounding_method.id)]
 
     @api.model
-    def _load_pos_data_fields(self, config_id):
+    def _load_pos_data_fields(self, config):
         return ['id', 'name', 'rounding', 'rounding_method', 'strategy']

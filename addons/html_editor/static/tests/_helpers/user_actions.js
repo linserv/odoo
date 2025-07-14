@@ -1,11 +1,8 @@
-import { closestBlock } from "@html_editor/utils/blocks";
-import { boundariesIn, leftPos, startPos } from "@html_editor/utils/position";
 import { findInSelection } from "@html_editor/utils/selection";
-import { click, manuallyDispatchProgrammaticEvent, press, waitFor } from "@odoo/hoot-dom";
-import { tick } from "@odoo/hoot-mock";
+import { click, manuallyDispatchProgrammaticEvent, press, tick, waitFor } from "@odoo/hoot-dom";
 import { setSelection } from "./selection";
 import { execCommand } from "./userCommands";
-import { isBrowserChrome, isMobileOS } from "@web/core/browser/feature_detection";
+import { isMobileOS } from "@web/core/browser/feature_detection";
 import { isTextNode } from "@html_editor/utils/dom_info";
 
 /** @typedef {import("@html_editor/plugin").Editor} Editor */
@@ -42,7 +39,7 @@ export async function insertText(editor, text) {
     };
     for (const char of text) {
         // KeyDownEvent is required to trigger deleteRange.
-        const keydownEvent = await manuallyDispatchProgrammaticEvent.silent(
+        const [keydownEvent] = await manuallyDispatchProgrammaticEvent.silent(
             editor.editable,
             "keydown",
             { key: char }
@@ -51,7 +48,7 @@ export async function insertText(editor, text) {
             continue;
         }
         // InputEvent is required to simulate the insert text.
-        const beforeinputEvent = await manuallyDispatchProgrammaticEvent.silent(
+        const [beforeinputEvent] = await manuallyDispatchProgrammaticEvent.silent(
             editor.editable,
             "beforeinput",
             { inputType: "insertText", data: char }
@@ -60,7 +57,7 @@ export async function insertText(editor, text) {
             continue;
         }
         insertChar(char);
-        const inputEvent = await manuallyDispatchProgrammaticEvent.silent(
+        const [inputEvent] = await manuallyDispatchProgrammaticEvent.silent(
             editor.editable,
             "input",
             { inputType: "insertText", data: char }
@@ -330,14 +327,5 @@ export async function tripleClick(node) {
         // Default prevented, no effects on selection to simulate.
         return;
     }
-    const block = closestBlock(element);
-    let [anchorNode, anchorOffset, focusNode, focusOffset] = boundariesIn(block);
-    // Simulate Chrome's bad behaviour
-    if (isBrowserChrome() && block.nextSibling) {
-        const nextSibling = block.nextSibling;
-        [focusNode, focusOffset] =
-            nextSibling.nodeName === "BR" ? leftPos(nextSibling) : startPos(nextSibling);
-    }
-    setSelection({ anchorNode, anchorOffset, focusNode, focusOffset });
     await tick();
 }

@@ -22,24 +22,27 @@ function isConnectedElement(el) {
     return el && el.isConnected && !!el.ownerDocument.defaultView;
 }
 
-export function useDomState(getState, { checkEditingElement = true, onReady } = {}) {
+export function useDomState(getState, { checkEditingElement = true } = {}) {
     const env = useEnv();
     const isValid = (el) => (!el && !checkEditingElement) || isConnectedElement(el);
-    const handler = () => {
+    const handler = async (ev) => {
         const editingElement = env.getEditingElement();
         if (isValid(editingElement)) {
-            Object.assign(state, getState(editingElement));
+            const newStatePromise = getState(editingElement);
+            if (ev) {
+                ev.detail.getStatePromises.push(newStatePromise);
+                const newState = await newStatePromise;
+                const shouldApply = await ev.detail.updatePromise;
+                if (shouldApply) {
+                    Object.assign(state, newState);
+                }
+            } else {
+                Object.assign(state, await newStatePromise);
+            }
         }
     };
     const state = useState({});
-    if (onReady) {
-        onReady.then(() => {
-            handler();
-        });
-    } else {
-        handler();
-    }
-
+    onWillStart(handler);
     useBus(env.editorBus, "DOM_UPDATED", handler);
     return state;
 }
@@ -93,11 +96,11 @@ export function useBuilderComponent() {
     };
     updateEditingElements();
     oldEnv.editorBus.addEventListener("UPDATE_EDITING_ELEMENT", updateEditingElements);
-    onWillUpdateProps((nextProps) => {
+    onWillUpdateProps(async (nextProps) => {
         if (comp.props.applyTo !== nextProps.applyTo) {
             applyTo = nextProps.applyTo;
             oldEnv.editorBus.trigger("UPDATE_EDITING_ELEMENT");
-            oldEnv.editorBus.trigger("DOM_UPDATED");
+            await oldEnv.triggerDomUpdated();
         }
     });
     onWillDestroy(() => {
@@ -332,12 +335,12 @@ export function useSelectableItemComponent(id, { getLabel = () => {} } = {}) {
             env.selectableContext.removeSelectableItem(selectableItem);
         });
     } else {
-        state = useDomState(
-            () => ({
+        state = useDomState(async () => {
+            await onReady;
+            return {
                 isActive: isSelectableActive(),
-            }),
-            { onReady }
-        );
+            };
+        });
     }
 
     if (id) {
@@ -490,6 +493,7 @@ export function useClickableBuilderComponent() {
             }
             preventNextPreview = true;
             callOperation(applyOperation.preview, {
+                preview: true,
                 operationParams: {
                     cancellable: true,
                     cancelPrevious: () => applyOperation.revert(),
@@ -508,11 +512,12 @@ export function useClickableBuilderComponent() {
         operation.preview = () => {};
     }
 
-    function clean(nextApplySpecs) {
+    function clean(nextApplySpecs, isPreviewing) {
         for (const { actionId, actionParam, actionValue } of getAllActions()) {
             for (const editingElement of comp.env.getEditingElements()) {
                 let nextAction;
                 getAction(actionId).clean?.({
+                    isPreviewing,
                     editingElement,
                     params: actionParam,
                     value: actionValue,
@@ -531,13 +536,13 @@ export function useClickableBuilderComponent() {
         }
     }
 
-    async function callApply(applySpecs) {
-        comp.env.selectableContext?.cleanSelectedItem(applySpecs);
+    async function callApply(applySpecs, isPreviewing) {
+        comp.env.selectableContext?.cleanSelectedItem(applySpecs, isPreviewing);
         const cleans = inheritedActionIds
             .map((actionId) => comp.env.dependencyManager.get(actionId).cleanSelectedItem)
             .filter(Boolean);
         for (const clean of new Set(cleans)) {
-            clean(applySpecs);
+            clean(applySpecs, isPreviewing);
         }
         const proms = [];
         const isAlreadyApplied = isApplied();
@@ -546,7 +551,8 @@ export function useClickableBuilderComponent() {
             const shouldClean = _shouldClean(comp, hasClean, isAlreadyApplied);
             if (shouldClean) {
                 proms.push(
-                    applySpec.clean({
+                    applySpec.action.clean({
+                        isPreviewing,
                         editingElement: applySpec.editingElement,
                         params: applySpec.actionParam,
                         value: applySpec.actionValue,
@@ -557,7 +563,8 @@ export function useClickableBuilderComponent() {
                 );
             } else {
                 proms.push(
-                    applySpec.apply({
+                    applySpec.action.apply({
+                        isPreviewing,
                         editingElement: applySpec.editingElement,
                         params: applySpec.actionParam,
                         value: applySpec.actionValue,
@@ -619,11 +626,12 @@ export function useInputBuilderComponent({
 
     const withLoadingEffect = useWithLoadingEffect(getAllActions);
 
-    async function callApply(applySpecs) {
+    async function callApply(applySpecs, isPreviewing) {
         const proms = [];
         for (const applySpec of applySpecs) {
             proms.push(
-                applySpec.apply({
+                applySpec.action.apply({
+                    isPreviewing,
                     editingElement: applySpec.editingElement,
                     params: applySpec.actionParam,
                     value: applySpec.actionValue,
@@ -646,7 +654,8 @@ export function useInputBuilderComponent({
             ({ actionId }) => getAction(actionId).getValue
         );
         const { actionId, actionParam } = actionWithGetValue;
-        const actionValue = getAction(actionId).getValue({ editingElement, params: actionParam });
+        const actionValue =
+            getAction(actionId).getValue({ editingElement, params: actionParam }) || defaultValue;
         return {
             value: actionValue,
         };
@@ -675,6 +684,7 @@ export function useInputBuilderComponent({
     function preview(userInputValue) {
         if (shouldPreview) {
             callOperation(applyOperation.preview, {
+                preview: true,
                 userInputValue: parseDisplayValue(userInputValue),
                 operationParams: {
                     cancellable: true,
@@ -743,6 +753,18 @@ export function useVisibilityObserver(contentName, callback) {
     );
 }
 
+export function useInputDebouncedCommit(ref) {
+    const comp = useComponent();
+    return useDebounced(() => {
+        const normalizedDisplayValue = comp.commit(ref.el.value);
+        ref.el.value = normalizedDisplayValue;
+    }, 550);
+    // ↑ 500 is the delay when holding keydown between the 1st and 2nd event
+    // fired. Some additional delay by the browser may add another ~5-10ms.
+    // We debounce above that threshold to keep a single history step when
+    // holding up/down on a number or range input.
+}
+
 export const basicContainerBuilderComponentProps = {
     id: { type: String, optional: true },
     applyTo: { type: String, optional: true },
@@ -799,7 +821,10 @@ export function getAllActionsAndOperations(comp) {
                     actionId,
                     actionParam,
                     actionValue,
+                    action,
                 };
+                // TODO Since the action is now in the spec, this shouldn't be
+                // necessary anymore.
                 for (const method of overridableMethods) {
                     if (!action.has || action.has(method)) {
                         spec[method] = action[method];
@@ -861,20 +886,22 @@ export function getAllActionsAndOperations(comp) {
         return actions.concat(inheritedActions || []);
     }
     function callOperation(fn, params = {}) {
+        const isPreviewing = !!params.preview;
         const actionsSpecs = getActionsSpecs(getAllActions(), params.userInputValue);
-        comp.env.editor.shared.operation.next(() => fn(actionsSpecs), {
+
+        comp.env.editor.shared.operation.next(() => fn(actionsSpecs, isPreviewing), {
             load: async () =>
                 Promise.all(
                     actionsSpecs.map(async (applySpec) => {
-                        if (!applySpec.load) {
+                        if (!applySpec.action.has("load")) {
                             return;
                         }
-                        const hasClean = !!applySpec.clean;
+                        const hasClean = !!applySpec.action.has("clean");
                         if (!applySpec.loadOnClean && _shouldClean(comp, hasClean, isApplied())) {
                             // The element will be cleaned, do not load
                             return;
                         }
-                        const result = await applySpec.load({
+                        const result = await applySpec.action.load({
                             editingElement: applySpec.editingElement,
                             params: applySpec.actionParam,
                             value: applySpec.actionValue,

@@ -15,7 +15,7 @@ class ScrollButtonOptionPlugin extends Plugin {
                 OptionComponent: ScrollButtonOption,
                 selector: "section",
                 exclude:
-                    "[data-snippet] :not(.oe_structure) > [data-snippet],.s_instagram_page,.o_mega_menu > section,.s_appointments .s_dynamic_snippet_content",
+                    "[data-snippet] :not(.oe_structure) > [data-snippet],.s_instagram_page,.o_mega_menu > section,.s_appointments .s_dynamic_snippet_content, .s_bento_banner section[data-name='Card'],.s_floating_blocks,.s_floating_blocks .s_floating_blocks_block",
             }),
         ],
         builder_actions: {
@@ -82,7 +82,7 @@ class ScrollButtonManager {
 
 const scrollButtonManager = new ScrollButtonManager();
 
-class AddScrollButtonAction extends BuilderAction {
+export class AddScrollButtonAction extends BuilderAction {
     static id = "addScrollButton";
     setup() {
         this.manager = scrollButtonManager;
@@ -101,7 +101,7 @@ class AddScrollButtonAction extends BuilderAction {
     }
 }
 
-class ScrollButtonSectionHeightClassAction extends ClassAction {
+export class ScrollButtonSectionHeightClassAction extends ClassAction {
     static id = "scrollButtonSectionHeightClass";
     setup() {
         this.manager = scrollButtonManager;

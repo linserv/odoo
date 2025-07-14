@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-
-from odoo import api, Command, fields, models, _
+from odoo import api, fields, models, _
 from odoo.exceptions import ValidationError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools import format_amount
 
 ACCOUNT_DOMAIN = "[('account_type', 'not in', ('asset_receivable','liability_payable','asset_cash','liability_credit_card','off_balance'))]"
@@ -115,7 +113,7 @@ class ProductTemplate(models.Model):
     @api.constrains('uom_id')
     def _check_uom_not_in_invoice(self):
         self.env['product.template'].flush_model(['uom_id'])
-        self._cr.execute("""
+        self.env.cr.execute("""
             SELECT prod_template.id
               FROM account_move_line line
               JOIN product_product prod_variant ON line.product_id = prod_variant.id
@@ -127,7 +125,7 @@ class ProductTemplate(models.Model):
                AND template_uom.id != line_uom.id
              LIMIT 1
         """, [tuple(self.ids)])
-        if self._cr.fetchall():
+        if self.env.cr.fetchall():
             raise ValidationError(_(
                 "This product is already being used in posted Journal Entries.\n"
                 "If you want to change its Unit of Measure, please archive this product and create a new one."
@@ -289,11 +287,11 @@ class ProductProduct(models.Model):
             name = name.split('\n')[0]
         domains = []
         if barcode:
-            domains.append([('barcode', '=', barcode)])
+            domains.append(Domain('barcode', '=', barcode))
         if default_code:
-            domains.append([('default_code', '=', default_code)])
+            domains.append(Domain('default_code', '=', default_code))
         if name:
-            domains += [[('name', '=', name)], [('name', 'ilike', name)]]
+            domains += [Domain('name', '=', name), Domain('name', 'ilike', name)]
 
         company = company or self.env.company
         for company_domain in (
@@ -301,10 +299,10 @@ class ProductProduct(models.Model):
             [('company_id', '=', False)],
         ):
             products = self.env['product.product'].search(
-                expression.AND([
-                    expression.OR(domains),
+                Domain.AND([
+                    Domain.OR(domains),
                     company_domain,
-                    extra_domain or [],
+                    extra_domain or Domain.TRUE,
                 ]),
             )
             for domain in domains:

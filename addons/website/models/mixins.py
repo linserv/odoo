@@ -9,7 +9,6 @@ from odoo import api, fields, models, _
 from odoo.fields import Domain
 from odoo.addons.website.tools import text_from_html
 from odoo.http import request
-from odoo.osv import expression
 from odoo.exceptions import AccessError
 from odoo.tools import escape_psql
 from odoo.tools.json import scriptsafe as json_safe
@@ -260,7 +259,7 @@ class WebsitePublishedMixin(models.AbstractModel):
                 # Some main_record might be in sudo because their content needs
                 # to be rendered by a template even if they were not supposed
                 # to be accessible
-                plain_record = record.sudo(flag=False) if self._context.get('can_publish_unsudo_main_object', False) else record
+                plain_record = record.sudo(flag=False) if self.env.context.get('can_publish_unsudo_main_object', False) else record
                 self.env['website'].get_current_website()._check_user_can_modify(plain_record)
                 record.can_publish = True
             except AccessError:
@@ -286,7 +285,7 @@ class WebsitePublishedMultiMixin(WebsitePublishedMixin):
     @api.depends('is_published', 'website_id')
     @api.depends_context('website_id')
     def _compute_website_published(self):
-        current_website_id = self._context.get('website_id')
+        current_website_id = self.env.context.get('website_id')
         for record in self:
             if current_website_id:
                 record.website_published = record.is_published and (not record.website_id or record.website_id.id == current_website_id)
@@ -302,11 +301,11 @@ class WebsitePublishedMultiMixin(WebsitePublishedMixin):
             return NotImplemented
         assert list(value) == [True]
 
-        current_website_id = self._context.get('website_id')
+        current_website_id = self.env.context.get('website_id')
         is_published = Domain('is_published', '=', True)
         if current_website_id:
-            on_current_website = self.env['website'].website_domain(current_website_id)
-            return is_published & Domain(on_current_website)
+            on_current_website = self.env['website'].browse(current_website_id).website_domain()
+            return is_published & on_current_website
         else:  # should be in the backend, return things that are published anywhere
             return is_published
 
@@ -343,14 +342,14 @@ class WebsiteSearchableMixin(models.AbstractModel):
 
         :return: domain limited to the matches of the search expression
         """
-        domains = domain_list.copy()
+        domain = Domain.AND(domain_list)
         if search:
             for search_term in search.split():
-                subdomains = [[(field, 'ilike', escape_psql(search_term))] for field in fields]
+                subdomains = [Domain(field, 'ilike', escape_psql(search_term)) for field in fields]
                 if extra:
                     subdomains.append(extra(self.env, search_term))
-                domains.append(expression.OR(subdomains))
-        return expression.AND(domains)
+                domain &= Domain.OR(subdomains)
+        return domain
 
     @api.model
     def _search_get_detail(self, website, order, options):

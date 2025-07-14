@@ -153,7 +153,7 @@
         </xpath>
     </template>
 
-    <template id="website_sale_coupon_cart_hide_qty" inherit_id="website_sale.cart_lines">
+    <template id="website_sale_coupon_cart_hide_qty" inherit_id="website_sale.cart_lines_price">
         <xpath expr="//del" position="attributes">
             <attribute name="t-if">not line.is_reward_line</attribute>
         </xpath>
@@ -194,7 +194,7 @@
 
     <template id="reduction_coupon_code" inherit_id="website_sale.reduction_code">
         <xpath expr="//t[@t-set='force_coupon']" position="after">
-            <t t-set="_placeholder" t-value="'Discount code or gift card'"/>
+            <t t-set="_placeholder">Discount code or gift card</t>
         </xpath>
     </template>
 
@@ -220,10 +220,6 @@
 
 
     <template id="cart_line_product_no_link" inherit_id="website_sale.cart_lines">
-        <xpath expr="//h6[@t-field='line.name_short']" position="replace">
-            <h6 t-if="line.is_reward_line" class="d-inline align-top fw-bold text-wrap small" t-field="line.name"/>
-            <t t-else="">$0</t>
-        </xpath>
         <xpath expr="//div[@name='o_wsale_cart_line_button_container']" position="before">
             <t t-if="line.is_reward_line" t-call="sale_loyalty.used_gift_card"/>
         </xpath>

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import logging
@@ -8,7 +7,7 @@ from datetime import datetime
 
 from odoo import api, fields, models, tools, _
 from odoo.exceptions import UserError, ValidationError, AccessError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools import sql, SQL
 from odoo.tools.json import scriptsafe as json_safe
 
@@ -191,7 +190,7 @@ class ForumPost(models.Model):
 
     @api.depends_context('uid')
     def _compute_user_vote(self):
-        votes = self.env['forum.post.vote'].search_read([('post_id', 'in', self._ids), ('user_id', '=', self._uid)], ['vote', 'post_id'])
+        votes = self.env['forum.post.vote'].sudo().search_read([('post_id', 'in', self._ids), ('user_id', '=', self.env.uid)], ['vote', 'post_id'])
         mapped_vote = dict([(v['post_id'][0], v['vote']) for v in votes])
         for vote in self:
             vote.user_vote = mapped_vote.get(vote.id, 0)
@@ -208,7 +207,7 @@ class ForumPost(models.Model):
     @api.depends_context('uid')
     def _compute_user_favourite(self):
         for post in self:
-            post.user_favourite = post._uid in post.favourite_ids.ids
+            post.user_favourite = post.env.uid in post.favourite_ids.ids
 
     @api.depends('favourite_ids')
     def _compute_favorite_count(self):
@@ -228,7 +227,7 @@ class ForumPost(models.Model):
     @api.depends_context('uid')
     def _compute_uid_has_answered(self):
         for post in self:
-            post.uid_has_answered = post._uid in post.child_ids.create_uid.ids
+            post.uid_has_answered = post.env.uid in post.child_ids.create_uid.ids
 
     @api.depends('child_ids.is_correct')
     def _compute_has_validated_answer(self):
@@ -375,7 +374,7 @@ class ForumPost(models.Model):
                     raise AccessError(_('%d karma required to accept or refuse an answer.', post.karma_accept))
                 # update karma except for self-acceptance
                 mult = 1 if vals['is_correct'] else -1
-                if vals['is_correct'] != post.is_correct and post.create_uid.id != self._uid:
+                if vals['is_correct'] != post.is_correct and post.create_uid.id != self.env.uid:
                     post.create_uid.sudo()._add_karma(post.forum_id.karma_gen_answer_accepted * mult, post,
                                                       _('User answer accepted') if mult > 0 else _('Accepted answer removed'))
                     self.env.user.sudo()._add_karma(post.forum_id.karma_gen_answer_accept * mult, post,
@@ -521,7 +520,7 @@ class ForumPost(models.Model):
 
         self.write({
             'state': 'close',
-            'closed_uid': self._uid,
+            'closed_uid': self.env.uid,
             'closed_date': datetime.today().strftime(tools.DEFAULT_SERVER_DATETIME_FORMAT),
             'closed_reason_id': reason_id,
         })
@@ -608,7 +607,7 @@ class ForumPost(models.Model):
     def vote(self, upvote=True):
         self.ensure_one()
         Vote = self.env['forum.post.vote']
-        existing_vote = Vote.search([('post_id', '=', self.id), ('user_id', '=', self._uid)])
+        existing_vote = Vote.search([('post_id', '=', self.id), ('user_id', '=', self.env.uid)])
         new_vote_value = '1' if upvote else '-1'
         if existing_vote:
             if upvote:
@@ -770,8 +769,8 @@ class ForumPost(models.Model):
             self.ensure_one()
             if not self.can_comment:
                 raise AccessError(_('%d karma required to comment.', self.karma_comment))
-            if not kwargs.get('record_name') and self.parent_id:
-                kwargs['record_name'] = self.parent_id.name
+            if not kwargs.get('force_record_name') and self.parent_id.name:
+                kwargs['force_record_name'] = self.parent_id.name
         return super().message_post(message_type=message_type, **kwargs)
 
     def _notify_thread_by_inbox(self, message, recipients_data, msg_vals=False, **kwargs):
@@ -865,36 +864,36 @@ class ForumPost(models.Model):
         }
 
         domain = website.website_domain()
-        domain = expression.AND([domain, [('state', '=', 'active'), ('can_view', '=', True)]])
+        domain &= Domain('state', '=', 'active') & Domain('can_view', '=', True)
         include_answers = options.get('include_answers', False)
         if not include_answers:
-            domain = expression.AND([domain, [('parent_id', '=', False)]])
+            domain &= Domain('parent_id', '=', False)
         forum = options.get('forum')
         if forum:
-            domain = expression.AND([domain, [('forum_id', '=', self.env['ir.http']._unslug(forum)[1])]])
+            domain &= Domain('forum_id', '=', self.env['ir.http']._unslug(forum)[1])
         tags = options.get('tag')
         if tags:
-            domain = expression.AND([domain, [('tag_ids', 'in', [self.env['ir.http']._unslug(tag)[1] for tag in tags.split(',')])]])
+            domain &= Domain('tag_ids', 'in', [self.env['ir.http']._unslug(tag)[1] for tag in tags.split(',')])
         filters = options.get('filters')
         if filters == 'unanswered':
-            domain = expression.AND([domain, [('child_ids', '=', False)]])
+            domain &= Domain('child_ids', '=', False)
         elif filters == 'solved':
-            domain = expression.AND([domain, [('has_validated_answer', '=', True)]])
+            domain &= Domain('has_validated_answer', '=', True)
         elif filters == 'unsolved':
-            domain = expression.AND([domain, [('has_validated_answer', '=', False)]])
+            domain &= Domain('has_validated_answer', '=', False)
         user = self.env.user
         my = options.get('my')
         create_uid = user.id if my == 'mine' else options.get('create_uid')
         if create_uid:
-            domain = expression.AND([domain, [('create_uid', '=', create_uid)]])
+            domain &= Domain('create_uid', '=', create_uid)
         if my == 'followed':
-            domain = expression.AND([domain, [('message_partner_ids', '=', user.partner_id.id)]])
+            domain &= Domain('message_partner_ids', '=', user.partner_id.id)
         elif my == 'tagged':
-            domain = expression.AND([domain, [('tag_ids.message_partner_ids', '=', user.partner_id.id)]])
+            domain &= Domain('tag_ids.message_partner_ids', '=', user.partner_id.id)
         elif my == 'favourites':
-            domain = expression.AND([domain, [('favourite_ids', '=', user.id)]])
+            domain &= Domain('favourite_ids', '=', user.id)
         elif my == 'upvoted':
-            domain = expression.AND([domain, [('vote_ids.user_id', '=', user.id)]])
+            domain &= Domain('vote_ids.user_id', '=', user.id)
 
         # 'sorting' from the form's "Order by" overrides order during auto-completion
         order = options.get('sorting', order)

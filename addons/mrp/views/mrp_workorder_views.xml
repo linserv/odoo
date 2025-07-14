@@ -16,7 +16,7 @@
                 <filter string="Late" name="late" domain="[('date_start','&lt;=',time.strftime('%Y-%m-%d'))]"/>
                 <separator/>
                 <filter string="Start Date" name="date_start_filter" date="date_start"/>
-                <group expand="0" string="Group By...">
+                <group string="Group By...">
                     <filter string="Work center" name="workcenter" domain="[]" context="{'group_by': 'workcenter_id'}"/>
                     <filter string="Product" name="product" domain="[]" context="{'group_by': 'product_id'}"/>
                 </group>
@@ -60,7 +60,7 @@
         <field name="model">mrp.workorder</field>
         <field name="priority" eval="100"/>
         <field name="arch" type="xml">
-            <list>
+            <list multi_edit="1">
                 <field name="consumption" column_invisible="True"/>
                 <field name="company_id" column_invisible="True"/>
                 <field name="is_produced" column_invisible="True"/>
@@ -280,6 +280,8 @@
                 <field name="production_id"/>
                 <field name="product_id"/>
                 <field name="finished_lot_id"/>
+                <field name="product_variant_attributes"/>
+                <field name="move_raw_ids" string="Component" filter_domain="[('move_raw_ids.product_id', 'ilike', self)]"/>
                 <filter string="In Progress" name="progress" domain="[('state', '=', 'progress')]"/>
                 <filter string="To Do" name="ready" domain="[('state', '=', 'ready')]"/>
                 <filter string="Blocked" name="blocked" domain="[('state', '=', 'blocked')]"/>
@@ -288,7 +290,7 @@
                 <separator/>
                 <filter string="Late" name="late" domain="['&amp;', ('date_start', '&lt;', datetime.datetime.now()), ('state', '=', 'ready')]"
                     help="Production started late"/>
-                <group expand="0" string="Group By">
+                <group string="Group By">
                     <filter string="Work Center" name="work_center" domain="[]" context="{'group_by': 'workcenter_id'}"/>
                     <filter string="Manufacturing Order" name="production" domain="[]" context="{'group_by': 'production_id'}"/>
                     <filter string="Status" name="status" domain="[]" context="{'group_by': 'state'}"/>
@@ -367,7 +369,7 @@
                         </div>
                         <footer>
                             <h5>
-                                <field name="product_id"/>, <field name="qty_production" class="ms-1"/> <field name="product_uom_id"/><t t-if="record.finished_lot_id.value">, </t> <field t-if="record.finished_lot_id.value" name="finished_lot_id" class="ms-1"/>
+                                <field name="product_id"/>, <field name="qty_production" class="ms-1"/> <field name="product_uom_id" groups="uom.group_uom"/><t t-if="record.finished_lot_id.value">, </t> <field t-if="record.finished_lot_id.value" name="finished_lot_id" class="ms-1"/>
                             </h5>
                             <div class="o_kanban_workorder_status d-flex ms-auto" t-if="record.state.raw_value == 'progress'">
                                 <span t-if="record.working_state.raw_value != 'blocked' and record.working_user_ids.raw_value.length > 0" class="fa fa-play fs-6" role="img" aria-label="Is running" title="Is running"/>

@@ -22,7 +22,7 @@ export function useColorPickerBuilderComponent() {
             const proms = [];
             for (const applySpec of applySpecs) {
                 proms.push(
-                    applySpec.apply({
+                    applySpec.action.apply({
                         editingElement: applySpec.editingElement,
                         params: applySpec.actionParam,
                         value: applySpec.actionValue,
@@ -72,6 +72,7 @@ export function useColorPickerBuilderComponent() {
         }
         preventNextPreview = true;
         callOperation(applyOperation.preview, {
+            preview: true,
             userInputValue: getColor(colorValue),
             operationParams: {
                 cancellable: true,
@@ -136,9 +137,11 @@ export class BuilderColorPicker extends Component {
                 showRgbaField: true,
                 noTransparency: this.props.noTransparency,
                 enabledTabs: this.props.enabledTabs,
+                className: "o-hb-colorpicker",
             },
             {
                 onClose: onPreviewRevert,
+                popoverClass: "o-hb-colorpicker-popover",
             }
         );
     }

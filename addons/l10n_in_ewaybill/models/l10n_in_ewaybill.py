@@ -325,6 +325,7 @@ class L10nInEwaybill(models.Model):
             self._check_lines,
             self._check_gst_treatment,
             self._check_transporter,
+            self._check_state,
         ]
         for get_error_message in methods_to_check:
             error_message.extend(get_error_message())
@@ -346,6 +347,15 @@ class L10nInEwaybill(models.Model):
         }
         for partner in partners:
             error_message += self._l10n_in_validate_partner(partner)
+        return error_message
+
+    def _check_state(self):
+        error_message = []
+        if self.account_move_id and self.account_move_id.state != 'posted':
+            error_message.append(_(
+                "An E-waybill cannot be generated for a %s move.",
+                dict(self.env['account.move']._fields['state']._description_selection(self.env))[self.account_move_id.state]
+            ))
         return error_message
 
     @api.model
@@ -473,7 +483,7 @@ class L10nInEwaybill(models.Model):
         cancel_json = {
             'ewbNo': int(self.name),
             'cancelRsnCode': int(self.cancel_reason),
-            'CnlRem': self.cancel_remarks,
+            'cancelRmrk': self.cancel_remarks,
         }
         ewb_api = EWayBillApi(self.company_id)
         self._lock_ewaybill()
@@ -482,13 +492,14 @@ class L10nInEwaybill(models.Model):
         except EWayBillError as error:
             self._handle_error(error)
             return False
+        self._handle_internal_warning_if_present(response)  # In case of error 312
         self._create_and_post_response_attachment(
             ewb_name=self.name,
             response=response,
             is_cancel=True
         )
         self._write_successfully_response({'state': 'cancel'})
-        self._cr.commit()
+        self.env.cr.commit()
 
     def _generate_ewaybill(self):
         self.ensure_one()
@@ -514,7 +525,7 @@ class L10nInEwaybill(models.Model):
             ),
             **self._l10n_in_ewaybill_handle_zero_distance_alert_if_present(response_data)
         })
-        self._cr.commit()
+        self.env.cr.commit()
 
     @api.model
     def _convert_str_datetime_to_date(self, str_datetime):

@@ -37,17 +37,15 @@ class PosCategory(models.Model):
     has_image = fields.Boolean(compute='_compute_has_image')
 
     @api.model
-    def _load_pos_data_domain(self, data):
+    def _load_pos_data_domain(self, data, config):
         domain = []
-        limited_categories = data['pos.config'][0]['limit_categories']
-        if limited_categories:
-            available_category_ids = data['pos.config'][0]['iface_available_categ_ids']
-            category_ids = self.env['pos.category'].browse(available_category_ids)._get_descendants().ids
+        if config.limit_categories:
+            category_ids = config.iface_available_categ_ids._get_descendants().ids
             domain += [('id', 'in', category_ids)]
         return domain
 
     @api.model
-    def _load_pos_data_fields(self, config_id):
+    def _load_pos_data_fields(self, config):
         return ['id', 'name', 'parent_id', 'child_ids', 'write_date', 'has_image', 'color', 'sequence', 'hour_until', 'hour_after']
 
     def _get_hierarchy(self) -> List[str]:
@@ -70,22 +68,6 @@ class PosCategory(models.Model):
     def _compute_has_image(self):
         for category in self:
             category.has_image = bool(category.image_128)
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            if vals.get("parent_id"):
-                vals["color"] = self.search_read([("id", "=", vals["parent_id"])])[0][
-                    "color"
-                ]
-        return super().create(vals_list)
-
-    def write(self, vals):
-        if vals.get('parent_id') and not ("color" in vals):
-            vals["color"] = self.search_read([("id", "=", vals["parent_id"])])[0][
-                "color"
-            ]
-        return super().write(vals)
 
     def _get_descendants(self):
         available_categories = self

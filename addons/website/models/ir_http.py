@@ -8,17 +8,15 @@ import unittest
 
 import pytz
 import werkzeug
-import werkzeug.routing
-import werkzeug.utils
 
 import odoo
 from odoo import api, models, tools
 from odoo import SUPERUSER_ID
 from odoo.exceptions import AccessError
+from odoo.fields import Domain
 from odoo.http import request
 from odoo.tools.json import scriptsafe as json_scriptsafe
 from odoo.tools.safe_eval import safe_eval
-from odoo.osv.expression import FALSE_DOMAIN
 from odoo.addons.base.models.ir_http import EXTENSION_TO_WEB_MIMETYPES
 from odoo.addons.http_routing.models import ir_http
 from odoo.addons.portal.controllers.portal import _build_url_w_params
@@ -28,17 +26,16 @@ logger = logging.getLogger(__name__)
 
 def sitemap_qs2dom(qs, route, field='name'):
     """ Convert a query_string (can contains a path) to a domain"""
-    dom = []
     if qs and qs.lower() not in route:
         needles = qs.strip('/').split('/')
         # needles will be altered and keep only element which one is not in route
         # diff(from=['shop', 'product'], to=['shop', 'product', 'product']) => to=['product']
         unittest.util.unorderable_list_difference(route.strip('/').split('/'), needles)
         if len(needles) == 1:
-            dom = [(field, 'ilike', needles[0])]
+            return Domain(field, 'ilike', needles[0])
         else:
-            dom = list(FALSE_DOMAIN)
-    return dom
+            return Domain.FALSE
+    return Domain.TRUE
 
 
 def get_request_website():
@@ -181,7 +178,7 @@ class IrHttp(models.AbstractModel):
             if website:
                 request.update_env(user=website._get_cached('user_id'))
 
-        if not request.uid:
+        if not request.env.uid:
             super()._auth_method_public()
 
     @classmethod
@@ -239,7 +236,7 @@ class IrHttp(models.AbstractModel):
     def _frontend_pre_dispatch(cls):
         super()._frontend_pre_dispatch()
 
-        if not request.context.get('tz'):
+        if not request.env.context.get('tz'):
             with contextlib.suppress(pytz.UnknownTimeZoneError):
                 request.update_context(tz=pytz.timezone(request.geoip.location.time_zone).zone)
 
@@ -266,7 +263,7 @@ class IrHttp(models.AbstractModel):
             **cls._get_web_editor_context(),
         )
 
-        request.website = website.with_context(request.context)
+        request.website = website.with_context(request.env.context)
 
     @classmethod
     def _post_dispatch(cls, response):
@@ -303,7 +300,7 @@ class IrHttp(models.AbstractModel):
         req_page = request.httprequest.path
 
         def _search_page(comparator='='):
-            page_domain = [('url', comparator, req_page)] + request.website.website_domain()
+            page_domain = Domain('url', comparator, req_page) & request.website.website_domain()
             return request.env['website.page'].sudo().search(page_domain, order='website_id asc', limit=1)
 
         # specific page first
@@ -348,12 +345,12 @@ class IrHttp(models.AbstractModel):
     def _serve_redirect(cls):
         req_page = request.httprequest.path
         req_page_with_qs = request.httprequest.environ['REQUEST_URI']
-        domain = [
-            ('redirect_type', 'in', ('301', '302')),
+        domain = (
+            Domain('redirect_type', 'in', ('301', '302'))
             # trailing / could have been removed by server_page
-            ('url_from', 'in', [req_page_with_qs, req_page.rstrip('/'), req_page + '/'])
-        ]
-        domain += request.website.website_domain()
+            & Domain('url_from', 'in', [req_page_with_qs, req_page.rstrip('/'), req_page + '/'])
+            & request.website.website_domain()
+        )
         return request.env['website.rewrite'].sudo().search(domain, order='url_from DESC', limit=1)
 
     @classmethod
@@ -417,7 +414,7 @@ class IrHttp(models.AbstractModel):
                     )
                     values['view'] = values['view'] and values['view'][0]
         # Needed to show reset template on translated pages (`_prepare_environment` will set it for main lang)
-        values['editable'] = request.uid and request.env.user.has_group('website.group_website_designer')
+        values['editable'] = request.env.uid and request.env.user.has_group('website.group_website_designer')
         return values
 
     @classmethod

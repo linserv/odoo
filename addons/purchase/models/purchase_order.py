@@ -420,7 +420,7 @@ class PurchaseOrder(models.Model):
         # are taken with the company of the order
         # if not defined, with_company doesn't change anything.
         self = self.with_company(self.company_id)
-        default_currency = self._context.get("default_currency_id")
+        default_currency = self.env.context.get("default_currency_id")
         if not self.partner_id:
             self.fiscal_position_id = False
             self.currency_id = default_currency or self.env.company.currency_id.id
@@ -473,10 +473,12 @@ class PurchaseOrder(models.Model):
         return groups
 
     def _notify_by_email_prepare_rendering_context(self, message, msg_vals=False, model_description=False,
-                                                   force_email_company=False, force_email_lang=False):
+                                                   force_email_company=False, force_email_lang=False,
+                                                   force_record_name=False):
         render_context = super()._notify_by_email_prepare_rendering_context(
             message, msg_vals=msg_vals, model_description=model_description,
-            force_email_company=force_email_company, force_email_lang=force_email_lang
+            force_email_company=force_email_company, force_email_lang=force_email_lang,
+            force_record_name=force_record_name,
         )
         subtitles = [render_context['record'].name]
         # don't show price on RFQ mail
@@ -783,7 +785,10 @@ class PurchaseOrder(models.Model):
 
         if len(invoices) != 1:
             raise ValidationError(_("You can only upload a bill for a single vendor at a time."))
-        invoices.with_context(skip_is_manually_modified=True)._extend_with_attachments(attachments, new=True)
+        invoices.with_context(skip_is_manually_modified=True)._extend_with_attachments(
+            invoices._to_files_data(attachments),
+            new=True,
+        )
 
         invoices.message_post(attachment_ids=attachments.ids)
 
@@ -819,7 +824,8 @@ class PurchaseOrder(models.Model):
                 # Merge RFQs into the oldest purchase order
                 rfqs -= oldest_rfq
                 for rfq_line in rfqs.order_line:
-                    existing_line = oldest_rfq.order_line.filtered(lambda l: l.product_id == rfq_line.product_id and
+                    existing_line = oldest_rfq.order_line.filtered(lambda l: l.display_type not in ['line_note', 'line_section'] and
+                                                                                l.product_id == rfq_line.product_id and
                                                                                 l.product_uom_id == rfq_line.product_uom_id and
                                                                                 l.analytic_distribution == rfq_line.analytic_distribution and
                                                                                 l.discount == rfq_line.discount and
@@ -880,7 +886,7 @@ class PurchaseOrder(models.Model):
         """Prepare the dict of values to create the new invoice for a purchase order.
         """
         self.ensure_one()
-        move_type = self._context.get('default_move_type', 'in_invoice')
+        move_type = self.env.context.get('default_move_type', 'in_invoice')
 
         partner_invoice = self.env['res.partner'].browse(self.partner_id.address_get(['invoice'])['invoice'])
         partner_bank_id = self.partner_id.commercial_partner_id.bank_ids.filtered_domain(['|', ('company_id', '=', False), ('company_id', '=', self.company_id.id)])[:1]
@@ -1117,7 +1123,7 @@ class PurchaseOrder(models.Model):
         }
 
     def _get_product_catalog_domain(self):
-        return Domain.AND([super()._get_product_catalog_domain(), [('purchase_ok', '=', True)]])
+        return super()._get_product_catalog_domain() & Domain('purchase_ok', '=', True)
 
     def _get_product_catalog_order_data(self, products, **kwargs):
         res = super()._get_product_catalog_order_data(products, **kwargs)
@@ -1294,6 +1300,13 @@ class PurchaseOrder(models.Model):
         """
         self.ensure_one()
         return self.state == 'cancel'
+
+    @api.model
+    def get_import_templates(self):
+        return [{
+            'label': _('Import Template for Requests for Quotation'),
+            'template': '/purchase/static/xls/requests_for_quotation_import_template.xlsx',
+        }]
 
     # ------------------------------------------------------------
     # EDI

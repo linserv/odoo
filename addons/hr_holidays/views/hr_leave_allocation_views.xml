@@ -7,10 +7,13 @@
         <field name="arch" type="xml">
             <search string="Search allocations">
                 <field name="employee_id" string='Employee'/>
-                <field name="name"/>
+                <field name="name" string="Title"/>
+                <field name="department_id"/>
+                <field name="holiday_status_id"/>
+                <field name="allocation_type"/>
+                <field name="accrual_plan_id"/>
                 <field name="activity_user_id" string="Activities of"/>
                 <field name="activity_type_id" string="Activity type"/>
-                <field name="holiday_status_id"/>
                 <filter domain="[
                         ('state','in',['confirm']),
                         '|',
@@ -56,7 +59,6 @@
                 <filter string="My Allocations" name="my_leaves" domain="[('employee_id.user_id', '=', uid)]"/>
                 <filter string="Validity Start" name="validity_start" date="date_from" start_month="0" end_month="2" start_year="-1" end_year="1"/>
                 <separator/>
-                <field name="holiday_status_id"/>
                 <filter invisible="1" string="My Activities" name="filter_activities_my"
                     domain="[('activity_user_id', '=', uid)]"/>
                 <separator invisible="1"/>
@@ -72,7 +74,7 @@
                 <filter name="approved_state" string="To Approve or Approved Allocations" invisible="1"
                     domain="[('state', 'in', ('confirm', 'validate'))]"/>
                 <separator/>
-                <group expand="0" string="Group By">
+                <group string="Group By">
                     <filter name="group_employee" string="Employee" context="{'group_by':'employee_id'}"/>
                     <filter name="group_type" string="Type" context="{'group_by':'holiday_status_id'}"/>
                     <filter name="group_allocation_type" string="Allocation Type" context="{'group_by':'allocation_type'}"/>
@@ -284,7 +286,7 @@
                     <button type="action"
                         name="%(hr_holidays.action_hr_leave_allocation_generate_multi_wizard)d"
                         string="New Group Allocation" class="btn btn-secondary"
-                        groups="hr_holidays.group_hr_holidays_user" display="always"
+                        groups="hr_holidays.group_hr_holidays_responsible" display="always"
                     />
                 </header>
                 <field name="employee_id" decoration-muted="not active_employee" widget="many2one_avatar_employee" readonly="state in ['refuse', 'validate']"/>
@@ -384,7 +386,7 @@
                     <button type="action"
                         name="%(hr_holidays.action_hr_leave_allocation_generate_multi_wizard)d"
                         string="New Group Allocation" class="btn btn-secondary"
-                        groups="hr_holidays.group_hr_holidays_user" display="always"/>
+                        groups="hr_holidays.group_hr_holidays_responsible" display="always"/>
                 </header>
                 <field name="can_approve"/>
                 <field name="can_validate"/>
@@ -425,9 +427,9 @@
                                             </div>
                                             <div class="col-3 o_hr_holidays_card">
                                                 <div class="fw-bold d-flex gap-1 me-1">
-                                                    <field name="virtual_remaining_leaves" widget="integer" options="{'type': 'number'}"/>
+                                                    <field name="virtual_remaining_leaves" widget="float" digits="[3,2]"/>
                                                     /
-                                                    <field name="max_leaves" widget="integer" options="{'type': 'number'}"/>
+                                                    <field name="max_leaves" widget="float" digits="[3,2]"/>
                                                 </div>
                                                 <span>
                                                     Current balance

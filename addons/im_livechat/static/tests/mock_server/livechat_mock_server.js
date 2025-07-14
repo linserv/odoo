@@ -152,7 +152,13 @@ async function livechat_init(request) {
 registerRoute("/im_livechat/email_livechat_transcript", email_livechat_transcript);
 /** @type {RouteCallback} */
 async function email_livechat_transcript(request) {
-    return true;
+    const DiscussChannel = this.env["discuss.channel"];
+    const { channel_id, email } = await parseRequestParams(request);
+    const [channel] = DiscussChannel.search_read([["id", "=", channel_id]]);
+    if (!channel) {
+        return;
+    }
+    DiscussChannel._email_livechat_transcript(channel_id, email);
 }
 
 registerRoute("/im_livechat/emoji_bundle", get_emoji_bundle);
@@ -160,6 +166,25 @@ registerRoute("/im_livechat/emoji_bundle", get_emoji_bundle);
 async function get_emoji_bundle(request) {
     await loadBundle("web.assets_emoji");
     return new Response();
+}
+
+registerRoute("/im_livechat/session/update_status", session_update_status);
+/** @type {RouteCallback} */
+async function session_update_status(request) {
+    /** @type {import("mock_models").DiscussChannel} */
+    const DiscussChannel = this.env["discuss.channel"];
+    const { channel_id, livechat_status } = await parseRequestParams(request);
+    if (this.env.user.share) {
+        return false;
+    }
+    const [channel] = DiscussChannel.search_read([["id", "=", channel_id]]);
+    if (!channel) {
+        return false;
+    }
+    DiscussChannel.write([channel_id], {
+        livechat_status: livechat_status,
+    });
+    return true;
 }
 
 registerRoute("/im_livechat/session/update_note", session_update_note);
@@ -190,5 +215,9 @@ patch(mailDataHelpers, {
                 makeKwArgs({ fields: ["are_you_inside", "name"] })
             );
         }
+    },
+    _process_request_for_all(store) {
+        super._process_request_for_all(...arguments);
+        store.add({ livechat_available: true });
     },
 });

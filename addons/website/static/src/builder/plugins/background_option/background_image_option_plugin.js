@@ -24,6 +24,7 @@ export class BackgroundImageOptionPlugin extends Plugin {
             ReplaceBgImageAction,
             DynamicColorAction,
         },
+        force_not_editable_selector: ".o_we_bg_filter",
     };
     /**
      * Transfers the background-image and the dataset information relative to
@@ -170,7 +171,7 @@ export class SelectFilterColorAction extends StyleAction {
     }
 }
 
-class ToggleBgImageAction extends BuilderAction {
+export class ToggleBgImageAction extends BuilderAction {
     static id = "toggleBgImage";
     static dependencies = ["backgroundImageOption"];
     load(context) {
@@ -193,7 +194,7 @@ class ToggleBgImageAction extends BuilderAction {
     }
 }
 
-class ReplaceBgImageAction extends BuilderAction {
+export class ReplaceBgImageAction extends BuilderAction {
     static id = "replaceBgImage";
     static dependencies = ["backgroundImageOption"];
     load(context) {
@@ -203,7 +204,7 @@ class ReplaceBgImageAction extends BuilderAction {
         return this.dependencies.backgroundImageOption.applyReplaceBackgroundImage(context);
     }
 }
-class DynamicColorAction extends BuilderAction {
+export class DynamicColorAction extends BuilderAction {
     static id = "dynamicColor";
     static dependencies = ["backgroundImageOption"];
     getValue({ editingElement, params: { mainParam: colorName } }) {

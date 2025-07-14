@@ -195,7 +195,7 @@ try:
 except ImportError:
     from .tools._vendor.send_file import send_file as _send_file
 
-import odoo
+import odoo.addons
 from .exceptions import UserError, AccessError, AccessDenied
 from .modules import module as module_manager
 from .modules.registry import Registry
@@ -986,6 +986,43 @@ class FilesystemSessionStore(sessions.FilesystemSessionStore):
     def is_valid_key(self, key):
         return _base64_urlsafe_re.match(key) is not None
 
+    def get_missing_session_identifiers(self, identifiers):
+        """
+            :param identifiers: session identifiers whose file existence must be checked
+                                identifiers are a part session sid (first 42 chars)
+            :type identifiers: iterable
+            :return: the identifiers which are not present on the filesystem
+            :rtype: set
+
+            Note 1:
+            Working with identifiers 42 characters long means that
+            we don't have to work with the entire sid session,
+            while maintaining sufficient entropy to avoid collisions.
+            See details in ``generate_key``.
+
+            Note 2:
+            Scans the session store for inactive (GC'd) sessions.
+            Works even if GC is done externally (not via ``vacuum()``).
+            Performance is acceptable for an infrequent background job:
+                - listing ``directories``: 1-5s on SSD
+                - iterating sessions:
+                    - 25k on standard SSD: ~1.5 min
+                    - 2M on RAID10 SSD: ~25s
+        """
+        # There are a lot of session files.
+        # Use the param ``identifiers`` to select the necessary directories.
+        # In the worst case, we have 4096 directories (64^2).
+        identifiers = set(identifiers)
+        directories = {
+            os.path.normpath(os.path.join(self.path, identifier[:2]))
+            for identifier in identifiers
+        }
+        # Remove the identifiers for which a file is present on the filesystem.
+        for directory in directories:
+            with contextlib.suppress(OSError), os.scandir(directory) as session_files:
+                identifiers.difference_update(sf.name[:42] for sf in session_files)
+        return identifiers
+
     def delete_from_identifiers(self, identifiers):
         files_to_unlink = []
         for identifier in identifiers:
@@ -1350,6 +1387,7 @@ class HTTPRequest:
         httprequest.parameter_storage_class = werkzeug.datastructures.ImmutableMultiDict
         httprequest.max_content_length = DEFAULT_MAX_CONTENT_LENGTH
         httprequest.max_form_memory_size = 10 * 1024 * 1024  # 10 MB
+        self._session_id__ = httprequest.cookies.get('session_id')
 
         self.__wrapped = httprequest
         self.__environ = self.__wrapped.environ
@@ -1654,7 +1692,7 @@ class Request:
         self._post_init = None
 
     def _get_session_and_dbname(self):
-        sid = self.httprequest.cookies.get('session_id')
+        sid = self.httprequest._session_id__
         if not sid or not root.session_store.is_valid_key(sid):
             session = root.session_store.new()
         else:
@@ -1728,6 +1766,7 @@ class Request:
 
     @property
     def context(self):
+        warnings.warn("Since 19.0, use request.env.context directly", DeprecationWarning, stacklevel=2)
         return self.env.context
 
     @context.setter
@@ -1736,6 +1775,7 @@ class Request:
 
     @property
     def uid(self):
+        warnings.warn("Since 19.0, use request.env.uid directly", DeprecationWarning, stacklevel=2)
         return self.env.uid
 
     @uid.setter
@@ -1744,6 +1784,7 @@ class Request:
 
     @property
     def cr(self):
+        warnings.warn("Since 19.0, use request.env.cr directly", DeprecationWarning, stacklevel=2)
         return self.env.cr
 
     @cr.setter
@@ -2060,7 +2101,9 @@ class Request:
         """ Serve a static file from the file system. """
         module, _, path = self.httprequest.path[1:].partition('/static/')
         try:
-            directory = root.statics[module]
+            directory = root.static_path(module)
+            if not directory:
+                raise NotFound(f'Module "{module}" not found.\n')
             filepath = werkzeug.security.safe_join(directory, path)
             debug = (
                 'assets' in self.session.debug and
@@ -2072,8 +2115,6 @@ class Request:
             )
             root.set_csp(res)
             return res
-        except KeyError:
-            raise NotFound(f'Module "{module}" not found.\n')
         except OSError:  # cover both missing file and invalid permissions
             raise NotFound(f'File "{path}" not found in module {module}.\n')
 
@@ -2477,22 +2518,13 @@ class Application:
         from odoo.service.server import load_server_wide_modules  # noqa: PLC0415
         load_server_wide_modules()
 
-    @functools.cached_property
-    def statics(self):
+    def static_path(self, module_name: str) -> str | None:
         """
         Map module names to their absolute ``static`` path on the file
         system.
         """
-        mod2path = {}
-        for addons_path in odoo.addons.__path__:
-            for module in os.listdir(addons_path):
-                manifest = module_manager.get_manifest(module)
-                static_path = opj(addons_path, module, 'static')
-                if (manifest
-                        and (manifest['installable'] or manifest['assets'])
-                        and os.path.isdir(static_path)):
-                    mod2path[module] = static_path
-        return mod2path
+        manifest = module_manager.Manifest.for_addon(module_name, display_warning=False)
+        return manifest.static_path if manifest is not None else None
 
     def get_static_file(self, url, host=''):
         """
@@ -2516,11 +2548,15 @@ class Application:
         if ((netloc and netloc != host) or (path_netloc and path_netloc != host)):
             return None
 
-        if (module not in self.statics or static != 'static' or not resource):
+        if not (static == 'static' and resource):
+            return None
+
+        static_path = self.static_path(module)
+        if not static_path:
             return None
 
         try:
-            return file_path(f'{module}/static/{resource}')
+            return file_path(opj(static_path, resource))
         except FileNotFoundError:
             return None
 

@@ -201,34 +201,34 @@ test("Can change the padding of an image", async () => {
 
     await click(".o-we-toolbar div[name='image_padding'] .dropdown-toggle");
     await animationFrame();
-    await click(".o_popover span:contains('Small')");
+    await click(".o-dropdown--menu span:contains('Small')");
     await animationFrame();
     expect("img").toHaveClass("p-1");
 
     await click(".o-we-toolbar div[name='image_padding'] .dropdown-toggle");
     await animationFrame();
-    await click(".o_popover span:contains('Medium')");
+    await click(".o-dropdown--menu span:contains('Medium')");
     await animationFrame();
     expect("img").not.toHaveClass("p-1");
     expect("img").toHaveClass("p-2");
 
     await click(".o-we-toolbar div[name='image_padding'] .dropdown-toggle");
     await animationFrame();
-    await click(".o_popover span:contains('Large')");
+    await click(".o-dropdown--menu span:contains('Large')");
     await animationFrame();
     expect("img").not.toHaveClass("p-2");
     expect("img").toHaveClass("p-3");
 
     await click(".o-we-toolbar div[name='image_padding'] .dropdown-toggle");
     await animationFrame();
-    await click(".o_popover span:contains('XL')");
+    await click(".o-dropdown--menu span:contains('XL')");
     await animationFrame();
     expect("img").not.toHaveClass("p-3");
     expect("img").toHaveClass("p-5");
 
     await click(".o-we-toolbar div[name='image_padding'] .dropdown-toggle");
     await animationFrame();
-    await click(".o_popover span:contains('None')");
+    await click(".o-dropdown--menu span:contains('None')");
     await animationFrame();
     expect("img").not.toHaveClass("p-5");
 });
@@ -242,7 +242,7 @@ test("Can undo the image padding", async () => {
 
     await click(".o-we-toolbar div[name='image_padding'] .dropdown-toggle");
     await animationFrame();
-    await click(".o_popover span:contains('Small')");
+    await click(".o-dropdown--menu span:contains('Small')");
     await animationFrame();
     expect("img").toHaveClass("p-1");
 
@@ -528,7 +528,7 @@ test("can undo adding link to image", async () => {
 
 test("can remove the link of an image", async () => {
     await setupEditor(`
-        <a href="#"><img src="${base64Img}"></a>
+        <a href="http://test.test/"><img src="${base64Img}"></a>
     `);
     const img = queryOne("img");
     await click("img");
@@ -542,7 +542,7 @@ test("can remove the link of an image", async () => {
 
 test("can undo link removing of an image", async () => {
     const { editor } = await setupEditor(`
-        <a href="#"><img src="${base64Img}"></a>
+        <a href="http://test.test/"><img src="${base64Img}"></a>
     `);
     const img = queryOne("img");
     await click("img");

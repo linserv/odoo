@@ -1,16 +1,16 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-import pytz
-
 from collections import defaultdict
 from contextlib import contextmanager
-from dateutil.relativedelta import relativedelta
 from itertools import chain
+
+import pytz
+from dateutil.relativedelta import relativedelta
 from psycopg2 import OperationalError
 
-from odoo import api, fields, models, _
-from odoo.exceptions import ValidationError, UserError
-from odoo.osv import expression
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError, ValidationError
+from odoo.fields import Domain
 from odoo.tools.intervals import Intervals
 
 
@@ -149,24 +149,6 @@ class HrWorkEntry(models.Model):
 
     def _get_duration_is_valid(self):
         return self.work_entry_type_id and self.work_entry_type_id.is_leave
-
-    def _get_duration_batch(self):
-        result = {}
-        cached_periods = defaultdict(float)
-        for work_entry in self:
-            date_start = work_entry.date_start
-            date_stop = work_entry.date_stop
-            if not date_start or not date_stop:
-                result[work_entry.id] = 0.0
-                continue
-            if (date_start, date_stop) in cached_periods:
-                result[work_entry.id] = cached_periods[(date_start, date_stop)]
-            else:
-                dt = date_stop - date_start
-                duration = dt.days * 24 + round(dt.total_seconds()) / 3600  # Number of hours
-                cached_periods[(date_start, date_stop)] = duration
-                result[work_entry.id] = duration
-        return result
 
     def _get_duration_batch(self):
         no_version_work_entries = self.env['hr.work.entry']
@@ -335,6 +317,14 @@ class HrWorkEntry(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         vals_list = [self._set_current_contract(vals) for vals in vals_list]
+        company_by_employee_id = {}
+        for vals in vals_list:
+            if vals.get('company_id'):
+                continue
+            if vals['employee_id'] not in company_by_employee_id:
+                employee = self.env['hr.employee'].browse(vals['employee_id'])
+                company_by_employee_id[employee.id] = employee.company_id.id
+            vals['company_id'] = company_by_employee_id[vals['employee_id']]
         work_entries = super().create(vals_list)
         work_entries._check_if_error()
         return work_entries
@@ -387,13 +377,13 @@ class HrWorkEntry(models.Model):
             start = start or min(self.mapped('date_start'), default=False)
             stop = stop or max(self.mapped('date_stop'), default=False)
             if not skip and start and stop:
-                domain = [
-                    ('date_start', '<', stop),
-                    ('date_stop', '>', start),
-                    ('state', 'not in', ('validated', 'cancelled')),
-                ]
+                domain = (
+                    Domain('date_start', '<', stop)
+                    & Domain('date_stop', '>', start)
+                    & Domain('state', 'not in', ('validated', 'cancelled'))
+                )
                 if employee_ids:
-                    domain = expression.AND([domain, [('employee_id', 'in', list(employee_ids))]])
+                    domain &= Domain('employee_id', 'in', list(employee_ids))
                 work_entries = self.sudo().with_context(hr_work_entry_no_check=True).search(domain)
                 work_entries._reset_conflicting_state()
             yield

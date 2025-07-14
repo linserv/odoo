@@ -5,7 +5,7 @@ import {
 import { Plugin } from "@html_editor/plugin";
 import { withSequence } from "@html_editor/utils/resource";
 import { _t } from "@web/core/l10n/translation";
-import { unwrapContents } from "@html_editor/utils/dom";
+import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 
 export class FilePlugin extends Plugin {
     static id = "file";
@@ -20,7 +20,8 @@ export class FilePlugin extends Plugin {
             description: _t("Add a download box"),
             icon: "fa-upload",
             run: this.uploadAndInsertFiles.bind(this),
-            isAvailable: this.isUploadCommandAvailable.bind(this),
+            isAvailable: (selection) =>
+                this.isUploadCommandAvailable(selection) && isHtmlContentSupported(selection),
         },
         powerbox_items: {
             categoryId: "media",
@@ -41,16 +42,6 @@ export class FilePlugin extends Plugin {
             },
         }),
         selectors_for_feff_providers: () => ".o_file_box",
-        normalize_handlers: (node) => {
-            // If an image is wrapped in an <a> tag, remove the link on
-            // replacing it with a document. This ensures the document is not
-            // unnecessarily wrapped in a clickable link.
-            const fileElement = node.querySelector(".o_file_box");
-            const parentEl = fileElement?.parentElement;
-            if (parentEl?.tagName === "A" && parentEl.children.length === 1) {
-                unwrapContents(parentEl);
-            }
-        },
     };
 
     get recordInfo() {

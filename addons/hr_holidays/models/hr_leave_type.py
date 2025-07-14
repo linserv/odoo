@@ -105,7 +105,7 @@ class HrLeaveType(models.Model):
     request_unit = fields.Selection([
         ('day', 'Day'),
         ('half_day', 'Half-Day'),
-        ('hour', 'Hours')], default='day', string='Take Time Off in', required=True)
+        ('hour', 'Hours')], default='day', string='Duration Type', required=True)
     unpaid = fields.Boolean('Is Unpaid', default=False)
     include_public_holidays_in_duration = fields.Boolean('Ignore Public Holidays', default=False, help="Public holidays should be counted in the leave duration when applying for leaves")
     leave_notif_subtype_id = fields.Many2one('mail.message.subtype', string='Time Off Notification Subtype', default=lambda self: self.env.ref('hr_holidays.mt_leave', raise_if_not_found=False))
@@ -133,9 +133,9 @@ class HrLeaveType(models.Model):
         if operator not in ('in', 'not in'):
             return NotImplemented
 
-        if {'default_date_from', 'default_date_to', 'tz'} <= set(self._context):
-            default_date_from_dt = fields.Datetime.to_datetime(self._context.get('default_date_from'))
-            default_date_to_dt = fields.Datetime.to_datetime(self._context.get('default_date_to'))
+        if {'default_date_from', 'default_date_to', 'tz'} <= set(self.env.context):
+            default_date_from_dt = fields.Datetime.to_datetime(self.env.context.get('default_date_from'))
+            default_date_to_dt = fields.Datetime.to_datetime(self.env.context.get('default_date_to'))
 
             # Cast: Datetime -> Date using user's tz
             date_from = fields.Date.context_today(self, default_date_from_dt)
@@ -146,7 +146,7 @@ class HrLeaveType(models.Model):
             date_from = date(current_year, 1, 1)
             date_to = date(current_year, 12, 31)
 
-        employee_id = self._context.get('default_employee_id', self._context.get('employee_id')) or self.env.user.employee_id.id
+        employee_id = self.env.context.get('default_employee_id', self.env.context.get('employee_id')) or self.env.user.employee_id.id
 
         leave_types = self.env['hr.leave.allocation'].search([
             ('employee_id', '=', employee_id),
@@ -193,9 +193,9 @@ class HrLeaveType(models.Model):
 
     @api.depends('requires_allocation', 'max_leaves', 'virtual_remaining_leaves')
     def _compute_valid(self):
-        date_from = self._context.get('default_date_from', fields.Datetime.today())
-        date_to = self._context.get('default_date_to', fields.Datetime.today())
-        employee_id = self._context.get('default_employee_id', self._context.get('employee_id', self.env.user.employee_id.id))
+        date_from = self.env.context.get('default_date_from', fields.Datetime.today())
+        date_to = self.env.context.get('default_date_to', fields.Datetime.today())
+        employee_id = self.env.context.get('default_employee_id', self.env.context.get('employee_id', self.env.user.employee_id.id))
         allocation_by_leave_type = dict(self.env['hr.leave.allocation']._read_group(
             domain=Domain([
                 ('holiday_status_id', 'in', self.filtered(lambda leave_type: leave_type.requires_allocation).ids),
@@ -351,14 +351,8 @@ class HrLeaveType(models.Model):
         )
         return {holiday_status.id: count for holiday_status, count in allocations_count}
 
-    @api.depends('employee_requests')
-    def _compute_allocation_validation_type(self):
-        for leave_type in self:
-            if not leave_type.employee_requests:
-                leave_type.allocation_validation_type = 'hr'
-
     def requested_display_name(self):
-        return self._context.get('holiday_status_display_name', True) and self._context.get('employee_id')
+        return self.env.context.get('holiday_status_display_name', True) and self.env.context.get('employee_id')
 
     @api.depends('requires_allocation', 'virtual_remaining_leaves', 'max_leaves', 'request_unit')
     @api.depends_context('holiday_status_display_name', 'employee_id')
@@ -379,7 +373,7 @@ class HrLeaveType(models.Model):
             record.display_name = name
 
     @api.model
-    def _search(self, domain, offset=0, limit=None, order=None):
+    def _search(self, domain, offset=0, limit=None, order=None, **kwargs):
         """ Override _search to order the results, according to some employee.
         The order is the following
 
@@ -394,11 +388,11 @@ class HrLeaveType(models.Model):
         employee = self.env['hr.employee']._get_contextual_employee()
         if order == self._order and employee:
             # retrieve all leaves, sort them, then apply offset and limit
-            leaves = self.browse(super()._search(domain))
+            leaves = self.browse(super()._search(domain, **kwargs))
             leaves = leaves.sorted(key=self._model_sorting_key, reverse=True)
             leaves = leaves[offset:(offset + limit) if limit else None]
             return leaves._as_query()
-        return super()._search(domain, offset, limit, order)
+        return super()._search(domain, offset, limit, order, **kwargs)
 
     def copy_data(self, default=None):
         vals_list = super().copy_data(default=default)
@@ -411,6 +405,7 @@ class HrLeaveType(models.Model):
             ('holiday_status_id', 'in', self.ids),
         ]
         action['context'] = {
+            'employee_id': False,
             'default_holiday_status_id': self.ids[0],
             'search_default_approved_state': 1,
             'search_default_year': 1,

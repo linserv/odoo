@@ -7,7 +7,6 @@ import { _t } from "@web/core/l10n/translation";
 import { rpc } from "@web/core/network/rpc";
 
 const CUSTOM_BUTTON_EXTRA_WIDTH = 10;
-let cachedCurrency;
 
 export class DonationSnippet extends Interaction {
     static selector = ".s_donation";
@@ -37,8 +36,7 @@ export class DonationSnippet extends Interaction {
     }
 
     async willStart() {
-        cachedCurrency ||= await this.waitFor(rpc("/website/get_current_currency"));
-        this.currency = cachedCurrency;
+        this.currency = await rpc("/website/get_current_currency", { cached: true });
     }
 
     start() {
@@ -110,7 +108,7 @@ export class DonationSnippet extends Interaction {
             if (this.rangeSliderEl) {
                 amount = parseFloat(this.rangeSliderEl.value);
             } else if (donationButtonEls.length) {
-                amount = parseFloat(this.el.querySelector("#s_donation_amount_input").value);
+                amount = parseFloat(this.el.querySelector("#s_donation_amount_input")?.value);
                 let errorMessage = "";
                 const minAmount = parseFloat(this.el.dataset.minimumAmount);
                 if (!amount) {

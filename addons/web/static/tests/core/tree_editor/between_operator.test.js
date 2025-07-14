@@ -2,14 +2,11 @@ import { describe, expect, test } from "@odoo/hoot";
 
 import { makeMockEnv } from "@web/../tests/web_test_helpers";
 
+import { condition, connector, expression } from "@web/core/tree_editor/condition_tree";
 import {
-    applyTransformations,
-    condition,
-    connector,
-    expression,
-    FULL_VIRTUAL_OPERATORS_ELIMINATION,
-    FULL_VIRTUAL_OPERATORS_INTRODUCTION,
-} from "@web/core/tree_editor/condition_tree";
+    eliminateVirtualOperators,
+    introduceVirtualOperators,
+} from "@web/core/tree_editor/virtual_operators";
 
 describe.current.tags("headless");
 
@@ -17,9 +14,6 @@ const options = {
     getFieldDef: (name) => {
         if (name === "m2o") {
             return { type: "many2one" };
-        }
-        if (name === "m2o.datetime_2" || name === "datetime_1") {
-            return { type: "datetime" };
         }
         if (name === "m2o.int_2" || name === "int_1") {
             return { type: "integer" };
@@ -72,51 +66,6 @@ test("between operator: introduction/elimination", async () => {
         },
         {
             tree_py: connector("&", [
-                condition("datetime_1", ">=", 1),
-                condition("datetime_1", "<=", 2),
-            ]),
-            tree: condition("datetime_1", "between", [1, 2]),
-        },
-        {
-            tree_py: connector(
-                "&",
-                [condition("datetime_1", ">=", 1), condition("datetime_1", "<=", 2)],
-                true
-            ),
-            tree: condition("datetime_1", "between", [1, 2], true),
-        },
-        {
-            tree_py: connector("&", [
-                condition("m2o.datetime_2", ">=", 1),
-                condition("m2o.datetime_2", "<=", 2),
-            ]),
-            tree: connector("&", [
-                condition("m2o.datetime_2", ">=", 1),
-                condition("m2o.datetime_2", "<=", 2),
-            ]),
-        },
-        {
-            tree_py: condition(
-                "m2o",
-                "any",
-                connector("&", [condition("datetime_2", ">=", 1), condition("datetime_2", "<=", 2)])
-            ),
-            tree: condition("m2o.datetime_2", "between", [1, 2]),
-        },
-        {
-            tree_py: condition(
-                "m2o",
-                "any",
-                connector("&", [
-                    condition("datetime_2", ">=", 1),
-                    condition("datetime_2", "<=", 2),
-                ]),
-                true
-            ),
-            tree: condition("m2o", "any", condition("datetime_2", "between", [1, 2]), true),
-        },
-        {
-            tree_py: connector("&", [
                 condition(expression("path"), ">=", 1),
                 condition(expression("path"), "<=", 2),
             ]),
@@ -145,9 +94,7 @@ test("between operator: introduction/elimination", async () => {
         },
     ];
     for (const { tree_py, tree } of toTest) {
-        expect(applyTransformations(FULL_VIRTUAL_OPERATORS_INTRODUCTION, tree_py, options)).toEqual(
-            tree
-        );
-        expect(applyTransformations(FULL_VIRTUAL_OPERATORS_ELIMINATION, tree)).toEqual(tree_py);
+        expect(introduceVirtualOperators(tree_py, options)).toEqual(tree);
+        expect(eliminateVirtualOperators(tree)).toEqual(tree_py);
     }
 });

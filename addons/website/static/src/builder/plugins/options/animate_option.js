@@ -1,6 +1,5 @@
-import { KeepLast } from "@web/core/utils/concurrency";
 import { BaseOptionComponent, useDomState } from "@html_builder/core/utils";
-import { isImageSupportedForStyle } from "@website/builder/plugins/image/replace_media_option";
+import { isImageSupportedForStyle } from "@html_builder/plugins/image/replace_media_option";
 
 export class AnimateOption extends BaseOptionComponent {
     static template = "website.AnimateOption";
@@ -9,24 +8,21 @@ export class AnimateOption extends BaseOptionComponent {
         getEffectsItems: Function,
         canHaveHoverEffect: Function,
         requireAnimation: { type: Boolean, optional: true },
+        slots: { type: Object, optional: true },
     };
     static defaultProps = { requireAnimation: false };
 
     setup() {
         super.setup();
-        const keeplast = new KeepLast();
-        this.state = useDomState((editingElement) => {
+        this.state = useDomState(async (editingElement) => {
             const hasAnimateClass = editingElement.classList.contains("o_animate");
 
-            // todo: maybe add a spinner
-            keeplast.add(this.props.canHaveHoverEffect(editingElement)).then((result) => {
-                this.state.canHover = result;
-            });
+            const canHover = await this.props.canHaveHoverEffect(editingElement);
 
             return {
                 isOptionActive: this.isOptionActive(editingElement),
                 hasAnimateClass: hasAnimateClass,
-                canHover: false,
+                canHover,
                 isLimitedEffect: this.limitedEffects.some((className) =>
                     editingElement.classList.contains(className)
                 ),

@@ -72,7 +72,7 @@
                 <filter invisible="1" string="Future Activities" name="activities_upcoming_all"
                         domain="[('activity_date_deadline', '&gt;', context_today().strftime('%Y-%m-%d'))
                         ]"/>
-                <group expand="0" string="Group By">
+                <group string="Group By">
                     <filter name="group_employee" string="Employee" context="{'group_by':'employee_id'}"/>
                     <filter name="group_type" string="Type" context="{'group_by':'holiday_status_id'}"/>
                     <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
@@ -91,12 +91,12 @@
         <field name="name">hr.leave.view.kanban</field>
         <field name="model">hr.leave</field>
         <field name="arch" type="xml">
-            <kanban sample="1" class="o_holidays_view_kanban">
+            <kanban sample="1" class="o_holidays_view_kanban" js_class="time_off_kanban_dashboard">
                 <header>
                     <button type="action"
                         name="%(hr_holidays.action_hr_leave_generate_multi_wizard)d"
                         string="New Group Time Off" class="btn btn-secondary"
-                        groups="hr_holidays.group_hr_holidays_user" display="always"
+                        groups="hr_holidays.group_hr_holidays_responsible" display="always"
                     />
                 </header>
                 <field name="supported_attachment_ids_count"/>
@@ -159,9 +159,9 @@
                                             <div class="col-3 o_hr_holidays_card">
                                                 <div t-if="record.holiday_status_requires_allocation.raw_value"> <!-- To keep the same space-->
                                                     <div class="fw-bold d-flex gap-1 me-1">
-                                                        <field name="virtual_remaining_leaves"/>
+                                                        <field name="virtual_remaining_leaves" widget="float" digits="[3,2]"/>
                                                         /
-                                                        <field name="max_leaves"/>
+                                                        <field name="max_leaves" widget="float" digits="[3,2]"/>
                                                     </div>
                                                     <span>
                                                         Current balance
@@ -364,7 +364,7 @@
                             <field name="name" readonly="state != 'confirm'" widget="text" nolabel="1" colspan="2" placeholder="No description provided" />
                         </group>
                         <group>
-                            <field name="supported_attachment_ids" widget="many2many_binary" nolabel="1" invisible="state not in ('confirm', 'validate1')" />
+                            <field name="supported_attachment_ids" widget="many2many_binary" nolabel="1" invisible="state != 'confirm'" />
                         </group>
                     </div>
                     <div class="o_hr_leave_column col_right col-md-6 col-12">
@@ -385,6 +385,9 @@
         <field name="mode">primary</field>
         <field name="priority">100</field>
         <field name="arch" type="xml">
+            <field name="holiday_status_id" position="before">
+                <field name="employee_id" widget="many2one_avatar_employee" readonly="1"/>
+            </field>
             <xpath expr="//header" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
@@ -428,9 +431,11 @@
         <field name="mode">primary</field>
         <field name="priority">17</field>
         <field name="arch" type="xml">
+            <xpath expr="//field[@widget='many2one_avatar_employee']" position="attributes"> 
+                <attribute name="readonly">0</attribute>
+            </xpath>
             <field name="holiday_status_id" position="before">
                 <field name="user_id" invisible="1"/> <!-- Used in HolidaysFormViewDialog -->
-                <field name="employee_id" widget="many2one_avatar_employee"/>
             </field>
         </field>
     </record>
@@ -496,9 +501,9 @@
                 <attribute name="invisible">0</attribute>
             </xpath>
             <xpath expr="//field[@name='holiday_status_id']" position="before">
-                <field name="employee_id" groups="hr_holidays.group_hr_holidays_user" readonly="state in ['cancel', 'refuse', 'validate', 'validate1']" widget="many2one_avatar_employee"/>
+                <field name="employee_id" groups="hr_holidays.group_hr_holidays_responsible" readonly="state in ['cancel', 'refuse', 'validate', 'validate1']" widget="many2one_avatar_employee"/>
                 <field name="company_id" groups="base.group_multi_company"/>
-                <field name="department_id" groups="hr_holidays.group_hr_holidays_user" readonly="1"/>
+                <field name="department_id" groups="hr_holidays.group_hr_holidays_responsible" readonly="1"/>
             </xpath>
         </field>
     </record>
@@ -537,7 +542,7 @@
                     <button type="action"
                         name="%(hr_holidays.action_hr_leave_generate_multi_wizard)d"
                         string="New Group Time Off" class="btn btn-secondary"
-                        groups="hr_holidays.group_hr_holidays_user" display="always"
+                        groups="hr_holidays.group_hr_holidays_responsible" display="always"
                     />
                 </header>
                 <field name="employee_id" widget="many2one_avatar_employee" readonly="state in ['cancel', 'refuse', 'validate', 'validate1']" />

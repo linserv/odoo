@@ -1,55 +1,68 @@
-function getSpecificOperators(fieldDef, params) {
+export function getDomainDisplayedOperators(fieldDef, params = {}) {
+    if (!fieldDef) {
+        fieldDef = {};
+    }
     const { type, is_property } = fieldDef;
 
     if (is_property) {
         switch (type) {
             case "many2many":
             case "tags":
+                return ["in", "not in", "set", "not set"];
             case "many2one":
-                return [];
+            case "selection":
+                return ["=", "!=", "set", "not set"];
         }
     }
-    const allowExpressions = "allowExpressions" in params ? params.allowExpressions : true;
     switch (type) {
+        case "boolean":
+            return ["set", "not set"];
+        case "selection":
+            return ["=", "!=", "in", "not in", "set", "not set"];
         case "char":
         case "text":
         case "html":
-        case "many2one":
-        case "many2many":
-        case "one2many":
-            return ["ilike", "not ilike", "starts_with", "ends_with"];
+            return ["=", "!=", "ilike", "not ilike", "starts with", "set", "not set"];
         case "date":
         case "datetime":
             return [
-                ...(allowExpressions ? ["today", "not_today"] : []),
-                ">",
+                ...("allowExpressions" in params && !params.allowExpressions ? [] : ["in range"]),
+                "=",
                 "<",
-                "between",
-                "not_between",
-                ...(allowExpressions ? ["next", "not_next", "last", "not_last"] : []),
+                ">",
+                "set",
+                "not set",
             ];
         case "integer":
         case "float":
         case "monetary":
-            return [">", "<", "between", "not_between", "ilike", "not ilike"];
+            return ["=", "!=", "<", ">", "between"];
+        case "many2one":
+        case "many2many":
+        case "one2many":
+            return ["in", "not in", "ilike", "not ilike", "set", "not set"];
         case "json":
-            return ["ilike", "not ilike"];
-        case "date_option":
-        case "time_option":
-        case "datetime_option":
-            return [">", "<", "between", "not_between"];
+            return ["=", "!=", "ilike", "not ilike", "set", "not set"];
+        case "properties":
+            return ["set", "not set"];
+        case undefined:
+            return ["="];
         default:
-            return [];
+            return [
+                "=",
+                "!=",
+                "<",
+                ">",
+                "ilike",
+                "not ilike",
+                "like",
+                "not like",
+                "=like",
+                "=ilike",
+                "in",
+                "not in",
+                "set",
+                "not set",
+            ];
     }
-}
-
-export function getDomainDisplayedOperators(fieldDef, params = {}) {
-    fieldDef ||= {};
-    if (!fieldDef.type) {
-        return ["="];
-    }
-    if (fieldDef.type === "boolean") {
-        return ["set", "not_set"];
-    }
-    return ["in", "not in", ...getSpecificOperators(fieldDef, params), "set", "not_set"];
 }

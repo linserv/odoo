@@ -213,6 +213,8 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "livechat_end_dt": False,
                         "livechat_note": False,
                         "livechat_status": "in_progress",
+                        "livechat_outcome": "no_failure",
+                        "livechat_expertise_ids": [],
                         "livechat_operator_id": {
                             "id": self.operator.partner_id.id,
                             "type": "partner",
@@ -315,7 +317,9 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
             channel.channel_member_ids.filtered(lambda m: m.partner_id == self.operator.partner_id)
         )
         self.assertEqual(
-            Store(channel.with_context(guest=guest).with_user(self.user_public)).get_result()["discuss.channel"],
+            Store(
+                channel.with_user(self.user_public).with_context(guest=guest),
+            ).get_result()["discuss.channel"],
             self._filter_channels_fields(
                 {
                     "anonymous_name": f"Visitor #{self.visitor.id}",
@@ -323,7 +327,6 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                     "channel_type": "livechat",
                     "country_id": False,
                     "create_uid": self.user_public.id,
-                    "custom_notifications": False,
                     "default_display_mode": False,
                     "description": False,
                     "fetchChannelInfoState": "fetched",
@@ -343,7 +346,6 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                     "member_count": 1,
                     "message_needaction_counter": 0,
                     "message_needaction_counter_bus_id": 0,
-                    "mute_until_dt": False,
                     "name": f"Visitor #{self.visitor.id} El Deboulonnator",
                     "parent_channel_id": False,
                     "requested_by_operator": False,

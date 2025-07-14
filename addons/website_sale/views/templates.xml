@@ -1224,7 +1224,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"/>
             </div>
             <div
-                if="is_view_active('website_sale.search') and (opt_wsale_attributes or opt_wsale_attributes_top)"
+                t-if="is_view_active('website_sale.search') and (opt_wsale_attributes or opt_wsale_attributes_top)"
                 class="offcanvas-body flex-grow-0 overflow-visible"
             >
                 <t t-call="website_sale.search">
@@ -1342,7 +1342,7 @@
             class="o_wsale_filmstrip_container o_wsale_filmstrip_default d-flex align-items-stretch w-100 overflow-hidden"
             role="navigation"
         >
-            <div class="o_wsale_filmstrip_wrapper w-100 overflow-auto">
+            <div class="o_wsale_filmstrip_wrapper position-relative w-100 overflow-auto z-1">
                 <ul
                     class="o_wsale_filmstrip d-flex align-items-stretch mb-0 w-100 list-unstyled overflow-visible"
                     role="menu"
@@ -1850,8 +1850,12 @@
 
     <!-- /shop/product page -->
     <template id="base_unit_price" name="Product Base unit price">
-        (<span class="o_base_unit_price" t-esc="base_unit_price" t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"/>
-         / <span class="oe_custom_base_unit" t-field="product.base_unit_name"/>)
+        <span
+            class="o_base_unit_price"
+            t-esc="base_unit_price"
+            t-options="{'widget': 'monetary', 'display_currency': website.currency_id}"
+        />
+         / <span class="oe_custom_base_unit" t-field="product.base_unit_name"/>
     </template>
 
     <template id="product" name="Product" track="1">
@@ -1960,7 +1964,7 @@
                                             </t>
                                         </a>
                                     </t>
-                                    <p
+                                    <div
                                         t-field="product.description_ecommerce"
                                         t-attf-class="oe_structure text-muted {{not product.description_ecommerce and 'mb-0'}}"
                                         placeholder="A detailed, formatted description to promote your product on this page. Use '/' to discover more features."
@@ -2326,7 +2330,7 @@
     <template id="product_tags" name="Product Tags" active="True">
         <div
             class="o_product_tags o_field_tags d-flex flex-wrap align-items-center gap-2 mb-2 mt-1"
-            t-if="any(tag.visible_on_ecommerce for tag in all_product_tags)"
+            t-if="any(tag.visible_to_customers for tag in all_product_tags)"
         >
             <t t-foreach="all_product_tags" t-as="tag">
                 <t t-if="tag.visible_to_customers">
@@ -2739,12 +2743,30 @@
                         <div class="d-flex gap-3">
                             <div class="flex-grow-1 text-wrap w-100">
                                 <div class="d-flex justify-content-between">
-                                    <t t-call="website_sale.cart_line_product_link">
-                                        <h6
-                                            t-field="line.name_short"
-                                            class="d-inline align-top fw-bold text-wrap small"
-                                        />
-                                    </t>
+                                    <div class="d-md-flex flex-md-wrap column-gap-md-2 align-items-md-center">
+                                        <t t-call="website_sale.cart_line_product_link">
+                                            <h6
+                                                t-out="line._get_line_header()"
+                                                class="mb-0 fw-bold text-wrap small"
+                                            />
+                                        </t>
+                                        <t t-set="combination_name" t-value="line._get_combination_name()"/>
+                                        <div
+                                            t-if="combination_name or line.product_template_id._has_multiple_uoms()"
+                                            class="d-inline-flex flex-wrap column-gap-2 row-gap-1 align-items-center my-1 my-md-0 w-100 w-md-auto"
+                                        >
+                                            <span
+                                                t-if="combination_name"
+                                                class="h6 text-muted small mb-0"
+                                                t-out="combination_name"
+                                            />
+                                            <span
+                                                t-if="line.product_template_id._has_multiple_uoms()"
+                                                class="badge bg-light"
+                                                t-out="line.product_uom_id.name"
+                                            />
+                                        </div>
+                                    </div>
                                     <div
                                         t-attf-class="{{'d-block d-md-none' if not is_combo else ''}}"
                                         t-call="website_sale.cart_lines_price"
@@ -2781,7 +2803,7 @@
                             <div t-if="not is_combo" class="d-none d-md-block">
                                 <t t-call="website_sale.cart_lines_price"/>
                                 <div
-                                    class="d-none d-md-block"
+                                    class="d-none d-md-block mt-2"
                                     t-call="website_sale.cart_lines_quantity"
                                 />
                             </div>
@@ -2810,18 +2832,18 @@
     </template>
 
     <template id="cart_lines_quantity" name="Shopping Cart Line quantity">
+        <t
+            t-set="should_show_quantity_selector"
+            t-value="is_view_active('website_sale.product_quantity')"
+        />
         <div
-            class="css_quantity input-group justify-content-end h-100 border"
+            t-attf-class="css_quantity input-group justify-content-end h-100 {{should_show_quantity_selector and line._is_sellable() and 'border' or ''}}"
             t-attf-name="{{'website_sale_cart_line_quantity' if not is_mobile else 'website_sale_cart_line_quantity_mobile'}}"
         >
-            <t
-                t-set="should_show_quantity_selector"
-                t-value="is_view_active('website_sale.product_quantity')"
-            />
             <t t-if="should_show_quantity_selector and line._is_sellable()">
                 <a
                     href="#"
-                    class="js_add_cart_json btn btn-link d-inline-block border-end-0"
+                    class="btn btn-link d-inline-block border-end-0"
                     aria-label="Remove one"
                     title="Remove one"
                 >
@@ -2847,7 +2869,7 @@
                 <a
                     t-else=""
                     href="#"
-                    class="js_add_cart_json d-inline-block btn btn-link border-start-0"
+                    class="btn btn-link d-inline-block border-start-0"
                     aria-label="Add one"
                     title="Add one"
                 >
@@ -2869,7 +2891,7 @@
 
     <template id="cart_lines_price" name="Shopping Cart Line Price">
         <h6
-            class="d-flex flex-column flex-md-row align-items-end align-items-md-start justify-content-md-end small fw-bold"
+            class="d-flex flex-column flex-md-row align-items-end align-items-md-start justify-content-md-end mb-0 small fw-bold"
             name="website_sale_cart_line_price"
         >
             <t t-if="line.discount and line._is_sellable() and line._get_displayed_unit_price()">
@@ -2881,20 +2903,20 @@
             </t>
             <t t-set="product_price" t-value="line._get_cart_display_price()"/>
             <t t-call="website_sale.cart_product_price"/>
-            <small
-                t-if="line._is_sellable() and line.env['res.groups']._is_feature_enabled('website_sale.group_show_uom_price') and line.product_id.base_unit_price"
-                class="cart_product_base_unit_price d-block text-muted"
-                groups="website_sale.group_show_uom_price"
-            >
-                <t t-call="website_sale.base_unit_price">
-                    <t t-set="product" t-value="line.product_id"/>
-                    <t
-                        t-set="base_unit_price"
-                        t-value="product._get_base_unit_price(product_price/line.product_uom_qty)"
-                    />
-                </t>
-            </small>
         </h6>
+        <small
+            t-if="line._is_sellable() and line.env['res.groups']._is_feature_enabled('website_sale.group_show_uom_price') and line.product_id.base_unit_price"
+            class="cart_product_base_unit_price d-block text-muted text-end"
+            groups="website_sale.group_show_uom_price"
+        >
+            <t t-call="website_sale.base_unit_price">
+                <t t-set="product" t-value="line.product_id"/>
+                <t
+                    t-set="base_unit_price"
+                    t-value="product._get_base_unit_price(product_price/line.product_uom_qty)"
+                />
+            </t>
+        </small>
     </template>
 
     <template id="cart_combo_item_line">
@@ -2991,13 +3013,14 @@
                     t-as="product"
                     t-attf-class="d-flex gap-3 py-4 #{not product_last and 'border-bottom'}"
                     t-att-data-publish="product.website_published and 'on' or 'off'"
+                    name="suggested_product"
                 >
                     <div class="o_cart_product_image">
                         <a t-att-href="product.website_url">
                             <div t-field="product.image_128" t-options="{'widget': 'image', 'qweb_img_responsive': False, 'class': 'border rounded'}"/>
                         </a>
                     </div>
-                    <div class="o_cart_suggested_product_name flex-grow-1">
+                    <div class="flex-grow-1">
                         <div class="d-flex justify-content-between">
                             <div>
                                 <a t-att-href="product.website_url">
@@ -3007,7 +3030,7 @@
                                     />
                                 </a>
                                 <div
-                                    class="text-truncate small text-muted"
+                                    class="o_description_line overflow-hidden mb-2 small text-muted"
                                     t-field="product.description_sale"
                                 />
                             </div>
@@ -3632,9 +3655,13 @@
                                 class="td-product_name td-qty w-100 pt-3"
                                 name="website_sale_cart_summary_product_name"
                             >
-                                <span class="text-wrap">
-                                    <t t-out="line.name_short"/>
-                                </span>
+                                <span class="text-wrap" t-out="line._get_line_header()"/>
+                                <p class="text-muted small mb-0" t-out="line._get_combination_name()"/>
+                                <span
+                                    t-if="line.product_template_id._has_multiple_uoms()"
+                                    class="badge mt-1 bg-light"
+                                    t-out="line.product_uom_id.name"
+                                />
                             </td>
                             <td class="td-price pe-0 pt-3 text-end"
                                 name="website_sale_cart_summary_line_price">
@@ -3677,7 +3704,10 @@
             </t>
 
             <t t-set="tx_sudo" t-value="order.get_portal_last_transaction()"/>
-            <div t-if="tx_sudo.state in ['pending', 'done']" class="d-flex justify-content-between align-items-center">
+            <div
+                t-if="tx_sudo.state in ['pending', 'done'] or not order.amount_total"
+                class="d-flex justify-content-between align-items-center"
+            >
                 <h3>Thank you for your order.</h3>
                 <a
                     title="Print"
@@ -3815,6 +3845,7 @@
         <div class="oe_website_sale_tx_status mt-3" t-att-data-order-id="order.id" t-att-data-order-tracking-info="json.dumps(order_tracking_info)">
             <t t-set="tx_sudo" t-value="order.get_portal_last_transaction()"/>
             <div
+                t-if="tx_sudo"
                 t-attf-class="alert px-3 pb-0 pt-3 #{
                     (tx_sudo.state == 'pending' and 'alert-info') or
                     (tx_sudo.state == 'done' and order.amount_total == tx_sudo.amount and 'alert-success') or

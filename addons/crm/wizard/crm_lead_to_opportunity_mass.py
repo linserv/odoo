@@ -85,11 +85,11 @@ class CrmLead2opportunityPartnerMass(models.TransientModel):
         self.ensure_one()
         if self.name == 'convert' and self.deduplicate:
             # TDE CLEANME: still using active_ids from context
-            active_ids = self._context.get('active_ids', [])
+            active_ids = self.env.context.get('active_ids', [])
             merged_lead_ids = set()
             remaining_lead_ids = set()
             for lead in self.lead_tomerge_ids:
-                if lead not in merged_lead_ids:
+                if lead.id not in merged_lead_ids:
                     duplicated_leads = self.env['crm.lead']._get_lead_duplicates(
                         partner=lead.partner_id,
                         email=lead.partner_id.email or lead.email_from,

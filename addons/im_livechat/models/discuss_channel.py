@@ -2,7 +2,7 @@
 
 from odoo import api, fields, models, _
 from odoo.addons.mail.tools.discuss import Store
-from odoo.tools import email_normalize, html2plaintext, plaintext2html
+from odoo.tools import email_normalize, email_split, html2plaintext, plaintext2html
 
 from markupsafe import Markup
 
@@ -158,13 +158,10 @@ class DiscussChannel(models.Model):
         "(channel_type, create_date) WHERE channel_type = 'livechat'"
     )
 
-    @api.depends('message_ids')
+    @api.depends("livechat_end_dt")
     def _compute_duration(self):
-        last_msg_by_channel_id = {
-            message.res_id: message for message in self._get_last_messages()
-        }
         for record in self:
-            end = last.date if (last := last_msg_by_channel_id.get(record.id)) else fields.Datetime.now()
+            end = record.livechat_end_dt or fields.Datetime.now()
             record.duration = (end - record.create_date).total_seconds() / 3600
 
     @api.depends("livechat_end_dt")
@@ -223,6 +220,16 @@ class DiscussChannel(models.Model):
     def _search_livechat_agent_history_ids(self, operator, value):
         if operator not in ("any", "in"):
             return NotImplemented
+        if operator == "in" and len(value) == 1 and not next(iter(value)):
+            return [
+                (
+                    "id",
+                    "not in",
+                    self.env["im_livechat.channel.member.history"]
+                    ._search([("livechat_member_type", "=", "agent")])
+                    .subselect("channel_id"),
+                ),
+            ]
         query = (
             self.env["im_livechat.channel.member.history"]._search(value)
             if isinstance(value, fields.Domain)
@@ -305,6 +312,7 @@ class DiscussChannel(models.Model):
         field_names["internal_users"].extend([
             Store.Attr("livechat_note", predicate=lambda c: c.channel_type == "livechat"),
             Store.Attr("livechat_status", predicate=lambda c: c.channel_type == "livechat"),
+            Store.Many("livechat_expertise_ids", ["name"], predicate=lambda c: c.channel_type == "livechat"),
         ])
         return field_names
 
@@ -312,7 +320,7 @@ class DiscussChannel(models.Model):
         """Return the standard fields to include in Store for livechat_operator_id."""
         return ["avatar_128", *self.env["res.partner"]._get_store_livechat_username_fields()]
 
-    def _to_store_defaults(self, for_current_user=True):
+    def _to_store_defaults(self, target: Store.Target):
         fields = [
             "anonymous_name",
             "chatbot_current_step",
@@ -325,13 +333,15 @@ class DiscussChannel(models.Model):
                 sudo=True,
             ),
         ]
-        if for_current_user and self.env.user._is_internal():
+        if target.is_internal(self.env):
             fields.append(Store.One("livechat_channel_id", ["name"], sudo=True))
             fields.extend([
                 Store.Attr("livechat_note", predicate=lambda c: c.channel_type == "livechat"),
+                Store.Attr("livechat_outcome", predicate=lambda c: c.channel_type == "livechat"),
                 Store.Attr("livechat_status", predicate=lambda c: c.channel_type == "livechat"),
+                Store.Many("livechat_expertise_ids", ["name"], predicate=lambda c: c.channel_type == "livechat"),
             ])
-        return super()._to_store_defaults(for_current_user=for_current_user) + fields
+        return super()._to_store_defaults(target) + fields
 
     def _to_store(self, store: Store, fields):
         """Extends the channel header by adding the livechat operator and the 'anonymous' profile"""
@@ -399,7 +409,7 @@ class DiscussChannel(models.Model):
                 member.sudo()._rtc_leave_call()
             # sudo: discuss.channel - visitor left the conversation, state must be updated
             self.sudo().livechat_end_dt = fields.Datetime.now()
-            self._bus_send_store(self, "livechat_end_dt")
+            Store(self, "livechat_end_dt", bus_channel=self).bus_send()
             # avoid useless notification if the channel is empty
             if not self.message_ids:
                 return
@@ -430,7 +440,7 @@ class DiscussChannel(models.Model):
             'subject': _('Conversation with %s', self.livechat_operator_id.user_livechat_username or self.livechat_operator_id.name),
             'email_from': company.catchall_formatted or company.email_formatted,
             'author_id': self.env.user.partner_id.id,
-            'email_to': email,
+            'email_to': email_split(email)[0],
             'body_html': mail_body,
         })
         mail.send()
@@ -457,6 +467,8 @@ class DiscussChannel(models.Model):
             last_msg_from_chatbot = message.author_id == chatbot_op
         return Markup("").join(parts)
 
+    def _get_livechat_session_fields_to_store(self):
+        return []
 
     # =======================
     # Chatbot
@@ -545,7 +557,7 @@ class DiscussChannel(models.Model):
                 question_msg.user_script_answer_id = selected_answer
                 question_msg.user_raw_script_answer_id = selected_answer.id
                 if store := self.env.context.get("message_post_store"):
-                    store.add(message, for_current_user=True).add(question_msg.mail_message_id)
+                    store.add(message).add(question_msg.mail_message_id)
 
             self.env["chatbot.message"].sudo().create(
                 {
@@ -618,4 +630,4 @@ class DiscussChannel(models.Model):
         ):
             # sudo: discuss.channel - last operator left the conversation, state must be updated.
             channel_sudo.livechat_end_dt = fields.Datetime.now()
-            self._bus_send_store(channel_sudo, "livechat_end_dt")
+            Store(channel_sudo, "livechat_end_dt", bus_channel=self).bus_send()

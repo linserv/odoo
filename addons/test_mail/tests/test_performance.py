@@ -531,7 +531,7 @@ class TestBaseAPIPerformance(BaseMailPerformance):
         test_record, test_template = self._create_test_records()
         test_template.write({'attachment_ids': [(5, 0)]})
 
-        with self.assertQueryCount(admin=28, employee=28):  # tm: 22/22
+        with self.assertQueryCount(admin=29, employee=29):  # tm: 23/23
             composer = self.env['mail.compose.message'].with_context({
                 'default_composition_mode': 'comment',
                 'default_model': test_record._name,
@@ -558,7 +558,7 @@ class TestBaseAPIPerformance(BaseMailPerformance):
     def test_mail_composer_w_template_attachments(self):
         test_record, test_template = self._create_test_records()
 
-        with self.assertQueryCount(admin=29, employee=29):  # tm: 23/23
+        with self.assertQueryCount(admin=30, employee=30):  # tm: 24/24
             composer = self.env['mail.compose.message'].with_context({
                 'default_composition_mode': 'comment',
                 'default_model': test_record._name,
@@ -617,7 +617,7 @@ class TestBaseAPIPerformance(BaseMailPerformance):
         test_record, test_template = self._create_test_records()
 
         customer = self.env['res.partner'].browse(self.customer.ids)
-        with self.assertQueryCount(admin=43, employee=43):  # tm 36/36
+        with self.assertQueryCount(admin=44, employee=44):  # tm 37/37
             composer_form = Form(
                 self.env['mail.compose.message'].with_context({
                     'default_composition_mode': 'comment',
@@ -993,7 +993,7 @@ class TestMailAPIPerformance(BaseMailPerformance):
     @warmup
     def test_message_get_suggested_recipients(self):
         record = self.test_records_recipients[0].with_env(self.env)
-        with self.assertQueryCount(employee=21):  # tm: 15
+        with self.assertQueryCount(employee=22):  # tm: 16
             recipients = record._message_get_suggested_recipients(no_create=False)
         new_partner = self.env['res.partner'].search([('email_normalized', '=', 'only.email.1@test.example.com')])
         self.assertEqual(len(new_partner), 1)
@@ -1008,7 +1008,7 @@ class TestMailAPIPerformance(BaseMailPerformance):
     @warmup
     def test_message_get_suggested_recipients_batch(self):
         records = self.test_records_recipients.with_env(self.env)
-        with self.assertQueryCount(employee=30):  # tm: 24
+        with self.assertQueryCount(employee=31):  # tm: 25
             _recipients = records._message_get_suggested_recipients_batch(no_create=False)
 
     @mute_logger('odoo.tests', 'odoo.addons.mail.models.mail_mail', 'odoo.models.unlink')
@@ -1120,7 +1120,7 @@ class TestMailAPIPerformance(BaseMailPerformance):
     def test_partner_find_from_emails(self):
         """ Test '_partner_find_from_emails', notably to check batch optimization """
         records = self.test_records_recipients.with_user(self.env.user)
-        with self.assertQueryCount(employee=26):  # tm: 19
+        with self.assertQueryCount(employee=27):  # tm: 20
             partners = records._partner_find_from_emails(
                 {record: [record.email_from, record.partner_id.email, record.user_id.email] for record in records},
                 avoid_alias=True,
@@ -1435,7 +1435,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
         messages_all = self.messages_all.with_env(self.env)
 
         with self.assertQueryCount(employee=23):  # tm 22
-            res = Store(messages_all, for_current_user=True).get_result()
+            res = Store(messages_all).get_result()
 
         self.assertEqual(len(res["mail.message"]), 2 * 2)
         for message in res["mail.message"]:
@@ -1448,7 +1448,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
         message = self.messages_all[0].with_env(self.env)
 
         with self.assertQueryCount(employee=23):  # tm 22
-            res = Store(message, for_current_user=True).get_result()
+            res = Store(message).get_result()
 
         self.assertEqual(len(res["mail.message"]), 1)
         self.assertEqual(len(res["mail.message"][0]["attachment_ids"]), 2)
@@ -1469,14 +1469,14 @@ class TestMessageToStorePerformance(BaseMailPerformance):
         } for record in records])
 
         with self.assertQueryCount(employee=4):
-            res = Store(messages, for_current_user=True).get_result()
+            res = Store(messages).get_result()
             self.assertEqual(len(res["mail.message"]), 6)
 
         self.env.flush_all()
         self.env.invalidate_all()
 
         with self.assertQueryCount(employee=14):  # tm: 13
-            res = Store(messages, for_current_user=True).get_result()
+            res = Store(messages).get_result()
             self.assertEqual(len(res["mail.message"]), 6)
 
     @warmup
@@ -1835,7 +1835,7 @@ class TestPerformance(BaseMailPostPerformance):
         self.push_to_end_point_mocked.reset_mock()  # reset as executed twice
         self.flush_tracking()
 
-        with self.assertQueryCount(employee=79):  # tm: 79
+        with self.assertQueryCount(employee=80):  # tm: 80
             ticket.message_post(
                 attachments=attachments_vals,
                 attachment_ids=attachments.ids,
@@ -1880,7 +1880,7 @@ class TestPerformance(BaseMailPostPerformance):
         self.push_to_end_point_mocked.reset_mock()  # reset as executed twice
         self.flush_tracking()
 
-        with self.assertQueryCount(employee=790):  # tm: 781
+        with self.assertQueryCount(employee=800):  # tm: 791
             for ticket, attachments in zip(tickets, attachments_all, strict=True):
                 ticket.message_post(
                     attachments=attachments_vals,

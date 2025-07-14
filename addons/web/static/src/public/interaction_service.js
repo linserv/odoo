@@ -72,18 +72,19 @@ class InteractionService {
             this.owlApp = new App(null, appConfig);
         }
         const root = this.owlApp.createRoot(C, { props, env: this.env });
-        const compElem = document.createElement("owl-component");
-        compElem.setAttribute("contenteditable", "false");
-        compElem.dataset.oeProtected = "true";
-        el.appendChild(compElem);
+        const rootEl = document.createElement("owl-root");
+        rootEl.setAttribute("contenteditable", "false");
+        rootEl.dataset.oeProtected = "true";
+        rootEl.style.display = "contents";
+        el.appendChild(rootEl);
         return {
             C,
             root,
-            el: compElem,
-            mount: () => root.mount(compElem),
+            el: rootEl,
+            mount: () => root.mount(rootEl),
             destroy: () => {
                 root.destroy();
-                compElem.remove();
+                rootEl.remove();
             },
         };
     }
@@ -119,10 +120,16 @@ class InteractionService {
                 if (I.selectorHas) {
                     targets = [...targets].filter((el) => !!el.querySelector(I.selectorHas));
                 }
+                if (I.selectorNotHas) {
+                    targets = [...targets].filter((el) => !el.querySelector(I.selectorNotHas));
+                }
             } catch {
                 const selectorHasError = I.selectorHas ? ` or selectorHas: '${I.selectorHas}'` : "";
+                const selectorNotHasError = I.selectorNotHas
+                    ? ` or selectorNotHas: '${I.selectorNotHas}'`
+                    : "";
                 const error = new Error(
-                    `Could not start interaction ${I.name} (invalid selector: '${I.selector}'${selectorHasError})`
+                    `Could not start interaction ${I.name} (invalid selector: '${I.selector}'${selectorHasError}${selectorNotHasError})`
                 );
                 proms.push(Promise.reject(error));
                 continue;

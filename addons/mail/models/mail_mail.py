@@ -34,11 +34,11 @@ class MailMail(models.Model):
     def default_get(self, fields):
         # protection for `default_type` values leaking from menu action context (e.g. for invoices)
         # To remove when automatic context propagation is removed in web client
-        if self._context.get('default_type') not in self._fields['message_type'].base_field.selection:
-            self = self.with_context(dict(self._context, default_type=None))
-        if self._context.get('default_state') not in self._fields['state'].base_field.selection:
-            self = self.with_context(dict(self._context, default_state='outgoing'))
-        return super(MailMail, self).default_get(fields)
+        if self.env.context.get('default_type') not in self._fields['message_type'].base_field.selection:
+            self = self.with_context(dict(self.env.context, default_type=None))  # noqa: PLW0642
+        if self.env.context.get('default_state') not in self._fields['state'].base_field.selection:
+            self = self.with_context(dict(self.env.context, default_state='outgoing'))  # noqa: PLW0642
+        return super().default_get(fields)
 
     # content
     mail_message_id = fields.Many2one('mail.message', 'Message', required=True, ondelete='cascade', index=True, auto_join=True)
@@ -185,7 +185,7 @@ class MailMail(models.Model):
         return self.write({'state': 'cancel'})
 
     @api.model
-    def process_email_queue(self, ids=(), batch_size=1000):
+    def process_email_queue(self, email_ids=(), batch_size=1000):
         """Send immediately queued messages, committing after each
            message is sent - this is not transactional and should
            not be called during another transaction!
@@ -193,7 +193,7 @@ class MailMail(models.Model):
         A maximum of 1K MailMail (configurable using 'mail.mail.queue.batch.size'
         optional ICP) are fetched in order to keep time under control.
 
-        :param list ids: optional list of emails ids to send. If given only
+        :param list email_ids: optional list of emails ids to send. If given only
                          scheduled and outgoing emails within this ids list
                          are sent;
         """
@@ -204,11 +204,11 @@ class MailMail(models.Model):
                    ('scheduled_date', '=', False),
                    ('scheduled_date', '<=', datetime.datetime.utcnow()),
         ]
-        if 'filters' in self._context:
-            domain.extend(self._context['filters'])
+        if 'filters' in self.env.context:
+            domain.extend(self.env.context['filters'])
         batch_size = int(self.env['ir.config_parameter'].sudo().get_param('mail.mail.queue.batch.size', batch_size)) or batch_size
-        send_ids = self.search(domain, limit=batch_size if not ids else batch_size * 10).ids
-        if not ids:
+        send_ids = self.search(domain, limit=batch_size if not email_ids else batch_size * 10).ids
+        if not email_ids:
             ids_done = set()
             total = len(send_ids) if len(send_ids) < batch_size else self.search_count(domain)
 
@@ -220,7 +220,7 @@ class MailMail(models.Model):
                     # commit progress only when running from a cron job
                     self.env['ir.cron']._commit_progress(len(processed), remaining=total - len(ids_done))
         else:
-            send_ids = list(set(send_ids) & set(ids))
+            send_ids = list(set(send_ids) & set(email_ids))
             post_send_callback = None
 
         send_ids.sort()
@@ -838,7 +838,7 @@ class MailMail(models.Model):
             if auto_commit is True:
                 if post_send_callback:
                     post_send_callback([mail_id])
-                self._cr.commit()
+                self.env.cr.commit()
         if post_send_callback:
             post_send_callback(self.ids)
         return True

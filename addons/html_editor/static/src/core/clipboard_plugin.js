@@ -15,6 +15,7 @@ import {
     getBaseContainerSelector,
 } from "@html_editor/utils/base_container";
 import { DIRECTIONS } from "../utils/position";
+import { isHtmlContentSupported } from "./selection_plugin";
 
 /**
  * @typedef { import("./selection_plugin").EditorSelection } EditorSelection
@@ -198,8 +199,7 @@ export class ClipboardPlugin extends Plugin {
      * @param {DataTransfer} clipboardData
      */
     handlePasteUnsupportedHtml(selection, clipboardData) {
-        const targetSupportsHtmlContent = isHtmlContentSupported(selection.anchorNode);
-        if (!targetSupportsHtmlContent) {
+        if (!isHtmlContentSupported(selection)) {
             const text = clipboardData.getData("text/plain");
             this.dependencies.dom.insert(text);
             return true;
@@ -274,20 +274,27 @@ export class ClipboardPlugin extends Plugin {
      */
     pasteText(text) {
         const textFragments = text.split(/\r?\n/);
+        let selection = this.dependencies.selection.getEditableSelection();
+        const preEl = closestElement(selection.anchorNode, "PRE");
         let textIndex = 1;
         for (const textFragment of textFragments) {
-            // Replace consecutive spaces by alternating nbsp.
-            const modifiedTextFragment = textFragment.replace(/( {2,})/g, (match) => {
-                let alertnateValue = false;
-                return match.replace(/ /g, () => {
-                    alertnateValue = !alertnateValue;
-                    const replaceContent = alertnateValue ? "\u00A0" : " ";
-                    return replaceContent;
+            let modifiedTextFragment = textFragment;
+
+            // <pre> preserves whitespace by default, so no need for &nbsp.
+            if (!preEl) {
+                // Replace consecutive spaces by alternating nbsp.
+                modifiedTextFragment = textFragment.replace(/( {2,})/g, (match) => {
+                    let alternateValue = false;
+                    return match.replace(/ /g, () => {
+                        alternateValue = !alternateValue;
+                        const replaceContent = alternateValue ? "\u00A0" : " ";
+                        return replaceContent;
+                    });
                 });
-            });
+            }
             this.dependencies.dom.insert(modifiedTextFragment);
             if (textIndex < textFragments.length) {
-                const selection = this.dependencies.selection.getEditableSelection();
+                selection = this.dependencies.selection.getEditableSelection();
                 // Break line by inserting new paragraph and
                 // remove current paragraph's bottom margin.
                 const block = closestBlock(selection.anchorNode);
@@ -387,10 +394,7 @@ export class ClipboardPlugin extends Plugin {
             if (
                 (isParagraphRelatedElement(block) ||
                     this.dependencies.baseContainer.isCandidateForBaseContainer(block)) &&
-                // TODO specific exception for "PRE" to keep everything inside one PRE.
-                // Consider removing this if PRE is to be used as a paragraph.
-                block.nodeName !== "PRE" &&
-                !block.closest("li")
+                block.nodeName !== "PRE"
             ) {
                 // A linebreak at the beginning of a block is an empty line.
                 const isEmptyLine = block.firstChild.nodeName === "BR";
@@ -424,8 +428,23 @@ export class ClipboardPlugin extends Plugin {
             } else {
                 let childrenNodes;
                 if (node.nodeName === "DIV") {
-                    if (this.dependencies.baseContainer.isCandidateForBaseContainer(node)) {
-                        childrenNodes = childNodes(node);
+                    if (!node.hasChildNodes()) {
+                        node.remove();
+                        return;
+                    } else if (this.dependencies.baseContainer.isCandidateForBaseContainer(node)) {
+                        const whiteSpace = node.style?.whiteSpace;
+                        if (whiteSpace && !["normal", "nowrap"].includes(whiteSpace)) {
+                            node.innerHTML = node.innerHTML.replace(/\n/g, "<br>");
+                        }
+                        const baseContainer = this.dependencies.baseContainer.createBaseContainer();
+                        const dir = node.getAttribute("dir");
+                        if (dir) {
+                            baseContainer.setAttribute("dir", dir);
+                        }
+                        baseContainer.append(...node.childNodes);
+
+                        node.replaceWith(baseContainer);
+                        childrenNodes = childNodes(baseContainer);
                     } else {
                         childrenNodes = unwrapContents(node);
                     }
@@ -560,10 +579,10 @@ export class ClipboardPlugin extends Plugin {
      */
     async onDrop(ev) {
         ev.preventDefault();
-        if (!isHtmlContentSupported(ev.target)) {
+        const selection = this.dependencies.selection.getEditableSelection();
+        if (!isHtmlContentSupported(selection)) {
             return;
         }
-        const selection = this.dependencies.selection.getEditableSelection();
         const nodeToSplit =
             selection.direction === DIRECTIONS.RIGHT ? selection.focusNode : selection.anchorNode;
         const offsetToSplit =
@@ -690,19 +709,6 @@ function getImageUrl(file) {
     });
 }
 
-// @phoenix @todo: move to Odoo plugin?
-/**
- * Returns true if the provided node can suport html content.
- *
- * @param {Node} node
- * @returns {boolean}
- */
-export function isHtmlContentSupported(node) {
-    return !closestElement(
-        node,
-        '[data-oe-model]:not([data-oe-field="arch"]):not([data-oe-type="html"]),[data-oe-translation-id]'
-    );
-}
 
 /**
  * Add origin to relative img src.
@@ -711,7 +717,7 @@ export function isHtmlContentSupported(node) {
 function prependOriginToImages(doc, origin) {
     doc.querySelectorAll("img").forEach((img) => {
         const src = img.getAttribute("src");
-        if (src && !src.startsWith("http") && !src.startsWith("//")) {
+        if (src && !/^(http|\/\/|data:)/.test(src)) {
             img.src = origin + (src.startsWith("/") ? src : "/" + src);
         }
     });

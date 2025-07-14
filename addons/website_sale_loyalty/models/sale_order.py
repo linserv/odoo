@@ -5,8 +5,8 @@ from datetime import timedelta
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+from odoo.fields import Domain
 from odoo.http import request
-from odoo.osv import expression
 
 
 class SaleOrder(models.Model):
@@ -23,7 +23,7 @@ class SaleOrder(models.Model):
                 if leaf[0] != 'sale_ok':
                     continue
                 res[idx] = ('ecommerce_ok', '=', True)
-                return expression.AND([res, [('website_id', 'in', (self.website_id.id, False))]])
+                return Domain.AND([res, [('website_id', 'in', (self.website_id.id, False))]])
         return res
 
     def _get_trigger_domain(self):
@@ -34,7 +34,7 @@ class SaleOrder(models.Model):
                 if leaf[0] != 'program_id.sale_ok':
                     continue
                 res[idx] = ('program_id.ecommerce_ok', '=', True)
-                return expression.AND([res, [('program_id.website_id', 'in', (self.website_id.id, False))]])
+                return Domain.AND([res, [('program_id.website_id', 'in', (self.website_id.id, False))]])
         return res
 
     def _try_pending_coupon(self):
@@ -248,9 +248,9 @@ class SaleOrder(models.Model):
                         res[coupon] = reward
         return res
 
-    def _cart_find_product_line(self, product_id, **kwargs):
+    def _cart_find_product_line(self, *args, **kwargs):
         # Filter out reward lines, they shouldn't be modified by standard _cart_add logic.
         # This kind of lines is handled by _update_programs_and_rewards and _auto_apply_rewards.
-        return super()._cart_find_product_line(product_id, **kwargs).filtered(
+        return super()._cart_find_product_line(*args, **kwargs).filtered(
             lambda sol: not sol.is_reward_line
         )

@@ -1807,7 +1807,7 @@ describe("t-att and t-out", () => {
                     _root: {
                         "t-out": () => {
                             expect.step("t-out");
-                            return markup(this.tOut);
+                            return this.tOut;
                         },
                     },
                     span: {
@@ -1817,11 +1817,11 @@ describe("t-att and t-out", () => {
                     },
                 };
                 setup() {
-                    this.tOut = `<span class="old-inner">Hi</span>`;
+                    this.tOut = markup`<span class="old-inner">Hi</span>`;
                 }
                 start() {
                     this.waitForTimeout(() => {
-                        this.tOut = "<span class='inner'>Hello</span>";
+                        this.tOut = markup`<span class='inner'>Hello</span>`;
                     }, 1000);
                 }
             }
@@ -1918,11 +1918,11 @@ describe("components", () => {
         }
         const { core } = await startInteraction(Test, `<div class="test"></div>`);
         expect(".test").toHaveOuterHTML(
-            `<div class="test"><owl-component contenteditable="false" data-oe-protected="true"></owl-component></div>`
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;"></owl-root></div>`
         );
         await animationFrame();
         expect(".test").toHaveOuterHTML(
-            `<div class="test"><owl-component contenteditable="false" data-oe-protected="true">component</owl-component></div>`
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;">component</owl-root></div>`
         );
         expect(isCDestroyed).toBe(false);
         core.stopInteractions();
@@ -1951,11 +1951,44 @@ describe("components", () => {
         }
         const { core } = await startInteraction(Test, `<div class="test"></div>`);
         expect(".test").toHaveOuterHTML(
-            `<div class="test"><owl-component contenteditable="false" data-oe-protected="true"></owl-component></div>`
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;"></owl-root></div>`
         );
         await animationFrame();
         expect(".test").toHaveOuterHTML(
-            `<div class="test"><owl-component contenteditable="false" data-oe-protected="true"><p>component<span>hello</span></p></owl-component></div>`
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;"><p>component<span>hello</span></p></owl-root></div>`
+        );
+        expect(isCDestroyed).toBe(false);
+        core.stopInteractions();
+        expect(isCDestroyed).toBe(true);
+        expect(".test").toHaveOuterHTML(`<div class="test"></div>`);
+    });
+
+    test("can receive the selected element with t-component", async () => {
+        let isCDestroyed = false;
+        class C extends Component {
+            static template = xml`<p>component<span t-out="props.prop"></span></p>`;
+            static props = {
+                prop: { optional: true, type: String },
+            };
+
+            setup() {
+                onWillDestroy(() => (isCDestroyed = true));
+            }
+        }
+
+        class Test extends Interaction {
+            static selector = ".test";
+            dynamicContent = {
+                _root: { "t-component": (el) => [C, { prop: el.className }] },
+            };
+        }
+        const { core } = await startInteraction(Test, `<div class="test"></div>`);
+        expect(".test").toHaveOuterHTML(
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;"></owl-root></div>`
+        );
+        await animationFrame();
+        expect(".test").toHaveOuterHTML(
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;"><p>component<span>test</span></p></owl-root></div>`
         );
         expect(isCDestroyed).toBe(false);
         core.stopInteractions();
@@ -1978,11 +2011,11 @@ describe("components", () => {
         }
         await startInteraction(Test, `<div class="test"></div>`);
         expect(".test").toHaveOuterHTML(
-            `<div class="test"><owl-component contenteditable="false" data-oe-protected="true"></owl-component></div>`
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;"></owl-root></div>`
         );
         await animationFrame();
         expect(".test").toHaveOuterHTML(
-            `<div class="test"><owl-component contenteditable="false" data-oe-protected="true">component</owl-component></div>`
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;">component</owl-root></div>`
         );
     });
 
@@ -2003,11 +2036,11 @@ describe("components", () => {
         }
         await startInteraction(Test, `<div class="test"></div>`);
         expect(".test").toHaveOuterHTML(
-            `<div class="test"><owl-component contenteditable="false" data-oe-protected="true"></owl-component></div>`
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;"></owl-root></div>`
         );
         await animationFrame();
         expect(".test").toHaveOuterHTML(
-            `<div class="test"><owl-component contenteditable="false" data-oe-protected="true"><p>component<span>with prop</span></p></owl-component></div>`
+            `<div class="test"><owl-root contenteditable="false" data-oe-protected="true" style="display: contents;"><p>component<span>with prop</span></p></owl-root></div>`
         );
     });
 });

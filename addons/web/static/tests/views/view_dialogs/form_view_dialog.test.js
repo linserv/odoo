@@ -79,7 +79,7 @@ test("formviewdialog buttons in footer are positioned properly", async () => {
     await animationFrame();
 
     expect(".modal-body button").toHaveCount(0, { message: "should not have any button in body" });
-    expect(".modal-footer button:not(.d-none)").toHaveCount(1, {
+    expect(".modal-footer button:visible").toHaveCount(1, {
         message: "should have only one button in footer",
     });
 });
@@ -105,13 +105,13 @@ test("modifiers are considered on multiple <footer/> tags", async () => {
 
     await animationFrame();
 
-    expect(queryAllTexts(".modal-footer button:not(.d-none)")).toEqual(["Hello", "World"], {
+    expect(queryAllTexts(".modal-footer button:visible")).toEqual(["Hello", "World"], {
         message: "only the first button section should be visible",
     });
 
     await click(".o_field_boolean input");
     await animationFrame();
-    expect(queryAllTexts(".modal-footer button:not(.d-none)")).toEqual(["Foo"], {
+    expect(queryAllTexts(".modal-footer button:visible")).toEqual(["Foo"], {
         message: "only the second button section should be visible",
     });
 });
@@ -255,7 +255,7 @@ test("formviewdialog is not closed when button handlers return a rejected promis
         </form>
     `;
     let reject;
-    onRpc("web_save", async () => {
+    onRpc("web_save", () => {
         if (reject) {
             return Promise.reject("rejected");
         }
@@ -390,7 +390,7 @@ test("Save a FormViewDialog when a required field is empty don't close the dialo
 test("new record has an expand button", async () => {
     Partner._views.form = /* xml */ `<form><field name="foo"/></form>`;
     Partner._records = [];
-    onRpc("web_save", async () => {
+    onRpc("web_save", () => {
         expect.step("save");
     });
     mockService("action", {
@@ -418,7 +418,7 @@ test("new record has an expand button", async () => {
 
 test("existing record has an expand button", async () => {
     Partner._views.form = /* xml */ `<form><field name="foo"/></form>`;
-    onRpc("web_save", async () => {
+    onRpc("web_save", () => {
         expect.step("save");
     });
     mockService("action", {
@@ -448,7 +448,7 @@ test("existing record has an expand button", async () => {
 test("expand button with save and new", async () => {
     Instrument._views.form = /* xml */ `<form><field name="name"/></form>`;
     Instrument._records = [{ id: 1, name: "Violon" }];
-    onRpc("web_save", async () => {
+    onRpc("web_save", () => {
         expect.step("save");
     });
     mockService("action", {

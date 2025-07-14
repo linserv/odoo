@@ -91,7 +91,7 @@ class ResPartner(models.Model):
     def _get_view_cache_key(self, view_id=None, view_type='form', **options):
         """Add context variable force_email in the key as _get_view depends on it."""
         key = super()._get_view_cache_key(view_id, view_type, **options)
-        return key + (self._context.get('force_email'),)
+        return key + (self.env.context.get('force_email'),)
 
     @api.model
     def find_or_create(self, email, assert_valid_email=False):
@@ -258,21 +258,18 @@ class ResPartner(models.Model):
             ]
         return [field_name]
 
-    def _to_store_defaults(self):
-        return [
+    def _to_store_defaults(self, target: Store.Target):
+        res = [
             "active",
             "avatar_128",
-            "email",
             "im_status",
             "is_company",
             Store.One("main_user_id", ["share"]),
             "name",
         ]
-
-    def _to_store(self, store: Store, fields):
-        if not self.env.user._is_internal() and "email" in fields:
-            fields.remove("email")
-        store.add_records_fields(self, fields)
+        if target.is_internal(self.env):
+            res.append("email")
+        return res
 
     @api.readonly
     @api.model

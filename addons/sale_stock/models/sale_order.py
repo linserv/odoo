@@ -64,15 +64,19 @@ class SaleOrder(models.Model):
         """
         if column_name != "warehouse_id":
             return super(SaleOrder, self)._init_column(column_name)
-        field = self._fields[column_name]
-        default = self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)], limit=1)
-        value = field.convert_to_write(default, self)
-        value = field.convert_to_column_insert(value, self)
-        if value is not None:
-            _logger.debug("Table '%s': setting default value of new column %s to %r",
-                self._table, column_name, value)
-            query = f'UPDATE "{self._table}" SET "{column_name}" = %s WHERE "{column_name}" IS NULL'
-            self._cr.execute(query, (value,))
+
+        default_warehouse = self.env["stock.warehouse"].search([], limit=1)
+
+        query = """
+        UPDATE sale_order so
+        SET warehouse_id = COALESCE(wh.id, %s)
+        FROM stock_warehouse wh
+        WHERE so.company_id = wh.company_id and so.warehouse_id IS NULL and wh.active
+        """
+        params = [default_warehouse.id]
+
+        _logger.debug("Initializing column '%s' in table '%s'", column_name, self._table)
+        self.env.cr.execute(query, params)
 
     @api.depends('picking_ids.date_done')
     def _compute_effective_date(self):
@@ -150,7 +154,7 @@ class SaleOrder(models.Model):
             for order in self:
                 pre_order_line_qty = {order_line: order_line.product_uom_qty for order_line in order.mapped('order_line') if not order_line.is_expense}
 
-        if values.get('partner_shipping_id') and self._context.get('update_delivery_shipping_partner'):
+        if values.get('partner_shipping_id') and self.env.context.get('update_delivery_shipping_partner'):
             for order in self:
                 order.picking_ids.partner_id = values.get('partner_shipping_id')
         elif values.get('partner_shipping_id'):
@@ -285,6 +289,7 @@ class SaleOrder(models.Model):
     def _prepare_invoice(self):
         invoice_vals = super(SaleOrder, self)._prepare_invoice()
         invoice_vals['invoice_incoterm_id'] = self.incoterm.id
+        invoice_vals['delivery_date'] = self.effective_date
         return invoice_vals
 
     def _log_decrease_ordered_quantity(self, documents, cancel=False):

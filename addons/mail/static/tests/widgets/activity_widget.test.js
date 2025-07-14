@@ -6,7 +6,6 @@ import {
     openListView,
     start,
     startServer,
-    userContext,
     waitStoreFetch,
 } from "@mail/../tests/mail_test_helpers";
 import { describe, expect, test } from "@odoo/hoot";
@@ -24,8 +23,8 @@ defineMailModels();
 describe.current.tags("desktop");
 
 test("list activity widget with no activity", async () => {
-    onRpc("res.users", "web_search_read", async (params) => {
-        expect(params.kwargs).toEqual({
+    onRpc("res.users", "web_search_read", ({ kwargs }) => {
+        expect(kwargs).toMatchObject({
             specification: {
                 activity_ids: { fields: {} },
                 activity_exception_decoration: {},
@@ -38,7 +37,7 @@ test("list activity widget with no activity", async () => {
             offset: 0,
             order: "",
             limit: 80,
-            context: { ...userContext(), bin_size: true },
+            context: { bin_size: true },
             count_limit: 10001,
             domain: [],
         });

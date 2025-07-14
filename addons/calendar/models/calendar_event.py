@@ -109,8 +109,8 @@ class CalendarEvent(models.Model):
     def _default_partners(self):
         """ When active_model is res.partner, the current partners should be attendees """
         partners = self.env.user.partner_id
-        active_id = self._context.get('active_id')
-        if self._context.get('active_model') == 'res.partner' and active_id and active_id not in partners.ids:
+        active_id = self.env.context.get('active_id')
+        if self.env.context.get('active_model') == 'res.partner' and active_id and active_id not in partners.ids:
                 partners |= self.env['res.partner'].browse(active_id)
         return partners
 
@@ -578,7 +578,7 @@ class CalendarEvent(models.Model):
 
         # if user is creating an event for an activity that already has one, create a second activity
         existing_event = False
-        orig_activity_ids = self.env['mail.activity'].browse(self._context.get('orig_activity_ids', []))
+        orig_activity_ids = self.env['mail.activity'].browse(self.env.context.get('orig_activity_ids', []))
         if len(orig_activity_ids) == 1:
             existing_event = orig_activity_ids.calendar_event_id
             if existing_event and orig_activity_ids.activity_type_id.category == 'meeting':
@@ -760,13 +760,14 @@ class CalendarEvent(models.Model):
             attendee_update_events.attendee_ids.filtered(lambda att: self.user_id.partner_id == att.partner_id).write({'state': 'needsAction'})
 
         current_attendees = self.filtered('active').attendee_ids
-        if 'partner_ids' in values:
+        skip_attendee_notification = self.env.context.get('skip_attendee_notification')
+        if not skip_attendee_notification and 'partner_ids' in values:
             # we send to all partners and not only the new ones
             (current_attendees - previous_attendees)._notify_attendees(
                 self.env.ref('calendar.calendar_template_meeting_invitation', raise_if_not_found=False),
                 force_send=True,
             )
-        if not self.env.context.get('is_calendar_event_new') and 'start' in values:
+        if not skip_attendee_notification and not self.env.context.get('is_calendar_event_new') and 'start' in values:
             start_date = fields.Datetime.to_datetime(values.get('start'))
             # Only notify on future events
             if start_date and start_date >= fields.Datetime.now():
@@ -827,6 +828,19 @@ class CalendarEvent(models.Model):
         if not self.env.su and private_fields:
             domain = Domain.AND([domain, self._get_default_privacy_domain()])
         return super()._read_group(domain, groupby, aggregates, having=having, offset=offset, limit=limit, order=order)
+
+    @api.model
+    def _read_grouping_sets(self, domain, grouping_sets, aggregates=(), order=None) -> list[tuple]:
+        fnames = {
+            spec.split(':')[0] for spec in itertools.chain(
+                *grouping_sets,
+                aggregates,
+            )
+        }
+        private_fields = fnames - self._get_public_fields()
+        if not self.env.su and private_fields:
+            domain = Domain.AND([domain, self._get_default_privacy_domain()])
+        return super()._read_grouping_sets(domain, grouping_sets, aggregates, order=order)
 
     def unlink(self):
         if not self:
@@ -983,29 +997,13 @@ class CalendarEvent(models.Model):
 
     def _get_default_privacy_domain(self):
         # Sub query user settings from calendars that are not private ('public' and 'confidential').
-        public_calendars_settings = self.env['res.users.settings'].sudo()._where_calc([('calendar_default_privacy', '!=', 'private')]).select('user_id')
+        public_calendars_settings = self.env['res.users.settings'].sudo()._search([('calendar_default_privacy', '!=', 'private')]).select('user_id')
         # display public, confidential events and events with default privacy when owner's default privacy is not private
         return [
             '|',
                 '|', ('privacy', 'in', ['public', 'confidential']), ('user_id', '=', self.env.user.id),
                 '&', ('privacy', '=', False), ('user_id', 'in', public_calendars_settings)
         ]
-
-    def _is_event_over(self):
-        """Check if the event is over. This method is used to check if the event
-        should trigger invitations with Google Calendar.
-        :return: True if the event is over, False otherwise
-        """
-        self.ensure_one()
-        now = fields.Datetime.now()
-        today = fields.Date.today()
-
-        # For all-day events
-        if self.allday:
-            return self.stop_date and self.stop_date < today
-
-        # For timed events
-        return self.stop and self.stop < now
 
     # ------------------------------------------------------------
     # ACTIONS
@@ -1381,7 +1379,7 @@ class CalendarEvent(models.Model):
             # Archive all events and delete recurrence, reactivate base event and apply updated values.
             base_event.action_mass_archive("all_events")
             base_event.recurrence_id.unlink()
-            base_event.write({
+            base_event.with_context(skip_attendee_notification=True).write({
                 'active': True,
                 'recurrence_id': False,
                 **values, **time_values
@@ -1498,7 +1496,6 @@ class CalendarEvent(models.Model):
 
         for meeting in self:
             cal = vobject.iCalendar()
-            cal.add('method').value = 'REQUEST'
             event = cal.add('vevent')
 
             if not meeting.start or not meeting.stop:
@@ -1559,7 +1556,7 @@ class CalendarEvent(models.Model):
                 1) if user add duration for 2 hours, return : August-23-2013 at (04-30 To 06-30) (Europe/Brussels)
                 2) if event all day ,return : AllDay, July-31-2013
         """
-        timezone = self._context.get('tz') or self.env.user.partner_id.tz or 'UTC'
+        timezone = self.env.context.get('tz') or self.env.user.partner_id.tz or 'UTC'
 
         # get date/time format according to context
         format_date, format_time = self._get_date_formats()

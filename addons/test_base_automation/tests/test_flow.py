@@ -3,6 +3,7 @@
 import datetime
 import json
 import sys
+from freezegun import freeze_time
 from unittest.mock import patch
 
 from odoo import Command
@@ -1646,6 +1647,72 @@ class TestCompute(common.TransactionCase):
         ).run()
         self.assertEqual(test_partner.ref, "PARTNER/0001/TEST")
 
+    def test_03_server_action_code_history_wizard(self):
+        self.env.user.tz = 'Europe/Brussels'  # UTC +2 for May 2025
+
+        def get_history(action):
+            return self.env["ir.actions.server.history"].search([("action_id", "=", action.id)])
+
+        def assert_history(action, expected):
+            history = get_history(action)
+            self.assertRecordValues(history, expected)
+
+        expected = []
+
+        with freeze_time("2025-05-01 08:00:00"):
+            self.env.cr._now = datetime.datetime.now()  # reset transaction's NOW
+            action = self.env["ir.actions.server"].create({
+                "name": "Test Action",
+                "model_id": self.env["ir.model"]._get("res.partner").id,
+                "state": "code",
+                "code": "pass",
+            })
+        expected.insert(0, {
+            "code": "pass",
+            "display_name": f"May 1, 2025, 10:00:00 AM - {self.env.ref('base.user_root').name}",
+        })
+        assert_history(action, expected)
+
+        with freeze_time("2025-05-01 08:30:00"):
+            self.env.cr._now = datetime.datetime.now()  # reset transaction's NOW
+            action.with_user(self.env.ref('base.user_admin')).write({"code": "hello"})
+        expected.insert(0, {
+            "code": "hello",
+            "display_name": f"May 1, 2025, 10:30:00 AM - {self.env.ref('base.user_admin').name}",
+        })
+        assert_history(action, expected)
+
+        with freeze_time("2025-05-05 11:30:00"):
+            self.env.cr._now = datetime.datetime.now()  # reset transaction's NOW
+            action.with_user(self.env.ref('base.user_admin')).write({"code": "coucou"})
+        expected.insert(0, {
+            "code": "coucou",
+            "display_name": f"May 5, 2025, 1:30:00 PM - {self.env.ref('base.user_admin').name}",
+        })
+        assert_history(action, expected)
+
+        with freeze_time("2025-05-12 09:30:00"):
+            self.env.cr._now = datetime.datetime.now()  # reset transaction's NOW
+            with Form(self.env['server.action.history.wizard'].with_context(default_action_id=action.id)) as wizard_form:
+                self.assertRecordValues(wizard_form.revision, [
+                    {
+                        "code": "hello",
+                        "display_name": f"May 1, 2025, 10:30:00 AM - {self.env.ref('base.user_admin').name}",
+                    }
+                ])
+                first_diff = str(wizard_form.code_diff)
+                wizard_form.revision = get_history(action)[-1]
+                second_diff = str(wizard_form.code_diff)
+                self.assertNotEqual(first_diff, second_diff)
+            wizard_form.record.restore_revision()
+
+        self.assertEqual(action.code, "pass")
+        expected.insert(0, {
+            "code": "pass",
+            "display_name": f"May 12, 2025, 11:30:00 AM - {self.env.ref('base.user_root').name}",
+        })
+        assert_history(action, expected)
+
 
 @common.tagged("post_install", "-at_install")
 class TestHttp(common.HttpCase):
@@ -1712,9 +1779,11 @@ class TestHttp(common.HttpCase):
             "webhook_url": automation_receiver.url,
         })
 
-        with self.allow_requests(all_requests=True):  # Changing the name will make an http request.
-            obj.name = "new_name"
+        # Changing the name will make an http request, post-commitedly
+        obj.name = "new_name"
         self.cr.flush()
+        with self.allow_requests(all_requests=True):
+            self.cr.postcommit.run()  # webhooks run in postcommit
         self.cr.clear()
         self._wait_remaining_requests()  # just in case the request timeouts
         self.assertEqual(json.loads(obj.another_field), {

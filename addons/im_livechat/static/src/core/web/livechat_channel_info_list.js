@@ -1,38 +1,54 @@
+import { TranscriptSender } from "@im_livechat/core/common/transcript_sender";
+
 import { ActionPanel } from "@mail/discuss/core/common/action_panel";
 import { prettifyMessageContent } from "@mail/utils/common/format";
 
-import { Component } from "@odoo/owl";
-import { _t } from "@web/core/l10n/translation";
+import { Component, useEffect } from "@odoo/owl";
 
 import { rpc } from "@web/core/network/rpc";
+import { useService } from "@web/core/utils/hooks";
+import { url } from "@web/core/utils/urls";
+import { startUrl } from "@web/core/browser/router";
+import { TagsList } from "@web/core/tags_list/tags_list";
 
 export class LivechatChannelInfoList extends Component {
-    static components = { ActionPanel };
-    static template = "im_livechat.channelInfoList";
+    static components = { ActionPanel, TagsList, TranscriptSender };
+    static template = "im_livechat.LivechatChannelInfoList";
     static props = ["thread"];
 
     setup() {
         super.setup();
+        this.store = useService("mail.store");
+        this.ui = useService("ui");
+        useEffect(
+            () => {
+                if (this.props.thread.hasFetchedLivechatSessionData) {
+                    return;
+                }
+                this.store.fetchStoreData("/im_livechat/session/data", {
+                    channel_id: this.props.thread.id,
+                });
+                this.props.thread.hasFetchedLivechatSessionData = true;
+            },
+            () => [this.props.thread.id, this.props.thread.hasFetchedLivechatSessionData]
+        );
     }
 
-    get statusButtons() {
-        return [
-            {
-                label: _t("In progress"),
-                status: "in_progress",
-                icon: "fa fa-circle-o",
-            },
-            {
-                label: _t("Waiting for customer"),
-                status: "waiting",
-                icon: "fa fa-check",
-            },
-            {
-                label: _t("Looking for help"),
-                status: "need_help",
-                icon: "fa fa-times",
-            },
-        ];
+    get expectAnswerSteps() {
+        return this.props.thread.messages
+            .filter((m) => m.chatbotStep?.expectAnswer)
+            .map((m) => m.chatbotStep);
+    }
+
+    get expertiseTags() {
+        return this.props.thread.livechat_expertise_ids.map((expertise) => {
+            return {
+                id: expertise.id,
+                text: expertise.name,
+                colorIndex: 0,
+                className: "me-1 mb-1",
+            };
+        });
     }
 
     onBlurNote() {
@@ -41,13 +57,19 @@ export class LivechatChannelInfoList extends Component {
         });
     }
 
-    updateLivechatStatus(livechat_status) {
-        if (this.props.thread.livechat_status === livechat_status) {
-            return;
+    openVisitorProfile() {
+        if (this.ui.isSmall) {
+            this.store.ChatWindow.get({ thread: this.props.thread })?.fold();
+        } else {
+            this.props.thread.openChatWindow({ focus: true });
         }
-        rpc("/im_livechat/session/update_status", {
-            channel_id: this.props.thread.id,
-            livechat_status,
-        });
+    }
+
+    get visitorProfileURL() {
+        const visitorPersona = this.props.thread?.livechatVisitorMember?.persona;
+        if (visitorPersona?.type === "partner") {
+            return url(`/${startUrl()}/res.partner/${visitorPersona.id}`);
+        }
+        return null;
     }
 }

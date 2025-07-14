@@ -359,7 +359,7 @@ test("Global filter with same id is not shared between dashboards", async functi
     expect(".o_searchview_facet").toHaveCount(0);
     await contains(".o_spreadsheet_dashboard_action .dropdown-toggle").click();
 
-    await contains(".o-dashboard-search-dialog a.dropdown-toggle").click();
+    await contains(".o-filters-search-dialog a.dropdown-toggle").click();
     await contains(".o-dropdown-item").click();
 
     await contains(".o-autocomplete--input.o_input").click();
@@ -399,11 +399,11 @@ test("Can add a new global filter from the search bar", async function () {
     await createSpreadsheetDashboard({ serverData });
 
     await contains(".o_spreadsheet_dashboard_action .dropdown-toggle").click();
-    expect(".o-dashboard-search-dialog a.dropdown-toggle").toHaveText("Add filter");
-    await contains(".o-dashboard-search-dialog a.dropdown-toggle").click();
+    expect(".o-filters-search-dialog a.dropdown-toggle").toHaveText("Add filter");
+    await contains(".o-filters-search-dialog a.dropdown-toggle").click();
     await contains(".o-dropdown-item").click();
 
-    expect(".o-dashboard-search-dialog a.dropdown-toggle").toHaveCount(0);
+    expect(".o-filters-search-dialog a.dropdown-toggle").toHaveCount(0);
 
     expect(".o-autocomplete--input.o_input").toHaveCount(1);
     expect(".o-autocomplete--input.o_input").toHaveValue("");
@@ -424,7 +424,7 @@ test("Can remove a global filter from the dialog", async function () {
                 type: "relation",
                 label: "Relation Filter",
                 modelName: "product",
-                defaultValue: [37], // xphone
+                defaultValue: { operator: "in", ids: [37] }, // xphone
             },
         ],
     };
@@ -450,7 +450,7 @@ test("Can open the dialog by clicking on a facet", async function () {
                 type: "relation",
                 label: "Relation Filter",
                 modelName: "product",
-                defaultValue: [37], // xphone
+                defaultValue: { operator: "in", ids: [37] }, // xphone
             },
         ],
     };
@@ -459,7 +459,7 @@ test("Can open the dialog by clicking on a facet", async function () {
 
     expect(".o_searchview_facet").toHaveCount(1);
     await contains(".o_searchview_facet").click();
-    expect(".o-dashboard-search-dialog").toHaveCount(1);
+    expect(".o-filters-search-dialog").toHaveCount(1);
 });
 
 test("Can open the dialog by clicking on the search bar", async function () {
@@ -470,7 +470,7 @@ test("Can open the dialog by clicking on the search bar", async function () {
                 type: "relation",
                 label: "Relation Filter",
                 modelName: "product",
-                defaultValue: [37], // xphone
+                defaultValue: { operator: "in", ids: [37] }, // xphone
             },
         ],
     };
@@ -478,7 +478,7 @@ test("Can open the dialog by clicking on the search bar", async function () {
     await createSpreadsheetDashboard({ serverData });
 
     await contains(".o_searchview").click();
-    expect(".o-dashboard-search-dialog").toHaveCount(1);
+    expect(".o-filters-search-dialog").toHaveCount(1);
 });
 
 test("Changes of global filters are not dispatched while inside the dialog", async function () {
@@ -498,14 +498,14 @@ test("Changes of global filters are not dispatched while inside the dialog", asy
     expect(model.getters.getGlobalFilterValue("1")).toBe(undefined);
 
     await contains(".o_spreadsheet_dashboard_action .dropdown-toggle").click();
-    await contains(".o-dashboard-search-dialog a.dropdown-toggle").click();
+    await contains(".o-filters-search-dialog a.dropdown-toggle").click();
     await contains(".o-dropdown-item").click();
 
     await contains(".o-autocomplete--input.o_input").click();
     await contains(".o-autocomplete--dropdown-item").click();
     expect(model.getters.getGlobalFilterValue("1")).toBe(undefined);
     await contains(".modal-footer .btn-primary").click();
-    expect(model.getters.getGlobalFilterValue("1")).toEqual([37]);
+    expect(model.getters.getGlobalFilterValue("1")).toEqual({ operator: "in", ids: [37] });
 });
 
 test("First global filter date is displayed as button", async function () {
@@ -516,7 +516,7 @@ test("First global filter date is displayed as button", async function () {
                 type: "relation",
                 label: "Relation Filter",
                 modelName: "product",
-                defaultValue: [37],
+                defaultValue: { operator: "in", ids: [37] },
             },
             {
                 id: "2",
@@ -546,4 +546,22 @@ test("No date buttons are displayed if there is no date filter", async function 
     const serverData = getServerData(spreadsheetData);
     await createSpreadsheetDashboard({ serverData });
     expect(".o_sp_date_filter_button").toHaveCount(0);
+});
+
+test("Unknown value for relation filter is displayed as inaccessible", async function () {
+    const spreadsheetData = {
+        globalFilters: [
+            {
+                id: "1",
+                type: "relation",
+                label: "Relation Filter",
+                modelName: "product",
+                defaultValue: { operator: "in", ids: [9999] }, // unknown product
+            },
+        ],
+    };
+    const serverData = getServerData(spreadsheetData);
+    await createSpreadsheetDashboard({ serverData });
+    expect(".o_searchview_facet").toHaveCount(1);
+    expect(".o_searchview_facet .o_facet_value").toHaveText("Inaccessible/missing record ID");
 });

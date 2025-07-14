@@ -98,8 +98,8 @@ class Binary(Field):
             # is given when assigning a binary field (test `TestFileSeparator`)
             return value.encode()
         if isinstance(value, int) and \
-                (record._context.get('bin_size') or
-                 record._context.get('bin_size_' + self.name)):
+                (record.env.context.get('bin_size') or
+                 record.env.context.get('bin_size_' + self.name)):
             # If the client requests only the size of the field, we return that
             # instead of the content. Presumably a separate request will be done
             # to read the actual content, if necessary.
@@ -229,8 +229,6 @@ class Binary(Field):
     def condition_to_sql(self, field_expr: str, operator: str, value, model: BaseModel, alias: str, query: Query) -> SQL:
         if not self.attachment or field_expr != self.name:
             return super().condition_to_sql(field_expr, operator, value, model, alias, query)
-        # check permission
-        model._check_field_access(self, 'read')
         assert operator in ('in', 'not in') and set(value) == {False}, "Should have been done in Domain optimization"
         return SQL(
             "%s%s(SELECT res_id FROM ir_attachment WHERE res_model = %s AND res_field = %s)",

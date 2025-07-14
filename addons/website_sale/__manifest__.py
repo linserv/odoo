@@ -81,7 +81,6 @@
         'web.assets_frontend': [
             'website_sale/static/src/interactions/**/*',
             'website_sale/static/src/snippets/**/*.js',
-            ('remove', 'website_sale/static/src/snippets/**/000.js'),
             ('remove', 'website_sale/static/src/snippets/**/options.js'),
             'website_sale/static/src/js/tours/tour_utils.js',
             'website_sale/static/src/scss/website_sale.scss',
@@ -92,7 +91,6 @@
 
             'website_sale/static/src/scss/product_configurator.scss',
 
-            'website_sale/static/src/js/cart.js',
             'website_sale/static/src/js/cart_service.js',
             'website_sale/static/src/js/checkout.js',
             'website_sale/static/src/js/payment_button.js',
@@ -154,7 +152,7 @@
             'website_sale/static/src/xml/website_sale.xml',
             'website_sale/static/src/scss/kanban_record.scss',
         ],
-        'html_builder.assets': [
+        'website.website_builder_assets': [
             'website_sale/static/src/js/website_sale_form_editor.js',
             'website_sale/static/src/website_builder/**/*',
         ],
@@ -184,13 +182,12 @@
         'web.assets_unit_tests_setup': [
             'website_sale/static/src/interactions/**/*',
             'website_sale/static/src/snippets/s_dynamic_snippet_products/dynamic_snippet_products.js',
+            'website_sale/static/src/js/website_sale_utils.js',
             # TODO Find out why these do not work:
             #'website_sale/static/src/snippets/**/*.js',
             # ('remove', 'website_sale/static/src/snippets/**/options.js'),
             # TODO Re-activate when testing edit mode
             #('remove', 'website_sale/static/src/snippets/**/*.edit.js'),
-            # TODO Remove when all 000 have been adapted
-            #('remove', 'website_sale/static/src/snippets/**/000.js'),
         ],
     },
     'author': 'Odoo S.A.',

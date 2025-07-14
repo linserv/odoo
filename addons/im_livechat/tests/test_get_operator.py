@@ -1,25 +1,13 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-import contextlib
 from datetime import timedelta
 from unittest.mock import patch
-
-import freezegun
 
 import odoo
 from odoo import Command, fields
 from odoo.addons.im_livechat.tests.common import TestGetOperatorCommon
-from odoo.addons.mail.tests.common import MailCommon
+from odoo.addons.mail.tests.common import MailCommon, freeze_all_time
 from odoo.tests.common import users
-
-
-@contextlib.contextmanager
-def freeze_all_time(time=None):
-    """ Freeze time for datetime calls and create_date in odoo.sql_db.BaseCursor."""
-    if time is None:
-        time = fields.Datetime.now()
-    with patch('odoo.sql_db.BaseCursor.now', return_value=time), freezegun.freeze_time(time):
-        yield
 
 
 @odoo.tests.tagged("-at_install", "post_install")
@@ -449,16 +437,15 @@ class TestGetOperator(MailCommon, TestGetOperatorCommon):
             {
                 "name": "Livechat Channel",
                 "user_ids": [first_operator.id, second_operator.id],
-                "buffer_time": 10,
             }
         )
         now = fields.Datetime.now()
-        with freeze_all_time(now + timedelta(minutes=-1)):
+        with freeze_all_time(now + timedelta(minutes=-3)):
             self._create_chat(livechat_channel, second_operator)
         with freeze_all_time(now):
             self._create_chat(livechat_channel, first_operator)
             self.assertEqual(second_operator, livechat_channel._get_operator())
-        with freeze_all_time(now + timedelta(seconds=11)):
+        with freeze_all_time(now + timedelta(seconds=121)):
             self.assertEqual(first_operator, livechat_channel._get_operator())
 
     def test_bypass_buffer_time_when_impossible_selection(self):
@@ -468,7 +455,6 @@ class TestGetOperator(MailCommon, TestGetOperatorCommon):
             {
                 "name": "Livechat Channel",
                 "user_ids": [first_operator.id, second_operator.id],
-                "buffer_time": 10,
             }
         )
         now = fields.Datetime.now()

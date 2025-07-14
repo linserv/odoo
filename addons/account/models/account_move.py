@@ -14,11 +14,11 @@ import re
 import os
 from textwrap import shorten
 
-from odoo import api, fields, models, _, Command, modules
+from odoo import api, fields, models, _, modules
 from odoo.tools.sql import column_exists, create_column
 from odoo.addons.account.tools import format_structured_reference_iso
 from odoo.exceptions import UserError, ValidationError, AccessError, RedirectWarning
-from odoo.osv import expression
+from odoo.fields import Command, Domain
 from odoo.tools.misc import clean_context
 from odoo.tools import (
     date_utils,
@@ -498,9 +498,14 @@ class AccountMove(models.Model):
         required=True,
         compute='_compute_currency_id', inverse='_inverse_currency_id', store=True, readonly=False, precompute=True,
     )
+    expected_currency_rate = fields.Float(
+        compute="_compute_expected_currency_rate",
+        digits=0,
+    )
     invoice_currency_rate = fields.Float(
         string='Currency Rate',
         compute='_compute_invoice_currency_rate', store=True, precompute=True,
+        readonly=False,
         copy=False,
         digits=0,
         help="Currency rate from company currency to document currency.",
@@ -859,7 +864,7 @@ class AccountMove(models.Model):
         # the currency is not a hard dependence, it triggers via manual add_to_compute
         # avoid computing the currency before all it's dependences are set (like the journal...)
         if self.env.cache.contains(self, self._fields['currency_id']):
-            currency_id = self.currency_id.id or self._context.get('default_currency_id')
+            currency_id = self.currency_id.id or self.env.context.get('default_currency_id')
             if currency_id and currency_id != company.currency_id.id:
                 currency_domain = domain + [('currency_id', '=', currency_id)]
                 journal = self.env['account.journal'].search(currency_domain, limit=1)
@@ -931,6 +936,7 @@ class AccountMove(models.Model):
             for move in moves:
                 move.made_sequence_gap = move.sequence_number > 1 and (move.sequence_number - 1) not in previous_numbers
 
+    @api.depends_context('lang')
     @api.depends('move_type')
     def _compute_type_name(self):
         type_name_mapping = dict(
@@ -1040,18 +1046,23 @@ class AccountMove(models.Model):
         return self.invoice_date or fields.Date.context_today(self)
 
     @api.depends('currency_id', 'company_currency_id', 'company_id', 'invoice_date')
+    def _compute_expected_currency_rate(self):
+        for move in self:
+            if move.currency_id:
+                move.expected_currency_rate = move.env['res.currency']._get_conversion_rate(
+                    from_currency=move.company_currency_id,
+                    to_currency=move.currency_id,
+                    company=move.company_id,
+                    date=move._get_invoice_currency_rate_date(),
+                )
+            else:
+                move.expected_currency_rate = 1
+
+    @api.depends('currency_id', 'company_currency_id', 'company_id', 'invoice_date')
     def _compute_invoice_currency_rate(self):
         for move in self:
             if move.is_invoice(include_receipts=True):
-                if move.currency_id:
-                    move.invoice_currency_rate = self.env['res.currency']._get_conversion_rate(
-                        from_currency=move.company_currency_id,
-                        to_currency=move.currency_id,
-                        company=move.company_id,
-                        date=move._get_invoice_currency_rate_date(),
-                    )
-                else:
-                    move.invoice_currency_rate = 1
+                move.invoice_currency_rate = move.expected_currency_rate
 
     @api.depends('move_type')
     def _compute_direction_sign(self):
@@ -2429,20 +2440,14 @@ class AccountMove(models.Model):
             if disabled:
                 return
 
-        unbalanced_moves = self._get_unbalanced_moves(container)
-        if unbalanced_moves:
-            error_msg = _("An error has occurred.")
-            for move_id, sum_debit, sum_credit in unbalanced_moves:
-                move = self.browse(move_id)
-                error_msg += _(
-                    "\n\n"
-                    "The journal entry is not balanced,"
-                    "with %(debit_total)s on the debit side and %(credit_total)s on the credit side, there needs to be an equilibrium!\n\n"
-                    "Consider adding a default account on the journal \"%(journal)s\" to automatically balance each journal entry and restore order to the accounting universe!",
-                    debit_total=format_amount(self.env, sum_debit, move.company_id.currency_id),
-                    credit_total=format_amount(self.env, sum_credit, move.company_id.currency_id),
-                    journal=move.journal_id.name)
-            raise UserError(error_msg)
+        if unbalanced_moves := self._get_unbalanced_moves(container):
+            if len(unbalanced_moves) == 1:
+                raise UserError(_("The entry is not balanced."))
+
+            error_msg = _("The following entries are unbalanced:\n\n")
+            for move in unbalanced_moves:
+                error_msg += f"  - {self.browse(move[0]).name}\n"
+                raise UserError(error_msg)
 
     def _get_unbalanced_moves(self, container):
         moves = container['records'].filtered(lambda move: move.line_ids)
@@ -2534,12 +2539,13 @@ class AccountMove(models.Model):
         return res
 
     def _get_product_catalog_domain(self):
+        domain = super()._get_product_catalog_domain()
         if self.is_sale_document():
-            return expression.AND([super()._get_product_catalog_domain(), [('sale_ok', '=', True)]])
+            return domain & Domain('sale_ok', '=', True)
         elif self.is_purchase_document():
-            return expression.AND([super()._get_product_catalog_domain(), [('purchase_ok', '=', True)]])
+            return domain & Domain('purchase_ok', '=', True)
         else:  # In case of an entry
-            return super()._get_product_catalog_domain()
+            return domain
 
     def _default_order_line_values(self, child_field=False):
         default_data = super()._default_order_line_values(child_field)
@@ -2655,7 +2661,7 @@ class AccountMove(models.Model):
 
         :param changed_fields: A set containing all modified fields on account.move.
         '''
-        if self._context.get('skip_account_move_synchronization'):
+        if self.env.context.get('skip_account_move_synchronization'):
             return
 
         self_sudo = self.sudo()
@@ -2787,6 +2793,8 @@ class AccountMove(models.Model):
     def _get_automatic_balancing_account(self):
         """ Small helper for special cases where we want to auto balance a move with a specific account. """
         self.ensure_one()
+        if self.journal_id.default_account_id:
+            return self.journal_id.default_account_id.id
         return self.company_id.account_journal_suspense_account_id.id
 
     @contextmanager
@@ -3500,7 +3508,7 @@ class AccountMove(models.Model):
                 'invoice_line_ids', 'line_ids', 'invoice_date', 'date', 'partner_id',
                 'invoice_payment_term_id', 'currency_id', 'fiscal_position_id', 'invoice_cash_rounding_id')
             readonly_fields = [val for val in vals if val in unmodifiable_fields]
-            if not self._context.get('skip_readonly_check') and move_state == "posted" and readonly_fields:
+            if not self.env.context.get('skip_readonly_check') and move_state == "posted" and readonly_fields:
                 raise UserError(_("You cannot modify the following readonly fields on a posted move: %s", ', '.join(readonly_fields)))
 
             if move.journal_id.sequence_override_regex and vals.get('name') and vals['name'] != '/' and not re.match(move.journal_id.sequence_override_regex, vals['name']):
@@ -3558,7 +3566,7 @@ class AccountMove(models.Model):
     def _get_unlink_logger_message(self):
         """ Before unlink, get a log message for audit trail if restricted.
         Logger is added here because in api ondelete, account.move.line is deleted, and we can't get total amount """
-        if not self._context.get('force_delete'):
+        if not self.env.context.get('force_delete'):
             pass
 
         moves_details = []
@@ -3592,7 +3600,7 @@ class AccountMove(models.Model):
         if not (
             self.env.user.has_group('account.group_account_manager')
             or any(self.company_id.mapped('quick_edit_mode'))
-            or self._context.get('force_delete')
+            or self.env.context.get('force_delete')
             or self.check_move_sequence_chain()
         ):
             raise UserError(_(
@@ -3602,7 +3610,7 @@ class AccountMove(models.Model):
 
     @api.ondelete(at_uninstall=False)
     def _unlink_account_audit_trail_except_once_post(self):
-        if not self._context.get('force_delete') and any(
+        if not self.env.context.get('force_delete') and any(
                 move.posted_before and move.company_id.restrictive_audit_trail
                 for move in self
         ):
@@ -3932,7 +3940,7 @@ class AccountMove(models.Model):
         elif move_type in self.env['account.move'].get_outbound_types(include_receipts=True):
             domain.append(('account_id.internal_group', '=', 'expense'))
 
-        query = self.env['account.move.line']._where_calc(domain)
+        query = self.env['account.move.line']._search(domain, bypass_access=True)
         account_code = self.env['account.account']._field_to_sql('account_move_line__account_id', 'code', query)
         rows = self.env.execute_query(SQL("""
             SELECT COUNT(foo.id), foo.account_id, foo.taxes
@@ -4090,7 +4098,7 @@ class AccountMove(models.Model):
 
     def _get_integrity_hash_fields(self):
         # Use the latest hash version by default, but keep the old one for backward compatibility when generating the integrity report.
-        hash_version = self._context.get('hash_version', MAX_HASH_VERSION)
+        hash_version = self.env.context.get('hash_version', MAX_HASH_VERSION)
         if hash_version == 1:
             return ['date', 'journal_id', 'company_id']
         elif hash_version in (2, 3, 4):
@@ -4107,16 +4115,10 @@ class AccountMove(models.Model):
         :param common_domain: a search domain that will be included in the returned domain in any case
         :param force_hash: if True, we'll check all moves posted, independently of journal settings
         """
-        common_domain = expression.AND([
-            common_domain or [],
-            [('state', '=', 'posted')],
-        ])
+        domain = Domain(common_domain or Domain.TRUE) & Domain('state', '=', 'posted')
         if force_hash:
-            return common_domain
-        return expression.AND([
-            common_domain,
-            [('restrict_mode_hash_table', '=', True)],
-        ])
+            return domain
+        return domain & Domain('restrict_mode_hash_table', '=', True)
 
     @api.model
     def _is_move_restricted(self, move, force_hash=False):
@@ -4167,7 +4169,7 @@ class AccountMove(models.Model):
         ], force_hash=True)
         if last_move_hashed and not include_pre_last_hash:
             # Hash moves only after the last hashed move, not the ones that may have been posted before the journal was set on restrict mode
-            domain.extend([('sequence_number', '>', last_move_hashed.sequence_number)])
+            domain &= Domain('sequence_number', '>', last_move_hashed.sequence_number)
 
         # On the accounting dashboard, we are only interested on whether there are documents to hash or not
         # so we can stop the computation early if we find at least one document to hash
@@ -4250,7 +4252,7 @@ class AccountMove(models.Model):
         """
         :return: dict of move_id: hash
         """
-        hash_version = self._context.get('hash_version', MAX_HASH_VERSION)
+        hash_version = self.env.context.get('hash_version', MAX_HASH_VERSION)
 
         def _getattrstring(obj, field_name):
             field_value = obj[field_name]
@@ -4953,10 +4955,9 @@ class AccountMove(models.Model):
     def _can_be_unlinked(self):
         self.ensure_one()
         lock_date = self.company_id._get_user_fiscal_lock_date(self.journal_id)
-        is_part_of_restricted_audit_trail = self.posted_before and self.company_id.restrictive_audit_trail
         posted_caba_entry = self.state == 'posted' and (self.tax_cash_basis_rec_id or self.tax_cash_basis_origin_move_id)
         posted_exchange_diff_entry = self.state == 'posted' and self.exchange_diff_partial_ids
-        return not self.inalterable_hash and self.date > lock_date and not is_part_of_restricted_audit_trail and not posted_caba_entry and not posted_exchange_diff_entry
+        return not self.inalterable_hash and self.date > lock_date and not posted_caba_entry and not posted_exchange_diff_entry
 
     def _is_protected_by_audit_trail(self):
         return any(move.posted_before and move.company_id.restrictive_audit_trail for move in self)
@@ -5058,7 +5059,7 @@ class AccountMove(models.Model):
                     move.currency_id.name
                 ))
 
-            if move.line_ids.account_id.filtered(lambda account: not account.active) and not self._context.get('skip_account_deprecation_check'):
+            if move.line_ids.account_id.filtered(lambda account: not account.active) and not self.env.context.get('skip_account_deprecation_check'):
                 validation_msgs.add(_("A line of this move is using a archived account, you cannot post it."))
 
         if validation_msgs:
@@ -5144,7 +5145,7 @@ class AccountMove(models.Model):
                     else _('%s - private part (taxes)', line.move_id.name)
                 )
 
-        draft_reverse_moves.reversed_entry_id._reconcile_reversed_moves(draft_reverse_moves, self._context.get('move_reverse_cancel', False))
+        draft_reverse_moves.reversed_entry_id._reconcile_reversed_moves(draft_reverse_moves, self.env.context.get('move_reverse_cancel', False))
         to_post.line_ids._reconcile_marked()
 
         customer_count, supplier_count = defaultdict(int), defaultdict(int)
@@ -5341,6 +5342,21 @@ class AccountMove(models.Model):
                     }))
                 move.write({'line_ids': line_ids_commands})
 
+    def get_currency_rate(self, company_id, to_currency_id, date):
+        company = self.env['res.company'].browse(company_id)
+        to_currency = self.env['res.currency'].browse(to_currency_id)
+
+        return self.env['res.currency']._get_conversion_rate(
+            from_currency=company.currency_id,
+            to_currency=to_currency,
+            company=company,
+            date=date,
+        )
+
+    def refresh_invoice_currency_rate(self):
+        for move in self:
+            move.invoice_currency_rate = move.expected_currency_rate
+
     def action_register_payment(self):
         if any(m.state != 'posted' for m in self):
             raise UserError(_("You can only register payment for posted journal entries."))
@@ -5477,7 +5493,7 @@ class AccountMove(models.Model):
 
         self._check_draftable()
         # We remove all the analytics entries for this journal
-        self.mapped('line_ids.analytic_line_ids').unlink()
+        self.line_ids.analytic_line_ids.with_context(skip_analytic_sync=True).unlink()
         self.mapped('line_ids').remove_move_reconcile()
         self.state = 'draft'
 
@@ -6414,11 +6430,13 @@ class AccountMove(models.Model):
         }[self.move_type]
 
     def _notify_by_email_prepare_rendering_context(self, message, msg_vals=False, model_description=False,
-                                                   force_email_company=False, force_email_lang=False):
+                                                   force_email_company=False, force_email_lang=False,
+                                                   force_record_name=False):
         # EXTENDS mail mail.thread
         render_context = super()._notify_by_email_prepare_rendering_context(
             message, msg_vals=msg_vals, model_description=model_description,
-            force_email_company=force_email_company, force_email_lang=force_email_lang
+            force_email_company=force_email_company, force_email_lang=force_email_lang,
+            force_record_name=force_record_name,
         )
         record = render_context['record']
         subtitles = [f"{record.name} - {record.partner_id.name}" if record.partner_id else record.name]
@@ -6553,3 +6571,35 @@ class AccountMove(models.Model):
         :returns: True if commit is acceptable, False otherwise.
         """
         return not modules.module.current_test
+
+    @api.model
+    def get_import_templates(self):
+        move_type = self.env.context.get('default_move_type')
+        match move_type:
+            case 'entry':
+                return [{
+                    'label': _('Import Template for Misc. Operations'),
+                    'template': '/account/static/xls/misc_operations_import_template.xlsx',
+                }]
+            case 'out_invoice':
+                return [{
+                    'label': _('Import Template for Invoices'),
+                    'template': '/account/static/xls/customer_invoices_credit_notes_import_template.xlsx',
+                }]
+            case 'out_refund':
+                return [{
+                    'label': _('Import Template for Credit Notes'),
+                    'template': '/account/static/xls/customer_invoices_credit_notes_import_template.xlsx',
+                }]
+            case 'in_invoice':
+                return [{
+                    'label': _('Import Template for Bills'),
+                    'template': '/account/static/xls/vendor_bills_refunds_import_template.xlsx',
+                }]
+            case 'in_refund':
+                return [{
+                    'label': _('Import Template for Refunds'),
+                    'template': '/account/static/xls/vendor_bills_refunds_import_template.xlsx',
+                }]
+            case _:
+                return []

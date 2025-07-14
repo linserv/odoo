@@ -7,14 +7,12 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from functools import partial
 from operator import itemgetter
-from werkzeug.urls import url_encode
 
 from odoo import http, _
 from odoo.addons.website.controllers.form import WebsiteForm
-from odoo.osv.expression import AND
+from odoo.fields import Domain
 from odoo.http import request
-from odoo.tools import email_normalize
-from odoo.tools.misc import groupby
+from odoo.tools import email_normalize, escape_psql
 
 
 class WebsiteHrRecruitment(WebsiteForm):
@@ -114,10 +112,10 @@ class WebsiteHrRecruitment(WebsiteForm):
         if not (country or department or office or contract_type or all_countries) \
             and (code := request.geoip.country_code) \
                 and (country := env['res.country'].search([('code', '=', code)], limit=1)):
-            country_count = env['hr.job'].search_count(AND([
-                website.website_domain(),
-                [('address_id.country_id', '=', country.id)]
-            ]))
+            country_count = env['hr.job'].search_count(
+                website.website_domain()
+                & Domain('address_id.country_id', '=', country.id)
+            )
             if not country_count:
                 country = False
 
@@ -201,13 +199,13 @@ class WebsiteHrRecruitment(WebsiteForm):
                 and applicant.create_date >= (datetime.now() - relativedelta(months=6))
 
         field_domain = {
-            'name': [('partner_name', '=ilike', value)],
+            'name': [('partner_name', '=ilike', escape_psql(value))],
             'email': [('email_normalized', '=', email_normalize(value))],
             'phone': [('partner_phone', '=', value)],
-            'linkedin': [('linkedin_profile', '=ilike', value)],
+            'linkedin': [('linkedin_profile', '=ilike', escape_psql(value))],
         }.get(field, [])
 
-        applications_by_status = http.request.env['hr.applicant'].sudo().search(AND([
+        applications_by_status = http.request.env['hr.applicant'].sudo().search(Domain.AND([
             field_domain,
             [
                 ('job_id.website_id', 'in', [http.request.website.id, False]),

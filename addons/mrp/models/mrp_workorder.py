@@ -38,6 +38,7 @@ class MrpWorkorder(models.Model):
     product_id = fields.Many2one(related='production_id.product_id')
     product_tracking = fields.Selection(related="product_id.tracking")
     product_uom_id = fields.Many2one(related='production_id.product_uom_id')
+    product_variant_attributes = fields.Many2many('product.template.attribute.value', related='product_id.product_template_attribute_value_ids')
     production_id = fields.Many2one('mrp.production', 'Manufacturing Order', required=True, check_company=True, readonly=True, index='btree')
     production_availability = fields.Selection(
         string='Stock Availability', readonly=True,
@@ -490,9 +491,11 @@ class MrpWorkorder(models.Model):
             new_workcenter = self.env['mrp.workcenter'].browse(values['workcenter_id'])
             for workorder in self:
                 if workorder.workcenter_id.id != values['workcenter_id']:
-                    if workorder.state in ('progress', 'done', 'cancel'):
-                        raise UserError(_('You cannot change the workcenter of a work order that is in progress or done.'))
+                    if workorder.state in ('done', 'cancel'):
+                        raise UserError(_('You cannot change the workcenter of a work order that is done.'))
                     workorder.leave_id.resource_id = new_workcenter.resource_id
+                    if workorder.state == 'progress':
+                        continue
                     workorder.duration_expected = workorder._get_duration_expected()
                     if workorder.date_start:
                         workorder.date_finished = workorder._calculate_date_finished(new_workcenter=new_workcenter)

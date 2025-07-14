@@ -1,10 +1,11 @@
 import { getValueFromVar, isMobileView } from "@html_builder/utils/utils";
 import { normalizeColor } from "@html_builder/utils/utils_css";
 import { Plugin } from "@html_editor/plugin";
+import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
 import { pick } from "@web/core/utils/objects";
 import { backgroundShapesDefinition } from "./background_shapes_definition";
-import { ShapeSelector } from "../shape/shape_selector";
+import { ShapeSelector } from "@html_builder/plugins/shape/shape_selector";
 import { getDefaultColors } from "./background_shape_option";
 import { withSequence } from "@html_editor/utils/resource";
 import { getBgImageURLFromURL } from "@html_editor/utils/image";
@@ -25,6 +26,7 @@ export class BackgroundShapeOptionPlugin extends Plugin {
         background_shape_target_providers: withSequence(5, (editingElement) =>
             editingElement.querySelector(":scope > .o_we_bg_filter")
         ),
+        force_not_editable_selector: ".o_we_shape",
     };
     static shared = [
         "getShapeStyleUrl",
@@ -293,7 +295,8 @@ export class BackgroundShapeOptionPlugin extends Plugin {
     showBackgroundShapes(editingElements) {
         this.dependencies.customizeTab.openCustomizeComponent(ShapeSelector, editingElements, {
             shapeActionId: "setBackgroundShape",
-            buttonWrapperClassName: "button_shape",
+            buttonWrapperClassName: "o-hb-bg-shape-btn",
+            selectorTitle: _t("Background Shapes"),
             shapeGroups: this.getBackgroundShapeGroups(),
             imgThroughDiv: true,
             getShapeUrl: this.getShapeStyleUrl.bind(this),

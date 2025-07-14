@@ -1,4 +1,3 @@
-import { stepUtils } from "@web_tour/tour_service/tour_utils";
 import {
     addMedia,
     changeOption,
@@ -15,7 +14,6 @@ registerWebsitePreviewTour('snippet_image_gallery', {
 }, () => [
     ...insertSnippet({id: 's_images_wall', name: 'Images Wall', groupName: "Images"}),
     ...clickOnSave(),
-    stepUtils.waitIframeIsReady(),
     {
         content: 'Click on an image of the Image Wall',
         trigger: ':iframe .s_image_gallery img',
@@ -53,7 +51,7 @@ registerWebsitePreviewTour("snippet_image_gallery_remove", {
     run: "click",
 }, {
     content: "Click on the second new image",
-    trigger: ".o_select_media_dialog img[title='s_default_image2.jpg']",
+    trigger: ".o_select_media_dialog img[title='s_default_image2.webp']",
     run: "click",
 },
     addMedia(),

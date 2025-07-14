@@ -1,7 +1,9 @@
+import { setSelection } from "@html_editor/../tests/_helpers/selection";
+import { insertText } from "@html_editor/../tests/_helpers/user_actions";
 import { expect, test } from "@odoo/hoot";
 import { animationFrame, click, queryOne } from "@odoo/hoot-dom";
 import { contains, onRpc, patchWithCleanup } from "@web/../tests/web_test_helpers";
-import { WebsiteBuilder } from "@website/client_actions/website_preview/website_builder_action";
+import { WebsiteBuilderClientAction } from "@website/client_actions/website_preview/website_builder_action";
 import {
     defineWebsiteModels,
     exampleWebsiteContent,
@@ -9,8 +11,6 @@ import {
     setupWebsiteBuilder,
     wrapExample,
 } from "./website_helpers";
-import { setSelection } from "@html_editor/../tests/_helpers/selection";
-import { insertText } from "@html_editor/../tests/_helpers/user_actions";
 
 defineWebsiteModels();
 
@@ -55,7 +55,7 @@ test("discard modified elements", async () => {
 });
 
 test("discard without any modifications", async () => {
-    patchWithCleanup(WebsiteBuilder.prototype, {
+    patchWithCleanup(WebsiteBuilderClientAction.prototype, {
         async reloadIframeAndCloseEditor() {
             this.websiteContent.el.contentDocument.body.innerHTML = wrapExample;
         },
@@ -91,13 +91,53 @@ test("content is escaped twice", async () => {
     await contains(".o-snippets-top-actions button:contains(Save)").click();
 });
 
+test("content is not escaped twice inside data-oe-model nodes which are not ir.ui.view", async () => {
+    const { getEditor } = await setupWebsiteBuilder(
+        `<div class="my_content" data-oe-model="other">hey</div>`
+    );
+    const editor = getEditor();
+    const div = queryOne(":iframe .my_content");
+    setSelection({ anchorNode: div.firstChild, anchorOffset: 0 });
+    await insertText(editor, "<div>html</div>");
+
+    onRpc("ir.ui.view", "save", ({ args }) => {
+        const savedView = args[1];
+        // we expect the html sent to have simply escaped text content
+        expect(savedView).toInclude(
+            `<div class="my_content" data-oe-model="other">&lt;div&gt;html&lt;/div&gt;hey</div>`
+        );
+        return true;
+    });
+    await contains(".o-snippets-top-actions button:contains(Save)").click();
+});
+
+test("content is not escaped twice inside root data-oe-model node which is not ir.ui.view", async () => {
+    const { getEditor } = await setupWebsiteBuilder(
+        `<div class="my_content" data-oe-model="other" data-oe-id="42" data-oe-field="thing">hey</div>`
+    );
+    const editor = getEditor();
+    const div = queryOne(":iframe .my_content");
+    setSelection({ anchorNode: div.firstChild, anchorOffset: 0 });
+    await insertText(editor, "<div>html</div>");
+
+    onRpc("ir.ui.view", "save", ({ args }) => {
+        const savedView = args[1];
+        // we expect the html sent to have simply escaped text content
+        expect(savedView).toInclude(
+            `<div class="my_content" data-oe-model="other" data-oe-id="42" data-oe-field="thing">&lt;div&gt;html&lt;/div&gt;hey</div>`
+        );
+        return true;
+    });
+    await contains(".o-snippets-top-actions button:contains(Save)").click();
+});
+
 function setupSaveAndReloadIframe() {
     const resultSave = [];
     onRpc("ir.ui.view", "save", ({ args }) => {
         resultSave.push(args[1]);
         return true;
     });
-    patchWithCleanup(WebsiteBuilder.prototype, {
+    patchWithCleanup(WebsiteBuilderClientAction.prototype, {
         async reloadIframeAndCloseEditor() {
             this.websiteContent.el.contentDocument.body.innerHTML =
                 resultSave.at(-1) || wrapExample;

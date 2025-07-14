@@ -94,7 +94,7 @@
                     </button>
                     <t t-if="env.config.viewSwitcherEntries?.length > 1">
                         <div t-if="env.isSmall" class="o_cp_switch_buttons btn-group d-print-none">
-                            <Dropdown>
+                            <Dropdown menuClass="{o_cp_switch_buttons: true, o_custom_bottom_sheet: true }">
                                 <button class="btn btn-secondary">
                                     <t t-set="activeView" t-value="env.config.viewSwitcherEntries.find((view) => view.active)"/>
                                     <i class="oi-fw" t-att-class="activeView.icon"/>
@@ -117,7 +117,7 @@
                                     t-custom-click="(ev, isMiddleClick) => this.switchView(view.type, isMiddleClick)"
                                     t-att-aria-label="view.name + ' View'"
                                 >
-                                    <i t-att-class="view.icon" />
+                                    <i class="oi-fw" t-att-class="view.icon" />
                                 </button>
                             </t>
                         </nav>

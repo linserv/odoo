@@ -37,7 +37,7 @@
                         </span>
                     </div>
                 </button>
-                <button name="action_open_last_month_overtime"
+                <button name="action_open_total_overtime"
                         class="oe_stat_button"
                         icon="fa-history"
                         type="object"
@@ -56,6 +56,12 @@
             </button>
             <xpath expr="//group[@name='managers']" position="inside">
                 <field name="attendance_manager_id" string="Attendance" widget="many2one_avatar_user" groups="hr_attendance.group_hr_attendance_manager"/>
+            </xpath>
+            <xpath expr="//field[@name='barcode']" position="attributes">
+                <attribute name="string">RFID/Badge Number</attribute>
+            </xpath>
+            <xpath expr="//button[@name='generate_random_barcode']" position="after">
+                <button name="open_barcode_scanner" string="Read a badge" type="object" class="btn btn-link" invisible="barcode"/>
             </xpath>
         </field>
     </record>
@@ -85,7 +91,7 @@
             </xpath>
             <xpath expr="//div[@name='button_box']" position="inside">
                 <field name="display_extra_hours" invisible="1"/>
-                <button name="action_open_last_month_overtime"
+                <button name="action_open_total_overtime"
                         class="oe_stat_button"
                         icon="fa-history"
                         type="object"
@@ -221,7 +227,7 @@
         <field name="name">hr.attendance.list</field>
         <field name="model">hr.attendance</field>
         <field name="arch" type="xml">
-            <list sample="1">
+            <list sample="1" js_class="extra_hours_list_view">
                 <field name="check_in"/>
                 <field name="check_out"/>
                 <field name="worked_hours" string="Worked Hours" widget="float_time"/>

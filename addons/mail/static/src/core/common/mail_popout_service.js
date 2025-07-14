@@ -7,6 +7,12 @@ import { getTemplate } from "@web/core/templates";
 const DEFAULT_ID = Symbol("default");
 
 export const mailPopoutService = {
+    /**
+     * To be overridden to add specific assets to call PiP.
+     * @param [Window] window the window on which we may add assets
+     */
+    async addAssets(window) {},
+
     start(env) {
         /**
          * @type {Map<any, { externalWindow: Window|null, hooks: { beforePopout?: Function, afterPopoutClosed?: Function, app: App } }>}
@@ -18,8 +24,11 @@ export const mailPopoutService = {
          * - Reset the external window header from main window (for appropriate title and other meta data)
          * - clear the external window's document body
          * - destroy the current app mounted on the window
+         * @param {any} id - The ID of the popout instance to reset
+         * @param {Object} [options]
+         * @param {Boolean} [options.useAlternativeAssets]
          */
-        function reset(id) {
+        async function reset(id, { useAlternativeAssets } = {}) {
             const popout = popouts.get(id);
             if (!popout) {
                 return;
@@ -27,7 +36,11 @@ export const mailPopoutService = {
             const doc = popout.externalWindow?.document;
             if (doc) {
                 doc.head.textContent = "";
-                doc.write(window.document.head.outerHTML);
+                if (useAlternativeAssets) {
+                    await mailPopoutService.addAssets(popout.externalWindow);
+                } else {
+                    doc.write(window.document.head.outerHTML);
+                }
                 doc.body = doc.createElement("body");
             }
             if (popout.app) {
@@ -63,12 +76,16 @@ export const mailPopoutService = {
          * @param {number} [param2.options.width] - The width of the popout window.
          * @param {number} [param2.options.height] - The height of the popout window.
          * @param {number} [param2.options.aspectRatio=16/9] - The aspect ratio of the popout window.
+         * @param {boolean} [param2.options.useAlternativeAssets]
          * @returns {Promise<Window|null>}
          */
         async function pip(
             id,
             component,
-            { props, options: { width, height, aspectRatio = 16 / 9 } = {} } = {}
+            {
+                props,
+                options: { width, height, aspectRatio = 16 / 9, useAlternativeAssets = false } = {},
+            } = {}
         ) {
             const popout = popouts.get(id);
             let externalWindow = popout.externalWindow;
@@ -78,17 +95,25 @@ export const mailPopoutService = {
                 height =
                     height || (width ? width / aspectRatio : Math.min(240, window.innerHeight));
                 width = width || height * aspectRatio;
-                externalWindow = await window.documentPictureInPicture.requestWindow({
-                    width,
-                    height,
-                });
+                if (window.documentPictureInPicture) {
+                    externalWindow = await window.documentPictureInPicture.requestWindow({
+                        width,
+                        height,
+                    });
+                } else {
+                    externalWindow = browser.open(
+                        "about:blank",
+                        "_blank",
+                        `popup=yes,width=${width},height=${height}`
+                    );
+                }
                 popout.externalWindow = externalWindow;
                 pollClosedWindow(id);
             }
-            reset(id);
+            await reset(id, { useAlternativeAssets });
             popout.app = new App(component, {
                 name: "Popout",
-                env: Object.assign(env, {
+                env: Object.assign({}, env, {
                     /**
                      * Some sub components may need a reference to the external window to
                      * access window information such as its dimensions, or to attach event listeners.

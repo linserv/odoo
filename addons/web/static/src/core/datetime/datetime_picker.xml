@@ -16,9 +16,9 @@
                         </div>
                     </t>
                     <t t-foreach="month.weeks" t-as="week" t-key="week.number">
-                        <t t-if="props.showWeekNumbers ?? !props.range">
+                        <t t-if="props.showWeekNumbers">
                             <div
-                                class="o_week_number_cell d-flex align-items-center ps-2 text-muted fst-italic"
+                                class="o_week_number_cell d-flex align-items-center ps-2 fw-bolder"
                                 t-esc="week.number"
                             />
                         </t>
@@ -32,14 +32,16 @@
                                     o_select_start: arInfo.isSelectStart,
                                     o_select_end: arInfo.isSelectEnd,
                                     o_highlighted: arInfo.isHighlighted,
-                                    'o_today fw-bolder text-decoration-underline': itemInfo.includesToday,
+                                    'o_today fw-bolder': itemInfo.includesToday,
                                     [itemInfo.extraClass]: true,
                                 }"
                                 t-att-disabled="!itemInfo.isValid"
                                 t-on-pointerenter="() => (state.hoveredDate = itemInfo.range[0])"
                                 t-on-click="() => this.zoomOrSelect(itemInfo)"
                             >
-                                <t t-esc="itemInfo.label" />
+                                <div t-att-class="{'w-75 align-content-center text-center rounded-circle': itemInfo.includesToday}">
+                                    <t t-esc="itemInfo.label" />
+                                </div>
                             </div>
                         </t>
                     </t>
@@ -95,33 +97,33 @@
     <t t-name="web.DateTimePicker">
         <div
             class="o_datetime_picker d-flex flex-column gap-2 user-select-none p-2"
-            t-attf-style="--DateTimePicker__Day-template-columns: {{ props.showWeekNumbers ?? !props.range ? 8 : 7 }}"
+            t-attf-style="--DateTimePicker__Day-template-columns: {{ props.showWeekNumbers ? 8 : 7 }}"
         >
             <nav class="o_datetime_picker_header">
                 <button
-                    class="o_previous btn btn-light"
+                    class="o_previous btn opacity-75 opacity-100-hover"
                     t-on-click="previous"
                     tabindex="-1"
                 >
                     <i class="oi oi-chevron-left" t-att-title="activePrecisionLevel.prevTitle" />
                 </button>
                 <button
-                    class="o_next btn btn-light"
+                    class="o_next btn opacity-75 opacity-100-hover"
                     t-on-click="next"
                     tabindex="-1"
                 >
                     <i class="oi oi-chevron-right" t-att-title="activePrecisionLevel.nextTitle" />
                 </button>
                 <button
-                    class="o_zoom_out o_datetime_button btn text-truncate"
+                    class="o_zoom_out o_datetime_button btn opacity-75 opacity-100-hover text-truncate"
                     tabindex="-1"
-                    t-att-class="{ 'btn-light': !isLastPrecisionLevel }"
+                    t-att-class="{ 'disabled': isLastPrecisionLevel }"
                     t-att-title="!isLastPrecisionLevel and activePrecisionLevel.mainTitle"
                     t-on-click="zoomOut"
                 >
                     <t t-foreach="titles" t-as="title" t-key="title">
                         <strong
-                            class="o_header_part fs-5"
+                            class="o_header_part"
                             t-esc="title"
                         />
                     </t>

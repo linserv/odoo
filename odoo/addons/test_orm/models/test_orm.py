@@ -157,7 +157,7 @@ class TestOrmMessage(models.Model):
     has_important_sibling = fields.Boolean(compute='_compute_has_important_sibling')
 
     attributes = fields.Properties(
-        string='Properties',
+        string='Discussion Properties',
         definition='discussion.attributes_definition',
     )
 
@@ -176,7 +176,7 @@ class TestOrmMessage(models.Model):
     @api.depends('author.name', 'discussion.name')
     def _compute_name(self):
         for message in self:
-            message.name = self._context.get('compute_name',
+            message.name = self.env.context.get('compute_name',
                 "[%s] %s" % (message.discussion.name or '', message.author.name or ''))
 
     @api.constrains('name')
@@ -242,6 +242,7 @@ class TestOrmEmailmessage(models.Model):
     _name = 'test_orm.emailmessage'
     _description = 'Test ORM Email Message'
     _inherits = {'test_orm.message': 'message'}
+    _inherit = 'properties.base.definition.mixin'
 
     message = fields.Many2one('test_orm.message', 'Message',
                               required=True, ondelete='cascade')
@@ -451,6 +452,7 @@ class TestOrmRelated(models.Model):
     message_currency = fields.Many2one(related="message.author", string='Message Author')
 
     foo_id = fields.Many2one('test_orm.related_foo')
+    foo_ids = fields.Many2many('test_orm.related_foo', string='Foos')
 
     foo_name = fields.Char('foo_name', related='foo_id.name', related_sudo=False)
     foo_name_sudo = fields.Char('foo_name_sudo', related='foo_id.name', related_sudo=True)
@@ -460,11 +462,23 @@ class TestOrmRelated(models.Model):
 
     foo_id_bar_name = fields.Char('foo_id_bar_name', related='foo_id.bar_name', related_sudo=False)
 
-    foo_bar_id = fields.Many2one(string='foo_bar_id', related='foo_id.bar_id', related_sudo=False)
-    foo_bar_id_name = fields.Char('foo_bar_id_name', related='foo_bar_id.name', related_sudo=False)
+    foo_bar_id = fields.Many2one(related='foo_id.bar_id', related_sudo=False, string='Bar')
+    foo_bar_id_name = fields.Char(related='foo_bar_id.name', related_sudo=False, string='Bar Name')
 
-    foo_bar_sudo_id = fields.Many2one(string='foo_bar_sudo_id', related='foo_id.bar_id', related_sudo=True)
-    foo_bar_sudo_id_name = fields.Char('foo_bar_sudo_id_name', related='foo_bar_sudo_id.name', related_sudo=False)
+    foo_bar_sudo_id = fields.Many2one(related='foo_id.bar_id', related_sudo=True, string='Bar Sudo')
+    foo_bar_sudo_id_name = fields.Char(related='foo_bar_sudo_id.name', related_sudo=False, string='Bar Sudo Name')
+
+    foo_bar_ids = fields.Many2many(related='foo_id.bar_ids', related_sudo=False)
+    foo_bar_sudo_ids = fields.Many2many(related='foo_id.bar_ids', related_sudo=True, string='Bars Sudo')
+
+    foo_foo_ids = fields.One2many(related='foo_id.foo_ids', related_sudo=False, string='Foo Foos')
+    foo_foo_sudo_ids = fields.One2many(related='foo_id.foo_ids', related_sudo=True, string='Foo Foos Sudo')
+
+    foo_binary_att = fields.Binary(related='foo_id.binary_att', related_sudo=False)
+    foo_binary_att_sudo = fields.Binary(related='foo_id.binary_att', related_sudo=True, string='Binary Att Sudo')
+
+    foo_binary_bin = fields.Binary(related='foo_id.binary_bin', related_sudo=False)
+    foo_binary_bin_sudo = fields.Binary(related='foo_id.binary_bin', related_sudo=True, string='Binary Bin Sudo')
 
 
 class TestOrmRelated_Foo(models.Model):
@@ -473,8 +487,18 @@ class TestOrmRelated_Foo(models.Model):
 
     name = fields.Char()
     bar_id = fields.Many2one('test_orm.related_bar')
+    foo_ids = fields.One2many('test_orm.related', 'foo_id', string='Foos')
+    bar_ids = fields.Many2many('test_orm.related_bar', string='Bars')
+    binary_att = fields.Binary()
+    binary_bin = fields.Binary(attachment=False)
     bar_name = fields.Char('bar_name', related='bar_id.name', related_sudo=False)
     bar_alias = fields.Many2one(related='bar_id', string='bar_alias')
+
+    foo_names = fields.Char(related='foo_ids.name', related_sudo=False, string="Foo Names")
+    foo_names_sudo = fields.Char(related='foo_ids.name', related_sudo=True, string="Foo Names Sudo")
+
+    bar_names = fields.Char(related='bar_ids.name', related_sudo=False, string="Bar Names")
+    bar_names_sudo = fields.Char(related='bar_ids.name', related_sudo=True, string="Bar Names Sudo")
 
 
 class TestOrmRelated_Bar(models.Model):
@@ -520,19 +544,19 @@ class TestOrmComputeInverse(models.Model):
 
     @api.depends('foo')
     def _compute_bar(self):
-        self._context.get('log', []).append('compute')
+        self.env.context.get('log', []).append('compute')
         for record in self:
             record.bar = record.foo
 
     def _inverse_bar(self):
-        self._context.get('log', []).append('inverse')
+        self.env.context.get('log', []).append('inverse')
         for record in self:
             record.foo = record.bar
 
     @api.constrains('bar', 'baz')
     def _check_constraint(self):
-        if self._context.get('log_constraint'):
-            self._context.get('log', []).append('constraint')
+        if self.env.context.get('log_constraint'):
+            self.env.context.get('log', []).append('constraint')
 
     @api.depends('foo')
     def _compute_child_ids(self):
@@ -573,18 +597,18 @@ class TestOrmMulti_Compute_Inverse(models.Model):
 
     @api.depends('foo')
     def _compute_bars(self):
-        self._context.get('log', []).append('compute')
+        self.env.context.get('log', []).append('compute')
         for record in self:
             substrs = record.foo.split('/') + ['', '', '']
             record.bar1, record.bar2, record.bar3 = substrs[:3]
 
     def _inverse_bar1(self):
-        self._context.get('log', []).append('inverse1')
+        self.env.context.get('log', []).append('inverse1')
         for record in self:
             record.write({'foo': f'{record.bar1}/{record.bar2}/{record.bar3}'})
 
     def _inverse_bar23(self):
-        self._context.get('log', []).append('inverse23')
+        self.env.context.get('log', []).append('inverse23')
         for record in self:
             record.write({'foo': f'{record.bar1}/{record.bar2}/{record.bar3}'})
 
@@ -2366,3 +2390,14 @@ class OnchangePartialView(models.Model):
     name = fields.Char()
     company_id = fields.Many2one('res.company', default=lambda r: r.env.company)
     currency_id = fields.Many2one('res.currency', related='company_id.currency_id')
+
+
+class BinaryTest(models.Model):
+    _name = _description = "binary.test"
+
+    img = fields.Image()
+    bin1 = fields.Binary()
+    bin2 = fields.Binary(compute="_compute_bin2")
+
+    def _compute_bin2(self):
+        self.bin2 = {}

@@ -9,7 +9,7 @@ import pytz
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError, AccessError, ValidationError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools.translate import _
 
 
@@ -40,7 +40,7 @@ class AccountAnalyticLine(models.Model):
         result = super().default_get(field_list)
         if not self.env.context.get('default_employee_id') and 'employee_id' in field_list and result.get('user_id'):
             result['employee_id'] = self.env['hr.employee'].search([('user_id', '=', result['user_id']), ('company_id', '=', result.get('company_id', self.env.company.id))], limit=1).id
-        if not self._context.get('default_project_id') and self._context.get('is_timesheet'):
+        if not self.env.context.get('default_project_id') and self.env.context.get('is_timesheet'):
             employee_id = result.get('employee_id', self.env.context.get('default_employee_id', False))
             favorite_project_id = self._get_favorite_project_id(employee_id)
             if favorite_project_id:
@@ -48,17 +48,15 @@ class AccountAnalyticLine(models.Model):
         return result
 
     def _domain_project_id(self):
-        domain = [('allow_timesheets', '=', True), ('is_template', '=', False)]
+        domain = Domain([('allow_timesheets', '=', True), ('is_template', '=', False)])
         if not self.env.user.has_group('hr_timesheet.group_timesheet_manager'):
-            return expression.AND([domain,
-                ['|', ('privacy_visibility', '!=', 'followers'), ('message_partner_ids', 'in', [self.env.user.partner_id.id])]
-            ])
+            domain &= Domain('privacy_visibility', '!=', 'followers') | Domain('message_partner_ids', 'in', [self.env.user.partner_id.id])
         return domain
 
     def _domain_employee_id(self):
-        domain = [('company_id', 'in', self._context.get('allowed_company_ids'))]
+        domain = Domain('company_id', 'in', self.env.context.get('allowed_company_ids'))
         if not self.env.user.has_group('hr_timesheet.group_hr_timesheet_approver'):
-            domain = expression.AND([domain, [('user_id', '=', self.env.user.id)]])
+            domain &= Domain('user_id', '=', self.env.user.id)
         return domain
 
     task_id = fields.Many2one(
@@ -88,13 +86,12 @@ class AccountAnalyticLine(models.Model):
             ('res_model', 'in', ('project.project', 'project.task')),
         ], ['res_model'], ['res_id:array_agg']))
         if not followed_ids_by_model:
-            return expression.FALSE_DOMAIN
-        domains = []
+            return Domain.FALSE
+        domain = Domain.FALSE
         if project_ids := followed_ids_by_model.get('project.project'):
-            domains.append([('project_id', 'in', project_ids)])
+            domain |= Domain('project_id', 'in', project_ids)
         if task_ids := followed_ids_by_model.get('project.task'):
-            domains.append([('task_id', 'in', task_ids)])
-        domain = expression.OR(domains)
+            domain |= Domain('task_id', 'in', task_ids)
         return domain
 
     @api.depends('project_id.message_partner_ids', 'task_id.message_partner_ids')
@@ -248,14 +245,18 @@ class AccountAnalyticLine(models.Model):
 
             company = task.company_id or project.company_id or self.env['res.company'].browse(vals.get('company_id'))
             vals['company_id'] = company.id
-            vals.update(self._timesheet_preprocess_get_accounts(vals))
+            vals.update({
+                fname: account_id
+                for fname, account_id in self._timesheet_preprocess_get_accounts(vals).items()
+                if fname not in vals
+            })
 
             if not vals.get('product_uom_id'):
                 vals['product_uom_id'] = company.project_time_mode_id.id
 
             if not vals.get('name'):
                 vals['name'] = '/'
-            employee_id = vals.get('employee_id', self._context.get('default_employee_id', False))
+            employee_id = vals.get('employee_id', self.env.context.get('default_employee_id', False))
             if employee_id and employee_id not in employee_ids:
                 employee_ids.append(employee_id)
             else:
@@ -288,7 +289,7 @@ class AccountAnalyticLine(models.Model):
         for vals in vals_list:
             if not vals.get('project_id'):
                 continue
-            employee_in_id = vals.get('employee_id', self._context.get('default_employee_id', False))
+            employee_in_id = vals.get('employee_id', self.env.context.get('default_employee_id', False))
             if employee_in_id:
                 company = False
                 if not vals.get('company_id'):
@@ -341,7 +342,11 @@ class AccountAnalyticLine(models.Model):
             raise ValidationError(_('Timesheets cannot be created on a private task.'))
         if project or task:
             values['company_id'] = task.company_id.id or project.company_id.id
-        values.update(self._timesheet_preprocess_get_accounts(values))
+        values.update({
+            fname: account_id
+            for fname, account_id in self._timesheet_preprocess_get_accounts(values).items()
+            if fname not in values
+        })
 
         if values.get('employee_id'):
             employee = self.env['hr.employee'].browse(values['employee_id'])
@@ -378,12 +383,13 @@ class AccountAnalyticLine(models.Model):
         if self.env.user.has_group('hr_timesheet.group_hr_timesheet_user'):
             # Then, he is internal user, and we take the domain for this current user
             return self.env['ir.rule']._compute_domain(self._name)
-        return [
-            '|',
-            ('message_partner_ids', 'child_of', [self.env.user.partner_id.commercial_partner_id.id]),
-            ('partner_id', 'child_of', [self.env.user.partner_id.commercial_partner_id.id]),
-            ('project_id.privacy_visibility', '=', 'portal'),
-        ]
+        return (
+            (
+                Domain('message_partner_ids', 'child_of', [self.env.user.partner_id.commercial_partner_id.id])
+                | Domain('partner_id', 'child_of', [self.env.user.partner_id.commercial_partner_id.id])
+            )
+            & Domain('project_id.privacy_visibility', '=', 'portal')
+        )
 
     def _timesheet_preprocess_get_accounts(self, vals):
         project = self.env['project.project'].sudo().browse(vals.get('project_id'))
@@ -503,9 +509,18 @@ class AccountAnalyticLine(models.Model):
             'res_id': self.id,
             'res_model': 'account.analytic.line',
             'views': [(self.env.ref('hr_timesheet.timesheet_view_form_portal_user').id, 'form')],
-            'context': self._context,
+            'context': self.env.context,
         }
 
     @api.model
     def get_unusual_days(self, date_from, date_to=None):
         return self.env.user.employee_id._get_unusual_days(date_from, date_to)
+
+    @api.model
+    def get_import_templates(self):
+        if self.env.context.get('is_timesheet'):
+            return [{
+                'label': _('Import Template for Timesheets'),
+                'template': '/hr_timesheet/static/xls/timesheets_import_template.xlsx',
+            }]
+        return []

@@ -33,9 +33,10 @@ test("add livechat in the sidebar on visitor sending first message", async () =>
             Command.create({
                 unpin_dt: "2021-01-01 12:00:00",
                 last_interest_dt: "2021-01-01 10:00:00",
+                livechat_member_type: "agent",
                 partner_id: serverState.partnerId,
             }),
-            Command.create({ guest_id: guestId }),
+            Command.create({ guest_id: guestId, livechat_member_type: "visitor" }),
         ],
         channel_type: "livechat",
         country_id: countryId,
@@ -71,8 +72,8 @@ test("invite button should be present on livechat", async () => {
     const channelId = pyEnv["discuss.channel"].create({
         anonymous_name: "Visitor 11",
         channel_member_ids: [
-            Command.create({ partner_id: serverState.partnerId }),
-            Command.create({ guest_id: guestId }),
+            Command.create({ partner_id: serverState.partnerId, livechat_member_type: "agent" }),
+            Command.create({ guest_id: guestId, livechat_member_type: "visitor" }),
         ],
         channel_type: "livechat",
         livechat_operator_id: serverState.partnerId,
@@ -93,9 +94,10 @@ test("livechats are sorted by last activity time in the sidebar: most recent at 
             channel_member_ids: [
                 Command.create({
                     last_interest_dt: "2021-01-01 10:00:00",
+                    livechat_member_type: "agent",
                     partner_id: serverState.partnerId,
                 }),
-                Command.create({ guest_id: guestId_1 }),
+                Command.create({ guest_id: guestId_1, livechat_member_type: "visitor" }),
             ],
             channel_type: "livechat",
             livechat_operator_id: serverState.partnerId,
@@ -105,9 +107,10 @@ test("livechats are sorted by last activity time in the sidebar: most recent at 
             channel_member_ids: [
                 Command.create({
                     last_interest_dt: "2021-02-01 10:00:00",
+                    livechat_member_type: "agent",
                     partner_id: serverState.partnerId,
                 }),
-                Command.create({ guest_id: guestId_2 }),
+                Command.create({ guest_id: guestId_2, livechat_member_type: "visitor" }),
             ],
             channel_type: "livechat",
             livechat_operator_id: serverState.partnerId,
@@ -136,8 +139,8 @@ test("sidebar search finds livechats", async () => {
     pyEnv["discuss.channel"].create({
         anonymous_name: "Visitor 11",
         channel_member_ids: [
-            Command.create({ partner_id: serverState.partnerId }),
-            Command.create({ guest_id: guestId }),
+            Command.create({ partner_id: serverState.partnerId, livechat_member_type: "agent" }),
+            Command.create({ guest_id: guestId, livechat_member_type: "visitor" }),
         ],
         channel_type: "livechat",
         livechat_operator_id: serverState.partnerId,
@@ -147,4 +150,21 @@ test("sidebar search finds livechats", async () => {
     await click("input[placeholder='Find or start a conversation']");
     await click("a", { text: "Visitor 11" });
     await contains(".o-mail-Discuss-threadName[title='Visitor 11']");
+});
+
+test("open visitor's partner profile if visitor has one", async () => {
+    const pyEnv = await startServer();
+    const livechatPartner = pyEnv["res.partner"].create({ name: "Joel Willis" });
+    const channel = pyEnv["discuss.channel"].create({
+        channel_member_ids: [
+            Command.create({ partner_id: serverState.partnerId }),
+            Command.create({ partner_id: livechatPartner }),
+        ],
+        channel_type: "livechat",
+        livechat_operator_id: serverState.partnerId,
+    });
+    await start();
+    await openDiscuss(channel);
+    await click("a[title='View Contact']");
+    await contains("div.o_field_widget > input:value(Joel Willis)");
 });

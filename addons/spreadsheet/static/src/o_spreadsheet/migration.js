@@ -57,7 +57,11 @@ migrationStepRegistry.add("18.4.10", {
     migrate(data) {
         for (const globalFilter of data.globalFilters || []) {
             if (globalFilter.type === "text" && typeof globalFilter.defaultValue == "string") {
-                globalFilter.defaultValue = [globalFilter.defaultValue];
+                if (globalFilter.defaultValue === "") {
+                    delete globalFilter.defaultValue;
+                } else {
+                    globalFilter.defaultValue = [globalFilter.defaultValue];
+                }
             }
             if (globalFilter.type === "text" && globalFilter.rangeOfAllowedValues) {
                 globalFilter.rangesOfAllowedValues = [globalFilter.rangeOfAllowedValues];
@@ -121,6 +125,35 @@ migrationStepRegistry.add("18.4.14", {
         for (const globalFilter of data.globalFilters || []) {
             delete globalFilter.rangeType;
             delete globalFilter.disabledPeriods;
+        }
+        return data;
+    },
+});
+
+migrationStepRegistry.add("18.5.10", {
+    migrate(data) {
+        for (const globalFilter of data.globalFilters || []) {
+            if (globalFilter.type === "relation" && globalFilter.defaultValue) {
+                const operator = globalFilter.includeChildren ? "child_of" : "in";
+                delete globalFilter.includeChildren;
+                globalFilter.defaultValue = {
+                    operator,
+                    ids: globalFilter.defaultValue,
+                };
+            } else if (globalFilter.type === "text" && globalFilter.defaultValue) {
+                globalFilter.defaultValue = {
+                    operator: "ilike",
+                    strings: globalFilter.defaultValue,
+                };
+            } else if (globalFilter.type === "boolean" && globalFilter.defaultValue) {
+                if (globalFilter.defaultValue.length === 2) {
+                    delete globalFilter.defaultValue; // [true, false] no longer supported
+                } else {
+                    globalFilter.defaultValue = {
+                        operator: globalFilter.defaultValue[0] ? "set" : "not_set",
+                    };
+                }
+            }
         }
         return data;
     },

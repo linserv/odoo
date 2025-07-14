@@ -37,7 +37,7 @@ class PosOrder(models.Model):
     table_stand_number = fields.Char(string="Table Stand Number")
 
     @api.model
-    def _load_pos_self_data_domain(self, data):
+    def _load_pos_self_data_domain(self, data, config):
         return [('id', '=', False)]
 
     @api.model
@@ -57,6 +57,7 @@ class PosOrder(models.Model):
     def _send_notification(self, order_ids):
         config_ids = order_ids.config_id
         for config in config_ids:
+            config.notify_synchronisation(config.current_session_id.id, self.env.context.get('login_number', 0))
             config._notify('ORDER_STATE_CHANGED', {})
     
     def action_send_self_order_receipt(self, email, mail_template_id, ticket_image, basic_image):

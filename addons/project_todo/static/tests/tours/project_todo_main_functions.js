@@ -1,6 +1,6 @@
 import { markup } from "@odoo/owl";
 import { registry } from "@web/core/registry";
-import { stepUtils } from "@web_tour/tour_service/tour_utils";
+import { stepUtils } from "@web_tour/tour_utils";
 
 registry.category("web_tour.tours").add('project_todo_main_functions', {
     url: '/odoo',
@@ -166,7 +166,7 @@ registry.category("web_tour.tours").add('project_todo_main_functions', {
     expectUnloadPage: true,
 }, {
     trigger: ".o_form_view .breadcrumb-item:last-child",
-    content: markup("Let's go back to the <b>kanban view</b> to have an overview of tasks linked to project chosen."),
+    content: markup`Let's go back to the <b>kanban view</b> to have an overview of tasks linked to project chosen.`,
     run: "click",
 }, {
     trigger: ".o_kanban_view",

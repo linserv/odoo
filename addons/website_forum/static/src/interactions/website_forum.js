@@ -1,15 +1,14 @@
+import { scrollTo, closestScrollable } from "@html_builder/utils/scrolling";
 import { Interaction } from "@web/public/interaction";
 import { registry } from "@web/core/registry";
-import { htmlJoin } from "@mail/utils/common/html";
 import { markup } from "@odoo/owl";
 import { browser } from "@web/core/browser/browser";
-import { cookie } from "@web/core/browser/cookie";;
+import { cookie } from "@web/core/browser/cookie";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { _t } from "@web/core/l10n/translation";
 import { rpc } from "@web/core/network/rpc";
-import { escape } from "@web/core/utils/strings";
+import { htmlJoin } from "@web/core/utils/html";
 import { session } from "@web/session";
-import { scrollTo, closestScrollable } from "@web_editor/js/common/scrolling";
 import { loadWysiwygFromTextarea } from "@web_editor/js/frontend/loadWysiwygFromTextarea";
 import { FlagMarkAsOffensiveDialog } from "../components/flag_mark_as_offensive/flag_mark_as_offensive";
 import { WebsiteForumTagsWrapper } from "../components/website_forum_tags_wrapper";
@@ -166,7 +165,9 @@ export class WebsiteForum extends Interaction {
     warnIfPublicUser() {
         if (session.is_website_user) {
             this.displayAccessDeniedNotification(
-                markup(`<a href='/web/login'>` + escape(_t("Oh no! Please sign in to perform this action")) + "</a>")
+                markup`<a href='/web/login'>${_t(
+                    "Oh no! Please sign in to perform this action"
+                )}</a>`
             );
             return true;
         }
@@ -261,8 +262,8 @@ export class WebsiteForum extends Interaction {
             message = htmlJoin(
                 message,
                 _t("%(link_start)sRead the guidelines to know how to gain karma.%(link_end)s", {
-                    link_start: markup(`<br><a class="alert-link" href="/forum/${forumId}/faq">`),
-                    link_end: markup("</a>"),
+                    link_start: markup`<br><a class="alert-link" href="/forum/${forumId}/faq">`,
+                    link_end: markup`</a>`,
                 })
             );
         }

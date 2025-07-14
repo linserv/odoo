@@ -11,7 +11,7 @@
             <div class="container oe_website_jobs">
                 <!-- Topbar -->
                 <section class="o_wevent_index_topbar_filters d-flex d-print-none align-items-center justify-content-lg-end flex-wrap gap-2 mt-4 mb-3">
-                    <h2 class="me-auto mb-0 h4">Our Job Offers</h2>
+                    <h1 class="me-auto mb-0 h4">Our Job Offers</h1>
                     <!-- Customizations -->
                     <t t-call="website_hr_recruitment.topbar_customizations"/>
                 </section>
@@ -943,7 +943,7 @@
             <t t-set="non_filter_params" t-valuef="#{current_department_param}#{current_employment_type_param}#{current_industry_param}"/>
             <t t-set="count_per_filter" t-value="count_per_office"/>
             <t t-set="dropdown_id" t-value="'officesDropdown'"/>
-            <t t-set="untype_label" t-value="'Remote'"/>
+            <t t-set="untype_label">Remote</t>
         </t>
     </xpath>
     <xpath expr="//div[hasclass('accordion-flush')]" position="inside">
@@ -957,7 +957,7 @@
             <t t-set="non_filter_params" t-valuef="#{current_department_param}#{current_employment_type_param}#{current_industry_param}"/>
             <t t-set="count_per_filter" t-value="count_per_office"/>
             <t t-set="dropdown_id" t-value="'officesDropdown'"/>
-            <t t-set="untype_label" t-value="'Remote'"/>
+            <t t-set="untype_label">Remote</t>
         </t>
     </xpath>
 </template>
@@ -974,7 +974,7 @@
             <t t-set="non_filter_params" t-valuef="#{current_country_param}#{current_office_param}#{current_employment_type_param}#{current_industry_param}"/>
             <t t-set="count_per_filter" t-value="count_per_department"/>
             <t t-set="dropdown_id" t-value="'departmentsDropdown'"/>
-            <t t-set="untype_label" t-value="'Others'"/>
+            <t t-set="untype_label">Others</t>
         </t>
     </xpath>
     <xpath expr="//div[hasclass('accordion-flush')]" position="inside">
@@ -988,7 +988,7 @@
             <t t-set="non_filter_params" t-valuef="#{current_country_param}#{current_office_param}#{current_employment_type_param}#{current_industry_param}"/>
             <t t-set="count_per_filter" t-value="count_per_department"/>
             <t t-set="dropdown_id" t-value="'departmentsDropdown'"/>
-            <t t-set="untype_label" t-value="'Others'"/>
+            <t t-set="untype_label">Others</t>
         </t>
     </xpath>
 </template>

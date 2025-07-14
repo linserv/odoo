@@ -65,10 +65,6 @@ $o-we-dropzone-border: $o-we-dropzone-border-width dashed $o-brand-odoo !default
 $o-we-dropzone-accent-color: $o-we-color-accent !default;
 $o-we-dropzone-bg-color: rgba($o-we-dropzone-accent-color, .5) !default;
 
-// Translations
-$o-we-content-to-translate-color: rgba(255, 255, 90, 0.5) !default;
-$o-we-translated-content-color: rgba(120, 215, 110, 0.5) !default;
-
 $o-we-toolbar-height: 40px !default;
 
 $o-we-item-spacing: 8px !default;
@@ -810,3 +806,16 @@ $o-bg-shapes: (
         -moz-appearance: textfield;
     }
 };
+
+%o-hb-input-base {
+    border: $o-we-sidebar-content-field-border-width solid $o-we-sidebar-content-field-border-color;
+    border-radius: $o-we-sidebar-content-field-border-radius;
+    background-color: var(--o-hb-field-input-bg, #{$o-we-sidebar-content-field-input-bg});
+    padding: 0.15rem $o-we-sidebar-content-field-clickable-spacing;
+    color: inherit;
+
+    &:focus, &:focus-within {
+        border-color: var(--o-hb-input-active-border, #{$o-we-sidebar-content-field-input-border-color});
+        color: var(--o-hb-row-color-active, #{$o-we-fg-lighter});
+    }
+}

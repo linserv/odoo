@@ -111,7 +111,8 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
 
         document_node.update({
             'cbc:UBLVersionID': None,
-            # The issue time must be the current time set in the UTC time zone
+            # The issue date and time must be the current time set in the UTC time zone
+            'cbc:IssueDate': {'_text': datetime.now(tz=UTC).strftime("%Y-%m-%d")},
             'cbc:IssueTime': {'_text': datetime.now(tz=UTC).strftime("%H:%M:%SZ")},
 
             'cbc:DueDate': None,
@@ -124,12 +125,15 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
             'cac:OrderReference': None,
 
             # Debit/Credit note original invoice ref.
+            # Applies to credit notes, debit notes, refunds for both invoices and self-billed invoices.
+            # The original document is mandatory; but in some specific cases it will be empty (sending a credit note for an invoice
+            # managed outside Odoo/...)
             'cac:BillingReference': {
                 'cac:InvoiceDocumentReference': {
-                    'cbc:ID': {'_text': vals['original_document'].name},
-                    'cbc:UUID': {'_text': vals['original_document'].l10n_my_edi_external_uuid},
+                    'cbc:ID': {'_text': (vals['original_document'] and vals['original_document'].name) or 'NA'},
+                    'cbc:UUID': {'_text': (vals['original_document'] and vals['original_document'].l10n_my_edi_external_uuid) or 'NA'},
                 }
-            } if vals['original_document'] else None,
+            } if vals['document_type_code'] in {'02', '03', '04', '12', '13', '14'} else None,
             'cac:AdditionalDocumentReference': [
                 {
                     'cbc:ID': {'_text': invoice.l10n_my_edi_custom_form_reference},
@@ -308,10 +312,11 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
         super()._add_invoice_line_item_nodes(line_node, vals)
 
         base_line = vals['base_line']
-        if base_line['record'].l10n_my_edi_classification_code:
+        class_code = base_line['record'].product_id.product_tmpl_id.l10n_my_edi_classification_code
+        if class_code:
             line_node['cac:Item']['cac:CommodityClassification'] = {
                 'cbc:ItemClassificationCode': {
-                    '_text': base_line['record'].l10n_my_edi_classification_code,
+                    '_text': class_code,
                     'listID': 'CLASS',
                 }
             }
@@ -335,11 +340,12 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
         for partner_type in ('supplier', 'customer'):
             partner = vals[partner_type]
             phone_number = partner.phone
-            if phone_number:
+            # 'NA' is a valid value in some cases, e.g. consolidated invoices.
+            if phone_number != 'NA':
                 phone = self._l10n_my_edi_get_formatted_phone_number(phone_number)
                 if E_164_REGEX.match(phone) is None:
                     self._l10n_my_edi_make_validation_error(constraints, 'phone_number_format', partner_type, partner.display_name)
-            else:
+            elif not phone_number:
                 self._l10n_my_edi_make_validation_error(constraints, 'phone_number_required', partner_type, partner.display_name)
 
             # We need to provide both l10n_my_identification_type and l10n_my_identification_number
@@ -365,9 +371,6 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
                 self._l10n_my_edi_make_validation_error(constraints, 'tax_ids_required', line.id, line.display_name)
             elif any(tax.l10n_my_tax_type == 'E' for tax in line.tax_ids) and not invoice.l10n_my_edi_exemption_reason:
                 self._l10n_my_edi_make_validation_error(constraints, 'tax_exemption_required', invoice.id, invoice.display_name)
-
-        if vals['document_type_code'] not in ('01', '11') and not vals['original_document']:
-            self._l10n_my_edi_make_validation_error(constraints, 'adjustment_origin', invoice.id, invoice.display_name)
 
         return constraints
 
@@ -459,7 +462,7 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
             counterpart_amls = payment_terms.matched_debit_ids.debit_move_id + payment_terms.matched_credit_ids.credit_move_id
             counterpart_move_type = 'out_invoice' if invoice.move_type == 'out_refund' else 'out_refund'
             has_payments = bool(counterpart_amls.move_id.filtered(lambda move: move.move_type != counterpart_move_type))
-            is_paid = invoice.payment_state in ('in_payment', 'paid')
+            is_paid = invoice.payment_state in ('in_payment', 'paid', 'reversed')
             if is_paid and has_payments:
                 code = '04' if invoice.move_type == 'out_refund' else '14'
             else:
@@ -543,8 +546,14 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
                 line_name=record_name
             ),
             'tax_exemption_required': _(
-                "You must set a Tax Exemption Reason on the invoice : %(invoice_name)s as some taxes have the type 'Tax exemption'.",
+                "You must set a Tax Exemption Reason on the invoice : %(invoice_name)s as some taxes have the type 'Tax exemption' without a reason set.",
                 invoice_name=record_name
+            ),
+            'tax_exemption_required_on_tax': _(
+                "You must set a Tax Exemption Reason on each tax exempt taxes in order to use them in a Myinvois Document.",
+            ),
+            'missing_general_public': _(
+                "You must have a commercial partner named 'General Public' with a VAT number set to 'EI00000000010' in order to proceed.",
             ),
         }
 

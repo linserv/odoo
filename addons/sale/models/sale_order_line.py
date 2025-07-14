@@ -7,8 +7,7 @@ from markupsafe import Markup
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
-from odoo.fields import Command
-from odoo.osv import expression
+from odoo.fields import Command, Domain
 from odoo.tools import float_compare, float_is_zero, format_date, groupby
 from odoo.tools.translate import _
 
@@ -573,11 +572,10 @@ class SaleOrderLine(models.Model):
             else:
                 line = line.with_company(line.company_id)
                 price = line._get_display_price()
+                product_taxes = line.product_id.taxes_id._filter_taxes_by_company(line.company_id)
                 line.price_unit = line.product_id._get_tax_included_unit_price_from_price(
                     price,
-                    product_taxes=line.product_id.taxes_id.filtered(
-                        lambda tax: tax.company_id == line.env.company
-                    ),
+                    product_taxes=product_taxes,
                     fiscal_position=line.order_id.fiscal_position_id,
                 )
                 line.technical_price_unit = line.price_unit
@@ -869,7 +867,7 @@ class SaleOrderLine(models.Model):
             return result
 
         # group analytic lines by product uom and so line
-        domain = expression.AND([[('so_line', 'in', self.ids)], additional_domain])
+        domain = Domain.AND([[('so_line', 'in', self.ids)], additional_domain])
         data = self.env['account.analytic.line']._read_group(
             domain,
             ['product_uom_id', 'so_line'],
@@ -927,9 +925,9 @@ class SaleOrderLine(models.Model):
 
     def _get_invoice_lines(self):
         self.ensure_one()
-        if self._context.get('accrual_entry_date'):
+        if self.env.context.get('accrual_entry_date'):
             return self.invoice_lines.filtered(
-                lambda l: l.move_id.invoice_date and l.move_id.invoice_date <= self._context['accrual_entry_date']
+                lambda l: l.move_id.invoice_date and l.move_id.invoice_date <= self.env.context['accrual_entry_date']
             )
         else:
             return self.invoice_lines
@@ -1542,12 +1540,9 @@ class SaleOrderLine(models.Model):
 
     def _sellable_lines_domain(self):
         discount_products_ids = self.env.companies.sale_discount_product_id.ids
-        domain = [('is_downpayment', '=', False)]
+        domain = Domain('is_downpayment', '=', False)
         if discount_products_ids:
-            domain = expression.AND([
-                domain,
-                [('product_id', 'not in', discount_products_ids)],
-            ])
+            domain &= Domain('product_id', 'not in', discount_products_ids)
         return domain
 
     def _get_lines_with_price(self):

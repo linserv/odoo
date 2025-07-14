@@ -2,26 +2,20 @@ import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_d
 import { _t } from "@web/core/l10n/translation";
 import { uniqueId } from "@web/core/utils/functions";
 import { Reactive } from "@web/core/utils/reactive";
-import { escape } from "@web/core/utils/strings";
 import { AddSnippetDialog } from "./add_snippet_dialog";
 import { registry } from "@web/core/registry";
 import { user } from "@web/core/user";
-import { markup } from "@odoo/owl";
-import { RPCError } from "@web/core/network/rpc";
-import { redirect } from "@web/core/utils/urls";
+import { markup, useState } from "@odoo/owl";
+import { useService } from "@web/core/utils/hooks";
 
 export class SnippetModel extends Reactive {
     constructor(services, { snippetsName, context }) {
         super();
         this.orm = services.orm;
         this.dialog = services.dialog;
-        this.notification = services.notification;
         this.snippetsName = snippetsName;
-        this.websiteService = services.website;
-        this.uiService = services.ui;
         this.context = context;
         this.loadProm = null;
-        this.beforeReload = null;
 
         this.snippetsByCategory = {
             snippet_groups: [],
@@ -83,58 +77,16 @@ export class SnippetModel extends Reactive {
         return this.snippetsByCategory[category].find((snippet) => snippet.name === name);
     }
 
-    registerBeforeReload(func) {
-        this.beforeReload = func;
-    }
-
-    unregisterBeforeReload() {
-        this.beforeReload = null;
-    }
-
-    installSnippetModule(snippet) {
-        // TODO: Should be the app name, not the snippet name ... Maybe both ?
-        const bodyText = _t("Do you want to install %s App?", snippet.title);
+    installSnippetModule(snippet, installSnippetModule) {
+        const bodyText = _t("Do you want to install %s App?", snippet.moduleDisplayName);
         const linkText = _t("More info about this app.");
         const linkUrl =
             "/odoo/action-base.open_module_tree/" + encodeURIComponent(snippet.moduleId);
 
         this.dialog.add(ConfirmationDialog, {
-            title: _t("Install %s", snippet.title),
-            body: markup`${bodyText}\n<a href="${linkUrl}" target="_blank">${linkText}</a>`,
-            confirm: () => {
-                this.uiService.block();
-                (async () => {
-                    try {
-                        await this.orm.call("ir.module.module", "button_immediate_install", [
-                            [Number(snippet.moduleId)],
-                        ]);
-                        if (this.beforeReload) {
-                            await this.beforeReload();
-                        }
-                        const currentPath = encodeURIComponent(window.location.pathname);
-                        const websiteId = this.websiteService.currentWebsite.id;
-                        redirect(
-                            `/odoo/action-website.website_preview?website_id=${encodeURIComponent(
-                                websiteId
-                            )}&path=${currentPath}&enable_editor=1`
-                        );
-                    } catch (e) {
-                        if (e instanceof RPCError) {
-                            const message = _t("Could not install module %(title)s", {
-                                title: snippet.title,
-                            });
-                            this.notification.add(message, {
-                                type: "danger",
-                                sticky: true,
-                            });
-                            return;
-                        }
-                        throw e;
-                    } finally {
-                        this.uiService.unblock();
-                    }
-                })();
-            },
+            title: _t("Install %s", snippet.moduleDisplayName),
+            body: markup`${bodyText}\n<a href="${linkUrl}" target="_blank"><i class="oi oi-arrow-right me-1"></i>${linkText}</a>`,
+            confirm: async () => installSnippetModule(snippet),
             confirmLabel: _t("Save and Install"),
             cancel: () => {},
         });
@@ -149,8 +101,9 @@ export class SnippetModel extends Reactive {
      * @param {Object} - `onSelect` called when a snippet is selected. Must return
      *     an HTMLElement.
      *                 - `onClose` called when the dialog is closed.
+     * @param {Object} editor
      */
-    openSnippetDialog(snippet, { onSelect, onClose }) {
+    openSnippetDialog(snippet, { onSelect, onClose }, editor) {
         this.dialog.add(
             AddSnippetDialog,
             {
@@ -160,6 +113,8 @@ export class SnippetModel extends Reactive {
                     const newSnippetEl = onSelect(...args);
                     this.updateSnippetContent(newSnippetEl);
                 },
+                installSnippetModule: editor.config.installSnippetModule,
+                editor,
             },
             { onClose }
         );
@@ -180,11 +135,32 @@ export class SnippetModel extends Reactive {
                     { context }
                 );
                 const snippetsDocument = new DOMParser().parseFromString(html, "text/html");
+                const processors = registry.category("html_builder.snippetsPreprocessor").getAll();
+                for (const processor of Object.values(processors)) {
+                    processor(this.snippetsName, snippetsDocument);
+                }
                 this.computeSnippetTemplates(snippetsDocument);
                 this.setSnippetName(snippetsDocument);
             })();
         }
         return this.loadProm;
+    }
+
+    /**
+     * Reloads the snippet data, optionally updating the context.
+     *
+     * @param {Object} context - Optional context to override or extend the
+     *                           current context.
+     * @returns {Promise<void>} A promise that resolves once the snippets are
+     *                          reloaded.
+     */
+    reload(context = {}) {
+        this.loadProm = null;
+        this.context = {
+            ...this.context,
+            ...context,
+        };
+        return this.load();
     }
 
     computeSnippetTemplates(snippetsDocument) {
@@ -200,7 +176,7 @@ export class SnippetModel extends Reactive {
                     content: snippetEl.children[0],
                     viewId: parseInt(snippetEl.dataset.oeSnippetId),
                     key: snippetEl.dataset.oeSnippetKey,
-                    thumbnailSrc: escape(snippetEl.dataset.oeThumbnail),
+                    thumbnailSrc: snippetEl.dataset.oeThumbnail,
                     imagePreviewSrc: snippetEl.dataset.oImagePreview,
                     isCustom: false,
                     label: snippetEl.dataset.oLabel,
@@ -212,6 +188,7 @@ export class SnippetModel extends Reactive {
                     Object.assign(snippet, {
                         moduleId,
                         isInstallable: !!moduleId,
+                        moduleDisplayName: snippetEl.dataset.moduleDisplayName,
                     });
                 }
                 if (snippetEl.dataset.oeForbidSanitize) {
@@ -301,8 +278,7 @@ export class SnippetModel extends Reactive {
             template_key: this.snippetsName,
         });
         // Reload snippet to have updated name.
-        this.loadProm = null;
-        await this.load();
+        await this.reload();
     }
 
     setSnippetName(snippetsDocument) {
@@ -354,10 +330,17 @@ export class SnippetModel extends Reactive {
      *
      * @param {HTMLElement} snippetEl the snippet we want to save
      * @param {Array<Function>} cleanForSaveHandlers all the hanlders of the
-     *     clean_for_save_handlers` resources
+     *     `clean_for_save_handlers` resources
+     * @param {Function} wrapWithSaveSnippetHandlers a function that processes the snippet
+     * before and/or after the cloning. E.g. stopping the interactions before
+     * cloning and restarting them after cloning.
      * @returns
      */
-    saveSnippet(snippetEl, cleanForSaveHandlers) {
+    saveSnippet(
+        snippetEl,
+        cleanForSaveHandlers,
+        wrapWithSaveSnippetHandlers = (_, callback) => callback()
+    ) {
         return new Promise((resolve) => {
             this.dialog.add(
                 ConfirmationDialog,
@@ -371,7 +354,10 @@ export class SnippetModel extends Reactive {
                         const snippetKey = isButton ? "s_button" : snippetEl.dataset.snippet;
                         const thumbnailURL = this.getSnippetThumbnailURL(snippetKey);
 
-                        const snippetCopyEl = snippetEl.cloneNode(true);
+                        const snippetCopyEl = wrapWithSaveSnippetHandlers(snippetEl, () =>
+                            snippetEl.cloneNode(true)
+                        );
+
                         // "CleanForSave" the snippet copy (only its children in
                         // the case of a popup, or it will be saved as invisible
                         // and will not be visible in the "add snippet" dialog).
@@ -411,9 +397,8 @@ export class SnippetModel extends Reactive {
                             context,
                         });
 
-                        this.loadProm = null;
                         // Reload the snippets so the sidebar is up to date.
-                        await this.load();
+                        await this.reload();
                         resolve(savedName);
                     },
                 },
@@ -424,19 +409,35 @@ export class SnippetModel extends Reactive {
 }
 
 registry.category("services").add("html_builder.snippets", {
-    dependencies: ["orm", "dialog", "website", "notification", "ui"],
+    dependencies: ["orm", "dialog"],
 
-    start(env, { orm, dialog, website, notification, ui }) {
-        const services = { orm, dialog, website, notification, ui };
+    start(env, { orm, dialog }) {
+        const services = { orm, dialog };
         const context = {
-            website_id: website.currentWebsite?.id,
-            lang: website.currentWebsite?.metadata.lang,
+            lang: user.context.lang, // will be overridden by each module through reload().
             user_lang: user.context.lang,
         };
 
-        return new SnippetModel(services, {
-            snippetsName: "website.snippets",
-            context,
-        });
+        const snippetModelsMap = new Map();
+        const getSnippetModel = (snippetsName) => {
+            if (snippetModelsMap.has(snippetsName)) {
+                return snippetModelsMap.get(snippetsName);
+            }
+            snippetModelsMap.set(
+                snippetsName,
+                new SnippetModel(services, {
+                    snippetsName,
+                    context,
+                })
+            );
+            return snippetModelsMap.get(snippetsName);
+        };
+
+        return { getSnippetModel };
     },
 });
+
+export function useSnippets(snippetsName) {
+    const snippetsService = useService("html_builder.snippets");
+    return useState(snippetsService.getSnippetModel(snippetsName));
+}

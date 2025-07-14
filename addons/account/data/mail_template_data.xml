@@ -18,7 +18,12 @@
     <p style="margin: 0px; padding: 0px; font-size: 13px;">
         Dear
         <t t-if="object.partner_id.parent_id">
-            <t t-out="object.partner_id.name or ''">Brandon Freeman</t> (<t t-out="object.partner_id.parent_id.name or ''">Azure Interior</t>),
+            <t t-if="object.partner_id.name">
+                <t t-out="object.partner_id.name">Brandon Freeman</t> (<t t-out="object.partner_id.parent_id.name or ''">Azure Interior</t>),
+            </t>
+            <t t-else="">
+                <t t-out="object.partner_id.parent_id.name or ''">Azure Interior</t>,
+            </t>
         </t>
         <t t-else="">
             <t t-out="object.partner_id.name or ''">Brandon Freeman</t>,
@@ -64,7 +69,6 @@
 </div>
             </field>
             <field name="report_template_ids" eval="[]"/>
-            <field name="lang">{{ object.partner_id.lang }}</field>
             <field name="auto_delete" eval="True"/>
         </record>
 
@@ -94,7 +98,6 @@
 </div>
 </field>
             <field name="report_template_ids" eval="[(4, ref('account.action_report_payment_receipt'))]"/>
-            <field name="lang">{{ object.partner_id.lang }}</field>
             <field name="auto_delete" eval="True"/>
         </record>
         <!-- Credit note template -->
@@ -139,7 +142,6 @@
 </div>
             </field>
             <field name="report_template_ids" eval="[]"/>
-            <field name="lang">{{ object.partner_id.lang }}</field>
             <field name="auto_delete" eval="True"/>
         </record>
         <!-- Invoice mail gateway failed -->

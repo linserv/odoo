@@ -24,23 +24,32 @@
     'assets': {
         "im_livechat.assets_embed_core": [
             "website/static/src/**/common/**/*",
+            "website_livechat/static/src/**/common/**/*",
+        ],
+        'im_livechat.embed_assets_unit_tests_setup': [
+            ('remove', 'website_livechat/static/**'),
+            "web/static/tests/public/helpers.js",
+            "website/static/tests/helpers.js",
+            'website_livechat/static/tests/website_livechat_test_helpers.js',
+            "website/static/tests/mock_server/**/*",
+            "website_livechat/static/tests/mock_server/**/*",
         ],
         "mail.assets_public": [
             "website_livechat/static/src/**/common/**/*",
         ],
         'website.assets_wysiwyg': [
-            'website_livechat/static/src/scss/**/*',
+            "website/static/src/**/common/**/*",
         ],
         'website.assets_editor': [
             'website_livechat/static/src/js/**/*',
         ],
         'web.assets_frontend': [
-            'website_livechat/static/src/patch/assets_frontend/website.scss',
+            "website_livechat/static/src/**/common/**/*",
+            'website_livechat/static/src/**/frontend/**/*',
         ],
         'web.assets_backend': [
             "website_livechat/static/src/**/common/**/*",
             'website_livechat/static/src/**/*',
-            ('remove', 'website_livechat/static/src/scss/**/*'),
         ],
         'web.assets_unit_tests': [
             'website_livechat/static/tests/**/*',

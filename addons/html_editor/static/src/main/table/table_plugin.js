@@ -31,6 +31,7 @@ import { findInSelection } from "@html_editor/utils/selection";
 import { getColumnIndex, getRowIndex, getTableCells } from "@html_editor/utils/table";
 import { isBrowserFirefox } from "@web/core/browser/feature_detection";
 import { getActiveHotkey } from "@web/core/hotkeys/hotkey_service";
+import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 
 export const BORDER_SENSITIVITY = 5;
 
@@ -97,6 +98,7 @@ export class TablePlugin extends Plugin {
                 run: (params) => {
                     this.insertTable(params);
                 },
+                isAvailable: isHtmlContentSupported,
             },
         ],
 
@@ -602,10 +604,11 @@ export class TablePlugin extends Plugin {
         }
 
         for (const td of selectedTds) {
-            // @todo @phoenix this replaces paragraphs by inline content. Is this intended?
-            td.replaceChildren(this.document.createElement("br"));
+            const baseContainer = this.dependencies.baseContainer.createBaseContainer();
+            baseContainer.appendChild(this.document.createElement("br"));
+            td.replaceChildren(baseContainer);
         }
-        this.dependencies.selection.setCursorStart(selectedTds[0]);
+        this.dependencies.selection.setCursorStart(selectedTds[0].firstChild);
     }
 
     /**

@@ -4,7 +4,7 @@
         <field name="name">hr.attendance.overtime.list</field>
         <field name="model">hr.attendance.overtime</field>
         <field name="arch" type="xml">
-            <list edit="0" create="0">
+            <list edit="0" create="0" js_class="extra_hours_list_view">
                 <field name="date"/>
                 <field name="employee_id"/>
                 <field name="duration" widget="float_time"/>
@@ -24,7 +24,7 @@
                     context_today() + relativedelta(months=-3)
                     )
                 )]"/>
-                <group expand="0" string="Group By">
+                <group string="Group By">
                     <filter string="Date" name="groupby_date" context="{'group_by': 'date:week'}"/>
                     <filter string="Employee" name="employee" context="{'group_by': 'employee_id'}"/>
                 </group>

@@ -8,10 +8,11 @@ import { HighlightConfigurator } from "./highlight_configurator";
 import { StackingComponent, useStackingComponentState } from "./stacking_component";
 import { formatsSpecs } from "@html_editor/utils/formatting";
 import { closestElement, descendants } from "@html_editor/utils/dom_traversal";
-import { removeStyle } from "@html_editor/utils/dom";
+import { removeClass, removeStyle } from "@html_editor/utils/dom";
 import { isTextNode } from "@html_editor/utils/dom_info";
 import { getCurrentTextHighlight } from "@website/js/highlight_utils";
 import { isCSSColor, rgbaToHex } from "@web/core/utils/colors";
+import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 import { nodeSize } from "@html_editor/utils/position";
 
 export class HighlightPlugin extends Plugin {
@@ -39,6 +40,7 @@ export class HighlightPlugin extends Plugin {
                     },
                     onClick: this.completeHighlightSelection.bind(this),
                 },
+                isAvailable: isHtmlContentSupported,
             },
         ],
         clean_for_save_handlers: ({ root }) => {
@@ -65,6 +67,14 @@ export class HighlightPlugin extends Plugin {
         selectionchange_handlers: this.updateSelectedHighlight.bind(this),
         collapsed_selection_toolbar_predicate: (selectionData) =>
             !!closestElement(selectionData.editableSelection.anchorNode, ".o_text_highlight"),
+        remove_format_handlers: () => {
+            const highlightedNodes = this.getSelectedHighlightNodes();
+            for (const node of new Set(highlightedNodes)) {
+                for (const svg of node.querySelectorAll(".o_text_highlight_svg")) {
+                    svg.remove();
+                }
+            }
+        },
     };
 
     setup() {
@@ -84,20 +94,28 @@ export class HighlightPlugin extends Plugin {
     updateSelectedHighlight() {
         const nodes = this.getSelectedHighlightNodes();
         const uniqueNodes = new Set(nodes);
-        this.highlightState.isDisabled = uniqueNodes.size > 1;
-        if (uniqueNodes.size != 1) {
+        if (uniqueNodes.size === 0) {
             this.highlightState.highlightId = undefined;
             this.highlightState.color = "";
             this.highlightState.thickness = undefined;
             return;
         }
 
-        this.highlightState.highlightId = getCurrentTextHighlight(nodes[0]);
+        this.highlightState.highlightId =
+            uniqueNodes.size > 1 ? "multiple" : getCurrentTextHighlight(nodes[0]);
         if (this.highlightState.highlightId) {
-            const style = getComputedStyle(nodes[0]);
-            this.highlightState.color = style.getPropertyValue("--text-highlight-color");
-            const thickness = style.getPropertyValue("--text-highlight-width");
-            this.highlightState.thickness = thickness ? parseInt(thickness) : "";
+            // If multiple highlights are selected, either show the common highlight properties
+            // or nothing if none
+            const style = nodes.map((node) =>
+                getComputedStyle(node).getPropertyValue("--text-highlight-color")
+            );
+            this.highlightState.color = style.every((v) => v === style[0]) ? style[0] : undefined;
+            const thickness = nodes.map((node) =>
+                getComputedStyle(node).getPropertyValue("--text-highlight-width")
+            );
+            this.highlightState.thickness = thickness.every((v) => v === thickness[0])
+                ? parseInt(thickness[0])
+                : "";
         }
     }
 
@@ -168,10 +186,7 @@ export class HighlightPlugin extends Plugin {
     getSelectedHighlightNodes() {
         return this.dependencies.selection
             .getTargetedNodes()
-            .map((n) => {
-                const el = n.nodeType === Node.ELEMENT_NODE ? n : n.parentElement;
-                return el.closest(".o_text_highlight");
-            })
+            .map((n) => closestElement(n, ".o_text_highlight"))
             .filter(Boolean);
     }
     /**
@@ -237,7 +252,7 @@ formatsSpecs.highlight = {
     addStyle: (node, { highlightId, thicknessToRestore, colorToRestore }) => {
         node.dispatchEvent(new Event("text_highlight_added", { bubbles: true }));
         node.classList.add("o_text_highlight", `o_text_highlight_${highlightId}`);
-        if (colorToRestore) {
+        if (colorToRestore && colorToRestore !== "currentColor") {
             node.style.setProperty("--text-highlight-color", colorToRestore);
         }
         if (thicknessToRestore) {
@@ -251,7 +266,8 @@ formatsSpecs.highlight = {
         }
     },
     removeStyle: (node) => {
-        node.classList.remove(
+        removeClass(
+            node,
             ...[...node.classList].filter((cls) => cls.startsWith("o_text_highlight"))
         );
         removeStyle(node, "--text-highlight-width");
@@ -267,7 +283,7 @@ class HighlightToolbarButton extends Component {
         getSelection: Function,
     };
     static template = xml`
-        <button t-ref="root" t-attf-class="btn btn-light o-select-highlight {{highlightState.isDisabled ? 'disabled' : ''}}" t-on-click="openHighlightConfigurator" t-att-title="highlightState.isDisabled ? 'Highlighting is disabled when your selection overlaps more than one highlight' : props.title">
+        <button t-ref="root" t-attf-class="btn btn-light o-select-highlight" t-on-click="openHighlightConfigurator" t-att-title="props.title">
             <i class="fa oi oi-text-effect oi-fw py-1"/>
         </button>
     `;
@@ -289,14 +305,11 @@ class HighlightToolbarButton extends Component {
         });
     }
     openHighlightConfigurator() {
-        if (this.highlightState.isDisabled) {
-            return;
-        }
         this.props.onClick();
         this.configuratorPopover.open(this.root.el, {
             stackState: this.componentStack,
-            style: "max-height: 275px; width: 262px",
-            class: "d-flex flex-column",
+            style: "max-height: 300px; width: 262px",
+            class: "d-flex flex-column p-2",
         });
     }
 }

@@ -1239,3 +1239,111 @@ class TestPointOfSaleFlow(CommonPosTest):
         self.env['pos.order'].sync_from_ui(refund_values)
         refunded_order_line = self.env['pos.order.line'].search([('product_id', '=', product.id), ('qty', '=', -2)])
         self.assertEqual(refunded_order_line.total_cost, -20)
+
+    def test_cancel_order_with_past_preset(self):
+        # Test that cancelling an order with a past preset does not raise an error and does cancel the order.
+        preset_takeaway = self.env['pos.preset'].create({
+            'name': 'Takeaway',
+        })
+        self.pos_config_usd.write({
+            'use_presets': True,
+            'default_preset_id': preset_takeaway.id,
+            'available_preset_ids': [(6, 0, [preset_takeaway.id])],
+        })
+        resource_calendar = self.env['resource.calendar'].create({
+            'name': 'Takeaway',
+            'attendance_ids': [(0, 0, {
+                'name': 'Takeaway',
+                'dayofweek': str(day),
+                'hour_from': 0,
+                'hour_to': 24,
+                'day_period': 'morning',
+            }) for day in range(7)],
+        })
+        preset_takeaway.write({
+            'use_timing': True,
+            'resource_calendar_id': resource_calendar
+        })
+        self.pos_config_usd.open_ui()
+        current_session = self.pos_config_usd.current_session_id
+
+        order = self.env['pos.order'].create({
+            'company_id': self.env.company.id,
+            'session_id': current_session.id,
+            'partner_id': False,
+            'lines': [(0, 0, {
+                'name': "OL/0001",
+                'product_id': self.env['product.product'].search([('available_in_pos', '=', True)], limit=1).id,
+                'price_unit': 49.99,
+                'discount': 0,
+                'qty': 1,
+                'tax_ids': [],
+                'price_subtotal': 49.99,
+                'price_subtotal_incl': 49.99,
+            })],
+            'pricelist_id': False,
+            'amount_paid': 49.99,
+            'amount_total': 49.99,
+            'amount_tax': 0.0,
+            'amount_return': 0.0,
+            'to_invoice': False,
+            'last_order_preparation_change': '{}',
+            'preset_id': preset_takeaway.id,
+            'preset_time': fields.Datetime.to_string(fields.Datetime.now() + timedelta(days=-2)),
+        })
+        order.action_pos_order_cancel()
+        self.assertEqual(order.state, 'cancel')
+
+    def test_order_invoiced_after_session_closed(self):
+        """Test that an order can be invoiced after its session is closed.
+        Scenario:
+            1. Create a POS session and two orders:
+            - Order A: Not to be invoiced immediately.
+            - Order B: To be invoiced immediately.
+            2. Close the POS session.
+            3. Ensure:
+            - Both orders have `reversed_move_ids` unset.
+            4. Assign a partner to Order A and invoice it AFTER the session is closed.
+            - Confirm that `reversed_move_ids` is set accordingly.
+        """
+        order_data = {
+            'line_data': [
+                {'product_id': self.ten_dollars_with_10_incl.product_variant_id.id},
+                {'product_id': self.twenty_dollars_with_10_incl.product_variant_id.id},
+            ],
+            'payment_data': [
+                {'payment_method_id': self.bank_payment_method.id, 'amount': 30},
+            ],
+        }
+
+        self.pos_config_usd.open_ui()
+        current_session = self.pos_config_usd.current_session_id
+
+        order_no_invoice, _ = self.create_backend_pos_order({**order_data, 'to_invoice': False, 'partner_id': False})
+        order_invoiced_immediate, _ = self.create_backend_pos_order({**order_data, 'to_invoice': True, 'partner_id': self.partner.id})
+
+        total_cash_payment = sum(
+            current_session.mapped('order_ids.payment_ids')
+            .filtered(lambda p: p.payment_method_id.type == 'cash')
+            .mapped('amount')
+        )
+        current_session.post_closing_cash_details(total_cash_payment)
+        current_session.close_session_from_ui()
+
+        # Ensure the session is closed
+        self.assertEqual(current_session.state, 'closed')
+
+        # Initial state: no reversal moves for both orders
+        self.assertFalse(order_no_invoice.reversed_move_ids,
+                        "Order with 'to_invoice' = False should have no reversal moves after session is closed.")
+        self.assertFalse(order_invoiced_immediate.reversed_move_ids,
+                        "Immediate invoiced order should have no reversal moves after session is closed.")
+
+        # Now, set a partner and invoice the order after the session is closed
+        order_no_invoice.partner_id = self.partner
+        order_no_invoice.action_pos_order_invoice()
+
+        # Confirm that reversal move(s) are now set
+        reversal_moves = self.env['account.move'].search([('reversed_pos_order_id', '=', order_no_invoice.id)])
+        self.assertEqual(order_no_invoice.reversed_move_ids, reversal_moves,
+                        "Reversal move should be set for the order invoiced after the session is closed.")

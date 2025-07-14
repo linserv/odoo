@@ -945,16 +945,10 @@ test("execute_action of type object are handled", async () => {
     expect.assertions(4);
     serverState.userContext = { some_key: 2 };
 
-    onRpc("partner", "object", async function ({ args, kwargs }) {
-        expect(kwargs).toEqual(
+    onRpc("partner", "object", function ({ args, kwargs }) {
+        expect(kwargs).toMatchObject(
             {
-                context: {
-                    lang: "en",
-                    uid: 7,
-                    tz: "taht",
-                    allowed_company_ids: [1],
-                    some_key: 2,
-                },
+                context: { some_key: 2 },
             },
             { message: "should call route with correct arguments" }
         );
@@ -2398,7 +2392,7 @@ test("do not restore after action button clicked", async () => {
     expect(".o_statusbar_buttons button[name=do_something]").toBeVisible();
 
     await contains(".o_statusbar_buttons button[name=do_something]").click();
-    expect(".o_form_buttons_view .o_form_button_save").not.toBeVisible();
+    expect(".o_control_panel_main_buttons .o_form_button_save").not.toHaveCount();
 });
 
 test("debugManager is active for views", async () => {
@@ -2413,8 +2407,8 @@ test("debugManager is active for views", async () => {
 
 test.tags("desktop");
 test("reload a view via the view switcher keep state", async () => {
-    onRpc("formatted_read_group", () => {
-        expect.step("formatted_read_group");
+    onRpc("formatted_read_grouping_sets", () => {
+        expect.step("formatted_read_grouping_sets");
     });
 
     await mountWithCleanup(WebClient);
@@ -2436,8 +2430,8 @@ test("reload a view via the view switcher keep state", async () => {
     await switchView("pivot");
     expect(".o_pivot_measure_row").toHaveClass("o_pivot_sort_order_asc");
     expect.verifySteps([
-        "formatted_read_group", // initial formatted_read_group
-        "formatted_read_group", // formatted_read_group at reload after switch view
+        "formatted_read_grouping_sets", // initial formatted_read_grouping_sets
+        "formatted_read_grouping_sets", // formatted_read_grouping_sets at reload after switch view
     ]);
 });
 

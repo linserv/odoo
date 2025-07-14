@@ -220,6 +220,14 @@ test("toolbar link buttons react to selection change", async () => {
     expect(".btn[name='unlink']").toHaveCount(1);
 });
 
+test("toolbar unlink button should not be present when link is unremovable", async () => {
+    await setupEditor('<p>a<a class="oe_unremovable" href="http://test.test/">bc[d]</a>e</p>');
+    await waitFor(".o-we-toolbar");
+    expect(".btn[name='link']").toHaveCount(1);
+    expect(".btn[name='link']").toHaveClass("active");
+    expect(".btn[name='unlink']").toHaveCount(0);
+});
+
 test("toolbar format buttons should react to format change", async () => {
     await setupEditor(
         `<div class="o-paragraph">[\ufeff<a href="http://test.com">\ufefftest.com\ufeff</a>\ufeff&nbsp;]</div>`
@@ -1095,7 +1103,7 @@ test("toolbar should close on open link popover (iframe)", async () => {
 
 test.tags("desktop");
 test("toolbar should close on edit link from preview", async () => {
-    await setupEditor(`<p><a href="#">[a]</a></p>`);
+    await setupEditor(`<p><a href="http://test.test/">[a]</a></p>`);
     await expectElementCount(".o-we-toolbar", 1);
     await click(".o-we-toolbar .fa-link");
     await waitFor(".o-we-linkpopover");
@@ -1120,32 +1128,37 @@ test("close the toolbar if the selection contains any nodes (traverseNode = [], 
 });
 
 test.tags("desktop");
-test("should be able to close image cropper while loading the media", async () => {
-    onRpc("/html_editor/get_image_info", () => ({
-        original: {
-            image_src: "#",
-        },
-    }));
-    onRpc("/web/image/__odoo__unknown__src__/", async () => {
+test("should not close image cropper while loading media", async () => {
+    const base64Image =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=";
+
+    // Mock backend image RPCs
+    onRpc("/html_editor/get_image_info", async () => {
         await delay(50);
-        return {};
+        return {
+            original: { image_src: base64Image },
+        };
     });
 
-    await setupEditor(`<p>[<img src="#">]</p>`);
+    // Setup editor with an image
+    await setupEditor(`<p>[<img src="${base64Image}">]</p>`);
     await waitFor(".o-we-toolbar");
 
-    await click('button[name="image_transform"]');
     await animationFrame();
-
     await click('.btn[name="image_crop"]');
-    await animationFrame();
 
     await waitFor('.btn[title="Discard"]', { timeout: 1000 });
     await click('.btn[title="Discard"]');
     await animationFrame();
 
-    // Cropper should get closed while the cropper still loading the image.
-    expect('.btn[title="Discard"]').toHaveCount(0);
+    // Cropper should not close as the cropper still loading the image.
+    expect('.btn[title="Discard"]').toHaveCount(1);
+
+    // Once the image loaded we should be able to close
+    await waitFor('img[src^="blob:"]', { timeout: 2000 });
+    await advanceTime(200);
+    await click('.btn[title="Discard"]');
+    await waitForNone('.btn[title="Discard"]', { timeout: 1500 });
 });
 
 test("toolbar shouldn't be visible if can_display_toolbar === false", async () => {

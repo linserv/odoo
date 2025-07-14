@@ -46,7 +46,7 @@ export class BuilderList extends Component {
         useBuilderComponent();
         const { state, commit, preview } = useInputBuilderComponent({
             id: this.props.id,
-            defaultValue: this.parseDisplayValue([this.makeDefaultItem()]),
+            defaultValue: this.parseDisplayValue([]),
             parseDisplayValue: this.parseDisplayValue,
             formatRawValue: this.formatRawValue,
         });
@@ -100,8 +100,7 @@ export class BuilderList extends Component {
         this.commit(items);
     }
 
-    deleteItem(e) {
-        const itemId = e.target.dataset.id;
+    deleteItem(itemId) {
         const items = this.formatRawValue(this.state.value);
         this.commit(items.filter((item) => item._id !== itemId));
     }

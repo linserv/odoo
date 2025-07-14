@@ -12,7 +12,7 @@
                 </div>
                 <div t-else="" class="d-flex">
                     <div class="col p-2" style="max-width: 250px;">
-                        <div class="input-group mb-1" t-att-class="{'d-none': state.isLabelHidden}">
+                        <div class="input-group mb-1" t-att-class="{'d-none': !state.showLabel}">
                             <input t-ref="label"
                                 class="o_we_label_link border-dark-subtle form-control form-control-sm"
                                 t-model="state.label"
@@ -139,7 +139,7 @@
                                         <a href="#" class="mx-1 o_we_edit_link text-dark" t-on-click="onClickEdit" title="Edit Link">
                                             <i class="fa fa-edit"></i>
                                         </a>
-                                        <a href="#" class="ms-1 o_we_remove_link text-dark" t-on-click="onClickRemove" title="Remove Link">
+                                        <a href="#" t-if="props.canRemove" class="ms-1 o_we_remove_link text-dark" t-on-click="onClickRemove" title="Remove Link">
                                             <i class="fa fa-chain-broken"></i>
                                         </a>
                                     </t>

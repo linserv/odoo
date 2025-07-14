@@ -145,10 +145,10 @@ class AccountMergeWizard(models.TransientModel):
         all_root_companies = self.env['res.company'].sudo().search([('parent_id', '=', False)])
         for account in accounts:
             for company in account.company_ids & all_root_companies:
-                code_by_company[company] = account.with_company(company).sudo().code
+                code_by_company[company.id] = account.with_company(company).sudo().code
             for company in all_root_companies - account.company_ids:
                 if code := account.with_company(company).sudo().code:
-                    code_by_company[company] = code
+                    code_by_company[company.id] = code
 
         account_to_merge_into = accounts[0]
         accounts_to_remove = accounts[1:]
@@ -205,10 +205,18 @@ class AccountMergeWizard(models.TransientModel):
         self.env.registry.clear_cache()
 
         # Step 5: Write company_ids and codes on the account
-        for company, code in code_by_company.items():
-            account_to_merge_into.with_company(company).sudo().code = code
+        self.env.cr.execute(SQL(
+            """
+            UPDATE account_account
+               SET code_store = %(code_by_company_json)s
+             WHERE id = %(account_to_merge_into_id)s
+            """,
+            code_by_company_json=json.dumps(code_by_company),
+            account_to_merge_into_id=account_to_merge_into.id,
+        ))
 
         account_to_merge_into.sudo().company_ids = company_ids_to_write
+        self.env.add_to_compute(self.env['account.account']._fields['tag_ids'], account_to_merge_into)
 
 
 class AccountMergeWizardLine(models.TransientModel):
@@ -251,10 +259,10 @@ class AccountMergeWizardLine(models.TransientModel):
     @api.depends('account_id')
     def _compute_account_has_hashed_entries(self):
         # optimization to avoid having to re-check which accounts have hashed entries
-        query = self.env['account.move.line']._where_calc([
+        query = self.env['account.move.line']._search([
             ('account_id', 'in', self.account_id.ids),
             ('move_id.inalterable_hash', '!=', False),
-        ])
+        ], bypass_access=True)
         query_result = self.env.execute_query(query.select(SQL('DISTINCT account_move_line.account_id')))
         accounts_with_hashed_entries_ids = {r[0] for r in query_result}
         wizard_lines_with_hashed_entries = self.filtered(lambda l: l.account_id.id in accounts_with_hashed_entries_ids)

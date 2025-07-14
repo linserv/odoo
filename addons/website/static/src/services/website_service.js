@@ -12,8 +12,9 @@ import { reactive, EventBus } from "@odoo/owl";
 
 const websiteSystrayRegistry = registry.category('website_systray');
 
+// TODO this is duplicated in website_root at least, it should be a shared util
 export const unslugHtmlDataObject = (repr) => {
-    const match = repr && repr.match(/(.+)\((\d+),(.*)\)/);
+    const match = repr && repr.match(/(.+)\((-?\d+),(.*)\)/);
     if (!match) {
         return null;
     }
@@ -253,13 +254,11 @@ export const websiteService = {
                 }
                 action.doAction("website.website_preview", {
                     clearBreadcrumbs: true,
-                    additionalContext: {
-                        params: {
-                            website_id: websiteId || currentWebsiteId,
-                            path: path || (contentWindow && contentWindow.location.href) || '/',
-                            enable_editor: edition,
-                            edit_translations: translation,
-                        },
+                    props: {
+                        websiteId: websiteId || currentWebsiteId,
+                        path: path || (contentWindow && contentWindow.location.href) || '/',
+                        enableEditor: edition,
+                        editTranslations: translation,
                     },
                 });
             },
@@ -272,7 +271,17 @@ export const websiteService = {
                 ]);
             },
             async fetchWebsites() {
-                websites = [...(await orm.searchRead('website', [], ['domain', 'id', 'name', 'language_ids']))];
+                websites = (
+                    await orm.webSearchRead("website", [], {
+                        specification: {
+                            domain: {},
+                            id: {},
+                            name: {},
+                            language_ids: {},
+                            default_lang_id: { fields: { code: {} } },
+                        },
+                    })
+                ).records;
             },
             async loadWysiwyg() {
                 await ensureJQuery();

@@ -39,9 +39,21 @@ class TableOfContentOptionPlugin extends Plugin {
             NavbarPositionAction,
         },
         normalize_handlers: this.normalize.bind(this),
+        // Prevent dropping a table of content inside another table of content.
         dropzone_selector: {
             selector: ".s_table_of_content",
             excludeAncestor: ".s_table_of_content",
+        },
+        // Only allow moving main parts of the table of content by using arrows.
+        is_draggable_handlers: (el) => {
+            if (
+                el.matches(
+                    ".s_table_of_content .s_table_of_content_navbar_wrap, .s_table_of_content .s_table_of_content_main"
+                )
+            ) {
+                return false;
+            }
+            return true;
         },
     };
 
@@ -116,7 +128,7 @@ class TableOfContentOptionPlugin extends Plugin {
         const headingIds = currentHeadingItems.map(({ el }) => getTocAndHeadingId(el).headingId);
         let maxHeadingIds = Math.max(0, ...headingIds);
 
-        tableOfContentNavbar.innerHTML = "";
+        tableOfContentNavbar.textContent = "";
         const uniqueHeadingIds = new Set();
         for (const { title, el } of currentHeadingItems) {
             let { headingId } = getTocAndHeadingId(el);
@@ -146,7 +158,7 @@ class TableOfContentOptionPlugin extends Plugin {
     }
 }
 
-class NavbarPositionAction extends BuilderAction {
+export class NavbarPositionAction extends BuilderAction {
     static id = "navbarPosition";
     isApplied({ editingElement: navbarWrapEl, params: { mainParam: position } }) {
         if (navbarWrapEl.classList.contains("s_table_of_content_horizontal_navbar")) {

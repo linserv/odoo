@@ -1372,15 +1372,15 @@ class TestNoThread(MailCommon, TestRecipients):
 
         message = self.env['mail.message'].create({
             'model': test_record._name,
-            'record_name': 'Not used in message _to_store',
             'res_id': test_record.id,
         })
-        formatted = Store(message, for_current_user=True).get_result()["mail.message"][0]
+        formatted = Store(message).get_result()["mail.message"][0]
         self.assertEqual(formatted['default_subject'], test_record.name)
         self.assertEqual(formatted['record_name'], test_record.name)
 
         test_record.write({'name': 'Just Test'})
-        formatted = Store(message, for_current_user=True).get_result()["mail.message"][0]
+        message.invalidate_recordset(['record_name'])
+        formatted = Store(message).get_result()["mail.message"][0]
         self.assertEqual(formatted['default_subject'], 'Just Test')
         self.assertEqual(formatted['record_name'], 'Just Test')
 

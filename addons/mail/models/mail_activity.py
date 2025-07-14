@@ -342,7 +342,7 @@ class MailActivity(models.Model):
         return super().unlink()
 
     @api.model
-    def _search(self, domain, offset=0, limit=None, order=None):
+    def _search(self, domain, offset=0, limit=None, order=None, *, bypass_access=False, **kwargs):
         """ Override that adds specific access rights of mail.activity, to remove
         ids uid could not see according to our custom rules. Please refer to
         :meth:`_check_access` for more details about those rules.
@@ -350,12 +350,12 @@ class MailActivity(models.Model):
         The method is inspired by what has been done on mail.message. """
 
         # Rules do not apply to administrator
-        if self.env.is_superuser():
-            return super()._search(domain, offset, limit, order)
+        if self.env.is_superuser() or bypass_access:
+            return super()._search(domain, offset, limit, order, bypass_access=True, **kwargs)
 
         # retrieve activities and their corresponding res_model, res_id
         # Don't use the ORM to avoid cache pollution
-        query = super()._search(domain, offset, limit, order)
+        query = super()._search(domain, offset, limit, order, **kwargs)
         fnames_to_read = ['id', 'res_model', 'res_id', 'user_id']
         rows = self.env.execute_query(query.select(
             *[self._field_to_sql(self._table, fname) for fname in fnames_to_read],
@@ -414,14 +414,13 @@ class MailActivity(models.Model):
                 record.message_notify(
                     partner_ids=activity.user_id.partner_id.ids,
                     body=body,
-                    record_name=activity.res_name,
                     model_description=model_description,
                     email_layout_xmlid='mail.mail_notification_layout',
                     subject=_('"%(activity_name)s: %(summary)s" assigned to you',
                               activity_name=activity.res_name,
                               summary=activity.summary or activity.activity_type_id.name or ''),
                     subtitles=[_('Activity: %s', activity.activity_type_id.name or _('Todo')),
-                               _('Deadline: %s', activity.date_deadline.strftime(get_lang(activity.env).date_format))]
+                               _('Deadline: %s', activity.date_deadline.strftime(get_lang(activity.env).date_format))],
                 )
 
     def action_done(self):
@@ -606,7 +605,7 @@ class MailActivity(models.Model):
     def activity_format(self):
         return Store(self).get_result()
 
-    def _to_store_defaults(self):
+    def _to_store_defaults(self, target):
         return [
             "activity_category",
             Store.One("activity_type_id", "name"),

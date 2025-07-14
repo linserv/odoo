@@ -6,7 +6,6 @@ import { MessageConfirmDialog } from "@mail/core/common/message_confirm_dialog";
 import { NavigableList } from "@mail/core/common/navigable_list";
 import { useSuggestion } from "@mail/core/common/suggestion_hook";
 import { prettifyMessageContent } from "@mail/utils/common/format";
-import { htmlJoin } from "@mail/utils/common/html";
 import { useSelection } from "@mail/utils/common/hooks";
 import { isDragSourceExternalFile } from "@mail/utils/common/misc";
 import { rpc } from "@web/core/network/rpc";
@@ -30,9 +29,9 @@ import {
 
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
-import { createElementWithContent } from "@web/core/utils/html";
+import { createElementWithContent, htmlJoin } from "@web/core/utils/html";
 import { FileUploader } from "@web/views/fields/file_handler";
-import { escape, isEmail } from "@web/core/utils/strings";
+import { isEmail } from "@web/core/utils/strings";
 import { isDisplayStandalone, isIOS, isMobileOS } from "@web/core/browser/feature_detection";
 import { Dropdown } from "@web/core/dropdown/dropdown";
 import { DropdownItem } from "@web/core/dropdown/dropdown_item";
@@ -94,8 +93,9 @@ export class Composer extends Component {
         this.isIosPwa = isIOS() && isDisplayStandalone();
         this.composerActions = useComposerActions();
         this.OR_PRESS_SEND_KEYBIND = _t("or press %(send_keybind)s", {
-            send_keybind: markup(
-                this.sendKeybinds.map((key) => `<samp>${escape(key)}</samp>`).join(" + ")
+            send_keybind: htmlJoin(
+                this.sendKeybinds.map((key) => markup`<samp>${key}</samp>`),
+                " + "
             ),
         });
         this.store = useService("mail.store");
@@ -185,7 +185,15 @@ export class Composer extends Component {
         useEffect(
             () => {
                 if (this.fakeTextarea.el.scrollHeight) {
+                    let wasEmpty = false;
+                    if (!this.fakeTextarea.el.value) {
+                        wasEmpty = true;
+                        this.fakeTextarea.el.value = "0";
+                    }
                     this.ref.el.style.height = this.fakeTextarea.el.scrollHeight + "px";
+                    if (wasEmpty) {
+                        this.fakeTextarea.el.value = "";
+                    }
                 }
                 this.saveContentDebounced();
             },
@@ -228,7 +236,7 @@ export class Composer extends Component {
             if (this.thread.channel_type === "channel") {
                 const threadName = this.thread.displayName;
                 if (this.thread.parent_channel_id) {
-                    return _t(`Message "%(subChannelName)s"`, {
+                    return _t('Message "%(subChannelName)s"', {
                         subChannelName: threadName,
                     });
                 }
@@ -244,7 +252,6 @@ export class Composer extends Component {
     }
 
     onClickCancelOrSaveEditText(ev) {
-        ev.preventDefault();
         const composer = toRaw(this.props.composer);
         if (composer.message && ev.target.dataset?.type === EDIT_CLICK_TYPE.CANCEL) {
             this.props.onDiscardCallback(ev);
@@ -259,35 +266,23 @@ export class Composer extends Component {
             return _t(
                 "%(open_button)s%(icon)s%(open_em)sDiscard editing%(close_em)s%(close_button)s",
                 {
-                    open_button: markup(
-                        `<button class='btn px-1 py-0' data-type="${escape(
-                            EDIT_CLICK_TYPE.CANCEL
-                        )}">`
-                    ),
-                    close_button: markup("</button>"),
-                    icon: markup(
-                        `<i class='fa fa-times-circle pe-1' data-type="${escape(
-                            EDIT_CLICK_TYPE.CANCEL
-                        )}"></i>`
-                    ),
-                    open_em: markup(`<em data-type="${escape(EDIT_CLICK_TYPE.CANCEL)}">`),
-                    close_em: markup("</em>"),
+                    open_button: markup`<button class='btn px-1 py-0' data-type="${EDIT_CLICK_TYPE.CANCEL}">`,
+                    close_button: markup`</button>`,
+                    icon: markup`<i class='fa fa-times-circle pe-1' data-type="${EDIT_CLICK_TYPE.CANCEL}"></i>`,
+                    open_em: markup`<em data-type="${EDIT_CLICK_TYPE.CANCEL}">`,
+                    close_em: markup`</em>`,
                 }
             );
         } else {
             const tags = {
-                open_samp: markup("<samp>"),
-                close_samp: markup("</samp>"),
-                open_em: markup("<em>"),
-                close_em: markup("</em>"),
-                open_cancel: markup(
-                    `<a role="button" href="#" data-type="${escape(EDIT_CLICK_TYPE.CANCEL)}">`
-                ),
-                close_cancel: markup("</a>"),
-                open_save: markup(
-                    `<a role="button" href="#" data-type="${escape(EDIT_CLICK_TYPE.SAVE)}">`
-                ),
-                close_save: markup("</a>"),
+                open_samp: markup`<samp>`,
+                close_samp: markup`</samp>`,
+                open_em: markup`<em>`,
+                close_em: markup`</em>`,
+                open_cancel: markup`<button class="btn btn-link fst-italic p-0 align-baseline" data-type="${EDIT_CLICK_TYPE.CANCEL}">`,
+                close_cancel: markup`</button>`,
+                open_save: markup`<button class="btn btn-link fst-italic p-0 align-baseline" data-type="${EDIT_CLICK_TYPE.SAVE}">`,
+                close_save: markup`</button>`,
             };
             return this.env.inChatter
                 ? _t(
@@ -635,9 +630,9 @@ export class Composer extends Component {
      */
     formatDefaultBodyForFullComposer(defaultBody, signature = "") {
         if (signature) {
-            defaultBody = htmlJoin(defaultBody, markup("<br>"), signature);
+            defaultBody = markup`${defaultBody}<br>${signature}`;
         }
-        return htmlJoin(markup("<div>"), defaultBody, markup("</div>")); // as to not wrap in <p> by html_sanitize
+        return markup`<div>${defaultBody}</div>`; // as to not wrap in <p> by html_sanitize
     }
 
     clear() {
@@ -657,7 +652,6 @@ export class Composer extends Component {
     }
 
     async processMessage(cb) {
-        const el = this.ref.el;
         const attachments = this.props.composer.attachments;
         if (attachments.some(({ uploading }) => uploading)) {
             this.env.services.notification.add(_t("Please wait while the file is uploading."), {
@@ -678,7 +672,7 @@ export class Composer extends Component {
             }
             this.clear();
             this.state.active = true;
-            el.focus();
+            this.ref.el?.focus();
         }
     }
 

@@ -10,6 +10,8 @@ from odoo.exceptions import AccessError, ValidationError
 from odoo.addons.bus.websocket import WebsocketConnectionHandler
 from odoo.addons.mail.tools.discuss import Store
 
+BUFFER_TIME = 120  # Time in seconds between two sessions assigned to the same operator. Not enforced if the operator is the best suited.
+
 
 class Im_LivechatChannel(models.Model):
     """ Livechat Channel
@@ -24,7 +26,7 @@ class Im_LivechatChannel(models.Model):
     _rating_satisfaction_days = 14  # include only last 14 days to compute satisfaction
 
     def _default_user_ids(self):
-        return [(6, 0, [self._uid])]
+        return [(6, 0, [self.env.uid])]
 
     def _default_button_text(self):
         return _('Have a Question? Chat with us.')
@@ -56,12 +58,6 @@ class Im_LivechatChannel(models.Model):
     )
     block_assignment_during_call = fields.Boolean("No Chats During Call", help="While on a call, agents will not receive new conversations.")
     review_link = fields.Char("Review Link", help="Visitors who leave a positive review will be redirected to this optional link.")
-    buffer_time = fields.Integer(
-        string="Individual Buffer Time (sec)",
-        help="Time in seconds between two sessions of the same operator."
-            "This will not be enforced if the operator is the best suited for the session"
-            "(e.g. the only one available with the right language or set of skills)"
-    )
 
     # computed fields
     web_page = fields.Char('Web Page', compute='_compute_web_page_link', store=False, readonly=True,
@@ -96,14 +92,16 @@ class Im_LivechatChannel(models.Model):
 
     @api.depends("channel_ids.livechat_end_dt")
     def _compute_ongoing_sessions_count(self):
-        count_by_channel = self.env["discuss.channel"]._read_group(
-            [
-                ("channel_type", "=", "livechat"),
-                ("livechat_end_dt", "=", False),
-                ("livechat_channel_id", "in", self.ids),
-            ],
-            ["livechat_channel_id"],
-            ["__count"],
+        count_by_channel = dict(
+            self.env["discuss.channel"]._read_group(
+                [
+                    ("channel_type", "=", "livechat"),
+                    ("livechat_end_dt", "=", False),
+                    ("livechat_channel_id", "in", self.ids),
+                ],
+                ["livechat_channel_id"],
+                ["__count"],
+            )
         )
         for channel in self:
             channel.ongoing_session_count = count_by_channel.get(channel, 0)
@@ -201,7 +199,7 @@ class Im_LivechatChannel(models.Model):
 
     def _compute_script_external(self):
         values = {
-            "dbname": self._cr.dbname,
+            "dbname": self.env.cr.dbname,
         }
         for record in self:
             values["channel_id"] = record.id
@@ -230,13 +228,13 @@ class Im_LivechatChannel(models.Model):
             raise AccessError(_("Only Live Chat operators can join Live Chat channels"))
         # sudo: im_livechat.channel - operators can join channels
         self.sudo().user_ids = [Command.link(self.env.user.id)]
-        self.env.user._bus_send_store(self, ["are_you_inside", "name"])
+        Store(self, ["are_you_inside", "name"], bus_channel=self.env.user).bus_send()
 
     def action_quit(self):
         self.ensure_one()
         # sudo: im_livechat.channel - users can leave channels
         self.sudo().user_ids = [Command.unlink(self.env.user.id)]
-        self.env.user._bus_send_store(self.sudo(), ["are_you_inside", "name"])
+        Store(self.sudo(), ["are_you_inside", "name"], bus_channel=self.env.user).bus_send()
 
     def action_view_rating(self):
         """ Action to display the rating relative to the channel, so all rating of the
@@ -451,12 +449,12 @@ class Im_LivechatChannel(models.Model):
                         (
                             "create_date",
                             ">",
-                            fields.Datetime.now() - timedelta(seconds=self.buffer_time),
+                            fields.Datetime.now() - timedelta(seconds=BUFFER_TIME),
                         ),
                     ],
                     groupby=["partner_id"],
                 )
-            } if self.buffer_time else set()
+            }
 
         def same_language(operator):
             return operator.partner_id.lang == lang or lang in operator.livechat_lang_ids.mapped("code")
@@ -603,7 +601,7 @@ class Im_LivechatChannelRule(models.Model):
         domain = [('country_ids', '=', False), ('channel_id', '=', channel_id)]
         return _match(self.search(domain))
 
-    def _to_store_defaults(self):
+    def _to_store_defaults(self, target):
         return [
             "action",
             "auto_popup_timer",

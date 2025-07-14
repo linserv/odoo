@@ -1,5 +1,6 @@
 import { Deferred } from "@web/core/utils/concurrency";
 import { IndexedDB } from "@web/core/utils/indexed_db";
+import { deepCopy } from "./objects";
 
 const CRYPTO_ALGO = "AES-GCM";
 
@@ -84,50 +85,55 @@ class RamCache {
     }
 }
 
-function compareValues(value1, value2) {
-    return JSON.stringify(value1) === JSON.stringify(value2);
-}
-
 export class PersistentCache {
     constructor(name, version, secret) {
         this.crypto = new Crypto(secret);
         this.indexedDB = new IndexedDB(name, version + CRYPTO_ALGO);
         this.ramCache = new RamCache();
+        this.pendingRequests = {};
     }
 
-    read(table, key, fallback, { onUpdate } = {}) {
+    read(table, key, fallback, { onFinish } = {}) {
         const ramValue = this.ramCache.read(table, key);
-        if (ramValue && !onUpdate) {
-            return ramValue;
+        const requestKey = `${table}/${key}`;
+        const hadPendingRequest = requestKey in this.pendingRequests;
+        if (onFinish) {
+            this.pendingRequests[requestKey] = this.pendingRequests[requestKey] || [];
+            this.pendingRequests[requestKey].push(onFinish);
+        }
+        if (ramValue && (!onFinish || hadPendingRequest)) {
+            return ramValue.then((result) => deepCopy(result));
         }
         const def = new Deferred();
         const fromCache = new Deferred();
         let fromCacheValue;
-        const prom = fallback()
-            .then((result) => {
-                def.resolve(result);
-                this.ramCache.write(table, key, Promise.resolve(result));
-                if (onUpdate && fromCacheValue && !compareValues(fromCacheValue, result)) {
-                    onUpdate(result);
-                }
-                this.crypto.encrypt(result).then((encryptedResult) => {
-                    this.indexedDB.write(table, key, encryptedResult);
-                });
-                return result;
-            })
-            .catch(async (error) => {
-                await fromCache;
-                if (fromCacheValue) {
-                    // def has already been fullfilled with the cached value
-                    throw error;
-                }
-                this.ramCache.delete(table, key); // remove rejected prom from ram cache
-                def.reject(error);
+        const onFullfilled = (result) => {
+            def.resolve(deepCopy(result));
+            this.ramCache.write(table, key, Promise.resolve(result));
+            const hasChanged =
+                (fromCacheValue && fromCacheValue !== JSON.stringify(result)) || false;
+            this.pendingRequests[requestKey]?.forEach((cb) => cb(hasChanged, deepCopy(result)));
+            delete this.pendingRequests[requestKey];
+            this.crypto.encrypt(result).then((encryptedResult) => {
+                this.indexedDB.write(table, key, encryptedResult);
             });
+            return result;
+        };
+        const onRejected = async (error) => {
+            delete this.pendingRequests[requestKey];
+            await fromCache;
+            if (fromCacheValue) {
+                // def has already been fullfilled with the cached value
+                throw error;
+            }
+            this.ramCache.delete(table, key); // remove rejected prom from ram cache
+            def.reject(error);
+        };
+        const prom = fallback().then(onFullfilled, onRejected);
         if (ramValue) {
             ramValue.then((value) => {
-                def.resolve(value);
-                fromCacheValue = value;
+                def.resolve(deepCopy(value));
+                fromCacheValue = JSON.stringify(value);
                 fromCache.resolve();
             });
         } else {
@@ -143,9 +149,9 @@ export class PersistentCache {
                         // The data will be updated with the new cryptoKey.
                         return;
                     }
-                    def.resolve(decrypted);
+                    def.resolve(deepCopy(decrypted));
                     this.ramCache.write(table, key, Promise.resolve(decrypted));
-                    fromCacheValue = decrypted;
+                    fromCacheValue = JSON.stringify(decrypted);
                 }
                 fromCache.resolve();
             });

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import datetime
@@ -10,7 +9,7 @@ from markupsafe import Markup
 
 from odoo import api, exceptions, fields, models, modules, _
 from odoo.osv import expression
-from odoo.tools import float_compare, float_round, SQL
+from odoo.tools import float_compare, float_round
 from odoo.tools.safe_eval import safe_eval
 
 _logger = logging.getLogger(__name__)
@@ -448,7 +447,7 @@ class CrmTeam(models.Model):
         # and the first commit occur at the end of the bundle,
         # the first transaction can be long which we want to avoid
         if auto_commit:
-            self._cr.commit()
+            self.env.cr.commit()
 
         # assignment process data
         global_data = dict(assigned=set(), merged=set(), duplicates=set())
@@ -480,13 +479,13 @@ class CrmTeam(models.Model):
                 # unlink duplicates once
                 self.env['crm.lead'].browse(lead_unlink_ids).unlink()
                 lead_unlink_ids = set()
-                self._cr.commit()
+                self.env.cr.commit()
 
         # unlink duplicates once
         self.env['crm.lead'].browse(lead_unlink_ids).unlink()
 
         if auto_commit:
-            self._cr.commit()
+            self.env.cr.commit()
 
         # some final log
         _logger.info('## Assigned %s leads', (len(global_data['assigned']) + len(global_data['merged'])))
@@ -761,28 +760,3 @@ class CrmTeam(models.Model):
         if self.use_opportunities:
             return self.action_open_leads()
         return super().action_primary_channel_button()
-
-    def _graph_get_model(self):
-        if self.use_opportunities:
-            return 'crm.lead'
-        return super()._graph_get_model()
-
-    def _graph_date_column(self):
-        if self.use_opportunities:
-            return SQL('create_date')
-        return super()._graph_date_column()
-
-    def _graph_y_query(self):
-        if self.use_opportunities:
-            return SQL('count(*)')
-        return super()._graph_y_query()
-
-    def _extra_sql_conditions(self):
-        if self.use_opportunities:
-            return SQL("type LIKE 'opportunity'")
-        return super()._extra_sql_conditions()
-
-    def _graph_title_and_key(self):
-        if self.use_opportunities:
-            return ['', _('New Opportunities')] # no more title
-        return super()._graph_title_and_key()

@@ -5,6 +5,7 @@ import { getScrollingElement } from "@web/core/utils/scrolling";
 import { _t } from "@web/core/l10n/translation";
 import { closest } from "@web/core/utils/ui";
 import { useDragAndDrop } from "@html_editor/utils/drag_and_drop";
+import { useSnippets } from "@html_builder/snippets/snippet_service";
 import { getCSSVariableValue } from "@html_builder/utils/utils_css";
 import { scrollTo } from "@html_builder/utils/scrolling";
 import { Snippet } from "./snippet";
@@ -13,13 +14,15 @@ import { CustomInnerSnippet } from "./custom_inner_snippet";
 export class BlockTab extends Component {
     static template = "html_builder.BlockTab";
     static components = { Snippet, CustomInnerSnippet };
-    static props = {};
+    static props = {
+        snippetsName: String,
+    };
 
     setup() {
         this.dialog = useService("dialog");
         this.orm = useService("orm");
         this.popover = useService("popover");
-        this.snippetModel = useState(useService("html_builder.snippets"));
+        this.snippetModel = useSnippets(this.props.snippetsName);
         this.blockTabRef = useRef("block-tab");
         // Needed to avoid race condition in tours.
         this.state = useState({ ongoingInsertion: false });
@@ -59,42 +62,48 @@ export class BlockTab extends Component {
                 const baseSectionEl = snippet.content.cloneNode(true);
                 this.state.ongoingInsertion = true;
                 await new Promise((resolve) => {
-                    this.snippetModel.openSnippetDialog(snippet, {
-                        onSelect: (snippet) => {
-                            snippetEl = snippet.content.cloneNode(true);
+                    this.snippetModel.openSnippetDialog(
+                        snippet,
+                        {
+                            onSelect: (snippet) => {
+                                snippetEl = snippet.content.cloneNode(true);
 
-                            // Add the dropzones corresponding to a section and
-                            // make them invisible.
-                            const selectors = this.shared.dropzone.getSelectors(baseSectionEl);
-                            const dropzoneEls = this.shared.dropzone.activateDropzones(selectors);
-                            this.editable
-                                .querySelectorAll(".oe_drop_zone")
-                                .forEach((dropzoneEl) => dropzoneEl.classList.add("invisible"));
+                                // Add the dropzones corresponding to a section and
+                                // make them invisible.
+                                const selectors = this.shared.dropzone.getSelectors(baseSectionEl);
+                                const dropzoneEls =
+                                    this.shared.dropzone.activateDropzones(selectors);
+                                this.editable
+                                    .querySelectorAll(".oe_drop_zone")
+                                    .forEach((dropzoneEl) => dropzoneEl.classList.add("invisible"));
 
-                            // Find the dropzone closest to the center of the
-                            // viewport and not located in the top quarter of
-                            // the viewport.
-                            const iframeWindow = this.document.defaultView;
-                            const viewPortCenterPoint = {
-                                x: iframeWindow.innerWidth / 2,
-                                y: iframeWindow.innerHeight / 2,
-                            };
-                            const validDropzoneEls = dropzoneEls.filter(
-                                (el) => el.getBoundingClientRect().top >= viewPortCenterPoint.y / 2
-                            );
-                            const closestDropzoneEl =
-                                closest(validDropzoneEls, viewPortCenterPoint) ||
-                                dropzoneEls.at(-1);
+                                // Find the dropzone closest to the center of the
+                                // viewport and not located in the top quarter of
+                                // the viewport.
+                                const iframeWindow = this.document.defaultView;
+                                const viewPortCenterPoint = {
+                                    x: iframeWindow.innerWidth / 2,
+                                    y: iframeWindow.innerHeight / 2,
+                                };
+                                const validDropzoneEls = dropzoneEls.filter(
+                                    (el) =>
+                                        el.getBoundingClientRect().top >= viewPortCenterPoint.y / 2
+                                );
+                                const closestDropzoneEl =
+                                    closest(validDropzoneEls, viewPortCenterPoint) ||
+                                    dropzoneEls.at(-1);
 
-                            // Insert the selected snippet.
-                            closestDropzoneEl.after(snippetEl);
-                            this.shared.dropzone.removeDropzones();
-                            return snippetEl;
+                                // Insert the selected snippet.
+                                closestDropzoneEl.after(snippetEl);
+                                this.shared.dropzone.removeDropzones();
+                                return snippetEl;
+                            },
+                            onClose: () => {
+                                resolve();
+                            },
                         },
-                        onClose: () => {
-                            resolve();
-                        },
-                    });
+                        this.env.editor
+                    );
                 });
 
                 if (snippetEl) {
@@ -129,22 +138,26 @@ export class BlockTab extends Component {
         // Open the snippet dialog.
         let selectedSnippetEl;
         await new Promise((resolve) => {
-            this.snippetModel.openSnippetDialog(snippet, {
-                onSelect: (snippet) => {
-                    selectedSnippetEl = snippet.content.cloneNode(true);
-                    hookEl.replaceWith(selectedSnippetEl);
-                    return selectedSnippetEl;
+            this.snippetModel.openSnippetDialog(
+                snippet,
+                {
+                    onSelect: (snippet) => {
+                        selectedSnippetEl = snippet.content.cloneNode(true);
+                        hookEl.replaceWith(selectedSnippetEl);
+                        return selectedSnippetEl;
+                    },
+                    onClose: () => {
+                        if (!selectedSnippetEl) {
+                            hookEl.remove();
+                        }
+                        this.snippetModel.snippetStructures.forEach(
+                            (snippet) => delete snippet.isExcluded
+                        );
+                        resolve();
+                    },
                 },
-                onClose: () => {
-                    if (!selectedSnippetEl) {
-                        hookEl.remove();
-                    }
-                    this.snippetModel.snippetStructures.forEach(
-                        (snippet) => delete snippet.isExcluded
-                    );
-                    resolve();
-                },
-            });
+                this.env.editor
+            );
         });
 
         if (selectedSnippetEl) {

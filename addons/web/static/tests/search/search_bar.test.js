@@ -22,6 +22,7 @@ import {
     getCurrentOperator,
     getCurrentPath,
     getCurrentValue,
+    label,
 } from "@web/../tests/core/tree_editor/condition_tree_editor_test_helpers";
 import {
     contains,
@@ -45,7 +46,6 @@ import {
     validateSearch,
 } from "@web/../tests/web_test_helpers";
 import { cookie } from "@web/core/browser/cookie";
-import { pick } from "@web/core/utils/objects";
 import { SearchBar } from "@web/search/search_bar/search_bar";
 import { useSearchBarToggler } from "@web/search/search_bar/search_bar_toggler";
 class Partner extends models.Model {
@@ -814,13 +814,12 @@ test("many2one_reference fields are supported in search view", async () => {
 
 test("check kwargs of a rpc call with a domain", async () => {
     onRpc("name_search", (params) => {
-        expect(pick(params, "args", "kwargs", "method", "model")).toEqual({
+        expect(params).toMatchObject({
             model: "partner",
             method: "name_search",
             args: [],
             kwargs: {
                 domain: [["bool", "=", true]],
-                context: { lang: "en", uid: 7, tz: "taht", allowed_company_ids: [1] },
                 limit: 8 + 1,
                 name: "F",
             },
@@ -1341,7 +1340,7 @@ test("search a property: definition record id in the context", async () => {
 
 test("edit a filter", async () => {
     onRpc("/web/domain/validate", () => true);
-    const searchBar = await mountWithSearch(SearchBar, {
+    await mountWithSearch(SearchBar, {
         resModel: "partner",
         searchMenuTypes: ["groupBy"], // we need it to have facet (see facets getter in search_model)
         searchViewId: false,
@@ -1368,7 +1367,7 @@ test("edit a filter", async () => {
     expect(SELECTORS.condition).toHaveCount(1);
     expect(queryAllTexts`.modal footer button`).toEqual(["Search", "Discard"]);
     expect(getCurrentPath()).toBe("Birthday");
-    expect(getCurrentOperator()).toBe("greater or equal");
+    expect(getCurrentOperator()).toBe(label(">="));
     expect(getCurrentValue()).toBe("context_today()");
     expect(`.modal footer button`).toBeEnabled();
 
@@ -1379,13 +1378,12 @@ test("edit a filter", async () => {
     await contains(`.modal ${SELECTORS.addNewRule}`).click();
     expect(SELECTORS.condition).toHaveCount(1);
     expect(getCurrentPath()).toBe("Id");
-    expect(getCurrentOperator()).toBe("equals");
-    expect(getCurrentValue()).toBe("");
+    expect(getCurrentOperator()).toBe(label("="));
+    expect(getCurrentValue()).toBe("1");
 
     await contains(".modal footer button").click();
     expect(`.modal`).toHaveCount(0);
-    expect(getFacetTexts()).toEqual(["Id = ( )", "Bool"]);
-    expect(searchBar.env.searchModel.domain).toEqual([["id", "in", []]]);
+    expect(getFacetTexts()).toEqual(["Id = 1", "Bool"]);
 });
 
 test("edit a filter with context: context is kept after edition", async () => {
@@ -1459,7 +1457,7 @@ test("edit a favorite", async () => {
 
     await contains(".modal footer button").click();
     expect(`.modal`).toHaveCount(0);
-    expect(getFacetTexts()).toEqual(["Foo contains def", "Bool\n>\nCompany"]);
+    expect(getFacetTexts()).toEqual([`Foo ${label("ilike")} def`, "Bool\n>\nCompany"]);
 });
 
 test("edit a field", async () => {
@@ -1611,7 +1609,9 @@ test("facets display with any / not any operator (with a complex path)", async f
     await addNewRule();
 
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Company ➔ Company : ( Id = 1 and Id = 1 ) or Bar not set"]);
+    expect(getFacetTexts()).toEqual([
+        `Company ➔ Company : ( Id = 1 and Id = 1 ) or Bar ${label("not set")}`,
+    ]);
     expect.verifySteps([`/web/domain/validate`]);
 });
 
@@ -1642,7 +1642,7 @@ test("facets display with any / not any operator (with a or)", async function ()
     await addNewRule();
 
     await contains(".modal footer button").click();
-    expect(getFacetTexts()).toEqual(["Company : ( Id = 1 and Id = 1 ) or Bar not set"]);
+    expect(getFacetTexts()).toEqual([`Company : ( Id = 1 and Id = 1 ) or Bar ${label("not set")}`]);
     expect.verifySteps([`/web/domain/validate`]);
 });
 
@@ -1674,7 +1674,7 @@ test("facets display with any / not any operator (check brackets)", async functi
 
     await contains(".modal footer button").click();
     expect(getFacetTexts()).toEqual([
-        "Company : ( Bar : ( Bool not set and Bool not set ) and Bar : ( Bool set ) ) or Bar not set",
+        `Company : ( Bar : ( Bool ${label("not set")} and Bool ${label("not set")} ) and Bar : ( Bool ${label("set")} ) ) or Bar ${label("not set")}`,
     ]);
     expect.verifySteps([`/web/domain/validate`]);
 });

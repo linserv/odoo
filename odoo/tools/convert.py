@@ -13,7 +13,9 @@ import os.path
 import pprint
 import re
 import subprocess
+import warnings
 from datetime import datetime, timedelta
+from typing import Literal, Optional
 
 from dateutil.relativedelta import relativedelta
 from lxml import etree, builder
@@ -30,14 +32,16 @@ from .safe_eval import safe_eval, pytz, time
 
 _logger = logging.getLogger(__name__)
 
+ConvertMode = Literal['init', 'update']
+IdRef = dict[str, int | Literal[False]]
 
 class ParseError(Exception):
     ...
 
-def _get_idref(self, env, model_str, idref):
+
+def _get_eval_context(self, env, model_str):
     from odoo import fields, release  # noqa: PLC0415
-    idref2 = dict(idref,
-                  Command=fields.Command,
+    context = dict(Command=fields.Command,
                   time=time,
                   DateTime=datetime,
                   datetime=datetime,
@@ -47,8 +51,8 @@ def _get_idref(self, env, model_str, idref):
                   ref=self.id_get,
                   pytz=pytz)
     if model_str:
-        idref2['obj'] = env[model_str].browse
-    return idref2
+        context['obj'] = env[model_str].browse
+    return context
 
 def _fix_multiple_roots(node):
     """
@@ -75,10 +79,8 @@ def _eval_xml(self, node, env):
         if f_search := node.get('search'):
             f_use = node.get("use",'id')
             f_name = node.get("name")
-            idref2 = {}
-            if f_search:
-                idref2 = _get_idref(self, env, f_model, self.idref)
-            q = safe_eval(f_search, idref2)
+            context = _get_eval_context(self, env, f_model)
+            q = safe_eval(f_search, context)
             ids = env[f_model].search(q).ids
             if f_use != 'id':
                 ids = [x[f_use] for x in env[f_model].browse(ids).read([f_use])]
@@ -92,9 +94,9 @@ def _eval_xml(self, node, env):
                     f_val = f_val[0]
             return f_val
         if a_eval := node.get('eval'):
-            idref2 = _get_idref(self, env, f_model, self.idref)
+            context = _get_eval_context(self, env, f_model)
             try:
-                return safe_eval(a_eval, idref2)
+                return safe_eval(a_eval, context)
             except Exception:
                 logging.getLogger('odoo.tools.convert.init').error(
                     'Could not eval(%s) for %s in %s', a_eval, node.get('name'), env.context)
@@ -107,13 +109,14 @@ def _eval_xml(self, node, env):
                 if found in done:
                     continue
                 done.add(found)
-                id = m.groups()[0]
-                if not id in self.idref:
-                    self.idref[id] = self.id_get(id)
+                rec_id = m[1]
+                xid = self.make_xml_id(rec_id)
+                if (record_id := self.idref.get(xid)) is None:
+                    record_id = self.idref[xid] = self.id_get(xid)
                 # So funny story: in Python 3, bytes(n: int) returns a
                 # bytestring of n nuls. In Python 2 it obviously returns the
                 # stringified number, which is what we're expecting here
-                s = s.replace(found, str(self.idref[id]))
+                s = s.replace(found, str(record_id))
             s = s.replace('%%', '%') # Quite weird but it's for (somewhat) backward compatibility sake
             return s
 
@@ -172,8 +175,8 @@ def _eval_xml(self, node, env):
         kwargs = {}
 
         if a_eval := node.get('eval'):
-            idref2 = _get_idref(self, env, model_str, self.idref)
-            args = list(safe_eval(a_eval, idref2))
+            context = _get_eval_context(self, env, model_str)
+            args = list(safe_eval(a_eval, context))
         for child in node:
             if child.tag == 'value' and child.get('name'):
                 kwargs[child.get('name')] = _eval_xml(self, child, env)
@@ -247,9 +250,9 @@ form: module.record_id""" % (xml_id,)
         records = self.env[d_model]
 
         if d_search := rec.get("search"):
-            idref = _get_idref(self, self.env, d_model, {})
+            context = _get_eval_context(self, self.env, d_model)
             try:
-                records = records.search(safe_eval(d_search, idref))
+                records = records.search(safe_eval(d_search, context))
             except ValueError:
                 _logger.warning('Skipping deletion for failed search `%r`', d_search, exc_info=True)
 
@@ -366,7 +369,7 @@ form: module.record_id""" % (xml_id,)
 
                 # if the resource already exists, don't update it but store
                 # its database id (can be useful)
-                self.idref[rec_id] = record.id
+                self.idref[xid] = record.id
                 return None
             elif not nodeattr2bool(rec, 'forcecreate', True):
                 # if it doesn't exist and we shouldn't create it, skip it
@@ -398,8 +401,8 @@ form: module.record_id""" % (xml_id,)
             f_val = False
 
             if f_search := field.get("search"):
-                idref2 = _get_idref(self, env, f_model, self.idref)
-                q = safe_eval(f_search, idref2)
+                context = _get_eval_context(self, env, f_model)
+                q = safe_eval(f_search, context)
                 assert f_model, 'Define an attribute model="..." in your .XML file!'
                 # browse the objects searched
                 s = env[f_model].search(q)
@@ -455,8 +458,8 @@ form: module.record_id""" % (xml_id,)
         if foreign_record_to_create:
             model = model.with_context(foreign_record_to_create=foreign_record_to_create)
         record = model._load_records([data], self.mode == 'update')
-        if rec_id:
-            self.idref[rec_id] = record.id
+        if xid:
+            self.idref[xid] = record.id
         if config.get('import_partial'):
             env.cr.commit()
         for child_rec, inverse_name in sub_records:
@@ -534,14 +537,13 @@ form: module.record_id""" % (xml_id,)
         return self._tag_record(record)
 
     def id_get(self, id_str, raise_if_not_found=True):
+        id_str = self.make_xml_id(id_str)
         if id_str in self.idref:
             return self.idref[id_str]
-        res = self.model_id_get(id_str, raise_if_not_found)
-        return res and res[1]
+        return self.model_id_get(id_str, raise_if_not_found)[1]
 
     def model_id_get(self, id_str, raise_if_not_found=True):
-        if '.' not in id_str:
-            id_str = '%s.%s' % (self.module, id_str)
+        id_str = self.make_xml_id(id_str)
         return self.env['ir.model.data']._xmlid_to_res_model_res_id(id_str, raise_if_not_found=raise_if_not_found)
 
     def _tag_root(self, el):
@@ -591,11 +593,11 @@ form: module.record_id""" % (xml_id,)
             value = self._sequences[-1] = value + 10
         return value
 
-    def __init__(self, env, module, idref, mode, noupdate=False, xml_filename=None):
+    def __init__(self, env, module, idref: Optional[IdRef], mode: ConvertMode, noupdate: bool = False, xml_filename: str = ''):
         self.mode = mode
         self.module = module
         self.envs = [env(context=dict(env.context, lang=None))]
-        self.idref = {} if idref is None else idref
+        self.idref: IdRef = {} if idref is None else idref
         self._noupdate = [noupdate]
         self._sequences = []
         self.xml_filename = xml_filename
@@ -614,12 +616,28 @@ form: module.record_id""" % (xml_id,)
         self._tag_root(de)
     DATA_ROOTS = ['odoo', 'data', 'openerp']
 
-def convert_file(env, module, filename, idref, mode='update', noupdate=False, kind=None, pathname=None):
+
+def convert_file(
+        env,
+        module,
+        filename,
+        idref: Optional[IdRef],
+        mode: ConvertMode = 'update',
+        noupdate=False,
+        kind=None,
+        pathname=None,
+):
+    if kind is not None:
+        warnings.warn(
+            "The `kind` argument is deprecated in Odoo 19.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     if pathname is None:
         pathname = os.path.join(module, filename)
     ext = os.path.splitext(filename)[1].lower()
 
-    with file_open(pathname, 'rb') as fp:
+    with file_open(pathname, 'rb', env=env) as fp:
         if ext == '.csv':
             convert_csv_import(env, module, pathname, fp.read(), idref, mode, noupdate)
         elif ext == '.sql':
@@ -631,11 +649,20 @@ def convert_file(env, module, filename, idref, mode='update', noupdate=False, ki
         else:
             raise ValueError("Can't load unknown file type %s.", filename)
 
+
 def convert_sql_import(env, fp):
     env.cr.execute(fp.read()) # pylint: disable=sql-injection
 
-def convert_csv_import(env, module, fname, csvcontent, idref=None, mode='init',
-        noupdate=False):
+
+def convert_csv_import(
+        env,
+        module,
+        fname,
+        csvcontent,
+        idref: Optional[IdRef] = None,
+        mode: ConvertMode = 'init',
+        noupdate=False,
+):
     '''Import csv file :
         quote: "
         delimiter: ,
@@ -684,7 +711,16 @@ def convert_csv_import(env, module, fname, csvcontent, idref=None, mode='init',
             message=warning_msg,
         ))
 
-def convert_xml_import(env, module, xmlfile, idref=None, mode='init', noupdate=False, report=None):
+
+def convert_xml_import(
+        env,
+        module,
+        xmlfile,
+        idref: Optional[IdRef] = None,
+        mode: ConvertMode = 'init',
+        noupdate=False,
+        report=None,
+):
     doc = etree.parse(xmlfile)
     schema = os.path.join(config.root_path, 'import_xml.rng')
     relaxng = etree.RelaxNG(etree.parse(schema))

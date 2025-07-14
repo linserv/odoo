@@ -6,16 +6,7 @@ import { DomainSelectorDialog } from "@web/core/domain_selector_dialog/domain_se
 import { _t } from "@web/core/l10n/translation";
 import { rpcBus } from "@web/core/network/rpc";
 import { evaluateExpr } from "@web/core/py_js/py";
-import {
-    constructTree,
-    domainFromTree,
-    treeFromDomain,
-} from "@web/core/tree_editor/condition_tree";
-import {
-    useGetTreeDescription,
-    useGetTreeTooltip,
-    useMakeGetFieldDef,
-} from "@web/core/tree_editor/utils";
+import { domainFromTree } from "@web/core/tree_editor/domain_from_tree";
 import { user } from "@web/core/user";
 import { groupBy, sortBy } from "@web/core/utils/arrays";
 import { deepCopy } from "@web/core/utils/objects";
@@ -181,25 +172,22 @@ export class SearchModel extends EventBus {
         this.env = env;
         this.setup(services, args);
     }
-    /**
-     * @override
-     */
+
     setup(services) {
         // services
-        const { field: fieldService, name: nameService, orm, view, dialog } = services;
+        const { field: fieldService, orm, view, dialog, treeProcessor } = services;
         this.orm = orm;
         this.fieldService = fieldService;
         this.viewService = view;
+        this.treeProcessor = treeProcessor;
         this.dialog = dialog;
         this.orderByCount = false;
-
-        this.getDomainTreeDescription = useGetTreeDescription(fieldService, nameService);
-        this.getDomainTreeTooltip = useGetTreeTooltip(fieldService, nameService);
-        this.makeGetFieldDef = useMakeGetFieldDef(fieldService);
 
         // used to manage search items related to date/datetime fields
         this.referenceMoment = DateTime.local();
         this.intervalOptions = getIntervalOptions();
+        this.categoriesLoadId = 0;
+        this.filtersLoadId = 0;
     }
 
     /**
@@ -726,14 +714,17 @@ export class SearchModel extends EventBus {
             context = makeContext(contexts);
         }
 
-        const getFieldDef = await this.makeGetFieldDef(this.resModel, constructTree(domain));
-        const tree = treeFromDomain(domain, { distributeNot: !this.isDebugMode, getFieldDef });
+        const tree = await this.treeProcessor.treeFromDomain(
+            this.resModel,
+            domain,
+            !this.isDebugMode
+        );
         const trees =
             !tree.negate && tree.value === "&" && tree.children.length > 0 ? tree.children : [tree];
         const promises = trees.map(async (tree) => {
             const [description, tooltip] = await Promise.all([
-                this.getDomainTreeDescription(this.resModel, tree),
-                this.getDomainTreeTooltip(this.resModel, tree, true),
+                this.treeProcessor.getDomainTreeDescription(this.resModel, tree),
+                this.treeProcessor.getDomainTreeTooltip(this.resModel, tree),
             ]);
             const preFilter = {
                 description,
@@ -1022,7 +1013,9 @@ export class SearchModel extends EventBus {
                     propertyDomain: [definitionRecord, "=", definitionRecordId],
                     propertyFieldDefinition: definition,
                     propertyItemId: searchItem.id,
-                    description: `${definition.string} (${definitionRecordName})`,
+                    description: definitionRecordName
+                        ? `${definition.string} (${definitionRecordName})`
+                        : definition.string,
                     groupId: this.nextGroupId++,
                 };
                 if (["many2many", "tags"].includes(definition.type)) {
@@ -1428,13 +1421,21 @@ export class SearchModel extends EventBus {
     async _fetchCategories(categories) {
         const filterDomain = this._getFilterDomain();
         const searchDomain = this.searchDomain;
+        const categoriesLoadId = ++this.categoriesLoadId;
         await Promise.all(
             categories.map(async (category) => {
-                const result = await this.orm.call(
-                    this.resModel,
-                    "search_panel_select_range",
-                    [category.fieldName],
-                    {
+                const result = await this.orm
+                    .cached({
+                        onFinish: (hasChanged, result) => {
+                            if (!hasChanged || categoriesLoadId !== this.categoriesLoadId) {
+                                return;
+                            }
+                            this._createCategoryTree(category.id, result);
+                            this._reset();
+                            this.trigger("update");
+                        },
+                    })
+                    .call(this.resModel, "search_panel_select_range", [category.fieldName], {
                         category_domain: this._getCategoryDomain(category.id),
                         context: this.globalContext,
                         enable_counters: category.enableCounters,
@@ -1443,8 +1444,7 @@ export class SearchModel extends EventBus {
                         hierarchize: category.hierarchize,
                         limit: category.limit,
                         search_domain: searchDomain,
-                    }
-                );
+                    });
                 this._createCategoryTree(category.id, result);
             })
         );
@@ -1463,13 +1463,21 @@ export class SearchModel extends EventBus {
         }
         const categoryDomain = this._getCategoryDomain();
         const searchDomain = this.searchDomain;
+        const filtersLoadId = ++this.filtersLoadId;
         await Promise.all(
             filters.map(async (filter) => {
-                const result = await this.orm.call(
-                    this.resModel,
-                    "search_panel_select_multi_range",
-                    [filter.fieldName],
-                    {
+                const result = await this.orm
+                    .cached({
+                        onFinish: (hasChanged, result) => {
+                            if (!hasChanged || filtersLoadId !== this.filtersLoadId) {
+                                return;
+                            }
+                            this._createFilterTree(filter.id, result);
+                            this._reset();
+                            this.trigger("update");
+                        },
+                    })
+                    .call(this.resModel, "search_panel_select_multi_range", [filter.fieldName], {
                         category_domain: categoryDomain,
                         comodel_domain: new Domain(filter.domain).toList(evalContext),
                         context: this.globalContext,
@@ -1480,8 +1488,7 @@ export class SearchModel extends EventBus {
                         group_domain: this._getGroupDomain(filter),
                         limit: filter.limit,
                         search_domain: searchDomain,
-                    }
-                );
+                    });
                 this._createFilterTree(filter.id, result);
             })
         );

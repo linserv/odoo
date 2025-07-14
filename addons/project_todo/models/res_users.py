@@ -35,7 +35,7 @@ class ResUsers(models.Model):
                 """
         self.env.cr.execute(query, {
             'user_id': self.env.uid,
-            'active': self._context.get('active_test', True),
+            'active': self.env.context.get('active_test', True),
         })
         activity_data = self.env.cr.dictfetchall()
         view_type = self.env['project.task']._systray_view
@@ -45,12 +45,12 @@ class ResUsers(models.Model):
             is_task = activity['is_task']
             if is_task not in user_activities:
                 if not is_task:
-                    module = 'project_todo'
+                    module_name = 'project_todo'
                     name = _('To-Do')
                 else:
-                    module = 'project'
+                    module_name = 'project'
                     name = _('Task')
-                icon = modules.module.get_module_icon(module)
+                icon = modules.Manifest.for_addon(module_name).icon
                 user_activities[is_task] = {
                     'id': self.env['ir.model']._get('project.task').id,
                     'name': name,

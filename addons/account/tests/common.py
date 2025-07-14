@@ -171,18 +171,8 @@ class AccountTestInvoicingCommon(ProductCommon):
 
         # ==== Payment methods ====
         bank_journal = cls.company_data['default_journal_bank']
-        in_outstanding_account = cls.env['account.account'].create({
-            'name': "Outstanding Receipts",
-            'code': 'OSTR00',
-            'reconcile': True,
-            'account_type': 'asset_current'
-        })
-        out_outstanding_account = cls.env['account.account'].create({
-            'name': "Outstanding Payments",
-            'code': 'OSTP00',
-            'reconcile': True,
-            'account_type': 'asset_current'
-        })
+        in_outstanding_account = cls.env['account.chart.template'].ref('account_journal_payment_debit_account_id', raise_if_not_found=False)
+        out_outstanding_account = cls.env['account.chart.template'].ref('account_journal_payment_credit_account_id', raise_if_not_found=False)
         if bank_journal:
             cls.inbound_payment_method_line = bank_journal.inbound_payment_method_line_ids[0]
             cls.inbound_payment_method_line.payment_account_id = in_outstanding_account
@@ -749,22 +739,20 @@ class AccountTestInvoicingCommon(ProductCommon):
 
     def _turn_node_as_dict_hierarchy(self, node, path=''):
         ''' Turn the node as a python dictionary to be compared later with another one.
-        Allow to ignore the management of namespaces.
         :param node:    A node inside an xml tree.
         :param path:    The optional path of tags for recursive call.
         :return:        A python dictionary.
         '''
         tag_split = node.tag.split('}')
         tag_wo_ns = tag_split[-1]
-        attrib_wo_ns = {k: v for k, v in node.attrib.items() if '}' not in k}
         full_path = f'{path}/{tag_wo_ns}'
         return {
             'node': node,
-            'tag': tag_wo_ns,
+            'tag': node.tag,
             'full_path': full_path,
             'namespace': None if len(tag_split) < 2 else tag_split[0],
             'text': (node.text or '').strip(),
-            'attrib': attrib_wo_ns,
+            'attrib': dict(node.attrib.items()),
             'children': [
                 self._turn_node_as_dict_hierarchy(child_node, path=full_path)
                 for child_node in node.getchildren()
@@ -856,9 +844,9 @@ class AccountTestInvoicingCommon(ProductCommon):
 
 
 class AccountTestMockOnlineSyncCommon(HttpCase):
-    def start_tour(self, url_path, tour_name, step_delay=None, **kwargs):
+    def start_tour(self, url_path, tour_name, **kwargs):
         with self.mock_online_sync_favorite_institutions():
-            super().start_tour(url_path, tour_name, step_delay, **kwargs)
+            super().start_tour(url_path, tour_name, **kwargs)
 
     @classmethod
     @contextmanager
@@ -901,42 +889,6 @@ class TestTaxCommon(AccountTestInvoicingHttpCommon):
     def setUp(self):
         super().setUp()
         self.js_tests = []
-
-    def group_of_taxes(self, taxes, **kwargs):
-        self.number += 1
-        return self.env['account.tax'].create({
-            **kwargs,
-            'name': f"group_({self.number})",
-            'amount_type': 'group',
-            'children_tax_ids': [Command.set(taxes.ids)],
-        })
-
-    def percent_tax(self, amount, **kwargs):
-        self.number += 1
-        return self.env['account.tax'].create({
-            **kwargs,
-            'name': f"percent_{amount}_({self.number})",
-            'amount_type': 'percent',
-            'amount': amount,
-        })
-
-    def division_tax(self, amount, **kwargs):
-        self.number += 1
-        return self.env['account.tax'].create({
-            **kwargs,
-            'name': f"division_{amount}_({self.number})",
-            'amount_type': 'division',
-            'amount': amount,
-        })
-
-    def fixed_tax(self, amount, **kwargs):
-        self.number += 1
-        return self.env['account.tax'].create({
-            **kwargs,
-            'name': f"fixed_{amount}_({self.number})",
-            'amount_type': 'fixed',
-            'amount': amount,
-        })
 
     def _ensure_rate(self, currency, date, rate):
         currency_rate = currency.rate_ids.filtered(lambda x: x.name == fields.Date.from_string(date))

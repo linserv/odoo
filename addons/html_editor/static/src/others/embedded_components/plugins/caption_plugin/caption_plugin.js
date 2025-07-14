@@ -7,6 +7,7 @@ import { closestElement } from "@html_editor/utils/dom_traversal";
 import { EDITABLE_MEDIA_CLASS } from "@html_editor/utils/dom_info";
 import { boundariesOut, rightPos } from "@html_editor/utils/position";
 import { findInSelection } from "@html_editor/utils/selection";
+import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 
 export class CaptionPlugin extends Plugin {
     static id = "caption";
@@ -24,6 +25,7 @@ export class CaptionPlugin extends Plugin {
                 id: "toggleImageCaption",
                 title: _t("Add/remove a caption"),
                 run: this.toggleImageCaption.bind(this),
+                isAvailable: isHtmlContentSupported,
             },
         ],
         toolbar_items: [
@@ -39,7 +41,7 @@ export class CaptionPlugin extends Plugin {
         clean_for_save_handlers: this.cleanForSave.bind(this),
         mount_component_handlers: this.setupNewCaption.bind(this),
         delete_handlers: this.afterDelete.bind(this),
-        delete_image_handlers: this.handleDeleteImage.bind(this),
+        delete_image_overrides: this.handleDeleteImage.bind(this),
         after_save_media_dialog_handlers: this.onImageReplaced.bind(this),
         hints: [{ selector: "FIGCAPTION", text: _t("Write a caption...") }],
         unsplittable_node_predicates: [

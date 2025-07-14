@@ -102,7 +102,7 @@ class ResourceCalendar(models.Model):
                                  help="Average hours per day a resource is supposed to work with this calendar.")
     tz = fields.Selection(
         _tz_get, string='Timezone', required=True,
-        default=lambda self: self._context.get('tz') or self.env.user.tz or self.env.ref('base.user_admin').tz or 'UTC',
+        default=lambda self: self.env.context.get('tz') or self.env.user.tz or self.env.ref('base.user_admin').tz or 'UTC',
         help="This field is used in order to define in which timezone the resources will work.")
     tz_offset = fields.Char(compute='_compute_tz_offset', string='Timezone offset')
     two_weeks_calendar = fields.Boolean(string="Calendar in 2 weeks mode")
@@ -436,11 +436,14 @@ class ResourceCalendar(models.Model):
 
             for resource in resources:
                 if resource and resource._is_fully_flexible():
+                    # If the resource is fully flexible, return the whole period from start_dt to end_dt with a dummy attendance
+                    hours = (end_dt - start_dt).total_seconds() / 3600
+                    days = hours / 24
                     dummy_attendance = self.env['resource.calendar.attendance'].new({
-                        'duration_hours': (end - start).total_seconds() / 3600,
-                        'duration_days': (end - start).days + 1,
+                        'duration_hours': hours,
+                        'duration_days': days,
                     })
-                    result_per_resource_id[resource.id] = Intervals([(start, end, dummy_attendance)], keep_distinct=True)
+                    result_per_resource_id[resource.id] = Intervals([(start_dt, end_dt, dummy_attendance)], keep_distinct=True)
                 elif resource and resource.calendar_id.flexible_hours:
                     # For flexible Calendars, we create intervals to fill in the weekly intervals with the average daily hours
                     # until the full time required hours are met. This gives us the most correct approximation when looking at a daily
@@ -739,6 +742,9 @@ class ResourceCalendar(models.Model):
         domain = []
         if company_id:
             domain = [('company_id', 'in', (company_id.id, False))]
+        if self.flexible_hours:
+            works = {d[0].date() for d in self._leave_intervals_batch(start_dt, end_dt, domain=domain)[False]}
+            return {fields.Date.to_string(day.date()): (day.date() in works) for day in rrule(DAILY, start_dt, until=end_dt)}
         works = {d[0].date() for d in self._work_intervals_batch(start_dt, end_dt, domain=domain)[False]}
         return {fields.Date.to_string(day.date()): (day.date() not in works) for day in rrule(DAILY, start_dt, until=end_dt)}
 

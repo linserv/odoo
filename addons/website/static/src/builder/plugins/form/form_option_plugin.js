@@ -4,7 +4,6 @@ import { Plugin } from "@html_editor/plugin";
 import { reactive } from "@odoo/owl";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { redirect } from "@web/core/utils/urls";
-import { FormOptionRedraw } from "./form_option_redraw";
 import { FormFieldOptionRedraw } from "./form_field_option_redraw";
 import { FormOptionAddFieldButton } from "./form_option_add_field_button";
 import {
@@ -39,6 +38,7 @@ import { _t } from "@web/core/l10n/translation";
 import { renderToElement } from "@web/core/utils/render";
 import { selectElements } from "@html_editor/utils/dom_traversal";
 import { BuilderAction } from "@html_builder/core/builder_action";
+import { FormOption } from "./form_option";
 
 const DEFAULT_EMAIL_TO_VALUE = "info@yourcompany.example.com";
 export class FormOptionPlugin extends Plugin {
@@ -101,7 +101,7 @@ export class FormOptionPlugin extends Plugin {
         },
         builder_options: [
             {
-                OptionComponent: FormOptionRedraw,
+                OptionComponent: FormOption,
                 props: {
                     fetchModels: this.fetchModels.bind(this),
                     prepareFormModel: this.prepareFormModel.bind(this),
@@ -202,12 +202,17 @@ export class FormOptionPlugin extends Plugin {
             this._fetchAuthorizedFields.bind(this),
             ({ cacheKey }) => cacheKey
         );
+        this.visibilityConditionCachedRecords = new Cache(
+            this._getVisibilityConditionCachedRecords.bind(this),
+            JSON.stringify
+        );
     }
     destroy() {
         super.destroy();
         this.modelsCache.invalidate();
         this.fieldRecordsCache.invalidate();
         this.authorizedFieldsCache.invalidate();
+        this.visibilityConditionCachedRecords.invalidate();
     }
     getModelsCache(formEl) {
         // Through a method so that it can be overridden.
@@ -273,7 +278,7 @@ export class FormOptionPlugin extends Plugin {
         return field.records;
     }
     async prepareFormModel(el, activeForm) {
-        const formKey = activeForm.website_form_key;
+        const formKey = activeForm?.website_form_key;
         const formInfo = registry.category("website.form_editor_actions").get(formKey, null);
         if (formInfo) {
             const formatInfo = getDefaultFormat(el);
@@ -404,6 +409,12 @@ export class FormOptionPlugin extends Plugin {
             model,
             propertyOrigins,
         ]);
+    }
+    async _getVisibilityConditionCachedRecords(model, domain, fields, kwargs = {}) {
+        return this.services.orm.searchRead(model, domain, fields, {
+            ...kwargs,
+            limit: 1000, // Safeguard to not crash DBs
+        });
     }
     async whitelistForms(el) {
         for (const sigEl of el.querySelectorAll("input[name=website_form_signature]")) {
@@ -552,9 +563,7 @@ export class FormOptionPlugin extends Plugin {
         // Update available visibility dependencies
         const existingDependencyNames = [];
         const conditionInputs = [];
-        for (const el of formEl.querySelectorAll(
-            ".s_website_form_field:not(.s_website_form_dnone)"
-        )) {
+        for (const el of formEl.querySelectorAll(".s_website_form_field")) {
             const inputEl = el.querySelector(".s_website_form_input");
             if (
                 el.querySelector(".s_website_form_label_content") &&
@@ -576,9 +585,12 @@ export class FormOptionPlugin extends Plugin {
         const dependencyEl = getDependencyEl(fieldEl);
         const conditionValueList = [];
         if (dependencyEl) {
+            const containerEl = dependencyEl.closest(".s_website_form_field");
+            const fieldType = containerEl?.dataset.type;
             if (
                 ["radio", "checkbox"].includes(dependencyEl.type) ||
-                dependencyEl.nodeName === "SELECT"
+                dependencyEl.nodeName === "SELECT" ||
+                fieldType === "record"
             ) {
                 // Update available visibility options
                 const inputContainerEl = fieldEl;
@@ -592,6 +604,26 @@ export class FormOptionPlugin extends Plugin {
                     if (!inputContainerEl.dataset.visibilityCondition) {
                         inputContainerEl.dataset.visibilityCondition =
                             dependencyEl.querySelector("option").value;
+                    }
+                } else if (fieldType === "record") {
+                    const model = containerEl.dataset.model;
+                    const idField = containerEl.dataset.idField || "id";
+                    const displayNameField = containerEl.dataset.displayNameField || "display_name";
+                    const records = await this.visibilityConditionCachedRecords.read(
+                        model,
+                        [],
+                        [idField, displayNameField]
+                    );
+                    for (const record of records) {
+                        conditionValueList.push({
+                            value: String(record[idField]),
+                            textContent: record[displayNameField],
+                        });
+                    }
+                    if (!inputContainerEl.dataset.visibilityCondition) {
+                        inputContainerEl.dataset.visibilityCondition = String(
+                            records[0]?.[idField]
+                        );
                     }
                 } else {
                     // DependencyEl is a radio or a checkbox
@@ -665,7 +697,7 @@ export class FormOptionPlugin extends Plugin {
             }
             valueList = reactive({
                 title: _t("%s List", optionText),
-                addItemTitle: _t("Add new %s", optionText),
+                addItemTitle: _t("Add New %s", optionText),
                 checkType,
                 defaultItemName: _t("Item"),
                 hasDefault: ["one2many", "many2many"].includes(type) ? "multiple" : "unique",
@@ -687,7 +719,7 @@ export class FormOptionPlugin extends Plugin {
 
 // Form actions
 // Components that use this action MUST await fetchModels before they start.
-class SelectAction extends BuilderAction {
+export class SelectAction extends BuilderAction {
     static id = "selectAction";
     static dependencies = ["websiteFormOption"];
     async load({ editingElement: el, value: modelId }) {
@@ -725,7 +757,7 @@ class SelectAction extends BuilderAction {
 }
 // Select the value of a field (hidden) that will be used on the model as a preset.
 // ie: The Job you apply for if the form is on that job's page.
-class AddActionFieldAction extends BuilderAction {
+export class AddActionFieldAction extends BuilderAction {
     static id = "addActionField";
     static dependencies = ["websiteFormOption"];
     async load({ editingElement: el }) {
@@ -779,7 +811,7 @@ class AddActionFieldAction extends BuilderAction {
         return currentValue === value;
     }
 }
-class PromptSaveRedirectAction extends BuilderAction {
+export class PromptSaveRedirectAction extends BuilderAction {
     static id = "promptSaveRedirect";
     static dependencies = ["savePlugin"];
     apply({ params: { mainParam } }) {
@@ -802,7 +834,7 @@ class PromptSaveRedirectAction extends BuilderAction {
         });
     }
 }
-class UpdateLabelsMarkAction extends BuilderAction {
+export class UpdateLabelsMarkAction extends BuilderAction {
     static id = "updateLabelsMark";
     static dependencies = ["websiteFormOption"];
     apply({ editingElement: el }) {
@@ -813,7 +845,7 @@ class UpdateLabelsMarkAction extends BuilderAction {
     }
 }
 
-class SetMarkAction extends BuilderAction {
+export class SetMarkAction extends BuilderAction {
     static id = "setMark";
     static dependencies = ["websiteFormOption"];
     apply({ editingElement: el, value }) {
@@ -826,7 +858,7 @@ class SetMarkAction extends BuilderAction {
     }
 }
 
-class OnSuccessAction extends BuilderAction {
+export class OnSuccessAction extends BuilderAction {
     static id = "onSuccess";
     apply({ editingElement: el, value }) {
         el.dataset.successMode = value;
@@ -847,7 +879,7 @@ class OnSuccessAction extends BuilderAction {
         return currentValue === value;
     }
 }
-class ToggleEndMessageAction extends BuilderAction {
+export class ToggleEndMessageAction extends BuilderAction {
     static id = "toggleEndMessage";
     apply({ editingElement: el }) {
         const messageEl = el.parentElement.querySelector(".s_website_form_end_message");
@@ -865,7 +897,7 @@ class ToggleEndMessageAction extends BuilderAction {
         return el.classList.contains("o_builder_form_show_message");
     }
 }
-class FormToggleRecaptchaLegalAction extends BuilderAction {
+export class FormToggleRecaptchaLegalAction extends BuilderAction {
     static id = "formToggleRecaptchaLegal";
     apply({ editingElement: el }) {
         const labelWidth = el.querySelector(".s_website_form_label").style.width;
@@ -885,7 +917,7 @@ class FormToggleRecaptchaLegalAction extends BuilderAction {
     }
 }
 // Field actions
-class CustomFieldAction extends BuilderAction {
+export class CustomFieldAction extends BuilderAction {
     static id = "customField";
     static dependencies = ["websiteFormOption"];
     load(context) {
@@ -902,7 +934,7 @@ class CustomFieldAction extends BuilderAction {
         return currentValue === value;
     }
 }
-class ExistingFieldAction extends BuilderAction {
+export class ExistingFieldAction extends BuilderAction {
     static id = "existingField";
     static dependencies = ["websiteFormOption"];
     load(context) {
@@ -918,7 +950,7 @@ class ExistingFieldAction extends BuilderAction {
         return currentValue === value;
     }
 }
-class SelectTypeAction extends BuilderAction {
+export class SelectTypeAction extends BuilderAction {
     static id = "selectType";
     static dependencies = ["websiteFormOption"];
     load(context) {
@@ -934,7 +966,7 @@ class SelectTypeAction extends BuilderAction {
         return currentValue === value;
     }
 }
-class ExistingFieldSelectTypeAction extends BuilderAction {
+export class ExistingFieldSelectTypeAction extends BuilderAction {
     static id = "existingFieldSelectType";
     static dependencies = ["websiteFormOption"];
     load(context) {
@@ -950,7 +982,7 @@ class ExistingFieldSelectTypeAction extends BuilderAction {
         return currentValue === value;
     }
 }
-class MultiCheckboxDisplayAction extends BuilderAction {
+export class MultiCheckboxDisplayAction extends BuilderAction {
     static id = "multiCheckboxDisplay";
     apply({ editingElement: fieldEl, value }) {
         const targetEl = getMultipleInputs(fieldEl);
@@ -967,7 +999,7 @@ class MultiCheckboxDisplayAction extends BuilderAction {
         return currentValue === value;
     }
 }
-class SetLabelTextAction extends BuilderAction {
+export class SetLabelTextAction extends BuilderAction {
     static id = "setLabelText";
     apply({ editingElement: fieldEl, value }) {
         const labelEl = fieldEl.querySelector(".s_website_form_label_content");
@@ -1018,7 +1050,7 @@ class SetLabelTextAction extends BuilderAction {
         return labelEl.textContent;
     }
 }
-class SelectLabelPositionAction extends BuilderAction {
+export class SelectLabelPositionAction extends BuilderAction {
     static id = "selectLabelPosition";
     static dependencies = ["websiteFormOption"];
     load(context) {
@@ -1034,7 +1066,7 @@ class SelectLabelPositionAction extends BuilderAction {
         return currentValue === value;
     }
 }
-class ToggleDescriptionAction extends BuilderAction {
+export class ToggleDescriptionAction extends BuilderAction {
     static id = "toggleDescription";
     static dependencies = ["websiteFormOption"];
     load(context) {
@@ -1052,7 +1084,7 @@ class ToggleDescriptionAction extends BuilderAction {
         return !!description;
     }
 }
-class SelectTextareaValueAction extends BuilderAction {
+export class SelectTextareaValueAction extends BuilderAction {
     static id = "selectTextareaValue";
     apply({ editingElement: fieldEl, value }) {
         fieldEl.textContent = value;
@@ -1062,7 +1094,7 @@ class SelectTextareaValueAction extends BuilderAction {
         return fieldEl.textContent;
     }
 }
-class ToggleRequiredAction extends BuilderAction {
+export class ToggleRequiredAction extends BuilderAction {
     static id = "toggleRequired";
     static dependencies = ["websiteFormOption"];
     apply({ editingElement: fieldEl, params: { mainParam: activeValue } }) {
@@ -1083,7 +1115,7 @@ class ToggleRequiredAction extends BuilderAction {
         return fieldEl.classList.contains(activeValue);
     }
 }
-class SetVisibilityAction extends BuilderAction {
+export class SetVisibilityAction extends BuilderAction {
     static id = "setVisibility";
     static dependencies = ["websiteFormOption"];
     load(context) {
@@ -1108,7 +1140,7 @@ class SetVisibilityAction extends BuilderAction {
         return true;
     }
 }
-class SetVisibilityDependencyAction extends BuilderAction {
+export class SetVisibilityDependencyAction extends BuilderAction {
     static id = "setVisibilityDependency";
     apply({ editingElement: fieldEl, value }) {
         return setVisibilityDependency(fieldEl, value);
@@ -1118,7 +1150,7 @@ class SetVisibilityDependencyAction extends BuilderAction {
         return currentValue === value;
     }
 }
-class SetFormCustomFieldValueListAction extends BuilderAction {
+export class SetFormCustomFieldValueListAction extends BuilderAction {
     static id = "setFormCustomFieldValueList";
     static dependencies = ["websiteFormOption"];
     apply({ editingElement: fieldEl, value }) {

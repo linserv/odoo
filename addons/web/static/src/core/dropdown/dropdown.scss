@@ -103,6 +103,10 @@
             cursor: pointer;
         }
     }
+
+    .dropdown-item.o-dropdopwn-item-indent {
+        --#{$prefix}dropdown-item-padding-x: #{$dropdown-item-padding-x * 1.5};
+    }
 }
 
 // Unstyle buttons so they behave like regular dropdown-item
@@ -114,4 +118,12 @@
             width: 100%;
         }
     }
+}
+
+.o_bottom_sheet .o_bottom_sheet_body.dropdown-menu {
+    --dropdown-border-width: 0;
+    --dropdown-box-shadow: none;
+
+    position: static;
+    max-height: unset;
 }

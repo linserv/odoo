@@ -1,6 +1,5 @@
 from bisect import bisect_left
 from collections import defaultdict
-from collections.abc import Iterable
 import contextlib
 import itertools
 import re
@@ -8,7 +7,6 @@ import json
 
 from odoo import api, fields, models, _, Command
 from odoo.fields import Domain
-from odoo.osv import expression
 from odoo.exceptions import UserError, ValidationError, RedirectWarning
 from odoo.tools import SQL, Query
 
@@ -188,6 +186,11 @@ class AccountAccount(models.Model):
                 account_first_company_root_id=SQL.identifier('account_first_company', 'root_company_id'),
                 to_flush=self._fields['code_store'],
             )
+        if field_expr == 'root_id':
+            return SQL(
+                "SUBSTRING(%(placeholder_code)s, 1, 2)",
+                placeholder_code=self._field_to_sql(alias, 'placeholder_code', query, flush),
+            )
 
         return super()._field_to_sql(alias, field_expr, query, flush)
 
@@ -217,7 +220,7 @@ class AccountAccount(models.Model):
         self.env['account.payment.method'].flush_model(['payment_type'])
         self.env['account.payment.method.line'].flush_model(['payment_method_id', 'payment_account_id'])
 
-        self._cr.execute('''
+        self.env.cr.execute('''
             SELECT
                 account.id,
                 journal.id
@@ -263,7 +266,7 @@ class AccountAccount(models.Model):
         ''', {
             'accounts': tuple(self.ids)
         })
-        res = self._cr.fetchone()
+        res = self.env.cr.fetchone()
         if res:
             account = self.env['account.account'].browse(res[0])
             journal = self.env['account.journal'].browse(res[1])
@@ -299,7 +302,7 @@ class AccountAccount(models.Model):
 
         self.env['account.account'].flush_model(['account_type'])
         self.env['account.journal'].flush_model(['type', 'default_account_id'])
-        self._cr.execute('''
+        self.env.cr.execute('''
             SELECT account.id
             FROM account_account account
             JOIN account_journal journal ON journal.default_account_id = account.id
@@ -309,7 +312,7 @@ class AccountAccount(models.Model):
             LIMIT 1;
         ''', [tuple(self.ids)])
 
-        if self._cr.fetchone():
+        if self.env.cr.fetchone():
             raise ValidationError(_("The account is already in use in a 'sale' or 'purchase' journal. This means that the account's type couldn't be 'receivable' or 'payable'."))
 
     @api.constrains('reconcile')
@@ -321,7 +324,7 @@ class AccountAccount(models.Model):
         self.env['account.journal'].flush_model(['company_id', 'default_account_id'])
         self.env['account.payment.method.line'].flush_model(['journal_id', 'payment_account_id'])
 
-        self._cr.execute('''
+        self.env.cr.execute('''
             SELECT journal.id
             FROM account_journal journal
             JOIN res_company company on journal.company_id = company.id
@@ -334,7 +337,7 @@ class AccountAccount(models.Model):
             'accounts': tuple(accounts.ids),
         })
 
-        rows = self._cr.fetchall()
+        rows = self.env.cr.fetchall()
         if rows:
             journals = self.env['account.journal'].browse([r[0] for r in rows])
             raise ValidationError(_(
@@ -355,7 +358,7 @@ class AccountAccount(models.Model):
     def _check_account_is_bank_journal_bank_account(self):
         self.env['account.account'].flush_model(['account_type'])
         self.env['account.journal'].flush_model(['type', 'default_account_id'])
-        self._cr.execute('''
+        self.env.cr.execute('''
             SELECT journal.id
               FROM account_journal journal
               JOIN account_account account ON journal.default_account_id = account.id
@@ -364,7 +367,7 @@ class AccountAccount(models.Model):
              LIMIT 1;
         ''', [tuple(self.ids)])
 
-        if self._cr.fetchone():
+        if self.env.cr.fetchone():
             raise ValidationError(_("You cannot change the type of an account set as Bank Account on a journal to Receivable or Payable."))
 
     @api.depends_context('company')
@@ -687,10 +690,10 @@ class AccountAccount(models.Model):
     def _search_internal_group(self, operator, value):
         if operator != 'in':
             return NotImplemented
-        return expression.OR([
-            [('account_type', '=like', self._get_internal_group(v) + '%')]
+        return Domain.OR(
+            Domain('account_type', '=like', self._get_internal_group(v) + '%')
             for v in value
-        ])
+        )
 
     @api.depends('account_type')
     def _compute_reconcile(self):
@@ -725,11 +728,11 @@ class AccountAccount(models.Model):
         got assigned.
         """
         self.ensure_one()
-        if 'import_account_opening_balance' not in self._cr.precommit.data:
-            data = self._cr.precommit.data['import_account_opening_balance'] = {}
-            self._cr.precommit.add(self._load_precommit_update_opening_move)
+        if 'import_account_opening_balance' not in self.env.cr.precommit.data:
+            data = self.env.cr.precommit.data['import_account_opening_balance'] = {}
+            self.env.cr.precommit.add(self._load_precommit_update_opening_move)
         else:
-            data = self._cr.precommit.data['import_account_opening_balance']
+            data = self.env.cr.precommit.data['import_account_opening_balance']
         data.setdefault(self.env.company.id, {}).setdefault(self.id, [None, None])
         index = 0 if field == 'debit' else 1
         data[self.env.company.id][self.id][index] = amount
@@ -780,7 +783,7 @@ class AccountAccount(models.Model):
         elif move_type in self.env['account.move'].get_outbound_types(include_receipts=True):
             domain.append(('account_id.internal_group', '=', 'expense'))
 
-        query = self.env['account.move.line']._where_calc(domain)
+        query = self.env['account.move.line']._search(domain, bypass_access=True)
         if not filter_never_user_accounts:
             _kind, rhs_table, condition = query._joins['account_move_line__account_id']
             query._joins['account_move_line__account_id'] = (SQL("RIGHT JOIN"), rhs_table, condition)
@@ -836,7 +839,7 @@ class AccountAccount(models.Model):
     @api.model
     @api.readonly
     def name_search(self, name='', domain=None, operator='ilike', limit=100):
-        move_type = self._context.get('move_type')
+        move_type = self.env.context.get('move_type')
         if not move_type:
             return super().name_search(name, domain, operator, limit)
 
@@ -865,7 +868,7 @@ class AccountAccount(models.Model):
 
     @api.model
     def _search_display_name(self, operator, value):
-        if operator in expression.NEGATIVE_TERM_OPERATORS:
+        if Domain.is_negative_operator(operator):
             return NotImplemented
         if operator == 'in':
             names = value
@@ -960,7 +963,7 @@ class AccountAccount(models.Model):
         Instead, the opening balances are collected and this method is called once at the end
         to update the opening move accordingly.
         """
-        data = self._cr.precommit.data.pop('import_account_opening_balance', {})
+        data = self.env.cr.precommit.data.pop('import_account_opening_balance', {})
 
         for company_id, account_values in data.items():
             self.env['res.company'].browse(company_id)._update_opening_move({
@@ -1082,7 +1085,7 @@ class AccountAccount(models.Model):
         if vals.get('deprecated') and self.env["account.tax.repartition.line"].search_count([('account_id', 'in', self.ids)], limit=1):
             raise UserError(_("You cannot deprecate an account that is used in a tax distribution."))
 
-        res = super(AccountAccount, self.with_context(defer_account_code_checks=True)).write(vals)
+        res = super(AccountAccount, self.with_context(defer_account_code_checks=True, prefetch_fields=any(field in vals for field in ['code', 'account_type']))).write(vals)
 
         if not self.env.context.get('defer_account_code_checks') and {'company_ids', 'code', 'code_mapping_ids'} & vals.keys():
             self._ensure_code_is_unique()
@@ -1547,7 +1550,7 @@ class AccountGroup(models.Model):
 
     @api.model
     def _search_display_name(self, operator, value):
-        if operator in expression.NEGATIVE_TERM_OPERATORS:
+        if Domain.is_negative_operator(operator):
             return NotImplemented
         if operator == 'in':
             return [

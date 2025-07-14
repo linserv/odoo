@@ -24,11 +24,11 @@ import {
 import { OdooCoreViewPlugin } from "@spreadsheet/plugins";
 import { getItemId } from "../../helpers/model";
 import { serializeDate } from "@web/core/l10n/dates";
+import { getFilterCellValue, getFilterValueDomain } from "../helpers";
 
 const { DateTime } = luxon;
 
-const { UuidGenerator, createEmptyExcelSheet, createEmptySheet, toXC, toNumber, toBoolean } =
-    helpers;
+const { UuidGenerator, createEmptyExcelSheet, createEmptySheet, toXC, toNumber } = helpers;
 const uuidGenerator = new UuidGenerator();
 
 export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
@@ -44,14 +44,6 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
     ]);
     constructor(config) {
         super(config);
-        this.nameService = config.custom.env?.services.name;
-        this.odooDataProvider = config.custom.odooDataProvider;
-        /**
-         * Cache record display names for relation filters.
-         * For each filter, contains a promise resolving to
-         * the list of display names.
-         */
-        this.recordsDisplayName = {};
         this.values = {};
     }
 
@@ -83,17 +75,7 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
      */
     handle(cmd) {
         switch (cmd.type) {
-            case "ADD_GLOBAL_FILTER":
-                this.recordsDisplayName[cmd.filter.id] = cmd.filter.defaultValueDisplayNames;
-                break;
-            case "EDIT_GLOBAL_FILTER": {
-                const filter = cmd.filter;
-                const id = filter.id;
-                this.recordsDisplayName[id] = filter.defaultValueDisplayNames;
-                break;
-            }
             case "SET_GLOBAL_FILTER_VALUE":
-                this.recordsDisplayName[cmd.id] = cmd.displayNames;
                 if (cmd.value === undefined) {
                     this._clearGlobalFilterValue(cmd.id);
                 } else {
@@ -101,7 +83,6 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
                 }
                 break;
             case "REMOVE_GLOBAL_FILTER":
-                delete this.recordsDisplayName[cmd.id];
                 delete this.values[cmd.id];
                 break;
         }
@@ -123,15 +104,14 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
         if (!filter) {
             return new Domain();
         }
-        switch (filter.type) {
-            case "text":
-                return this._getTextDomain(filter, fieldMatching);
-            case "date":
-                return this._getDateDomain(filter, fieldMatching);
-            case "relation":
-                return this._getRelationDomain(filter, fieldMatching);
-            case "boolean":
-                return this._getBooleanDomain(filter, fieldMatching);
+        const value = this.getGlobalFilterValue(filter.id);
+        const field = fieldMatching.chain;
+        if (!field || !value) {
+            return new Domain();
+        } else if (filter.type === "date") {
+            return this._getDateDomain(filter, fieldMatching);
+        } else {
+            return getFilterValueDomain(filter, value, field);
         }
     }
 
@@ -154,15 +134,14 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
             return undefined;
         }
         switch (filter.type) {
-            case "text":
-            case "boolean":
-                return filter.defaultValue;
             case "date":
                 return this._getDateValueFromDefaultValue(filter.defaultValue);
             case "relation":
-                if (filter.defaultValue === "current_user") {
-                    return [user.userId];
+                if (filter.defaultValue.ids === "current_user") {
+                    return { ...filter.defaultValue, ids: [user.userId] };
                 }
+                return filter.defaultValue;
+            default:
                 return filter.defaultValue;
         }
     }
@@ -194,15 +173,16 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
                 _t(`Filter "%(filter_name)s" not found`, { filter_name: filterName })
             );
         }
-        const value = this.getGlobalFilterValue(filter.id);
         switch (filter.type) {
-            case "text":
-            case "boolean":
-                return [[{ value: value?.length ? value.join(", ") : "" }]];
             case "date":
                 return this._getDateFilterDisplayValue(filter);
-            case "relation":
-                return this._getRelationFilterDisplayValue(filter, value);
+            default: {
+                const value = this.getGlobalFilterValue(filter.id);
+                if (!value) {
+                    return [[{ value: "" }]];
+                }
+                return getFilterCellValue(this.getters, filter, value);
+            }
         }
     }
 
@@ -220,8 +200,8 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
         const additionOptions = [
             // add the current value because it might not be in the range
             // if the range cells changed in the meantime
-            ...(this.getGlobalFilterValue(filterId) ?? []),
-            ...(filter.defaultValue ?? []),
+            ...(this.getGlobalFilterValue(filterId)?.strings ?? []),
+            ...(filter.defaultValue?.strings ?? []),
         ];
         const options = this.getTextFilterOptionsFromRanges(
             filter.rangesOfAllowedValues,
@@ -353,22 +333,6 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
         return undefined;
     }
 
-    _getRelationFilterDisplayValue(filter, value) {
-        if (!value?.length || !this.nameService) {
-            return [[{ value: "" }]];
-        }
-        if (!this.recordsDisplayName[filter.id]) {
-            const promise = this.nameService
-                .loadDisplayNames(filter.modelName, value)
-                .then((result) => {
-                    this.recordsDisplayName[filter.id] = Object.values(result);
-                });
-            this.odooDataProvider.notifyWhenPromiseResolves(promise);
-            return [[{ value: "" }]];
-        }
-        return [[{ value: this.recordsDisplayName[filter.id].join(", ") }]];
-    }
-
     /**
      * Get the domain relative to a date field
      *
@@ -388,57 +352,6 @@ export class GlobalFiltersCoreViewPlugin extends OdooCoreViewPlugin {
         const offset = fieldMatching.offset || 0;
         const { from, to } = getDateRange(this.getGlobalFilterValue(filter.id), offset);
         return getDateDomain(from, to, field, type);
-    }
-
-    /**
-     * Get the domain relative to a text field
-     *
-     * @private
-     *
-     * @param {GlobalFilter} filter
-     * @param {FieldMatching} fieldMatching
-     *
-     * @returns {Domain}
-     */
-    _getTextDomain(filter, fieldMatching) {
-        const value = this.getGlobalFilterValue(filter.id);
-        if (!value || !value.length || !fieldMatching.chain) {
-            return new Domain();
-        }
-        const field = fieldMatching.chain;
-        return Domain.or(value.map((text) => [[field, "ilike", text]]));
-    }
-
-    /**
-     * Get the domain relative to a relation field
-     *
-     * @private
-     *
-     * @param {RelationalGlobalFilter} filter
-     * @param {FieldMatching} fieldMatching
-     *
-     * @returns {Domain}
-     */
-    _getRelationDomain(filter, fieldMatching) {
-        const values = this.getGlobalFilterValue(filter.id);
-        if (!values || values.length === 0 || !fieldMatching.chain) {
-            return new Domain();
-        }
-        const field = fieldMatching.chain;
-        const operator = filter.includeChildren ? "child_of" : "in";
-        return new Domain([[field, operator, values]]);
-    }
-
-    _getBooleanDomain(filter, fieldMatching) {
-        const value = this.getGlobalFilterValue(filter.id);
-        if (!value || !value.length || !fieldMatching.chain) {
-            return new Domain();
-        }
-        const field = fieldMatching.chain;
-        if (value.length === 1) {
-            return new Domain([[field, "=", toBoolean(value[0])]]);
-        }
-        return new Domain([[field, "in", [toBoolean(value[0]), toBoolean(value[1])]]]);
     }
 
     /**

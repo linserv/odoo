@@ -24,6 +24,8 @@ crypt_context = CryptContext(schemes=['pbkdf2_sha512', 'plaintext'],
 
 _dangerous_logger = logging.getLogger(__name__)  # use config._log() instead
 
+optparse._ = str  # disable gettext
+
 DEFAULT_SERVER_WIDE_MODULES = ['base', 'rpc', 'web']
 REQUIRED_SERVER_WIDE_MODULES = ['base', 'web']
 
@@ -225,6 +227,8 @@ class configmanager:
                          help="install one or more modules (comma-separated list, use \"all\" for all modules), requires -d")
         group.add_option("-u", "--update", dest="update", type='comma',  metavar="MODULE,...", my_default=[], file_loadable=False,
                          help="update one or more modules (comma-separated list, use \"all\" for all modules). Requires -d.")
+        group.add_option("--reinit", dest="reinit", type='comma', metavar="MODULE,...", my_default=[], file_loadable=False,
+                         help="reinitialize one or more modules (comma-separated list), requires -d")
         group.add_option("--with-demo", dest="with_demo", action='store_true', my_default=False,
                          help="install demo data in new databases")
         group.add_option("--without-demo", dest="with_demo", type='without_demo', metavar='BOOL', nargs='?', const=True,

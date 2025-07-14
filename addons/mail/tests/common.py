@@ -2,6 +2,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import base64
+import contextlib
 import email
 import email.policy
 import json
@@ -18,7 +19,7 @@ from random import randint
 from unittest.mock import patch
 from urllib.parse import urlparse, urlencode, parse_qsl
 
-from odoo import tools
+from odoo import tools, fields
 from odoo.addons.base.models.ir_mail_server import IrMail_Server
 from odoo.addons.base.tests.common import MockSmtplibCase
 from odoo.addons.bus.models.bus import BusBus, json_dump
@@ -276,7 +277,7 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
         )
 
     def gateway_mail_reply_from_smtp_email(self, template, source_smtp_to_list,
-                                           reply_all=False, cc=False,
+                                           reply_all=False, add_to_lst=False, cc=False,
                                            force_email_from=False, force_return_path=False,
                                            extra=False, use_references=True, extra_references=False, use_in_reply_to=False,
                                            debug_log=False,
@@ -309,6 +310,8 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
                 email for email in email_split_and_format_normalize(smtp_email['msg_to'])
                 if email_normalize(email) not in source_smtp_to_list]
             )
+        if add_to_lst:
+            replying_to = f'{replying_to},{",".join(add_to_lst)}'
         with RecordCapturer(self.env['mail.message'], []) as capture_messages, \
              self.mock_mail_gateway():
             self._gateway_mail_reply(
@@ -319,7 +322,7 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
                 debug_log=debug_log,
                 target_model=target_model,
             )
-        return capture_messages
+        return capture_messages.records
 
     def gateway_mail_reply_last_email(self, template, force_email_to=False, debug_log=False):
         """ Tool to automatically reply to last outgoing mail. """
@@ -2019,3 +2022,18 @@ class MailCommon(MailCase):
                 'partner_id': partner.id,
             } for partner in partners
         ])
+
+
+@contextlib.contextmanager
+def freeze_all_time(dt=None):
+    """Freeze both `cr.now` and `Datetime.now`. ORM `create_date` and `write_date`
+    are based on `cursor.now()`. Domains often use `Datetime.now()` which can
+    lead to inconsistencies when using `freeze_time`.
+
+    :param dt: Datetime to freeze the time to. Defaults to `Datetime.now()`.
+    :type dt: datetime.datetime
+    """
+    if not dt:
+        dt = fields.Datetime.now()
+    with patch('odoo.sql_db.BaseCursor.now', return_value=dt), freeze_time(dt):
+        yield

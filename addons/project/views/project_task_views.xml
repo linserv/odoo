@@ -28,7 +28,7 @@
                         <filter name="create_date_last_30_days" string="Last 30 Days" domain="[('date_last_stage_update', '&gt;', datetime.datetime.combine(context_today() - relativedelta(days=30), datetime.time(23, 59, 59)).to_utc())]"/>
                         <filter name="create_date_last_365_days" string="Last 365 Days" domain="[('date_last_stage_update', '&gt;', datetime.datetime.combine(context_today() - relativedelta(days=365), datetime.time(23, 59, 59)).to_utc())]"/>
                     </filter>
-                    <group expand="0" string="Group By">
+                    <group string="Group By">
                         <filter string="Stage" name="stage" context="{'group_by': 'stage_id'}"/>
                         <filter string="Milestone" name="milestone" context="{'group_by': 'milestone_id'}" groups="project.group_project_milestone"/>
                         <filter string="Priority" name="groupby_priority" context="{'group_by': 'priority'}"/>
@@ -465,6 +465,7 @@
                                         'kanban_view_ref': 'project.project_sub_task_view_kanban_mobile',
                                         'closed_X2M_count': closed_subtask_count,
                                         'default_is_template': is_template,
+                                        'default_tag_ids': tag_ids,
                                    }"
                                    widget="subtasks_one2many">
                                 <list editable="bottom" decoration-muted="state in ['1_done','1_canceled']" open_form_view="True">
@@ -554,7 +555,6 @@
                                     <field name="company_id" groups="base.group_multi_company" options="{'no_create': True}" placeholder="Visible to all"/>
                                     <field name="sequence" groups="base.group_no_one"/>
                                     <field name="email_cc" groups="base.group_no_one" invisible="is_template"/>
-                                    <field name="displayed_image_id" groups="base.group_no_one" options="{'no_create': True}"/>
                                 </group>
                                 <group invisible="is_template">
                                     <field name="date_assign" groups="base.group_no_one"/>
@@ -745,7 +745,8 @@
                     <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" optional="show" context="{'project_id': project_id}"/>
                     <field name="date_last_stage_update" optional="hide" column_invisible="context.get('default_is_template', False)"/>
                     <field name="state" widget="project_task_state_selection" nolabel="1" width="20px" options="{'is_toggle_mode': false}"/>
-                    <field name="stage_id" column_invisible="context.get('set_visible', False)" optional="show"/>
+                    <field name="stage_id_color" column_invisible="1"/>
+                    <field name="stage_id" column_invisible="context.get('set_visible', False)" optional="show" widget="selection_badge" options="{'color_field': 'stage_id_color'}"/>
                 </list>
             </field>
         </record>
@@ -805,7 +806,7 @@
             <field eval="2" name="priority"/>
             <field name="arch" type="xml">
                 <calendar date_start="date_deadline" string="Tasks" mode="month"
-                          color="stage_id" event_limit="5" hide_time="true"
+                          color="stage_id_color" event_limit="5" hide_time="true"
                           event_open_popup="true" quick_create="0" show_unusual_days="True"
                           js_class="project_task_calendar"
                           scales="day,week,month,year">
@@ -818,7 +819,8 @@
                     <field name="partner_id" invisible="not partner_id"/>
                     <field name="priority" widget="priority" readonly="1"/>
                     <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}" invisible="not tag_ids"/>
-                    <field name="stage_id" invisible="not project_id or not stage_id" widget="task_stage_with_state_selection"/>
+                    <field name="stage_id_color" invisible="1"/>
+                    <field name="stage_id" invisible="not project_id or not stage_id" widget="task_stage_with_state_selection" filters="1"/>
                     <field name="personal_stage_id" string="Personal Stage" options="{'no_open': True}" invisible="project_id or not personal_stage_id"/>
                     <field name="task_properties" invisible="not task_properties"/>
                 </calendar>
@@ -836,6 +838,9 @@
                 </xpath>
                 <xpath expr="//field[@name='project_id']" position="attributes">
                     <attribute name="filters">1</attribute>
+                </xpath>
+                <xpath expr="//field[@name='stage_id']" position="replace">
+                    <field name="stage_id" invisible="not project_id or not stage_id" widget="task_stage_with_state_selection"/>
                 </xpath>
             </field>
         </record>

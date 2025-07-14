@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import itertools
 from ast import literal_eval
@@ -9,7 +8,7 @@ from re import findall as regex_findall
 
 from odoo import _, api, Command, fields, models, SUPERUSER_ID
 from odoo.exceptions import UserError, ValidationError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools.float_utils import float_compare, float_is_zero, float_round
 from odoo.tools.misc import clean_context, OrderedSet, groupby
 
@@ -225,16 +224,18 @@ class StockMove(models.Model):
 
     @api.depends('picking_id.location_dest_id')
     def _compute_location_dest_id(self):
+        customer_loc, __ = self.env['stock.warehouse']._get_partner_locations()
+        inter_comp_location = self.env.ref('stock.stock_location_inter_company', raise_if_not_found=False)
         for move in self:
             location_dest = False
             if move.picking_id:
                 location_dest = move.picking_id.location_dest_id
+            elif move.rule_id.location_dest_from_rule:
+                location_dest = move.rule_id.location_dest_id
             elif move.picking_type_id:
                 location_dest = move.picking_type_id.default_location_dest_id
             is_move_to_interco_transit = False
-            if self.env.user.has_group('base.group_multi_company') and location_dest:
-                customer_loc, __ = self.env['stock.warehouse']._get_partner_locations()
-                inter_comp_location = self.env.ref('stock.stock_location_inter_company', raise_if_not_found=False)
+            if location_dest:
                 is_move_to_interco_transit = location_dest._child_of(customer_loc) and move.location_final_id == inter_comp_location
             if location_dest and move.location_final_id and (move.location_final_id._child_of(location_dest) or is_move_to_interco_transit):
                 # Force the location_final as dest in the following cases:
@@ -806,20 +807,18 @@ Please change the quantity done or the rounding precision in your settings.""",
         """ Manually mark the relevant orderpoints for re-computation.
         This allows us to only recompute the qty_to_order for the orderpoints in the relevant warehouse(s),
         instead of all the orderpoints linked to the product."""
-        orderpoint_domain = []
+        if not self:
+            return
+        domains = []
         for move in self:
-            domain_for_move = [('product_id', '=', move.product_id.id)]
+            domain_for_move = Domain('product_id', '=', move.product_id.id)
             wh_ids = move.location_id.warehouse_id.ids + move.location_dest_id.warehouse_id.ids
             if wh_ids:
-                domain_for_move = expression.AND([domain_for_move, [('warehouse_id', 'in', wh_ids)]])
-            if not orderpoint_domain:
-                orderpoint_domain = domain_for_move
-                continue
-            orderpoint_domain = expression.OR([orderpoint_domain, domain_for_move])
-        if orderpoint_domain:
-            orderpoints = self.env['stock.warehouse.orderpoint'].sudo().search(orderpoint_domain, order='id')
-            orderpoints.invalidate_recordset(['qty_to_order', 'qty_forecast'])
-            self.env.add_to_compute(self.env['stock.warehouse.orderpoint']._fields['qty_to_order_computed'], orderpoints)
+                domain_for_move &= Domain('warehouse_id', 'in', wh_ids)
+            domains.append(domain_for_move)
+        orderpoints = self.env['stock.warehouse.orderpoint'].sudo().search(Domain.OR(domains), order='id')
+        orderpoints.invalidate_recordset(['qty_to_order', 'qty_forecast'])
+        self.env.add_to_compute(self.env['stock.warehouse.orderpoint']._fields['qty_to_order_computed'], orderpoints)
 
     def _delay_alert_get_documents(self):
         """Returns a list of recordset of the documents linked to the stock.move in `self` in order
@@ -1012,8 +1011,8 @@ Please change the quantity done or the rounding precision in your settings.""",
         return move_lines_vals
 
     @api.model
-    def action_generate_lot_line_vals(self, context, mode, first_lot, count, lot_text):
-        if not context.get('default_product_id'):
+    def action_generate_lot_line_vals(self, context_data, mode, first_lot, count, lot_text):
+        if not context_data.get('default_product_id'):
             raise UserError(_("No product found to generate Serials/Lots for."))
         assert mode in ('generate', 'import')
         default_vals = {}
@@ -1033,9 +1032,9 @@ Please change the quantity done or the rounding precision in your settings.""",
             if text.startswith(prefix):
                 return text[len(prefix):]
             return text
-        for key in context:
+        for key in context_data:
             if key.startswith('default_'):
-                default_vals[remove_prefix(key, 'default_')] = context[key]
+                default_vals[remove_prefix(key, 'default_')] = context_data[key]
 
         if default_vals['tracking'] == 'lot' and mode == 'generate':
             lot_qties = generate_lot_qty(default_vals['quantity'], count)
@@ -1169,25 +1168,25 @@ Please change the quantity done or the rounding precision in your settings.""",
             candidate_moves_set.add(picking.move_ids)
 
     def _merge_move_itemgetter(self, distinct_fields, excluded_fields=None):
-        field_names = [
-            f_name for f_name in distinct_fields
-            if f_name != 'price_unit' and (excluded_fields is None or f_name not in excluded_fields)
-        ]
-        base_getter = itemgetter(*field_names)
+        fields = set(distinct_fields or []) - set(excluded_fields or [])
+        float_fields = {f_name for f_name in fields if self.env['stock.move']._fields[f_name].type == 'float'}
+        base_getter = itemgetter(*fields - float_fields)
 
-        if 'price_unit' not in distinct_fields:
+        if not float_fields:
             return base_getter
 
-        price_unit_prec = self.env['decimal.precision'].precision_get('Product Price')
-        currency_prec = self.company_id.currency_id.decimal_places
-        price_precision = min(currency_prec, price_unit_prec)
+        float_precision = {f_name: (self.env['stock.move']._fields[f_name].get_digits(self.env) or (False, 2))[1] for f_name in float_fields}
+        if 'price_unit' in float_fields:
+            price_unit_prec = self.env['decimal.precision'].precision_get('Product Price')
+            currency_precision = self.company_id.currency_id.decimal_places
+            float_precision['price_unit'] = min(currency_precision, price_unit_prec) if currency_precision else price_unit_prec
 
-        def _get_formatted_price_unit(move):
-            # Round and Cast the price_unit into a string so that rounding errors do not prevent the merge
-            rounded_price_unit = float_round(move.price_unit, precision_digits=price_precision)
-            return "{:.{p}f}".format(rounded_price_unit, p=price_precision)
+        def _get_formatted_float_fields(move, f_name, precision):
+            # Round and cast the value of move.f_name into a string so that rounding errors do not prevent the merge
+            rounded_value = float_round(move[f_name], precision_digits=precision[f_name])
+            return "{:.{precision}f}".format(rounded_value, precision=precision[f_name])
 
-        return lambda move: base_getter(move) + (_get_formatted_price_unit(move),)
+        return lambda move: base_getter(move) + tuple(_get_formatted_float_fields(move, f_name, float_precision) for f_name in float_fields)
 
     def _merge_moves(self, merge_into=False):
         """ This method will, for each move in `self`, go up in their linked picking and try to
@@ -1400,7 +1399,14 @@ Please change the quantity done or the rounding precision in your settings.""",
         if any(picking.partner_id != m.partner_id for m in self):
             vals['partner_id'] = False
         if any(picking.origin != m.origin for m in self):
-            vals['origin'] = False
+            current_origins = set(picking.origin.split(',') + [False]) if picking.origin else {False}
+            vals['origin'] = picking.origin
+            for move in self:
+                if move.origin not in current_origins:
+                    if not vals['origin']:
+                        vals['origin'] = move.origin
+                    else:
+                        vals['origin'] += f',{move.origin}'
         return vals
 
     def _assign_picking_post_process(self, new=False):
@@ -2175,7 +2181,7 @@ Please change the quantity done or the rounding precision in your settings.""",
         pass
 
     def _recompute_state(self):
-        if self._context.get('preserve_state'):
+        if self.env.context.get('preserve_state'):
             return
         moves_state_to_write = defaultdict(set)
         for move in self:
@@ -2345,18 +2351,19 @@ Please change the quantity done or the rounding precision in your settings.""",
         if not self or self.env['ir.config_parameter'].sudo().get_param('stock.picking_no_auto_reserve'):
             return
 
-        domains = [
+        product_domains = Domain.OR(
             [('product_id', '=', move.product_id.id), ('location_id', '=', move.location_dest_id.id)]
             for move in self
-        ]
+        )
         static_domain = [('state', 'in', ['confirmed', 'partially_available']),
                          ('procure_method', '=', 'make_to_stock'),
                          '|',
                             ('reservation_date', '<=', fields.Date.today()),
                             ('picking_type_id.reservation_method', '=', 'at_confirm')
                         ]
-        moves_to_reserve = self.env['stock.move'].search(expression.AND([static_domain, expression.OR(domains)]),
-                                                         order='priority desc, date asc, id asc')
+        moves_to_reserve = self.env['stock.move'].search(
+            Domain(static_domain) & product_domains,
+            order='priority desc, date asc, id asc')
         moves_to_reserve = moves_to_reserve.sorted(key=lambda m: m.group_id.id in self.group_id.ids, reverse=True)
         moves_to_reserve._action_assign()
 

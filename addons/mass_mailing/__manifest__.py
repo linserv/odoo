@@ -21,6 +21,7 @@
     'data': [
         'data/res_groups_privilege_data.xml',
         'security/res_groups_data.xml',
+        'security/security.xml',
         'security/ir.model.access.csv',
         'data/digest_data.xml',
         'data/ir_attachment_data.xml',
@@ -164,12 +165,14 @@
             'mass_mailing/static/tests/tours/**/*',
         ],
         'web.qunit_suite_tests': [
-            'mass_mailing/static/tests/mass_mailing_favourite_filter_tests.js',
             'mass_mailing/static/src/js/mass_mailing_snippets.js',
             'mass_mailing/static/src/snippets/s_media_list/options.js',
             'mass_mailing/static/src/snippets/s_showcase/options.js',
             'mass_mailing/static/src/snippets/s_rating/options.js',
             'mass_mailing/static/tests/mass_mailing_html_tests.js',
+        ],
+        'web.assets_unit_tests': [
+            'mass_mailing/static/tests/mass_mailing_favourite_filter.test.js',
         ],
     },
     'author': 'Odoo S.A.',

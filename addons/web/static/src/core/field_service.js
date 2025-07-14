@@ -1,64 +1,11 @@
 import { Domain } from "@web/core/domain";
-import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
-import { deepCopy } from "@web/core/utils/objects";
 
 /**
  * @typedef {Object} LoadFieldsOptions
  * @property {string[]|false} [fieldNames]
  * @property {string[]} [attributes]
  */
-
-const MODEL_DATE_PROPERTIES = "__model__date_properties__";
-const DATE_PROPERTIES = Object.fromEntries(
-    Object.entries({
-        day_of_week: { string: _t("Weekday") },
-        day_of_month: { string: _t("Day of month") },
-        day_of_year: { string: _t("Day of year") },
-        iso_week_number: { string: _t("Week number") },
-        month_number: { string: _t("Month") },
-        quarter_number: { string: _t("Quarter") },
-        year_number: { string: _t("Year") },
-    }).map(([name, o]) => [name, { ...o, searchable: true, name, type: "date_option" }])
-);
-
-const MODEL_TIME_PROPERTIES = "__model__time_properties__";
-const TIME_PROPERTIES = Object.fromEntries(
-    Object.entries({
-        hour_number: { string: _t("Hour") },
-        minute_number: { string: _t("Minute") },
-        second_number: { string: _t("Second") },
-    }).map(([name, o]) => [name, { ...o, searchable: true, name, type: "time_option" }])
-);
-
-const MODEL_DATETIME_PROPERTIES = "__model__datetime_properties__";
-const DATETIME_PROPERTIES = Object.fromEntries(
-    Object.entries({
-        __date: { string: _t("Date"), relation: MODEL_DATE_PROPERTIES }, // virtual: defined via year_number, month_number, and day_of_month
-        __time: { string: _t("Time"), relation: MODEL_TIME_PROPERTIES }, // virtual: defined via hour_number, minute_number, and second_number
-    }).map(([name, o]) => [name, { ...o, searchable: true, name, type: "datetime_option" }])
-);
-
-export const SPECIAL_MODEL_NAMES = new Set([
-    MODEL_DATETIME_PROPERTIES,
-    MODEL_DATE_PROPERTIES,
-    MODEL_TIME_PROPERTIES,
-]);
-function getSpecialModelFields(resModel) {
-    switch (resModel) {
-        case MODEL_DATETIME_PROPERTIES:
-            return Object.assign(
-                {},
-                deepCopy(DATETIME_PROPERTIES),
-                deepCopy(DATE_PROPERTIES),
-                deepCopy(TIME_PROPERTIES)
-            );
-        case MODEL_DATE_PROPERTIES:
-            return deepCopy(DATE_PROPERTIES);
-        case MODEL_TIME_PROPERTIES:
-            return deepCopy(TIME_PROPERTIES);
-    }
-}
 
 function getRelation(fieldDef, followRelationalProperties = false) {
     if (fieldDef.relation) {
@@ -67,18 +14,18 @@ function getRelation(fieldDef, followRelationalProperties = false) {
     if (fieldDef.comodel && followRelationalProperties) {
         return fieldDef.comodel;
     }
-    if (fieldDef.type === "datetime") {
-        return MODEL_DATETIME_PROPERTIES;
-    }
-    if (fieldDef.type === "date") {
-        return MODEL_DATE_PROPERTIES;
-    }
     return null;
 }
 
 export const fieldService = {
     dependencies: ["orm"],
-    async: ["loadFields", "loadPath", "loadPropertyDefinitions"],
+    async: [
+        "loadFieldInfo",
+        "loadFields",
+        "loadPath",
+        "loadPropertyDefinitions",
+        "loadPathDescription",
+    ],
     start(env, { orm }) {
         /**
          * @param {string} resModel
@@ -86,9 +33,6 @@ export const fieldService = {
          * @returns {Promise<object>}
          */
         async function loadFields(resModel, options = {}) {
-            if (SPECIAL_MODEL_NAMES.has(resModel)) {
-                return getSpecialModelFields(resModel);
-            }
             if (typeof resModel !== "string" || !resModel) {
                 throw new Error(`Invalid model name: ${resModel}`);
             }
@@ -103,22 +47,31 @@ export const fieldService = {
          * @param {import("@web/core/domain").DomainListRepr} [domain=[]]
          * @returns {Promise<Object>}
          */
-        async function _loadPropertyDefinitions(fieldDefs, name, domain = []) {
+        async function _loadPropertyDefinitions(resModel, fieldDefs, name, domain = []) {
             const {
                 definition_record: definitionRecord,
                 definition_record_field: definitionRecordField,
             } = fieldDefs[name];
             const definitionRecordModel = fieldDefs[definitionRecord].relation;
 
-            // @ts-ignore
-            domain = Domain.and([[[definitionRecordField, "!=", false]], domain]).toList();
-
-            const result = await orm.webSearchRead(definitionRecordModel, domain, {
-                specification: {
-                    display_name: {},
-                    [definitionRecordField]: {},
-                },
-            });
+            let result;
+            if (definitionRecordModel === "properties.base.definition") {
+                // Record without parent (eg `res.partner`)
+                result = await orm.call(
+                    "properties.base.definition",
+                    "get_properties_base_definition",
+                    [resModel, name]
+                );
+            } else {
+                // @ts-ignore
+                domain = Domain.and([[[definitionRecordField, "!=", false]], domain]).toList();
+                result = await orm.webSearchRead(definitionRecordModel, domain, {
+                    specification: {
+                        display_name: {},
+                        [definitionRecordField]: {},
+                    },
+                });
+            }
 
             const definitions = {};
             for (const record of result.records) {
@@ -146,7 +99,7 @@ export const fieldService = {
          */
         async function loadPropertyDefinitions(resModel, fieldName, domain) {
             const fieldDefs = await loadFields(resModel);
-            return _loadPropertyDefinitions(fieldDefs, fieldName, domain);
+            return _loadPropertyDefinitions(resModel, fieldDefs, fieldName, domain);
         }
 
         /**
@@ -182,7 +135,7 @@ export const fieldService = {
             } else if (fieldDef.type === "properties") {
                 subResult = await _loadPath(
                     followRelationalProperties ? resModel : "*",
-                    await _loadPropertyDefinitions(fieldDefs, name),
+                    await _loadPropertyDefinitions(resModel, fieldDefs, name),
                     remainingNames
                 );
             }
@@ -216,7 +169,63 @@ export const fieldService = {
             return _loadPath(resModel, fieldDefs, path.split("."), followRelationalProperties);
         }
 
-        return { loadFields, loadPath, loadPropertyDefinitions };
+        /**
+         * @param {string} resModel
+         * @param {string} path
+         * @returns {Promise<Object>}
+         */
+        async function loadFieldInfo(resModel, path) {
+            if (typeof path !== "string" || !path || path === "*") {
+                return { resModel, fieldDef: null };
+            }
+            const { isInvalid, names, modelsInfo } = await loadPath(resModel, path);
+            if (isInvalid) {
+                return { resModel, fieldDef: null };
+            }
+            const name = names.at(-1);
+            const modelInfo = modelsInfo.at(-1);
+            return { resModel: modelInfo.resModel, fieldDef: modelInfo.fieldDefs[name] };
+        }
+
+        function makeString(value) {
+            return String(value ?? "-");
+        }
+
+        async function loadPathDescription(resModel, path, allowEmpty) {
+            if ([0, 1].includes(path)) {
+                return { isInvalid: false, displayNames: [makeString(path)] };
+            }
+            if (allowEmpty && !path) {
+                return { isInvalid: false, displayNames: [] };
+            }
+            if (typeof path !== "string" || !path || path === "*") {
+                return { isInvalid: true, displayNames: [makeString()] };
+            }
+            const { isInvalid, modelsInfo, names } = await loadPath(resModel, path);
+            const result = { isInvalid: !!isInvalid, displayNames: [] };
+            if (!isInvalid) {
+                const lastName = names.at(-1);
+                const lastFieldDef = modelsInfo.at(-1).fieldDefs[lastName];
+                if (["properties", "properties_definition"].includes(lastFieldDef.type)) {
+                    // there is no known case where we want to select a 'properties' field directly
+                    result.isInvalid = true;
+                }
+            }
+            for (let index = 0; index < names.length; index++) {
+                const name = names[index];
+                const fieldDef = modelsInfo[index]?.fieldDefs[name];
+                result.displayNames.push(fieldDef?.string || makeString(name));
+            }
+            return result;
+        }
+
+        return {
+            loadFieldInfo,
+            loadFields,
+            loadPath,
+            loadPathDescription,
+            loadPropertyDefinitions,
+        };
     },
 };
 

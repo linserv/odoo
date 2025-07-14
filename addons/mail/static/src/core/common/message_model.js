@@ -6,7 +6,6 @@ import {
     htmlToTextContentInline,
     prettifyMessageContent,
 } from "@mail/utils/common/format";
-import { createDocumentFragmentFromContent } from "@mail/utils/common/html";
 
 import { browser } from "@web/core/browser/browser";
 import { stateToUrl } from "@web/core/browser/router";
@@ -14,7 +13,7 @@ import { loadEmoji } from "@web/core/emoji_picker/emoji_picker";
 import { _t } from "@web/core/l10n/translation";
 import { rpc } from "@web/core/network/rpc";
 import { user } from "@web/core/user";
-import { createElementWithContent } from "@web/core/utils/html";
+import { createDocumentFragmentFromContent, createElementWithContent } from "@web/core/utils/html";
 import { url } from "@web/core/utils/urls";
 
 const { DateTime } = luxon;
@@ -280,6 +279,10 @@ export class Message extends Record {
         return candidates.has(this.subject?.toLowerCase());
     }
 
+    get persistent() {
+        return Number.isInteger(this.id);
+    }
+
     get resUrl() {
         return url(stateToUrl({ model: this.thread.model, resId: this.thread.id }));
     }
@@ -489,6 +492,19 @@ export class Message extends Record {
         this.store.env.services.notification.add(notification, { type });
     }
 
+    async copyMessageText() {
+        const messageBody = convertBrToLineBreak(this.body);
+        try {
+            await browser.navigator.clipboard.writeText(messageBody);
+        } catch {
+            this.store.env.services.notification.add(
+                _t("Message Copy Failed (Permission denied?)!"),
+                { type: "danger" }
+            );
+        }
+        this.store.env.services.notification.add(_t("Message Copied!"), { type: "info" });
+    }
+
     async edit(
         body,
         attachments = [],
@@ -509,7 +525,7 @@ export class Message extends Record {
                 .map((attachment) => attachment.id),
             attachment_tokens: attachments
                 .concat(this.attachment_ids)
-                .map((attachment) => attachment.access_token),
+                .map((attachment) => attachment.ownership_token),
             body: await prettifyMessageContent(body, { validMentions }),
             message_id: this.id,
             partner_ids: validMentions?.partners?.map((partner) => partner.id),
@@ -581,6 +597,7 @@ export class Message extends Record {
         });
         this.body = "";
         this.attachment_ids = [];
+        this.composer = undefined;
     }
 
     async setDone() {

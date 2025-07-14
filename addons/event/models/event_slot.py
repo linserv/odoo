@@ -17,7 +17,7 @@ class EventSlot(models.Model):
     _description = "Event Slot"
     _order = "event_id, date, start_hour, end_hour, id"
 
-    event_id = fields.Many2one("event.event", "Event", required=True, ondelete="cascade")
+    event_id = fields.Many2one("event.event", "Event", required=True, ondelete="cascade", index=True)
     color = fields.Integer("Color", default=0)
     date = fields.Date("Date", required=True)
     date_tz = fields.Selection(related="event_id.date_tz")
@@ -125,8 +125,8 @@ class EventSlot(models.Model):
                         GROUP BY event_slot_id, state
                     """
             self.env['event.registration'].flush_model(['event_slot_id', 'state', 'active'])
-            self._cr.execute(query, (tuple(self.ids),))
-            res = self._cr.fetchall()
+            self.env.cr.execute(query, (tuple(self.ids),))
+            res = self.env.cr.fetchall()
             for slot_id, state, num in res:
                 results[slot_id][state_field[state]] = num
         # compute seats_available

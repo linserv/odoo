@@ -81,7 +81,7 @@ class IrQweb(models.AbstractModel):
     def _compile_directive_snippet(self, el, compile_context, indent):
         key = el.attrib.pop('t-snippet')
         el.set('t-call', key)
-        snippet_lang = self._context.get('snippet_lang')
+        snippet_lang = self.env.context.get('snippet_lang')
         if snippet_lang:
             el.set('t-lang', f"'{snippet_lang}'")
 
@@ -282,10 +282,10 @@ class IrQwebFieldContact(models.AbstractModel):
             attrs['data-oe-contact-options'] = json.dumps(options)
         return attrs
 
-    # helper to call the rendering of contact field
     @api.model
-    def get_record_to_html(self, ids, options=None):
-        return self.value_to_html(self.env['res.partner'].search([('id', '=', ids[0])]), options=options)
+    def get_record_to_html(self, contact_ids, options=None):
+        """ Helper to call the rendering of contact field. """
+        return self.value_to_html(self.env['res.partner'].search([('id', '=', contact_ids[0])]), options=options)
 
 
 class IrQwebFieldDate(models.AbstractModel):

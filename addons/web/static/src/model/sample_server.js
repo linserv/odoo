@@ -124,6 +124,8 @@ export class SampleServer {
                 return this._mockWebReadGroup(params);
             case "formatted_read_group":
                 return this._mockFormattedReadGroup(params);
+            case "formatted_read_grouping_sets":
+                return this._mockFormattedReadGroupingSets(params);
             case "read_progress_bar":
                 return this._mockReadProgressBar(params);
             case "read":
@@ -508,6 +510,23 @@ export class SampleServer {
     }
 
     /**
+     * Mocks calls to the base method of formatted_read_grouping_sets method.
+     *
+     * @param {Object} params
+     * @param {string} params.model
+     * @param {string[][]} params.grouping_sets
+     * @param {string[]} params.aggregates
+     * @returns {Object[]} Object with keys groups and length
+     */
+    _mockFormattedReadGroupingSets(params) {
+        const res = [];
+        for (const groupBy of params.grouping_sets) {
+            res.push(this._mockFormattedReadGroup({ ...params, groupBy }));
+        }
+        return res;
+    }
+
+    /**
      * Mocks calls to the read_progress_bar method.
      * @private
      * @param {Object} params
@@ -830,6 +849,7 @@ export function buildSampleORM(resModel, fields, user) {
     const sampleORM = new ORM(user);
     sampleORM.rpc = fakeRPC;
     sampleORM.isSample = true;
+    sampleORM.cached = () => sampleORM;
     sampleORM.setGroups = (groups) => sampleServer.setExistingGroups(groups);
     return sampleORM;
 }

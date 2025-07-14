@@ -5,6 +5,8 @@ import { ImageGalleryComponent } from "./image_gallery_option";
 import { renderToElement } from "@web/core/utils/render";
 import { updateCarouselIndicators } from "../carousel_option_plugin";
 import { BuilderAction } from "@html_builder/core/builder_action";
+import { withSequence } from "@html_editor/utils/resource";
+import { SNIPPET_SPECIFIC, SNIPPET_SPECIFIC_END } from "@html_builder/utils/option_sequence";
 
 class ImageGalleryOption extends Plugin {
     static id = "imageGalleryOption";
@@ -20,10 +22,14 @@ class ImageGalleryOption extends Plugin {
     static shared = ["processImages", "getMode", "setImages", "restoreSelection", "getColumns"];
     resources = {
         builder_options: [
-            {
+            withSequence(SNIPPET_SPECIFIC, {
+                template: "website.ImageGalleryImagesOption",
+                selector: ".s_image_gallery",
+            }),
+            withSequence(SNIPPET_SPECIFIC_END, {
                 OptionComponent: ImageGalleryComponent,
                 selector: ".s_image_gallery",
-            },
+            }),
         ],
         builder_actions: {
             AddImageAction,
@@ -54,8 +60,8 @@ class ImageGalleryOption extends Plugin {
         }
     }
 
-    restoreSelection(imageToSelect) {
-        if (imageToSelect && !this.dependencies.history.getIsPreviewing()) {
+    restoreSelection(imageToSelect, isPreviewing) {
+        if (imageToSelect && !isPreviewing) {
             // We want to update the container to the equivalent cloned image.
             // This has to be done in the new step so we manually add a step
             this.dependencies.history.addStep();
@@ -119,7 +125,7 @@ class ImageGalleryOption extends Plugin {
      * @param {String('slideshow'|'masonry'|'grid'|'nomode')} mode
      * @param {Element[]} images
      */
-    async setImages(imageGalleryElement, mode, images) {
+    setImages(imageGalleryElement, mode, images) {
         if (mode !== this.getMode(imageGalleryElement)) {
             imageGalleryElement.classList.remove("o_nomode", "o_masonry", "o_grid", "o_slideshow");
             imageGalleryElement.classList.add(`o_${mode}`);
@@ -249,8 +255,17 @@ class ImageGalleryOption extends Plugin {
         slideshowEl.querySelectorAll("img").forEach((img, index) => {
             img.setAttribute("data-index", index);
         });
-
-        imageGalleryElement.style.height = window.innerHeight * 0.7 + "px";
+        if (images.length) {
+            imageGalleryElement.style.height = window.innerHeight * 0.7 + "px";
+            slideshowEl
+                .querySelector(".carousel .o_carousel_controllers")
+                ?.classList.remove("d-none");
+            slideshowEl.querySelector(".carousel .carousel-inner")?.classList.remove("d-none");
+        } else {
+            imageGalleryElement.style.removeProperty("height");
+            slideshowEl.querySelector(".carousel .o_carousel_controllers")?.classList.add("d-none");
+            slideshowEl.querySelector(".carousel .carousel-inner")?.classList.add("d-none");
+        }
         this.addDomListener(slideshowEl, "slid.bs.carousel", this.onCarouselSlid);
     }
 
@@ -391,7 +406,7 @@ class ImageGalleryOption extends Plugin {
     }
 }
 
-class AddImageAction extends BuilderAction {
+export class AddImageAction extends BuilderAction {
     static id = "addImage";
     static dependencies = ["media", "imageGalleryOption"];
     async load({ editingElement }) {
@@ -419,40 +434,40 @@ class AddImageAction extends BuilderAction {
         }
     }
 }
-class RemoveAllImagesAction extends BuilderAction {
+export class RemoveAllImagesAction extends BuilderAction {
     static id = "removeAllImages";
+    static dependencies = ["imageGalleryOption"];
     apply({ editingElement: el }) {
-        const containerEl = el.querySelector(".container, .container-fluid, .o_container_small");
-        for (const subEl of containerEl.querySelectorAll(
-            ":scope > *:not(.o_empty_gallery_alert)"
-        )) {
-            subEl.remove();
-        }
+        const mode = this.dependencies.imageGalleryOption.getMode(el);
+        this.dependencies.imageGalleryOption.setImages(el, mode, []);
     }
 }
-class SetImageGalleryLayoutAction extends BuilderAction {
+export class SetImageGalleryLayoutAction extends BuilderAction {
     static id = "setImageGalleryLayout";
     static dependencies = ["imageGalleryOption"];
     load({ editingElement }) {
         return this.dependencies.imageGalleryOption.processImages(editingElement);
     }
-    apply({ editingElement, params: { mainParam: mode }, loadResult }) {
+    apply({ isPreviewing, editingElement, params: { mainParam: mode }, loadResult }) {
         if (mode !== this.dependencies.imageGalleryOption.getMode(editingElement)) {
             this.dependencies.imageGalleryOption.setImages(editingElement, mode, loadResult.images);
-            this.dependencies.imageGalleryOption.restoreSelection(loadResult.imageToSelect);
+            this.dependencies.imageGalleryOption.restoreSelection(
+                loadResult.imageToSelect,
+                isPreviewing
+            );
         }
     }
     isApplied({ editingElement, params: { mainParam: mode } }) {
         return mode === this.dependencies.imageGalleryOption.getMode(editingElement);
     }
 }
-class SetImageGalleryColumnsAction extends BuilderAction {
+export class SetImageGalleryColumnsAction extends BuilderAction {
     static id = "setImageGalleryColumns";
     static dependencies = ["imageGalleryOption"];
     load({ editingElement }) {
         return this.dependencies.imageGalleryOption.processImages(editingElement);
     }
-    apply({ editingElement, params: { mainParam: columns }, loadResult }) {
+    apply({ isPreviewing, editingElement, params: { mainParam: columns }, loadResult }) {
         if (columns !== this.dependencies.imageGalleryOption.getColumns(editingElement)) {
             editingElement.dataset.columns = columns;
             this.dependencies.imageGalleryOption.setImages(
@@ -460,7 +475,10 @@ class SetImageGalleryColumnsAction extends BuilderAction {
                 this.dependencies.imageGalleryOption.getMode(editingElement),
                 loadResult.images
             );
-            this.dependencies.imageGalleryOption.restoreSelection(loadResult.imageToSelect);
+            this.dependencies.imageGalleryOption.restoreSelection(
+                loadResult.imageToSelect,
+                isPreviewing
+            );
         }
     }
     isApplied({ editingElement, params: { mainParam: columns } }) {
@@ -468,7 +486,7 @@ class SetImageGalleryColumnsAction extends BuilderAction {
     }
 }
 
-class SetCarouselSpeedAction extends BuilderAction {
+export class SetCarouselSpeedAction extends BuilderAction {
     static id = "setCarouselSpeed";
     apply({ editingElement, value }) {
         editingElement.dataset.bsInterval = value * 1000;

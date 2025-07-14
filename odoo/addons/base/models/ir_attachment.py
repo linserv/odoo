@@ -57,7 +57,7 @@ class IrAttachment(models.Model):
 
     @api.model
     def _filestore(self):
-        return config.filestore(self._cr.dbname)
+        return config.filestore(self.env.cr.dbname)
 
     @api.model
     def _get_storage_domain(self):
@@ -168,7 +168,7 @@ class IrAttachment(models.Model):
         # the LOCK statement will wait until those concurrent transactions end.
         # But this transaction will not see the new attachements if it has done
         # other requests before the LOCK (like the method _storage() above).
-        cr = self._cr
+        cr = self.env.cr
         cr.commit()
 
         # prevent all concurrent updates on ir_attachment while collecting,
@@ -221,7 +221,7 @@ class IrAttachment(models.Model):
     @api.depends('store_fname', 'db_datas', 'file_size')
     @api.depends_context('bin_size')
     def _compute_datas(self):
-        if self._context.get('bin_size'):
+        if self.env.context.get('bin_size'):
             for attach in self:
                 attach.datas = human_size(attach.file_size)
             return
@@ -450,8 +450,8 @@ class IrAttachment(models.Model):
         if self:
             # DLE P173: `test_01_portal_attachment`
             self.env['ir.attachment'].flush_model(['res_model', 'res_id', 'create_uid', 'public', 'res_field'])
-            self._cr.execute('SELECT res_model, res_id, create_uid, public, res_field FROM ir_attachment WHERE id IN %s', [tuple(self.ids)])
-            for res_model, res_id, create_uid, public, res_field in self._cr.fetchall():
+            self.env.cr.execute('SELECT res_model, res_id, create_uid, public, res_field FROM ir_attachment WHERE id IN %s', [tuple(self.ids)])
+            for res_model, res_id, create_uid, public, res_field in self.env.cr.fetchall():
                 if public and mode == 'read':
                     continue
                 if not self.env.is_system():
@@ -508,9 +508,10 @@ class IrAttachment(models.Model):
         return ret_attachments
 
     @api.model
-    def _search(self, domain, offset=0, limit=None, order=None):
+    def _search(self, domain, offset=0, limit=None, order=None, *, active_test=True, bypass_access=False):
         # add res_field=False in domain if not present; the arg[0] trick below
         # works for domain items and '&'/'|'/'!' operators too
+        assert not self._active_name, "active name not supported on ir.attachment"
         disable_binary_fields_attachments = False
         domain = Domain(domain)
         if (
@@ -520,9 +521,9 @@ class IrAttachment(models.Model):
             disable_binary_fields_attachments = True
             domain &= Domain('res_field', '=', False)
 
-        if self.env.is_superuser():
+        if self.env.is_superuser() or bypass_access:
             # rules do not apply for the superuser
-            return super()._search(domain, offset, limit, order)
+            return super()._search(domain, offset, limit, order, bypass_access=True)
 
         # For attachments, the permissions of the document they are attached to
         # apply, so we must remove attachments for which the user cannot access
@@ -576,8 +577,8 @@ class IrAttachment(models.Model):
         # reached the last page. To avoid an infinite recursion due to the
         # permission checks the sub-call need to be aware of the number of
         # expected records to retrieve
-        if len(all_ids) == limit and len(result) < self._context.get('need', limit):
-            need = self._context.get('need', limit) - len(result)
+        if len(all_ids) == limit and len(result) < self.env.context.get('need', limit):
+            need = self.env.context.get('need', limit) - len(result)
             more_ids = self.with_context(need=need)._search(
                 domain, offset + len(all_ids), limit, order,
             )

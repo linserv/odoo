@@ -1,12 +1,12 @@
 from datetime import datetime
 
 from odoo.addons.l10n_ar.tests.common import TestAr
-from odoo.addons.website_sale.tests.common import MockRequest, WebsiteSaleCommon
+from odoo.addons.website_sale.tests.common import MockRequest
 from odoo.tests import tagged
 
 
 @tagged('post_install_l10n', 'post_install', '-at_install')
-class TestL10nArWebsiteSale(WebsiteSaleCommon, TestAr):
+class TestL10nArWebsiteSale(TestAr):
 
     @classmethod
     def setUpClass(cls):
@@ -54,6 +54,7 @@ class TestL10nArWebsiteSale(WebsiteSaleCommon, TestAr):
             return self.product_1._get_additionnal_combination_info(
                 product_or_template=product_id or self.product_1,
                 quantity=quantity,
+                uom=self.uom_unit,
                 date=datetime(2025, 5, 21),
                 website=self.ar_website
             )

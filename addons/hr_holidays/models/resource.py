@@ -2,7 +2,7 @@
 
 from odoo import fields, models, api, _
 from odoo.exceptions import ValidationError
-from odoo.osv import expression
+from odoo.fields import Domain
 import pytz
 from datetime import datetime
 
@@ -33,15 +33,14 @@ class ResourceCalendarLeaves(models.Model):
                     raise ValidationError(_('Two public holidays cannot overlap each other for the same working hours.'))
 
     def _get_domain(self, time_domain_dict):
-        domain = expression.OR([
+        return Domain.OR(
             [
                 ('employee_company_id', '=', date['company_id']),
                 ('date_to', '>', date['date_from']),
                 ('date_from', '<', date['date_to']),
             ]
             for date in time_domain_dict
-        ])
-        return expression.AND([domain, [('state', 'not in', ['refuse', 'cancel'])]])
+        ) & Domain('state', 'not in', ['refuse', 'cancel'])
 
     def _get_time_domain_dict(self):
         return [{
@@ -77,7 +76,7 @@ class ResourceCalendarLeaves(models.Model):
                     and (not sick_time_status or leave.holiday_status_id not in sick_time_status):
                 message = _("Due to a change in global time offs, %s extra day(s) have been taken from your allocation. Please review this leave if you need it to be changed.", -1 * duration_difference)
             try:
-                leave.write({'state': state})
+                leave.sudo().write({'state': state})  # sudo in order to skip _check_approval_update
                 leave._check_validity()
                 if leave.state == 'validate':
                     # recreate the resource leave that were removed by writing state to draft

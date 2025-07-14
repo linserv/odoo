@@ -38,6 +38,7 @@ class TestUblBis3(AccountTestInvoicingCommon):
             'zip': "1367",
             'city': "Ramillies",
             'vat': 'BE0202239951',
+            'company_registry': '0202239951',
             'country_id': self.env.ref('base.be').id,
             'bank_ids': [Command.create({'acc_number': 'BE15001559627230'})],
         })
@@ -48,6 +49,7 @@ class TestUblBis3(AccountTestInvoicingCommon):
             'zip': "1367",
             'city': "Ramillies",
             'vat': 'BE0477472701',
+            'company_registry': '0477472701',
             'country_id': self.env.ref('base.be').id,
             'bank_ids': [Command.create({'acc_number': 'BE90735788866632'})],
         })

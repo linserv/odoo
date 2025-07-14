@@ -11,7 +11,7 @@ import werkzeug
 
 from odoo import _, api, fields, models, SUPERUSER_ID
 from odoo.exceptions import UserError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools import split_every
 from odoo.tools.image import image_data_uri
 
@@ -306,7 +306,7 @@ Customs form No. 1, 9, etc for Vendor Bills""",
 
     # API methods
 
-    def _l10n_my_edi_submit_documents(self, xml_contents):
+    def _l10n_my_edi_submit_documents(self, xml_contents, commit=True):
         """ Contact our IAP service in order to send the invoice xml to the MyInvois API. """
         proxy_user = self._l10n_my_edi_ensure_proxy_user()
 
@@ -370,8 +370,8 @@ Customs form No. 1, 9, etc for Vendor Bills""",
 
                     move.write(updated_values)
 
-            if self._can_commit():
-                self._cr.commit()
+            if commit and self._can_commit():
+                self.env.cr.commit()
 
         # For successful moves, we log the sending here. Any errors will be handled by the send & print wizard.
         if success_messages:
@@ -385,7 +385,7 @@ Customs form No. 1, 9, etc for Vendor Bills""",
 
         return errors
 
-    def _l10n_my_edi_fetch_updated_statuses(self):
+    def _l10n_my_edi_fetch_updated_statuses(self, commit=True):
         """
         Contact our IAP service in order to get the status of the invoices in self.
         Statuses are fetched in batches using the l10n_my_edi_submission_uid field.
@@ -412,6 +412,11 @@ Customs form No. 1, 9, etc for Vendor Bills""",
 
             for move in move_batch:
                 status_info = statuses.get(move.l10n_my_edi_external_uuid)
+                # l10n_my_edi_state would already be in progress as its set during submission
+                if ((status_info and status_info["status"] == "in_progress") or
+                        (not status_info and move.l10n_my_edi_state == "in_progress")):
+                    any_in_progress = True
+
                 # If the status did not change, we do not need to do anything.
                 if not status_info or move.l10n_my_edi_state == status_info['status']:
                     continue
@@ -436,8 +441,8 @@ Customs form No. 1, 9, etc for Vendor Bills""",
                 elif move.l10n_my_edi_state == 'valid':
                     move._update_validation_fields(status_info)
 
-            if self._can_commit():
-                self._cr.commit()
+            if commit and self._can_commit():
+                self.env.cr.commit()
 
         # We don't consider these errors per-say. From my understanding an invalid invoice is considered as cancelled,
         # so a new one must be issued.
@@ -493,7 +498,7 @@ Customs form No. 1, 9, etc for Vendor Bills""",
             )
 
         if self._can_commit():
-            self._cr.commit()
+            self.env.cr.commit()
 
     @api.model
     def _cron_l10n_my_edi_synchronize_myinvois(self):
@@ -506,15 +511,15 @@ Customs form No. 1, 9, etc for Vendor Bills""",
         # /!\ when an invoice validation is pending, l10n_my_edi_validation_time is still None. These also need to be updated.
         datetime_threshold = datetime.datetime.now() - datetime.timedelta(hours=74)
         # We always want to fetch in_progress invoices, it's very likely that their status is already there.
-        invoice_domain = [("l10n_my_edi_state", "=", "in_progress")]
+        invoice_domain = Domain("l10n_my_edi_state", "=", "in_progress")
         # For valid invoices, we want them if their l10n_my_edi_validation_time is less than 74h ago, and if their l10n_my_edi_retry_at in the past.
-        invoice_domain = expression.OR([invoice_domain, [
+        invoice_domain |= Domain([
             ('l10n_my_edi_state', '=', 'valid'),
             ('l10n_my_edi_validation_time', '>', datetime_threshold),
             '|',
             ('l10n_my_edi_retry_at', '<=', datetime.datetime.now()),
             ('l10n_my_edi_retry_at', '=', False),
-        ]])
+        ])
         if self._can_commit():
             self.env['ir.cron']._commit_progress(remaining=self.search_count(invoice_domain))
         grouped_invoices = self.env["account.move"]._read_group(
@@ -748,12 +753,15 @@ Customs form No. 1, 9, etc for Vendor Bills""",
         """ Create the xml file (if needed) to be sent to the platform.
         This will replace what is done in send & print.
         """
+        self._l10n_my_edi_send_invoice()
+
+    def _l10n_my_edi_send_invoice(self, commit=True):
         # Gather the moves that have to be sent and the xml for each of them.
         moves, xml_contents = self._l10n_my_edi_prepare_moves_to_send()
         # We then push the moves to myinvois.
-        self._l10n_my_edi_send_to_myinvois(moves, xml_contents)
+        self._l10n_my_edi_send_to_myinvois(moves, xml_contents, commit)
         # We need to see if the validation status is already available; otherwise it will be fetched via a cron.
-        self._l10n_my_edi_get_status(moves)
+        errors = self._l10n_my_edi_get_status(moves, commit)
         # Finally, we update the move attachments
         for move, xml_content in xml_contents.items():
             if xml_content:
@@ -766,6 +774,7 @@ Customs form No. 1, 9, etc for Vendor Bills""",
                     'res_field': 'l10n_my_edi_file',  # Binary field
                 })
                 move.invalidate_recordset(fnames=['l10n_my_edi_file_id', 'l10n_my_edi_file'])
+        return errors
 
     def _l10n_my_edi_prepare_moves_to_send(self):
         AccountMoveSend = self.env['account.move.send']
@@ -790,10 +799,10 @@ Customs form No. 1, 9, etc for Vendor Bills""",
             xml_contents[move] = xml_content
         return moves, xml_contents
 
-    def _l10n_my_edi_send_to_myinvois(self, moves, xml_contents):
+    def _l10n_my_edi_send_to_myinvois(self, moves, xml_contents, commit=True):
         AccountMoveSend = self.env['account.move.send']
         if moves and xml_contents:
-            errors = moves._l10n_my_edi_submit_documents(xml_contents)
+            errors = moves._l10n_my_edi_submit_documents(xml_contents, commit)
 
             for move in moves.filtered(lambda m: m in errors):
                 move.message_post(body=AccountMoveSend._format_error_html({
@@ -802,8 +811,8 @@ Customs form No. 1, 9, etc for Vendor Bills""",
                 }))
 
             # At this point we will need to commit as we reached the api, and we could have a mix of failed and valid invoice.
-            if moves._can_commit():
-                self._cr.commit()
+            if commit and moves._can_commit():
+                self.env.cr.commit()
 
             # We already logged the details on the invoice(s) and saved the api results. If we send a single invoice, we can safely raise now.
             if errors and len(moves) == 1:
@@ -812,13 +821,14 @@ Customs form No. 1, 9, etc for Vendor Bills""",
                     'errors': errors[moves],
                 }))
 
-    def _l10n_my_edi_get_status(self, moves):
+    def _l10n_my_edi_get_status(self, moves, commit=True):
         AccountMoveSend = self.env['account.move.send']
         retry = 0
-        errors, any_in_progress = moves._l10n_my_edi_fetch_updated_statuses()
-        while any_in_progress and retry < 2:
-            time.sleep(1)  # We wait a second before retrying.
-            errors, any_in_progress = moves._l10n_my_edi_fetch_updated_statuses()
+        errors, any_in_progress = moves._l10n_my_edi_fetch_updated_statuses(commit)
+        while any_in_progress and retry < 3:
+            if self._can_commit():
+                time.sleep(1 + retry)  # We wait a while before retrying, only when not in test mode
+            errors, any_in_progress = moves._l10n_my_edi_fetch_updated_statuses(commit)
             retry += 1
         # While technically an in_progress status is not an error, it won't hurt much to display it as such.
         # The "error" message in this case should be clear enough.
@@ -828,8 +838,10 @@ Customs form No. 1, 9, etc for Vendor Bills""",
                 'errors': errors[move],
             }))
         # We commit again if possible, to ensure that the invoice status is set in the database in case of errors later.
-        if self._can_commit():
-            self._cr.commit()
+        if commit and self._can_commit():
+            self.env.cr.commit()
+
+        return errors
 
     def _generate_myinvois_qr_code(self):
         """ Generate the qr code which should be embedded into the invoices PDF """

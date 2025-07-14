@@ -137,10 +137,9 @@
                             <group>
                                 <group string="Model" name="group_model">
                                     <field name="model_year"/>
-                                    <field name="transmission" invisible="vehicle_type != 'car'"/>
-                                    <field name="color"/>
                                     <field name="seats" invisible="vehicle_type != 'car'"/>
                                     <field name="doors" invisible="vehicle_type != 'car'"/>
+                                    <field name="color"/>
                                     <field name="trailer_hook" invisible="vehicle_type != 'car'"/>
                                     <field name="frame_type" invisible="vehicle_type != 'bike'"/>
                                     <label for="frame_size" invisible="vehicle_type != 'bike'"/>
@@ -150,6 +149,8 @@
                                     <field name="electric_assistance" invisible="vehicle_type != 'bike'"/>
                                 </group>
                                 <group string="Engine" invisible="vehicle_type != 'car'">
+                                    <field name="fuel_type"/>
+                                    <field name="transmission" invisible="vehicle_type != 'car'"/>
                                     <label for="power" invisible="power_unit != 'power'"/>
                                     <div class="o_row" invisible="power_unit != 'power'">
                                         <field name="power"/>
@@ -165,7 +166,6 @@
                                         <field name="vehicle_range"/>
                                         <field name="range_unit"/>
                                     </div>
-                                    <field name="fuel_type"/>
                                     <label for="co2"/>
                                     <div class="o_row">
                                         <field name="co2"/>
@@ -255,7 +255,7 @@
                     domain="[('activity_date_deadline', '=', context_today().strftime('%Y-%m-%d'))]"/>
                 <filter invisible="1" string="Future Activities" name="activities_upcoming_all"
                     domain="[('activity_date_deadline', '&gt;', context_today().strftime('%Y-%m-%d'))]"/>
-                <group expand="1" string="Group By">
+                <group string="Group By">
                     <filter string="Model" name="groupby_model" context="{'group_by': 'model_id'}"/>
                     <filter string="Brand" name="groupby_make" context="{'group_by': 'brand_id'}"/>
                     <filter string="Status" name="groupby_status" context="{'group_by': 'state_id'}"/>
@@ -430,7 +430,7 @@
                 <field name="driver_id"/>
                 <field name="value"/>
                 <field name="date"/>
-                <group expand="0" string="Group By">
+                <group string="Group By">
                     <filter name="groupby_vehicle" context="{'group_by': 'vehicle_id'}" string="Vehicle"/>
                     <filter name="groupby_date" context="{'group_by': 'date'}" string="Date"/>
                 </group>
@@ -482,7 +482,7 @@
             <search>
                 <field name="name"/>
                 <field name="category"/>
-                <group expand="1" string="Group By">
+                <group string="Group By">
                     <filter name="groupby_category" context="{'group_by' : 'category'}"/>
                 </group>
             </search>

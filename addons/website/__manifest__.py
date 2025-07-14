@@ -135,6 +135,7 @@
         'views/snippets/s_key_images.xml',
         'views/snippets/s_kickoff.xml',
         'views/snippets/s_discovery.xml',
+        'views/snippets/s_bento_banner.xml',
         'views/snippets/s_striped.xml',
         'views/snippets/s_intro_pill.xml',
         'views/snippets/s_big_number.xml',
@@ -165,6 +166,7 @@
         'views/snippets/s_map.xml',
         'views/snippets/s_dynamic_snippet.xml',
         'views/snippets/s_dynamic_snippet_carousel.xml',
+        'views/snippets/s_banner_product.xml',
         'views/snippets/s_embed_code.xml',
         'views/snippets/s_website_controller_page_listing_layout.xml',
         'views/snippets/s_website_form.xml',
@@ -221,6 +223,7 @@
             "website/static/src/**/common/**/*",
         ],
         'web.assets_frontend': [
+            'html_builder/static/src/utils/scrolling.js',
             'website/static/src/interactions/**/*',
             'website/static/src/core/**/*',
             'website/static/src/utils/**/*',
@@ -275,6 +278,7 @@
         'website.assets_edit_frontend': [
             'website/static/src/**/*.edit.js',
             'website/static/src/**/*.edit.scss',
+            'website/static/src/**/*.edit.xml',
             'website/static/src/core/website_edit_service.js',
         ],
         'website.inside_builder_style': [
@@ -294,6 +298,7 @@
         'web.assets_tests': [
             'website/static/tests/tour_utils/lifecycle_dep_interaction.js',
             'website/static/tests/tours/**/*',
+            'website/static/src/client_actions/website_preview/website_builder_action_test_mode.js',
             'html_builder/static/src/utils/utils_css.js',
         ],
         'web.assets_backend': [
@@ -308,6 +313,7 @@
             'website/static/src/js/text_processing.js',
             'website/static/src/js/highlight_utils.js',
             'website/static/src/client_actions/*/*',
+            ('remove', 'website/static/src/client_actions/website_preview/website_builder_action_test_mode.js'),
             'website/static/src/components/fields/*',
             'website/static/src/components/fullscreen_indication/fullscreen_indication.js',
             'website/static/src/components/fullscreen_indication/fullscreen_indication.scss',
@@ -336,18 +342,19 @@
             'website/static/src/scss/website.backend.dark.scss',
             'website/static/src/components/website_loader/website_loader.dark.scss'
         ],
-        'web.qunit_suite_tests': [
-            'website/static/tests/redirect_field_tests.js',
-        ],
         'web.assets_unit_tests': [
             'web/static/src/legacy/js/public/minimal_dom.js',
+            'website/static/src/client_actions/website_preview/website_builder_action_test_mode.js',
             'website/static/tests/core/**/*',
             'website/static/tests/helpers.js',
             'website/static/tests/interactions/**/*',
             'website/static/tests/builder/**/*',
             'website/static/tests/mock_server/**/*',
+            'website/static/tests/redirect_field.test.js',
+            'website/static/tests/new_content_modal.test.js',
         ],
         'web.assets_unit_tests_setup': [
+            'html_builder/static/src/utils/scrolling.js',
             'web/static/src/legacy/js/core/class.js',
             'web/static/src/legacy/js/public/lazyloader.js',
             'web/static/src/legacy/js/public/minimal_dom.js',
@@ -362,6 +369,9 @@
             ('remove', 'website/static/src/snippets/**/options.js'),
             'website/static/src/snippets/**/*.xml',
             'website/static/src/xml/**/*.xml',
+            ## TODO: remove the following line when cleaning up residuals files
+            ## from the old editor
+            ('remove', 'website/static/src/snippets/s_floating_blocks/options.xml'),
             ('remove', 'website/static/src/xml/website.editor.xml'),
             ('remove', 'website/static/src/xml/web_editor.xml'),
             'website/static/src/snippets/s_table_of_content/000.scss',
@@ -462,6 +472,7 @@
             'website/static/src/components/edit_head_body_dialog/edit_head_body_dialog.js',
             'website/static/src/components/edit_head_body_dialog/edit_head_body_dialog.scss',
             'website/static/src/components/edit_head_body_dialog/edit_head_body_dialog.xml',
+            'website/static/src/utils/**/*',
             'website/static/src/components/dialog/*.js',
             'website/static/src/components/dialog/*.scss',
             'website/static/src/components/dialog/*.xml',
@@ -472,8 +483,6 @@
             'website/static/src/components/navbar/navbar.scss',
             'website/static/src/components/navbar/navbar.xml',
             'website/static/src/components/burger_menu/burger_menu.js',
-            'website/static/src/components/switch/switch.js',
-            'website/static/src/components/switch/switch.scss',
             'website/static/src/components/wysiwyg_adapter/page_options.js',
             'website/static/src/components/translator/translator.js',
             'website/static/src/components/translator/translator.scss',
@@ -489,10 +498,11 @@
             # Don't include dark mode files in light mode
             ('remove', 'website/static/src/components/dialog/*.dark.scss'),
         ],
-        'html_builder.assets': [
-
+        'website.website_builder_assets': [
+            ('include', 'html_builder.assets'),
             'website/static/src/scss/website_common.scss',
             'website/static/src/builder/**/*',
+            ('remove', 'website/static/src/builder/**/*.inside.scss'),
         ],
         'html_builder.iframe_add_dialog': [
             'website/static/src/snippets/**/*.edit.scss',
@@ -531,10 +541,10 @@
             '5': ['s_banner'],
         },
         'gallery': {
-            '0': ['s_text_block_h2', 's_images_wall'],
-            '1': ['s_text_block_h2', 's_image_text', 's_text_image', 's_image_text_2nd'],
+            '0': ['s_text_block_h1', 's_images_wall'],
+            '1': ['s_text_block_h1', 's_image_text', 's_text_image', 's_image_text_2nd'],
             '2': ['s_banner', 's_text_block_2nd', 's_image_gallery', 's_picture_only'],
-            '3': ['s_text_block_h2', 's_text_block', 's_three_columns', 's_three_columns_2nd'],
+            '3': ['s_text_block_h1', 's_text_block', 's_three_columns', 's_three_columns_2nd'],
             '4': ['s_cover', 's_media_list'],
         },
         'services': {

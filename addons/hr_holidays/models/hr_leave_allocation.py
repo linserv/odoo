@@ -152,7 +152,7 @@ class HrLeaveAllocation(models.Model):
         return _(
             '%(name)s (%(duration)s day(s))',
             name=self.holiday_status_id.name,
-            duration=self.number_of_days,
+            duration=float_round(self.number_of_days, precision_digits=2),
         )
 
     @api.onchange('name')
@@ -171,24 +171,25 @@ class HrLeaveAllocation(models.Model):
     @api.depends('name', 'date_from', 'date_to')
     def _compute_description_validity(self):
         for allocation in self:
+            date_from = allocation.date_from or fields.Date.context_today(allocation)
             if allocation.date_to:
                 name_validity = _(
                     "%(allocation_name)s (from %(date_from)s to %(date_to)s)",
                     allocation_name=allocation.name,
-                    date_from=allocation.date_from.strftime("%b %d %Y"),
+                    date_from=date_from.strftime("%b %d %Y"),
                     date_to=allocation.date_to.strftime("%b %d %Y"),
                 )
             else:
                 name_validity = _(
                     "%(allocation_name)s (from %(date_from)s to No Limit)",
                     allocation_name=allocation.name,
-                    date_from=allocation.date_from.strftime("%b %d %Y"),
+                    date_from=date_from.strftime("%b %d %Y"),
                 )
             allocation.name_validity = name_validity
 
     @api.depends('employee_id', 'holiday_status_id')
     def _compute_leaves(self):
-        date_from = fields.Date.from_string(self._context['default_date_from']) if 'default_date_from' in self._context else fields.Date.today()
+        date_from = fields.Date.from_string(self.env.context['default_date_from']) if 'default_date_from' in self.env.context else fields.Date.today()
         employee_days_per_allocation = self.employee_id._get_consumed_leaves(self.holiday_status_id, date_from)[0]
         for allocation in self:
             origin = allocation._origin
@@ -677,8 +678,8 @@ class HrLeaveAllocation(models.Model):
         # Try to force the leave_type display_name when creating new records
         # This is called right after pressing create and returns the display_name for
         # most fields in the view.
-        if values and 'employee_id' in fields_spec and 'employee_id' not in self._context:
-            employee_id = get_employee_from_context(values, self._context, self.env.user.employee_id.id)
+        if values and 'employee_id' in fields_spec and 'employee_id' not in self.env.context:
+            employee_id = get_employee_from_context(values, self.env.context, self.env.user.employee_id.id)
             self = self.with_context(employee_id=employee_id)
         return super().onchange(values, field_names, fields_spec)
 
@@ -744,7 +745,7 @@ class HrLeaveAllocation(models.Model):
                 partners_to_subscribe.add(allocation.employee_id.sudo().parent_id.user_id.partner_id.id)
                 partners_to_subscribe.add(allocation.employee_id.leave_manager_id.partner_id.id)
             allocation.message_subscribe(partner_ids=tuple(partners_to_subscribe))
-            if not self._context.get('import_file'):
+            if not self.env.context.get('import_file'):
                 allocation.activity_update()
             if allocation.validation_type == 'no_validation' and allocation.state == 'confirm':
                 allocation.action_approve()
@@ -812,17 +813,6 @@ class HrLeaveAllocation(models.Model):
     # Business methods
     ####################################################
 
-    def action_set_to_confirm(self):
-        if any(allocation.state != 'refuse' for allocation in self):
-            raise UserError(_('Allocation state must be "Refused" in order to be reset to "To Approve".'))
-        self.write({
-            'state': 'confirm',
-            'approver_id': False,
-            'second_approver_id': False,
-        })
-        self.activity_update()
-        return True
-
     def action_approve(self):
         current_employee = self.env.user.employee_id
         allocation_to_approve = self.env['hr.leave.allocation']
@@ -874,8 +864,6 @@ class HrLeaveAllocation(models.Model):
         if self.env.is_superuser():
             return True
         current_employee = self.env.user.employee_id
-        if not current_employee:
-            return True
         is_administrator = self.env.user.has_group('hr_holidays.group_hr_holidays_manager')
         for allocation in self:
             is_time_off_manager = allocation.employee_id.leave_manager_id == self.env.user
@@ -982,8 +970,8 @@ class HrLeaveAllocation(models.Model):
                         note = _(
                             'New Allocation Request created by %(user)s: %(count)s Days of %(allocation_type)s',
                             user=allocation.create_uid.name,
-                            count=allocation.number_of_days,
-                            allocation_type=allocation.holiday_status_id.name
+                            count=float_round(allocation.number_of_days, precision_digits=2),
+                            allocation_type=allocation.holiday_status_id.name,
                         )
                     else:
                         activity_type = approval_activity

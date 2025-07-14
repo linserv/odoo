@@ -4,6 +4,11 @@ import { registry } from "@web/core/registry";
 import { CarouselItemHeaderMiddleButtons } from "./carousel_item_header_buttons";
 import { renderToElement } from "@web/core/utils/render";
 import { BuilderAction } from "@html_builder/core/builder_action";
+import { withSequence } from "@html_editor/utils/resource";
+import { between } from "@html_builder/utils/option_sequence";
+import { WEBSITE_BACKGROUND_OPTIONS, BOX_BORDER_SHADOW } from "@website/builder/option_sequence";
+
+export const CAROUSEL_CARDS_SEQUENCE = between(WEBSITE_BACKGROUND_OPTIONS, BOX_BORDER_SHADOW);
 
 const carouselWrapperSelector =
     ".s_carousel_wrapper, .s_carousel_intro_wrapper, .s_carousel_cards_wrapper";
@@ -29,11 +34,11 @@ export class CarouselOptionPlugin extends Plugin {
                 selector: "section",
                 applyTo: ".s_carousel_intro, .s_quotes_carousel_compact",
             },
-            {
+            withSequence(CAROUSEL_CARDS_SEQUENCE, {
                 template: "website.CarouselCardsOption",
                 selector: "section",
                 applyTo: ".s_carousel_cards",
-            },
+            }),
         ],
         builder_header_middle_buttons: {
             Component: CarouselItemHeaderMiddleButtons,
@@ -41,8 +46,13 @@ export class CarouselOptionPlugin extends Plugin {
                 ".s_carousel .carousel-item, .s_quotes_carousel .carousel-item, .s_carousel_intro .carousel-item, .s_carousel_cards .carousel-item",
             props: {
                 addSlide: (editingElement) => this.addSlide(editingElement.closest(".carousel")),
-                removeSlide: (editingElement) =>
-                    this.removeSlide(editingElement.closest(".carousel")),
+                removeSlide: async (editingElement) => {
+                    // Check if the slide is still in the DOM
+                    // TODO: find a more general way to handle target element already removed by an option
+                    if (editingElement.parentElement) {
+                        await this.removeSlide(editingElement.closest(".carousel"));
+                    }
+                },
                 applyAction: this.dependencies.builderActions.applyAction,
             },
         },
@@ -66,10 +76,12 @@ export class CarouselOptionPlugin extends Plugin {
             // Restore all the carousels so their first slide is the active one.
             for (const carouselEl of this.editable.querySelectorAll(".carousel")) {
                 const firstItemEl = carouselEl.querySelector(".carousel-item");
-                if (firstItemEl.classList.contains("active")) {
-                    continue;
+                if (firstItemEl) {
+                    if (firstItemEl.classList.contains("active")) {
+                        continue;
+                    }
+                    proms.push(this.slide(carouselEl, 0));
                 }
-                proms.push(this.slide(carouselEl, 0));
             }
             return Promise.all(proms);
         },
@@ -300,7 +312,7 @@ export function updateCarouselIndicators(carouselEl, newPosition) {
         }
     });
 }
-class AddSlideAction extends BuilderAction {
+export class AddSlideAction extends BuilderAction {
     static id = "addSlide";
     static dependencies = ["carouselOption"];
     setup() {
@@ -310,7 +322,7 @@ class AddSlideAction extends BuilderAction {
         return this.dependencies.carouselOption.addSlide(editingElement);
     }
 }
-class SlideCarouselAction extends BuilderAction {
+export class SlideCarouselAction extends BuilderAction {
     static id = "slideCarousel";
     static dependencies = ["carouselOption"];
     setup() {
@@ -322,7 +334,7 @@ class SlideCarouselAction extends BuilderAction {
     }
 }
 
-class ToggleControllersAction extends BuilderAction {
+export class ToggleControllersAction extends BuilderAction {
     static id = "toggleControllers";
     apply({ editingElement }) {
         const carouselEl = editingElement.closest(".carousel");
@@ -333,7 +345,7 @@ class ToggleControllersAction extends BuilderAction {
         carouselEl.classList.toggle("s_carousel_controllers_hidden", areControllersHidden);
     }
 }
-class ToggleCardImgAction extends BuilderAction {
+export class ToggleCardImgAction extends BuilderAction {
     static id = "toggleCardImg";
     apply({ editingElement }) {
         const carouselEl = editingElement.closest(".carousel");

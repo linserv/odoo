@@ -71,7 +71,7 @@
         <record model="ir.actions.act_window" id="mrp_workcenter_productivity_report_oee">
             <field name="name">Overall Equipment Effectiveness</field>
             <field name="res_model">mrp.workcenter.productivity</field>
-            <field name="view_id" eval="oee_pie_view"/>
+            <field name="view_id" ref="oee_pie_view"/>
             <field name="view_mode">graph,pivot,list,form</field>
             <field name="domain">[('workcenter_id','=',active_id)]</field>
             <field name="context">{'search_default_thismonth':True}</field>
@@ -366,7 +366,7 @@
                 <search string="Search for mrp workcenter">
                     <field name="name" string="Work Center" filter_domain="['|', ('name', 'ilike', self), ('code', 'ilike', self)]"/>
                     <filter name="archived" string="Archived" domain="[('active', '=', False)]"/>
-                    <group expand="0" string="Group By...">
+                    <group string="Group By...">
                         <filter string="Company" name="company" domain="[]" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
                     </group>
                 </search>
@@ -492,7 +492,7 @@
                 <filter name="productive" string="Fully Productive" domain="[('loss_type','=','productive')]"/>
                 <filter name="filter_date_start" string="Date" date="date_start"/>
                 <separator/>
-                <group expand='0' string='Group by...'>
+                <group string='Group by...'>
                     <filter string="User" name="user" context="{'group_by': 'create_uid'}"/>
                     <filter string='Workcenter' name="workcenter_group" context="{'group_by': 'workcenter_id'}"/>
                     <filter string="Loss Reason" name="loss_group" context="{'group_by': 'loss_id'}"/>

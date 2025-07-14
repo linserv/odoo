@@ -65,9 +65,12 @@ class AnalyticPlanFieldsMixin(models.AbstractModel):
             if self[fname]
         ])
 
+    def _get_distribution_key(self):
+        return ",".join(str(account_id) for account_id in self._get_analytic_accounts().ids)
+
     def _get_analytic_distribution(self):
-        account_ids = self._get_analytic_accounts().ids
-        return {} if not account_ids else {",".join(str(account_id) for account_id in account_ids): 100}
+        accounts = self._get_distribution_key()
+        return {} if not accounts else {accounts: 100}
 
     def _get_mandatory_plans(self, company, business_domain):
         return [
@@ -97,7 +100,7 @@ class AnalyticPlanFieldsMixin(models.AbstractModel):
     @api.model
     def fields_get(self, allfields=None, attributes=None):
         fields = super().fields_get(allfields, attributes)
-        if not self._context.get("studio") and self.env['account.analytic.plan'].has_access('read'):
+        if not self.env.context.get("studio") and self.env['account.analytic.plan'].has_access('read'):
             project_plan, other_plans = self.env['account.analytic.plan']._get_all_plans()
             for plan in project_plan + other_plans:
                 fname = plan._column_name()
@@ -111,7 +114,7 @@ class AnalyticPlanFieldsMixin(models.AbstractModel):
         return self._patch_view(arch, view, view_type)
 
     def _patch_view(self, arch, view, view_type):
-        if not self._context.get("studio") and self.env['account.analytic.plan'].has_access('read'):
+        if not self.env.context.get("studio") and self.env['account.analytic.plan'].has_access('read'):
             project_plan, other_plans = self.env['account.analytic.plan']._get_all_plans()
 
             # Find main account nodes

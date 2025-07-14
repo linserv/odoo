@@ -27,11 +27,11 @@ test("Should set a shape on an image", async () => {
     expect(img.src.startsWith("data:image/svg+xml;base64,")).toBe(true);
     expect(":iframe .test-options-target img").toHaveAttribute(
         "data-original-src",
-        "/website/static/src/img/snippets_demo/s_text_image.jpg"
+        "/website/static/src/img/snippets_demo/s_text_image.webp"
     );
     expect(":iframe .test-options-target img").toHaveAttribute(
         "data-mimetype-before-conversion",
-        "image/jpeg"
+        "image/webp"
     );
     expect(":iframe .test-options-target img").toHaveAttribute(
         "data-shape",
@@ -44,7 +44,7 @@ test("Should set a shape on an image", async () => {
     expect(":iframe .test-options-target img").toHaveAttribute("data-shape-colors", ";;;;");
 });
 test("Should change the shape color of an image", async () => {
-    const { getEditor } = await setupWebsiteBuilder(
+    const { getEditor, waitDomUpdated } = await setupWebsiteBuilder(
         `<div class="test-options-target">
             ${testImg}
         </div>`,
@@ -59,6 +59,7 @@ test("Should change the shape color of an image", async () => {
     await contains("[data-action-value='html_builder/pattern/pattern_wave_4']").click();
     // ensure the shape action has been applied
     await editor.shared.operation.next(() => {});
+    await waitDomUpdated();
 
     await waitFor(`[data-label="Colors"] .o_we_color_preview`);
 
@@ -95,8 +96,7 @@ test("Should change the shape color of an image", async () => {
 
     // ensure the shape action has been applied
     await editor.shared.operation.next(() => {});
-    // wait for owl to update the dom
-    await animationFrame();
+    await waitDomUpdated();
 
     expect(`[data-label="Colors"] .o_we_color_preview:nth-child(1)`).toHaveAttribute(
         "style",
@@ -108,7 +108,7 @@ test("Should change the shape color of an image", async () => {
     );
 });
 test("Should change the shape color of an image with a class color", async () => {
-    const { getEditor } = await setupWebsiteBuilder(
+    const { getEditor, waitDomUpdated } = await setupWebsiteBuilder(
         `<div class="test-options-target">
             ${testImg}
         </div>`,
@@ -160,7 +160,7 @@ test("Should change the shape color of an image with a class color", async () =>
     // ensure the shape action has been applied
     await editor.shared.operation.next(() => {});
     // wait for owl to update the dom
-    await animationFrame();
+    await waitDomUpdated();
 
     expect(`[data-label="Colors"] .o_we_color_preview:nth-child(1)`).toHaveAttribute(
         "style",
@@ -186,8 +186,8 @@ test("Should not show transform action on shape that cannot bet transformed", as
     await editor.shared.operation.next(() => {});
     await animationFrame();
 
-    expect(`[data-action-id="flipImageShape"]`).not.toBeVisible();
-    expect(`[data-action-id="rotateImageShape"]`).not.toBeVisible();
+    expect(`[data-action-id="flipImageShape"]`).not.toHaveCount();
+    expect(`[data-action-id="rotateImageShape"]`).not.toHaveCount();
 });
 describe("flip shape axis", () => {
     test("Should flip the shape X axis", async () => {
@@ -400,7 +400,7 @@ test("Should not show animate speed if the shape is not animated", async () => {
     await editor.shared.operation.next(() => {});
     await animationFrame();
 
-    expect(`[data-action-id="setImageShapeSpeed"]`).not.toBeVisible();
+    expect(`[data-action-id="setImageShapeSpeed"]`).not.toHaveCount();
 });
 test("Should change the speed of an animated shape", async () => {
     const { getEditor } = await setupWebsiteBuilder(`
@@ -448,7 +448,7 @@ describe("toggle ratio", () => {
         await editor.shared.operation.next(() => {});
         await animationFrame();
 
-        expect(`[data-action-id="toggleImageShapeRatio"]`).not.toBeVisible();
+        expect(`[data-action-id="toggleImageShapeRatio"]`).not.toHaveCount();
     });
     test("A shape with togglable ratio should be added cropped and crop when clicked", async () => {
         const { getEditor } = await setupWebsiteBuilder(`

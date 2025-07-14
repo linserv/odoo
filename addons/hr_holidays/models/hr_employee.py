@@ -40,8 +40,7 @@ class HrEmployee(models.Model):
     show_leaves = fields.Boolean('Able to see Remaining Time Off', compute='_compute_show_leaves')
     is_absent = fields.Boolean('Absent Today', compute='_compute_leave_status', search='_search_absent_employee')
     allocation_display = fields.Char(compute='_compute_allocation_remaining_display')
-    allocation_remaining_display = fields.Char(compute='_compute_allocation_remaining_display',
-                                               groups="hr.group_hr_user")
+    allocation_remaining_display = fields.Char(compute='_compute_allocation_remaining_display')
     hr_icon_display = fields.Selection(selection_add=[
         ('presence_holiday_absent', 'On leave'),
         ('presence_holiday_present', 'Present but on leave')])
@@ -271,13 +270,12 @@ class HrEmployee(models.Model):
     def action_time_off_dashboard(self):
         action = self.env['ir.actions.act_window']._for_xml_id('hr_holidays.hr_leave_action_action_approve_department')
         action['context'] = dict(literal_eval(action['context']))
-        action['context']['search_default_employee_id'] = self.ids
+        action['context']['show_dashboard'] = True
         action['context'].pop('search_default_waiting_for_me', False)
         action['context'].pop('search_default_waiting_for_me_manager', False)
+        action['context']['default_employee_id'] = self.id
+        action['domain'] = [('employee_id', 'in', self.ids)]
         return action
-
-    def _is_leave_user(self):
-        return self == self.env.user.employee_id and self.env.user.has_group('hr_holidays.group_hr_holidays_user')
 
     def get_mandatory_days(self, start_date, end_date):
         all_days = {}

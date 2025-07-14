@@ -12,9 +12,8 @@ from werkzeug.urls import url_decode, url_encode, url_parse
 
 from odoo import fields
 from odoo.exceptions import ValidationError
-from odoo.fields import Command
+from odoo.fields import Command, Domain
 from odoo.http import request, route
-from odoo.osv import expression
 from odoo.tools import SQL, clean_context, float_round, groupby, lazy, str2bool
 from odoo.tools.json import scriptsafe as json_scriptsafe
 from odoo.tools.translate import _
@@ -159,26 +158,28 @@ class WebsiteSale(payment_portal.PaymentPortal):
         if search:
             for srch in search.split(" "):
                 subdomains = [
-                    [('name', 'ilike', srch)],
-                    [('product_variant_ids.default_code', 'ilike', srch)]
+                    Domain('name', 'ilike', srch),
+                    Domain('product_variant_ids.default_code', 'ilike', srch),
                 ]
                 if search_in_description:
-                    subdomains.append([('website_description', 'ilike', srch)])
-                    subdomains.append([('description_sale', 'ilike', srch)])
+                    subdomains.extend((
+                        Domain('website_description', 'ilike', srch),
+                        Domain('description_sale', 'ilike', srch),
+                    ))
                 extra_subdomain = self._add_search_subdomains_hook(srch)
                 if extra_subdomain:
                     subdomains.append(extra_subdomain)
-                domains.append(expression.OR(subdomains))
+                domains.append(Domain.OR(subdomains))
 
         if category:
-            domains.append([('public_categ_ids', 'child_of', int(category))])
+            domains.append(Domain('public_categ_ids', 'child_of', int(category)))
 
         if attribute_value_dict:
             domains.extend(
                 request.env['product.template']._get_attribute_value_domain(attribute_value_dict)
             )
 
-        return expression.AND(domains)
+        return Domain.AND(domains)
 
     def sitemap_shop(env, rule, qs):
         website = env['website'].get_current_website()
@@ -192,7 +193,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
         Category = env['product.public.category']
         dom = sitemap_qs2dom(qs, f'{SHOP_PATH}/category', Category._rec_name)
-        dom += website.website_domain()
+        dom &= website.website_domain()
         for cat in Category.search(dom):
             loc = f'{SHOP_PATH}/category/{env["ir.http"]._slug(cat)}'
             if not qs or qs.lower() in loc:
@@ -207,7 +208,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
         ProductTemplate = env['product.template']
         dom = sitemap_qs2dom(qs, SHOP_PATH, ProductTemplate._rec_name)
-        dom += website.sale_product_domain()
+        dom &= Domain(website.sale_product_domain())
         for product in ProductTemplate.search(dom):
             loc = f'{SHOP_PATH}/{env["ir.http"]._slug(product)}'
             if not qs or qs.lower() in loc:
@@ -378,8 +379,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             domain = self._get_shop_domain(search, category, attribute_value_dict)
 
             # This is ~4 times more efficient than a search for the cheapest and most expensive products
-            query = Product._where_calc(domain)
-            Product._apply_ir_rules(query, 'read')
+            query = Product._search(domain)
             sql = query.select(
                 SQL(
                     "COALESCE(MIN(list_price), 0) * %(conversion_rate)s, COALESCE(MAX(list_price), 0) * %(conversion_rate)s",
@@ -404,24 +404,23 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
         ProductTag = request.env['product.tag']
         if filter_by_tags_enabled and search_product:
-            all_tags = ProductTag.search(
-                expression.AND([
-                    [('product_ids.is_published', '=', True), ('visible_to_customers', '=', True)],
-                    website_domain
-                ])
-            )
+            all_tags = ProductTag.search(Domain.AND([
+                Domain('product_ids.is_published', '=', True),
+                Domain('visible_to_customers', '=', True),
+                website_domain,
+            ]))
         else:
             all_tags = ProductTag
 
         Category = request.env['product.public.category']
-        categs_domain = [('parent_id', '=', False)] + website_domain
+        categs_domain = Domain('parent_id', '=', False) & website_domain
         if not self.env.user._is_internal():
-            categs_domain = expression.AND([categs_domain, [('has_published_products', '=', True)]])
+            categs_domain &= Domain('has_published_products', '=', True)
         if search:
             search_categories = Category.search(
-                [('product_tmpl_ids', 'in', search_product.ids)] + website_domain
+                Domain('product_tmpl_ids', 'in', search_product.ids) & website_domain
             ).parents_and_self
-            categs_domain.append(('id', 'in', search_categories.ids))
+            categs_domain &= Domain('id', 'in', search_categories.ids)
         else:
             search_categories = Category
         categs = lazy(lambda: Category.search(categs_domain))
@@ -582,6 +581,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
         # Compatibility pre-v14
         # Redirect to the "correct" product URL, which doesn't include `/product`, and where the
         # category has been removed from the query parameters and added to the path.
+        category = int(category) if str(category).isdigit() else False
         category = self._validate_and_get_category(category)
         query = self._get_filtered_query_string(
             request.httprequest.query_string.decode(), keys_to_remove=['category']
@@ -1585,14 +1585,9 @@ class WebsiteSale(payment_portal.PaymentPortal):
         if order_sudo.amount_total and not tx_sudo:
             return request.redirect(self._get_shop_path())
 
-        if not order_sudo.amount_total and not tx_sudo:
-            if order_sudo.state != 'sale':
-                # Only confirm the order if it wasn't already confirmed.
-                order_sudo._validate_order()
-
-            # clean context and session, then redirect to the portal page
-            request.website.sale_reset()
-            return request.redirect(order_sudo.get_portal_url())
+        if not order_sudo.amount_total and not tx_sudo and order_sudo.state != 'sale':
+            # Only confirm the order if it wasn't already confirmed.
+            order_sudo._validate_order()
 
         # clean context and session, then redirect to the confirmation page
         request.website.sale_reset()

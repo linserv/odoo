@@ -5,6 +5,7 @@ import { cookie } from "@web/core/browser/cookie";
 import { markup } from "@odoo/owl";
 import { omit } from "@web/core/utils/objects";
 import { waitForStable } from "@web/core/macro";
+import { stepUtils } from "@web_tour/tour_utils";
 
 export function addMedia(position = "right") {
     return {
@@ -161,7 +162,7 @@ export function changeOptionInPopover(blockName, optionName, elementName, search
     steps.push(
         clickOnElement(
             `${elementName} in the ${optionName} option`,
-            `.o_popover div.o-dropdown-item:contains("${elementName}"), .o_popover ${elementName}`
+            `.o_popover div.o-dropdown-item:contains("${elementName}"), .o_popover span.o-dropdown-item:contains("${elementName}"), .o_popover ${elementName}`
         )
     );
     return steps;
@@ -325,6 +326,7 @@ export function clickOnSave(position = "bottom", timeout = 50000) {
             noPrepend: true,
             timeout,
         },
+        stepUtils.waitIframeIsReady(),
     ];
 }
 
@@ -634,22 +636,30 @@ export function toggleMobilePreview(toggleOn) {
  *                                      the link element.
  * @returns {TourStep[]} The tour steps that opens the link popup.
  */
-export function openLinkPopup(triggerSelector, linkName = "", focusNodeIndex = 0) {
+export function openLinkPopup(
+    triggerSelector,
+    linkName = "",
+    focusNodeIndex = 0,
+    triggerClick = false
+) {
     return [
         {
             content: `Open '${linkName}' link popup`,
             trigger: triggerSelector,
-            async run() {
+            async run(actions) {
+                if (triggerClick) {
+                    actions.click();
+                }
                 const el = this.anchor;
                 const sel = el.ownerDocument.getSelection();
                 sel.collapse(el.childNodes[focusNodeIndex], 1);
                 el.focus();
-            }
+            },
         },
         {
             content: "Check if the link popover opened",
-            trigger: ".o-we-linkpopover"
-        }
+            trigger: ".o-we-linkpopover",
+        },
     ];
 }
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from collections import defaultdict
@@ -6,8 +5,8 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from odoo import api, fields, models, SUPERUSER_ID, _
-from odoo.osv import expression
-from odoo.tools import float_compare, OrderedSet
+from odoo.fields import Domain
+from odoo.tools import OrderedSet
 
 
 class StockRule(models.Model):
@@ -28,13 +27,10 @@ class StockRule(models.Model):
         return message_dict
 
     def _compute_picking_type_code_domain(self):
-        remaining = self.browse()
+        super()._compute_picking_type_code_domain()
         for rule in self:
             if rule.action == 'manufacture':
-                rule.picking_type_code_domain = 'mrp_operation'
-            else:
-                remaining |= rule
-        super(StockRule, remaining)._compute_picking_type_code_domain()
+                rule.picking_type_code_domain = rule.picking_type_code_domain or [] + ['mrp_operation']
 
     def _should_auto_confirm_procurement_mo(self, p):
         return (not p.orderpoint_id and p.move_raw_ids) or (p.move_dest_ids.procure_method != 'make_to_order' and not p.move_raw_ids and not p.workorder_ids)
@@ -279,9 +275,9 @@ class ProcurementGroup(models.Model):
                         procurement.origin, procurement.company_id, values))
             else:
                 procurements_without_kit.append(procurement)
-        return super(ProcurementGroup, self).run(procurements_without_kit, raise_user_error=raise_user_error)
+        return super().run(procurements_without_kit, raise_user_error=raise_user_error)
 
     def _get_moves_to_assign_domain(self, company_id):
-        domain = super(ProcurementGroup, self)._get_moves_to_assign_domain(company_id)
-        domain = expression.AND([domain, [('production_id', '=', False)]])
+        domain = super()._get_moves_to_assign_domain(company_id)
+        domain = Domain.AND([domain, Domain('production_id', '=', False)])
         return domain

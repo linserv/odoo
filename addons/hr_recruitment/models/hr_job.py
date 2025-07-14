@@ -36,6 +36,8 @@ class HrJob(models.Model):
         help="Select the location where the applicant will work. Addresses listed here are defined on the company's contact information.")
     application_ids = fields.One2many('hr.applicant', 'job_id', "Job Applications")
     application_count = fields.Integer(compute='_compute_application_count', string="Application Count")
+    open_application_count = fields.Integer(compute='_compute_open_application_count', string="Open Application Count",
+                                            help="Number of applications that are still ongoing (not hired or refused)")
     all_application_count = fields.Integer(compute='_compute_all_application_count', string="All Application Count")
     new_application_count = fields.Integer(
         compute='_compute_new_application_count', string="New Application",
@@ -52,6 +54,7 @@ class HrJob(models.Model):
             position. The Recruiter is automatically added to all meetings with the Applicant.")
     document_ids = fields.One2many('ir.attachment', compute='_compute_document_ids', string="Documents", readonly=True)
     documents_count = fields.Integer(compute='_compute_document_ids', string="Document Count")
+    employee_count = fields.Integer(compute='_compute_employee_count')
     alias_id = fields.Many2one(help="Email alias for this job position. New emails will automatically create new applicants for this job position.")
     color = fields.Integer("Color Index")
     is_favorite = fields.Boolean(compute='_compute_is_favorite', inverse='_inverse_is_favorite')
@@ -62,8 +65,7 @@ class HrJob(models.Model):
     currency_id = fields.Many2one("res.currency", related="company_id.currency_id", readonly=True)
     compensation = fields.Monetary(currency_field="currency_id")
 
-    activities_overdue = fields.Integer(compute='_compute_activities')
-    activities_today = fields.Integer(compute='_compute_activities')
+    activity_count = fields.Integer(compute='_compute_activities')
 
     job_properties = fields.Properties('Properties', definition='company_id.job_properties_definition')
 
@@ -96,19 +98,15 @@ class HrJob(models.Model):
         self.env.cr.execute("""
             SELECT
                 app.job_id,
-                COUNT(*) AS act_count,
-                CASE
-                    WHEN %(today)s::date - act.date_deadline::date = 0 THEN 'today'
-                    WHEN %(today)s::date - act.date_deadline::date > 0 THEN 'overdue'
-                END AS act_state
+                COUNT(*) AS act_count
              FROM mail_activity act
              JOIN hr_applicant app ON app.id = act.res_id
              JOIN hr_recruitment_stage sta ON app.stage_id = sta.id
             WHERE act.user_id = %(user_id)s AND act.res_model = 'hr.applicant'
-              AND act.date_deadline <= %(today)s::date AND app.active
+              AND app.active
               AND app.job_id IN %(job_ids)s
               AND sta.hired_stage IS NOT TRUE
-            GROUP BY app.job_id, act_state
+            GROUP BY app.job_id
         """, {
             'today': fields.Date.context_today(self),
             'user_id': self.env.uid,
@@ -117,10 +115,9 @@ class HrJob(models.Model):
         })
         job_activities = defaultdict(dict)
         for activity in self.env.cr.dictfetchall():
-            job_activities[activity['job_id']][activity['act_state']] = activity['act_count']
+            job_activities[activity['job_id']] = activity['act_count']
         for job in self:
-            job.activities_overdue = job_activities[job.id].get('overdue', 0)
-            job.activities_today = job_activities[job.id].get('today', 0)
+            job.activity_count = job_activities[job.id]
 
     @api.depends('application_ids.interviewer_ids')
     def _compute_extended_interviewer_ids(self):
@@ -184,6 +181,29 @@ class HrJob(models.Model):
         result = {job.id: count for job, count in read_group_result}
         for job in self:
             job.application_count = result.get(job.id, 0)
+
+    def _compute_open_application_count(self):
+        hired_stages = self.env['hr.recruitment.stage'].search([('hired_stage', '=', True)])
+        result = dict(self.env['hr.applicant']._read_group([
+            ('job_id', 'in', self.ids),
+            ('stage_id', 'not in', hired_stages.ids),
+        ], ['job_id'], ['__count']))
+        for job in self:
+            job.open_application_count = result.get(job, 0)
+
+    def _compute_employee_count(self):
+        res = {
+            job.id: count
+            for job, count in self.env['hr.employee']._read_group(
+                domain=[
+                    ('job_id', 'in', self.ids),
+                ],
+                groupby=['job_id'],
+                aggregates=['__count'],
+            )
+        }
+        for job in self:
+            job.employee_count = res.get(job.id, 0)
 
     def _get_first_stage(self):
         self.ensure_one()
@@ -294,7 +314,7 @@ class HrJob(models.Model):
                 )
                 if application_ids:
                     application_ids.message_unsubscribe(to_unsubscribe)
-                    application_ids.user_id = job.user_id
+                    application_ids.with_context(mail_auto_subscribe_no_notify=True).user_id = job.user_id
 
         # Since the alias is created upon record creation, the default values do not reflect the current values unless
         # specifically rewritten
@@ -345,24 +365,10 @@ class HrJob(models.Model):
         views = ['activity'] + [view for view in action['view_mode'].split(',') if view != 'activity']
         action['view_mode'] = ','.join(views)
         action['views'] = [(False, view) for view in views]
-        return action
-
-    def action_open_late_activities(self):
-        action = self.action_open_activities()
         action['context'] = {
             'default_job_id': self.id,
             'search_default_job_id': self.id,
-            'search_default_activities_overdue': True,
             'search_default_running_applicant_activities': True,
-        }
-        return action
-
-    def action_open_today_activities(self):
-        action = self.action_open_activities()
-        action['context'] = {
-            'default_job_id': self.id,
-            'search_default_job_id': self.id,
-            'search_default_activities_today': True,
         }
         return action
 
@@ -375,10 +381,30 @@ class HrJob(models.Model):
             "data/scenarios/hr_recruitment_scenario.xml",
             None,
             mode="init",
-            kind="data",
         )
 
         return {
             "type": "ir.actions.client",
             "tag": "reload",
+        }
+
+    def action_open_employees(self):
+        self.ensure_one()
+        if self.env['hr.employee'].has_access('read'):
+            res_model = "hr.employee"
+        else:
+            res_model = "hr.employee.public"
+
+        return {
+            'name': _("Related Employees"),
+            'type': 'ir.actions.act_window',
+            'res_model': res_model,
+            'view_mode': 'list,kanban,form',
+            'views': [(False, 'list'), (False, 'kanban'), (False, 'form')],
+            'context': {
+                'default_job_id': self.id,
+                'search_default_group_job': 1,
+                'search_default_job_id': self.id,
+                'expand': 1
+            },
         }

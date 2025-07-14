@@ -435,7 +435,7 @@ class expression(object):
             :attr result: the result of the parsing, as a pair (query, params)
             :attr query: Query object holding the final result
         """
-        warnings.warn("Since 19.0, expression() is deprecated, use Domain or _where_calc instead", DeprecationWarning)
+        warnings.warn("Since 19.0, expression() is deprecated, use Domain or _search instead", DeprecationWarning)
         self._unaccent = model.pool.unaccent
         self._has_trigram = model.pool.has_trigram
         self.root_model = model
@@ -443,7 +443,7 @@ class expression(object):
 
         # normalize and prepare the expression for parsing
         domain = orm_domains.Domain(domain)
-        domain = domain.optimize(self.root_model, full=True)
+        domain = domain.optimize_full(self.root_model)
         self.expression = domain
 
         # this object handles all the joins

@@ -68,7 +68,7 @@ class ModelConverter(werkzeug.routing.BaseConverter):
 
     def to_python(self, value: str) -> models.BaseModel:
         _uid = RequestUID(value=value, converter=self)
-        env = api.Environment(request.cr, _uid, request.context)
+        env = api.Environment(request.env.cr, _uid, request.env.context)
         return env[self.model].browse(self.unslug(value)[1])
 
     def to_url(self, value: models.BaseModel) -> str:
@@ -84,7 +84,7 @@ class ModelsConverter(werkzeug.routing.BaseConverter):
 
     def to_python(self, value: str) -> models.BaseModel:
         _uid = RequestUID(value=value, converter=self)
-        env = api.Environment(request.cr, _uid, request.context)
+        env = api.Environment(request.env.cr, _uid, request.env.context)
         return env[self.model].browse(int(v) for v in value.split(','))
 
     def to_url(self, value: models.BaseModel) -> str:
@@ -409,11 +409,9 @@ class IrHttp(models.AbstractModel):
         http.root.session_store.vacuum(max_lifetime=http.get_session_max_inactivity(self.env))
 
     @api.model
-    def get_translations_for_webclient(self, modules, lang):
-        if not modules:
-            modules = self.pool._init_modules
+    def _get_translations_for_webclient(self, modules, lang):
         if not lang:
-            lang = self._context.get("lang")
+            lang = self.env.context.get("lang")
         lang_data = self.env['res.lang']._get_data(code=lang)
         lang_params = {
             "name": lang_data.name,
@@ -439,8 +437,8 @@ class IrHttp(models.AbstractModel):
 
     @api.model
     @tools.ormcache('frozenset(modules)', 'lang')
-    def get_web_translations_hash(self, modules, lang):
-        translations, lang_params = self.get_translations_for_webclient(modules, lang)
+    def _get_web_translations_hash(self, modules, lang):
+        translations, lang_params = self._get_translations_for_webclient(modules, lang)
         translation_cache = {
             'lang_parameters': lang_params,
             'modules': translations,

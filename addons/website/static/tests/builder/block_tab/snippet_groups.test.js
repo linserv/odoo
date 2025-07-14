@@ -70,14 +70,14 @@ test("install an app from snippet group", async () => {
     await setupWebsiteBuilder("<div><p>Text</p></div>", {
         snippets: {
             snippet_groups: [
-                '<div name="A" data-module-id="111" data-oe-thumbnail="a.svg"><section class="s_snippet_group" data-snippet="s_snippet_group"></section></div>',
+                '<div name="A" data-module-id="111" data-module-display-name="module_A" data-oe-thumbnail="a.svg"><section class="s_snippet_group" data-snippet="s_snippet_group"></section></div>',
             ],
         },
     });
     await click(`.o-snippets-menu #snippet_groups .o_snippet .btn.o_install_btn`);
     await animationFrame();
     expect(".modal").toHaveCount(1);
-    expect(".modal-body").toHaveText("Do you want to install A App?\nMore info about this app.");
+    expect(".modal-body").toHaveText("Do you want to install module_A App?\nMore info about this app.");
 
     await contains(".modal .btn-primary:contains('Save and Install')").click();
     expect.verifySteps([`button_immediate_install`]);
@@ -91,12 +91,14 @@ test("install an app from snippet structure", async () => {
     const snippetsDescription = () => [
         {
             name: "Test 1",
+            moduleDisplayName: "Test 1 module",
             groupName: "a",
             content: getBasicSection("Yop"),
             moduleId: 111,
         },
         {
             name: "Test 2",
+            moduleDisplayName: "Test 2 module",
             groupName: "a",
             content: getBasicSection("Hello"),
         },
@@ -112,11 +114,7 @@ test("install an app from snippet structure", async () => {
             ),
         },
     });
-    await click(
-        queryFirst(
-            ".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area"
-        )
-    );
+    await click(".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area");
     await waitForSnippetDialog();
     expect(
         ".o_add_snippet_dialog .o_add_snippet_iframe:iframe .o_snippet_preview_wrap"
@@ -133,7 +131,7 @@ test("install an app from snippet structure", async () => {
     );
     await animationFrame();
     expect(".o_dialog:not(:has(.o_inactive_modal)) .modal-body").toHaveText(
-        "Do you want to install Test 1 App?\nMore info about this app."
+        "Do you want to install Test 1 module App?\nMore info about this app."
     );
 
     await contains(
@@ -176,11 +174,7 @@ test("open add snippet dialog + switch snippet category", async () => {
         },
     });
     expect(queryAllTexts(".o-snippets-menu #snippet_groups .o_snippet")).toEqual(["A", "B"]);
-    await click(
-        queryFirst(
-            ".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area"
-        )
-    );
+    await click(".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area");
     await waitForSnippetDialog();
     expect(queryAllTexts(".o_add_snippet_dialog aside .list-group .list-group-item")).toEqual([
         "A",
@@ -253,11 +247,7 @@ test("search snippet in add snippet dialog", async () => {
             ),
         },
     });
-    await click(
-        queryFirst(
-            ".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area"
-        )
-    );
+    await click(".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area");
     await waitForSnippetDialog();
     expect("aside .list-group .list-group-item").toHaveCount(2);
     const snippetsDescriptionProcessed = snippetsDescription(true);
@@ -346,11 +336,7 @@ test("search snippet by class", async () => {
             ),
         },
     });
-    await click(
-        queryFirst(
-            ".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area"
-        )
-    );
+    await click(".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area");
     await waitForSnippetDialog();
 
     // Search among classes of root node
@@ -404,11 +390,7 @@ test("add snippet dialog with imagePreview", async () => {
             ),
         },
     });
-    await click(
-        queryFirst(
-            ".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area"
-        )
-    );
+    await click(".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area");
     const previewSnippetIframeSelector =
         ".o_add_snippet_dialog .o_add_snippet_iframe:iframe .o_snippet_preview_wrap";
     await waitForSnippetDialog();
@@ -452,11 +434,7 @@ test("insert snippet structure", async () => {
         `<section class="o_colored_level"><p>Text</p></section>`
     );
 
-    await click(
-        queryFirst(
-            ".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area"
-        )
-    );
+    await click(".o-snippets-menu #snippet_groups .o_snippet_thumbnail .o_snippet_thumbnail_area");
     await waitForSnippetDialog();
     const previewSelector =
         ".o_add_snippet_dialog .o_add_snippet_iframe:iframe .o_snippet_preview_wrap";

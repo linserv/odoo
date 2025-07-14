@@ -339,9 +339,8 @@
     <div t-attf-class="card w-100 o_wslides_course_card mb-4 #{'o_wslides_course_unpublished' if not channel.is_published else ''}" t-cache="channel if is_public_user and not search_tags else None">
         <t t-set="channel_frontend_tags" t-value="channel.tag_ids.filtered(lambda tag: tag.color)"/>
         <a t-attf-href="/slides/#{slug(channel)}" t-title="channel.name" style="height:120px">
-            <div t-field="channel.image_1920" t-options="{'widget': 'image', 'preview_image': 'image_512'}" class="o_wslides_background_image h-100">
-                <t t-if="channel.partner_has_new_content" t-call="website_slides.course_card_information"/>
-            </div>
+            <div t-field="channel.image_1920" t-options="{'widget': 'image', 'preview_image': 'image_512'}" class="o_wslides_background_image h-100"/>
+            <t t-if="channel.partner_has_new_content" t-call="website_slides.course_card_information"/>
         </a>
         <div class="card-body p-3">
             <a class="card-title h5 mb-2 o_wslides_desc_truncate_2" t-attf-href="/slides/#{slug(channel)}" t-field="channel.name"/>
@@ -384,10 +383,10 @@
     </t>
 </template>
 
-<template id="course_card_information_arrow" inherit_id="website_slides.course_card_information"
-    active="True" name='New Content Ribbon'>
+<template id="course_card_information_badge" inherit_id="website_slides.course_card_information"
+    active="True" name='New Content Badge'>
     <xpath expr="//t[@id='course_card_information_content']" position="inside">
-        <span class="o_wslides_arrow">New Content</span>
+        <span class="position-absolute top-0 badge bg-secondary mt-2 ms-2">New Content</span>
     </xpath>
 </template>
 
@@ -477,7 +476,7 @@
     <div class="o_wslides_home_aside">
         <div t-if="user.rank_id" class="d-flex align-items-center">
             <span class="fw-bold text-muted me-2">Current rank:</span>
-            <img t-att-src="website.image_url(user.rank_id, 'image_128')" width="16" height="16" alt="" class="o_object_fit_cover me-1"/>
+            <img t-att-src="website.image_url(user.rank_id, 'image_128')" width="16" height="16" alt="" class="object-fit-cover me-1"/>
             <a href="/profile/ranks_badges" t-field="user.rank_id"/>
         </div>
         <t t-set="next_rank_id" t-value="user._get_next_rank()"/>

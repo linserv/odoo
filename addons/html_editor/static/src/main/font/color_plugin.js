@@ -21,6 +21,7 @@ import { _t } from "@web/core/l10n/translation";
 import { isColorGradient, isCSSColor, RGBA_REGEX, rgbaToHex } from "@web/core/utils/colors";
 import { ColorSelector } from "./color_selector";
 import { backgroundImageCssToParts, backgroundImagePartsToCss } from "@html_editor/utils/image";
+import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 
 const RGBA_OPACITY = 0.6;
 const HEX_OPACITY = "99";
@@ -47,6 +48,7 @@ export class ColorPlugin extends Plugin {
             {
                 id: "applyColor",
                 run: this.applyColor.bind(this),
+                isAvailable: isHtmlContentSupported,
             },
         ],
         toolbar_items: [
@@ -56,6 +58,7 @@ export class ColorPlugin extends Plugin {
                 description: _t("Apply Font Color"),
                 Component: ColorSelector,
                 props: this.getPropsForColorSelector("foreground"),
+                isAvailable: isHtmlContentSupported,
             },
             {
                 id: "backcolor",
@@ -63,6 +66,7 @@ export class ColorPlugin extends Plugin {
                 description: _t("Apply Background Color"),
                 Component: ColorSelector,
                 props: this.getPropsForColorSelector("background"),
+                isAvailable: isHtmlContentSupported,
             },
         ],
 
@@ -289,6 +293,9 @@ export class ColorPlugin extends Plugin {
             if (mode === "backgroundColor" && color) {
                 return !closestElement(node, "table.o_selected_table");
             }
+            if (closestElement(node).classList.contains("o_default_color")) {
+                return false;
+            }
             const li = closestElement(node, "li");
             if (li && color && this.dependencies.selection.areNodeContentsFullySelected(li)) {
                 return rgbaToHex(li.style.color).toLowerCase() !== hexColor;
@@ -419,10 +426,6 @@ export class ColorPlugin extends Plugin {
         // Color the selected <font>s and remove uncolored fonts.
         const fontsSet = new Set(fonts);
         for (const font of fontsSet) {
-            const closestLI = closestElement(font, "li");
-            if (font && color === "" && closestLI?.style.color) {
-                color = "initial";
-            }
             this.colorElement(font, color, mode);
             if (
                 !hasColor(font, "color") &&
@@ -509,6 +512,8 @@ export class ColorPlugin extends Plugin {
                 backgroundImagePartsToCss(parts)
             );
         } else {
+            // Change camelCase to kebab-case.
+            mode = mode.replace("backgroundColor", "background-color");
             this.delegateTo("apply_style", element, mode, color);
         }
         this.fixColorCombination(element);

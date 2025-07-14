@@ -7,12 +7,11 @@ from ast import literal_eval
 from datetime import date, timedelta
 from collections import defaultdict
 
-from odoo import SUPERUSER_ID, _, api, fields, models
+from odoo import _, api, fields, models
 from odoo.addons.stock.models.stock_move import PROCUREMENT_PRIORITIES
 from odoo.addons.web.controllers.utils import clean_action
 from odoo.exceptions import UserError
 from odoo.fields import Domain
-from odoo.osv import expression
 from odoo.tools import format_datetime, format_date, groupby, SQL
 from odoo.tools.float_utils import float_compare, float_is_zero
 
@@ -302,12 +301,12 @@ class StockPickingType(models.Model):
     def _search_display_name(self, operator, value):
         # Try to reverse the `display_name` structure
         if operator == 'in':
-            return expression.OR(self._search_display_name('=', v) for v in value)
+            return Domain.OR(self._search_display_name('=', v) for v in value)
         if operator == 'not in':
             return NotImplemented
         parts = isinstance(value, str) and value.split(': ')
         if parts and len(parts) == 2:
-            return ['&', ('warehouse_id.name', operator, parts[0]), ('name', operator, parts[1])]
+            return Domain('warehouse_id.name', operator, parts[0]) & Domain('name', operator, parts[1])
         if operator == '=':
             operator = 'in'
             value = [value]
@@ -464,7 +463,7 @@ class StockPickingType(models.Model):
 
     def get_action_picking_type_moves_analysis(self):
         action = self.env["ir.actions.actions"]._for_xml_id('stock.stock_move_action')
-        action['domain'] = expression.AND([
+        action['domain'] = Domain.AND([
             action['domain'] or [], [('picking_type_id', '=', self.id)]
         ])
         return action
@@ -607,10 +606,6 @@ class StockPicking(models.Model):
     has_deadline_issue = fields.Boolean(
         "Is late", compute='_compute_has_deadline_issue', store=True, default=False,
         help="Is late or will be late depending on the deadline and scheduled date")
-    date = fields.Datetime(
-        'Creation Date',
-        default=fields.Datetime.now, tracking=True, copy=False,
-        help="Creation Date, usually the time of the order")
     date_done = fields.Datetime('Date of Transfer', copy=False, readonly=True, help="Date at which the transfer has been processed or cancelled.")
     delay_alert_date = fields.Datetime('Delay Alert Date', compute='_compute_delay_alert_date', search='_search_delay_alert_date')
     json_popover = fields.Char('JSON data for the popover widget', compute='_compute_json_popover')
@@ -630,7 +625,7 @@ class StockPicking(models.Model):
     picking_type_id = fields.Many2one(
         'stock.picking.type', 'Operation Type',
         required=True, index=True,
-        default=_default_picking_type_id)
+        default=_default_picking_type_id, tracking=True)
     warehouse_address_id = fields.Many2one('res.partner', related='picking_type_id.warehouse_id.partner_id')
     picking_type_code = fields.Selection(
         related='picking_type_id.code',
@@ -745,7 +740,7 @@ class StockPicking(models.Model):
     def _search_date_category(self, operator, value):
         if operator != 'in':
             return NotImplemented
-        return expression.OR(
+        return Domain.OR(
             self.date_category_to_domain('scheduled_date', item)
             for item in value
         )
@@ -1017,7 +1012,7 @@ class StockPicking(models.Model):
             return ['|', ('state', 'in', invalid_states), *self._search_products_availability_state('in', value - {False})]
         value = set(self._fields['products_availability_state'].get_values(self.env)) & value
         if not value:
-            return expression.FALSE_DOMAIN
+            return Domain.FALSE
 
         def _get_comparison_date(move):
             return move.picking_id.scheduled_date
@@ -1030,7 +1025,7 @@ class StockPicking(models.Model):
                 return False
 
         pickings = self.env['stock.picking'].search([('state', 'not in', invalid_states)], order='id').filtered(_filter_picking_moves)
-        return [('id', 'in', pickings.ids)]
+        return Domain('id', 'in', pickings.ids)
 
     def _get_show_allocation(self, picking_type_id):
         """ Helper method for computing "show_allocation" value.
@@ -1058,7 +1053,7 @@ class StockPicking(models.Model):
     def get_empty_list_help(self, help_message):
         return self.env['ir.ui.view']._render_template(
             'stock.help_message_template', {
-                'picking_type_code': self._context.get('restricted_picking_type_code') or self.picking_type_code,
+                'picking_type_code': self.env.context.get('restricted_picking_type_code') or self.picking_type_code,
             }
         )
 
@@ -1907,7 +1902,7 @@ class StockPicking(models.Model):
         action = self.env["ir.actions.actions"]._for_xml_id("stock.action_stock_scrap")
         scraps = self.env['stock.scrap'].search([('picking_id', '=', self.id)])
         action['domain'] = [('id', 'in', scraps.ids)]
-        action['context'] = dict(self._context, create=False)
+        action['context'] = dict(self.env.context, create=False)
         return action
 
     def action_see_packages(self):

@@ -2,7 +2,7 @@
 <templates xml:space="preserve">
     <t t-inherit="mail.ChatWindow.headerContent" t-inherit-mode="extension">
         <xpath expr="//*[@name='threadAvatar']" position="before">
-            <t t-if="props.chatWindow.thread" t-call="im_livechat.LivechatStatusLabel">
+            <t t-if="props.chatWindow.thread" t-call="im_livechat.LivechatStatusLabelOfThread">
                 <t t-set="livechatThread" t-value="props.chatWindow.thread"/>
             </t>
         </xpath>

@@ -24,7 +24,6 @@ import {
     normalizeSelfClosingElement,
 } from "../utils/selection";
 import { closestScrollableY } from "@web/core/utils/scrolling";
-import { isBrowserFirefox } from "@web/core/browser/feature_detection";
 
 /**
  * @typedef { Object } EditorSelection
@@ -93,6 +92,13 @@ export function isArtificialVoidElement(node) {
 
 export function isNotAllowedContent(node) {
     return isArtificialVoidElement(node) || VOID_ELEMENT_NAMES.includes(node.nodeName);
+}
+
+export function isHtmlContentSupported(selection) {
+    return !closestElement(
+        selection.focusNode,
+        '[data-oe-model]:not([data-oe-type="html"]):not([data-oe-field="arch"]):not([data-oe-translation-source-sha])'
+    );
 }
 
 /**
@@ -211,7 +217,8 @@ export class SelectionPlugin extends Plugin {
         this.addDomListener(this.editable, "mousedown", (ev) => {
             if (ev.detail === 2) {
                 this.correctDoubleClick = true;
-            } else if (ev.detail % 3 === 0) {
+            }
+            if (ev.detail && ev.detail % 3 === 0) {
                 this.onTripleClick(ev);
             }
         });
@@ -248,8 +255,8 @@ export class SelectionPlugin extends Plugin {
                     this.dispatchTo("selection_leave_handlers");
                 }
             };
-            this.addDomListener(this.document, "focus", focusEditable, { capture: true });
-            this.addDomListener(document, "focus", unFocusEditable, { capture: true });
+            this.addDomListener(this.document, "focusin", focusEditable, { capture: true });
+            this.addDomListener(document, "focusin", unFocusEditable, { capture: true });
             this.addDomListener(this.document, "pointerdown", focusEditable, { capture: true });
             this.addDomListener(document, "pointerdown", unFocusEditable, { capture: true });
         }
@@ -266,6 +273,19 @@ export class SelectionPlugin extends Plugin {
 
     resetSelection() {
         this.activeSelection = this.makeActiveSelection();
+    }
+
+    onTripleClick(ev) {
+        const selectionData = this.getSelectionData();
+        if (selectionData.documentSelectionIsInEditable) {
+            const { documentSelection } = selectionData;
+            const block = closestBlock(documentSelection.anchorNode);
+            const [anchorNode, anchorOffset] = getDeepestPosition(block, 0);
+            const [focusNode, focusOffset] = getDeepestPosition(block, nodeSize(block));
+            this.setSelection({ anchorNode, anchorOffset, focusNode, focusOffset });
+            ev.preventDefault();
+            return;
+        }
     }
 
     /**
@@ -691,7 +711,9 @@ export class SelectionPlugin extends Plugin {
         const lastLeafNode = lastLeaf(node);
         return (
             // Custom rules
-            this.getResource("fully_selected_node_predicates").some((cb) => cb(node, selection)) ||
+            this.getResource("fully_selected_node_predicates").some((cb) =>
+                cb(node, selection, range)
+            ) ||
             // Default rule
             (range.isPointInRange(firstLeafNode, 0) &&
                 range.isPointInRange(lastLeafNode, nodeSize(lastLeafNode)))
@@ -1016,32 +1038,5 @@ export class SelectionPlugin extends Plugin {
             ? [start, startOffset, end, endOffset]
             : [end, endOffset, start, startOffset];
         return this.setSelection({ anchorNode, anchorOffset, focusNode, focusOffset });
-    }
-
-    /**
-     * Chrome and Safari set the selection to an undesired position on triple-click. E.g.:
-     *   Before: <p>abc</p><p>def</p>
-     *   Action: Triple-click on the first paragraph
-     *   After: <p>[abc</p><p>]def</p>
-     * This function overrides the default behavior and sets the selection
-     * around the inner boundaries of the target's block, e.g.:
-     *   <p>[abc]</p><p>def</p>
-     *
-     * This is not needed for Firefox. Moreover, Firefox does not support
-     * selection.modify with "paragraphBoundary".
-     *
-     * @param {MouseEvent} ev
-     */
-    onTripleClick(ev) {
-        if (isBrowserFirefox()) {
-            return;
-        }
-        const selection = this.document.getSelection();
-        if (!selection) {
-            return;
-        }
-        selection.modify("move", "backward", "paragraphBoundary");
-        selection.modify("extend", "forward", "paragraphBoundary");
-        ev.preventDefault();
     }
 }

@@ -36,12 +36,18 @@
             'web/static/lib/bootstrap/scss/_maps.scss',
             'web/static/fonts/fonts.scss',
             'html_builder/static/src/**/*',
+            ('remove', 'html_builder/static/src/**/*.inside.scss'),
+            ('remove', 'html_builder/static/src/**/*.dark.scss'),
+        ],
+        'web.assets_web_dark': [
+            'html_builder/static/src/**/*.dark.scss',
         ],
         'html_builder.inside_builder_style': [
             ('include', 'web._assets_helpers'),
 
             'web/static/src/scss/bootstrap_overridden.scss',
             'html_builder/static/src/**/*.inside.scss',
+            'html_editor/static/src/main/chatgpt/chatgpt_plugin.scss',
             'html_editor/static/src/main/link/link.scss',
         ],
         'html_builder.assets_edit_frontend': [
@@ -58,7 +64,7 @@
         ],
         'web.assets_unit_tests': [
             'html_builder/static/tests/**/*',
-            ('include', 'html_builder.assets'),
+            ('include', 'website.website_builder_assets'),
         ],
     },
     'license': 'LGPL-3',

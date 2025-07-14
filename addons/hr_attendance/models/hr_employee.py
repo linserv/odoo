@@ -32,8 +32,7 @@ class HrEmployee(models.Model):
         string="Attendance Status", compute='_compute_attendance_state',
         selection=[('checked_out', "Checked out"), ('checked_in', "Checked in")],
         groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
-    hours_last_month = fields.Float(
-        compute='_compute_hours_last_month', groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
+    hours_last_month = fields.Float(compute='_compute_hours_last_month')
     hours_today = fields.Float(
         compute='_compute_hours_today',
         groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
@@ -47,8 +46,7 @@ class HrEmployee(models.Model):
         compute='_compute_hours_last_month', groups="hr.group_hr_user")
     overtime_ids = fields.One2many(
         'hr.attendance.overtime', 'employee_id', groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
-    total_overtime = fields.Float(
-        compute='_compute_total_overtime', compute_sudo=True, groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
+    total_overtime = fields.Float(compute='_compute_total_overtime', compute_sudo=True)
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -198,6 +196,27 @@ class HrEmployee(models.Model):
                 empl_name=self.sudo().name))
         return attendance
 
+    @api.model
+    def get_overtime_data(self, domain=None, employee_id=None):
+        domain = [] if domain is None else domain
+        validated_overtime = {
+            attendance[0].id: attendance[1]
+            for attendance in self.env["hr.attendance"]._read_group(
+                domain=domain,
+                groupby=['employee_id'],
+                aggregates=['validated_overtime_hours:sum']
+            )
+        }
+        overtime_adjustments = {
+            overtime[0].id: overtime[1]
+            for overtime in self.env["hr.attendance.overtime"]._read_group(
+                domain=[('employee_id', '=', employee_id), ('adjustment', '=', True)],
+                groupby=['employee_id'],
+                aggregates=['duration:sum']
+            )
+        }
+        return {"validated_overtime": validated_overtime, "overtime_adjustments": overtime_adjustments}
+
     def action_open_last_month_attendances(self):
         self.ensure_one()
         return {
@@ -206,21 +225,23 @@ class HrEmployee(models.Model):
             "res_model": "hr.attendance",
             "views": [[self.env.ref('hr_attendance.hr_attendance_employee_simple_tree_view').id, "list"]],
             "context": {
-                "create": 0
+                "create": 0,
+                "search_default_check_in_filter": 1,
             },
-            "domain": [('employee_id', '=', self.id),
-                       ('check_in', ">=", fields.Datetime.today().replace(day=1))]
+            "domain": [('employee_id', '=', self.id)]
         }
 
-    def action_open_last_month_overtime(self):
+    def action_open_total_overtime(self):
         self.ensure_one()
         return {
             "type": "ir.actions.act_window",
-            "name": _("Attendances This Month"),
+            "name": _("Extra Hours"),
             "res_model": "hr.attendance",
             "views": [[self.env.ref('hr_attendance.hr_attendance_validated_hours_employee_simple_tree_view').id, "list"]],
             "context": {
-                "create": 0
+                "create": 0,
+                "employee_id": self.id,
+                "model": 'hr.employee',
             },
             "domain": [('employee_id', '=', self.id), ('overtime_status', '=', 'approved')]
         }
@@ -249,3 +270,10 @@ class HrEmployee(models.Model):
         for employee in self:
             employee.show_hr_icon_display = employee.company_id.hr_presence_control_attendance or bool(employee.user_id)
         return res
+
+    def open_barcode_scanner(self):
+        return {
+            "type": "ir.actions.client",
+            "tag": "employee_barcode_scanner",
+            "name": "Badge Scanner"
+        }

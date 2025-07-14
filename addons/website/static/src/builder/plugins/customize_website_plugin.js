@@ -1,4 +1,8 @@
-import { getCSSVariableValue, isCSSVariable } from "@html_builder/utils/utils_css";
+import {
+    getCSSVariableValue,
+    isCSSVariable,
+    setBuilderCSSVariables,
+} from "@html_builder/utils/utils_css";
 import { Plugin } from "@html_editor/plugin";
 import { parseHTML } from "@html_editor/utils/html";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
@@ -30,6 +34,7 @@ export class CustomizeWebsitePlugin extends Plugin {
         "getPendingThemeRequests",
         "setPendingThemeRequests",
         "isPluginDestroyed",
+        "reloadBundles",
     ];
 
     resources = {
@@ -103,7 +108,12 @@ export class CustomizeWebsitePlugin extends Plugin {
         }
         return finalValue;
     }
-    async customizeWebsiteVariables(variables = {}, nullValue = "null", clean = false) {
+    async customizeWebsiteVariables(
+        variables = {},
+        nullValue = "null",
+        clean = false,
+        reloadBundles = true
+    ) {
         this.variablesToCustomize = Object.assign(this.variablesToCustomize, variables);
         if (!Object.keys(this.variablesToCustomize).length) {
             return;
@@ -114,7 +124,9 @@ export class CustomizeWebsitePlugin extends Plugin {
             }
         }
         await this.debouncedSCSSVariablesCusto(nullValue);
-        await this.reloadBundles();
+        if (reloadBundles) {
+            await this.reloadBundles();
+        }
     }
     debouncedSCSSVariablesCusto = debounce(async (nullValue) => {
         const variables = this.variablesToCustomize;
@@ -125,7 +137,10 @@ export class CustomizeWebsitePlugin extends Plugin {
             nullValue
         );
     }, 0);
-    async customizeWebsiteColors(colors = {}, { colorType, combinationColor, nullValue } = {}) {
+    async customizeWebsiteColors(
+        colors = {},
+        { colorType, combinationColor, nullValue, resetCcOnEmpty, reloadBundles = true } = {}
+    ) {
         const baseURL = "/website/static/src/scss/options/colors/";
         colorType = colorType ? colorType + "_" : "";
         const url = `${baseURL}user_${colorType}color_palette.scss`;
@@ -144,11 +159,18 @@ export class CustomizeWebsitePlugin extends Plugin {
                 } else if (!isCSSColor(color)) {
                     finalColors[colorName] = `'${color}'`;
                 }
+            } else {
+                if (resetCcOnEmpty) {
+                    finalColors[combinationColor] = "";
+                }
+                finalColors[colorName] = "";
             }
         }
         this.colorsToCustomize = Object.assign(this.colorsToCustomize, finalColors);
         await this.debouncedSCSSColorsCusto(url, nullValue);
-        await this.reloadBundles();
+        if (reloadBundles) {
+            await this.reloadBundles();
+        }
     }
     debouncedSCSSColorsCusto = debounce(async (url, nullValue) => {
         const colors = this.colorsToCustomize;
@@ -325,7 +347,7 @@ export class CustomizeWebsitePlugin extends Plugin {
     }
 }
 
-class SwitchThemeAction extends BuilderAction {
+export class SwitchThemeAction extends BuilderAction {
     static id = "switchTheme";
     static dependencies = ["savePlugin", "action"];
     setup() {
@@ -351,7 +373,7 @@ class SwitchThemeAction extends BuilderAction {
     }
 }
 
-class AddLanguageAction extends BuilderAction {
+export class AddLanguageAction extends BuilderAction {
     static id = "addLanguage";
     static dependencies = ["savePlugin"];
     setup() {
@@ -390,7 +412,7 @@ class AddLanguageAction extends BuilderAction {
     }
 }
 
-class CustomizeBodyBgTypeAction extends BuilderAction {
+export class CustomizeBodyBgTypeAction extends BuilderAction {
     static id = "customizeBodyBgType";
     static dependencies = ["builderActions", "history", "customizeWebsite"];
     isApplied({ value }) {
@@ -466,7 +488,7 @@ class CustomizeBodyBgTypeAction extends BuilderAction {
     }
 }
 
-class RemoveFontAction extends BuilderAction {
+export class RemoveFontAction extends BuilderAction {
     static id = "removeFont";
     static dependencies = ["builderActions"];
     setup() {
@@ -664,7 +686,7 @@ export class WebsiteConfigAction extends BuilderAction {
     }
 }
 
-class SelectTemplateAction extends BuilderAction {
+export class SelectTemplateAction extends BuilderAction {
     static id = "selectTemplate";
     static dependencies = ["customizeWebsite"];
     async prepare({ actionParam }) {
@@ -693,7 +715,10 @@ export class CustomizeWebsiteVariableAction extends BuilderAction {
     }
     isApplied({ params: { mainParam: variable } = {}, value }) {
         const currentValue = this.dependencies.customizeWebsite.getWebsiteVariableValue(variable);
-        return currentValue === value;
+        return (
+            // There might be unquoted values in existing databases.
+            currentValue === value || `'${currentValue}'` === value
+        );
     }
     getValue({ params: { mainParam: variable } }) {
         const currentValue = this.dependencies.customizeWebsite.getWebsiteVariableValue(variable);
@@ -709,7 +734,7 @@ export class CustomizeWebsiteVariableAction extends BuilderAction {
     }
 }
 
-class CustomizeWebsiteColorAction extends BuilderAction {
+export class CustomizeWebsiteColorAction extends BuilderAction {
     static id = "customizeWebsiteColor";
     static dependencies = ["customizeWebsite"];
     setup() {
@@ -745,25 +770,37 @@ class CustomizeWebsiteColorAction extends BuilderAction {
             } else {
                 colorValue = value;
             }
+            const isColorCombination = /^o_cc[12345]$/.test(value);
             await this.dependencies.customizeWebsite.customizeWebsiteColors(
                 {
                     [color]: colorValue,
                 },
-                { colorType, combinationColor, nullValue }
+                {
+                    colorType,
+                    combinationColor,
+                    nullValue,
+                    // Do not touch CC if a gradient is being set
+                    resetCcOnEmpty: !gradientValue,
+                    // Reload bundle will be handled by setting gradient
+                    reloadBundles: isColorCombination,
+                }
             );
-            await this.dependencies.customizeWebsite.customizeWebsiteVariables({
-                [gradientColor]: gradientValue || nullValue,
-            }); // reloads bundles
+            if (!isColorCombination) {
+                await this.dependencies.customizeWebsite.customizeWebsiteVariables({
+                    [gradientColor]: gradientValue || nullValue,
+                }); // reloads bundles
+            }
         } else {
             await this.dependencies.customizeWebsite.customizeWebsiteColors(
                 { [color]: value },
-                { colorType, combinationColor, nullValue }
+                { colorType, combinationColor, resetCcOnEmpty: true, nullValue }
             );
         }
+        setBuilderCSSVariables();
     }
 }
 
-class CustomizeButtonStyleAction extends BuilderAction {
+export class CustomizeButtonStyleAction extends BuilderAction {
     static id = "customizeButtonStyle";
     static dependencies = ["customizeWebsite"];
     setup() {

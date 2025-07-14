@@ -24,24 +24,30 @@ export class OverlayButtonsPlugin extends Plugin {
     setup() {
         // TODO find how to not overflow the mobile preview.
         this.iframe = this.editable.ownerDocument.defaultView.frameElement;
-        this.overlay = this.dependencies.overlay.createOverlay(OverlayButtons, {
-            positionOptions: {
-                position: "top-middle",
-                onPositioned: (overlayEl, position) => {
-                    const iframeRect = this.iframe.getBoundingClientRect();
-                    if (this.target && position.top < iframeRect.top) {
-                        const targetRect = this.target.getBoundingClientRect();
-                        const newTop = iframeRect.top + targetRect.bottom + 15;
-                        position.top = newTop;
-                        overlayEl.style.top = `${newTop}px`;
-                    }
-                    return;
+        this.overlay = this.dependencies.overlay.createOverlay(
+            OverlayButtons,
+            {
+                positionOptions: {
+                    position: "top-middle",
+                    onPositioned: (overlayEl, position) => {
+                        const iframeRect = this.iframe.getBoundingClientRect();
+                        if (this.target && position.top < iframeRect.top) {
+                            const targetRect = this.target.getBoundingClientRect();
+                            const newTop = iframeRect.top + targetRect.bottom + 15;
+                            position.top = newTop;
+                            overlayEl.style.top = `${newTop}px`;
+                        }
+                        return;
+                    },
+                    margin: 15,
+                    flip: false,
                 },
-                margin: 15,
-                flip: false,
+                closeOnPointerdown: false,
             },
-            closeOnPointerdown: false,
-        });
+            // The buttons should appear under other overlays, like the link
+            // popover. The default sequence is 50.
+            { sequence: 49 }
+        );
         this.target = null;
         this.state = reactive({
             isVisible: true,
@@ -60,15 +66,15 @@ export class OverlayButtonsPlugin extends Plugin {
 
         // On keydown, hide the buttons and then show them again when the mouse
         // moves.
-        const onMouseMoveOrDown = throttleForAnimation((ev) => {
+        const onMouseMoveOrDown = throttleForAnimation(() => {
             this.showOverlayButtons();
-            ev.currentTarget.removeEventListener("mousemove", onMouseMoveOrDown);
-            ev.currentTarget.removeEventListener("mousedown", onMouseMoveOrDown);
+            this.editable.removeEventListener("mousemove", onMouseMoveOrDown);
+            this.editable.removeEventListener("mousedown", onMouseMoveOrDown);
         });
-        this.addDomListener(this.editable, "keydown", (ev) => {
+        this.addDomListener(this.editable, "keydown", () => {
             this.hideOverlayButtons();
-            ev.currentTarget.addEventListener("mousemove", onMouseMoveOrDown);
-            ev.currentTarget.addEventListener("mousedown", onMouseMoveOrDown);
+            this.editable.addEventListener("mousemove", onMouseMoveOrDown);
+            this.editable.addEventListener("mousedown", onMouseMoveOrDown);
         });
 
         // Hide the buttons when scrolling. Show them again when the scroll is

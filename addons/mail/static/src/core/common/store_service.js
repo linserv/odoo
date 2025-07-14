@@ -14,6 +14,7 @@ import { session } from "@web/session";
 import { browser } from "@web/core/browser/browser";
 import { loader } from "@web/core/emoji_picker/emoji_picker";
 import { patch } from "@web/core/utils/patch";
+import { isMobileOS } from "@web/core/browser/feature_detection";
 
 /**
  * @typedef {{isSpecial: boolean, channel_types: string[], label: string, displayName: string, description: string}} SpecialMention
@@ -90,6 +91,11 @@ export class Store extends BaseStore {
      */
     inPublicPage = false;
     odoobot = fields.One("Persona");
+    useMobileView = fields.Attr(undefined, {
+        compute() {
+            return this.store.env.services.ui.isSmall || isMobileOS();
+        },
+    });
     users = {};
     /** @type {number} */
     internalUserGroupId;
@@ -455,7 +461,6 @@ export class Store extends BaseStore {
             mentionedChannels = [],
             mentionedPartners = [],
             mentionedRoles = [],
-            specialMentions = [],
         } = {}
     ) {
         const validMentions = {};
@@ -536,7 +541,7 @@ export class Store extends BaseStore {
             thread_model: thread.model,
         };
         if (attachments.length) {
-            params.attachment_tokens = attachments.map((attachment) => attachment.access_token);
+            params.attachment_tokens = attachments.map((attachment) => attachment.ownership_token);
         }
         if (cannedResponseIds?.length) {
             params.canned_response_ids = cannedResponseIds;

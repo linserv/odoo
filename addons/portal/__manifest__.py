@@ -17,7 +17,6 @@ a dependency towards website editing and customization capabilities.""",
     'depends': ['web', 'web_editor', 'http_routing', 'mail', 'auth_signup'],
     'data': [
         'security/ir.model.access.csv',
-        'data/mail_template_data.xml',
         'data/mail_templates.xml',
         'views/address_templates.xml',
         'views/mail_templates_public.xml',
@@ -110,6 +109,9 @@ a dependency towards website editing and customization capabilities.""",
             "mail/static/src/chatter/web_portal/**/*.scss",
             ("remove", "mail/static/src/**/*.dark.scss"),
             "portal/static/src/chatter/scss/shadow.scss",
+        ],
+        'website.inside_builder_style': [
+            'portal/static/src/scss/portal.inside.scss'
         ],
     },
     'author': 'Odoo S.A.',

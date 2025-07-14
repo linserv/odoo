@@ -1,13 +1,12 @@
 import { ScheduledMessage } from "@mail/chatter/web/scheduled_message";
 import { Activity } from "@mail/core/web/activity";
 import { AttachmentList } from "@mail/core/common/attachment_list";
-import { BaseRecipientsList } from "@mail/core/web/base_recipients_list";
 import { Chatter } from "@mail/chatter/web_portal/chatter";
 import { FollowerList } from "@mail/core/web/follower_list";
 import { isDragSourceExternalFile } from "@mail/utils/common/misc";
 import { useAttachmentUploader } from "@mail/core/common/attachment_uploader_hook";
 import { useCustomDropzone } from "@web/core/dropzone/dropzone_hook";
-import { useHover, useMessageHighlight } from "@mail/utils/common/hooks";
+import { useHover, useMessageScrolling } from "@mail/utils/common/hooks";
 import { MailAttachmentDropzone } from "@mail/core/common/mail_attachment_dropzone";
 import { RecipientsInput } from "@mail/core/web/recipients_input";
 import { SearchMessageInput } from "@mail/core/common/search_message_input";
@@ -32,7 +31,6 @@ export const DELAY_FOR_SPINNER = 1000;
 Object.assign(Chatter.components, {
     Activity,
     AttachmentList,
-    BaseRecipientsList,
     Dropdown,
     FileUploader,
     FollowerList,
@@ -79,7 +77,7 @@ Object.assign(Chatter.defaultProps, {
  */
 patch(Chatter.prototype, {
     setup() {
-        this.messageHighlight = useMessageHighlight();
+        this.messageHighlight = useMessageScrolling();
         super.setup(...arguments);
         this.orm = useService("orm");
         this.keepLastSuggestedRecipientsUpdate = new KeepLast();

@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
 from odoo import api, fields, models, _
-from odoo import osv
+from odoo.fields import Domain
 from odoo.tools.sql import SQL
 from odoo.exceptions import UserError
 
@@ -46,7 +45,7 @@ class AccountAccountTag(models.Model):
         in the specified country.
         """
         domain = self._get_tax_tags_domain(tag_name, country_id)
-        original_lang = self._context.get('lang', 'en_US')
+        original_lang = self.env.context.get('lang', 'en_US')
         rslt_tags = self.env['account.account.tag'].with_context(active_test=False, lang='en_US').search(domain)
         return rslt_tags.with_context(lang=original_lang)  # Restore original language, in case the name of the tags needs to be shown/modified
 
@@ -75,7 +74,7 @@ class AccountAccountTag(models.Model):
             ]
             or_domains.append(expr_domain)
 
-        domain = osv.expression.AND([[('engine', '=', 'tax_tags')], osv.expression.OR(or_domains)])
+        domain = Domain('engine', '=', 'tax_tags') & Domain.OR(or_domains)
         return self.env['account.report.expression'].search(domain)
 
     @api.ondelete(at_uninstall=False)

@@ -6,12 +6,12 @@ import json
 from collections import defaultdict
 from datetime import timedelta
 
-from odoo import api, Command, fields, models
+from odoo import api, fields, models
 from odoo.addons.mail.tools.discuss import Store
 from odoo.addons.rating.models import rating_data
 from odoo.exceptions import UserError
-from odoo.osv.expression import AND
-from odoo.tools import get_lang, SQL, LazyTranslate
+from odoo.fields import Command, Domain
+from odoo.tools import get_lang, float_utils, formatLang, SQL, LazyTranslate
 from odoo.tools.misc import unquote
 from odoo.tools.translate import _
 from .project_update import STATUS_COLOR
@@ -40,12 +40,12 @@ class ProjectProject(models.Model):
         count_fields = {fname for fname in self._fields if 'count' in fname}
         if count_field not in count_fields:
             raise ValueError(f"Parameter 'count_field' can only be one of {count_fields}, got {count_field} instead.")
-        domain = [('project_id', 'in', self.ids)]
+        domain = Domain('project_id', 'in', self.ids)
         if additional_domain:
-            domain = AND([domain, additional_domain])
+            domain &= Domain(additional_domain)
         ProjectTask = self.env['project.task'].with_context(active_test=any(project.active for project in self))
         tasks_count_by_project = dict(ProjectTask._read_group(domain, ['project_id'], ['__count']))
-        templates_count_by_project = dict(ProjectTask._read_group(AND([domain, [('is_template', '=', True)]]), ['project_id'], ['__count']))
+        templates_count_by_project = dict(ProjectTask._read_group(domain & Domain('is_template', '=', True), ['project_id'], ['__count']))
         for project in self:
             if project.is_template:
                 count = templates_count_by_project.get(project, 0)
@@ -175,6 +175,7 @@ class ProjectProject(models.Model):
     # Not `required` since this is an option to enable in project settings.
     stage_id = fields.Many2one('project.project.stage', string='Stage', ondelete='restrict', groups="project.group_project_stages",
         tracking=True, index=True, copy=False, default=_default_stage_id, group_expand='_read_group_expand_full')
+    stage_id_color = fields.Integer(string='Stage Color', related="stage_id.color", export_string_translation=False)
     duration_tracking = fields.Json(groups="project.group_project_stages")
 
     update_ids = fields.One2many('project.update', 'project_id', export_string_translation=False)
@@ -546,8 +547,8 @@ class ProjectProject(models.Model):
                 if 'label_tasks' in vals and not vals['label_tasks']:
                     vals['label_tasks'] = task_label
         if self.env.user.has_group('project.group_project_stages'):
-            if 'default_stage_id' in self._context:
-                stage = self.env['project.project.stage'].browse(self._context['default_stage_id'])
+            if 'default_stage_id' in self.env.context:
+                stage = self.env['project.project.stage'].browse(self.env.context['default_stage_id'])
                 # The project's company_id must be the same as the stage's company_id
                 if stage.company_id:
                     for vals in vals_list:
@@ -839,7 +840,7 @@ class ProjectProject(models.Model):
         action = self.env['ir.actions.act_window']._for_xml_id('project.rating_rating_action_view_project_rating')
         action['display_name'] = _("%(name)s's Rating", name=self.name)
         action_context = ast.literal_eval(action['context']) if action['context'] else {}
-        action_context.update(self._context)
+        action_context.update(self.env.context)
         action_context['search_default_filter_write_date'] = 'custom_write_date_last_30_days'
         action_context.pop('group_by', None)
         action['domain'] = [('consumed', '=', True), ('parent_res_model', '=', 'project.project'), ('parent_res_id', '=', self.id)]
@@ -1015,6 +1016,47 @@ class ProjectProject(models.Model):
             })
         return buttons
 
+    def _get_profitability_values(self):
+        if not self.env.user.has_group('project.group_project_manager'):
+            return {}, False
+        profitability_items = self._get_profitability_items(False)
+        if profitability_items and 'revenues' in profitability_items and 'costs' in profitability_items:  # sort the data values
+            profitability_items['revenues']['data'] = sorted(profitability_items['revenues']['data'], key=lambda k: k['sequence'])
+            profitability_items['costs']['data'] = sorted(profitability_items['costs']['data'], key=lambda k: k['sequence'])
+        costs = sum(profitability_items['costs']['total'].values())
+        revenues = sum(profitability_items['revenues']['total'].values())
+        margin = revenues + costs
+        to_bill_to_invoice = profitability_items['costs']['total']['to_bill'] + profitability_items['revenues']['total']['to_invoice']
+        billed_invoiced = profitability_items['costs']['total']['billed'] + profitability_items['revenues']['total']['invoiced']
+        expected_percentage, to_bill_to_invoice_percentage, billed_invoiced_percentage = 0, 0, 0
+        if revenues:
+            expected_percentage = formatLang(self.env, (margin / revenues) * 100, digits=0)
+        if profitability_items['revenues']['total']['to_invoice']:
+            to_bill_to_invoice_percentage = formatLang(self.env, (to_bill_to_invoice / profitability_items['revenues']['total']['to_invoice']) * 100, digits=0)
+        if profitability_items['revenues']['total']['invoiced']:
+            billed_invoiced_percentage = formatLang(self.env, (billed_invoiced / profitability_items['revenues']['total']['invoiced']) * 100, digits=0)
+        profitability_values_dict = {
+            'account_id': self.account_id,
+            'costs': profitability_items['costs'],
+            'revenues': profitability_items['revenues'],
+            'expected_percentage': expected_percentage,
+            'to_bill_to_invoice_percentage': to_bill_to_invoice_percentage,
+            'billed_invoiced_percentage': billed_invoiced_percentage,
+            'total': {
+                'costs': costs,
+                'revenues': revenues,
+                'margin': margin,
+                'margin_percentage': formatLang(self.env,
+                                                not float_utils.float_is_zero(costs, precision_digits=2) and (margin / -costs) * 100 or 0.0,
+                                                digits=0),
+            },
+            'labels': self._get_profitability_labels(),
+        }
+        show_profitability = bool(profitability_values_dict.get('account_id')
+            and (profitability_values_dict.get('costs') or profitability_values_dict.get('revenues'))
+        )
+        return profitability_values_dict, show_profitability
+
     # ---------------------------------------------------
     #  Business Methods
     # ---------------------------------------------------
@@ -1047,7 +1089,7 @@ class ProjectProject(models.Model):
         pass
 
     def _get_plan_domain(self, plan):
-        return AND([super()._get_plan_domain(plan), ['|', ('company_id', '=', False), ('company_id', '=?', unquote('company_id'))]])
+        return Domain.AND([super()._get_plan_domain(plan), ['|', ('company_id', '=', False), ('company_id', '=?', unquote('company_id'))]])
 
     def _get_account_node_context(self, plan):
         return {

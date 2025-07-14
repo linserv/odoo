@@ -41,7 +41,6 @@
         'views/point_of_sale_sequence.xml',
         'data/point_of_sale_data.xml',
         'views/pos_order_report_view.xml',
-        'views/account_statement_view.xml',
         'views/digest_views.xml',
         'views/res_partner_view.xml',
         'views/report_userlabel.xml',
@@ -92,14 +91,14 @@
             'point_of_sale/static/tests/pos/tours/**/*',
             'point_of_sale/static/tests/generic_helpers/**/*',
             'point_of_sale/static/tests/customer_display/**/*',
-            'point_of_sale/static/src/utils.js'
+            'point_of_sale/static/src/utils.js',
         ],
         'web.assets_unit_tests': [
-            # for the related_models.test.js
-            'point_of_sale/static/src/app/models/related_models/**/*',
+            # Load it first to be sure models registry is loaded
+            'point_of_sale/static/src/app/models/**/*',
+            'point_of_sale/static/tests/unit/**/*',
+
             # for the data_service.test.js
-            'point_of_sale/static/src/app/models/utils/indexed_db.js',
-            'point_of_sale/static/src/app/models/data_service_options.js',
             'point_of_sale/static/src/utils.js',
             'point_of_sale/static/src/proxy_trap.js',
             'point_of_sale/static/src/lazy_getter.js',
@@ -108,7 +107,6 @@
 
             'point_of_sale/static/src/app/utils/html-to-image.js',
             'point_of_sale/static/src/app/services/render_service.js',
-            'point_of_sale/static/tests/unit/**/*',
 
             'point_of_sale/static/src/app/components/odoo_logo/*',
             'point_of_sale/static/src/app/components/centered_icon/*',
@@ -209,6 +207,7 @@
             "web_tour/static/src/tour_pointer/**/*.xml",
             "web_tour/static/src/tour_pointer/**/*.js",
             "web_tour/static/src/tour_service/**/*",
+            'web_tour/static/src/tour_utils.js',
             "barcodes/static/tests/legacy/helpers.js",
             "web/static/tests/legacy/helpers/utils.js",
             "web/static/tests/legacy/helpers/cleanup.js",

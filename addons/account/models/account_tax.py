@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-from odoo import api, fields, models, _, Command
-from odoo.osv import expression
+from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
-from odoo.fields import Domain
+from odoo.fields import Command, Domain
 from odoo.tools import frozendict, groupby, html2plaintext, is_html_empty, split_every, SQL
 from odoo.tools.float_utils import float_repr, float_round, float_compare
 from odoo.tools.misc import clean_context, formatLang
@@ -246,7 +244,7 @@ class AccountTax(models.Model):
                         ('country_id', '=', tax.country_id.id),
                         ('id', '!=', tax.id),
                     ])
-            if duplicates := self.search(expression.OR(domains)):
+            if duplicates := self.search(Domain.OR(domains)):
                 raise ValidationError(
                     self.env._(
                         "Tax names must be unique!\n%(taxes)s",
@@ -273,7 +271,7 @@ class AccountTax(models.Model):
             if (
                 record.tax_exigibility == 'on_payment'
                 and not record.cash_basis_transition_account_id.reconcile
-                and not self._context.get('chart_template_load')
+                and not self.env.context.get('chart_template_load')
             ):
                 raise ValidationError(_("The cash basis transition account needs to allow reconciliation."))
 
@@ -549,7 +547,7 @@ class AccountTax(models.Model):
         return ''.join(list_name)
 
     @api.model
-    def _search(self, domain, offset=0, limit=None, order=None):
+    def _search(self, domain, *args, **kwargs):
         """
         Intercept the search on `name` to allow searching more freely on taxes
         when using `like` or `ilike`.
@@ -559,7 +557,7 @@ class AccountTax(models.Model):
                 return Domain('name', cond.operator, AccountTax._parse_name_search(cond.value))
             return cond
         domain = Domain(domain).map_conditions(preprocess_name)
-        return super()._search(domain, offset, limit, order)
+        return super()._search(domain, *args, **kwargs)
 
     def _search_name(self, operator, value):
         if isinstance(value, str):
@@ -643,6 +641,11 @@ class AccountTax(models.Model):
     def _sanitize_vals(self, vals):
         """Normalize the create/write values."""
         sanitized = vals.copy()
+
+        # Wrap plain text in <div> if description has no HTML tags to avoid the padding with automatically added <p>
+        if sanitized.get('description') and not re.search(r'<[^>]+>', sanitized['description']):
+            sanitized['description'] = f"<div>{sanitized['description']}</div>"
+
         # Allow to provide invoice_repartition_line_ids and refund_repartition_line_ids by dispatching them
         # correctly in the repartition_line_ids
         if 'repartition_line_ids' in sanitized and (
@@ -3208,8 +3211,8 @@ class AccountTax(models.Model):
 
         # Compute tax details for a single line.
         currency = currency or company.currency_id
-        if 'force_price_include' in self._context:
-            special_mode = 'total_included' if self._context['force_price_include'] else 'total_excluded'
+        if 'force_price_include' in self.env.context:
+            special_mode = 'total_included' if self.env.context['force_price_include'] else 'total_excluded'
         elif not handle_price_include:
             special_mode = 'total_excluded'
         else:
@@ -3260,7 +3263,7 @@ class AccountTax(models.Model):
                 if not rep_line.account_id:
                     total_void += tax_rep_data['tax_amount_currency']
 
-        if self._context.get('round_base', True):
+        if self.env.context.get('round_base', True):
             total_excluded = currency.round(total_excluded)
             total_included = currency.round(total_included)
 
@@ -3502,7 +3505,7 @@ class AccountTaxRepartitionLine(models.Model):
         :return: An account.account record or an empty recordset.
         """
         self.ensure_one()
-        if not force_caba_exigibility and self.tax_id.tax_exigibility == 'on_payment' and not self._context.get('caba_no_transition_account'):
+        if not force_caba_exigibility and self.tax_id.tax_exigibility == 'on_payment' and not self.env.context.get('caba_no_transition_account'):
             return self.tax_id.cash_basis_transition_account_id
         else:
             return self.account_id

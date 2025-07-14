@@ -509,7 +509,6 @@ export function makeActionManager(env, router = _router) {
                 }
             } else {
                 // The action to load isn't the current one => executes it
-                context.params = state;
                 Object.assign(options, {
                     additionalContext: context,
                     viewType: state.resId ? "form" : state.view_type,
@@ -1256,7 +1255,7 @@ export function makeActionManager(env, router = _router) {
         const clientAction = actionRegistry.get(action.tag);
         action.path ||= clientAction.path;
         if (clientAction.prototype instanceof Component) {
-            if (action.target !== "new") {
+            if (action.target !== "new" && !options.newWindow) {
                 const canProceed = await clearUncommittedChanges(env);
                 if (!canProceed) {
                     return;
@@ -1265,10 +1264,11 @@ export function makeActionManager(env, router = _router) {
                     action.target = clientAction.target;
                 }
             }
+            const props = clientAction.extractProps?.(action) || {};
             const controller = _makeController({
                 Component: clientAction,
                 action,
-                ..._getActionInfo(action, options.props),
+                ..._getActionInfo(action, { ...props, ...options.props }),
             });
             controller.displayName ||= clientAction.displayName?.toString() || "";
             return _updateUI(controller, options);
@@ -1412,7 +1412,7 @@ export function makeActionManager(env, router = _router) {
             case "ir.actions.act_url":
                 return _executeActURLAction(action, options);
             case "ir.actions.act_window":
-                if (action.target !== "new") {
+                if (action.target !== "new" && !options.newWindow) {
                     const canProceed = await clearUncommittedChanges(env);
                     if (!canProceed) {
                         return new Promise(() => {});
@@ -1631,9 +1631,11 @@ export function makeActionManager(env, router = _router) {
                 view,
             });
 
-        const canProceed = await clearUncommittedChanges(env);
-        if (!canProceed) {
-            return;
+        if (!newWindow) {
+            const canProceed = await clearUncommittedChanges(env);
+            if (!canProceed) {
+                return;
+            }
         }
 
         Object.assign(

@@ -1,18 +1,22 @@
 import {
+    Component,
     onMounted,
     onPatched,
     onWillUnmount,
+    toRaw,
     useComponent,
     useEffect,
     useRef,
     useState,
+    xml,
 } from "@odoo/owl";
 
+import { monitorAudio } from "@mail/utils/common/media_monitoring";
 import { browser } from "@web/core/browser/browser";
+import { OVERLAY_SYMBOL } from "@web/core/overlay/overlay_container";
 import { Deferred } from "@web/core/utils/concurrency";
 import { makeDraggableHook } from "@web/core/utils/draggable_hook_builder_owl";
 import { useService } from "@web/core/utils/hooks";
-import { monitorAudio } from "@mail/utils/common/media_monitoring";
 
 export function useLazyExternalListener(target, eventName, handler, eventParams) {
     const boundHandler = handler.bind(useComponent());
@@ -102,11 +106,7 @@ export function useHover(refNames, { onHover, onAway, stateObserver, onHovering 
             targets.push({ ref: refName });
             continue;
         }
-        targets.push({
-            ref: refName.endsWith("*")
-                ? useRef(refName.substring(0, refName.length - 1))
-                : useRef(refName),
-        });
+        targets.push({ ref: useRef(refName) });
     }
     const state = useState({
         set isHover(newIsHover) {
@@ -119,8 +119,25 @@ export function useHover(refNames, { onHover, onAway, stateObserver, onHovering 
             void this._count;
             return this._isHover;
         },
+        _contains: [],
         _count: 0,
         _isHover: false,
+        _targets: targets,
+        addTarget(target) {
+            state._targets.push(target);
+            const handleMouseenter = (ev) => onmouseenter(ev);
+            const handleMouseleave = (ev) => onmouseleave(ev);
+            target.ref.el.addEventListener("mouseenter", handleMouseenter, true);
+            target.ref.el.addEventListener("mouseleave", handleMouseleave, true);
+            return () => {
+                target.ref.el.removeEventListener("mouseenter", handleMouseenter, true);
+                target.ref.el.removeEventListener("mouseleave", handleMouseleave, true);
+                const idx = state._targets.findIndex((t) => t === target);
+                if (idx) {
+                    state._targets.splice(idx, 1);
+                }
+            };
+        },
     });
     function setHover(hovering) {
         if (hovering && !wasHovering) {
@@ -152,7 +169,7 @@ export function useHover(refNames, { onHover, onAway, stateObserver, onHovering 
         if (state.isHover) {
             return;
         }
-        for (const target of targets) {
+        for (const target of toRaw(state)._targets) {
             if (!target.ref.el) {
                 continue;
             }
@@ -162,16 +179,27 @@ export function useHover(refNames, { onHover, onAway, stateObserver, onHovering 
                 return;
             }
         }
+        for (const contains of state._contains) {
+            if (contains(ev.target)) {
+                setHover(true);
+                return;
+            }
+        }
     }
     function onmouseleave(ev) {
         if (!state.isHover) {
             return;
         }
-        for (const target of targets) {
+        for (const target of toRaw(state._targets)) {
             if (!target.ref.el) {
                 continue;
             }
             if (target.ref.el.contains(ev.relatedTarget)) {
+                return;
+            }
+        }
+        for (const contains of state._contains) {
+            if (contains(ev.relatedTarget)) {
                 return;
             }
         }
@@ -208,6 +236,31 @@ export function useHover(refNames, { onHover, onAway, stateObserver, onHovering 
     return state;
 }
 
+export class UseHoverOverlay extends Component {
+    static props = ["slots", "hover"];
+    static template = xml`<div t-ref="root"><t t-slot="default"/></div>`;
+
+    setup() {
+        super.setup();
+        this.root = useRef("root");
+        const overlayContains = toRaw(this.env[OVERLAY_SYMBOL].contains);
+        let removeTarget;
+        onMounted(() => {
+            this.props.hover._contains.push(overlayContains);
+            removeTarget = this.props.hover.addTarget({
+                ref: { el: this.root.el.closest(".o-overlay-item") },
+            });
+        });
+        onWillUnmount(() => {
+            const idx = this.props.hover._contains.find((c) => c === overlayContains);
+            if (idx) {
+                this.props.hover._contains.splice(idx, 1);
+            }
+            removeTarget?.();
+        });
+    }
+}
+
 /**
  * Hook that execute the callback function each time the scrollable element hit
  * the bottom minus the threshold.
@@ -233,7 +286,7 @@ export function useOnBottomScrolled(refName, callback, threshold = 1) {
 
 /**
  * @param {string} refName
- * @param {function} cb
+ * @param {function} [cb]
  */
 export function useVisible(refName, cb, { ready = true } = {}) {
     const ref = useRef(refName);
@@ -243,7 +296,7 @@ export function useVisible(refName, cb, { ready = true } = {}) {
     });
     function setValue(value) {
         state.isVisible = value;
-        cb(state.isVisible);
+        cb?.(state.isVisible);
     }
     const observer = new IntersectionObserver((entries) => {
         setValue(entries.at(-1).isIntersecting);
@@ -264,16 +317,16 @@ export function useVisible(refName, cb, { ready = true } = {}) {
 }
 
 /**
- * @typedef {Object} MessageHighlight
- * @property {function} clearHighlight
+ * @typedef {Object} MessageScrolling
+ * @property {function} clear
  * @property {function} highlightMessage
  * @property {number|null} highlightedMessageId
- * @returns {MessageHighlight}
+ * @returns {MessageScrolling}
  */
-export function useMessageHighlight(duration = 2000) {
+export function useMessageScrolling(duration = 2000) {
     let timeout;
     const state = useState({
-        clearHighlight() {
+        clear() {
             if (this.highlightedMessageId) {
                 browser.clearTimeout(timeout);
                 timeout = null;
@@ -288,17 +341,35 @@ export function useMessageHighlight(duration = 2000) {
             if (thread.notEq(message.thread)) {
                 return;
             }
-            await thread.loadAround(message.id);
+            state.initiated = true;
+            let messageScrollDirection;
+            if (message.notIn(thread.messages)) {
+                messageScrollDirection = message.id < thread.messages[0]?.id ? "top" : "bottom";
+                await thread.loadAround(message.id);
+            }
             const lastHighlightedMessageId = state.highlightedMessageId;
-            this.clearHighlight();
+            this.clear();
             if (lastHighlightedMessageId === message.id) {
                 // Give some time for the state to update.
                 await new Promise(setTimeout);
             }
-            thread.scrollTop = undefined;
+            thread.scrollTop = messageScrollDirection === "top" ? "bottom" : undefined;
+            if (thread.scrollTop === "bottom") {
+                state.startupDeferred = new Deferred();
+                await state.startupDeferred;
+                state.startupDeferred = null;
+            }
             state.highlightedMessageId = message.id;
-            timeout = browser.setTimeout(() => this.clearHighlight(), duration);
+            state.initiated = false;
+            timeout = browser.setTimeout(() => this.clear(), duration);
         },
+        initiated: false,
+        /**
+         * Deferred during highlight startup, i.e. highlight is initiated but isn't scrolling yet
+         * Useful to set correct starting condition to initiate scroll to highlight, like scroll to bottom.
+         */
+        startupDeferred: null,
+        /** Deferred during scrolling to highlight */
         scrollPromise: null,
         /**
          * Scroll the element into view and expose a promise that will resolved
@@ -508,3 +579,60 @@ export const useMovable = makeDraggableHook({
         return { top, left };
     },
 });
+
+export const LONG_PRESS_DELAY = 400;
+
+/**
+ * Subscribes to long press events on the element matching the given ref name.
+ * It internally prevents false positives caused by scroll gestures.
+ *
+ * @param {string} refName The ref name of the element to listen for long presses on.
+ * @param {Object} options
+ * @param {() => void} [options.action] Function called when a long press is detected.
+ * @param {() => boolean} [options.predicate] Optional function to enable long press detection.
+ */
+export function useLongPress(refName, { action, predicate = () => true } = {}) {
+    const MOVE_TRESHOLD = 10;
+    const ref = useRef(refName);
+    let timer = null;
+    let startX = 0;
+    let startY = 0;
+
+    function reset() {
+        clearTimeout(timer);
+        timer = null;
+    }
+    useLazyExternalListener(
+        () => ref.el,
+        "touchstart",
+        (ev) => {
+            if (!predicate()) {
+                return;
+            }
+            const touch = ev.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            timer = setTimeout(() => {
+                action();
+                reset();
+            }, LONG_PRESS_DELAY);
+        }
+    );
+    useLazyExternalListener(
+        () => ref.el,
+        "touchmove",
+        (ev) => {
+            if (!timer) {
+                return;
+            }
+            const touch = ev.touches[0];
+            const dx = touch.screenX - startX;
+            const dy = touch.screenY - startY;
+            if (Math.hypot(dx, dy) > MOVE_TRESHOLD) {
+                reset();
+            }
+        }
+    );
+    useLazyExternalListener(() => ref.el, "touchend", reset);
+    useLazyExternalListener(() => ref.el, "touchcancel", reset);
+}

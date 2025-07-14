@@ -1,3 +1,4 @@
+import { scrollTo } from "@html_builder/utils/scrolling";
 import { Interaction } from "@web/public/interaction";
 import { registry } from "@web/core/registry";
 
@@ -17,7 +18,6 @@ import {
     serializeDate,
     serializeDateTime,
 } from "@web/core/l10n/dates";
-import { scrollTo } from "@web_editor/js/common/scrolling";
 import wUtils from "@website/js/utils";
 
 const { DateTime } = luxon;
@@ -45,7 +45,7 @@ export class Form extends Interaction {
         "input.o_add_files_button": { "t-on-click": this.clickAddFilesButton },
         ".s_website_form_field[data-type=binary]": { "t-on-click": this.clickFileDelete }, // delegate on ".o_file_delete"
         ".s_website_form_field": {
-            "t-on-input": this.onFieldInput,
+            "t-on-input": this.debounced(this.onFieldInput, 300),
             "t-att-class": (el) => ({ "d-none": !this.isFieldVisible(el) }),
         },
         // Do not disable inputs that are required for the model.
@@ -71,6 +71,7 @@ export class Form extends Interaction {
         this.dateFieldEls = this.el.querySelectorAll(".s_website_form_datetime, .o_website_form_datetime, .s_website_form_date, .o_website_form_date");
         this.disableDateTimePickers = [];
         this.preFillValues = {};
+        this.lastFormData = this.getFormDataIncludingDisabledFields(this.el);
     }
 
     async willStart() {
@@ -111,6 +112,7 @@ export class Form extends Interaction {
         this.prefillValues();
 
         // Visibility might need to be adapted according to pre-filled values.
+        this.lastFormData = this.getFormDataIncludingDisabledFields(this.el);
         this.updateContent();
 
         if (session.geoip_phone_code) {
@@ -750,10 +752,9 @@ export class Form extends Interaction {
                 return false;
             }
 
-            const formData = this.getFormDataIncludingDisabledFields(this.el);
             const currentValueOfDependency = ["contains", "!contains"].includes(comparator)
-                ? formData.getAll(dependencyName).join()
-                : formData.get(dependencyName);
+                ? this.lastFormData.getAll(dependencyName).join()
+                : this.lastFormData.get(dependencyName);
             return this.compareTo(comparator, currentValueOfDependency, visibilityCondition, between);
         };
     }
@@ -764,11 +765,17 @@ export class Form extends Interaction {
      * @returns {FormData} a FormData object containing also disabled fields
      */
     getFormDataIncludingDisabledFields(formEl) {
-        const formCopy = formEl.cloneNode(true);
-        formCopy.querySelectorAll("input, select, textarea").forEach((element) => {
+        const disabledFields = formEl.querySelectorAll(
+            "input:disabled, select:disabled, textarea:disabled"
+        );
+        disabledFields.forEach((element) => {
             element.removeAttribute("disabled");
         });
-        return new FormData(formCopy);
+        const formData = new FormData(formEl);
+        disabledFields.forEach((element) => {
+            element.setAttribute("disabled", true);
+        });
+        return formData;
     }
 
     isFieldVisible(fieldEl) {
@@ -813,6 +820,9 @@ export class Form extends Interaction {
      */
     onFieldInput() {
         // Implicitly updates DOM.
+        // Generates a new snapshot of the current form data, including disabled
+        // fields, which is necessary for visibility calculations.
+        this.lastFormData = this.getFormDataIncludingDisabledFields(this.el);
     }
 
     /**

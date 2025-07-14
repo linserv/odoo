@@ -11,7 +11,12 @@ import { Domain } from "@web/core/domain";
 import { user } from "@web/core/user";
 import { TextFilterValue } from "../filter_text_value/filter_text_value";
 import { getFields, ModelNotFoundError } from "@spreadsheet/data_sources/data_source";
-import { BooleanMultiSelector } from "../boolean_multi_selector/boolean_multi_selector";
+import { SelectionFilterValue } from "../selection_filter_value/selection_filter_value";
+import {
+    isTextualOperator,
+    isSetOperator,
+    getDefaultValue,
+} from "@spreadsheet/global_filters/helpers";
 
 const { ValidationMessages } = components;
 
@@ -21,7 +26,7 @@ export class FilterValue extends Component {
         TextFilterValue,
         DateFilterValue,
         MultiRecordSelector,
-        BooleanMultiSelector,
+        SelectionFilterValue,
         ValidationMessages,
     };
     static props = {
@@ -35,7 +40,6 @@ export class FilterValue extends Component {
 
     setup() {
         this.getters = this.props.model.getters;
-        this.nameService = useService("name");
         this.fieldService = useService("field");
         this.isValid = false;
         onWillStart(async () => {
@@ -54,6 +58,14 @@ export class FilterValue extends Component {
                 }
             }
         });
+    }
+
+    get isTextualOperator() {
+        return isTextualOperator(this.filterValue?.operator);
+    }
+
+    get isSetOperator() {
+        return isSetOperator(this.filterValue?.operator);
     }
 
     get filter() {
@@ -86,6 +98,10 @@ export class FilterValue extends Component {
         );
     }
 
+    getDefaultOperator() {
+        return getDefaultValue(this.filter.type).operator;
+    }
+
     onDateInput(id, value) {
         this.props.setGlobalFilterValue(id, value);
     }
@@ -95,7 +111,8 @@ export class FilterValue extends Component {
             this.clear(id);
             return;
         }
-        this.props.setGlobalFilterValue(id, value);
+        const operator = this.filterValue?.operator ?? this.getDefaultOperator();
+        this.props.setGlobalFilterValue(id, { operator, strings: value });
     }
 
     onBooleanInput(id, value) {
@@ -106,16 +123,25 @@ export class FilterValue extends Component {
         this.props.setGlobalFilterValue(id, value);
     }
 
+    onSelectionInput(id, value) {
+        if (Array.isArray(value) && value.length === 0) {
+            this.clear(id);
+            return;
+        }
+        const operator = this.filterValue?.operator ?? this.getDefaultOperator();
+        this.props.setGlobalFilterValue(id, { operator, selectionValues: value });
+    }
+
     async onTagSelected(id, resIds) {
         if (!resIds.length) {
             // force clear, even automatic default values
             this.clear(id);
         } else {
-            const displayNames = await this.nameService.loadDisplayNames(
-                this.filter.modelName,
-                resIds
+            const operator = this.filterValue?.operator ?? this.getDefaultOperator();
+            this.props.setGlobalFilterValue(
+                id,
+                { operator, ids: resIds },
             );
-            this.props.setGlobalFilterValue(id, resIds, Object.values(displayNames));
         }
     }
 

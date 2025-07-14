@@ -6,9 +6,9 @@ import base64
 import json
 import random
 
-from odoo import models, api, _, fields, Command, tools
+from odoo import models, api, _, fields, tools
 from odoo.exceptions import UserError
-from odoo.osv import expression
+from odoo.fields import Command, Domain
 from odoo.release import version
 from odoo.tools import DEFAULT_SERVER_DATE_FORMAT as DF, SQL
 from odoo.tools.misc import formatLang, format_date as odoo_format_date, get_lang
@@ -278,12 +278,11 @@ class AccountJournal(models.Model):
               JOIN account_move move ON move.id = st_line.move_id
              WHERE move.journal_id = ANY(%s)
                AND move.date > %s
-               AND move.date <= %s
                AND move.company_id = ANY(%s)
           GROUP BY move.date, move.journal_id
           ORDER BY move.date DESC
         """
-        self.env.cr.execute(query, (self.ids, last_month, today, self.env.companies.ids))
+        self.env.cr.execute(query, (self.ids, last_month, self.env.companies.ids))
         query_result = group_by_journal(self.env.cr.dictfetchall())
 
         result = {}
@@ -304,15 +303,16 @@ class AccountJournal(models.Model):
                     graph_key = _('Sample data')
             else:
                 last_balance = journal.current_statement_balance
-                data.append(build_graph_data(today, last_balance, currency))
+                # Make sure the last point in the graph is at least today or a future date
+                if not journal_result or journal_result[0]['date'] < today.date():
+                    data.append(build_graph_data(today, last_balance, currency))
                 date = today
                 amount = last_balance
                 #then we subtract the total amount of bank statement lines per day to get the previous points
                 #(graph is drawn backward)
                 for val in journal_result:
                     date = val['date']
-                    if date.strftime(DF) != today.strftime(DF):  # make sure the last point in the graph is today
-                        data[:0] = [build_graph_data(date, amount, currency)]
+                    data[:0] = [build_graph_data(date, amount, currency)]
                     amount -= val['amount']
 
                 # make sure the graph starts 1 month ago
@@ -422,15 +422,15 @@ class AccountJournal(models.Model):
         :param name: the name of the variable to inject in the dashboard's data
         :type name: str
         :param domain: the domain of records to count
-        :type domain: list[tuple]
         """
         res = {
             journal.id: count
             for journal, count in self.env[model]._read_group(
-                domain=[
-                   *self.env[model]._check_company_domain(self.env.companies),
-                   ('journal_id', 'in', self.ids),
-               ] + domain,
+                domain=Domain.AND((
+                    self.env[model]._check_company_domain(self.env.companies),
+                    Domain('journal_id', 'in', self.ids),
+                    domain,
+                )),
                 groupby=['journal_id'],
                 aggregates=['__count'],
             )
@@ -445,7 +445,7 @@ class AccountJournal(models.Model):
             return
 
         # Number to reconcile
-        self._cr.execute("""
+        self.env.cr.execute("""
             SELECT st_line.journal_id,
                    COUNT(st_line.id)
               FROM account_bank_statement_line st_line
@@ -484,7 +484,7 @@ class AccountJournal(models.Model):
             ('statement_line_id', '=', False),
             ('parent_state', '=', 'posted'),
             ('payment_id', '=', False),
-      ] + expression.OR(misc_domain)
+      ] + Domain.OR(misc_domain)
 
         misc_totals = {
             account: (balance, count_lines, currencies)
@@ -712,25 +712,25 @@ class AccountJournal(models.Model):
             dashboard_data[journal.id]['onboarding'] = onboarding_data[journal.company_id].get(journal_onboarding_map.get(journal.type))
 
     def _get_draft_sales_purchases_query(self):
-        return self.env['account.move']._where_calc([
+        return self.env['account.move']._search([
             *self.env['account.move']._check_company_domain(self.env.companies),
             ('journal_id', 'in', self.ids),
             ('state', '=', 'draft'),
             ('move_type', 'in', self.env['account.move'].get_invoice_types(include_receipts=True)),
-        ])
+        ], bypass_access=True)
 
     def _get_to_pay_select(self):
         return SQL("TRUE AS to_pay")
 
     def _get_open_sale_purchase_query(self, journal_type):
         assert journal_type in ('sale', 'purchase')
-        query = self.env['account.move']._where_calc([
+        query = self.env['account.move']._search([
             *self.env['account.move']._check_company_domain(self.env.companies),
             ('journal_id', 'in', self.ids),
             ('payment_state', 'in', ('not_paid', 'partial')),
             ('move_type', 'in', ('out_invoice', 'out_refund') if journal_type == 'sale' else ('in_invoice', 'in_refund')),
             ('state', '=', 'posted'),
-        ])
+        ], bypass_access=True)
         selects = [
             SQL("journal_id"),
             SQL("company_id"),
@@ -773,7 +773,7 @@ class AccountJournal(models.Model):
     def _get_journal_dashboard_bank_running_balance(self):
         # In order to not recompute everything from the start, we take the last
         # bank statement and only sum starting from there.
-        self._cr.execute("""
+        self.env.cr.execute("""
             SELECT journal.id AS journal_id,
                    statement.id AS statement_id,
                    COALESCE(statement.balance_end_real, 0) AS balance_end_real,
@@ -869,7 +869,7 @@ class AccountJournal(models.Model):
         return result
 
     def _get_move_action_context(self):
-        ctx = self._context.copy()
+        ctx = self.env.context.copy()
         journal = self
         if not ctx.get('default_journal_id'):
             ctx['default_journal_id'] = journal.id
@@ -905,7 +905,7 @@ class AccountJournal(models.Model):
         """ This function is called by the "try our sample" button of Vendor Bills,
         visible on dashboard if no bill has been created yet.
         """
-        context = dict(self._context)
+        context = dict(self.env.context)
         purchase_journal = self.browse(context.get('default_journal_id')) or self.search([('type', '=', 'purchase')], limit=1)
         if not purchase_journal:
             raise UserError(self._build_no_journal_error_msg(self.env.company.display_name, ['purchase']))
@@ -991,8 +991,8 @@ class AccountJournal(models.Model):
 
     def _select_action_to_open(self):
         self.ensure_one()
-        if self._context.get('action_name'):
-            return self._context.get('action_name')
+        if self.env.context.get('action_name'):
+            return self.env.context.get('action_name')
         elif self.type == 'bank':
             return 'action_bank_statement_tree'
         elif self.type == 'credit':
@@ -1017,7 +1017,7 @@ class AccountJournal(models.Model):
 
         action = self.env["ir.actions.act_window"]._for_xml_id(action_name)
 
-        context = self._context.copy()
+        context = self.env.context.copy()
         if 'context' in action and isinstance(action['context'], str):
             context.update(ast.literal_eval(action['context']))
         else:
@@ -1032,7 +1032,7 @@ class AccountJournal(models.Model):
         # original action domain.
         if action.get('domain') and isinstance(action['domain'], str):
             action['domain'] = ast.literal_eval(action['domain'] or '[]')
-        if not self._context.get('action_name'):
+        if not self.env.context.get('action_name'):
             if self.type == 'sale':
                 action['domain'] = [(domain_type_field, 'in', ('out_invoice', 'out_refund', 'out_receipt'))]
             elif self.type == 'purchase':
@@ -1116,12 +1116,10 @@ class AccountJournal(models.Model):
 
     def show_sequence_holes(self):
         has_sequence_holes = self._query_has_sequence_holes()
-        domain = expression.OR(
-            [
-                *self.env['account.move']._check_company_domain(self.env.companies),
-                ('journal_id', '=', journal_id),
-                ('sequence_prefix', '=', prefix),
-            ]
+        domain = Domain(self.env['account.move']._check_company_domain(self.env.companies))
+        domain &= Domain.OR(
+            Domain('journal_id', '=', journal_id)
+            & Domain('sequence_prefix', '=', prefix)
             for journal_id, prefix in has_sequence_holes
         )
         action = self._show_sequence_holes(domain)

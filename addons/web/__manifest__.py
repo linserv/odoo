@@ -320,6 +320,7 @@ This module provides the core of the Odoo Web Client.
             "web/static/lib/ace/mode-qweb.js",
             "web/static/lib/ace/mode-python.js",
             "web/static/lib/ace/mode-scss.js",
+            "web/static/lib/ace/mode-json.js",
             "web/static/lib/ace/theme-monokai.js",
         ],
 
@@ -453,7 +454,6 @@ This module provides the core of the Odoo Web Client.
             'web/static/tests/public/**/*.xml',
             ('remove', 'web/static/src/public/database_manager.js'),
             ('remove', 'web/static/src/public/error_notifications.js'),
-            'web/static/src/public/public_component_service.js',
             'web/static/src/webclient/clickbot/clickbot.js',
         ],
         # Unit test files
@@ -467,7 +467,6 @@ This module provides the core of the Odoo Web Client.
             ('include', 'web.assets_backend'),
             ('include', 'web.assets_backend_lazy'),
 
-            'web/static/src/public/public_component_service.js',
             'web/static/tests/legacy/patch_translations.js',
             'web/static/lib/qunit/qunit-2.9.1.css',
             'web/static/lib/qunit/qunit-2.9.1.js',

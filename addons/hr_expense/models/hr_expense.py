@@ -1407,16 +1407,6 @@ class HrExpense(models.Model):
         if False in self.mapped('payment_mode'):
             raise UserError(_("Please specify if the expenses were paid by the company, or the employee."))
 
-        missing_email_employees = self.employee_id.filtered(lambda employee: not employee.work_email)
-        if missing_email_employees:
-            action = self.env['ir.actions.actions']._for_xml_id('hr.open_view_employee_list_my')
-            action['domain'] = [('id', 'in', missing_email_employees.ids)]
-            raise RedirectWarning(
-                message=_("The work email of some employees is missing. Please add it on their form."),
-                action=action,
-                button_text=_("Go to employees"),
-             )
-
     def _do_approve(self, check=True):
         if check:
             self._check_can_approve()
@@ -1584,14 +1574,13 @@ class HrExpense(models.Model):
         for employee_sudo, expenses_sudo in self.sudo().grouped('employee_id').items():
             multiple_expenses_name = _("Expenses of %(employee)s", employee=employee_sudo.name)
             move_ref = expenses_sudo.name if len(expenses_sudo) == 1 else multiple_expenses_name
-            currency = expenses_sudo.currency_id if len(expenses_sudo.currency_id) == 1 else expenses_sudo.company_currency_id
             return_vals.append({
             **expenses_sudo._prepare_move_vals(),
                 'ref': move_ref,
                 'move_type': 'in_invoice',
                 'partner_id': employee_sudo.work_contact_id.id,
                 'commercial_partner_id': employee_sudo.user_partner_id.id,
-                'currency_id': currency.id,
+                'currency_id': expenses_sudo.company_currency_id.id,
                 'line_ids': [Command.create(expense_sudo._prepare_move_lines_vals()) for expense_sudo in expenses_sudo],
                 'partner_bank_id': employee_sudo.bank_account_id.id,
                 'attachment_ids': attachments_data,

@@ -6,7 +6,7 @@ from freezegun import freeze_time
 
 from odoo import Command, fields
 from odoo.addons.hr_expense.tests.common import TestExpenseCommon
-from odoo.exceptions import RedirectWarning, UserError, ValidationError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests import tagged, Form
 
 
@@ -652,21 +652,6 @@ class TestExpenses(TestExpenseCommon):
         # CASE 7: ALLOWS Setting the amounts to 0 while resetting the expense to draft
         expense.write({'total_amount_currency': 0.0, 'total_amount': 0.0, 'state': 'draft'})
 
-    def test_expense_with_employee_with_no_work_email(self):
-        """
-        Should raise a RedirectWarning when the selected employee in the expense doesn't have a work email.
-        """
-        # Create two employees with no work email
-        employee = self.env['hr.employee'].create({'name': "Test Employee1"})
-
-        # Create an expense with the above created employees
-        expense = self.create_expenses({'employee_id': employee.id})
-
-        expense.action_submit()
-        expense.action_approve()
-        with self.assertRaises(RedirectWarning):
-            self.post_expenses_with_wizard(expense)
-
     def test_foreign_currencies_total(self):
         """ Check that the dashboard computes amount properly in company currency """
         self.create_expenses([{
@@ -987,3 +972,17 @@ class TestExpenses(TestExpenseCommon):
         expense.quantity = 0
         self.assertTrue(expense.currency_id.is_zero(expense.total_amount_currency))
         self.assertEqual(expense.company_currency_id.compare_amounts(expense.price_unit, self.product_b.standard_price), 0)
+
+    def test_employee_expense_in_foreign_currency(self):
+        """ Checks that the currency of the posted entries is always the company currency """
+        expense = self.create_expenses({
+            'payment_mode': 'own_account',
+            'currency_id': self.other_currency.id,
+        })
+        expense.action_submit()
+        expense.action_approve()
+        expense._post_without_wizard()
+        self.assertRecordValues(
+            expense.account_move_id,
+            [{'amount_total': 500.0, 'currency_id': expense.account_move_id.company_currency_id.id}],
+        )

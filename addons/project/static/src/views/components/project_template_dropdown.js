@@ -1,8 +1,14 @@
-import { Component, onWillStart } from "@odoo/owl";
+import { Component, onWillStart, useState } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
+import { Dropdown } from "@web/core/dropdown/dropdown";
+import { DropdownItem } from "@web/core/dropdown/dropdown_item";
 
 export class ProjectTemplateDropdown extends Component {
     static template = "project.ProjectTemplateDropdown";
+    static components = {
+        Dropdown,
+        DropdownItem,
+    };
 
     static props = {
         hotkey: {
@@ -29,8 +35,8 @@ export class ProjectTemplateDropdown extends Component {
     setup() {
         this.action = useService("action");
         this.orm = useService("orm");
+        this.state = useState({ projectTemplates: [] });
         onWillStart(this.onWillStart);
-        this.projectTemplates = [];
     }
 
     get readFields() {
@@ -42,11 +48,15 @@ export class ProjectTemplateDropdown extends Component {
     }
 
     async onWillStart() {
-        this.projectTemplates = await this.orm.searchRead(
-            "project.project",
-            this.projectTemplatesDomain,
-            this.readFields
-        );
+        this.state.projectTemplates = await this.orm
+            .cached({
+                onFinish: (hasChanged, result) => {
+                    if (hasChanged) {
+                        this.state.projectTemplates = result;
+                    }
+                },
+            })
+            .searchRead("project.project", this.projectTemplatesDomain, this.readFields);
     }
 
     contextPreprocess(templateId) {

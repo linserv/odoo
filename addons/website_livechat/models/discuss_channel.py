@@ -2,6 +2,7 @@
 
 from odoo import fields, models, _
 from odoo.addons.mail.tools.discuss import Store
+from datetime import datetime, timedelta
 
 
 class DiscussChannel(models.Model):
@@ -24,20 +25,8 @@ class DiscussChannel(models.Model):
         if self.channel_type == "livechat" and not pinned and not self.message_ids:
             self.sudo().unlink()
 
-    def _field_store_repr(self, field_name):
-        if field_name == "requested_by_operator":
-            return [
-                Store.Attr(
-                    "requested_by_operator",
-                    # sudo - res.users: can access operator's user even if he left the channel.
-                    lambda channel: channel.create_uid in channel.livechat_operator_id.sudo().user_ids,
-                    predicate=lambda channel: channel.livechat_visitor_id,
-                ),
-            ]
-        return [field_name]
-
-    def _to_store_defaults(self, for_current_user=True):
-        return super()._to_store_defaults(for_current_user=for_current_user) + [
+    def _to_store_defaults(self, target):
+        return super()._to_store_defaults(target) + [
             Store.One(
                 "livechat_visitor_id",
                 [
@@ -51,7 +40,14 @@ class DiscussChannel(models.Model):
                 predicate=lambda channel: channel.channel_type == "livechat"
                 and self.livechat_visitor_id.has_access("read"),
             ),
-            "requested_by_operator",
+            # sudo: discuss.channel - visitor can access to the channel member history of
+            # an accessible channel when computing requested_by_operator
+            Store.Attr(
+                "requested_by_operator",
+                lambda channel: channel.create_uid in channel.sudo()
+                .livechat_agent_history_ids.partner_id.user_ids,
+                predicate=lambda channel: channel.channel_type == "livechat",
+            ),
         ]
 
     def _get_visitor_history(self, visitor):
@@ -67,6 +63,31 @@ class DiscussChannel(models.Model):
             visitor=self.livechat_visitor_id.display_name or _("The visitor"),
             operator=operator or _("an operator"),
         )
+
+    def _get_livechat_session_fields_to_store(self):
+        fields_to_store = super()._get_livechat_session_fields_to_store()
+        domain = [
+            ("channel_type", "=", "livechat"),
+            ("livechat_visitor_id", "=", self.livechat_visitor_id.id),
+            (
+                "create_date",
+                ">=",
+                fields.Datetime.to_string(datetime.now() - timedelta(days=7)),
+            ),
+        ]
+        channels = self.env["discuss.channel"].search(domain, limit=5)
+        fields_to_store.append(
+            Store.One(
+                "livechat_visitor_id", [
+                    Store.Many(
+                        "discuss_channel_ids",
+                        value=channels,
+                    ),
+                ],
+                predicate=lambda channel: channel.channel_type == "livechat",
+            ),
+        )
+        return fields_to_store
 
     def message_post(self, **kwargs):
         """Override to mark the visitor as still connected.

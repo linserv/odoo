@@ -7,7 +7,7 @@ from werkzeug.urls import url_parse
 
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
-from odoo.fields import Command
+from odoo.fields import Domain
 from odoo.http import request
 from odoo.tools.translate import html_translate
 
@@ -58,7 +58,7 @@ class WebsiteMenu(models.Model):
     @api.depends('website_id')
     @api.depends_context('display_website')
     def _compute_display_name(self):
-        if not self._context.get('display_website') and not self.env.user.has_group('website.group_multi_website'):
+        if not self.env.context.get('display_website') and not self.env.user.has_group('website.group_multi_website'):
             return super()._compute_display_name()
 
         for menu in self:
@@ -94,8 +94,8 @@ class WebsiteMenu(models.Model):
             if 'website_id' in vals:
                 menus |= super().create(vals)
                 continue
-            elif self._context.get('website_id'):
-                vals['website_id'] = self._context.get('website_id')
+            elif self.env.context.get('website_id'):
+                vals['website_id'] = self.env.context.get('website_id')
                 menus |= super().create(vals)
                 continue
             else:
@@ -278,11 +278,10 @@ class WebsiteMenu(models.Model):
                     referer_url = werkzeug.urls.url_parse(request.httprequest.headers.get('Referer', '')).path
                     menu['url'] = referer_url + menu['url']
             else:
-                domain = self.env["website"].website_domain(website_id) + [
-                    "|",
-                    ("url", "=", menu["url"]),
-                    ("url", "=", "/" + menu["url"]),
-                ]
+                domain = self.env["website"].browse(website_id).website_domain() & (
+                    Domain("url", "=", menu["url"])
+                    | Domain("url", "=", "/" + menu["url"])
+                )
                 page = self.env["website.page"].search(domain, limit=1)
                 if page:
                     menu['page_id'] = page.id

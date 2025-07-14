@@ -81,16 +81,11 @@ A synchronization with an internal agenda (Meetings of the CRM module) is also p
         'web.assets_unit_tests': [
             'hr_holidays/static/tests/**/*',
             ('remove', 'hr_holidays/static/tests/tours/**/*'),
-            ('remove', 'hr_holidays/static/tests/legacy/**/*'),
-        ],
-        'web.qunit_suite_tests': [
-            'hr_holidays/static/tests/legacy/**/*',
         ],
         'web.assets_tests': [
             '/hr_holidays/static/tests/tours/**/*'
         ],
     },
-    'post_init_hook': '_hr_holiday_post_init',
     'author': 'Odoo S.A.',
     'license': 'LGPL-3',
 }

@@ -1,7 +1,8 @@
-import { after, before, describe, test } from "@odoo/hoot";
-import { testEditor } from "./_helpers/editor";
+import { after, before, describe, expect, test } from "@odoo/hoot";
+import { setupEditor, testEditor } from "./_helpers/editor";
 import { unformat } from "./_helpers/format";
 import { setColor } from "./_helpers/user_actions";
+import { getContent } from "./_helpers/selection";
 
 const redToBlueGradient = "linear-gradient(rgb(255, 0, 0), rgb(0, 0, 255))";
 const greenToBlueGradient = "linear-gradient(rgb(0, 255, 0), rgb(0, 0, 255))";
@@ -196,12 +197,12 @@ test("should not apply font tag to t nodes (protects if else nodes separation)",
             <p>
                 <t t-if="object.partner_id.parent_id">
                     <t t-out="object.partner_id.parent_id.name or ''" style="color: red;">
-                        <font style="color: red;">AzureInterior</font>
+                        <font style="color: red;">Azure Interior</font>
                     </t>
                 </t>
                 <t t-else="">
                     <t t-out="object.partner_id.name or ''" style="color: red;">
-                        <font style="color: red;">BrandonFreeman</font>
+                        <font style="color: red;">Brandon Freeman</font>
                     </t>
                 </t>
             </p>
@@ -513,6 +514,17 @@ test("should apply gradient text color on selected text", async () => {
             '<div style="background-image:none"><p><font class="text-gradient" style="background-image: linear-gradient(135deg, rgb(255, 174, 127) 0%, rgb(109, 204, 0) 100%);">[ab<strong>cd</strong>ef]</font></p></div>',
     });
 });
+
+test("should merge adjacent font with the same text color when mutations common root is <font>", async () => {
+    // This test should not execute clean for save as the bug will no longer exists
+    const { el, editor } = await setupEditor(
+        '<p><font style="color: rgb(255, 0, 0);">first </font><font style="color: rgb(0, 255, 0);">[second]</font></p>'
+    );
+    await setColor("rgb(255, 0, 0)", "color")(editor);
+    const expected = '<p><font style="color: rgb(255, 0, 0);">first [second]</font></p>';
+    expect(getContent(el)).toBe(expected);
+});
+
 describe("colorElement", () => {
     test("should apply o_cc1 class to the element when a color wasn't defined", async () => {
         await testEditor({

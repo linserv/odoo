@@ -77,12 +77,12 @@ class ProductPricelistItem(models.Model):
     product_tmpl_id = fields.Many2one(
         comodel_name='product.template',
         string="Product",
-        ondelete='cascade', check_company=True,
+        ondelete='cascade', check_company=True, index='btree_not_null',
         help="Specify a template if this rule only applies to one product template. Keep empty otherwise.")
     product_id = fields.Many2one(
         comodel_name='product.product',
         string="Variant",
-        ondelete='cascade', check_company=True,
+        ondelete='cascade', check_company=True, index='btree_not_null',
         domain="[('product_tmpl_id', '=', product_tmpl_id)]",
         help="Specify a product if this rule only applies to one product. Keep empty otherwise.")
     product_uom_name = fields.Char(related='product_tmpl_id.uom_name')
@@ -167,12 +167,12 @@ class ProductPricelistItem(models.Model):
     def _compute_is_pricelist_required(self):
         self.is_pricelist_required = True
 
-    @api.depends('pricelist_id', 'product_tmpl_id')
+    @api.depends('pricelist_id.company_id', 'product_tmpl_id')
     def _compute_company_id(self):
         for item in self:
             item.company_id = item.pricelist_id.company_id or item.product_tmpl_id.company_id
 
-    @api.depends('pricelist_id', 'company_id')
+    @api.depends('pricelist_id.currency_id', 'company_id')
     def _compute_currency_id(self):
         for item in self:
             item.currency_id = (

@@ -1,6 +1,6 @@
 import { expect, test } from "@odoo/hoot";
 import { queryAll, queryAllTexts, queryFirst, queryOne, queryText } from "@odoo/hoot-dom";
-import { Deferred, animationFrame, mockDate } from "@odoo/hoot-mock";
+import { animationFrame, Deferred, mockDate } from "@odoo/hoot-mock";
 import { markup } from "@odoo/owl";
 import {
     contains,
@@ -63,7 +63,7 @@ class Partner extends models.Model {
     price_nonaggregable = fields.Monetary({
         string: "Price non-aggregable",
         aggregator: undefined,
-        currency_field: this.currency_id,
+        currency_field: "currency_id",
         groupable: false,
     });
     reference = fields.Reference({
@@ -159,6 +159,24 @@ class Product extends models.Model {
     ];
 }
 
+class Currency extends models.Model {
+    _name = "res.currency";
+
+    name = fields.Char();
+    symbol = fields.Char();
+    position = fields.Selection({
+        selection: [
+            ["after", "A"],
+            ["before", "B"],
+        ],
+    });
+
+    _records = [
+        { id: 1, name: "USD", symbol: "$", position: "before" },
+        { id: 2, name: "EUR", symbol: "€", position: "after" },
+    ];
+}
+
 class Customer extends models.Model {
     _name = "customer";
     name = fields.Char({ string: "Customer Name" });
@@ -184,7 +202,7 @@ class User extends models.Model {
     }
 }
 
-defineModels([Partner, Product, Customer, User]);
+defineModels([Partner, Product, Customer, Currency, User]);
 
 test('pivot view without "string" attribute', async () => {
     const view = await mountView({
@@ -244,7 +262,7 @@ test("all measures should be displayed with a pivot_measures context", async () 
     });
 
     await contains("button:contains(Measures)").click();
-    expect(".o_popover.popover.o-dropdown--menu.dropdown-menu").toHaveCount(1);
+    expect(".o-dropdown--menu.o-dropdown--menu.dropdown-menu").toHaveCount(1);
     const measures = queryAllTexts(".o-dropdown-item");
     expect(measures).toEqual(["bouh", "Computed and not stored", "Foo", "Count"]);
 });
@@ -594,9 +612,9 @@ test('clicking on the "Total" cell with time range activated', async () => {
 });
 
 test("pivot view grouped by date field", async () => {
-    expect.assertions(2);
+    expect.assertions(1);
 
-    onRpc("formatted_read_group", ({ kwargs }) => {
+    onRpc("formatted_read_grouping_sets", ({ kwargs }) => {
         expect(kwargs.aggregates).toEqual(["foo:sum", "__count"]);
     });
 
@@ -619,7 +637,7 @@ test("without measures, pivot view uses __count by default", async () => {
     Partner._fields.foo = fields.Integer({ aggregator: null });
     expect.assertions(4);
 
-    onRpc("formatted_read_group", ({ kwargs }) => {
+    onRpc("formatted_read_grouping_sets", ({ kwargs }) => {
         expect(kwargs.aggregates).toEqual(["__count"]);
     });
 
@@ -655,7 +673,7 @@ test("pivot view grouped by many2one field", async () => {
 
 test("pivot view can be reloaded", async () => {
     let readGroupCount = 0;
-    onRpc("formatted_read_group", () => {
+    onRpc("formatted_read_grouping_sets", () => {
         readGroupCount++;
     });
     await mountView({
@@ -678,7 +696,7 @@ test("pivot view can be reloaded", async () => {
 test.tags("desktop");
 test("basic folding/unfolding", async () => {
     let rpcCount = 0;
-    onRpc("formatted_read_group", () => {
+    onRpc("formatted_read_grouping_sets", () => {
         rpcCount++;
     });
 
@@ -714,7 +732,7 @@ test("basic folding/unfolding", async () => {
 
     await contains(queryOne(".dropdown-item:eq(2)", { root: subDropdownMenu })).click();
     expect("tbody tr").toHaveCount(4);
-    expect(rpcCount).toBe(3);
+    expect(rpcCount).toBe(2);
 });
 
 test.tags("desktop");
@@ -907,9 +925,9 @@ test("pivot custom groupby: grouping on date field use default interval month", 
     expect.assertions(1);
 
     let checkReadGroup = false;
-    onRpc("formatted_read_group", ({ kwargs }) => {
+    onRpc("formatted_read_grouping_sets", ({ kwargs }) => {
         if (checkReadGroup) {
-            expect(kwargs.groupby).toEqual(["date:month"]);
+            expect(kwargs.grouping_sets[0]).toEqual(["date:month"]);
             checkReadGroup = false;
         }
     });
@@ -1058,11 +1076,11 @@ test("can toggle extra measure", async () => {
     await contains(".dropdown-item:contains(Count):eq(0").click();
     expect(".dropdown-item:contains(Count)").toHaveClass("selected");
     expect(".o_pivot_cell_value").toHaveCount(6);
-    expect(rpcCount).toBe(2);
+    expect(rpcCount).toBe(1);
     await contains(".dropdown-item:contains(Count):eq(0)").click();
     expect(".dropdown-item:contains(Count):eq(0)").not.toHaveClass("selected");
     expect(".o_pivot_cell_value").toHaveCount(3);
-    expect(rpcCount).toBe(2);
+    expect(rpcCount).toBe(1);
 });
 
 test("no content helper when no active measure", async () => {
@@ -1183,7 +1201,7 @@ test("tries to restore previous state after domain change", async () => {
     await removeFacet();
 
     expect("table").toHaveCount(1);
-    expect(rpcCount).toBe(2);
+    expect(rpcCount).toBe(1);
     expect(".o_pivot_cell_value").toHaveCount(3);
     expect(".o_pivot_measure_row:contains(Foo)").toHaveCount(1);
 });
@@ -1239,7 +1257,7 @@ test("can sort data in a column by clicking on header", async () => {
 
 test("can expand all rows", async () => {
     let nbReadGroups = 0;
-    onRpc("formatted_read_group", () => {
+    onRpc("formatted_read_grouping_sets", () => {
         nbReadGroups++;
     });
     await mountView({
@@ -1257,7 +1275,7 @@ test("can expand all rows", async () => {
 			</search>`,
     });
 
-    expect(nbReadGroups).toBe(2);
+    expect(nbReadGroups).toBe(1);
     expect(getCurrentValues()).toBe("32,12,20");
 
     // expand on date:days, product
@@ -1267,7 +1285,7 @@ test("can expand all rows", async () => {
     nbReadGroups = 0;
     await toggleMenuItem("Product");
 
-    expect(nbReadGroups).toBe(3);
+    expect(nbReadGroups).toBe(1);
     expect("tbody tr").toHaveCount(8);
 
     // collapse the first two rows
@@ -1280,13 +1298,13 @@ test("can expand all rows", async () => {
     nbReadGroups = 0;
     await contains(".o_pivot_expand_button").click();
 
-    expect(nbReadGroups).toBe(3);
+    expect(nbReadGroups).toBe(1);
     expect("tbody tr").toHaveCount(8);
 });
 
 test("expand all with a delay", async () => {
     let def;
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -2182,7 +2200,7 @@ test("pivot still handles __count__ measure", async () => {
     // for retro-compatibility reasons, the pivot view still handles
     // '__count__' measure.
 
-    onRpc("formatted_read_group", ({ kwargs }) => {
+    onRpc("formatted_read_grouping_sets", ({ kwargs }) => {
         expect(kwargs.aggregates).toEqual(["__count"]);
     });
 
@@ -2328,7 +2346,7 @@ test("Row and column groupbys plus a domain", async () => {
 
 test("parallel data loading should discard all but the last one", async () => {
     let def;
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -2471,7 +2489,7 @@ test("Click on the measure list but not on a menu item", async () => {
 
 test.tags("desktop");
 test("Navigation list view for a group and back with breadcrumbs", async () => {
-    expect.assertions(9);
+    expect.assertions(6);
 
     Partner._views["pivot"] = `<pivot>
 			<field name="customer" type="row"/>
@@ -2483,12 +2501,12 @@ test("Navigation list view for a group and back with breadcrumbs", async () => {
     Partner._views["form"] = `<form><field name="foo"/></form>`;
 
     let readGroupCount = 0;
-    onRpc("formatted_read_group", ({ kwargs }) => {
-        expect.step("formatted_read_group");
+    onRpc("formatted_read_grouping_sets", ({ kwargs }) => {
+        expect.step("formatted_read_grouping_sets");
         const domain = kwargs.domain;
-        if ([0, 1].indexOf(readGroupCount) !== -1) {
+        if ([0].indexOf(readGroupCount) !== -1) {
             expect(domain).toEqual([]);
-        } else if ([2, 3, 4, 5].indexOf(readGroupCount) !== -1) {
+        } else if ([1, 2].indexOf(readGroupCount) !== -1) {
             expect(domain).toEqual([["foo", "=", 12]]);
         }
         readGroupCount++;
@@ -2517,13 +2535,10 @@ test("Navigation list view for a group and back with breadcrumbs", async () => {
     await contains(".o_control_panel ol.breadcrumb li.breadcrumb-item").click();
 
     expect.verifySteps([
-        "formatted_read_group",
-        "formatted_read_group",
-        "formatted_read_group",
-        "formatted_read_group",
+        "formatted_read_grouping_sets",
+        "formatted_read_grouping_sets",
         "web_search_read",
-        "formatted_read_group",
-        "formatted_read_group",
+        "formatted_read_grouping_sets",
     ]);
 });
 
@@ -2615,6 +2630,7 @@ test("group bys added via control panel and expand Header do not stack", async (
     ]);
 });
 
+test.tags("desktop");
 test("display only one dropdown menu", async () => {
     await mountView({
         type: "pivot",
@@ -2637,26 +2653,29 @@ test("display only one dropdown menu", async () => {
 });
 
 test("Server order is kept by default", async () => {
-    let isSecondReadGroup = false;
-    onRpc("formatted_read_group", () => {
-        if (isSecondReadGroup) {
-            return [
-                {
-                    customer: [2, "Second"],
-                    "foo:sum": 18,
-                    __count: 2,
-                    __extra_domain: [["customer", "=", 2]],
-                },
-                {
-                    customer: [1, "First"],
-                    "foo:sum": 14,
-                    __count: 2,
-                    __extra_domain: [["customer", "=", 1]],
-                },
-            ];
-        }
-        isSecondReadGroup = true;
-    });
+    onRpc("formatted_read_grouping_sets", () => [
+        [
+            {
+                "foo:sum": 32,
+                __extra_domain: [],
+                __count: 4,
+            },
+        ],
+        [
+            {
+                customer: [2, "Second"],
+                "foo:sum": 18,
+                __count: 2,
+                __extra_domain: [["customer", "=", 2]],
+            },
+            {
+                customer: [1, "First"],
+                "foo:sum": 14,
+                __count: 2,
+                __extra_domain: [["customer", "=", 1]],
+            },
+        ],
+    ]);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -2715,7 +2734,7 @@ test("empty pivot view with action helper", async () => {
         type: "pivot",
         resModel: "partner",
         context: { search_default_small_than_0: true },
-        noContentHelp: markup(`<p class="abc">click to add a foo</p>`),
+        noContentHelp: markup`<p class="abc">click to add a foo</p>`,
         config: {
             views: [[false, "search"]],
         },
@@ -2726,41 +2745,6 @@ test("empty pivot view with action helper", async () => {
     await removeFacet();
     expect(".o_view_nocontent .abc").toHaveCount(0);
     expect("table").toHaveCount(1);
-});
-
-test.tags("desktop");
-test("reset filter button should appear when no data corresponding to facets", async () => {
-    Partner._views["pivot,false"] = `<pivot>
-		<field name="product_id" type="measure"/>
-		<field name="date" interval="month" type="col"/>
-	</pivot>`;
-    Partner._views["search,false"] = `<search>
-		<filter name="no_match" string="Match nothing" domain="[['id', '=', 0]]"/>
-	</search>`;
-
-    await mountView({
-        type: "pivot",
-        resModel: "partner",
-        context: { search_default_small_than_0: true },
-        noContentHelp: markup(`<p class="abc">click to add a foo</p>`),
-        config: {
-            views: [[false, "search"]],
-        },
-    });
-
-    await contains(".o_pivot_view").click();
-    await toggleSearchBarMenu();
-    await toggleMenuItem("Match nothing");
-
-    expect(".o_view_nocontent").toHaveCount(1);
-    expect(getFacetTexts()).not.toEqual([]);
-    expect(".o_reset_filter_button").toHaveCount(1);
-    expect(".o_reset_filter_button").toHaveText("Reset Filters");
-    expect(".o_facet_value").toHaveText("Match nothing");
-
-    await contains(".o_reset_filter_button").click();
-    expect(getFacetTexts()).toEqual([]);
-    expect(".o_reset_filter_button").not.toHaveCount(1);
 });
 
 test.tags("desktop");
@@ -2777,7 +2761,7 @@ test("empty pivot view with sample data", async () => {
         type: "pivot",
         resModel: "partner",
         context: { search_default_small_than_0: true },
-        noContentHelp: markup('<p class="abc">click to add a foo</p>'),
+        noContentHelp: markup`<p class="abc">click to add a foo</p>`,
         config: {
             views: [[false, "search"]],
         },
@@ -2806,7 +2790,7 @@ test("non empty pivot view with sample data", async () => {
     await mountView({
         type: "pivot",
         resModel: "partner",
-        noContentHelp: markup('<p class="abc">click to add a foo</p>'),
+        noContentHelp: markup`<p class="abc">click to add a foo</p>`,
         config: {
             views: [[false, "search"]],
         },
@@ -2851,12 +2835,7 @@ test("pivot is reloaded when leaving and coming back", async () => {
     expect(".o_pivot_view").toHaveCount(1);
     expect(getCurrentValues()).toBe(["4", "2", "2"].join(","));
 
-    expect.verifySteps([
-        "/web/webclient/load_menus",
-        "get_views",
-        "formatted_read_group",
-        "formatted_read_group",
-    ]);
+    expect.verifySteps(["/web/webclient/load_menus", "get_views", "formatted_read_grouping_sets"]);
 
     // switch to list view
     await contains(".o_control_panel .o_switch_view.o_list").click();
@@ -2870,7 +2849,7 @@ test("pivot is reloaded when leaving and coming back", async () => {
     expect(".o_pivot_view").toHaveCount(1);
     expect(getCurrentValues()).toBe(["4", "2", "2"].join(","));
 
-    expect.verifySteps(["formatted_read_group", "formatted_read_group"]);
+    expect.verifySteps(["formatted_read_grouping_sets"]);
 });
 
 test.tags("desktop");
@@ -2960,11 +2939,11 @@ test("correctly handle concurrent reloads", async () => {
 
     let def;
     let readGroupCount = 0;
-    onRpc("formatted_read_group", () => {
+    onRpc("formatted_read_grouping_sets", () => {
         if (def) {
             readGroupCount++;
             if (readGroupCount === 2) {
-                // slow down last formatted_read_group of first reload
+                // slow down last formatted_read_grouping_sets of first reload
                 return def;
             }
         }
@@ -3005,7 +2984,7 @@ test("consecutively toggle several measures", async () => {
     Partner._fields.foo2 = fields.Integer({
         groupable: false,
     });
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -3036,7 +3015,7 @@ test("consecutively toggle several measures", async () => {
 
 test("flip axis while loading a filter", async () => {
     let def;
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -3073,7 +3052,7 @@ test("flip axis while loading a filter", async () => {
 
 test("sort rows while loading a filter", async () => {
     let def;
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -3109,7 +3088,7 @@ test("sort rows while loading a filter", async () => {
 
 test("close a group while loading a filter", async () => {
     let def;
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -3146,7 +3125,7 @@ test("close a group while loading a filter", async () => {
 
 test("add a groupby while loading a filter", async () => {
     let def;
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -3183,7 +3162,7 @@ test("add a groupby while loading a filter", async () => {
 
 test("expand a group while loading a filter", async () => {
     let def;
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -3224,7 +3203,7 @@ test("expand a group while loading a filter", async () => {
 
 test("concurrent reloads: add a filter, and directly toggle a measure", async () => {
     let def;
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -3586,32 +3565,32 @@ test("no class 'o_view_sample_data' when real data are presented", async () => {
 });
 
 test("group by properties in pivot view", async () => {
-    onRpc("/web/dataset/call_kw/partner/web_search_read", async (request) => {
-        const { params } = await request.json();
-        if (params.kwargs.specification?.properties_definition) {
+    onRpc("partner", "web_search_read", ({ kwargs }) => {
+        if (kwargs.specification?.properties_definition) {
             expect.step("fetch_definition");
         }
     });
-    onRpc("/web/dataset/call_kw/partner/formatted_read_group", async (request) => {
-        const { params } = await request.json();
-        if (params.kwargs.groupby?.includes("properties.my_char")) {
-            expect.step("formatted_read_group");
+    onRpc("partner", "formatted_read_grouping_sets", ({ kwargs, method }) => {
+        if (kwargs.grouping_sets[0].includes("properties.my_char")) {
+            expect.step(method);
             return [
-                {
-                    "properties.my_char": false,
-                    __extra_domain: [["properties.my_char", "=", false]],
-                    __count: 2,
-                },
-                {
-                    "properties.my_char": "aaa",
-                    __extra_domain: [["properties.my_char", "=", "aaa"]],
-                    __count: 1,
-                },
-                {
-                    "properties.my_char": "bbb",
-                    __extra_domain: [["properties.my_char", "=", "bbb"]],
-                    __count: 1,
-                },
+                [
+                    {
+                        "properties.my_char": false,
+                        __extra_domain: [["properties.my_char", "=", false]],
+                        __count: 2,
+                    },
+                    {
+                        "properties.my_char": "aaa",
+                        __extra_domain: [["properties.my_char", "=", "aaa"]],
+                        __count: 1,
+                    },
+                    {
+                        "properties.my_char": "bbb",
+                        __extra_domain: [["properties.my_char", "=", "bbb"]],
+                        __count: 1,
+                    },
+                ],
             ];
         }
     });
@@ -3642,7 +3621,7 @@ test("group by properties in pivot view", async () => {
     await contains(".o_accordion_values .o_menu_item").click();
 
     await animationFrame();
-    expect.verifySteps(["formatted_read_group"]);
+    expect.verifySteps(["formatted_read_grouping_sets"]);
 
     const cells = queryAll(".o_value");
     expect(cells).toHaveLength(4);
@@ -3658,9 +3637,10 @@ test("group by properties in pivot view", async () => {
     expect(columns[2]).toHaveText("bbb");
 });
 
-test("avoid duplicates in formatted_read_group parameter 'groupby'", async () => {
-    onRpc("formatted_read_group", ({ kwargs }) => {
-        expect.step(kwargs.groupby);
+test("avoid duplicates in formatted_read_grouping_sets parameter 'groupby'", async () => {
+    onRpc("formatted_read_grouping_sets", ({ kwargs }) => {
+        expect.step(kwargs.grouping_sets[0]);
+        expect.step(kwargs.grouping_sets[1]);
     });
     await mountView({
         type: "pivot",
@@ -3736,19 +3716,27 @@ test("Close header dropdown when a simple date groupby option is selected", asyn
 
 test("missing property field definition is fetched", async function () {
     onRpc(({ method, kwargs }) => {
-        if (method === "formatted_read_group" && kwargs.groupby?.includes("properties.my_char")) {
-            expect.step(JSON.stringify(kwargs.groupby));
+        if (method === "formatted_read_grouping_sets") {
+            expect.step(JSON.stringify(kwargs.grouping_sets));
             return [
-                {
-                    "properties.my_char": false,
-                    __extra_domain: [["properties.my_char", "=", false]],
-                    __count: 2,
-                },
-                {
-                    "properties.my_char": "aaa",
-                    __extra_domain: [["properties.my_char", "=", "aaa"]],
-                    __count: 1,
-                },
+                [
+                    {
+                        __extra_domain: [],
+                        __count: 3,
+                    },
+                ],
+                [
+                    {
+                        "properties.my_char": false,
+                        __extra_domain: [["properties.my_char", "=", false]],
+                        __count: 2,
+                    },
+                    {
+                        "properties.my_char": "aaa",
+                        __extra_domain: [["properties.my_char", "=", "aaa"]],
+                        __count: 1,
+                    },
+                ],
             ];
         } else if (method === "get_property_definition") {
             return {
@@ -3775,25 +3763,33 @@ test("missing property field definition is fetched", async function () {
             },
         ],
     });
-    expect.verifySteps([`["properties.my_char"]`]);
-    expect(getCurrentValues()).toBe("4,2,1");
+    expect.verifySteps([`[[],["properties.my_char"]]`]);
+    expect(getCurrentValues()).toBe("3,2,1");
 });
 
 test("missing deleted property field definition is created", async function (assert) {
     onRpc(({ method, kwargs }) => {
-        if (method === "formatted_read_group" && kwargs.groupby?.includes("properties.my_char")) {
-            expect.step(JSON.stringify(kwargs.groupby));
+        if (method === "formatted_read_grouping_sets") {
+            expect.step(JSON.stringify(kwargs.grouping_sets));
             return [
-                {
-                    "properties.my_char": false,
-                    __extra_domain: [["properties.my_char", "=", false]],
-                    __count: 2,
-                },
-                {
-                    "properties.my_char": "aaa",
-                    __extra_domain: [["properties.my_char", "=", "aaa"]],
-                    __count: 1,
-                },
+                [
+                    {
+                        __extra_domain: [],
+                        __count: 3,
+                    },
+                ],
+                [
+                    {
+                        "properties.my_char": false,
+                        __extra_domain: [["properties.my_char", "=", false]],
+                        __count: 2,
+                    },
+                    {
+                        "properties.my_char": "aaa",
+                        __extra_domain: [["properties.my_char", "=", "aaa"]],
+                        __count: 1,
+                    },
+                ],
             ];
         } else if (method === "get_property_definition") {
             return {};
@@ -3817,8 +3813,8 @@ test("missing deleted property field definition is created", async function (ass
             },
         ],
     });
-    expect.verifySteps([`["properties.my_char"]`]);
-    expect(getCurrentValues()).toBe("4,2,1");
+    expect.verifySteps([`[[],["properties.my_char"]]`]);
+    expect(getCurrentValues()).toBe("3,2,1");
 });
 
 test("middle clicking on a cell triggers a doAction", async () => {
@@ -3913,7 +3909,7 @@ test("display the field's falsy_value_label for false group, if defined", async 
 test.tags("desktop");
 test("pivot views make their control panel available directly", async () => {
     const def = new Deferred();
-    onRpc("formatted_read_group", () => def);
+    onRpc("formatted_read_grouping_sets", () => def);
     await mountView({
         type: "pivot",
         resModel: "partner",
@@ -3931,4 +3927,38 @@ test("pivot views make their control panel available directly", async () => {
     def.resolve();
     await animationFrame();
     expect(".o_pivot_view .o_pivot").toHaveCount(1);
+});
+
+test("pivot view with monetary", async () => {
+    Partner._fields.amount = fields.Monetary({ currency_field: "currency_id" });
+    Partner._fields.currency_id = fields.Many2one({ relation: "res.currency", default: 1 });
+    Partner._records[0].amount = 500;
+    Partner._records[1].amount = 300;
+    Partner._records[2].amount = 200;
+    Partner._records[3].amount = 400;
+    Partner._records[3].currency_id = 2;
+    await mountView({
+        type: "pivot",
+        resModel: "partner",
+        arch: `
+			<pivot>
+				<field name="amount" type="measure"/>
+			</pivot>`,
+        groupBy: ["currency_id"],
+    });
+    expect(".o_pivot table tbody tr").toHaveCount(3);
+    expect(".o_pivot table tbody tr:first").toHaveText("Total \n—");
+    expect(".o_pivot table tbody tr:first .o_value b").toHaveAttribute(
+        "data-tooltip",
+        "Different currencies cannot be aggregated"
+    );
+    expect(".o_pivot table tbody tr:eq(1)").toHaveText("USD \n$ 1,000.00");
+    expect(".o_pivot table tbody tr:last").toHaveText("EUR \n400.00 €");
+    // test sorting
+    await contains("th.o_pivot_measure_row").click();
+    expect(".o_pivot table tbody tr:eq(1)").toHaveText("EUR \n400.00 €");
+    expect(".o_pivot table tbody tr:last").toHaveText("USD \n$ 1,000.00");
+    await contains("th.o_pivot_measure_row").click();
+    expect(".o_pivot table tbody tr:eq(1)").toHaveText("USD \n$ 1,000.00");
+    expect(".o_pivot table tbody tr:last").toHaveText("EUR \n400.00 €");
 });

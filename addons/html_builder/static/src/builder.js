@@ -1,6 +1,4 @@
 import { Editor } from "@html_editor/editor";
-import { MAIN_PLUGINS } from "@html_editor/plugin_sets";
-import { closestElement } from "@html_editor/utils/dom_traversal";
 import {
     Component,
     EventBus,
@@ -15,15 +13,18 @@ import {
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
 import { _t } from "@web/core/l10n/translation";
-import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { addLoadingEffect as addButtonLoadingEffect } from "@web/core/utils/ui";
 import { useSetupAction } from "@web/search/action_hook";
 import { InvisibleElementsPanel } from "@html_builder/sidebar/invisible_elements_panel";
 import { BlockTab } from "@html_builder/sidebar/block_tab";
 import { CustomizeTab } from "@html_builder/sidebar/customize_tab";
-import { CORE_PLUGINS } from "@html_builder/core/core_plugins";
-import { EDITOR_COLOR_CSS_VARIABLES, getCSSVariableValue, setEditableWindow } from "@html_builder/utils/utils_css";
+import { useSnippets } from "@html_builder/snippets/snippet_service";
+import {
+    setBuilderCSSVariables,
+    setEditableDocument,
+    setEditableWindow,
+} from "@html_builder/utils/utils_css";
 import { withSequence } from "@html_editor/utils/resource";
 
 export class Builder extends Component {
@@ -32,10 +33,11 @@ export class Builder extends Component {
     static props = {
         closeEditor: { type: Function },
         reloadEditor: { type: Function, optional: true },
+        onEditorLoad: { type: Function, optional: true },
+        installSnippetModule: { type: Function, optional: true },
         snippetsName: { type: String },
         toggleMobile: { type: Function },
         overlayRef: { type: Function },
-        isTranslation: { type: Boolean },
         iframeLoaded: { type: Object },
         isMobile: { type: Boolean },
         Plugins: { type: Array, optional: true },
@@ -43,6 +45,7 @@ export class Builder extends Component {
         getThemeTab: { type: Function, optional: true },
     };
     static defaultProps = {
+        onEditorLoad: () => {},
         config: {},
     };
 
@@ -53,8 +56,7 @@ export class Builder extends Component {
         this.state = useState({
             canUndo: false,
             canRedo: false,
-            activeTab:
-                this.props.config.initialTab || (this.props.isTranslation ? "customize" : "blocks"),
+            activeTab: this.props.config.initialTab || "blocks",
             currentOptionsContainers: undefined,
             invisibleEls: [],
         });
@@ -66,35 +68,24 @@ export class Builder extends Component {
         this.ui = useService("ui");
         this.notification = useService("notification");
 
-        const editorBus = new EventBus();
+        this.snippetModel = useSnippets(this.props.snippetsName);
 
-        const mainPlugins = removePlugins(
-            [...MAIN_PLUGINS],
-            [
-                "PowerButtonsPlugin",
-                "DoubleClickImagePreviewPlugin",
-                "SeparatorPlugin",
-                "StarPlugin",
-                "BannerPlugin",
-                "MoveNodePlugin",
-            ]
-        );
-        const corePlugins = this.props.isTranslation ? [] : CORE_PLUGINS;
-        const Plugins = [...mainPlugins, ...corePlugins, ...(this.props.Plugins || [])];
+        this.lastTrigerUpdateId = 0;
+        this.editorBus = new EventBus();
+
         // TODO: maybe do a different config for the translate mode and the
         // "regular" mode.
         this.editor = new Editor(
             {
-                Plugins,
-                isTranslation: this.props.isTranslation,
+                Plugins: this.props.Plugins,
                 ...this.props.config,
                 onChange: ({ isPreviewing }) => {
                     if (!isPreviewing) {
                         this.state.canUndo = this.editor.shared.history.canUndo();
                         this.state.canRedo = this.editor.shared.history.canRedo();
                         this.updateInvisibleEls();
-                        editorBus.trigger("UPDATE_EDITING_ELEMENT");
-                        editorBus.trigger("DOM_UPDATED");
+                        this.editorBus.trigger("UPDATE_EDITING_ELEMENT");
+                        this.triggerDomUpdated();
                     }
                 },
                 reloadEditor: async (param = {}) => {
@@ -106,12 +97,14 @@ export class Builder extends Component {
                 closeEditor: async () => {
                     await this.props.closeEditor();
                 },
+                installSnippetModule: async (snippet) =>
+                    this.props.installSnippetModule(snippet, this.save.bind(this)),
                 resources: {
                     trigger_dom_updated: () => {
-                        editorBus.trigger("DOM_UPDATED");
+                        this.triggerDomUpdated();
                     },
                     on_mobile_preview_clicked: withSequence(20, () => {
-                        editorBus.trigger("DOM_UPDATED");
+                        this.triggerDomUpdated();
                     }),
                     change_current_options_containers_listeners: (currentOptionsContainers) => {
                         this.state.currentOptionsContainers = currentOptionsContainers;
@@ -129,36 +122,27 @@ export class Builder extends Component {
 
                     // disable the toolbar for images and icons
                 },
-                getRecordInfo: (editableEl) => {
-                    if (!editableEl) {
-                        editableEl = closestElement(
-                            this.editor.shared.selection.getEditableSelection().anchorNode
-                        );
-                    }
-                    return {
-                        resModel: editableEl.dataset["oeModel"],
-                        resId: editableEl.dataset["oeId"],
-                        field: editableEl.dataset["oeField"],
-                        type: editableEl.dataset["oeType"],
-                    };
-                },
                 localOverlayContainers: {
                     key: this.env.localOverlayContainerKey,
                     ref: this.props.overlayRef,
                 },
-                saveSnippet: (snippetEl, cleanForSaveHandlers) =>
-                    this.snippetModel.saveSnippet(snippetEl, cleanForSaveHandlers),
+                saveSnippet: (snippetEl, cleanForSaveHandlers, wrapWithSaveSnippetHandlers) =>
+                    this.snippetModel.saveSnippet(
+                        snippetEl,
+                        cleanForSaveHandlers,
+                        wrapWithSaveSnippetHandlers
+                    ),
+                snippetModel: this.snippetModel,
                 getShared: () => this.editor.shared,
                 updateInvisibleElementsPanel: () => this.updateInvisibleEls(),
                 allowCustomStyle: true,
                 allowTargetBlank: true,
-                getAnimateTextConfig: () => ({ editor: this.editor, editorBus }),
+                dropImageAsAttachment: true,
+                getAnimateTextConfig: () => ({ editor: this.editor, editorBus: this.editorBus }),
             },
             this.env.services
         );
-
-        this.snippetModel = useState(useService("html_builder.snippets"));
-        this.snippetModel.registerBeforeReload(this.save.bind(this));
+        this.props.onEditorLoad(this.editor);
 
         onWillStart(async () => {
             await this.snippetModel.load();
@@ -168,6 +152,7 @@ export class Builder extends Component {
             const iframeEl = await this.props.iframeLoaded;
             this.editableEl = iframeEl.contentDocument.body.querySelector("#wrapwrap");
             setEditableWindow(iframeEl.contentWindow);
+            setEditableDocument(iframeEl.contentDocument);
 
             // Prevent image dragging in the website builder. Not via css because
             // if one of the image ancestor has a dragstart listener, the dragstart handler
@@ -184,7 +169,8 @@ export class Builder extends Component {
 
         useSubEnv({
             editor: this.editor,
-            editorBus,
+            editorBus: this.editorBus,
+            triggerDomUpdated: this.triggerDomUpdated.bind(this),
         });
         // onMounted(() => {
         //     // actionService.setActionMode("fullscreen");
@@ -192,7 +178,6 @@ export class Builder extends Component {
         onWillDestroy(() => {
             this.editor.destroy();
             this.editableEl.removeEventListener("dragstart", this.onDragStart);
-            this.snippetModel.unregisterBeforeReload();
             // actionService.setActionMode("current");
         });
 
@@ -203,7 +188,7 @@ export class Builder extends Component {
 
         onMounted(() => {
             this.editor.document.body.classList.add("editor_enable");
-            this.setCSSVariables();
+            setBuilderCSSVariables();
             // TODO: onload editor
             this.updateInvisibleEls();
         });
@@ -215,17 +200,19 @@ export class Builder extends Component {
         // Fallback tab when no option is active.
         this.noSelectionTab = "blocks";
     }
+    async triggerDomUpdated() {
+        this.lastTrigerUpdateId++;
+        const currentTriggerId = this.lastTrigerUpdateId;
+        const getStatePromises = [];
+        const { promise: updatePromise, resolve } = Promise.withResolvers();
+        this.editorBus.trigger("DOM_UPDATED", { getStatePromises, updatePromise });
+        await Promise.all(getStatePromises);
+        const isLastTriggerId = this.lastTrigerUpdateId === currentTriggerId;
+        resolve(isLastTriggerId);
+    }
 
-    setCSSVariables() {
-        const el = this.builder_sidebarRef.el;
-        for (const style of EDITOR_COLOR_CSS_VARIABLES) {
-            let value = getCSSVariableValue(style);
-            if (value.startsWith("'") && value.endsWith("'")) {
-                // Gradient values are recovered within a string.
-                value = value.substring(1, value.length - 1);
-            }
-            el.style.setProperty(`--we-cp-${style}`, value);
-        }
+    get displayOnlyCustomizeTab() {
+        return !!this.props.config.customizeTab;
     }
 
     discard() {
@@ -249,6 +236,10 @@ export class Builder extends Component {
     }
 
     async save() {
+        this.editor.shared.operation.next(this._save.bind(this), { withLoadingEffect: false });
+    }
+
+    async _save() {
         this.isSaving = true;
         // TODO: handle the urgent save and the fail of the save operation
         const snippetMenuEl = this.builder_sidebarRef.el;
@@ -258,7 +249,7 @@ export class Builder extends Component {
         for (const actionButtonEl of actionButtonEls) {
             actionButtonEl.disabled = true;
         }
-        await this.editor.shared.savePlugin.save(this.props.isTranslation);
+        await this.editor.shared.savePlugin.save();
         this.props.closeEditor();
     }
 
@@ -326,16 +317,3 @@ export class Builder extends Component {
         ];
     }
 }
-
-/**
- * Removes the specified plugins from a given list of plugins.
- *
- * @param {Array<Plugin>} plugins the list of plugins
- * @param {Array<string>} pluginsToRemove the names of the plugins to remove
- * @returns {Array<Plugin>}
- */
-function removePlugins(plugins, pluginsToRemove) {
-    return plugins.filter((p) => !pluginsToRemove.includes(p.name));
-}
-
-registry.category("lazy_components").add("website.Builder", Builder);

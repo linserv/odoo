@@ -1,5 +1,6 @@
 import ast
 import base64
+import io
 import json
 import logging
 import lxml
@@ -7,6 +8,7 @@ import os
 import pathlib
 import sys
 import zipfile
+from babel.messages import extract
 from collections import defaultdict
 from io import BytesIO
 from os.path import join as opj
@@ -15,11 +17,12 @@ from odoo import api, fields, models, _
 from odoo.exceptions import AccessDenied, AccessError, UserError
 from odoo.fields import Domain
 from odoo.http import request
-from odoo.modules.module import adapt_version, MANIFEST_NAMES
+from odoo.modules.module import MANIFEST_NAMES, Manifest
 from odoo.release import major_version
-from odoo.tools import convert_csv_import, convert_sql_import, convert_xml_import, exception_to_unicode
-from odoo.tools import file_open, file_open_temporary_directory, ormcache
-from odoo.tools.misc import topological_sort
+from odoo.tools import SQL, convert_file, exception_to_unicode
+from odoo.tools import file_open, file_path, file_open_temporary_directory, ormcache
+from odoo.tools.misc import OrderedSet, topological_sort
+from odoo.tools.translate import JAVASCRIPT_TRANSLATION_COMMENT, CodeTranslations, TranslationImporter, get_base_langs
 
 _logger = logging.getLogger(__name__)
 
@@ -36,9 +39,44 @@ class IrModuleModule(models.Model):
         ('industries', 'Industries'),
     ], default='official')
 
+    @api.model
+    @ormcache()
+    def _get_imported_module_names(self):
+        return OrderedSet(self.sudo().search_fetch([('imported', '=', True), ('state', '=', 'installed')], ['name']).mapped('name'))
+
     def _get_modules_to_load_domain(self):
         # imported modules are not expected to be loaded as regular modules
         return super()._get_modules_to_load_domain() + [('imported', '=', False)]
+
+    @api.model
+    def _load_module_terms(self, modules, langs, overwrite=False):
+        super()._load_module_terms(modules, langs, overwrite=overwrite)
+
+        translation_importer = TranslationImporter(self.env.cr, verbose=False)
+        IrAttachment = self.env['ir.attachment']
+
+        for module in modules:
+            if Manifest.for_addon(module, downloaded=True, display_warning=False):
+                continue
+            for lang in langs:
+                for lang_ in get_base_langs(lang):
+                    # Translations for imported data modules only works with imported po files
+                    attachment = IrAttachment.sudo().search([
+                        ('name', '=', f"{module}_{lang_}.po"),
+                        ('url', '=', f"/{module}/i18n/{lang_}.po"),
+                        ('type', '=', 'binary'),
+                    ], limit=1)
+                    if attachment.raw:
+                        try:
+                            with io.BytesIO(attachment.raw) as fileobj:
+                                fileobj.name = attachment.name
+                                translation_importer.load(fileobj, 'po', lang, module=module)
+                        except Exception:   # noqa: BLE001
+                            _logger.warning('module %s: failed to load translation attachment %s for language %s', module, attachment.name, lang)
+                if lang != 'en_US' and lang not in translation_importer.imported_langs:
+                    _logger.info('module %s: no translation for language %s', module, lang)
+
+        translation_importer.save(overwrite=overwrite)
 
     @api.depends('name')
     def _get_latest_version(self):
@@ -73,20 +111,17 @@ class IrModuleModule(models.Model):
         known_mods_names = {m.name: m for m in known_mods}
         installed_mods = [m.name for m in known_mods if m.state == 'installed']
 
-        terp = {}
-        manifest_path = next((opj(path, name) for name in MANIFEST_NAMES if os.path.exists(opj(path, name))), None)
-        if manifest_path:
-            with file_open(manifest_path, 'rb', env=self.env) as f:
-                terp.update(ast.literal_eval(f.read().decode()))
+        terp = Manifest._from_path(path, env=self.env)
         if not terp:
             return False
-        if not terp.get('icon'):
-            icon_path = 'static/description/icon.png'
-            module_icon = module if os.path.exists(opj(path, icon_path)) else 'base'
-            terp['icon'] = opj('/', module_icon, icon_path)
         values = self.get_values_from_terp(terp)
-        if 'version' in terp:
-            values['latest_version'] = adapt_version(terp['version'])
+        try:
+            icon_path = terp.manifest_cached.get('icon') or opj(terp.name, 'static/description/icon.png')
+            file_path(icon_path, env=self.env, check_exists=True)
+            values['icon'] = '/' + icon_path
+        except OSError:
+            pass  # keep the default icon
+        values['latest_version'] = terp.version
         if self.env.context.get('data_module'):
             values['module_type'] = 'industries'
 
@@ -116,7 +151,7 @@ class IrModuleModule(models.Model):
         for pattern in terp.get('cloc_exclude', []):
             exclude_list.update(str(p.relative_to(base_dir)) for p in base_dir.glob(pattern) if p.is_file())
 
-        kind_of_files = ['data', 'init_xml', 'update_xml']
+        kind_of_files = ['data', 'init_xml']
         if with_demo:
             kind_of_files.append('demo')
         for kind in kind_of_files:
@@ -126,30 +161,21 @@ class IrModuleModule(models.Model):
                     _logger.info("module %s: skip unsupported file %s", module, filename)
                     continue
                 _logger.info("module %s: loading %s", module, filename)
-                noupdate = False
-                if ext == '.csv' and kind in ('init', 'init_xml'):
-                    noupdate = True
+                noupdate = ext == '.csv' and kind == 'init_xml'
                 pathname = opj(path, filename)
                 idref = {}
-                with file_open(pathname, 'rb', env=self.env) as fp:
-                    if ext == '.csv':
-                        convert_csv_import(self.env, module, pathname, fp.read(), idref, mode, noupdate)
-                    elif ext == '.sql':
-                        convert_sql_import(self.env, fp)
-                    elif ext == '.xml':
-                        convert_xml_import(self.env, module, fp, idref, mode, noupdate)
-                        if filename in exclude_list:
-                            for key, value in idref.items():
-                                xml_id = f"{module}.{key}" if '.' not in key else key
-                                name = xml_id.replace('.', '_')
-                                if self.env.ref(f"__cloc_exclude__.{name}", raise_if_not_found=False):
-                                    continue
-                                self.env['ir.model.data'].create([{
-                                    'name': name,
-                                    'model': self.env['ir.model.data']._xmlid_lookup(xml_id)[0],
-                                    'module': "__cloc_exclude__",
-                                    'res_id': value,
-                                }])
+                convert_file(self.env, module, filename, idref, mode, noupdate, pathname=pathname)
+                if filename in exclude_list:
+                    for xml_id, rec_id in idref.items():
+                        name = xml_id.replace('.', '_')
+                        if self.env.ref(f"__cloc_exclude__.{name}", raise_if_not_found=False):
+                            continue
+                        self.env['ir.model.data'].create([{
+                            'name': name,
+                            'model': self.env['ir.model.data']._xmlid_lookup(xml_id)[0],
+                            'module': "__cloc_exclude__",
+                            'res_id': rec_id,
+                        }])
 
         path_static = opj(path, 'static')
         IrAttachment = self.env['ir.attachment']
@@ -192,6 +218,37 @@ class IrModuleModule(models.Model):
                                 'module': "__cloc_exclude__",
                                 'res_id': attachment.id,
                             })
+
+        # store translation files as attachments to allow loading translations for webclient
+        path_lang = opj(path, 'i18n')
+        if os.path.isdir(path_lang):
+            for entry in os.scandir(path_lang):
+                if not entry.is_file() or not entry.name.endswith('.po'):
+                    # we don't support sub-directories in i18n
+                    continue
+                with file_open(entry.path, 'rb', env=self.env) as fp:
+                    raw = fp.read()
+                lang = entry.name.split('.')[0]
+                # store as binary ir.attachment
+                values = {
+                    'name': f'{module}_{lang}.po',
+                    'url': f'/{module}/i18n/{lang}.po',
+                    'res_model': 'ir.module.module',
+                    'res_id': mod.id,
+                    'type': 'binary',
+                    'raw': raw,
+                }
+                attachment = IrAttachment.sudo().search([('url', '=', values['url']), ('type', '=', 'binary'), ('name', '=', values['name'])])
+                if attachment:
+                    attachment.write(values)
+                else:
+                    attachment = IrAttachment.create(values)
+                    self.env['ir.model.data'].create({
+                        'name': f'attachment_{module}_{lang}'.replace('.', '_').replace(' ', '_'),
+                        'model': 'ir.attachment',
+                        'module': module,
+                        'res_id': attachment.id,
+                    })
 
         IrAsset = self.env['ir.asset']
         assets_vals = []
@@ -236,7 +293,6 @@ class IrModuleModule(models.Model):
             [module],
             [lang for lang, _name in self.env['res.lang'].get_installed()],
             overwrite=True,
-            imported_module=True,
         )
 
         if ('knowledge.article' in self.env
@@ -281,11 +337,9 @@ class IrModuleModule(models.Model):
                 module_data_files = defaultdict(list)
                 dependencies = defaultdict(list)
                 for mod_name, manifest in manifest_files:
-                    manifest_path = z.extract(manifest, module_dir)
-                    try:
-                        with file_open(manifest_path, 'rb', env=self.env) as f:
-                            terp = ast.literal_eval(f.read().decode())
-                    except Exception:
+                    _manifest_path = z.extract(manifest, module_dir)
+                    terp = Manifest._from_path(opj(module_dir, mod_name), env=self.env)
+                    if not terp:
                         continue
                     files_to_import = terp.get('data', []) + terp.get('init_xml', []) + terp.get('update_xml', [])
                     if with_demo:
@@ -323,7 +377,7 @@ class IrModuleModule(models.Model):
                         raise UserError(_(
                             "Error while importing module '%(module)s'.\n\n %(error_message)s \n\n",
                             module=mod_name, error_message=exception_to_unicode(e),
-                        ))
+                        )) from e
         return "", module_names
 
     def module_uninstall(self):
@@ -543,6 +597,92 @@ class IrModuleModule(models.Model):
                 'values': categories,
             }
         return super().search_panel_select_range(field_name, **kwargs)
+
+    @api.model
+    @ormcache('module', 'lang')
+    def _get_imported_module_translations_for_webclient(self, module, lang):
+        if not lang:
+            lang = self.env.context.get("lang") or 'en_US'
+        IrAttachment = self.env['ir.attachment']
+
+        def filter_func(row):
+            return row.get('value') and JAVASCRIPT_TRANSLATION_COMMENT in row['comments']
+
+        translations = {}
+        for lang_ in get_base_langs(lang):
+            attachment = IrAttachment.sudo().search([
+                ('name', '=', f"{module}_{lang_}.po"),
+                ('url', '=', f"/{module}/i18n/{lang_}.po"),
+                ('res_model', '=', 'ir.module.module'),
+                ('res_id', '=', self._get_id(module)),
+                ('type', '=', 'binary'),
+            ], limit=1)
+            if attachment.raw:
+                try:
+                    with io.BytesIO(attachment.raw) as fileobj:
+                        fileobj.name = attachment.name
+                        webclient_translations = CodeTranslations._read_code_translations_file(fileobj, filter_func)
+                        translations.update(webclient_translations)
+                except Exception:  # noqa: BLE001
+                    _logger.warning('module %s: failed to load translation attachment %s for language %s', module, attachment.name, lang)
+
+        return {
+            'messages': tuple({
+                'id': src,
+                'string': value,
+            } for src, value in translations.items())
+        }
+
+    @api.model
+    def _extract_resource_attachment_translations(self, module, lang):
+        yield from super()._extract_resource_attachment_translations(module, lang)
+        if not self._get(module).imported:
+            return
+        self.env['ir.model.data'].flush_model()
+        IrAttachment = self.env['ir.attachment']
+        IrAttachment.flush_model()
+        module_ = module.replace('_', r'\_')
+        ids = [r[0] for r in self.env.execute_query(SQL(
+            """
+                SELECT ia.id
+                FROM ir_attachment ia
+                JOIN ir_model_data imd
+                ON ia.id = imd.res_id
+                AND imd.model = 'ir.attachment'
+                AND imd.module = %(module)s
+                AND ia.res_model = 'ir.ui.view'
+                AND ia.res_field IS NULL
+                AND ia.res_id IS NULL
+                AND (ia.url ilike %(js_pattern)s or ia.url ilike %(xml_pattern)s)
+                AND ia.type = 'binary'
+                ORDER BY ia.url
+            """,
+            module=module,
+            js_pattern=f'/{module_}/static/src/%.js',
+            xml_pattern=f'/{module_}/static/src/%.xml',
+        ))]
+        attachments = IrAttachment.browse(OrderedSet(ids))
+        if not attachments:
+            return
+        translations = self._get_imported_module_translations_for_webclient(module, lang)
+        translations = {tran['id']: tran['string'] for tran in translations['messages']}
+        for attachment in attachments.filtered('raw'):
+            display_path = f'addons{attachment.url}'
+            if attachment.url.endswith('js'):
+                extract_method = 'odoo.tools.babel:extract_javascript'
+                extract_keywords = {'_t': None}
+            else:
+                extract_method = 'odoo.tools.translate:babel_extract_qweb'
+                extract_keywords = {}
+            try:
+                with io.BytesIO(attachment.raw) as fileobj:
+                    for extracted in extract.extract(extract_method, fileobj, keywords=extract_keywords):
+                        lineno, message, comments = extracted[:3]
+                        value = translations.get(message, '')
+                        # (module, ttype, name, res_id, source, comments, record_id, value)
+                        yield (module, 'code', display_path, lineno, message, comments + [JAVASCRIPT_TRANSLATION_COMMENT], None, value)
+            except Exception:  # noqa: BLE001
+                _logger.exception("Failed to extract terms from attachment with url %s", attachment.url)
 
 
 def _domain_asks_for_industries(domain):

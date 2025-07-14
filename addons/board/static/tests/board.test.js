@@ -608,21 +608,21 @@ describe("board_desktop", () => {
         onRpc(({ method, kwargs }) => {
             if (method === "get_property_definition") {
                 return {};
-            } else if (
-                method === "formatted_read_group" &&
-                kwargs.groupby?.includes("properties.my_char")
-            ) {
+            } else if (method === "formatted_read_grouping_sets") {
                 return [
-                    {
-                        "properties.my_char": false,
-                        __extra_domain: [["properties.my_char", "=", false]],
-                        __count: 2,
-                    },
-                    {
-                        "properties.my_char": "aaa",
-                        __extra_domain: [["properties.my_char", "=", "aaa"]],
-                        __count: 1,
-                    },
+                    [{ __count: 3, __extra_domain: [] }],
+                    [
+                        {
+                            "properties.my_char": false,
+                            __extra_domain: [["properties.my_char", "=", false]],
+                            __count: 2,
+                        },
+                        {
+                            "properties.my_char": "aaa",
+                            __extra_domain: [["properties.my_char", "=", "aaa"]],
+                            __count: 1,
+                        },
+                    ],
                 ];
             }
         });
@@ -670,7 +670,7 @@ describe("board_mobile", () => {
         expect(".o-dashboard-layout-1").toHaveCount(1, {
             message: "The display layout is force to 1",
         });
-        expect(".o-dashboard-action .o_control_panel").not.toBeVisible();
+        expect(".o-dashboard-action .o_control_panel").not.toHaveCount();
         expect(".o-dashboard-action-header .fa-close").toHaveCount(0, {
             message: "Should not have a close action button",
         });

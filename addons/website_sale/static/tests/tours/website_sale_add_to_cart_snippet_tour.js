@@ -8,7 +8,6 @@ import {
     changeOptionInPopover,
 } from "@website/js/tours/tour_utils";
 import { assertCartContains } from '@website_sale/js/tours/tour_utils';
-import { stepUtils } from "@web_tour/tour_service/tour_utils";
 
 
 function editAddToCartSnippet() {
@@ -16,6 +15,13 @@ function editAddToCartSnippet() {
         ...clickOnEditAndWaitEditMode(),
         ...clickOnSnippet({id: 's_add_to_cart'})
     ]
+}
+
+function checkQuanityInCart(quantity) {
+    return {
+        content: `Check if the cart quantity is ${quantity}`,
+        trigger: `:iframe .my_cart_quantity:contains(${quantity})`,
+    };
 }
 
 registerWebsitePreviewTour('add_to_cart_snippet_tour', {
@@ -29,23 +35,22 @@ registerWebsitePreviewTour('add_to_cart_snippet_tour', {
         ...clickOnSnippet({id: 's_add_to_cart'}),
         ...changeOptionInPopover("Add to Cart Button", "Product", "Product No Variant", true),
         ...clickOnSave(),
-        stepUtils.waitIframeIsReady(),
         clickOnElement("add to cart button", ":iframe .s_add_to_cart_btn"),
+        checkQuanityInCart("1"),
 
         // Product with 2 variants with visitor choice (will open modal)
         ...editAddToCartSnippet(),
         ...changeOptionInPopover("Add to Cart Button", "Product", "Product Yes Variant 1", true),
         ...clickOnSave(),
-        stepUtils.waitIframeIsReady(),
         clickOnElement("add to cart button", ":iframe .s_add_to_cart_btn"),
         clickOnElement("continue shopping", ":iframe .modal button:contains(Continue Shopping)"),
+        checkQuanityInCart("2"),
 
         // Product with 2 variants with a variant selected
         ...editAddToCartSnippet(),
         ...changeOptionInPopover("Add to Cart Button", "Product", "Product Yes Variant 2", true),
         ...changeOptionInPopover("Add to Cart Button", "Variant", "Product Yes Variant 2 (Pink)"),
         ...clickOnSave(),
-        stepUtils.waitIframeIsReady(),
         clickOnElement("add to cart button", ":iframe .s_add_to_cart_btn"),
         // Since 18.2, even if a specific variant is selected, the product configuration modal is displayed
         // The variant set on the modal used the default variants attributes (so will not correspond to the selected variant)
@@ -65,6 +70,7 @@ registerWebsitePreviewTour('add_to_cart_snippet_tour', {
             trigger: ":iframe .modal li:contains(Pink) input:checked",
         },
         clickOnElement('continue shopping', ':iframe .modal button:contains(Continue Shopping)',),
+        checkQuanityInCart("3"),
 
         // Basic product with no variants and action=buy now
         ...editAddToCartSnippet(),
@@ -72,15 +78,15 @@ registerWebsitePreviewTour('add_to_cart_snippet_tour', {
         ...changeOptionInPopover("Add to Cart Button", "Action", "Buy Now", false),
         // At this point the "Add to cart" button was changed to a "Buy Now" button
         ...clickOnSave(),
-        stepUtils.waitIframeIsReady(),
         clickOnElement('"Buy Now" button', ':iframe .s_add_to_cart_btn'),
+        checkQuanityInCart("4"),
         {
             // wait for the page to load, as the next check was sometimes too fast
             content: "Wait for the redirection to the cart page",
             trigger: ":iframe h4:contains(order summary)",
         },
-        assertCartContains({productName: 'Product No Variant', backend: true}),
-        assertCartContains({productName: 'Product Yes Variant 1 (Red)', backend: true}),
-        assertCartContains({productName: 'Product Yes Variant 2 (Pink)', backend: true}),
+        ...assertCartContains({productName: 'Product No Variant', backend: true}),
+        ...assertCartContains({productName: 'Product Yes Variant 1', combinationName: 'Red', backend: true}),
+        ...assertCartContains({productName: 'Product Yes Variant 2', combinationName: 'Pink', backend: true}),
     ],
 );

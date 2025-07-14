@@ -12,6 +12,7 @@ import { rpc } from "@web/core/network/rpc";
 import { memoize } from "@web/core/utils/functions";
 import { withSequence } from "@html_editor/utils/resource";
 import { isBlock, closestBlock } from "@html_editor/utils/blocks";
+import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 
 /**
  * @typedef {import("@html_editor/core/selection_plugin").EditorSelection} EditorSelection
@@ -150,7 +151,7 @@ export class LinkPlugin extends Plugin {
                     const linkEl = findInSelection(selection, "a");
                     return linkEl
                         ? this.getResource("link_popovers").some((p) => p.isAvailable(linkEl))
-                        : true;
+                        : isHtmlContentSupported(selection);
                 },
             },
             {
@@ -160,7 +161,12 @@ export class LinkPlugin extends Plugin {
                 icon: "fa-unlink",
                 isAvailable: (selection) => {
                     const linkEl = findInSelection(selection, "a");
-                    return !!linkEl && !this.isLinkImmutable(linkEl);
+                    return (
+                        !!linkEl &&
+                        !this.isLinkImmutable(linkEl) &&
+                        !this.isUnremovable(linkEl) &&
+                        isHtmlContentSupported(selection)
+                    );
                 },
                 run: this.removeLinkFromSelection.bind(this),
             },
@@ -252,6 +258,7 @@ export class LinkPlugin extends Plugin {
         /** Overrides */
         split_element_block_overrides: this.handleSplitBlock.bind(this),
         insert_line_break_element_overrides: this.handleInsertLineBreak.bind(this),
+        delete_image_overrides: this.deleteImageLink.bind(this),
     };
 
     setup() {
@@ -297,8 +304,13 @@ export class LinkPlugin extends Plugin {
             {
                 hotkey: "control+k",
                 category: "shortcut_conflict",
-                isAvailable: () =>
-                    this.dependencies.selection.getSelectionData().documentSelectionIsInEditable,
+                isAvailable: () => {
+                    const selectionData = this.dependencies.selection.getSelectionData();
+                    return (
+                        selectionData.documentSelectionIsInEditable &&
+                        isHtmlContentSupported(selectionData.editableSelection)
+                    );
+                },
             }
         );
         this.ignoredClasses = new Set(this.getResource("system_classes"));
@@ -549,6 +561,9 @@ export class LinkPlugin extends Plugin {
                 this.restoreSavePoint();
                 if (linkElement.isConnected) {
                     this.openLinkTools(linkElement);
+                } else {
+                    this.linkInDocument = null;
+                    this.currentOverlay.close();
                 }
                 this.dependencies.selection.focusEditable();
             },
@@ -575,6 +590,7 @@ export class LinkPlugin extends Plugin {
             recordInfo: this.config.getRecordInfo?.() || {},
             canEdit:
                 !this.linkInDocument || !this.linkInDocument.classList.contains("o_link_readonly"),
+            canRemove: this.linkInDocument && !this.isUnremovable(this.linkInDocument),
             canUpload: this.config.allowFile,
             onUpload: this.config.onAttachmentChange,
             type: this.type || "",
@@ -671,6 +687,14 @@ export class LinkPlugin extends Plugin {
                 anchorEl.appendChild(newFont);
                 this.dependencies.color.colorElement(newFont, color, "color");
             }
+
+            // When a link contains unsupported element (like an iframe or a link),
+            // we remove the link. Cases can happen when a image link is replaced
+            // by a document or a video
+            const hasUnsupportedMedia = anchorEl.querySelector("a, iframe");
+            if (hasUnsupportedMedia) {
+                this.removeLinkInDocument(anchorEl);
+            }
         }
     }
 
@@ -738,7 +762,7 @@ export class LinkPlugin extends Plugin {
         } else {
             const closestLinkElement = closestElement(selection.anchorNode, "A");
             if (closestLinkElement && closestLinkElement.isContentEditable) {
-                if (closestLinkElement !== this.linkInDocument) {
+                if (closestLinkElement !== this.linkInDocument || !this.currentOverlay.isOpen) {
                     this.openLinkTools(closestLinkElement);
                 }
             } else if (
@@ -777,11 +801,17 @@ export class LinkPlugin extends Plugin {
         this.dependencies.selection.setCursorEnd(linkElement);
     }
 
+    isUnremovable(linkEl) {
+        return this.getResource("unremovable_node_predicates").some((p) => p(linkEl));
+    }
+
     /**
      * Remove the link from the collapsed selection
      */
-    removeLinkInDocument() {
-        const link = this.linkInDocument;
+    removeLinkInDocument(link = this.linkInDocument) {
+        if (this.isUnremovable(link)) {
+            return;
+        }
         const cursors = this.dependencies.selection.preserveSelection();
         if (link && link.isContentEditable) {
             cursors.update(callbacksForCursorUpdate.unwrap(link));
@@ -995,6 +1025,19 @@ export class LinkPlugin extends Plugin {
         this.onInputDeleteNormalizeLink();
     }
 
+    deleteImageLink(imageToDelete) {
+        if (imageToDelete.parentElement.tagName === "A") {
+            // If the link is empty after removing the image, remove it.
+            const cursors = this.dependencies.selection.preserveSelection();
+            cursors.update(callbacksForCursorUpdate.remove(imageToDelete));
+            imageToDelete.remove();
+            this.closeLinkTools(cursors);
+            this.dependencies.history.addStep();
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Inserts a link in the editor. Called after pressing space or (shif +) enter.
      * Performs a regex check to determine if the url has correct syntax.
@@ -1002,7 +1045,7 @@ export class LinkPlugin extends Plugin {
     handleAutomaticLinkInsertion() {
         let selection = this.dependencies.selection.getEditableSelection();
         if (
-            isHtmlContentSupported(selection.anchorNode) &&
+            isHtmlContentSupported(selection) &&
             !closestElement(selection.anchorNode, "a") &&
             selection.anchorNode.nodeType === Node.TEXT_NODE
         ) {
@@ -1106,9 +1149,11 @@ export class LinkPlugin extends Plugin {
                 overlay: this.dependencies.overlay.createOverlay(
                     link_popover.PopoverClass,
                     {
-                        closeOnPointerdown: false,
+                        closeOnPointerdown: true,
                     },
-                    { sequence: 50 }
+                    {
+                        sequence: 50,
+                    }
                 ),
                 isAvailable: link_popover.isAvailable,
                 getProps: link_popover.getProps,
@@ -1123,19 +1168,4 @@ export class LinkPlugin extends Plugin {
     isLinkImmutable(linkEl) {
         return this.getResource("immutable_link_selectors").some((s) => linkEl.matches(s));
     }
-}
-
-// @phoenix @todo: duplicate from the clipboard plugin, should be moved to a shared location
-/**
- * Returns true if the provided node can suport html content.
- *
- * @param {Node} node
- * @returns {boolean}
- */
-export function isHtmlContentSupported(node) {
-    return !closestElement(
-        node,
-        '[data-oe-model]:not([data-oe-field="arch"]):not([data-oe-type="html"]),[data-oe-translation-id]',
-        true
-    );
 }

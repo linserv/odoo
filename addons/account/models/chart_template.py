@@ -35,6 +35,13 @@ SYSCOHADA_LIST = ['BJ', 'BF', 'CM', 'CF', 'KM', 'CG', 'CI', 'GA', 'GN', 'GW', 'G
                   'CD', 'SN', 'TD', 'TG']
 
 
+def get_python_translation(module, lang, value):
+    value_translated = code_translations.get_python_translations(module, lang).get(value)
+    if not value_translated:  # manage generic locale (i.e. `fr` instead of `fr_BE`)
+        value_translated = code_translations.get_python_translations(module, lang.split('_')[0]).get(value)
+    return value_translated
+
+
 def preserve_existing_tags_on_taxes(env, module):
     ''' This is a utility function used to preserve existing previous tags during upgrade of the module.'''
     xml_records = env['ir.model.data'].search([('model', '=', 'account.account.tag'), ('module', 'like', module)])
@@ -354,7 +361,7 @@ class AccountChartTemplate(models.AbstractModel):
                         if not force_create:
                             skip_update.add((model_name, xmlid))
                             continue
-                        if self._context.get('force_new_tax_active'):
+                        if self.env.context.get('force_new_tax_active'):
                             values['active'] = True
                         if xmlid in xmlid2tax:
                             obsolete_xmlid.add(xmlid)
@@ -868,8 +875,7 @@ class AccountChartTemplate(models.AbstractModel):
                 company[company_attr_name] = account
 
         # No fields on company
-        is_accounting_installed_next = self.env["ir.module.module"].search([('name', '=', 'accountant')]).state in ('to install', 'installed')
-        if not company.parent_id and not is_accounting_installed_next:
+        if not company.parent_id:
             accounts_data_no_fields = {
                 'account_journal_payment_debit_account_id': {
                     'name': _("Outstanding Receipts"),
@@ -1204,7 +1210,7 @@ class AccountChartTemplate(models.AbstractModel):
                         message = self.env._(
                             'Error while loading the localization: missing tax tag %(tag_name)s for country %(country_name)s. You should probably update your localization app first.',
                             tag_name=format_tag, country_name=country.name)
-                        if not self._context.get('ignore_missing_tags'):
+                        if not self.env.context.get('ignore_missing_tags'):
                             raise UserError(message)
                         else:
                             _logger.error(message)
@@ -1334,7 +1340,7 @@ class AccountChartTemplate(models.AbstractModel):
 
             self.env[model].flush_model(['id', company_id_field] + translatable_model_fields[model])
 
-            query = self.env[model]._where_calc([(company_id_field, 'in', company_ids)])
+            query = self.env[model]._search([(company_id_field, 'in', company_ids)], bypass_access=True)
 
             # We only want records that have at least 1 missing translation in any of its translatable fields
             missing_translation_clauses = [
@@ -1371,8 +1377,8 @@ class AccountChartTemplate(models.AbstractModel):
         # the queried models have been flushed already as part of the loop building the queries per model
         self.env['ir.model.data'].flush_model(['res_id', 'model', 'name'])
 
-        self._cr.execute(query)
-        return self._cr.fetchall()
+        self.env.cr.execute(query)
+        return self.env.cr.fetchall()
 
     def _get_field_translation(self, record, fname, lang):
         """Return the value for language lang for field with fname from record (or None if none exists).
@@ -1445,9 +1451,12 @@ class AccountChartTemplate(models.AbstractModel):
                         continue
                     value_translated = None
                     for code_module in ([module, 'account'] if module != 'account' else ['account']):
-                        value_translated = code_translations.get_python_translations(code_module, lang).get(value_en_US)
-                        if not value_translated:  # manage generic locale (i.e. `fr` instead of `fr_BE`)
-                            value_translated = code_translations.get_python_translations(code_module, lang.split('_')[0]).get(value_en_US)
+                        value_translated = get_python_translation(code_module, lang, value_en_US)
+                        if not value_translated and (re.match(r"<div>.*</div>", value_en_US)):
+                            # Manage HTML fields sanitized when no html tag was provided
+                            value_translated = get_python_translation(code_module, lang, value_en_US[5:-6])
+                            if value_translated:
+                                value_translated = f"<div>{value_translated}</div>"
                         if value_translated:
                             translation_importer.model_translations[mname][field][xml_id][lang] = value_translated
                             break

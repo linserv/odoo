@@ -14,7 +14,6 @@ from markupsafe import Markup
 from odoo import api, fields, models, _, tools
 from odoo.fields import Domain
 from odoo.exceptions import ValidationError, AccessError, RedirectWarning, UserError
-from odoo.osv import expression
 from odoo.tools import convert, format_time, SQL, Query
 from odoo.tools.intervals import Intervals
 
@@ -74,7 +73,7 @@ class HrEmployee(models.Model):
     name = fields.Char(string="Employee Name", related='resource_id.name', store=True, readonly=False, tracking=True)
     resource_id = fields.Many2one('resource.resource', required=True)
     # required because the mixin already creates it so it is not related to the version_id
-    resource_calendar_id = fields.Many2one(related='version_id.resource_calendar_id', index=False, store=False)
+    resource_calendar_id = fields.Many2one(related='version_id.resource_calendar_id', index=False, store=False, check_company=True)
     user_id = fields.Many2one(
         'res.users', 'User',
         related='resource_id.user_id',
@@ -106,7 +105,7 @@ class HrEmployee(models.Model):
     newly_hired = fields.Boolean('Newly Hired', compute='_compute_newly_hired', search='_search_newly_hired')
 
     active = fields.Boolean('Active', related='resource_id.active', default=True, store=True, readonly=False)
-    company_id = fields.Many2one('res.company', required=True)
+    company_id = fields.Many2one('res.company', required=True, tracking=True)
     company_country_id = fields.Many2one('res.country', 'Company Country', related='company_id.country_id', readonly=True, groups="base.group_system,hr.group_hr_user")
     company_country_code = fields.Char(related='company_country_id.code', depends=['company_country_id'], readonly=True, groups="base.group_system,hr.group_hr_user", string='Company Country Code')
     work_phone = fields.Char('Work Phone', compute="_compute_phones", store=True, readonly=False, tracking=True)
@@ -136,14 +135,7 @@ class HrEmployee(models.Model):
     has_work_permit = fields.Binary(string="Work Permit", groups="hr.group_hr_user")
     work_permit_scheduled_activity = fields.Boolean(default=False, groups="hr.group_hr_user")
     work_permit_name = fields.Char('work_permit_name', compute='_compute_work_permit_name', groups="hr.group_hr_user")
-    additional_note = fields.Text(string='Additional Note', groups="hr.group_hr_user", tracking=True)
-    certificate = fields.Selection([
-        ('graduate', 'Graduate'),
-        ('bachelor', 'Bachelor'),
-        ('master', 'Master'),
-        ('doctor', 'Doctor'),
-        ('other', 'Other'),
-    ], 'Certificate Level', groups="hr.group_hr_user", tracking=True)
+    certificate = fields.Selection(selection='_get_certificate_selection', string='Certificate Level', groups="hr.group_hr_user", tracking=True)
     study_field = fields.Char("Field of Study", groups="hr.group_hr_user", tracking=True)
     study_school = fields.Char("School", groups="hr.group_hr_user", tracking=True)
     emergency_contact = fields.Char(groups="hr.group_hr_user", tracking=True)
@@ -284,6 +276,16 @@ class HrEmployee(models.Model):
             employee.hr_icon_display = 'presence_' + employee.hr_presence_state
             employee.show_hr_icon_display = bool(employee.user_id)
 
+    @api.model
+    def _get_certificate_selection(self):
+        return [
+            ('graduate', self.env._('Graduate')),
+            ('bachelor', self.env._('Bachelor')),
+            ('master', self.env._('Master')),
+            ('doctor', self.env._('Doctor')),
+            ('other', self.env._('Other')),
+        ]
+
     def _get_first_versions(self):
         self.ensure_one()
         versions = self.version_ids
@@ -336,7 +338,7 @@ class HrEmployee(models.Model):
                 version = employee.current_version_id
             employee.version_id = version
 
-    @api.depends('version_ids.date_version', 'version_ids.active')
+    @api.depends('version_ids.date_version', 'version_ids.active', 'active')
     def _compute_current_version_id(self):
         for employee in self:
             version = self.env['hr.version'].search(
@@ -351,11 +353,14 @@ class HrEmployee(models.Model):
             else:
                 employee.current_version_id = False
 
+    def _cron_update_current_version_id(self):
+        self.search([])._compute_current_version_id()
+
     def _search_version_id(self, operator, value):
-        if operator == 'any':
-            return [('current_version_id', operator, value)]
-        domain = [('id', operator, value)]
-        return [('id', 'in', self.env['hr.version']._search(domain).select('employee_id'))]
+        if operator in ('any', 'any!'):
+            return Domain('current_version_id', operator, value)
+        domain = Domain('id', operator, value)
+        return Domain('id', 'in', self.env['hr.version']._search(domain).select('employee_id'))
 
     def _field_to_sql(self, alias: str, field_expr: str, query: (Query | None) = None, flush: bool = True) -> SQL:
         """This is required to search for the related fields of version_id as version_id is not stored"""
@@ -665,14 +670,15 @@ class HrEmployee(models.Model):
             'view_mode': 'form',
             'view_id': self.env.ref('hr.view_users_simple_form').id,
             'target': 'new',
-            'context': dict(self._context, **{
+            'context': {
+                **self.env.context,
                 'default_create_employee_id': self.id,
                 'default_name': self.name,
                 'default_phone': self.work_phone,
                 'default_mobile': self.mobile_phone,
                 'default_login': self.work_email,
                 'default_partner_id': self.work_contact_id.id,
-            })
+            },
         }
 
     def action_create_users_confirmation(self):
@@ -839,7 +845,7 @@ class HrEmployee(models.Model):
         return res
 
     @api.model
-    def _search(self, domain, offset=0, limit=None, order=None):
+    def _search(self, domain, offset=0, limit=None, order=None, *, bypass_access=False, **kwargs):
         """
             We override the _search because it is the method that checks the access rights
             This is correct to override the _search. That way we enforce the fact that calling
@@ -848,12 +854,12 @@ class HrEmployee(models.Model):
             browsed on the hr.employee model. This can be trusted as the ids of the public
             employees exactly match the ids of the related hr.employee.
         """
-        if self.browse().has_access('read'):
-            return super()._search(domain, offset, limit, order)
+        if self.browse().has_access('read') or bypass_access:
+            return super()._search(domain, offset, limit, order, bypass_access=bypass_access, **kwargs)
         try:
             # HACK: suppress warning if domain is optimized for another model
             domain = list(domain) if isinstance(domain, Domain) else domain
-            ids = self.env['hr.employee.public']._search(domain, offset, limit, order)
+            ids = self.env['hr.employee.public']._search(domain, offset, limit, order, **kwargs)
         except ValueError:
             raise AccessError(_('You do not have access to this document.'))
         # the result is expected from this table, so we should link tables
@@ -867,9 +873,9 @@ class HrEmployee(models.Model):
         }
         if dep_rd:
             return action_reload
-        convert.convert_file(env=self.env, module='hr', filename='data/scenarios/hr_scenario.xml', idref=None, mode='init', kind="data")
+        convert.convert_file(env=self.env, module='hr', filename='data/scenarios/hr_scenario.xml', idref=None, mode='init')
         if 'resume_line_ids' in self:
-            convert.convert_file(env=self.env, module='hr_skills', filename='data/scenarios/hr_skills_scenario.xml', idref=None, mode='init', kind="data")
+            convert.convert_file(env=self.env, module='hr_skills', filename='data/scenarios/hr_skills_scenario.xml', idref=None, mode='init')
         return action_reload
 
     def get_formview_id(self, access_uid=None):
@@ -968,13 +974,25 @@ class HrEmployee(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        for vals in vals_list:
+        vals_per_company = defaultdict(list)
+        for idx, vals in enumerate(vals_list):
             if vals.get('user_id'):
                 user = self.env['res.users'].browse(vals['user_id'])
                 vals.update(self._sync_user(user, bool(vals.get('image_1920'))))
                 vals['name'] = vals.get('name', user.name)
                 self._remove_work_contact_id(user, vals.get('company_id'))
-        employees = super().create(vals_list)
+            # Having one create per company is necessary to pass the company in the context to correctly set it in
+            # the underlying version created by the framework
+            vals_per_company[vals.get('company_id', self.env.company)].append((idx, vals))
+        index_per_employee = {}
+        employees = self.env['hr.employee']
+        for company, vals_list in vals_per_company.items():
+            idxs, vals_list = zip(*vals_list)
+            new_employees = super(HrEmployee, self.with_company(company)).create(vals_list)
+            index_per_employee.update(dict(zip(new_employees, idxs)))
+            employees |= new_employees
+        # As we do a custom batch by company, we must reorder the records to respect the original order.
+        employees = employees.sorted(key=lambda employee: index_per_employee[employee])
         # Sudo in case HR officer doesn't have the Contact Creation group
         employees.filtered(lambda e: not e.work_contact_id).sudo()._create_work_contacts()
         for employee_sudo in employees.sudo():
@@ -1020,6 +1038,13 @@ class HrEmployee(models.Model):
             self._remove_work_contact_id(user, vals.get('company_id'))
         if 'work_permit_expiration_date' in vals:
             vals['work_permit_scheduled_activity'] = False
+        if 'tz' in vals:
+            users_to_update = self.env['res.users']
+            for employee in self:
+                if employee.user_id and employee.company_id == employee.user_id.company_id and vals['tz'] != employee.user_id.tz:
+                    users_to_update |= employee.user_id
+            if users_to_update:
+                users_to_update.write({'tz': vals['tz']})
         if vals.get('department_id') or vals.get('user_id'):
             department_id = vals['department_id'] if vals.get('department_id') else self[:1].department_id.id
             # When added to a department or changing user, subscribe to the channels auto-subscribed by department
@@ -1078,9 +1103,9 @@ class HrEmployee(models.Model):
             # Empty links to this employees (example: manager, coach, time off responsible, ...)
             employee_fields_to_empty = self._get_employee_m2o_to_empty_on_archived_employees()
             user_fields_to_empty = self._get_user_m2o_to_empty_on_archived_employees()
-            employee_domain = [[(field, 'in', archived_employees.ids)] for field in employee_fields_to_empty]
-            user_domain = [[(field, 'in', archived_employees.user_id.ids) for field in user_fields_to_empty]]
-            employees = self.env['hr.employee'].search(expression.OR(employee_domain + user_domain))
+            employee_domain = Domain.OR(Domain(field, 'in', archived_employees.ids) for field in employee_fields_to_empty)
+            user_domain = Domain.OR(Domain(field, 'in', archived_employees.user_id.ids) for field in user_fields_to_empty)
+            employees = self.env['hr.employee'].search(employee_domain | user_domain)
             for employee in employees:
                 for field in employee_fields_to_empty:
                     if employee[field] in archived_employees:
@@ -1109,20 +1134,11 @@ class HrEmployee(models.Model):
                 'message': _("To avoid multi company issues (losing the access to your previous contracts, leaves, ...), you should create another employee in the new company instead.")
             }}
 
-    def _get_marital_status_selection(self):
-        return [
-            ('single', _('Single')),
-            ('married', _('Married')),
-            ('cohabitant', _('Legal Cohabitant')),
-            ('widower', _('Widower')),
-            ('divorced', _('Divorced')),
-        ]
-
     def _load_scenario(self):
         demo_tag = self.env.ref('hr.employee_category_demo', raise_if_not_found=False)
         if demo_tag:
             return
-        convert.convert_file(self.env, 'hr', 'data/scenarios/hr_scenario.xml', None, mode='init', kind='data')
+        convert.convert_file(self.env, 'hr', 'data/scenarios/hr_scenario.xml', None, mode='init')
 
     # ---------------------------------------------------------
     # Business Methods

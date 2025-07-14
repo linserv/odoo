@@ -13,13 +13,9 @@ import * as combo from "@point_of_sale/../tests/pos/tours/utils/combo_popup_util
 import { inLeftSide } from "@point_of_sale/../tests/pos/tours/utils/common";
 import { registry } from "@web/core/registry";
 import * as Numpad from "@point_of_sale/../tests/generic_helpers/numpad_util";
-import { delay } from "@odoo/hoot-dom";
 import * as TextInputPopup from "@point_of_sale/../tests/generic_helpers/text_input_popup_util";
-import {
-    generatePreparationChanges,
-    generatePreparationReceiptElement,
-} from "@point_of_sale/../tests/pos/tours/utils/preparation_receipt_util";
-import { renderToElement } from "@web/core/utils/render";
+import * as PreparationReceipt from "@point_of_sale/../tests/pos/tours/utils/preparation_receipt_util";
+import { negate } from "@point_of_sale/../tests/generic_helpers/utils";
 
 const ProductScreen = { ...ProductScreenPos, ...ProductScreenResto };
 
@@ -187,17 +183,34 @@ registry.category("web_tour.tours").add("pos_restaurant_sync_second_login", {
             // There is one draft synced order from the previous tour
             Chrome.startPoS(),
             FloorScreen.clickTable("2"),
+            Chrome.waitRequest(),
+            ProductScreen.isShown(),
+            {
+                trigger: ".pos-leftheader .badge:contains(2)",
+            },
             ProductScreen.totalAmountIs("4.40"),
 
             // Test transfering an order
             ProductScreen.clickControlButton("Transfer"),
+            FloorScreen.orderCountSyncedInTableIs(2, 2),
+            FloorScreen.clickTable("4"),
+            Chrome.waitRequest(),
+            ProductScreen.isShown(),
             {
-                trigger: ".table:contains(4)",
-                async run(helpers) {
-                    await delay(500);
-                    await helpers.click();
-                },
+                trigger: ".pos-leftheader .badge:contains(4)",
             },
+            Order.hasLine({
+                productName: "Coca-Cola",
+                quantity: 1,
+                withClass: ":eq(0)",
+                price: 2.2,
+            }),
+            Order.hasLine({
+                productName: "Minute Maid",
+                quantity: 1,
+                withClass: ":eq(1)",
+                price: 2.2,
+            }),
 
             // Test if products still get merged after transfering the order
             ProductScreen.clickDisplayedProduct("Coca-Cola"),
@@ -211,26 +224,26 @@ registry.category("web_tour.tours").add("pos_restaurant_sync_second_login", {
             ReceiptScreen.clickNextOrder(),
             // At this point, there are no draft orders.
 
-            {
-                trigger: ".table:contains(2)",
-                async run(helpers) {
-                    await delay(500);
-                    await helpers.click();
-                },
-            },
+            FloorScreen.clickTable("2"),
             ProductScreen.isShown(),
+            {
+                trigger: ".pos-leftheader .badge:contains(2)",
+            },
             ProductScreen.orderIsEmpty(),
             ProductScreen.clickControlButton("Transfer"),
+            FloorScreen.orderCountSyncedInTableIs(2, 0),
+            FloorScreen.orderCountSyncedInTableIs(4, 0),
+            FloorScreen.clickTable("4"),
+            Chrome.waitRequest(),
+            ProductScreen.isShown(),
             {
-                trigger: ".table:contains(4)",
-                async run(helpers) {
-                    await delay(500);
-                    await helpers.click();
-                },
+                trigger: ".pos-leftheader .badge:contains(4)",
             },
+            ProductScreen.orderIsEmpty(),
             ProductScreen.clickDisplayedProduct("Coca-Cola"),
             ProductScreen.totalAmountIs("2.20"),
             Chrome.clickPlanButton(),
+            FloorScreen.isShown(),
             FloorScreen.orderCountSyncedInTableIs("4", "1"),
         ].flat(),
 });
@@ -256,6 +269,42 @@ registry.category("web_tour.tours").add("SaveLastPreparationChangesTour", {
             FloorScreen.hasTable("2"),
             FloorScreen.hasTable("4"),
             FloorScreen.hasTable("5"),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_pos_restaurant_course", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickCourseButton(),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.clickCourseButton(),
+            ProductScreen.clickDisplayedProduct("Minute Maid"),
+            ProductScreen.clickCourseButton(),
+            ProductScreen.clickOrderButton(),
+            FloorScreen.clickTable("5"),
+            // Check only 2 courses are there and empty course gets removed on clicking Order button
+            {
+                trigger: negate('.order-course-name:eq(2) > span:contains("Course 3")'),
+            },
+            ProductScreen.clickCourseButton(),
+            Chrome.clickPlanButton(),
+            FloorScreen.isShown(),
+            FloorScreen.clickTable("5"),
+            // Check only 2 courses are there and empty course gets removed on clicking Plan button
+            {
+                trigger: negate('.order-course-name:eq(2) > span:contains("Course 3")'),
+            },
+            // Check empty course gets remove after fire course.
+            ProductScreen.clickCourseButton(),
+            ProductScreen.selectCourseLine("Course 2"),
+            ProductScreen.fireCourseButton(),
+            FloorScreen.clickTable("5"),
+            {
+                trigger: negate('.order-course-name:eq(2) > span:contains("Course 3")'),
+            },
         ].flat(),
 });
 
@@ -405,15 +454,15 @@ registry.category("web_tour.tours").add("PreparationPrinterContent", {
                 content: "Check if order preparation contains always Variant",
                 trigger: "body",
                 run: async () => {
-                    const rendered = generatePreparationReceiptElement();
+                    const receipts = await PreparationReceipt.generatePreparationReceipts();
 
-                    if (!rendered.innerHTML.includes("Value 1")) {
+                    if (!receipts[0].innerHTML.includes("Value 1")) {
                         throw new Error("Value 1 not found in printed receipt");
                     }
-                    if (!rendered.innerHTML.includes("14:20")) {
+                    if (!receipts[0].innerHTML.includes("14:20")) {
                         throw new Error("14:20 not found in printed receipt");
                     }
-                    if (rendered.innerHTML.includes("DUPLICATA!")) {
+                    if (receipts[0].innerHTML.includes("DUPLICATA!")) {
                         throw new Error("DUPLICATA! should not be present in printed receipt");
                     }
                 },
@@ -427,22 +476,96 @@ registry.category("web_tour.tours").add("PreparationPrinterContent", {
                 content: "Check if order preparation contains 'To Serve' order level internal note",
                 trigger: "body",
                 run: async () => {
-                    const changes = generatePreparationChanges();
-                    const rendered = renderToElement("point_of_sale.OrderChangeReceipt", {
-                        data: changes.orderData,
-                    });
-
-                    if (!rendered.innerHTML.includes("INTERNAL NOTE")) {
+                    const receipts = await PreparationReceipt.generatePreparationReceipts();
+                    if (!receipts[0].innerHTML.includes("Water")) {
+                        throw new Error("'Water' not found in printed receipt");
+                    }
+                    if (!receipts[1].innerHTML.includes("INTERNAL NOTE")) {
                         throw new Error("'INTERNAL NOTE' not found in printed receipt");
                     }
-                    if (!rendered.innerHTML.includes("To Serve")) {
+                    if (!receipts[1].innerHTML.includes("To Serve")) {
                         throw new Error("To Serve not found in printed receipt");
                     }
-                    if (rendered.innerHTML.includes("colorIndex")) {
+                    if (receipts[1].innerHTML.includes("colorIndex")) {
                         throw new Error("colorIndex should not be displayed in printed receipt");
                     }
                 },
             },
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_course_restaurant_preparation_tour", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickCourseButton(),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.clickCourseButton(),
+            ProductScreen.clickDisplayedProduct("Water"),
+            ProductScreen.clickCourseButton(),
+            ProductScreen.clickDisplayedProduct("Minute Maid"),
+            {
+                content: "Check if order preparation contains courses with products",
+                trigger: "body",
+                run: async () => {
+                    const receipts = await PreparationReceipt.generatePreparationReceipts();
+                    const coursesAndProducts = [
+                        { course: "Course 1", product: "Coca-Cola" },
+                        { course: "Course 2", product: "Water" },
+                        { course: "Course 3", product: "Minute Maid" },
+                    ];
+                    const courseEls = receipts[0].querySelectorAll("div.fw-bold");
+                    const productEls = receipts[0].querySelectorAll(".product-name");
+
+                    coursesAndProducts.forEach(({ course, product }) => {
+                        const courseFound = Array.from(courseEls).some((el) =>
+                            el.textContent.includes(course)
+                        );
+                        const productFound = Array.from(productEls).some((el) =>
+                            el.textContent.includes(product)
+                        );
+
+                        if (!courseFound || !productFound) {
+                            throw new Error(
+                                `"${course}" or "${product}" not found in printed receipt`
+                            );
+                        }
+                    });
+                },
+            },
+            ProductScreen.clickOrderButton(),
+            Dialog.bodyIs("Preparation Printer: The printer is not reachable."),
+            Dialog.confirm(),
+            FloorScreen.clickTable("5"),
+            ProductScreen.selectCourseLine("Course 2"),
+            {
+                content: "Check if 'Course 2' is printed on the receipt",
+                trigger: "body",
+                run: async () => {
+                    const receipts = await PreparationReceipt.generateFireCourseReceipts();
+                    if (!receipts[0].innerHTML.includes("Course 2 fired")) {
+                        throw new Error("'Course 2 fired' not found on printed receipt");
+                    }
+                },
+            },
+            ProductScreen.fireCourseButton(),
+            Dialog.bodyIs("Printer: The printer is not reachable."),
+            Dialog.confirm(),
+            FloorScreen.clickTable("5"),
+            ProductScreen.selectCourseLine("Course 3"),
+            {
+                content: "Check if 'Course 3' is printed on the receipt",
+                trigger: "body",
+                run: async () => {
+                    const receipts = await PreparationReceipt.generateFireCourseReceipts();
+                    if (!receipts[0].innerHTML.includes("Course 3 fired")) {
+                        throw new Error("'Course 3 fired' not found on printed receipt");
+                    }
+                },
+            },
+            ProductScreen.fireCourseButton(),
         ].flat(),
 });
 
@@ -466,8 +589,8 @@ registry.category("web_tour.tours").add("test_combo_preparation_receipt", {
                 content: "Check if order preparation has product correctly ordered",
                 trigger: "body",
                 run: async () => {
-                    const rendered = generatePreparationReceiptElement();
-                    const orderLines = [...rendered.querySelectorAll(".orderline")];
+                    const receipts = await PreparationReceipt.generatePreparationReceipts();
+                    const orderLines = [...receipts[0].querySelectorAll(".orderline")];
                     const orderLinesInnerText = orderLines.map((orderLine) => orderLine.innerText);
                     const expectedOrderLines = [
                         "Office Combo",
@@ -499,7 +622,7 @@ registry.category("web_tour.tours").add("MultiPreparationPrinter", {
             FloorScreen.clickTable("5"),
             ProductScreen.clickDisplayedProduct("Product 1"),
             ProductScreen.clickOrderButton(),
-            Dialog.bodyIs("Failed in printing Printer 2 changes of the order"),
+            Dialog.bodyIs("Printer 2: The printer is not reachable."),
             Dialog.confirm(),
         ].flat(),
 });
@@ -555,7 +678,8 @@ registry.category("web_tour.tours").add("test_multiple_preparation_printer_diffe
             ProductScreen.clickDisplayedProduct("Product 1"),
             ProductScreen.clickDisplayedProduct("Product 2"),
             ProductScreen.clickOrderButton(),
-            Dialog.bodyIs("Failed in printing Printer 1, Printer 2 changes of the order"),
+            Dialog.bodyIs("Printer 1: The printer is not reachable."),
+            Dialog.bodyIs("Printer 2: The printer is not reachable."),
             Dialog.confirm(),
         ].flat(),
 });
@@ -597,9 +721,9 @@ registry.category("web_tour.tours").add("test_combo_preparation_receipt_layout",
             {
                 trigger: "body",
                 run: async () => {
-                    const rendered = generatePreparationReceiptElement();
+                    const receipts = await PreparationReceipt.generatePreparationReceipts();
 
-                    const comboItemLines = [...rendered.querySelectorAll(".orderline.ms-5")].map(
+                    const comboItemLines = [...receipts[0].querySelectorAll(".orderline.ms-5")].map(
                         (el) => el.innerText
                     );
                     const expectedComboItemLines = [

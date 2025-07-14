@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import json
 import logging
@@ -13,8 +12,8 @@ from odoo import _, http, tools
 from odoo.addons.website.models.ir_http import sitemap_qs2dom
 from odoo.addons.website_profile.controllers.main import WebsiteProfile
 from odoo.exceptions import AccessError, UserError
+from odoo.fields import Domain
 from odoo.http import request
-from odoo.osv import expression
 from odoo.tools import is_html_empty
 
 _logger = logging.getLogger(__name__)
@@ -38,15 +37,13 @@ class WebsiteForum(WebsiteProfile):
         forum = values.get('forum')
         if forum and forum is not True and not request.env.user._is_public():
             def _get_my_other_forums():
-                post_domain = expression.OR(
-                    [[('create_uid', '=', request.uid)],
-                     [('favourite_ids', '=', request.uid)]]
+                post_domain = Domain('create_uid', '=', request.env.uid) \
+                    | Domain('favourite_ids', '=', request.env.uid)
+                return request.env['forum.forum'].search(
+                    request.website.website_domain()
+                    & Domain('id', '!=', forum.id)
+                    & Domain('post_ids', 'any', post_domain)
                 )
-                return request.env['forum.forum'].search(expression.AND([
-                    request.website.website_domain(),
-                    [('id', '!=', forum.id)],
-                    [('post_ids', 'any', post_domain)]
-                ]))
             values['my_other_forums'] = tools.lazy(_get_my_other_forums)
         else:
             values['my_other_forums'] = request.env['forum.forum']
@@ -82,7 +79,7 @@ class WebsiteForum(WebsiteProfile):
     def sitemap_forum(env, rule, qs):
         Forum = env['forum.forum']
         dom = sitemap_qs2dom(qs, '/forum', Forum._rec_name)
-        dom += env['website'].get_current_website().website_domain()
+        dom &= env['website'].get_current_website().website_domain()
         slug = env['ir.http']._slug
         for f in Forum.search(dom):
             loc = '/forum/%s' % slug(f)
@@ -124,7 +121,7 @@ class WebsiteForum(WebsiteProfile):
             # retro-compatibility for V8 and google links
             try:
                 sorting = werkzeug.urls.url_unquote_plus(sorting)
-                Post._order_to_sql(sorting, Post._where_calc([]))
+                Post._order_to_sql(sorting, Post._search([], bypass_access=True))
             except (UserError, ValueError):
                 sorting = False
 
@@ -230,7 +227,7 @@ class WebsiteForum(WebsiteProfile):
 
         domain = [('forum_id', '=', forum.id), ('posts_count', '=' if filters == "unused" else '>', 0)]
         if filters == 'followed' and not request.env.user._is_public():
-            domain = expression.AND([domain, [('message_is_follower', '=', True)]])
+            domain = Domain.AND([domain, [('message_is_follower', '=', True)]])
 
         # Build tags result without using tag_char to build pager, then return tags matching it
         values = self._prepare_user_values(forum=forum, searches={'tags': True}, **post)
@@ -291,10 +288,11 @@ class WebsiteForum(WebsiteProfile):
 
     def sitemap_forum_post(env, rule, qs):
         ForumPost = env['forum.post']
-        dom = expression.AND([
-            env['website'].get_current_website().website_domain(),
-            [('parent_id', '=', False), ('can_view', '=', True)],
-        ])
+        dom = (
+            env['website'].get_current_website().website_domain()
+            & Domain('parent_id', '=', False)
+            & Domain('can_view', '=', True)
+        )
         slug = env['ir.http']._slug
         for forum_post in ForumPost.search(dom):
             loc = '/forum/%s/%s' % (slug(forum_post.forum_id), slug(forum_post))
@@ -343,7 +341,7 @@ class WebsiteForum(WebsiteProfile):
     @http.route('/forum/<model("forum.forum"):forum>/question/<model("forum.post"):question>/toggle_favourite', type='jsonrpc', auth="user", methods=['POST'], website=True)
     def question_toggle_favorite(self, forum, question, **post):
         favourite = not question.user_favourite
-        question.sudo().favourite_ids = [(favourite and 4 or 3, request.uid)]
+        question.sudo().favourite_ids = [(favourite and 4 or 3, request.env.uid)]
         if favourite:
             # Automatically add the user as follower of the posts that he
             # favorites (on unfavorite we chose to keep him as a follower until
@@ -366,7 +364,7 @@ class WebsiteForum(WebsiteProfile):
     @http.route('/forum/<model("forum.forum"):forum>/question/<model("forum.post"):question>/edit_answer', type='http', auth="user", website=True)
     def question_edit_answer(self, forum, question, **kwargs):
         for record in question.child_ids:
-            if record.create_uid.id == request.uid:
+            if record.create_uid.id == request.env.uid:
                 answer = record
                 break
         else:
@@ -454,7 +452,7 @@ class WebsiteForum(WebsiteProfile):
     def post_toggle_correct(self, forum, post, **kwargs):
         if post.parent_id is False:
             return request.redirect('/')
-        if request.uid == post.create_uid.id:
+        if request.env.uid == post.create_uid.id:
             return {'error': 'own_post'}
 
         # set all answers to False, only one can be accepted
@@ -511,14 +509,14 @@ class WebsiteForum(WebsiteProfile):
 
     @http.route('/forum/<model("forum.forum"):forum>/post/<model("forum.post"):post>/upvote', type='jsonrpc', auth="user", website=True)
     def post_upvote(self, forum, post, **kwargs):
-        if request.uid == post.create_uid.id:
+        if request.env.uid == post.create_uid.id:
             return {'error': 'own_post'}
         upvote = True if not post.user_vote > 0 else False
         return post.vote(upvote=upvote)
 
     @http.route('/forum/<model("forum.forum"):forum>/post/<model("forum.post"):post>/downvote', type='jsonrpc', auth="user", website=True)
     def post_downvote(self, forum, post, **kwargs):
-        if request.uid == post.create_uid.id:
+        if request.env.uid == post.create_uid.id:
             return {'error': 'own_post'}
         upvote = True if post.user_vote < 0 else False
         return post.vote(upvote=upvote)

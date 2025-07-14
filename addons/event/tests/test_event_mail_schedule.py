@@ -21,6 +21,9 @@ class EventMailCommon(EventCase, MailCase, CronMixinCase):
     def setUpClass(cls):
         super().setUpClass()
 
+        # don't be annoyed by enrich cron for query counters (unmodular but hey)
+        cls.env['ir.config_parameter'].sudo().set_param('crm.iap.lead.enrich.setting', 'no')
+
         # give default values for all email aliases and domain
         cls._init_mail_gateway()
         cls._init_mail_servers()
@@ -734,8 +737,10 @@ class TestMailSchedule(EventMailCommon):
         # consider having hanging registrations, still not processed (e.g. adding
         # a new scheduler after)
         self.env.invalidate_all()
-        # event 19
-        with self.assertQueryCount(65), self.mock_datetime_and_now(reference_now), \
+        # event 19 - runbot 21
+        # - event_crm: +4 (w demo) / +1 (no demo)
+        # nightly: 31 :shrug:
+        with self.assertQueryCount(31), self.mock_datetime_and_now(reference_now), \
              self.mock_mail_gateway():
             _existing = self.env['event.registration'].create([
                 {
@@ -757,8 +762,10 @@ class TestMailSchedule(EventMailCommon):
             }),
         ]})
         self.env.invalidate_all()
-        # event 50
-        with self.assertQueryCount(69), \
+        # event 49 - runbot 52, +3 with nightly demo (still to check)
+        # - event_crm: +2 (no demo)
+        # nightly: 64 :shrugs
+        with self.assertQueryCount(64), \
              self.mock_datetime_and_now(reference_now + relativedelta(minutes=10)), \
              self.mock_mail_gateway():
             _new = self.env['event.registration'].create([

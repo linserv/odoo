@@ -138,16 +138,18 @@ class ResUsersLog(models.Model):
     # Uses the magical fields `create_uid` and `create_date` for recording logins.
     # See `mail.presence` for more recent activity tracking purposes.
 
+    create_uid = fields.Many2one('res.users', string='Created by', readonly=True, index=True)
+
     @api.autovacuum
     def _gc_user_logs(self):
-        self._cr.execute("""
+        self.env.cr.execute("""
             DELETE FROM res_users_log log1 WHERE EXISTS (
                 SELECT 1 FROM res_users_log log2
                 WHERE log1.create_uid = log2.create_uid
                 AND log1.create_date < log2.create_date
             )
         """)
-        _logger.info("GC'd %d user log entries", self._cr.rowcount)
+        _logger.info("GC'd %d user log entries", self.env.cr.rowcount)
 
 
 class ResUsers(models.Model):
@@ -166,9 +168,9 @@ class ResUsers(models.Model):
 
     def _check_company_domain(self, companies):
         if not companies:
-            return []
+            return Domain.TRUE
         company_ids = companies if isinstance(companies, str) else models.to_record_ids(companies)
-        return [('company_ids', 'in', company_ids)]
+        return Domain('company_ids', 'in', company_ids)
 
     @property
     def SELF_READABLE_FIELDS(self):
@@ -473,7 +475,7 @@ class ResUsers(models.Model):
 
     @api.model
     def _search_res_users_settings_id(self, operator, operand):
-        return [('res_users_settings_ids', operator, operand)]
+        return Domain('res_users_settings_ids', operator, operand)
 
     @api.onchange('login')
     def on_change_login(self):
@@ -535,8 +537,9 @@ class ResUsers(models.Model):
 
     @api.constrains('group_ids')
     def _check_at_least_one_administrator(self):
-        system = self.env.ref('base.group_system', raise_if_not_found=False)
-        if system and not system.user_ids:
+        if not self.env.registry._init_modules:
+            return  # ignore the constraint when updating the module 'base'
+        if not self.env.ref('base.group_system').user_ids:
             raise ValidationError(_("You must have at least an administrator user."))
 
     def onchange(self, values, field_names, fields_spec):
@@ -581,7 +584,7 @@ class ResUsers(models.Model):
     def write(self, values):
         if values.get('active') and SUPERUSER_ID in self._ids:
             raise UserError(_("You cannot activate the superuser."))
-        if values.get('active') == False and self._uid in self._ids:
+        if values.get('active') == False and self.env.uid in self._ids:  # noqa: E712
             raise UserError(_("You cannot deactivate the user you're currently logged in as."))
 
         if values.get('active'):
@@ -674,7 +677,7 @@ class ResUsers(models.Model):
         return vals_list
 
     @api.model
-    @tools.ormcache('self._uid')
+    @tools.ormcache('self.env.uid')
     def context_get(self):
         # use read() to not read other fields: this must work while modifying
         # the schema of models res.users or res.partner
@@ -729,11 +732,11 @@ class ResUsers(models.Model):
 
     @api.model
     def _get_login_domain(self, login):
-        return [('login', '=', login)]
+        return Domain('login', '=', login)
 
     @api.model
     def _get_email_domain(self, email):
-        return [('email', '=', email)]
+        return Domain('email', '=', email)
 
     @api.model
     def _get_login_order(self):
@@ -1420,7 +1423,7 @@ class ChangePasswordWizard(models.TransientModel):
     _transient_max_hours = 0.2
 
     def _default_user_ids(self):
-        user_ids = self._context.get('active_model') == 'res.users' and self._context.get('active_ids') or []
+        user_ids = self.env.context.get('active_model') == 'res.users' and self.env.context.get('active_ids') or []
         return [
             Command.create({'user_id': user.id, 'user_login': user.login})
             for user in self.env['res.users'].browse(user_ids)

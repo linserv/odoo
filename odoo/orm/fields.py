@@ -607,6 +607,7 @@ class Field(typing.Generic[T]):
         assert isinstance(self.related, str), self.related
 
         # determine the chain of fields, and make sure they are all set up
+        field_seq = []
         model_name = self.model_name
         for name in self.related.split('.'):
             field = model.pool[model_name]._fields.get(name)
@@ -616,6 +617,7 @@ class Field(typing.Generic[T]):
                 )
             if not field._setup_done:
                 field.setup(model.env[model_name])
+            field_seq.append(field)
             model_name = field.comodel_name
 
         # check type consistency
@@ -631,7 +633,7 @@ class Field(typing.Generic[T]):
         self.compute = self._compute_related
         if self.inherited or not (self.readonly or field.readonly):
             self.inverse = self._inverse_related
-        if not self.store and field._description_searchable:
+        if not self.store and all(f._description_searchable for f in field_seq):
             # allow searching on self only if the related field is searchable
             self.search = self._search_related
 
@@ -753,39 +755,18 @@ class Field(typing.Generic[T]):
             # let's call back with a positive operator
             return NotImplemented
 
-        # build the domain
-        # Note that the access of many2one fields in the path is done using sudo
-        # (see compute_sudo), but the given value may have a different context
-        model = records.env[self.model_name].with_context(active_test=False)
-        model = model.sudo(records.env.su or self.compute_sudo)
-
         # parse the path
-        path = self.related.split('.')
-        path_fields = []  # [(field, comodel | None)]
-        comodel = model
-        for fname in path:
-            field = comodel._fields[fname]
-            if field.relational:
-                comodel = model.env[field.comodel_name]
-            else:
-                comodel = None
-            path_fields.append((field, comodel))
-
-        # if the value is a domain, resolve it using records' environment
-        if isinstance(value, Domain):
-            field, comodel = path_fields[-1]
-            user_comodel = comodel.with_env(records.env)
-            if field.type == 'many2one':
-                user_comodel = user_comodel.with_context(active_test=False)
-            elif field.type in ('one2many', 'many2many'):
-                user_comodel = user_comodel.with_context(**field.context)
-            value = user_comodel._search(value)
+        field_seq = []
+        model_name = self.model_name
+        for fname in self.related.split('.'):
+            field = records.env[model_name]._fields[fname]
+            field_seq.append(field)
+            model_name = field.comodel_name
 
         # build the domain backwards with the any operator
-        field, comodel = path_fields[-1]
-        domain = Domain(field.name, operator, value)
-        for field, comodel in reversed(path_fields[:-1]):
-            domain = Domain(field.name, 'any', comodel._search(domain))
+        domain = Domain(field_seq[-1].name, operator, value)
+        for field in reversed(field_seq[:-1]):
+            domain = Domain(field.name, 'any!' if self.compute_sudo else 'any', domain)
             if can_be_null and field.type == 'many2one' and not field.required:
                 domain |= Domain(field.name, '=', False)
         return domain
@@ -1146,18 +1127,18 @@ class Field(typing.Generic[T]):
         """
         if not column:
             # the column does not exist, create it
-            sql.create_column(model._cr, model._table, self.name, self.column_type[1], self.string)
+            sql.create_column(model.env.cr, model._table, self.name, self.column_type[1], self.string)
             return
         if column['udt_name'] == self.column_type[0]:
             return
         if column['is_nullable'] == 'NO':
-            sql.drop_not_null(model._cr, model._table, self.name)
+            sql.drop_not_null(model.env.cr, model._table, self.name)
         self._convert_db_column(model, column)
         column.clear()  # remove information, because it may no longer be valid
 
     def _convert_db_column(self, model: BaseModel, column: dict[str, typing.Any]):
         """ Convert the given database column to the type of the field. """
-        sql.convert_column(model._cr, model._table, self.name, self.column_type[1])
+        sql.convert_column(model.env.cr, model._table, self.name, self.column_type[1])
 
     def update_db_notnull(self, model: BaseModel, column: dict[str, typing.Any]):
         """ Add or remove the NOT NULL constraint on ``self``.
@@ -1191,7 +1172,7 @@ class Field(typing.Generic[T]):
                 )
 
         elif not self.required and has_notnull:
-            sql.drop_not_null(model._cr, model._table, self.name)
+            sql.drop_not_null(model.env.cr, model._table, self.name)
 
     def update_db_related(self, model: BaseModel) -> None:
         """ Compute a stored related field directly in SQL. """
@@ -1365,15 +1346,15 @@ class Field(typing.Generic[T]):
         # operator: any
         # Note: relational operators overwrite this function for a more specific
         # behaviour, here we check just the field against the subselect.
-        # Example usage: ('id', 'any', Query | SQL)
-        if operator in ('any', 'not any'):
+        # Example usage: ('id', 'any!', Query | SQL)
+        if operator in ('any!', 'not any!'):
             if isinstance(value, Query):
                 subselect = value.subselect()
             elif isinstance(value, SQL):
                 subselect = SQL("(%s)", value)
             else:
-                raise TypeError(f"condition_to_sql() operator 'any' accepts SQL or Query, got {value}")
-            sql_operator = SQL_OPERATORS["in" if operator == "any" else "not in"]
+                raise TypeError(f"condition_to_sql() operator 'any!' accepts SQL or Query, got {value}")
+            sql_operator = SQL_OPERATORS["in" if operator == "any!" else "not in"]
             return SQL("%s%s%s", sql_field, sql_operator, subselect)
 
         raise NotImplementedError(f"Invalid operator {operator!r} for SQL in domain term {(field_expr, operator, value)!r}")

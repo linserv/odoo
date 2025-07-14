@@ -1,9 +1,11 @@
-# -*- coding: utf-8 -*-
 from odoo import http, fields
+from odoo.fields import Domain
 from odoo.http import request
 from odoo.tools import float_round
-from odoo.osv import expression
 from werkzeug.exceptions import NotFound, BadRequest, Unauthorized
+from odoo.exceptions import MissingError
+from odoo.tools import consteq
+
 
 class PosSelfOrderController(http.Controller):
     @http.route("/pos-self-order/process-order/<device_type>/", auth="public", type="jsonrpc", website=True)
@@ -29,6 +31,9 @@ class PosSelfOrderController(http.Controller):
 
         if 'name' in order:
             del order['name']
+
+        if device_type == 'kiosk':
+            order['floating_order_name'] = f"Table tracker {order['table_stand_number']}" if order.get('table_stand_number') else tracking_number
 
         order['pos_reference'] = pos_reference
         order['tracking_number'] = tracking_number
@@ -66,14 +71,14 @@ class PosSelfOrderController(http.Controller):
 
         return tracking_prefix, ref_prefix
 
-    def _generate_return_values(self, order, config_id):
+    def _generate_return_values(self, order, config):
         return {
-            'pos.order': order.read(order._load_pos_data_fields(config_id.id), load=False),
-            'res.partner': order.partner_id.read(order.partner_id._load_pos_data_fields(config_id.id), load=False),
-            'pos.order.line': order.lines.read(order._load_pos_data_fields(config_id.id), load=False),
-            'pos.payment': order.payment_ids.read(order.payment_ids._load_pos_data_fields(order.config_id.id), load=False),
-            'pos.payment.method': order.payment_ids.mapped('payment_method_id').read(order.env['pos.payment.method']._load_pos_data_fields(order.config_id.id), load=False),
-            'product.attribute.custom.value':  order.lines.custom_attribute_value_ids.read(order.lines.custom_attribute_value_ids._load_pos_data_fields(config_id.id), load=False),
+            'pos.order': self.env['pos.order']._load_pos_self_data_read(order, config),
+            'res.partner': self.env['res.partner']._load_pos_self_data_read(order.partner_id, config),
+            'pos.order.line': self.env['pos.order.line']._load_pos_self_data_read(order.lines, config),
+            'pos.payment': self.env['pos.payment']._load_pos_self_data_read(order.payment_ids, config),
+            'pos.payment.method': self.env['pos.payment.method']._load_pos_self_data_read(order.payment_ids.mapped('payment_method_id'), config),
+            'product.attribute.custom.value': self.env['product.attribute.custom.value']._load_pos_self_data_read(order.lines.custom_attribute_value_ids, config),
         }
 
     def _verify_line_price(self, lines, pos_config, preset_id):
@@ -125,7 +130,7 @@ class PosSelfOrderController(http.Controller):
 
         if existing_partner and existing_partner.exists():
             return {
-                'res.partner': existing_partner.read(existing_partner._load_pos_data_fields(pos_config.id), load=False),
+                'res.partner': self.env['res.partner']._load_pos_self_data_read(existing_partner, pos_config),
             }
 
         state_id = pos_config.env['res.country.state'].browse(int(state_id)) if state_id else False
@@ -143,30 +148,40 @@ class PosSelfOrderController(http.Controller):
         })
 
         return {
-            'res.partner': partner_sudo.read(partner_sudo._load_pos_data_fields(pos_config.id), load=False),
+            'res.partner': self.env['res.partner']._load_pos_self_data_read(partner_sudo, pos_config),
         }
+
+    @http.route('/pos-self-order/remove-order', auth='public', type='jsonrpc', website=True)
+    def remove_order(self, access_token, order_id, order_access_token):
+        pos_config = self._verify_pos_config(access_token)
+        pos_order = pos_config.env['pos.order'].browse(order_id)
+
+        if not pos_order.exists() or not consteq(pos_order.access_token, order_access_token):
+            raise MissingError(self.env._("Your order does not exist or has been removed"))
+
+        if pos_order.state != 'draft':
+            raise Unauthorized(self.env._("You are not authorized to remove this order"))
+
+        pos_order.remove_from_ui([pos_order.id])
 
     @http.route('/pos-self-order/get-user-data', auth='public', type='jsonrpc', website=True)
     def get_orders_by_access_token(self, access_token, order_access_tokens, table_identifier=None):
         pos_config = self._verify_pos_config(access_token)
         session = pos_config.current_session_id
         table = pos_config.env["restaurant.table"].search([('identifier', '=', table_identifier)], limit=1)
-        domain = False
 
         if not table_identifier:
-            domain = [(False, '=', True)]
+            domain = Domain.FALSE
         else:
-            domain = ['&', '&',
+            domain = Domain([
                 ('table_id', '=', table.id),
                 ('state', '=', 'draft'),
                 ('access_token', 'not in', [data.get('access_token') for data in order_access_tokens])
-            ]
+            ])
 
         for data in order_access_tokens:
-            domain = expression.OR([domain, ['&',
-                ('access_token', '=', data.get('access_token')),
-                ('write_date', '>', data.get('write_date'))
-            ]])
+            domain |= Domain('access_token', '=', data.get('access_token')) \
+                & Domain('write_date', '>', data.get('write_date'))
 
         orders = session.order_ids.filtered_domain(domain)
         if not orders:
@@ -193,7 +208,7 @@ class PosSelfOrderController(http.Controller):
         if not status:
             raise BadRequest("Something went wrong")
 
-        return {'order': order_sudo.read(order_sudo._load_pos_data_fields(pos_config.id), load=False), 'payment_status': status}
+        return {'order': self.env['pos.order']._load_pos_self_data_read(order_sudo, pos_config), 'payment_status': status}
 
     @http.route('/pos-self-order/change-printer-status', auth='public', type='jsonrpc', website=True)
     def change_printer_status(self, access_token, has_paper):

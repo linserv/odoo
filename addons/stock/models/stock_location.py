@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import calendar
@@ -8,8 +7,7 @@ from datetime import timedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
-from odoo.osv import expression
-from odoo.tools.float_utils import float_compare
+from odoo.fields import Domain
 
 
 class StockLocation(models.Model):
@@ -334,7 +332,7 @@ class StockLocation(models.Model):
             if locations.storage_category_id:
                 if package and package.package_type_id:
                     move_line_data = self.env['stock.move.line']._read_group([
-                        ('id', 'not in', list(self._context.get('exclude_sml_ids', set()))),
+                        ('id', 'not in', list(self.env.context.get('exclude_sml_ids', set()))),
                         ('result_package_id.package_type_id', '=', package_type.id),
                         ('state', 'not in', ['draft', 'cancel', 'done']),
                     ], ['location_dest_id'], ['result_package_id:count_distinct'])
@@ -347,7 +345,7 @@ class StockLocation(models.Model):
                         qty_by_location[location.id] += count
                 else:
                     move_line_data = self.env['stock.move.line']._read_group([
-                        ('id', 'not in', list(self._context.get('exclude_sml_ids', set()))),
+                        ('id', 'not in', list(self.env.context.get('exclude_sml_ids', set()))),
                         ('product_id', '=', product.id),
                         ('location_dest_id', 'in', locations.ids),
                         ('state', 'not in', ['draft', 'done', 'cancel'])
@@ -443,7 +441,7 @@ class StockLocation(models.Model):
             if self.storage_category_id.allow_new_product == "same":
                 # In case it's a package, `product` is not defined, so try to get
                 # the package products from the context
-                product = product or self._context.get('products')
+                product = product or self.env.context.get('products')
                 if (positive_quant and positive_quant.product_id != product) or len(product) > 1:
                     return False
                 if self.env['stock.move.line'].search_count([
@@ -479,13 +477,13 @@ class StockLocation(models.Model):
             [('location_id', 'in', self.ids)],
             groupby=['location_id', 'product_id'], aggregates=['quantity:sum'],
         )
-        base_domain = [('state', 'not in', ['draft', 'done', 'cancel']), ('id', 'not in', tuple(excluded_sml_ids))]
+        base_domain = Domain('state', 'not in', ['draft', 'done', 'cancel']) & Domain('id', 'not in', tuple(excluded_sml_ids))
         outgoing_move_lines = StockMoveLine._read_group(
-            expression.AND([[('location_id', 'in', self.ids)], base_domain]),
+            Domain('location_id', 'in', self.ids) & base_domain,
             groupby=['location_id', 'product_id'], aggregates=['quantity_product_uom:sum'],
         )
         incoming_move_lines = StockMoveLine._read_group(
-            expression.AND([[('location_dest_id', 'in', self.ids)], base_domain]),
+            Domain('location_dest_id', 'in', self.ids) & base_domain,
             groupby=['location_dest_id', 'product_id'], aggregates=['quantity_product_uom:sum']
         )
 

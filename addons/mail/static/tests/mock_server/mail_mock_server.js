@@ -1,4 +1,3 @@
-import { createDocumentFragmentFromContent } from "@mail/utils/common/html";
 import { markup } from "@odoo/owl";
 import {
     authenticate,
@@ -8,6 +7,7 @@ import {
     MockServer,
     MockServerError,
     models,
+    onRpc,
     serverState,
     unmakeKwArgs,
 } from "@web/../tests/web_test_helpers";
@@ -15,8 +15,9 @@ import { Domain } from "@web/core/domain";
 import { serializeDateTime } from "@web/core/l10n/dates";
 import { registry } from "@web/core/registry";
 import { groupBy } from "@web/core/utils/arrays";
+import { createDocumentFragmentFromContent } from "@web/core/utils/html";
 
-const mockRpcRegistry = registry.category("mock_rpc");
+const mockRpcRegistry = registry.category("mail.mock_rpc");
 export const DISCUSS_ACTION_ID = 104;
 
 /**
@@ -80,7 +81,7 @@ const onRpcAfterGlobal = { cb: (route, args) => {} };
 registry.category("mail.on_rpc_before_global").add(true, onRpcBeforeGlobal);
 registry.category("mail.on_rpc_after_global").add(true, onRpcAfterGlobal);
 export function registerRoute(route, handler) {
-    const beforeCallableHandler = async function (request) {
+    async function beforeCallableHandler(request) {
         let args;
         try {
             args = await parseRequestParams(request);
@@ -101,8 +102,9 @@ export function registerRoute(route, handler) {
             return res;
         }
         return response;
-    };
+    }
     mockRpcRegistry.add(route, beforeCallableHandler);
+    onRpc(route, beforeCallableHandler);
 }
 
 // RPC handlers
@@ -345,8 +347,6 @@ async function discuss_settings_mute(request) {
     const BusBus = this.env["bus.bus"];
     /** @type {import("mock_models").DiscussChannel} */
     const DiscussChannel = this.env["discuss.channel"];
-    /** @type {import("mock_models").ResUsersSettings} */
-    const ResUsersSettings = this.env["res.users.settings"];
     /** @type {import("mock_models").DiscussChannelMember} */
     const DiscussChannelMember = this.env["discuss.channel.member"];
     /** @type {import("mock_models").ResPartner} */
@@ -361,21 +361,16 @@ async function discuss_settings_mute(request) {
     } else {
         mute_until_dt = false;
     }
-    if (channel_id) {
-        const member = DiscussChannel._find_or_create_member_for_self(channel_id);
-        DiscussChannelMember.write([member.id], { mute_until_dt });
-        const [partner] = ResPartner.read(this.env.user.partner_id);
-        BusBus._sendone(
-            partner,
-            "mail.record/insert",
-            new mailDataHelpers.Store(DiscussChannel.browse(member.channel_id), {
-                mute_until_dt,
-            }).get_result()
-        );
-    } else {
-        const settings = ResUsersSettings._find_or_create_for_user(this.env.user.id);
-        ResUsersSettings.set_res_users_settings(settings.id, { mute_until_dt });
-    }
+    const member = DiscussChannel._find_or_create_member_for_self(channel_id);
+    DiscussChannelMember.write([member.id], { mute_until_dt });
+    const [partner] = ResPartner.read(this.env.user.partner_id);
+    BusBus._sendone(
+        partner,
+        "mail.record/insert",
+        new mailDataHelpers.Store(DiscussChannelMember.browse([member.id]), {
+            mute_until_dt,
+        }).get_result()
+    );
     return "dummy";
 }
 

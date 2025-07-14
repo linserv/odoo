@@ -8,7 +8,7 @@ from odoo import api, fields, models
 from odoo.addons.base.models.ir_model import MODULE_UNINSTALL_FLAG
 from odoo.exceptions import MissingError
 from odoo.http import request
-from odoo.modules.module import get_manifest
+from odoo.modules import Manifest
 from odoo.tools import escape_psql, split_every, SQL
 
 _logger = logging.getLogger(__name__)
@@ -76,7 +76,7 @@ class IrModuleModule(models.Model):
 
                     -> We want to upgrade every website using this theme.
         """
-        if request and request.db and request.env and request.context.get('apply_new_theme'):
+        if request and request.db and request.env and request.env.context.get('apply_new_theme'):
             self = self.with_context(apply_new_theme=True)
 
         for module in self:
@@ -243,7 +243,7 @@ class IrModuleModule(models.Model):
             for model_name in self._theme_model_names:
                 module._update_records(model_name, website)
 
-            if self._context.get('apply_new_theme'):
+            if self.env.context.get('apply_new_theme'):
                 # Both the theme install and upgrade flow ends up here.
                 # The _post_copy() is supposed to be called only when the theme
                 # is installed for the first time on a website.
@@ -416,7 +416,6 @@ class IrModuleModule(models.Model):
         self._theme_upgrade_upstream()
 
         result = website.button_go_website()
-        result['context']['params']['with_loader'] = True
         return result
 
     def button_remove_theme(self):
@@ -493,9 +492,9 @@ class IrModuleModule(models.Model):
             self.pool.website_views_to_adapt.clear()
 
     @api.model
-    def _load_module_terms(self, modules, langs, overwrite=False, imported_module=False):
+    def _load_module_terms(self, modules, langs, overwrite=False):
         """ Add missing website specific translation """
-        res = super()._load_module_terms(modules, langs, overwrite=overwrite, imported_module=imported_module)
+        res = super()._load_module_terms(modules, langs, overwrite=overwrite)
 
         if not langs or langs == ['en_US'] or not modules:
             return res
@@ -668,7 +667,7 @@ class IrModuleModule(models.Model):
             return set(items)
 
         create_count = 0
-        manifest = get_manifest(self.name)
+        manifest = Manifest.for_addon(self.name)
 
         # ------------------------------------------------------------
         # Configurator
@@ -740,7 +739,7 @@ class IrModuleModule(models.Model):
     def _generate_primary_page_templates(self):
         """ Generates page templates based on manifest entries. """
         View = self.env['ir.ui.view']
-        manifest = get_manifest(self.name)
+        manifest = Manifest.for_addon(self.name)
         templates = manifest['new_page_templates']
 
         # TODO Find a way to create theme and other module's template patches

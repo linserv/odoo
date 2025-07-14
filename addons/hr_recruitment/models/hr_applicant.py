@@ -3,13 +3,11 @@ import re
 
 from markupsafe import Markup
 from collections import defaultdict
-from dateutil.relativedelta import relativedelta
 from datetime import datetime
 
 from odoo import api, fields, models, tools
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 from odoo.fields import Domain
-from odoo.osv import expression
 from odoo.tools import SQL, clean_context
 from odoo.tools.translate import _
 
@@ -521,26 +519,21 @@ class HrApplicant(models.Model):
                 applicant.application_status = 'ongoing'
 
     def _search_application_status(self, operator, value):
-        supported_operators = ['=', '!=', 'in', 'not in']
-        if operator not in supported_operators:
-            raise UserError(_('Operation not supported'))
+        if operator != 'in':
+            return NotImplemented
 
-        # Normalize value to be a list to simplify processing
-        if isinstance(value, (str, bool)):
-            value = [value]
+        domains = []
+        # Map statuses to domain filters
+        if 'refused' in value:
+            domains.append([('active', '=', True), ('refuse_reason_id', '!=', None)])
+        if 'hired' in value:
+            domains.append([('active', '=', True), ('date_closed', '!=', False)])
+        if 'archived' in value or False in value:
+            domains.append([('active', '=', False)])
+        if 'ongoing' in value:
+            domains.append([('active', '=', True), ('date_closed', '=', False)])
 
-        valid_statuses_domain = {
-            'refused': Domain('refuse_reason_id', '!=', None),
-            'archived': Domain('active', '=', False),
-            'hired': Domain('date_closed', '!=', False),
-            'ongoing': Domain(['&', ('active', '=', True), ('date_closed', '=', False)]),
-        }
-        if not all(v in (list(valid_statuses_domain) + [False]) for v in value):
-            raise UserError(_('Some values do not exist in the application status'))
-        domain = Domain.FALSE
-        for status in value:
-            domain |= valid_statuses_domain[status]
-        return ~domain if operator in expression.NEGATIVE_TERM_OPERATORS else domain
+        return Domain.OR(domains)
 
     def _get_attachment_number(self):
         read_group_res = self.env['ir.attachment']._read_group(
@@ -553,7 +546,7 @@ class HrApplicant(models.Model):
     @api.model
     def _read_group_stage_ids(self, stages, domain):
         # retrieve job_id from the context and write the domain: ids + contextual columns (job or default)
-        job_id = self._context.get('default_job_id')
+        job_id = self.env.context.get('default_job_id')
         search_domain = [('job_ids', '=', False)]
         if job_id:
             search_domain = ['|', ('job_ids', '=', job_id)] + search_domain
@@ -646,7 +639,6 @@ class HrApplicant(models.Model):
                     subject=notification_subject,
                     body=notification_body,
                     email_layout_xmlid="mail.mail_notification_layout",
-                    record_name=applicant.display_name,
                     model_description="Applicant",
                 )
         return applicants
@@ -701,7 +693,6 @@ class HrApplicant(models.Model):
                         subject=notification_subject,
                         body=notification_body,
                         email_layout_xmlid="mail.mail_notification_layout",
-                        record_name=applicant.display_name,
                         model_description="Applicant",
                     )
         return res
@@ -881,8 +872,8 @@ class HrApplicant(models.Model):
         # don't post automated message related to the stage change.
         if 'stage_id' in changes and applicant.exists()\
             and applicant.stage_id.template_id\
-            and not applicant._context.get('just_moved')\
-            and not applicant._context.get('just_unarchived'):
+            and not applicant.env.context.get('just_moved')\
+            and not applicant.env.context.get('just_unarchived'):
             res['stage_id'] = (applicant.stage_id.template_id, {
                 'auto_delete_keep_log': False,
                 'subtype_id': self.env['ir.model.data']._xmlid_to_res_id('mail.mt_note'),

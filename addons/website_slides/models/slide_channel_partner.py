@@ -1,5 +1,5 @@
 from odoo import api, fields, models, tools, _
-from odoo.osv import expression
+from odoo.fields import Domain
 
 
 class SlideChannelPartner(models.Model):
@@ -141,11 +141,11 @@ class SlideChannelPartner(models.Model):
         """
         if self:
             # find all slide link to the channel and the partner
-            removed_slide_partner_domain = expression.OR([
-                [('partner_id', '=', channel_partner.partner_id.id),
-                 ('slide_id', 'in', channel_partner.channel_id.slide_ids.ids)]
+            removed_slide_partner_domain = Domain.OR(
+                Domain('partner_id', '=', channel_partner.partner_id.id)
+                & Domain('slide_id', 'in', channel_partner.channel_id.slide_ids.ids)
                 for channel_partner in self
-            ])
+            )
             self.env['slide.slide.partner'].search(removed_slide_partner_domain).unlink()
         return super().unlink()
 
@@ -228,9 +228,9 @@ class SlideChannelPartner(models.Model):
             email_values['body_html'] = template._render_encapsulate(
                 'mail.mail_notification_light', email_values['body_html'],
                 add_context={
-                    'message': self.env['mail.message'].sudo().new(dict(body=email_values['body_html'], record_name=record.channel_id.name)),
                     'model_description': _('Completed Course')  # tde fixme: translate into partner lang
-                }
+                },
+                context_record=record.channel_id,
             )
             mail_mail_values.append(email_values)
 

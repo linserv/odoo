@@ -109,7 +109,7 @@ class ResUsers(models.Model):
         users = super().create(vals_list)
 
         # log a portal status change (manual tracking)
-        log_portal_access = not self._context.get('mail_create_nolog') and not self._context.get('mail_notrack')
+        log_portal_access = not self.env.context.get('mail_create_nolog') and not self.env.context.get('mail_notrack')
         if log_portal_access:
             for user in users:
                 if user._is_portal():
@@ -122,7 +122,7 @@ class ResUsers(models.Model):
         return users
 
     def write(self, vals):
-        log_portal_access = 'group_ids' in vals and not self._context.get('mail_create_nolog') and not self._context.get('mail_notrack')
+        log_portal_access = 'group_ids' in vals and not self.env.context.get('mail_create_nolog') and not self.env.context.get('mail_notrack')
         user_portal_access_dict = {
             user.id: user._is_portal()
             for user in self
@@ -178,7 +178,7 @@ class ResUsers(models.Model):
                 )
         if "notification_type" in vals:
             for user in user_notification_type_modified:
-                user._bus_send_store(user, "notification_type")
+                Store(user, "notification_type", bus_channel=user).bus_send()
 
         return write_res
 
@@ -213,11 +213,9 @@ class ResUsers(models.Model):
                 'mail.mail_notification_light',
                 body_html,
                 add_context={
-                    # the 'mail_notification_light' expects a mail.message 'message' context, let's give it one
-                    'message': self.env['mail.message'].sudo().new(dict(body=body_html, record_name=user.name)),
                     'model_description': _('Account'),
-                    'company': user.company_id,
                 },
+                context_record=user,
             )
 
             vals = {

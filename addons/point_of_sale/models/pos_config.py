@@ -10,7 +10,7 @@ from odoo import api, fields, models, _, Command, tools, SUPERUSER_ID
 from odoo.http import request
 from odoo.exceptions import AccessError, ValidationError, UserError
 from odoo.tools import SQL, convert
-from odoo.osv import expression
+from odoo.service.common import exp_version
 
 DEFAULT_LIMIT_LOAD_PRODUCT = 5000
 DEFAULT_LIMIT_LOAD_PARTNER = 100
@@ -207,7 +207,8 @@ class PosConfig(models.Model):
         static_records = {}
 
         for model, ids in records.items():
-            static_records[model] = self.env[model]._read_pos_record(ids, self.id)
+            records = self.env[model].browse(ids)
+            static_records[model] = self.env[model]._load_pos_data_read(records, self)
 
         self._notify('SYNCHRONISATION', {
             'static_records': static_records,
@@ -226,10 +227,10 @@ class PosConfig(models.Model):
             dynamic_records[model] = self.env[model].search(domain)
 
         pos_order_data = dynamic_records.get('pos.order') or self.env['pos.order']
-        data = pos_order_data.read_pos_data([], self.id)
+        data = pos_order_data.read_pos_data([], self)
 
         for key, records in dynamic_records.items():
-            fields = self.env[key]._load_pos_data_fields(self.id)
+            fields = self.env[key]._load_pos_data_fields(self)
             ids = list(set(records.ids + [record['id'] for record in data.get(key, [])]))
             dynamic_records[key] = self.env[key].browse(ids).read(fields, load=False)
 
@@ -243,20 +244,31 @@ class PosConfig(models.Model):
         }
 
     @api.model
-    def _load_pos_data_domain(self, data):
-        return [('id', '=', data['pos.session'][0]['config_id'])]
+    def _load_pos_data_domain(self, data, config):
+        return [('id', '=', config.id)]
 
-    def _load_pos_data(self, data):
-        domain = self._load_pos_data_domain(data)
-        fields = self._load_pos_data_fields(self.id)
-        return self.search_read(domain, fields, load=False)
+    @api.model
+    def _load_pos_data_read(self, records, config):
+        read_records = super()._load_pos_data_read(records, config)
+        record = read_records[0]
 
-    def _post_read_pos_data(self, data):
-        if not data[0]['use_pricelist']:
-            data[0]['pricelist_id'] = False
-        if data:
-            data[0]['_IS_VAT'] = self.env.company.country_id.id in self.env.ref("base.europe").country_ids.ids
-        return super()._post_read_pos_data(data)
+        record['_server_version'] = exp_version()
+        record['_base_url'] = self.get_base_url()
+        record['_data_server_date'] = self.env.context.get('pos_last_server_date') or self.env.cr.now()
+        record['_has_cash_move_perm'] = self.env.user.has_group('account.group_account_invoice')
+        record['_pos_special_products_ids'] = self.env['pos.config']._get_special_products().ids
+
+        # Add custom fields for 'formula' taxes.
+        # We can ignore data for _load_pos_data_domain since isn't needed in the domain computation of account.tax
+        taxes = self.env['account.tax'].search(self.env['account.tax']._load_pos_data_domain({}, config))
+        product_fields = taxes._eval_taxes_computation_prepare_product_fields()
+        record['_product_default_values'] = \
+            self.env['account.tax']._eval_taxes_computation_prepare_product_default_values(product_fields)
+
+        if not record['use_pricelist']:
+            record['pricelist_id'] = False
+        record['_IS_VAT'] = self.env.company.country_id.id in self.env.ref("base.europe").country_ids.ids
+        return read_records
 
     @api.depends('payment_method_ids')
     def _compute_cash_control(self):
@@ -305,7 +317,7 @@ class PosConfig(models.Model):
                 ['cash_register_balance_end_real', 'stop_at'],
                 order="stop_at desc", limit=1)
             if session:
-                timezone = pytz.timezone(self._context.get('tz') or self.env.user.tz or 'UTC')
+                timezone = pytz.timezone(self.env.context.get('tz') or self.env.user.tz or 'UTC')
                 pos_config.last_session_closing_date = session[0]['stop_at'].astimezone(timezone).date()
                 pos_config.last_session_closing_cash = session[0]['cash_register_balance_end_real']
             else:
@@ -825,7 +837,7 @@ class PosConfig(models.Model):
             **cash_journal_vals,
         }
 
-        default_cash_account = self.env['account.account'].search([
+        default_cash_account = self.env['account.account'].with_context(lang='en_US').search([
             ('account_type', '=', 'asset_cash'),
             ('name', '=', 'Cash'),
             ('company_ids', 'in', self.env.company.root_id.id)
@@ -1089,3 +1101,6 @@ class PosConfig(models.Model):
 
         if not param_model.get_param("point_of_sale.limited_customer_count"):
             param_model.set_param("point_of_sale.limited_customer_count", DEFAULT_LIMIT_LOAD_PARTNER)
+
+    def _is_quantities_set(self):
+        return self.is_closing_entry_by_product

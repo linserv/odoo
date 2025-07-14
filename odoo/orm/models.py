@@ -77,6 +77,7 @@ from .utils import (
 
 if typing.TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Iterator, Reversible, Sequence
+    from types import MappingProxyType
     from .table_objects import TableObject
     from .environments import Environment
     from .registry import Registry, TriggerTree
@@ -356,7 +357,9 @@ class BaseModel(metaclass=MetaModel):
     pool: Registry  # all registry classes have a registry on the class
     # TODO replace most usages with self.env.registry; pool is reserved for class instance
 
-    _fields: dict[str, Field]
+    _fields__: dict[str, Field]
+    _fields: MappingProxyType[str, Field]
+
     _auto: bool = False
     """Whether a database table should be created.
     If set to ``False``, override :meth:`~odoo.models.BaseModel.init`
@@ -901,13 +904,13 @@ class BaseModel(metaclass=MetaModel):
         from .fields_relational import One2many  # noqa: PLC0415
 
         # determine values of mode, current_module and noupdate
-        mode = self._context.get('mode', 'init')
-        current_module = self._context.get('module', '__import__')
-        noupdate = self._context.get('noupdate', False)
+        mode = self.env.context.get('mode', 'init')
+        current_module = self.env.context.get('module', '__import__')
+        noupdate = self.env.context.get('noupdate', False)
         # add current module in context for the conversion of xml ids
         self = self.with_context(_import_current_module=current_module)
 
-        cr = self._cr
+        cr = self.env.cr
         savepoint = cr.savepoint()
 
         fields = [fix_import_export_id_paths(f) for f in fields]
@@ -1026,7 +1029,7 @@ class BaseModel(metaclass=MetaModel):
         flush_recordset = self.with_context(import_flush=flush, import_cache=LRU(1024))
 
         # TODO: break load's API instead of smuggling via context?
-        limit = self._context.get('_import_limit')
+        limit = self.env.context.get('_import_limit')
         if limit is None:
             limit = float('inf')
         extracted = flush_recordset._extract_records(fields, data, log=messages.append, limit=limit)
@@ -1279,8 +1282,8 @@ class BaseModel(metaclass=MetaModel):
         for name in fields_list:
             # 1. look up context
             key = 'default_' + name
-            if key in self._context:
-                defaults[name] = self._context[key]
+            if key in self.env.context:
+                defaults[name] = self.env.context[key]
                 continue
 
             field = self._fields.get(name)
@@ -1586,6 +1589,243 @@ class BaseModel(metaclass=MetaModel):
         return defaults
 
     @api.model
+    def _read_grouping_sets(
+        self,
+        domain: DomainType,
+        grouping_sets: Sequence[Sequence[str]],
+        aggregates: Sequence[str] = (),
+        order: str | None = None,
+    ) -> list[list[tuple]]:
+        """ Performs multiple aggregations with different groupings in a single query if possible.
+
+        This method uses SQL `GROUPING SETS` as a more advanced and efficient
+        alternative to calling :meth:`~._read_group` multiple times with different
+        `groupby` parameters. It allows you to get different levels of aggregated
+        data in one database round-trip.
+        Note that for many2many multiple SQL might be needed because of the deduplicated rows.
+
+        :param domain: :ref:`A search domain <reference/orm/domains>` to filter records before grouping
+        :param grouping_sets: A list of `groupby` specifications. Each inner list
+                              is a set of fields to group by and is equivalent to the
+                              `groupby` parameter of the :meth:`~._read_group` method.
+                              For example: `[['partner_id'], ['partner_id', 'state']]`.
+        :param aggregates: list of aggregates specification.
+                Each element is `'field:agg'` (aggregate field with aggregation function `'agg'`).
+                The possible aggregation functions are the ones provided by
+                `PostgreSQL <https://www.postgresql.org/docs/current/static/functions-aggregate.html>`_,
+                `'count_distinct'` with the expected meaning and `'recordset'` to act like `'array_agg'`
+                converted into a recordset.
+        :param order: optional ``order by`` specification, for
+                overriding the natural sort ordering of the groups,
+                see also :meth:`~.search`.
+        :return: A list of lists of tuples. The outer list's structure mirrors the
+                 input `grouping_sets`. Each inner list contains the results for one
+                 grouping specification. Each tuple within an inner list contains the
+                 values for the grouped fields, followed by the aggregate values,
+                 in the order they were specified.
+
+                 For example, given:
+                 - `grouping_sets=[['foo'], ['foo', 'bar']]`
+                 - `aggregates=['baz:sum']`
+
+                 The returned structure would be:
+                  ::
+
+                    [
+                        # Results for ['foo']
+                        [(foo1_val, baz_sum_1), (foo2_val, baz_sum_2), ...],
+                        # Results for ['foo', 'bar']
+                        [(foo1_val, bar1_val, baz_sum_3), (foo2_val, bar2_val, baz_sum_4), ...],
+                    ]
+
+        :raise AccessError: if user is not allowed to access requested information
+        """
+        if not grouping_sets:
+            raise ValueError("The 'grouping_sets' parameter cannot be empty.")
+
+        query = self._search(domain)
+        result = [[] for __ in grouping_sets]
+        if query.is_empty():
+            return result
+
+        # grouping_sets: [(a, b), (a), ()]
+        # all_groupby_specs: (a, b)
+        all_groupby_specs = tuple(unique(spec for groupby in grouping_sets for spec in groupby))
+
+        # --- Many2many Special Handling ---
+        many2many_groupby_specs = []
+        if len(grouping_sets) > 1:  # many2many logic only applies if we have multiple groupings
+            for spec in all_groupby_specs:
+                fname, property_name, __ = parse_read_group_spec(spec)
+                field = self._fields[fname]
+                if field.type == 'many2many':
+                    many2many_groupby_specs.append(spec)
+                elif field.type == 'properties':
+                    definition = self.get_property_definition(f"{fname}.{property_name}")
+                    property_type = definition.get('type')
+                    if property_type in ('tags', 'many2many'):
+                        many2many_groupby_specs.append(spec)
+
+        if (
+            many2many_groupby_specs and
+            # If aggregates are sensitive to row duplication (like sum, avg), we must isolate M2M groupings.
+            any(
+                not aggregate.endswith(
+                    (':max', ':min', ':bool_and', ':bool_or', ':array_agg_distinct', ':recordset', ':count_distinct'),
+                )
+                for aggregate in aggregates if aggregate != '__count'
+            )
+        ):
+            # The following logic is a recursive decomposition strategy. It's complex
+            # but necessary to prevent M2M joins from corrupting aggregates in other grouping sets.
+            # We find all combinations of M2M fields and create a sub-call for grouping sets
+            # that share that exact combination of M2M fields.
+
+            # ['A', 'B', 'C'] => [('A', 'B', 'C'), ('A', 'B'), ('A', 'C'), ('B', 'C'), ('A',), ('B',), ('C',), ()]
+            m2m_combinaisons = (
+                groupby for i in range(len(many2many_groupby_specs), -1, -1)
+                for groupby in itertools.combinations(many2many_groupby_specs, i)
+            )
+
+            grouping_sets_to_process = dict(enumerate(grouping_sets))
+            batched_calls = []  # [([groupby, ...], [index_result, ...])]
+
+            for m2m_comb in m2m_combinaisons:
+                if not grouping_sets_to_process:
+                    break
+                sub_grouping_sets = []
+                sub_result_indexes = []
+                for i, groupby in list(grouping_sets_to_process.items()):
+                    if all(m2m in groupby for m2m in m2m_comb):
+                        sub_grouping_sets.append(groupby)
+                        sub_result_indexes.append(i)
+                        grouping_sets_to_process.pop(i)
+
+                if sub_grouping_sets:
+                    batched_calls.append((sub_result_indexes, sub_grouping_sets))
+
+            assert not grouping_sets_to_process
+            # If the problem was decomposed, make recursive calls and assemble results.
+            if len(batched_calls) > 1:
+                for indexes, sub_grouping_sets in batched_calls:
+
+                    sub_order_parts = []
+                    all_sub_groupby = {spec for groupby in sub_grouping_sets for spec in groupby}
+                    for order_part in (order or '').split(','):
+                        order_part = order_part.strip()
+                        if not any(
+                            order_part.startswith(spec)
+                            for spec in all_groupby_specs if spec not in all_sub_groupby
+                        ):
+                            sub_order_parts.append(order_part)
+
+                    sub_results = self._read_grouping_sets(
+                        domain, sub_grouping_sets, aggregates=aggregates, order=",".join(sub_order_parts),
+                    )
+                    for index, subresult in zip(indexes, sub_results):
+                        result[index] = subresult
+                return result
+
+        elif many2many_groupby_specs and '__count' in aggregates:
+            # Efficiently handle '__count' with M2M fields by using a distinct count on 'id'
+            # without making another _read_grouping_sets (this is the very common case).
+            aggregates = tuple(
+                aggregate if aggregate != '__count' else 'id:count_distinct'
+                for aggregate in aggregates
+            )
+            if order:
+                order = order.replace('__count', 'id:count_distinct')
+
+        # --- SQL Query Construction ---
+        groupby_terms: dict[str, SQL] = {
+            spec: self._read_group_groupby(spec, query) for spec in all_groupby_specs
+        }
+        aggregates_terms: list[SQL] = [
+            self._read_group_select(spec, query) for spec in aggregates
+        ]
+        if groupby_terms:
+            # grouping_select_sql: GROUPING(a, b)
+            grouping_select_sql = SQL("GROUPING(%s)", SQL(", ").join(groupby_terms.values()))
+        else:
+            # GROUPING() is invalid SQL, so we use the 0 as literal
+            grouping_select_sql = SQL("0")
+
+        select_args = [grouping_select_sql, *groupby_terms.values(), *aggregates_terms]
+
+        # _read_group_orderby may change groupby_terms then it is necessary to be call before
+        query.order = self._read_group_orderby(order, groupby_terms, query)
+        # GROUPING SET ((a, b), (a), ())
+        grouping_sets_sql = [
+            SQL("(%s)", SQL(", ").join(groupby_terms[groupby_spec] for groupby_spec in grouping_set))
+            for grouping_set in grouping_sets
+        ]
+        query.groupby = SQL("GROUPING SETS (%s)", SQL(", ").join(grouping_sets_sql))
+
+        # This handles the case where `order` adds columns that must also be in `GROUP BY`.
+        # Rebuild the grouping sets to include these extra terms.
+
+        # row_values: [(GROUPING(...), a1, b1, aggregates...), (GROUPING(...), a2, b2, aggregates...), ...]
+        row_values = self.env.execute_query(query.select(*select_args))
+
+        if not row_values:  # shortcut
+            return result
+
+        # --- Result Post-Processing ---
+        # This is the core of the result dispatching logic. It uses the integer
+        # returned by GROUPING() as a key to map each result row to the correct
+        # grouping set defined by the user.
+        aggregates_indexes = tuple(range(len(all_groupby_specs), len(all_groupby_specs) + len(aggregates)))
+
+        # Map each possible GROUPING() bitmask to its corresponding result list and value extractor.
+        # {GROUPING(...): (append_method, extractor_method)}
+        mask_grouping_mapping = {}
+        for result_index, groupby_specs in enumerate(grouping_sets):
+            # PostgreSQL Doc: https://www.postgresql.org/docs/17/functions-aggregate.html#Grouping-Operations
+            # GROUPING ( group_by_expression(s) ) => integer
+            # Returns a bit mask indicating which GROUP BY expressions are not included in the
+            # current grouping set. Bits are assigned with the rightmost argument corresponding to
+            # the least-significant bit; each bit is 0 if the corresponding expression is included
+            # in the grouping criteria of the grouping set generating the current result row, and 1
+            # if it is not included.
+
+            # for GROUPING SET ((a, b), (a), ())
+            # GROUPING(a, b): a and b included = 0, a included = 1, b included = 2, none included = 3
+            groupby_mask = sum(
+                1 << i for i, groupby_spec in enumerate(reversed(all_groupby_specs))
+                if groupby_spec not in groupby_specs  # 0 if included and 1 if not
+            )
+            assert groupby_mask not in mask_grouping_mapping, f"_read_grouping_sets doesn't manage duplicate groupby specs: {grouping_sets!r}"
+
+            mask_grouping_mapping[groupby_mask] = (
+                result[result_index].append,
+                itemgetter_tuple(list(itertools.chain(
+                    (all_groupby_specs.index(groupby_spec) for groupby_spec in groupby_specs),
+                    aggregates_indexes,
+                ))),
+            )
+
+        aggregates_start_index = len(all_groupby_specs) + 1
+        # Transpose rows to columns for efficient, column-wise post-processing.
+        columns = list(zip(*row_values))
+        # The first column is the grouping mask
+        dispatch_info = map(mask_grouping_mapping.__getitem__, columns[0])
+        # Post-process values column by column
+        columns = [
+            *map(self._read_group_postprocess_groupby, all_groupby_specs, columns[1:aggregates_start_index]),
+            *map(self._read_group_postprocess_aggregate, aggregates, columns[aggregates_start_index:]),
+        ]
+
+        # result: [
+        #   [(a1, b1, <aggregates>), (a2, b2, <aggregates>), ...],
+        #   [(a1, <aggregates>), (a2, <aggregates>), ...],
+        #   [(<aggregates>)],
+        # ]
+        for (append_method, extractor), *row in zip(dispatch_info, *columns, strict=True):
+            append_method(extractor(row))
+
+        return result
+
+    @api.model
     def _read_group(
         self,
         domain: DomainType,
@@ -1646,19 +1886,18 @@ class BaseModel(metaclass=MetaModel):
             spec: self._read_group_groupby(spec, query)
             for spec in groupby
         }
-        if groupby_terms:
-            query.groupby = SQL(", ").join(groupby_terms.values())
-            query.having = self._read_group_having(list(having), query)
-            # _read_group_orderby may possibly extend query.groupby for orderby
-            query.order = self._read_group_orderby(order, groupby_terms, query)
-
-        select_terms: list[SQL] = [
+        aggregates_terms: list[SQL] = [
             self._read_group_select(spec, query)
             for spec in aggregates
         ]
+        select_args = [*[groupby_terms[spec] for spec in groupby], *aggregates_terms]
+        if groupby_terms:
+            query.order = self._read_group_orderby(order, groupby_terms, query)
+            query.groupby = SQL(", ").join(groupby_terms.values())
+            query.having = self._read_group_having(list(having), query)
 
         # row_values: [(a1, b1, c1), (a2, b2, c2), ...]
-        row_values = self.env.execute_query(query.select(*[groupby_terms[spec] for spec in groupby], *select_terms))
+        row_values = self.env.execute_query(query.select(*select_args))
 
         if not row_values:
             return row_values
@@ -1737,7 +1976,7 @@ class BaseModel(metaclass=MetaModel):
             # in order to reuse the mechanism _apply_ir_rules, then inject the
             # query as an extra condition of the left join
             comodel = self.env[field.comodel_name]
-            coquery = comodel._where_calc([], active_test=False)
+            coquery = comodel._search([], active_test=False, bypass_access=True)
             comodel._apply_ir_rules(coquery)
             # LEFT JOIN {field.relation} AS rel_alias ON
             #     alias.id = rel_alias.{field.column1}
@@ -1829,6 +2068,8 @@ class BaseModel(metaclass=MetaModel):
         """ Return (<SQL expression>, <SQL expression>)
         corresponding to the given order and groupby terms.
 
+        Note: this method may change groupby_terms
+
         :param order: the order specification
         :param groupby_terms: the group by terms mapping ({spec: sql_expression})
         :param query: The query we are building
@@ -1871,6 +2112,10 @@ class BaseModel(metaclass=MetaModel):
             ):
                 if sql_order := self._order_to_sql(f'{term} {direction} {nulls}', query):
                     orderby_terms.append(sql_order)
+                    if query._order_groupby:
+                        groupby_terms[term] = SQL(", ").join([groupby_terms[term], *query._order_groupby])
+                        query._order_groupby.clear()
+
             elif granularity == 'day_of_week':
                 """
                 Day offset relative to the first day of week in the user lang
@@ -2151,8 +2396,8 @@ class BaseModel(metaclass=MetaModel):
             days_offset = first_week_day and 7 - first_week_day
         interval = READ_GROUP_TIME_GRANULARITY[granularity]
         tz = False
-        if field.type == 'datetime' and self._context.get('tz') in pytz.all_timezones_set:
-            tz = pytz.timezone(self._context['tz'])
+        if field.type == 'datetime' and self.env.context.get('tz') in pytz.all_timezones_set:
+            tz = pytz.timezone(self.env.context['tz'])
 
         # TODO: refactor remaing lines here
 
@@ -2254,8 +2499,8 @@ class BaseModel(metaclass=MetaModel):
                         range_end = value + interval
                         if field.type == 'datetime':
                             tzinfo = None
-                            if self._context.get('tz') in pytz.all_timezones_set:
-                                tzinfo = pytz.timezone(self._context['tz'])
+                            if self.env.context.get('tz') in pytz.all_timezones_set:
+                                tzinfo = pytz.timezone(self.env.context['tz'])
                                 range_start = tzinfo.localize(range_start).astimezone(pytz.utc)
                                 # take into account possible hour change between start and end
                                 range_end = tzinfo.localize(range_end).astimezone(pytz.utc)
@@ -2569,15 +2814,7 @@ class BaseModel(metaclass=MetaModel):
             path_field = model._fields[path_fname]
             if path_field.type != 'many2one':
                 raise ValueError(f'Cannot convert {field} (related={field.related}) to SQL because {path_fname} is not a Many2one')
-
-            comodel = model.env[path_field.comodel_name]
-            coalias = query.make_alias(alias, path_fname)
-            query.add_join('LEFT JOIN', coalias, comodel._table, SQL(
-                "%s = %s",
-                model._field_to_sql(alias, path_fname, query),
-                SQL.identifier(coalias, 'id'),
-            ))
-            model, alias = comodel, coalias
+            model, alias = path_field.join(model, alias, query)
 
         return model, model._fields[last_fname], alias
 
@@ -2790,7 +3027,7 @@ class BaseModel(metaclass=MetaModel):
         # iterate on the database columns to drop the NOT NULL constraints of
         # fields which were required but have been removed (or will be added by
         # another module)
-        cr = self._cr
+        cr = self.env.cr
         cols = [name for name, field in self._fields.items()
                      if field.store and field.column_type]
         cr.execute(SQL(
@@ -2829,7 +3066,7 @@ class BaseModel(metaclass=MetaModel):
         if necessary:
             _logger.debug("Table '%s': setting default value of new column %s to %r",
                           self._table, column_name, value)
-            self._cr.execute(SQL(
+            self.env.cr.execute(SQL(
                 "UPDATE %(table)s SET %(field)s = %(value)s WHERE %(field)s IS NULL",
                 table=SQL.identifier(self._table),
                 field=SQL.identifier(column_name),
@@ -2868,8 +3105,8 @@ class BaseModel(metaclass=MetaModel):
         # has not been added in database yet!
         self = self.with_context(prefetch_fields=False)
 
-        cr = self._cr
-        update_custom_fields = self._context.get('update_custom_fields', False)
+        cr = self.env.cr
+        update_custom_fields = self.env.context.get('update_custom_fields', False)
         must_create_table = not sql.table_exists(cr, self._table)
         parent_path_compute = False
 
@@ -2886,7 +3123,7 @@ class BaseModel(metaclass=MetaModel):
 
             if self._parent_store:
                 if not sql.column_exists(cr, self._table, 'parent_path'):
-                    sql.create_column(self._cr, self._table, 'parent_path', 'VARCHAR')
+                    sql.create_column(self.env.cr, self._table, 'parent_path', 'VARCHAR')
                     parent_path_compute = True
                 self._check_parent_path()
 
@@ -3272,7 +3509,7 @@ class BaseModel(metaclass=MetaModel):
                 else translations[self.env.lang] if translations.get(self.env.lang) is not None \
                 else next((v for v in translations.values() if v is not None), None)
             self.invalidate_recordset([field_name])
-            self._cr.execute(SQL(
+            self.env.cr.execute(SQL(
                 """ UPDATE %(table)s
                     SET %(field)s = NULLIF(
                         jsonb_strip_nulls(%(fallback)s || COALESCE(%(field)s, '{}'::jsonb) || %(value)s),
@@ -3433,7 +3670,7 @@ class BaseModel(metaclass=MetaModel):
             instance) for ``self`` in cache.
         """
         # determine which fields can be prefetched
-        if self._context.get('prefetch_fields', True) and field.prefetch:
+        if self.env.context.get('prefetch_fields', True) and field.prefetch:
             fnames = [
                 name
                 for name, f in self._fields.items()
@@ -3468,7 +3705,7 @@ class BaseModel(metaclass=MetaModel):
 
         # first determine a query that satisfies the domain and access rules
         if any(field.column_type for field in fields_to_fetch):
-            query = self.with_context(active_test=False)._search([('id', 'in', self.ids)])
+            query = self._search([('id', 'in', self.ids)], active_test=False)
         else:
             try:
                 self.check_access('read')
@@ -3653,17 +3890,17 @@ class BaseModel(metaclass=MetaModel):
             raise ValueError("Expected singleton or no record: %s" % self)
         return self.env['ir.config_parameter'].sudo().get_param('web.base.url')
 
-    def _check_company_domain(self, companies):
+    def _check_company_domain(self, companies) -> Domain:
         """Domain to be used for company consistency between records regarding this model.
 
         :param companies: the allowed companies for the related record
         :type companies: BaseModel or list or tuple or int or unquote
         """
         if not companies:
-            return [('company_id', '=', False)]
+            return Domain('company_id', '=', False)
         if isinstance(companies, unquote):
-            return [('company_id', 'in', unquote(f'{companies} + [False]'))]
-        return [('company_id', 'in', to_record_ids(companies) + [False])]
+            return Domain('company_id', 'in', unquote(f'{companies} + [False]'))
+        return Domain('company_id', 'in', to_record_ids(companies) + [False])
 
     def _check_company(self, fnames=None):
         """ Check the companies of the values of the given field names.
@@ -3875,7 +4112,7 @@ class BaseModel(metaclass=MetaModel):
         from odoo.addons.base.models.ir_model import MODULE_UNINSTALL_FLAG
         for func in self._ondelete_methods:
             # func._ondelete is True if it should be called during uninstallation
-            if func._ondelete or not self._context.get(MODULE_UNINSTALL_FLAG):
+            if func._ondelete or not self.env.context.get(MODULE_UNINSTALL_FLAG):
                 func(self)
 
         # TOFIX: this avoids an infinite loop when trying to recompute a
@@ -3887,7 +4124,7 @@ class BaseModel(metaclass=MetaModel):
 
         self.env.flush_all()
 
-        cr = self._cr
+        cr = self.env.cr
         Data = self.env['ir.model.data'].sudo().with_context({})
         Defaults = self.env['ir.default'].sudo()
         Attachment = self.env['ir.attachment'].sudo()
@@ -3929,7 +4166,7 @@ class BaseModel(metaclass=MetaModel):
 
             # don't allow fallback value in ir.default for many2one company dependent fields to be deleted
             # Exception: when MODULE_UNINSTALL_FLAG, these fallbacks can be deleted by Defaults.discard_records(records)
-            if (many2one_fields := self.env.registry.many2one_company_dependents[self._name]) and not self._context.get(MODULE_UNINSTALL_FLAG):
+            if (many2one_fields := self.env.registry.many2one_company_dependents[self._name]) and not self.env.context.get(MODULE_UNINSTALL_FLAG):
                 IrModelFields = self.env["ir.model.fields"]
                 field_ids = tuple(IrModelFields._get_ids(field.model_name).get(field.name) for field in many2one_fields)
                 sub_ids_json_text = tuple(json.dumps(id_) for id_ in sub_ids)
@@ -3942,7 +4179,7 @@ class BaseModel(metaclass=MetaModel):
             # on delete set null/restrict for jsonb company dependent many2one
             for field in many2one_fields:
                 model = self.env[field.model_name]
-                if field.ondelete == 'restrict' and not self._context.get(MODULE_UNINSTALL_FLAG):
+                if field.ondelete == 'restrict' and not self.env.context.get(MODULE_UNINSTALL_FLAG):
                     if res := self.env.execute_query(SQL(
                         """
                         SELECT id, %(field)s
@@ -3997,7 +4234,7 @@ class BaseModel(metaclass=MetaModel):
             ir_attachment_unlink.unlink()
 
         # auditing: deletions are infrequent and leave no trace in the database
-        _unlink.info('User #%s deleted %s records with IDs: %r', self._uid, self._name, self.ids)
+        _unlink.info('User #%s deleted %s records with IDs: %r', self.env.uid, self._name, self.ids)
 
         return True
 
@@ -4597,7 +4834,7 @@ class BaseModel(metaclass=MetaModel):
 
             if other_fields:
                 # discard default values from context for other fields
-                others = records.with_context(clean_context(self._context))
+                others = records.with_context(clean_context(self.env.context))
                 for field in sorted(other_fields, key=attrgetter('_sequence')):
                     field.create([
                         (other, data['stored'][field.name])
@@ -4875,35 +5112,6 @@ class BaseModel(metaclass=MetaModel):
 
         return original_self.concat(*(data['record'] for data in data_list))
 
-    @api.model
-    def _where_calc(self, domain: DomainType, active_test: bool = True) -> Query:
-        """Compute the WHERE clause for the `_search` method without applying any security rule.
-
-        :param domain: the domain to compute
-        :param active_test: whether the default filtering of records with
-            ``active`` field set to ``False`` should be applied.
-        :return: the query expressing the given domain as provided in domain
-        """
-        domain = Domain(domain)
-
-        # if the object has an active field ('active', 'x_active'), filter out all
-        # inactive records unless they were explicitly asked for
-        if (
-            self._active_name
-            and active_test
-            and self.env.context.get('active_test', True)
-            and not any(leaf.field_expr == self._active_name for leaf in domain.iter_conditions())
-        ):
-            domain &= Domain(self._active_name, '=', True)
-
-        domain = domain.optimize(self, full=True)
-        if domain.is_false():
-            return self.browse()._as_query()
-        query = Query(self.env, self._table, self._table_sql)
-        if not domain.is_true():
-            query.add_where(domain._to_sql(self, self._table, query))
-        return query
-
     def _check_qorder(self, word: str) -> None:
         if not regex_order.match(word):
             raise UserError(_(
@@ -4927,7 +5135,7 @@ class BaseModel(metaclass=MetaModel):
         domain = self.env['ir.rule']._compute_domain(self._name, mode)
         if not domain.is_true():
             model = self.sudo()
-            domain = domain.optimize(model, full=True)
+            domain = domain.optimize_full(model)
             query.add_where(domain._to_sql(model, query.table, query))
 
     def _order_to_sql(self, order: str, query: Query, alias: (str | None) = None,
@@ -5000,8 +5208,7 @@ class BaseModel(metaclass=MetaModel):
                 sql_field = self._field_to_sql(alias, field_name, query)
 
             if coorder == 'id':
-                if query.groupby:
-                    query.groupby = SQL('%s, %s', query.groupby, sql_field)
+                query._order_groupby.append(sql_field)
                 return SQL("%s %s %s", sql_field, direction, nulls)
 
             # instead of ordering by the field's raw value, use the comodel's
@@ -5013,12 +5220,7 @@ class BaseModel(metaclass=MetaModel):
                 terms.append(SQL("%s IS NULL", sql_field))
 
             # LEFT JOIN the comodel table, in order to include NULL values, too
-            coalias = query.make_alias(alias, field_name)
-            query.add_join('LEFT JOIN', coalias, comodel._table, SQL(
-                "%s = %s",
-                sql_field,
-                SQL.identifier(coalias, 'id'),
-            ))
+            _comodel, coalias = field.join(self, alias, query)
 
             # delegate the order to the comodel
             reverse = direction.code == 'DESC'
@@ -5030,8 +5232,8 @@ class BaseModel(metaclass=MetaModel):
         sql_field = self._field_to_sql(alias, field_name, query)
         if field.type == 'boolean':
             sql_field = SQL("COALESCE(%s, FALSE)", sql_field)
-        if query.groupby:
-            query.groupby = SQL('%s, %s', query.groupby, sql_field)
+
+        query._order_groupby.append(sql_field)
 
         return SQL("%s %s %s", sql_field, direction, nulls)
 
@@ -5042,6 +5244,9 @@ class BaseModel(metaclass=MetaModel):
         offset: int = 0,
         limit: int | None = None,
         order: str | None = None,
+        *,
+        active_test: bool = True,
+        bypass_access: bool = False,
     ) -> Query:
         """
         Private implementation of search() method.
@@ -5055,27 +5260,43 @@ class BaseModel(metaclass=MetaModel):
         the latter option, though, as it might hurt performance. Indeed, by
         default the returned query object is not actually executed, and it can
         be injected as a value in a domain in order to generate sub-queries.
+
+        The `active_test` flag specifies whether to filter only active records.
+        The `bypass_access` controls whether or not permissions should be
+        checked on the model and record rules should be applied.
         """
-        self.browse().check_access('read')
+        check_access = not (self.env.su or bypass_access)
+        if check_access:
+            self.browse().check_access('read')
 
-        # deletegate to _where_calc
-        query = self._where_calc(domain)
-        if query.is_empty():
-            return query
-
-        # security access domain
-        if self.env.su:
-            sec_domain = Domain.TRUE
-        else:
-            sec_domain = self.env['ir.rule']._compute_domain(self._name, 'read')
-            sec_domain = sec_domain.optimize(self.sudo(), full=True)
+        domain = Domain(domain)
+        # inactive records unless they were explicitly asked for
+        if (
+            self._active_name
+            and active_test
+            and self.env.context.get('active_test', True)
+            and not any(leaf.field_expr == self._active_name for leaf in domain.iter_conditions())
+        ):
+            domain &= Domain(self._active_name, '=', True)
 
         # build the query
-        if sec_domain.is_false() or (not limit and limit is not None and limit is not False):
+        domain = domain.optimize_full(self)
+        if domain.is_false():
             return self.browse()._as_query()
-        if not sec_domain.is_true():
-            query.add_where(sec_domain._to_sql(self.sudo(), self._table, query))
+        query = Query(self.env, self._table, self._table_sql)
+        if not domain.is_true():
+            query.add_where(domain._to_sql(self, self._table, query))
 
+        # security access domain
+        if check_access:
+            sec_domain = self.env['ir.rule']._compute_domain(self._name, 'read')
+            sec_domain = sec_domain.optimize_full(self.sudo())
+            if sec_domain.is_false():
+                return self.browse()._as_query()
+            if not sec_domain.is_true():
+                query.add_where(sec_domain._to_sql(self.sudo(), self._table, query))
+
+        # add order and limits
         if order:
             query.order = self._order_to_sql(order, query)
         if limit is not None:
@@ -5105,7 +5326,7 @@ class BaseModel(metaclass=MetaModel):
         vals_list = []
         default = dict(default or {})
         # avoid recursion through already copied records in case of circular relationship
-        if '__copy_data_seen' not in self._context:
+        if '__copy_data_seen' not in self.env.context:
             self = self.with_context(__copy_data_seen=defaultdict(set))
 
         # build a black list of fields that should not be copied
@@ -5130,7 +5351,7 @@ class BaseModel(metaclass=MetaModel):
                           if field.copy and name not in default and name not in blacklist}
 
         for record in self:
-            seen_map = self._context['__copy_data_seen']
+            seen_map = self.env.context['__copy_data_seen']
             if record.id in seen_map[record._name]:
                 vals_list.append(None)
                 continue
@@ -5162,9 +5383,9 @@ class BaseModel(metaclass=MetaModel):
         """
         old = self
         # avoid recursion through already copied records in case of circular relationship
-        if '__copy_translations_seen' not in old._context:
+        if '__copy_translations_seen' not in old.env.context:
             old = old.with_context(__copy_translations_seen=defaultdict(set))
-        seen_map = old._context['__copy_translations_seen']
+        seen_map = old.env.context['__copy_translations_seen']
         if old.id in seen_map[old._name]:
             return
         seen_map[old._name].add(old.id)
@@ -5351,7 +5572,7 @@ class BaseModel(metaclass=MetaModel):
             relation = self._table
             column1 = 'id'
             column2 = field_name
-        cr = self._cr
+        cr = self.env.cr
         cr.execute(SQL(
             """
             WITH RECURSIVE __reachability AS (
@@ -5469,8 +5690,8 @@ class BaseModel(metaclass=MetaModel):
         # to any downstream search call(e.g. for x2m or computed fields), and
         # this is not the desired behavior. The flag was presumably only meant
         # for the main search().
-        if 'active_test' in self._context:
-            context = dict(self._context)
+        if 'active_test' in self.env.context:
+            context = dict(self.env.context)
             del context['active_test']
             records = records.with_context(context)
 
@@ -5598,10 +5819,20 @@ class BaseModel(metaclass=MetaModel):
             return list(self._ids)  # already real records
         return list(OriginIds(self._ids))
 
-    # backward-compatibility with former browse records
-    _cr = property(lambda self: self.env.cr)
-    _uid = property(lambda self: self.env.uid)
-    _context = property(lambda self: self.env.context)
+    @property
+    def _cr(self):
+        warnings.warn("Deprecated since 19.0, use self.env.cr directly", DeprecationWarning)
+        return self.env.cr
+
+    @property
+    def _uid(self):
+        warnings.warn("Deprecated since 19.0, use self.env.uid directly", DeprecationWarning)
+        return self.env.uid
+
+    @property
+    def _context(self):
+        warnings.warn("Deprecated since 19.0, use self.env.context directly", DeprecationWarning)
+        return self.env.context
 
     #
     # Conversion methods
@@ -5708,9 +5939,9 @@ class BaseModel(metaclass=MetaModel):
 
             # current context is {'key1': True}
             r2 = records.with_context({}, key2=True)
-            # -> r2._context is {'key2': True}
+            # -> r2.env.context is {'key2': True}
             r2 = records.with_context(key2=True)
-            # -> r2._context is {'key1': True, 'key2': True}
+            # -> r2.env.context is {'key1': True, 'key2': True}
 
         .. note:
 

@@ -1,9 +1,8 @@
-import { BuilderFontFamilyPicker } from "@website/builder/builder_fontfamilypicker";
 import { Plugin } from "@html_editor/plugin";
 import { withSequence } from "@html_editor/utils/resource";
 import { ThemeColorsOption } from "./theme_colors_option";
 import { ThemeAdvancedOption } from "./theme_advanced_option";
-import { getCSSVariableValue } from "@html_builder/utils/utils_css";
+import { getCSSVariableValue, setBuilderCSSVariables } from "@html_builder/utils/utils_css";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
@@ -16,6 +15,7 @@ import {
 import { reactive } from "@odoo/owl";
 import { BuilderAction } from "@html_builder/core/builder_action";
 import { CustomizeWebsiteVariableAction } from "../customize_website_plugin";
+import { EditHeadBodyDialog } from "@website/components/edit_head_body_dialog/edit_head_body_dialog";
 
 export const GRAY_PARAMS = {
     EXTRA_SATURATION: "gray-extra-saturation",
@@ -35,16 +35,16 @@ export const OPTION_POSITIONS = {
 
 export class ThemeTabPlugin extends Plugin {
     static id = "themeTab";
-    static dependencies = ["builderActions", "customizeWebsite", "googleMapsOption"];
     static shared = ["getGrayParams", "getGrays", "setGrays", "setGrayParams", "buildGray"];
     grayParams = {};
     grays = reactive({});
 
     resources = {
-        builder_components: { BuilderFontFamilyPicker },
         builder_actions: {
             CustomizeGrayAction,
             ChangeColorPaletteAction,
+            EditCustomCodeAction,
+            ConfigureApiKeyAction,
         },
         theme_options: [
             withSequence(
@@ -95,7 +95,6 @@ export class ThemeTabPlugin extends Plugin {
                     OptionComponent: ThemeAdvancedOption,
                     props: {
                         grays: this.grays,
-                        configureGMapsAPI: this.dependencies.googleMapsOption.configureGMapsAPI,
                     },
                 })
             ),
@@ -226,7 +225,7 @@ export class ThemeTabPlugin extends Plugin {
     }
 }
 
-class CustomizeGrayAction extends BuilderAction {
+export class CustomizeGrayAction extends BuilderAction {
     static id = "customizeGray";
     static dependencies = ["customizeWebsite", "themeTab"];
     setup() {
@@ -260,12 +259,15 @@ class CustomizeGrayAction extends BuilderAction {
         );
     }
 }
-class ChangeColorPaletteAction extends CustomizeWebsiteVariableAction {
+export class ChangeColorPaletteAction extends CustomizeWebsiteVariableAction {
     static id = "changeColorPalette";
     static dependencies = ["customizeWebsite"];
-    setup() {}
-    async apply(context) {
-        const confirmed = await new Promise((resolve) => {
+    setup() {
+        this.preview = false;
+        this.dependencies.customizeWebsite.withCustomHistory(this);
+    }
+    async load() {
+        return new Promise((resolve) => {
             this.services.dialog.add(ConfirmationDialog, {
                 body: _t(
                     "Changing the color palette will reset all your color customizations, are you sure you want to proceed?"
@@ -274,10 +276,28 @@ class ChangeColorPaletteAction extends CustomizeWebsiteVariableAction {
                 cancel: () => resolve(false),
             });
         });
-        if (!confirmed) {
+    }
+    async apply(context) {
+        if (!context.loadResult) {
             return;
         }
         await super.apply(context);
+        setBuilderCSSVariables();
+    }
+}
+
+export class EditCustomCodeAction extends BuilderAction {
+    static id = "editCustomCode";
+    apply() {
+        this.services.dialog.add(EditHeadBodyDialog);
+    }
+}
+
+export class ConfigureApiKeyAction extends BuilderAction {
+    static id = "configureApiKey";
+    static dependencies = ["googleMapsOption"];
+    apply() {
+        this.dependencies.googleMapsOption.configureGMapsAPI("", true);
     }
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@odoo/hoot";
-import { animationFrame, queryFirst } from "@odoo/hoot-dom";
+import { queryFirst, waitFor } from "@odoo/hoot-dom";
 import { contains, onRpc } from "@web/../tests/web_test_helpers";
 import { defineWebsiteModels, setupWebsiteBuilder } from "../website_helpers";
 
@@ -25,16 +25,17 @@ test("visibility of animation animation=none", async () => {
     `);
     await contains(":iframe .test-options-target img").click();
 
+    await waitFor(".options-container");
     expect(".options-container [data-label='Effect']").not.toBeVisible();
-    expect(".options-container [data-label='Direction']").not.toBeVisible();
+    expect(".options-container [data-label='Direction']").not.toHaveCount();
     expect(".options-container [data-label='Trigger']").not.toBeVisible();
-    expect(".options-container [data-label='Intensity']").not.toBeVisible();
-    expect(".options-container [data-label='Start After']").not.toBeVisible();
-    expect(".options-container [data-label='Duration']").not.toBeVisible();
+    expect(".options-container [data-label='Intensity']").not.toHaveCount();
+    expect(".options-container [data-label='Start After']").not.toHaveCount();
+    expect(".options-container [data-label='Duration']").not.toHaveCount();
 });
 describe("onAppearance", () => {
     test("visibility of animation animation=onAppearance", async () => {
-        await setupWebsiteBuilder(
+        const { waitDomUpdated } = await setupWebsiteBuilder(
             `
                 <div class="test-options-target">
                     ${testImg}
@@ -46,6 +47,7 @@ describe("onAppearance", () => {
 
         await contains(".options-container [data-label='Animation'] .dropdown-toggle").click();
         await contains(".o-dropdown--menu [data-action-value='onAppearance']").click();
+        await waitDomUpdated();
         expect(".options-container [data-label='Animation'] .o-dropdown").toHaveText(
             "On Appearance"
         );
@@ -55,13 +57,13 @@ describe("onAppearance", () => {
         expect(".options-container [data-label='Trigger'] .o-dropdown").toHaveText(
             "First Time Only"
         );
-        expect(".options-container [data-label='Intensity']").not.toBeVisible();
-        expect(".options-container [data-label='Scroll Zone']").not.toBeVisible();
+        expect(".options-container [data-label='Intensity']").not.toHaveCount();
+        expect(".options-container [data-label='Scroll Zone']").not.toHaveCount();
         expect(".options-container [data-label='Start After'] input").toHaveValue("0");
         expect(".options-container [data-label='Duration'] input").toHaveValue("1");
     });
     test("visibility of animation animation=onAppearance effect=slide", async () => {
-        await setupWebsiteBuilder(
+        const { waitDomUpdated } = await setupWebsiteBuilder(
             `
                 <div class="test-options-target">
                     ${testImg}
@@ -76,6 +78,7 @@ describe("onAppearance", () => {
 
         await contains(".options-container [data-label='Effect'] .dropdown-toggle").click();
         await contains(".o-dropdown--menu [data-action-value='o_anim_slide_in']").click();
+        await waitDomUpdated();
         expect(".options-container [data-label='Effect'] .o-dropdown").toHaveText("Slide");
 
         expect(".options-container [data-label='Direction'] .o-dropdown").toHaveText("From right");
@@ -83,12 +86,12 @@ describe("onAppearance", () => {
             "First Time Only"
         );
         expect(".options-container [data-label='Intensity'] input").toHaveValue(50);
-        expect(".options-container [data-label='Scroll Zone']").not.toBeVisible();
+        expect(".options-container [data-label='Scroll Zone']").not.toHaveCount();
         expect(".options-container [data-label='Start After'] input").toHaveValue("0");
         expect(".options-container [data-label='Duration'] input").toHaveValue("1");
     });
     test("visibility of animation animation=onAppearance effect=bounce", async () => {
-        await setupWebsiteBuilder(
+        const { waitDomUpdated } = await setupWebsiteBuilder(
             `
                 <div class="test-options-target">
                     ${testImg}
@@ -103,6 +106,7 @@ describe("onAppearance", () => {
 
         await contains(".options-container [data-label='Effect'] .dropdown-toggle").click();
         await contains(".o-dropdown--menu [data-action-value='o_anim_bounce_in']").click();
+        await waitDomUpdated();
         expect(".options-container [data-label='Effect'] .o-dropdown").toHaveText("Bounce");
 
         expect(".options-container [data-label='Direction'] .o-dropdown").toHaveText("In place");
@@ -110,12 +114,12 @@ describe("onAppearance", () => {
             "First Time Only"
         );
         expect(".options-container [data-label='Intensity'] input").toHaveValue(50);
-        expect(".options-container [data-label='Scroll Zone']").not.toBeVisible();
+        expect(".options-container [data-label='Scroll Zone']").not.toHaveCount();
         expect(".options-container [data-label='Start After'] input").toHaveValue("0");
         expect(".options-container [data-label='Duration'] input").toHaveValue("1");
     });
     test("visibility of animation animation=onAppearance effect=flash", async () => {
-        await setupWebsiteBuilder(
+        const { waitDomUpdated } = await setupWebsiteBuilder(
             `
                 <div class="test-options-target">
                     ${testImg}
@@ -130,20 +134,21 @@ describe("onAppearance", () => {
 
         await contains(".options-container [data-label='Effect'] .dropdown-toggle").click();
         await contains(".o-dropdown--menu [data-action-value='o_anim_flash']").click();
+        await waitDomUpdated();
         expect(".options-container [data-label='Effect'] .o-dropdown").toHaveText("Flash");
 
-        expect(".options-container [data-label='Direction']").not.toBeVisible();
+        expect(".options-container [data-label='Direction']").not.toHaveCount();
         expect(".options-container [data-label='Trigger'] .o-dropdown").toHaveText(
             "First Time Only"
         );
         expect(".options-container [data-label='Intensity'] input").toHaveValue(50);
-        expect(".options-container [data-label='Scroll Zone']").not.toBeVisible();
+        expect(".options-container [data-label='Scroll Zone']").not.toHaveCount();
         expect(".options-container [data-label='Start After'] input").toHaveValue("0");
         expect(".options-container [data-label='Duration'] input").toHaveValue("1");
     });
 });
 test("visibility of animation animation=onScroll", async () => {
-    await setupWebsiteBuilder(`
+    const { waitDomUpdated } = await setupWebsiteBuilder(`
         <div class="test-options-target">
             ${testImg}
         </div>
@@ -152,20 +157,21 @@ test("visibility of animation animation=onScroll", async () => {
 
     await contains(".options-container [data-label='Animation'] .dropdown-toggle").click();
     await contains(".o-dropdown--menu [data-action-value='onScroll']").click();
+    await waitDomUpdated();
     expect(".options-container [data-label='Animation'] .o-dropdown").toHaveText("On Scroll");
 
     expect(".options-container [data-label='Effect'] .o-dropdown").toHaveText("Fade");
     expect(".options-container [data-label='Direction'] .o-dropdown").toHaveText("In place");
 
     expect(".options-container [data-label='Trigger']").not.toBeVisible();
-    expect(".options-container [data-label='Intensity']").not.toBeVisible();
-    expect(".options-container [data-label='Start After']").not.toBeVisible();
-    expect(".options-container [data-label='Duration']").not.toBeVisible();
+    expect(".options-container [data-label='Intensity']").not.toHaveCount();
+    expect(".options-container [data-label='Start After']").not.toHaveCount();
+    expect(".options-container [data-label='Duration']").not.toHaveCount();
 
     expect(".options-container [data-label='Scroll Zone']").toBeVisible();
 });
 test("animation=onScroll should not be visible when the animation is limited", async () => {
-    await setupWebsiteBuilder(
+    const { waitDomUpdated } = await setupWebsiteBuilder(
         `
                 <div class="test-options-target">
                     ${testImg}
@@ -180,10 +186,11 @@ test("animation=onScroll should not be visible when the animation is limited", a
 
     await contains(".options-container [data-label='Effect'] .dropdown-toggle").click();
     await contains(".o-dropdown--menu [data-action-value='o_anim_flash']").click();
+    await waitDomUpdated();
     expect(".options-container [data-label='Effect'] .o-dropdown").toHaveText("Flash");
 
     await contains(".options-container [data-label='Animation'] .dropdown-toggle").click();
-    expect(".o-dropdown--menu [data-action-value='onScroll']").not.toBeVisible();
+    expect(".o-dropdown--menu [data-action-value='onScroll']").not.toHaveCount();
 });
 test("visibility of animation animation=onHover", async () => {
     await setupWebsiteBuilder(`
@@ -198,12 +205,12 @@ test("visibility of animation animation=onHover", async () => {
     expect(".options-container [data-label='Animation'] .o-dropdown").toHaveText("On Hover");
 
     expect(".options-container [data-label='Effect']").not.toBeVisible();
-    expect(".options-container [data-label='Direction']").not.toBeVisible();
+    expect(".options-container [data-label='Direction']").not.toHaveCount();
     expect(".options-container [data-label='Trigger']").not.toBeVisible();
-    expect(".options-container [data-label='Intensity']").not.toBeVisible();
-    expect(".options-container [data-label='Scroll Zone']").not.toBeVisible();
-    expect(".options-container [data-label='Start After']").not.toBeVisible();
-    expect(".options-container [data-label='Duration']").not.toBeVisible();
+    expect(".options-container [data-label='Intensity']").not.toHaveCount();
+    expect(".options-container [data-label='Scroll Zone']").not.toHaveCount();
+    expect(".options-container [data-label='Start After']").not.toHaveCount();
+    expect(".options-container [data-label='Duration']").not.toHaveCount();
 
     // todo: check all the hover options
 });
@@ -216,7 +223,7 @@ test("animation=onHover should not be visible when the image is a device shape",
     await contains(":iframe .test-options-target img").click();
 
     await contains(".options-container [data-label='Animation'] .dropdown-toggle").click();
-    expect(".o-dropdown--menu [data-action-value='onHover']").not.toBeVisible();
+    expect(".o-dropdown--menu [data-action-value='onHover']").not.toHaveCount();
 });
 test("animation=onHover should not be visible when the image has a wrong mimetype", async () => {
     await setupWebsiteBuilder(`
@@ -227,7 +234,7 @@ test("animation=onHover should not be visible when the image has a wrong mimetyp
     await contains(":iframe .test-options-target img").click();
 
     await contains(".options-container [data-label='Animation'] .dropdown-toggle").click();
-    expect(".o-dropdown--menu [data-action-value='onHover']").not.toBeVisible();
+    expect(".o-dropdown--menu [data-action-value='onHover']").not.toHaveCount();
 });
 test("animation=onHover should not be visible when the image has a cors protected image", async () => {
     await setupWebsiteBuilder(`
@@ -247,12 +254,13 @@ test("animation=onHover should not be visible when the image has a cors protecte
                             attachment: { id: 1 },
                             original: {
                                 id: 1,
-                                image_src: "/website/static/src/img/snippets_demo/s_text_image.jpg",
-                                mimetype: "image/jpeg",
+                                image_src:
+                                    "/website/static/src/img/snippets_demo/s_text_image.webp",
+                                mimetype: "image/webp",
                             },
                         },
                     };
-                case "/website/static/src/img/snippets_demo/s_text_image.jpg":
+                case "/website/static/src/img/snippets_demo/s_text_image.webp":
                     return;
                 default:
                     expect.step(route);
@@ -265,7 +273,7 @@ test("animation=onHover should not be visible when the image has a cors protecte
 
     await contains(".options-container [data-label='Animation'] .dropdown-toggle").click();
     expect.verifySteps(["/web/image/0-redirect/foo.jpg"]);
-    expect(".o-dropdown--menu [data-action-value='onHover']").not.toBeVisible();
+    expect(".o-dropdown--menu [data-action-value='onHover']").not.toHaveCount();
 });
 
 test("image should not be lazy onAppearance", async () => {
@@ -290,7 +298,7 @@ test("image should not be lazy onAppearance", async () => {
 });
 
 test("should not show the animation options if the image has a parent [data-oe-type='image']", async () => {
-    const { getEditor } = await setupWebsiteBuilder(`
+    const { getEditor, waitDomUpdated } = await setupWebsiteBuilder(`
         <div class="test-options-target">
             ${testImg}
         </div>
@@ -298,17 +306,17 @@ test("should not show the animation options if the image has a parent [data-oe-t
     const editor = getEditor();
     await contains(":iframe .test-options-target img").click();
 
-    await animationFrame();
+    await waitFor(".options-container");
     expect(".options-container [data-label='Animation'] .dropdown-toggle").toBeVisible();
     const optionTarget = queryFirst(":iframe .test-options-target");
     optionTarget.setAttribute("data-oe-type", "image");
     editor.shared.history.addStep();
-    await animationFrame();
-    expect(".options-container [data-label='Animation'] .dropdown-toggle").not.toBeVisible();
+    await waitDomUpdated();
+    expect(".options-container [data-label='Animation'] .dropdown-toggle").not.toHaveCount();
 });
 
 test("should not show the animation options if the image has is [data-oe-xpath]", async () => {
-    const { getEditor } = await setupWebsiteBuilder(`
+    const { getEditor, waitDomUpdated } = await setupWebsiteBuilder(`
         <div class="test-options-target">
             ${testImg}
         </div>
@@ -316,13 +324,13 @@ test("should not show the animation options if the image has is [data-oe-xpath]"
     const editor = getEditor();
     await contains(":iframe .test-options-target img").click();
 
-    await animationFrame();
+    await waitFor(".options-container");
     expect(".options-container [data-label='Animation'] .dropdown-toggle").toBeVisible();
     const optionTarget = queryFirst(":iframe .test-options-target img");
     optionTarget.setAttribute("data-oe-xpath", "/foo/bar");
     editor.shared.history.addStep();
-    await animationFrame();
-    expect(".options-container [data-label='Animation'] .dropdown-toggle").not.toBeVisible();
+    await waitDomUpdated();
+    expect(".options-container [data-label='Animation'] .dropdown-toggle").not.toHaveCount();
 });
 
 test("o_animate should be normalized with loading=eager", async () => {

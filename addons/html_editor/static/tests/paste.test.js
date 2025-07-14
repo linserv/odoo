@@ -42,6 +42,7 @@ describe("Html Paste cleaning - whitelist", () => {
                         pasteHtml(editor, `a<${tagDescription}>b</${tagName}>c`);
                     },
                     contentAfter: "<p>123" + html + "[]4</p>",
+                    config: { baseContainer: "DIV" },
                 });
             }
         }
@@ -261,6 +262,20 @@ describe("Simple text", () => {
                     pasteText(editor, "a\nb\nc");
                 },
                 contentAfter: "<pre>a<br>b<br>c[]</pre>",
+            });
+        });
+
+        test("should preserve spaces and not add nbsp when pasting plain text inside <pre>", async () => {
+            await testEditor({
+                contentBefore: "<pre>[]<br></pre>",
+                stepFunction: async (editor) => {
+                    pasteText(
+                        editor,
+                        "function example() {\n    console.log('Hello,    world!');\n    // Indented    comment\n}"
+                    );
+                },
+                contentAfter:
+                    "<pre>function example() {<br>    console.log('Hello,    world!');<br>    // Indented    comment<br>}[]</pre>",
             });
         });
     });
@@ -761,6 +776,17 @@ describe("Simple html elements containing <br>", () => {
                     pasteHtml(editor, "<div>abc<br>def</div>");
                 },
                 contentAfter: `<div>abc</div><div>def[]</div>`,
+                config: { baseContainer: "DIV" },
+            });
+        });
+
+        test("should split div with <br> (2)", async () => {
+            await testEditor({
+                contentBefore: "<p>[]<br></p>",
+                stepFunction: async (editor) => {
+                    pasteHtml(editor, "<div>abc<br>def</div>");
+                },
+                contentAfter: `<p>abc</p><p>def[]</p>`,
             });
         });
     });
@@ -1902,6 +1928,39 @@ describe("Complex html div", () => {
                 pasteHtml(editor, complexHtmlData);
             },
             contentAfter: `<div>abcdef</div><div dir="rtl">ghijkl</div><div>jklmno[]</div>`,
+            config: { baseContainer: "DIV" },
+        });
+    });
+
+    test("should convert div to a baseContainer (2)", async () => {
+        await testEditor({
+            contentBefore: "<p>[]<br></p>",
+            stepFunction: async (editor) => {
+                pasteHtml(editor, complexHtmlData);
+            },
+            contentAfter: `<p>abcdef</p><p dir="rtl">ghijkl</p><p>jklmno[]</p>`,
+        });
+    });
+
+    const copiedHtmlData = `<ol><li><div>abc</div><div></div></li><li><div></div><div style="white-space: break-spaces;"><span>def\nghi</span><br><span>jkl</span></div></li></ol>`;
+    test("should remove empty <div> elements from pasted content", async () => {
+        await testEditor({
+            contentBefore: "<p>12[]3</p>",
+            stepFunction: async (editor) => {
+                pasteHtml(editor, copiedHtmlData);
+            },
+            contentAfter: `<p>12</p><ol><li><div>abc</div></li><li><div>def</div><div>ghi</div><div>jkl[]</div></li></ol><p>3</p>`,
+            config: { baseContainer: "DIV" },
+        });
+    });
+
+    test("should remove empty <div> elements from pasted content (2)", async () => {
+        await testEditor({
+            contentBefore: "<p>12[]3</p>",
+            stepFunction: async (editor) => {
+                pasteHtml(editor, copiedHtmlData);
+            },
+            contentAfter: `<p>12</p><ol><li><p>abc</p></li><li><p>def</p><p>ghi</p><p>jkl[]</p></li></ol><p>3</p>`,
         });
     });
 });
@@ -2043,8 +2102,7 @@ describe("Special cases", () => {
                         unformat(`
                             <ul>
                                 <li>abc</li>
-                                <li>def</li>
-                                <li class="oe-nested">
+                                <li>def
                                     <ul>
                                         <li>123</li>
                                         <li>456</li>
@@ -2058,8 +2116,7 @@ describe("Special cases", () => {
                     <ol>
                         <li>Alpha</li>
                         <li>abc</li>
-                        <li>def</li>
-                        <li class="oe-nested">
+                        <li><p>def</p>
                             <ol>
                                 <li>123</li>
                                 <li>456[]</li>
@@ -2100,8 +2157,7 @@ describe("Special cases", () => {
                 },
                 contentAfter: unformat(`
                     <ul>
-                        <li>Alpha</li>
-                        <li class="oe-nested">
+                        <li><p>Alpha</p>
                             <ul>
                                 <li class="oe-nested">
                                     <ul>
@@ -2131,12 +2187,10 @@ describe("Special cases", () => {
                         unformat(`
                             <ul>
                                 <li>ab</li>
-                                <li>cd</li>
-                                <li class="oe-nested">
+                                <li>cd
                                     <ol>
                                         <li>ef</li>
-                                        <li>gh</li>
-                                        <li class="oe-nested">
+                                        <li>gh
                                             <ul class="o_checklist">
                                                 <li>ij</li>
                                                 <li>kl</li>
@@ -2151,12 +2205,10 @@ describe("Special cases", () => {
                 contentAfter: unformat(`
                     <ol>
                         <li>ab</li>
-                        <li>cd</li>
-                        <li class="oe-nested">
+                        <li><p>cd</p>
                             <ol>
                                 <li>ef</li>
-                                <li>gh</li>
-                                <li class="oe-nested">
+                                <li><p>gh</p>
                                     <ol>
                                         <li>ij</li>
                                         <li>kl[]</li>
@@ -2178,12 +2230,10 @@ describe("Special cases", () => {
                         unformat(`
                             <ul>
                                 <li>ab</li>
-                                <li>cd</li>
-                                <li class="oe-nested">
+                                <li>cd
                                     <ol>
                                         <li>ef</li>
-                                        <li>gh</li>
-                                        <li class="oe-nested">
+                                        <li>gh
                                             <ul class="o_checklist">
                                                 <li>ij</li>
                                                 <li>kl</li>
@@ -2198,12 +2248,10 @@ describe("Special cases", () => {
                 contentAfter: unformat(`
                     <ul>
                         <li>ab</li>
-                        <li>cd</li>
-                        <li class="oe-nested">
+                        <li><p>cd</p>
                             <ul>
                                 <li>ef</li>
-                                <li>gh</li>
-                                <li class="oe-nested">
+                                <li><p>gh</p>
                                     <ul>
                                         <li>ij</li>
                                         <li>kl[]</li>
@@ -2310,12 +2358,10 @@ describe("Special cases", () => {
                 },
                 contentAfter: unformat(`
                     <ul>
-                        <li>ab</li>
-                        <li class="oe-nested">
+                        <li><p>ab</p>
                             <ul>
                                 <li>cd</li>
-                                <li>ef</li>
-                                <li class="oe-nested">
+                                <li><p>ef</p>
                                     <ul>
                                         <li>gh</li>
                                         <li>ij</li>
@@ -2324,8 +2370,7 @@ describe("Special cases", () => {
                                     </ul>
                                 </li>
                                 <li>op</li>
-                                <li>qr</li>
-                                <li class="oe-nested">
+                                <li><p>qr</p>
                                     <ul>
                                         <li>st</li>
                                         <li>uv[]</li>
@@ -2509,7 +2554,8 @@ describe("link", () => {
 
         test("should replace link for new content when pasting in an empty link (collapsed)", async () => {
             await testEditor({
-                contentBefore: '<p><a href="#" oe-zws-empty-inline="">[]\u200B</a></p>',
+                contentBefore:
+                    '<p><a href="http://test.test/" oe-zws-empty-inline="">[]\u200B</a></p>',
                 stepFunction: async (editor) => {
                     pasteText(editor, "abc");
                 },
@@ -2518,7 +2564,8 @@ describe("link", () => {
         });
         test("should replace link for new content when pasting in an empty link (collapsed)(2)", async () => {
             await testEditor({
-                contentBefore: '<p>xy<a href="#" oe-zws-empty-inline="">\u200B[]</a>z</p>',
+                contentBefore:
+                    '<p>xy<a href="http://test.test/" oe-zws-empty-inline="">\u200B[]</a>z</p>',
                 stepFunction: async (editor) => {
                     pasteText(editor, "abc");
                 },
@@ -2528,7 +2575,7 @@ describe("link", () => {
 
         test("should replace link for new content (url) when pasting in an empty link (collapsed)", async () => {
             const { el, editor } = await setupEditor(
-                `<p>xy<a href="#" oe-zws-empty-inline="">\u200B[]</a>z</p>`
+                `<p>xy<a href="http://test.test/" oe-zws-empty-inline="">\u200B[]</a>z</p>`
             );
             pasteText(editor, "http://odoo.com");
             await animationFrame();
@@ -2539,9 +2586,11 @@ describe("link", () => {
         });
 
         test("should replace link for new content (imgUrl) when pasting in an empty link (collapsed) (1)", async () => {
-            const { el, editor } = await setupEditor(`<p>xy<a href="#">[]</a>z</p>`);
+            const { el, editor } = await setupEditor(
+                `<p>xy<a href="http://test.test/">[]</a>z</p>`
+            );
             expect(getContent(el)).toBe(
-                `<p>xy\ufeff<a href="#" class="o_link_in_selection">\ufeff[]</a>\ufeffz</p>`
+                `<p>xy\ufeff<a href="http://test.test/" class="o_link_in_selection">\ufeff[]</a>\ufeffz</p>`
             );
             pasteText(editor, imgUrl);
             await animationFrame();
@@ -2554,7 +2603,7 @@ describe("link", () => {
 
         test("should replace link for new content (url) when pasting in an empty link (collapsed) (2)", async () => {
             const { el, editor } = await setupEditor(
-                `<p>xy<a href="#" oe-zws-empty-inline="">\u200B[]</a>z</p>`
+                `<p>xy<a href="http://test.test/" oe-zws-empty-inline="">\u200B[]</a>z</p>`
             );
             pasteText(editor, imgUrl);
             await animationFrame();
@@ -2572,14 +2621,14 @@ describe("link", () => {
 
         test("should paste and transform plain text content over an empty link (collapsed)", async () => {
             await testEditor({
-                contentBefore: '<p><a href="#">[]\u200B</a></p>',
+                contentBefore: '<p><a href="http://test.test/">[]\u200B</a></p>',
                 stepFunction: async (editor) => {
                     pasteText(editor, "abc www.odoo.com xyz");
                 },
                 contentAfter: '<p>abc <a href="http://www.odoo.com">www.odoo.com</a> xyz[]</p>',
             });
             await testEditor({
-                contentBefore: '<p><a href="#">[]\u200B</a></p>',
+                contentBefore: '<p><a href="http://test.test/">[]\u200B</a></p>',
                 stepFunction: async (editor) => {
                     pasteText(editor, "odoo.com\ngoogle.com");
                 },
@@ -2591,7 +2640,7 @@ describe("link", () => {
 
         test("should paste html content over an empty link (collapsed)", async () => {
             await testEditor({
-                contentBefore: '<p><a href="#">[]\u200B</a></p>',
+                contentBefore: '<p><a href="http://test.test/">[]\u200B</a></p>',
                 stepFunction: async (editor) => {
                     pasteHtml(
                         editor,
@@ -2604,7 +2653,7 @@ describe("link", () => {
         });
         test("should paste html content over an empty link (collapsed) (2)", async () => {
             await testEditor({
-                contentBefore: '<p><a href="#">[]\u200B</a></p>',
+                contentBefore: '<p><a href="http://test.test/">[]\u200B</a></p>',
                 stepFunction: async (editor) => {
                     pasteHtml(
                         editor,
@@ -2680,11 +2729,11 @@ describe("link", () => {
 
         test("should paste plain text inside non empty link (collapsed)", async () => {
             await testEditor({
-                contentBefore: '<p><a href="#">a[]b</a></p>',
+                contentBefore: '<p><a href="http://test.test/">a[]b</a></p>',
                 stepFunction: async (editor) => {
                     pasteHtml(editor, "<span>123</span>");
                 },
-                contentAfter: '<p><a href="#">a123[]b</a></p>',
+                contentAfter: '<p><a href="http://test.test/">a123[]b</a></p>',
             });
         });
 

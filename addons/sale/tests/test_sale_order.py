@@ -1026,6 +1026,7 @@ class TestSalesTeam(SaleCommon):
         self.assertEqual(order.amount_total, 252)
         self.assertEqual(order.amount_tax, 52)
 
+
 @tagged('post_install', '-at_install')
 class TestSaleMailComposerUI(MailCommon, HttpCase):
     @classmethod

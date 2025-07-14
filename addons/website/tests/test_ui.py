@@ -209,8 +209,6 @@ class TestUiTranslate(odoo.tests.HttpCase):
         })
         self.start_tour(self.env['website'].get_client_action_url('/'), 'rte_translator', login='admin', timeout=120)
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_translate_menu_name(self):
         lang_en = self.env.ref('base.lang_en')
         parseltongue = self.env['res.lang'].create({
@@ -251,8 +249,6 @@ class TestUiTranslate(odoo.tests.HttpCase):
 
         self.start_tour(self.env['website'].get_client_action_url('/'), 'translate_text_options', login='admin')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_snippet_translation(self):
         ResLang = self.env['res.lang']
         parseltongue, fake_user_lang = ResLang.create([{
@@ -260,6 +256,7 @@ class TestUiTranslate(odoo.tests.HttpCase):
             'code': 'pa_GB',
             'iso_code': 'pa_GB',
             'url_code': 'pa_GB',
+            'direction': 'rtl',
         }, {
             'name': 'Fake User Lang',
             'code': 'fu_GB',
@@ -273,6 +270,9 @@ class TestUiTranslate(odoo.tests.HttpCase):
             parseltongue.code: {
                 # See contact_us_label
                 'Contact us': 'Contact us in Parseltongue'
+            },
+            fake_user_lang.code: {
+                'Contact us': 'Contact us in Fake User Lang'
             }
         })
         website = self.env['website'].create({
@@ -285,9 +285,16 @@ class TestUiTranslate(odoo.tests.HttpCase):
             'language_ids': [(6, 0, [self.env.ref('base.lang_en').id, parseltongue.id])],
             'default_lang_id': parseltongue.id,
         })
+        self.env['website'].create({
+            'name': 'website fu_GB',
+            'language_ids': [Command.set([fake_user_lang.id])],
+            'default_lang_id': fake_user_lang.id,
+        })
 
         self.start_tour(f"/website/force/{website.id}", 'snippet_translation', login='admin')
         self.start_tour(f"/website/force/{website_2.id}", 'snippet_translation_changing_lang', login='admin')
+        self.start_tour(f"/website/force/{website_2.id}", 'snippet_translation_switching_website', login='admin')
+        self.start_tour(f"/website/force/{website.id}", 'snippet_dialog_rtl', login='admin')
 
 
 @odoo.tests.common.tagged('post_install', '-at_install')
@@ -312,10 +319,8 @@ class TestUi(HttpCaseWithWebsiteUser):
         })
         self.start_tour("/", 'website_navbar_menu')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_05_specific_website_editor(self):
-        asset_bundle_xmlid = 'website.assets_wysiwyg'
+        asset_bundle_xmlid = "website.assets_edit_frontend"
         website_default = self.env['website'].search([], limit=1)
 
         new_website = self.env['website'].create({'name': 'New Website'})
@@ -331,7 +336,7 @@ class TestUi(HttpCaseWithWebsiteUser):
 
         self.env['ir.asset'].create({
             'name': 'EditorExtension',
-            'bundle': 'website.assets_wysiwyg',
+            'bundle': "website.assets_edit_frontend",
             'path': custom_url,
             'website_id': new_website.id,
         })
@@ -341,7 +346,7 @@ class TestUi(HttpCaseWithWebsiteUser):
         base_website_css_version = base_website_bundle.get_version('css')
         base_website_js_version = base_website_bundle.get_version('js')
 
-        new_website_bundle_modified = self.env['ir.qweb']._get_asset_bundle('website.assets_wysiwyg', assets_params={'website_id': new_website.id})
+        new_website_bundle_modified = self.env['ir.qweb']._get_asset_bundle("website.assets_edit_frontend", assets_params={'website_id': new_website.id})
         self.assertIn(custom_url, [f['url'] for f in new_website_bundle_modified.files])
         self.assertEqual(new_website_bundle_modified.get_version('css'), base_website_css_version)
         self.assertNotEqual(new_website_bundle_modified.get_version('js'), base_website_js_version, "js version for new website should now have been changed")
@@ -426,14 +431,12 @@ class TestUi(HttpCaseWithWebsiteUser):
     # TODO master-mysterious-egg fix error
     @unittest.skip("prepare mysterious-egg for merging")
     def test_09_website_edit_link_popover(self):
-        self.start_tour('/@/', 'edit_link_popover', login='admin', step_delay=500, timeout=180)
+        self.start_tour('/@/', 'edit_link_popover', login='admin', timeout=180)
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_10_website_conditional_visibility(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'conditional_visibility_1', login='admin')
         self.start_tour('/odoo', 'conditional_visibility_2', login='website_user')
-        self.start_tour(self.env['website'].get_client_action_url('/'), 'conditional_visibility_3', login='admin', step_delay=500, timeout=180)
+        self.start_tour(self.env['website'].get_client_action_url('/'), 'conditional_visibility_3', login='admin', timeout=180)
         self.start_tour(self.env['website'].get_client_action_url('/'), 'conditional_visibility_4', login='admin')
         self.start_tour(self.env['website'].get_client_action_url('/'), 'conditional_visibility_5', login='admin')
 
@@ -491,8 +494,6 @@ class TestUi(HttpCaseWithWebsiteUser):
     def test_23_website_multi_edition(self):
         self.start_tour('/@/', 'website_multi_edition', login='admin')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_24_snippet_cache_across_websites(self):
         default_website = self.env.ref('website.default_website')
         website = self.env['website'].create({
@@ -548,8 +549,6 @@ class TestUi(HttpCaseWithWebsiteUser):
     def test_30_website_text_animations(self):
         self.start_tour("/", 'text_animations', login='admin')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_31_website_edit_megamenu_big_icons_subtitles(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'edit_megamenu_big_icons_subtitles', login='admin')
 
@@ -568,8 +567,6 @@ class TestUi(HttpCaseWithWebsiteUser):
     def test_update_column_count(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'website_update_column_count', login="admin")
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_website_text_highlights(self):
         self.start_tour("/", 'text_highlights', login='admin')
 

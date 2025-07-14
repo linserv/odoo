@@ -162,7 +162,6 @@ class LivechatController(http.Controller):
             if guest:
                 store.add_global_values(guest_token=guest.sudo()._format_auth_cookie())
         request.env["res.users"].with_context(guest=guest)._init_store_data(store)
-        guest._bus_send_store(store)
         # Make sure not to send "isLoaded" value on the guest bus, otherwise it
         # could be overwritten.
         if channel:
@@ -173,6 +172,11 @@ class LivechatController(http.Controller):
                      "scrollUnread": False,
                  },
              )
+        if not request.env.user._is_public():
+            store.add(
+                request.env.user.partner_id,
+                {"email": request.env.user.partner_id.email},
+            )
         return {
             "store_data": store.get_result(),
             "channel_id": channel_id,

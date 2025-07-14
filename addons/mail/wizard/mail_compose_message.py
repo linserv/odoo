@@ -132,9 +132,6 @@ class MailComposeMessage(models.TransientModel):
     record_company_id = fields.Many2one(
         'res.company', 'Company',
         compute='_compute_record_environment', readonly=False, store=True)  # useful only in monorecord comment mode
-    record_name = fields.Char(
-        'Record Name',
-        compute='_compute_record_name', readonly=False, store=True)  # useful only in monorecord comment mode
     # characteristics
     message_type = fields.Selection([
         ('auto_comment', 'Automated Targeted Notification'),
@@ -211,15 +208,16 @@ class MailComposeMessage(models.TransientModel):
         for composer in self:
             composer._evaluate_res_domain()
 
-    @api.depends('composition_mode', 'model', 'parent_id', 'record_name',
+    @api.depends('composition_mode', 'model', 'parent_id',
                  'res_domain', 'res_ids', 'template_id')
     def _compute_subject(self):
         """ Computation is coming either form template, either from context.
         When having a template with a value set, copy it (in batch mode) or
         render it (in monorecord comment mode) on the composer. Otherwise
         it comes from the parent (if set), or computed based on the generic
-        '_message_compute_subject' method in monorecord comment mode, or
-        set to False. When removing the template, reset it. """
+        '_message_compute_subject' method or to the record display_name in
+        monorecord comment mode, or set to False. When removing the template,
+        reset it. """
         for composer in self:
             if composer.template_id:
                 composer._set_value_from_template('subject')
@@ -228,11 +226,11 @@ class MailComposeMessage(models.TransientModel):
                 if (not subject and composer.model and
                     composer.composition_mode == 'comment' and
                     not composer.composition_batch):
+                    res_ids = composer._evaluate_res_ids()
                     if composer.model_is_thread:
-                        res_ids = composer._evaluate_res_ids()
                         subject = self.env[composer.model].browse(res_ids)._message_compute_subject()
                     else:
-                        subject = composer.record_name
+                        subject = self.env[composer.model].browse(res_ids).display_name
                 composer.subject = subject
 
     @api.depends('composition_mode', 'model', 'res_domain', 'res_ids',
@@ -440,33 +438,6 @@ class MailComposeMessage(models.TransientModel):
                 composer.record_alias_domain_id = record._mail_get_alias_domains(
                     default_company=self.env.company
                 )[record.id]
-
-    @api.depends('composition_mode', 'model', 'parent_id', 'res_domain', 'res_ids')
-    def _compute_record_name(self):
-        """ Computation is coming either from parent message, either from the
-        record's display name in monorecord comment mode.
-
-        In batch mode it makes no sense to compute a single record name. In
-        email mode it is not used anyway. """
-        toreset = self.filtered(
-            lambda comp: comp.record_name
-                and (comp.composition_mode != 'comment' or comp.composition_batch)
-        )
-        if toreset:
-            toreset.record_name = False
-
-        toupdate = self.filtered(
-            lambda comp: not comp.record_name
-                            and comp.composition_mode == 'comment'
-                            and not comp.composition_batch
-        )
-        for composer in toupdate:
-            if composer.parent_id.record_name:
-                composer.record_name = composer.parent_id.record_name
-                continue
-            res_ids = composer._evaluate_res_ids()
-            if composer.model and len(res_ids) == 1:
-                composer.record_name = self.env[composer.model].browse(res_ids).display_name
 
     @api.depends('composition_mode')
     def _compute_subtype_id(self):
@@ -839,6 +810,7 @@ class MailComposeMessage(models.TransientModel):
         batch_size = int(
             self.env['ir.config_parameter'].sudo().get_param('mail.batch_size')
         ) or self._batch_size or 50  # be sure to not have 0, as otherwise no iteration is done
+        counter_mails_done = 0
         for res_ids_iter in tools.split_every(batch_size, res_ids):
             prepared_mail_values_filtered = self._manage_mail_values(self._prepare_mail_values(res_ids_iter))
             iter_mails_sudo = self.env['mail.mail'].sudo().create(list(prepared_mail_values_filtered.values()))
@@ -864,7 +836,10 @@ class MailComposeMessage(models.TransientModel):
             # send better void the cache and commit what is already generated to avoid
             # running several times on same records in case of issue
             if auto_commit is True:
-                self._cr.commit()
+                counter_mails_done += len(prepared_mail_values_filtered)
+                self.env['ir.cron']._notify_progress(done=counter_mails_done,
+                                                      remaining=len(res_ids) - counter_mails_done)
+                self.env.cr.commit()
             self.env.invalidate_all()
 
         return mails_sudo
@@ -893,7 +868,6 @@ class MailComposeMessage(models.TransientModel):
         model_id = self.env['ir.model']._get_id(self.model)
         values = {
             'name': self.template_name,
-            'subject': self.subject,
             'body_html': self.body,
             'model_id': model_id,
             'use_default_to': True,
@@ -903,7 +877,7 @@ class MailComposeMessage(models.TransientModel):
 
         if self.attachment_ids:
             attachments = self.env['ir.attachment'].sudo().browse(self.attachment_ids.ids).filtered(
-                lambda a: a.res_model == 'mail.compose.message' and a.create_uid.id == self._uid)
+                lambda a: a.res_model == 'mail.compose.message' and a.create_uid.id == self.env.uid)
             if attachments:
                 attachments.write({'res_model': template._name, 'res_id': template.id})
                 template.attachment_ids = self.attachment_ids
@@ -955,7 +929,6 @@ class MailComposeMessage(models.TransientModel):
             STA - 'message_type',
             STA - 'parent_id',
             DYN - 'partner_ids',
-            STA - 'record_name',
             DYN - 'reply_to',
             STA - 'reply_to_force_new',
             DYN - 'scheduled_date',
@@ -1039,7 +1012,6 @@ class MailComposeMessage(models.TransientModel):
             'mail_server_id': self.mail_server_id.id,
             'message_type': 'email_outgoing' if email_mode else self.message_type,
             'parent_id': self.parent_id.id,
-            'record_name': False if email_mode else self.record_name,
             'reply_to_force_new': self.reply_to_force_new and bool(self.reply_to),  # if manually voided, fallback on thread-based reply-to computation
             'subtype_id': subtype_id,
         }
@@ -1100,7 +1072,7 @@ class MailComposeMessage(models.TransientModel):
 
         # langs, used currently only to propagate in comment mode for notification
         # layout translation
-        langs = self._render_field('lang', res_ids)
+        langs = self._render_lang(res_ids)
         subjects = self._render_field('subject', res_ids, compute_lang=True)
         bodies = self._render_field(
             'body', res_ids, compute_lang=True,
@@ -1441,8 +1413,8 @@ class MailComposeMessage(models.TransientModel):
             return blacklisted_rec_ids
         if self.composition_mode == 'mass_mail':
             self.env['mail.blacklist'].flush_model(['email', 'active'])
-            self._cr.execute("SELECT email FROM mail_blacklist WHERE active=true")
-            blacklist = {x[0] for x in self._cr.fetchall()}
+            self.env.cr.execute("SELECT email FROM mail_blacklist WHERE active=true")
+            blacklist = {x[0] for x in self.env.cr.fetchall()}
             if not blacklist:
                 return blacklisted_rec_ids
             if isinstance(self.env[self.model], self.pool['mail.thread.blacklist']):

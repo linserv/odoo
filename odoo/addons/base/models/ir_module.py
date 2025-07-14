@@ -25,7 +25,7 @@ from odoo.tools.parse_version import parse_version
 from odoo.tools.misc import topological_sort, get_flag
 from odoo.tools.translate import TranslationImporter, get_po_paths, get_datafile_translation_path
 from odoo.http import request
-from odoo.modules import MissingDependency, get_module_path
+from odoo.modules.module import Manifest, MissingDependency
 
 _logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class IrModuleCategory(models.Model):
     _order = 'sequence, name, id'
     _allow_sudo_commands = False
 
-    name = fields.Char(string='Name', required=True, translate=True, index=True)
+    name = fields.Char(string='Name', required=True, translate=True)
     parent_id = fields.Many2one('ir.module.category', string='Parent Application', index=True)
     child_ids = fields.One2many('ir.module.category', 'parent_id', string='Child Applications')
     module_ids = fields.One2many('ir.module.module', 'category_id', string='Modules')
@@ -153,11 +153,13 @@ class IrModuleModule(models.Model):
 
     @classmethod
     def get_module_info(cls, name):
-        try:
-            return modules.get_manifest(name)
-        except Exception:
-            _logger.debug('Error when trying to fetch information for module %s', name, exc_info=True)
-            return {}
+        if isinstance(name, str):
+            # we have no info for studio_customization
+            # imported modules are not found using this method
+            return modules.Manifest.for_addon(name, downloaded=True, display_warning=False) or {}
+        if isinstance(name, modules.Manifest):
+            return name
+        return {}
 
     @api.depends('name', 'description')
     def _get_desc(self):
@@ -232,17 +234,21 @@ class IrModuleModule(models.Model):
         for module in self:
             if not module.id:
                 continue
+            manifest = self.get_module_info(module.name)
             if module.icon:
-                path = os.path.join(module.icon.lstrip("/"))
+                path = module.icon or ''
+            elif manifest:
+                path = manifest.get('icon', '')
             else:
-                path = modules.module.get_module_icon_path(module)
+                path = Manifest.for_addon('base').icon
+            path = path.removeprefix("/")
             if path:
                 try:
                     with tools.file_open(path, 'rb', filter_ext=('.png', '.svg', '.gif', '.jpeg', '.jpg')) as image_file:
                         module.icon_image = base64.b64encode(image_file.read())
-                except FileNotFoundError:
+                except OSError:
                     module.icon_image = ''
-            countries = self.get_module_info(module.name).get('countries', [])
+            countries = manifest.get('countries', [])
             country_code = len(countries) == 1 and countries[0]
             module.icon_flag = get_flag(country_code.upper()) if country_code else ''
 
@@ -324,9 +330,9 @@ class IrModuleModule(models.Model):
         return [('state', '=', 'installed')]
 
     def check_external_dependencies(self, module_name, newstate='to install'):
-        terp = self.get_module_info(module_name)
         try:
-            modules.check_manifest_dependencies(terp)
+            manifest = modules.Manifest.for_addon(module_name)
+            manifest.check_manifest_dependencies()
         except MissingDependency as e:
             if newstate == 'to install':
                 msg = _('Unable to install module "%(module)s" because an external dependency is not met: %(dependency)s', module=module_name, dependency=e.dependency)
@@ -340,7 +346,7 @@ class IrModuleModule(models.Model):
                 distro = platform.freedesktop_os_release()
                 id_likes = {distro['ID'], *distro.get('ID_LIKE').split()}
                 if 'debian' in id_likes or 'ubuntu' in id_likes:
-                    if package := terp['external_dependencies'].get('apt', {}).get(e.dependency):
+                    if package := manifest['external_dependencies'].get('apt', {}).get(e.dependency):
                         install_package = f'apt install {package}'
 
             if install_package:
@@ -462,9 +468,16 @@ class IrModuleModule(models.Model):
         return self._button_immediate_function(self.env.registry[self._name].button_install)
 
     @assert_log_admin_access
-    def button_install_cancel(self):
-        self.filtered(lambda m: m.state == 'to install').write({'state': 'uninstalled', 'demo': False})
+    @api.model
+    def button_reset_state(self):
+        # reset the transient state for all modules in case the module operation is stopped in an unexpected way.
+        self.search([('state', '=', 'to install')]).state = 'uninstalled'
+        self.search([('state', 'in', ('to update', 'to remove'))]).state = 'installed'
         return True
+
+    @api.model
+    def check_module_update(self):
+        return bool(self.sudo().search_count([('state', 'in', ('to install', 'to update', 'to remove'))], limit=1))
 
     @assert_log_admin_access
     def module_uninstall(self):
@@ -508,8 +521,8 @@ class IrModuleModule(models.Model):
                         d.name IN (SELECT name from ir_module_module where id in %s) AND
                         m.state NOT IN %s AND
                         m.id NOT IN %s """
-        self._cr.execute(query, (tuple(self.ids), tuple(exclude_states), tuple(known_deps.ids or self.ids)))
-        new_deps = self.browse([row[0] for row in self._cr.fetchall()])
+        self.env.cr.execute(query, (tuple(self.ids), tuple(exclude_states), tuple(known_deps.ids or self.ids)))
+        new_deps = self.browse([row[0] for row in self.env.cr.fetchall()])
         missing_mods = new_deps - known_deps
         known_deps |= new_deps
         if missing_mods:
@@ -533,8 +546,8 @@ class IrModuleModule(models.Model):
                         m.name IN (SELECT name from ir_module_module_dependency where module_id in %s) AND
                         m.state NOT IN %s AND
                         m.id NOT IN %s """
-        self._cr.execute(query, (tuple(self.ids), tuple(exclude_states), tuple(known_deps.ids or self.ids)))
-        new_deps = self.browse([row[0] for row in self._cr.fetchall()])
+        self.env.cr.execute(query, (tuple(self.ids), tuple(exclude_states), tuple(known_deps.ids or self.ids)))
+        new_deps = self.browse([row[0] for row in self.env.cr.fetchall()])
         missing_mods = new_deps - known_deps
         known_deps |= new_deps
         if missing_mods:
@@ -592,14 +605,14 @@ class IrModuleModule(models.Model):
                               "please try again later or contact your system administrator."))
         function(self)
 
-        self._cr.commit()
-        registry = modules.registry.Registry.new(self._cr.dbname, update_module=True)
-        self._cr.commit()
+        self.env.cr.commit()
+        registry = modules.registry.Registry.new(self.env.cr.dbname, update_module=True)
+        self.env.cr.commit()
         if request and request.registry is self.env.registry:
             request.env.cr.reset()
             request.registry = request.env.registry
             assert request.env.registry is registry
-        self._cr.reset()
+        self.env.cr.reset()
         assert self.env.registry is registry
 
         # pylint: disable=next-method-called
@@ -649,10 +662,6 @@ class IrModuleModule(models.Model):
             'res_model': 'base.module.uninstall',
             'context': {'default_module_ids': self.ids},
         }
-
-    def button_uninstall_cancel(self):
-        self.filtered(lambda m: m.state == 'to remove').write({'state': 'installed'})
-        return True
 
     @assert_log_admin_access
     def button_immediate_upgrade(self):
@@ -711,11 +720,6 @@ class IrModuleModule(models.Model):
         self.browse(to_install).button_install()
         return dict(ACTION_DICT, name=_('Apply Schedule Upgrade'))
 
-    @assert_log_admin_access
-    def button_upgrade_cancel(self):
-        self.write({'state': 'installed'})
-        return True
-
     @staticmethod
     def get_values_from_terp(terp):
         return {
@@ -759,9 +763,9 @@ class IrModuleModule(models.Model):
         known_mods_names = {mod.name: mod for mod in known_mods}
 
         # iterate through detected modules and update/create them in db
-        for mod_name in modules.get_modules():
-            mod = known_mods_names.get(mod_name)
-            terp = self.get_module_info(mod_name)
+        for manifest in modules.Manifest.all_addon_manifests():
+            mod = known_mods_names.get(manifest.name)
+            terp = self.get_module_info(manifest)
             values = self.get_values_from_terp(terp)
 
             if mod:
@@ -776,12 +780,11 @@ class IrModuleModule(models.Model):
                     res[0] += 1
                 if updated_values:
                     mod.write(updated_values)
+            elif not manifest or not terp:
+                continue
             else:
-                mod_path = modules.get_module_path(mod_name)
-                if not mod_path or not terp:
-                    continue
                 state = "uninstalled" if terp.get('installable', True) else "uninstallable"
-                mod = self.create(dict(name=mod_name, state=state, **values))
+                mod = self.create(dict(name=manifest.name, state=state, **values))
                 res[1] += 1
 
             mod._update_from_terp(terp)
@@ -799,10 +802,10 @@ class IrModuleModule(models.Model):
         existing = set(dep.name for dep in self.dependencies_id)
         needed = set(depends or [])
         for dep in (needed - existing):
-            self._cr.execute('INSERT INTO ir_module_module_dependency (module_id, name) values (%s, %s)', (self.id, dep))
+            self.env.cr.execute('INSERT INTO ir_module_module_dependency (module_id, name) values (%s, %s)', (self.id, dep))
         for dep in (existing - needed):
-            self._cr.execute('DELETE FROM ir_module_module_dependency WHERE module_id = %s and name = %s', (self.id, dep))
-        self._cr.execute('UPDATE ir_module_module_dependency SET auto_install_required = (name = any(%s)) WHERE module_id = %s',
+            self.env.cr.execute('DELETE FROM ir_module_module_dependency WHERE module_id = %s and name = %s', (self.id, dep))
+        self.env.cr.execute('UPDATE ir_module_module_dependency SET auto_install_required = (name = any(%s)) WHERE module_id = %s',
                          (list(auto_install_requirements or ()), self.id))
         self.env['ir.module.module.dependency'].invalidate_model(['auto_install_required'])
         self.invalidate_recordset(['dependencies_id'])
@@ -811,9 +814,9 @@ class IrModuleModule(models.Model):
         existing = set(self.country_ids.ids)
         needed = set(self.env['res.country'].search([('code', 'in', [c.upper() for c in countries])]).ids)
         for dep in (needed - existing):
-            self._cr.execute('INSERT INTO module_country (module_id, country_id) values (%s, %s)', (self.id, dep))
+            self.env.cr.execute('INSERT INTO module_country (module_id, country_id) values (%s, %s)', (self.id, dep))
         for dep in (existing - needed):
-            self._cr.execute('DELETE FROM module_country WHERE module_id = %s and country_id = %s', (self.id, dep))
+            self.env.cr.execute('DELETE FROM module_country WHERE module_id = %s and country_id = %s', (self.id, dep))
         self.invalidate_recordset(['country_ids'])
         self.env['res.company'].invalidate_model(['uninstalled_l10n_module_ids'])
 
@@ -822,9 +825,9 @@ class IrModuleModule(models.Model):
         existing = set(excl.name for excl in self.exclusion_ids)
         needed = set(excludes or [])
         for name in (needed - existing):
-            self._cr.execute('INSERT INTO ir_module_module_exclusion (module_id, name) VALUES (%s, %s)', (self.id, name))
+            self.env.cr.execute('INSERT INTO ir_module_module_exclusion (module_id, name) VALUES (%s, %s)', (self.id, name))
         for name in (existing - needed):
-            self._cr.execute('DELETE FROM ir_module_module_exclusion WHERE module_id=%s AND name=%s', (self.id, name))
+            self.env.cr.execute('DELETE FROM ir_module_module_exclusion WHERE module_id=%s AND name=%s', (self.id, name))
         self.invalidate_recordset(['exclusion_ids'])
 
     def _update_category(self, category='Uncategorized'):
@@ -841,7 +844,7 @@ class IrModuleModule(models.Model):
 
         categs = category.split('/')
         if categs != current_category_path:
-            cat_id = modules.db.create_categories(self._cr, categs)
+            cat_id = modules.db.create_categories(self.env.cr, categs)
             self.write({'category_id': cat_id})
 
     def _update_translations(self, filter_lang=None, overwrite=False):
@@ -937,26 +940,28 @@ class IrModuleModule(models.Model):
         return super().search_panel_select_range(field_name, **kwargs)
 
     @api.model
-    def _load_module_terms(self, modules, langs, overwrite=False, imported_module=False):
+    def _load_module_terms(self, modules, langs, overwrite=False):
         """ Load PO files of the given modules for the given languages. """
         # load i18n files
         translation_importer = TranslationImporter(self.env.cr, verbose=False)
 
         for module_name in modules:
-            # we may load files from temporary directories for imported modules
-            if not imported_module and not get_module_path(module_name, display_warning=False):
+            if not Manifest.for_addon(module_name, downloaded=True, display_warning=False):
                 continue
             for lang in langs:
-                env = self.env if imported_module else None
-                for po_path in get_po_paths(module_name, lang, env=env):
+                for po_path in get_po_paths(module_name, lang):
                     _logger.info('module %s: loading translation file %s for language %s', module_name, po_path, lang)
                     translation_importer.load_file(po_path, lang)
-                for data_path in get_datafile_translation_path(module_name, env=env):
+                for data_path in get_datafile_translation_path(module_name):
                     translation_importer.load_file(data_path, lang, module=module_name)
                 if lang != 'en_US' and lang not in translation_importer.imported_langs:
                     _logger.info('module %s: no translation for language %s', module_name, lang)
 
         translation_importer.save(overwrite=overwrite)
+
+    @api.model
+    def _extract_resource_attachment_translations(self, module, lang):
+        yield from ()
 
 
 DEP_STATES = STATES + [('unknown', 'Unknown')]

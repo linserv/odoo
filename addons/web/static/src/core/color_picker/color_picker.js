@@ -72,7 +72,7 @@ export class ColorPicker extends Component {
         this.root = useRef("root");
 
         this.defaultColor = this.props.state.selectedColor;
-        this.focusedColorBtn = null;
+        this.focusedBtn = null;
         this.state = useState({
             activeTab: this.getDefaultTab(),
             currentCustomColor: this.props.state.selectedColor,
@@ -162,13 +162,35 @@ export class ColorPicker extends Component {
     }
 
     onColorFocusin(ev) {
-        if (!ev.target.classList.contains("o_color_button") || this.focusedColorBtn === ev.target) {
-            this.focusedColorBtn = null;
+        // In the editor color picker, the preview and reset reapply the
+        // selection, which can remove the focus from the current button (if the
+        // node is recreated). We need to force the focus and break the infinite
+        // loop that it could trigger.
+        if (this.focusedBtn === ev.target) {
+            this.focusedBtn = null;
             return;
         }
+        this.focusedBtn = ev.target;
         this.onColorHover(ev);
-        this.focusedColorBtn = ev.target;
-        ev.target.focus();
+        if (document.activeElement !== ev.target) {
+            // The focus was lost during revert. Reset it where it should be.
+            ev.target.focus();
+        }
+    }
+
+    onColorFocusout(ev) {
+        if (ev.relatedTarget?.tagName !== "BUTTON") {
+            // Do not trigger a revert if we are in the focus loop (i.e. focus
+            // a button > selection is reset > focusout). Otherwise, the
+            // relatedTarget should always be one of the colorpicker's buttons.
+            return;
+        }
+        const activeEl = document.activeElement;
+        this.onColorHoverOut(ev);
+        if (document.activeElement !== activeEl) {
+            // The focus was lost during revert. Reset it where it should be.
+            ev.relatedTarget.focus();
+        }
     }
 
     getCurrentGradientColor() {
@@ -197,12 +219,21 @@ export class ColorPicker extends Component {
             targetBtn = target.previousElementSibling;
         } else if (key === "ArrowUp" || key === "ArrowDown") {
             const buttonIndex = [...target.parentElement.children].indexOf(target);
-            const row =
-                key === "ArrowUp"
-                    ? target.parentElement.previousElementSibling
-                    : target.parentElement.nextElementSibling;
-            if (row?.matches(".o_color_section, .o_colorpicker_section")) {
-                targetBtn = row.children[buttonIndex];
+            const nbColumns = getComputedStyle(target).getPropertyValue(
+                "--o-color-picker-grid-columns"
+            );
+            targetBtn =
+                target.parentElement.children[
+                    buttonIndex + (key === "ArrowUp" ? -1 : 1) * nbColumns
+                ];
+            if (!targetBtn) {
+                const row =
+                    key === "ArrowUp"
+                        ? target.parentElement.previousElementSibling
+                        : target.parentElement.nextElementSibling;
+                if (row?.matches(".o_color_section, .o_colorpicker_section")) {
+                    targetBtn = row.children[buttonIndex];
+                }
             }
         }
         if (targetBtn && targetBtn.classList.contains("o_color_button")) {

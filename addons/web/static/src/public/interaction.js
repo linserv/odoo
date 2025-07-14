@@ -41,6 +41,17 @@ export class Interaction {
     static selectorHas = "";
 
     /**
+     * Similar to `selectorHas` but equivalent to the `:not(:has(...)))`
+     * pseudo-selectors combination.
+     *
+     * Note that both `selectorHas` and `selectorNotHas` can be used
+     * simultaneously.
+     *
+     * @type {string}
+     */
+    static selectorNotHas = "";
+
+    /**
      * Constant to reset dynamicContent t-att-* and t-out.
      */
     static INITIAL_VALUE = INITIAL_VALUE;
@@ -459,6 +470,6 @@ export class Interaction {
      * @param {Object|null} [props]
      */
     mountComponent(el, C, props = null) {
-        this.__colibri__.mountComponent([el], C, props);
+        this.__colibri__.mountComponent(el, C, props);
     }
 }

@@ -174,7 +174,6 @@ For more specific needs, you may also assign custom-defined actions
             'mail/static/src/**/*.dark.scss',
         ],
         "web.assets_frontend": [
-            "mail/static/src/utils/common/html.js",
             "mail/static/src/utils/common/format.js",
         ],
         'mail.assets_discuss_public_test_tours': [
@@ -183,6 +182,7 @@ For more specific needs, you may also assign custom-defined actions
             # scss not needed in tests and depends on scss variables that are not in this bundle
             ('remove', 'web_tour/static/src/tour_pointer/**/*.scss'),
             'web_tour/static/src/tour_service/**/*',
+            'web_tour/static/src/tour_utils.js',
             'web/static/tests/legacy/helpers/cleanup.js',
             'web/static/tests/legacy/helpers/utils.js',
             'web/static/tests/legacy/utils.js',

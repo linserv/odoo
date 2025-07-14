@@ -1,8 +1,8 @@
 import { describe, expect, test } from "@odoo/hoot";
-import { testEditor, setupEditor } from "../_helpers/editor";
+import { setupEditor, testEditor } from "../_helpers/editor";
 import { unformat } from "../_helpers/format";
-import { deleteForward, insertText, tripleClick } from "../_helpers/user_actions";
 import { getContent } from "../_helpers/selection";
+import { deleteForward, insertText, tripleClick } from "../_helpers/user_actions";
 
 /**
  * content of the "deleteForward" sub suite in editor.test.js
@@ -348,7 +348,7 @@ describe("Selection collapsed", () => {
 
         test("should delete only the button", async () => {
             await testEditor({
-                contentBefore: `<p><a class="btn" href="#">[]</a>a</p>`,
+                contentBefore: `<p><a class="btn" href="http://test.test/">[]</a>a</p>`,
                 stepFunction: deleteForward,
                 contentAfter: `<p>[]a</p>`,
             });
@@ -1404,8 +1404,8 @@ describe("Selection not collapsed", () => {
             stepFunction: deleteForward,
             contentAfter: unformat(
                 `<table><tbody>
-                        <tr><td>cd</td><td>[]<br></td><td>gh</td></tr>
-                        <tr><td>ij</td><td><br></td><td>mn</td></tr>
+                        <tr><td>cd</td><td><p>[]<br></p></td><td>gh</td></tr>
+                        <tr><td>ij</td><td><p><br></p></td><td>mn</td></tr>
                         <tr><td>op</td><td>qr</td><td>st</td></tr>
                     </tbody></table>`
             ),

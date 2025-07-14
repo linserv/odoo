@@ -1970,6 +1970,12 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
         Discussion = self.env['test_orm.discussion']
 
         # add an ir.rule that forces reading field 'name'
+        self.env['ir.model.access'].create({
+            'name': 'demo',
+            'model_id': self.env['ir.model']._get(Discussion.categories._name).id,
+            'group_id': self.env.ref('base.group_user').id,
+            'perm_read': True,
+        })
         self.env['ir.rule'].create({
             'model_id': self.env['ir.model']._get(Discussion._name).id,
             'groups': [self.env.ref('base.group_user').id],
@@ -2511,6 +2517,21 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
             Model.search([('active', 'in', [True, False])])
         with self.assertQueries([]):
             Model.search([('active', 'not in', [True, False])])
+
+    def test_54_not_null_id_query(self):
+        # Test at post_install since not_null_fields is only loaded at the end of the registry
+        Model = self.env['test_orm.model_active_field'].with_context(active_test=False)
+
+        self.patch(self.env.registry, 'not_null_fields', {Model._fields['id']})
+
+        with self.assertQueries(["""
+            SELECT "test_orm_model_active_field"."id"
+            FROM "test_orm_model_active_field"
+            WHERE "test_orm_model_active_field"."id" NOT IN %s
+            ORDER BY "test_orm_model_active_field"."id"
+        """]):
+            Model.search([('id', '!=', 1)])
+            Model.search([('id', '=', False)])  # No query
 
     def test_60_one2many_domain(self):
         """ test the cache consistency of a one2many field with a domain """

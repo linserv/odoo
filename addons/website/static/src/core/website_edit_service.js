@@ -186,12 +186,28 @@ registry.category("services").add("website_edit", {
                         return NaN; // So that it is different from itself
                     },
                     shouldStop() {
+                        // Selector does not match anymore ?
+                        const I = this.constructor;
+                        let isMatch = this.el.matches(I.selector);
+                        if (I.selectorHas) {
+                            isMatch &&= !!this.el.querySelector(I.selectorHas);
+                        }
+                        if (I.selectorNotHas) {
+                            isMatch &&= !this.el.querySelector(I.selectorNotHas);
+                        }
+                        if (!isMatch) {
+                            return true;
+                        }
+                        // Configuration changed ?
                         const snapshot = this.getConfigurationSnapshot();
                         if (snapshot === this.configurationSnapshot) {
                             return false;
                         }
                         this.configurationSnapshot = snapshot;
                         return true;
+                    },
+                    isImpactedBy(el) {
+                        return false;
                     },
                     insert(...args) {
                         const el = args[0];
@@ -202,17 +218,16 @@ registry.category("services").add("website_edit", {
                         // parent node, you do not want the inserted node to be
                         // reinserted upon undo of the option's action.
                         el.dataset.skipHistoryHack = "true";
+                        el.setAttribute("contenteditable", "false");
                     },
                 }),
                 patch(publicInteractions.constructor.prototype, {
                     shouldStop(el, interaction) {
-                        if (super.shouldStop(el, interaction)) {
-                            if (this.isRefreshing) {
-                                return interaction.interaction.shouldStop();
-                            }
-                            return true;
+                        if (this.isRefreshing) {
+                            const mustBeRefreshed = super.shouldStop(el, interaction) || interaction.interaction.isImpactedBy(el);
+                            return mustBeRefreshed && interaction.interaction.shouldStop();
                         }
-                        return false;
+                        return super.shouldStop(el, interaction);
                     },
                 })
             );

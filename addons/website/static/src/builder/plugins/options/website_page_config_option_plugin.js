@@ -3,18 +3,18 @@ import { Plugin } from "@html_editor/plugin";
 import { registry } from "@web/core/registry";
 import { rgbToHex } from "@web/core/utils/colors";
 import { withSequence } from "@html_editor/utils/resource";
-import { FOOTER_SCROLL_TO } from "./footer_option_plugin";
+import { FOOTER_COPYRIGHT } from "./footer_option_plugin";
 import { HEADER_SCROLL_EFFECT } from "./header_option_plugin";
 import { TopMenuVisibilityOption } from "./website_page_config_option";
 import { BuilderAction } from "@html_builder/core/builder_action";
 
 export const TOP_MENU_VISIBILITY = after(HEADER_SCROLL_EFFECT);
-export const HIDE_FOOTER = after(FOOTER_SCROLL_TO);
+export const HIDE_FOOTER = after(FOOTER_COPYRIGHT);
 
 class WebsitePageConfigOptionPlugin extends Plugin {
     static id = "websitePageConfigOptionPlugin";
     static dependencies = ["history", "visibility"];
-    static shared = ["setDirty", "getVisibilityItem", "getFooterVisibility"];
+    static shared = ["setDirty", "setFooterVisible", "getVisibilityItem", "getFooterVisibility"];
     resources = {
         builder_actions: {
             SetWebsiteHeaderVisibilityAction,
@@ -78,8 +78,8 @@ class WebsitePageConfigOptionPlugin extends Plugin {
         const item = this.getVisibilityItem();
         const pageOptions = {
             header_overlay: () => item === "overTheContent",
-            header_color: () => this.getColorValue("background-color", "bg-o-color-"),
-            header_text_color: () => this.getColorValue("color", "text-o-color-"),
+            header_color: () => this.getColorValue("background-color", "bg-"),
+            header_text_color: () => this.getColorValue("color", "text-"),
             header_visible: () => item !== "hidden",
             footer_visible: () => !this.getFooterVisibility(),
         };
@@ -116,7 +116,7 @@ class WebsitePageConfigOptionPlugin extends Plugin {
         }
     }
 }
-class BaseWebsitePageConfigAction extends BuilderAction {
+export class BaseWebsitePageConfigAction extends BuilderAction {
     static id = "baseWebsitePageConfig";
     static dependencies = ["websitePageConfigOptionPlugin", "history", "visibility"];
     setup() {
@@ -174,7 +174,7 @@ class BaseWebsitePageConfigAction extends BuilderAction {
         });
     }
 }
-class SetWebsiteHeaderVisibilityAction extends BaseWebsitePageConfigAction {
+export class SetWebsiteHeaderVisibilityAction extends BaseWebsitePageConfigAction {
     static id = "setWebsiteHeaderVisibility";
     apply({ editingElement, value: headerPositionValue }) {
         const lastValue = this.websitePageConfig.getVisibilityItem();
@@ -189,7 +189,7 @@ class SetWebsiteHeaderVisibilityAction extends BaseWebsitePageConfigAction {
         return this.websitePageConfig.getVisibilityItem() === value;
     }
 }
-class SetWebsiteFooterVisibleAction extends BaseWebsitePageConfigAction {
+export class SetWebsiteFooterVisibleAction extends BaseWebsitePageConfigAction {
     static id = "setWebsiteFooterVisible";
     isApplied({ editingElement }) {
         return !this.websitePageConfig.getFooterVisibility();
@@ -204,7 +204,7 @@ class SetWebsiteFooterVisibleAction extends BaseWebsitePageConfigAction {
     }
 }
 
-class SetPageWebsiteDirtyAction extends BaseWebsitePageConfigAction {
+export class SetPageWebsiteDirtyAction extends BaseWebsitePageConfigAction {
     static id = "setPageWebsiteDirty";
     apply({ editingElement }) {
         this.websitePageConfig.setDirty();

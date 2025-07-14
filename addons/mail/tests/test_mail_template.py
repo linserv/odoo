@@ -34,6 +34,7 @@ class TestMailTemplate(MailCommon):
         })
 
     @users('admin')
+    @mute_logger('odoo.addons.mail.models.mail_template')
     @mute_logger('odoo.addons.mail.models.mail_render_mixin')
     def test_invalid_template_on_save(self):
         mail_template = self.env['mail.template'].create({
@@ -389,7 +390,7 @@ class TestMailTemplateReset(MailCommon):
         # pylint: disable=no-value-for-parameter
         convert_file(self.env, module='mail',
                      filename=filepath,
-                     idref={}, mode='init', noupdate=False, kind='test')
+                     idref={}, mode='init', noupdate=False)
 
     def test_mail_template_reset(self):
         self._load('mail', 'tests/test_mail_template.xml')
@@ -470,7 +471,8 @@ class TestMailTemplateReset(MailCommon):
 class TestMailTemplateUI(HttpCase):
 
     def test_mail_template_dynamic_placeholder_tour(self):
-        self.start_tour("/odoo", 'mail_template_dynamic_placeholder_tour', login="admin")
+        # keep debug for technical fields visibility
+        self.start_tour('/odoo?debug=1', 'mail_template_dynamic_placeholder_tour', login='admin')
 
 
 @tagged("mail_template", "-at_install", "post_install")

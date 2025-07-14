@@ -7,6 +7,7 @@ import {
     insertSnippet,
     registerWebsitePreviewTour,
 } from '@website/js/tours/tour_utils';
+import { stepUtils } from "@web_tour/tour_utils";
 
 registerWebsitePreviewTour('snippet_translation', {
     url: '/',
@@ -36,6 +37,7 @@ registerWebsitePreviewTour('snippet_translation', {
 registerWebsitePreviewTour('snippet_translation_changing_lang', {
     url: '/',
 }, () => [
+    stepUtils.waitIframeIsReady(),
     {
         content: "Open dropdown language selector",
         trigger: ':iframe .js_language_selector button',
@@ -87,3 +89,65 @@ registerWebsitePreviewTour('snippet_translation_changing_lang', {
         trigger: ':iframe .s_cover .btn-outline-secondary:contains("Contact us in Parseltongue")',
     },
 ]);
+registerWebsitePreviewTour(
+    "snippet_translation_switching_website",
+    {
+        url: "/",
+    },
+    () => [
+        ...clickOnEditAndWaitEditModeInTranslatedPage(),
+        ...insertSnippet({ id: "s_cover", name: "Cover", groupName: "Intro" }),
+        {
+            content: "Check that contact us contain Parseltongue",
+            trigger:
+                ":iframe .s_cover .btn-outline-secondary:contains('Contact us in Parseltongue')",
+        },
+        ...clickOnSave(),
+        {
+            content: "Open website switcher dropdown",
+            trigger: ".o_website_switcher_container button",
+            run: "click",
+        },
+        {
+            content: "Switch to website fu_GB",
+            trigger: ".o-dropdown--menu .o-dropdown-item:contains('website fu_GB')",
+            run: "click",
+        },
+        {
+            content: "Wait for website fu_GB",
+            trigger: ":iframe .o_homepage_editor_welcome_message",
+        },
+        ...clickOnEditAndWaitEditMode(),
+        ...insertSnippet({ id: "s_cover", name: "Cover", groupName: "Intro" }),
+        {
+            content: "Check that contact us contain Fake User Lang",
+            trigger: ":iframe .s_cover .btn-outline-secondary:contains('Fake User Lang')",
+        },
+    ]
+);
+registerWebsitePreviewTour(
+    "snippet_dialog_rtl",
+    {
+        url: "/",
+    },
+    () => [
+        ...clickOnEditAndWaitEditMode(),
+        {
+            trigger: ".o_builder_sidebar_open",
+        },
+        {
+            content: "Select a category snippet to show the snippet dialog",
+            trigger: `.o_block_tab:not(.o_we_ongoing_insertion) #snippet_groups .o_snippet[name="Intro"].o_draggable .o_snippet_thumbnail_area`,
+            run: "click",
+        },
+        {
+            content: "Check that the snippets preview is in rtl",
+            trigger: ":iframe .o_snippets_preview_row[dir=rtl]",
+        },
+        {
+            content: "Check that web.assets_frontend CSS bundle is in rtl",
+            trigger:
+                ":iframe link[type='text/css'][href*='/web.assets_frontend.rtl']:not(:visible)",
+        },
+    ],
+);

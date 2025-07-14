@@ -2,7 +2,7 @@ import { REPLACE_MEDIA } from "@html_builder/utils/option_sequence";
 import {
     REPLACE_MEDIA_SELECTOR,
     REPLACE_MEDIA_EXCLUDE,
-} from "@website/builder/plugins/image/image_tool_option_plugin";
+} from "@html_builder/plugins/image/image_tool_option_plugin";
 import { Plugin } from "@html_editor/plugin";
 import { withSequence } from "@html_editor/utils/resource";
 import { rpc } from "@web/core/network/rpc";
@@ -45,7 +45,7 @@ export class ProductImageOptionPlugin extends Plugin {
 /*
 * Change sequence of product page images
 */
-class SetPositionAction extends BuilderAction {
+export class SetPositionAction extends BuilderAction {
     static id = "setPosition";
     setup() {
         this.reload = {};
@@ -63,7 +63,7 @@ class SetPositionAction extends BuilderAction {
 /*
  * Removes the image in the back-end
  */
-class RemoveMediaAction extends BuilderAction {
+export class RemoveMediaAction extends BuilderAction {
     static id = "removeMedia";
     setup() {
         this.reload = {};

@@ -2692,6 +2692,71 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.create_programs([('name', 'gift_card')])
         self.start_pos_tour("test_gift_card_no_date")
 
+    def test_not_create_loyalty_card_expired_program(self):
+        self.env['loyalty.program'].search([]).write({'active': False})
+        self.env['res.partner'].create({'name': 'Test Partner'})
+
+        LoyaltyProgram = self.env['loyalty.program']
+        loyalty_program = LoyaltyProgram.create(LoyaltyProgram._get_template_values()['loyalty'])
+        loyalty_program.write({
+            'date_from': date.today() - timedelta(days=10),
+            'date_to': date.today() - timedelta(days=5),
+        })
+
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour(
+            "/pos/web?config_id=%d" % self.main_pos_config.id,
+            "test_not_create_loyalty_card_expired_program",
+            login="pos_user",
+        )
+
+        self.assertEqual(loyalty_program.coupon_count, 0)
+
+    def test_not_create_loyalty_card_max_usage_program(self):
+        self.env['loyalty.program'].search([]).write({'active': False})
+        self.env['res.partner'].create({'name': 'Test Partner'})
+        self.env['res.partner'].create({'name': 'Test Partner 2'})
+
+        loyalty_program = self.env['loyalty.program'].create({
+            'name': 'Loyalty Program',
+            'program_type': 'loyalty',
+            'trigger': 'auto',
+            'applies_on': 'both',
+            'rule_ids': [(0, 0, {
+                'reward_point_amount': 1,
+                'reward_point_mode': 'money',
+                'minimum_qty': 1,
+                'mode': 'auto',
+            })],
+            'reward_ids': [(0, 0, {
+                'reward_type': 'product',
+                'reward_product_id': self.whiteboard_pen.product_variant_id.id,
+                'reward_product_qty': 1,
+                'required_points': 5,
+            })],
+            'limit_usage': True,
+            'max_usage': 1,
+        })
+
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour(
+            "/pos/web?config_id=%d" % self.main_pos_config.id,
+            "PosOrderClaimReward",
+            login="pos_user",
+        )
+
+        self.assertEqual(loyalty_program.coupon_count, 1)
+        self.assertEqual(loyalty_program.total_order_count, 1)
+
+        self.start_tour(
+            "/pos/web?config_id=%d" % self.main_pos_config.id,
+            "PosOrderNoPoints",
+            login="pos_user",
+        )
+
+        self.assertEqual(loyalty_program.coupon_count, 1)
+        self.assertEqual(loyalty_program.total_order_count, 1)
+
     def test_physical_gift_card_invoiced(self):
         """
         Test that the manual gift card sold has been generated with correct code and partner id"""
@@ -2799,3 +2864,106 @@ class TestUi(TestPointOfSaleHttpCommon):
             "test_buy_x_get_y_reward_qty",
             login="pos_user"
         )
+
+    def test_settle_dont_give_points_again(self):
+        """
+        Tests that when settling an order that has been partially paid, it does not give the loyalty
+        points again. All of them should be given during the first transaction.
+        """
+        if not self.env["ir.module.module"].search([("name", "=", "pos_settle_due"), ("state", "=", "installed")]):
+            self.skipTest("pos_settle_due module is required for this test")
+        if self.main_pos_config.current_session_id:
+            self.main_pos_config.current_session_id.action_pos_session_closing_control()
+        LoyaltyProgram = self.env['loyalty.program']
+        (LoyaltyProgram.search([])).write({'pos_ok': False})
+        self.loyalty_program = self.env['loyalty.program'].create({
+            'name': 'Loyalty Program Test',
+            'program_type': 'promotion',
+            'pos_ok': True,
+            'pos_config_ids': [Command.link(self.main_pos_config.id)],
+            'rule_ids': [Command.create({
+                'reward_point_mode': 'money',
+                'reward_point_amount': 1,
+                'minimum_qty': 0,
+            })],
+            'reward_ids': [Command.create({
+                'reward_type': 'discount',
+                'discount': 1,
+                'discount_mode': 'per_point',
+            })],
+        })
+        partner_aaa = self.env['res.partner'].create({'name': 'AAA Partner'})
+        self.customer_account_payment_method = self.env['pos.payment.method'].create({
+            'name': 'Customer Account',
+            'split_transactions': True,
+        })
+        self.main_pos_config.write({
+            'payment_method_ids': [(4, self.customer_account_payment_method.id, 0)],
+        })
+        self.main_pos_config.open_ui()
+        order = self.env['pos.order'].create({
+            'company_id': self.company.id,
+            'session_id': self.main_pos_config.current_session_id.id,
+            'partner_id': partner_aaa.id,
+            'lines': [Command.create({
+                'product_id': self.wall_shelf.product_variant_id.id,
+                'price_unit': 10,
+                'discount': 0,
+                'qty': 1,
+                'price_subtotal': 10,
+                'price_subtotal_incl': 10,
+            })],
+            'amount_paid': 10.0,
+            'amount_total': 10.0,
+            'amount_tax': 0.0,
+            'amount_return': 0.0,
+            'to_invoice': True,
+        })
+        payment_context = {"active_id": order.id, "active_ids": order.ids}
+        self.env['pos.make.payment'].with_context(**payment_context).create({
+            'amount': 10.0,
+            'payment_method_id': self.customer_account_payment_method.id,
+        }).check()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_settle_dont_give_points_again', login="accountman")
+
+    def test_refund_does_not_decrease_points(self):
+        """
+        Tests that when refunding a product bought while spending points, it does not decrease the points a second time
+        """
+        LoyaltyProgram = self.env['loyalty.program']
+        (LoyaltyProgram.search([])).write({'pos_ok': False})
+        self.loyalty_program = self.env['loyalty.program'].create({
+            'name': 'Loyalty Program Test',
+            'program_type': 'loyalty',
+            'trigger': 'auto',
+            'applies_on': 'both',
+            'pos_ok': True,
+            'pos_config_ids': [Command.link(self.main_pos_config.id)],
+            'rule_ids': [Command.create({
+                'reward_point_mode': 'money',
+                'reward_point_amount': 0.1,
+                'minimum_amount': 1,
+            })],
+            'reward_ids': [Command.create({
+                'reward_type': 'discount',
+                'required_points': 100,
+                'discount': 1,
+                'discount_mode': 'per_point',
+            })],
+        })
+        self.product_refund = self.env["product.product"].create({
+            "name": "Refund Product",
+            "is_storable": True,
+            "list_price": 300,
+            "available_in_pos": True,
+            "taxes_id": False,
+        })
+        partner_refunding = self.env['res.partner'].create({'name': 'Refunding Guy'})
+        card = self.env['loyalty.card'].create({
+            'partner_id': partner_refunding.id,
+            'program_id': self.loyalty_program.id,
+            'points': 100,
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_refund_does_not_decrease_points', login="pos_user")
+        self.assertEqual(card.points, 30)

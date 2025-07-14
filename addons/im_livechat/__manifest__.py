@@ -59,6 +59,7 @@ Help your customers with this chat, and analyse their feedback.
         "demo/im_livechat_channel/im_livechat_session_12.xml",
         "demo/im_livechat_channel/im_livechat_session_13.xml",
         "demo/im_livechat_channel/im_livechat_session_14.xml",
+        "demo/im_livechat_channel/im_livechat_session_15.xml",
         "demo/im_livechat_channel/im_livechat_support_bot.xml",
         "demo/im_livechat_channel/im_livechat_support_bot_session_1.xml",
         "demo/im_livechat_channel/im_livechat_support_bot_session_2.xml",
@@ -173,6 +174,7 @@ Help your customers with this chat, and analyse their feedback.
             # scss not needed in tests and depends on scss variables that are not in this bundle
             ("remove", "web_tour/static/src/tour_pointer/**/*.scss"),
             "web_tour/static/src/tour_service/**/*",
+            'web_tour/static/src/tour_utils.js',
             "web/static/tests/legacy/helpers/cleanup.js",
             "web/static/tests/legacy/helpers/utils.js",
             "web/static/tests/legacy/utils.js",

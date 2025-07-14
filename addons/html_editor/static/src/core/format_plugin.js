@@ -4,7 +4,7 @@ import { callbacksForCursorUpdate } from "@html_editor/utils/selection";
 import { _t } from "@web/core/l10n/translation";
 import { Plugin } from "../plugin";
 import { closestBlock, isBlock } from "../utils/blocks";
-import { cleanTextNode, fillEmpty, splitTextNode, unwrapContents } from "../utils/dom";
+import { cleanTextNode, fillEmpty, removeClass, splitTextNode, unwrapContents } from "../utils/dom";
 import {
     areSimilarElements,
     isContentEditable,
@@ -27,6 +27,7 @@ import {
 } from "../utils/dom_traversal";
 import { formatsSpecs } from "../utils/formatting";
 import { boundariesIn, boundariesOut, DIRECTIONS, leftPos, rightPos } from "../utils/position";
+import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 
 const allWhitespaceRegex = /^[\s\u200b]*$/;
 
@@ -59,24 +60,28 @@ export class FormatPlugin extends Plugin {
                 description: _t("Toggle bold"),
                 icon: "fa-bold",
                 run: this.formatSelection.bind(this, "bold"),
+                isAvailable: isHtmlContentSupported,
             },
             {
                 id: "formatItalic",
                 description: _t("Toggle italic"),
                 icon: "fa-italic",
                 run: this.formatSelection.bind(this, "italic"),
+                isAvailable: isHtmlContentSupported,
             },
             {
                 id: "formatUnderline",
                 description: _t("Toggle underline"),
                 icon: "fa-underline",
                 run: this.formatSelection.bind(this, "underline"),
+                isAvailable: isHtmlContentSupported,
             },
             {
                 id: "formatStrikethrough",
                 description: _t("Toggle strikethrough"),
                 icon: "fa-strikethrough",
                 run: this.formatSelection.bind(this, "strikeThrough"),
+                isAvailable: isHtmlContentSupported,
             },
             {
                 id: "formatFontSize",
@@ -85,6 +90,7 @@ export class FormatPlugin extends Plugin {
                         applyStyle: true,
                         formatProps: { size },
                     }),
+                isAvailable: isHtmlContentSupported,
             },
             {
                 id: "formatFontSizeClassName",
@@ -93,6 +99,7 @@ export class FormatPlugin extends Plugin {
                         applyStyle: true,
                         formatProps: { className },
                     }),
+                isAvailable: isHtmlContentSupported,
             },
             {
                 id: "removeFormat",
@@ -102,6 +109,7 @@ export class FormatPlugin extends Plugin {
                         : _t("Selection has no format"),
                 icon: "fa-eraser",
                 run: this.removeFormat.bind(this),
+                isAvailable: isHtmlContentSupported,
             },
         ],
         shortcuts: [
@@ -167,7 +175,7 @@ export class FormatPlugin extends Plugin {
             ) {
                 continue;
             }
-            this._formatSelection(format, { applyStyle: false });
+            this.formatSelection(format, { applyStyle: false, removeFormat: true });
         }
         this.dependencies.history.addStep();
     }
@@ -220,9 +228,9 @@ export class FormatPlugin extends Plugin {
         );
     }
 
-    formatSelection(...args) {
-        this.delegateTo("format_selection_overrides", ...args);
-        if (this._formatSelection(...args)) {
+    formatSelection(formatName, options) {
+        this.delegateTo("format_selection_overrides", formatName, options);
+        if (this._formatSelection(formatName, options) && !options?.removeFormat) {
             this.dependencies.history.addStep();
         }
     }
@@ -315,6 +323,9 @@ export class FormatPlugin extends Plugin {
                         parentNode
                     );
                     removeFormat(newLastAncestorInlineFormat, formatSpec);
+                    if (["setFontSizeClassName", "fontSize"].includes(formatName) && applyStyle) {
+                        removeClass(newLastAncestorInlineFormat, "o_default_font_size");
+                    }
                     if (newLastAncestorInlineFormat.isConnected) {
                         inlineAncestors.push(newLastAncestorInlineFormat);
                         currentNode = newLastAncestorInlineFormat;
@@ -539,6 +550,12 @@ export class FormatPlugin extends Plugin {
     }
 
     onBeforeInput(ev) {
+        if (
+            ev.inputType.startsWith("format") &&
+            !isHtmlContentSupported(this.dependencies.selection.getEditableSelection())
+        ) {
+            ev.preventDefault();
+        }
         if (ev.inputType === "insertText") {
             const selection = this.dependencies.selection.getEditableSelection();
             if (!selection.isCollapsed) {
@@ -568,7 +585,7 @@ export class FormatPlugin extends Plugin {
      */
     mergeAdjacentInlines(root, { preserveSelection = true } = {}) {
         let selectionToRestore = null;
-        for (const node of descendants(root)) {
+        for (const node of [root, ...descendants(root)]) {
             if (this.shouldBeMergedWithPreviousSibling(node)) {
                 if (preserveSelection) {
                     selectionToRestore ??= this.dependencies.selection.preserveSelection();

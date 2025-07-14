@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, test } from "@odoo/hoot";
-import { setupEditor, testEditor } from "../_helpers/editor";
-import { unformat } from "../_helpers/format";
 import { manuallyDispatchProgrammaticEvent, microTick, press } from "@odoo/hoot-dom";
 import { animationFrame, tick } from "@odoo/hoot-mock";
-import { deleteBackward, insertText, tripleClick, undo } from "../_helpers/user_actions";
-import { getContent, setSelection } from "../_helpers/selection";
 import { patchWithCleanup } from "@web/../tests/web_test_helpers";
 import { browser } from "@web/core/browser/browser";
+import { setupEditor, testEditor } from "../_helpers/editor";
+import { unformat } from "../_helpers/format";
+import { getContent, setSelection } from "../_helpers/selection";
+import { deleteBackward, insertText, tripleClick, undo } from "../_helpers/user_actions";
 
 /**
  * content of the "deleteBackward" sub suite in editor.test.js
@@ -497,7 +497,7 @@ describe("Selection collapsed", () => {
         });
         test("should delete only the button", async () => {
             await testEditor({
-                contentBefore: `<p>a<a class="btn" href="#">[]</a></p>`,
+                contentBefore: `<p>a<a class="btn" href="http://test.test/">[]</a></p>`,
                 stepFunction: deleteBackward,
                 contentAfter: `<p>a[]</p>`,
             });
@@ -915,8 +915,7 @@ describe("Selection collapsed", () => {
 
         test("should delete a h1 inside a nested list immediately after insertion", async () => {
             await testEditor({
-                contentBefore:
-                    '<ul><li>abc</li><li class="oe-nested"><ul><li>[]<br></li></ul></li></ul>',
+                contentBefore: "<ul><li><p>abc</p><ul><li>[]<br></li></ul></li></ul>",
                 stepFunction: async (editor) => {
                     await insertText(editor, "/");
                     await insertText(editor, "Heading");
@@ -926,7 +925,7 @@ describe("Selection collapsed", () => {
                     deleteBackward(editor);
                     deleteBackward(editor);
                 },
-                contentAfter: "<ul><li>abc[]</li></ul>",
+                contentAfter: "<ul><li><p>abc[]</p></li></ul>",
             });
         });
     });
@@ -1700,8 +1699,8 @@ describe("Selection not collapsed", () => {
             stepFunction: deleteBackward,
             contentAfter: unformat(
                 `<table><tbody>
-                        <tr><td>cd</td><td>[]<br></td><td>gh</td></tr>
-                        <tr><td>ij</td><td><br></td><td>mn</td></tr>
+                        <tr><td>cd</td><td><p>[]<br></p></td><td>gh</td></tr>
+                        <tr><td>ij</td><td><p><br></p></td><td>mn</td></tr>
                         <tr><td>op</td><td>qr</td><td>st</td></tr>
                     </tbody></table>`
             ),

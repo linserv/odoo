@@ -133,6 +133,7 @@ class CrmLead(models.Model):
         compute='_compute_stage_id', readonly=False, store=True,
         copy=False, group_expand='_read_group_stage_ids', ondelete='restrict',
         domain="['|', ('team_id', '=', False), ('team_id', '=', team_id)]")
+    stage_id_color = fields.Integer(string='Stage Color', related="stage_id.color", export_string_translation=False)
     tag_ids = fields.Many2many(
         'crm.tag', 'crm_tag_rel', 'lead_id', 'tag_id', string='Tags',
         help="Classify and analyze your lead/opportunity categories like: Training, Service")
@@ -1042,7 +1043,7 @@ class CrmLead(models.Model):
         # - ('id', 'in', stages.ids): add columns that should be present
         # - OR ('fold', '=', False): add default columns that are not folded
         # - OR ('team_ids', '=', team_id), ('fold', '=', False) if team_id: add team columns that are not folded
-        team_id = self._context.get('default_team_id')
+        team_id = self.env.context.get('default_team_id')
         if team_id:
             search_domain = ['|', ('id', 'in', stages.ids), '|', ('team_id', '=', False), ('team_id', '=', team_id)]
         else:
@@ -1367,7 +1368,7 @@ class CrmLead(models.Model):
             return help_message
 
         help_title, sub_title = "", ""
-        if self._context.get('default_type') == 'lead':
+        if self.env.context.get('default_type') == 'lead':
             help_title = _('Create a new lead')
         else:
             help_title = _('Create an opportunity to start playing with your pipeline.')
@@ -1551,7 +1552,7 @@ class CrmLead(models.Model):
         return {
             'description': lambda fname, leads: '<br/><br/>'.join(desc for desc in leads.mapped('description') if not is_html_empty(desc)),
             'type': lambda fname, leads: 'opportunity' if any(lead.type == 'opportunity' for lead in leads) else 'lead',
-            'priority': lambda fname, leads: max(leads.mapped('priority')) if leads else False,
+            'priority': lambda fname, leads: max(priorities) if (priorities := leads.filtered('priority').mapped('priority')) else False,
             'tag_ids': lambda fname, leads: leads.mapped('tag_ids'),
             'lost_reason_id': lambda fname, leads:
                 False if leads and leads[0].probability
@@ -2036,10 +2037,12 @@ class CrmLead(models.Model):
         return super()._track_subtype(init_values)
 
     def _notify_by_email_prepare_rendering_context(self, message, msg_vals=False, model_description=False,
-                                                   force_email_company=False, force_email_lang=False):
+                                                   force_email_company=False, force_email_lang=False,
+                                                   force_record_name=False):
         render_context = super()._notify_by_email_prepare_rendering_context(
             message, msg_vals=msg_vals, model_description=model_description,
-            force_email_company=force_email_company, force_email_lang=force_email_lang
+            force_email_company=force_email_company, force_email_lang=force_email_lang,
+            force_record_name=force_record_name,
         )
         if self.date_deadline:
             render_context['subtitles'].append(
@@ -2343,7 +2346,7 @@ class CrmLead(models.Model):
         except AccessError:
             raise UserError(_("You don't have the access needed to run this cron."))
         else:
-            self._cr.execute('TRUNCATE TABLE crm_lead_scoring_frequency')
+            self.env.cr.execute('TRUNCATE TABLE crm_lead_scoring_frequency')
 
         new_frequencies_by_team, unused = self._pls_prepare_update_frequency_table(rebuild=True)
         # update frequency table
@@ -2685,26 +2688,26 @@ class CrmLead(models.Model):
             # Get leads values
             self.flush_model()
             # active_test = False as domain should take active into 'active' field it self
-            query = self.env['crm.lead'].with_context(active_test=False)._where_calc(domain)
+            query = self.env['crm.lead'].with_context(active_test=False)._search(domain, bypass_access=True)
             table = query.table
             query.order = SQL("%(table)s.team_id asc, %(table)s.id desc", table=SQL.identifier(table))
             sql_fields = [SQL.identifier(field) for field in pls_fields]
-            self._cr.execute(query.select(
+            self.env.cr.execute(query.select(
                 SQL("id"),
                 SQL("probability"),
                 *sql_fields,
             ))
-            lead_results = self._cr.dictfetchall()
+            lead_results = self.env.cr.dictfetchall()
 
             if use_tags:
                 # Get tags values
                 tag_rel_alias = query.left_join(table, 'id', 'crm_tag_rel', 'lead_id', 'crm_tag_rel')
                 tag_alias = query.left_join(tag_rel_alias, 'tag_id', 'crm_tag', 'id', 'crm_tag')
-                self._cr.execute(query.select(
+                self.env.cr.execute(query.select(
                     SQL("%s AS lead_id", SQL.identifier(table, "id")),
                     SQL("%s AS tag_id", SQL.identifier(tag_alias, "id")),
                 ))
-                tag_results = self._cr.dictfetchall()
+                tag_results = self.env.cr.dictfetchall()
             else:
                 tag_results = []
 

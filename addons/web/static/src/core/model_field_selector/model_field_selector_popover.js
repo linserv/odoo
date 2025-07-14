@@ -5,7 +5,6 @@ import { KeepLast } from "@web/core/utils/concurrency";
 import { useService } from "@web/core/utils/hooks";
 import { fuzzyLookup } from "@web/core/utils/search";
 import { debounce } from "@web/core/utils/timing";
-import { SPECIAL_MODEL_NAMES } from "@web/core/field_service";
 
 class Page {
     constructor(resModel, fieldDefs, options = {}) {
@@ -22,9 +21,7 @@ class Page {
         this.selectedName = selectedName;
         this.isDebugMode = isDebugMode;
         this.readProperty = readProperty;
-        this.sortedFieldNames = SPECIAL_MODEL_NAMES.has(resModel)
-            ? Object.keys(fieldDefs)
-            : sortFn(fieldDefs);
+        this.sortedFieldNames = sortFn(fieldDefs);
         this.fieldNames = this.sortedFieldNames;
         this.query = "";
         this.focusedFieldName = null;
@@ -176,19 +173,13 @@ export class ModelFieldSelectorPopover extends Component {
         if (!this.props.followRelations) {
             return false;
         }
-        return (
-            fieldDef.relation ||
-            // fields that are not groupable are in general not searchable
-            (fieldDef.groupable && (fieldDef.type === "datetime" || fieldDef.type === "date")) ||
-            fieldDef.type === "datetime_option"
-        );
+        return fieldDef.relation;
     }
 
-    filter(fieldDefs, path) {
-        const filteredKeys =
-            "__date" in fieldDefs
-                ? ["__date", "__time"]
-                : Object.keys(fieldDefs).filter((k) => this.props.filter(fieldDefs[k], path));
+    filter(fieldDefs, path, resModel) {
+        const filteredKeys = Object.keys(fieldDefs).filter((k) =>
+            this.props.filter(fieldDefs[k], path, resModel)
+        );
         return Object.fromEntries(filteredKeys.map((k) => [k, fieldDefs[k]]));
     }
 
@@ -202,7 +193,7 @@ export class ModelFieldSelectorPopover extends Component {
         this.state.page.selectedName = fieldDef.name;
         const { resModel, fieldDefs } = modelsInfo.at(-1);
         this.openPage(
-            new Page(resModel, this.filter(fieldDefs, this.state.page.path), {
+            new Page(resModel, this.filter(fieldDefs, this.state.page.path, resModel), {
                 previousPage: this.state.page,
                 isDebugMode: this.props.isDebugMode,
                 readProperty: this.props.readProperty,
@@ -224,7 +215,7 @@ export class ModelFieldSelectorPopover extends Component {
     async loadPages(resModel, path) {
         if (typeof path !== "string" || !path.length) {
             const fieldDefs = await this.fieldService.loadFields(resModel);
-            return new Page(resModel, this.filter(fieldDefs, path), {
+            return new Page(resModel, this.filter(fieldDefs, path, resModel), {
                 isDebugMode: this.props.isDebugMode,
                 readProperty: this.props.readProperty,
                 sortFn: this.props.sort,
@@ -236,7 +227,7 @@ export class ModelFieldSelectorPopover extends Component {
                 throw new Error(`Invalid model name: ${resModel}`);
             case "path": {
                 const { resModel, fieldDefs } = modelsInfo[0];
-                return new Page(resModel, this.filter(fieldDefs, path), {
+                return new Page(resModel, this.filter(fieldDefs, path, resModel), {
                     selectedName: path,
                     isDebugMode: this.props.isDebugMode,
                     readProperty: this.props.readProperty,
@@ -248,7 +239,7 @@ export class ModelFieldSelectorPopover extends Component {
                 for (let index = 0; index < names.length; index++) {
                     const name = names[index];
                     const { resModel, fieldDefs } = modelsInfo[index];
-                    page = new Page(resModel, this.filter(fieldDefs, path), {
+                    page = new Page(resModel, this.filter(fieldDefs, path, resModel), {
                         previousPage: page,
                         selectedName: name,
                         isDebugMode: this.props.isDebugMode,
