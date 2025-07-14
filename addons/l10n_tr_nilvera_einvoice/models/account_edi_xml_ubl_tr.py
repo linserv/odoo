@@ -1,4 +1,8 @@
-from odoo import models
+import math
+from num2words import num2words
+
+from odoo import _, api, models
+from odoo.exceptions import UserError
 
 
 class AccountEdiXmlUblTr(models.AbstractModel):
@@ -42,7 +46,24 @@ class AccountEdiXmlUblTr(models.AbstractModel):
             'pricing_currency_code': invoice.currency_id.name.upper() if invoice.currency_id != invoice.company_id.currency_id else False,
             'currency_dp': 2,
         })
+        # Nilvera will reject any <BuyerReference> tag, so remove it
+        if vals['vals'].get('buyer_reference'):
+            del vals['vals']['buyer_reference']
+
+        vals['vals']['note_vals'].append({'note': self._l10n_tr_get_amount_integer_partn_text_note(invoice.amount_residual_signed, self.env.ref('base.TRY')), 'note_attrs': {}})
+        if vals['invoice'].currency_id.name != 'TRY':
+            vals['vals']['note_vals'].append({'note': self._l10n_tr_get_amount_integer_partn_text_note(invoice.amount_residual, vals['invoice'].currency_id), 'note_attrs': {}})
         return vals
+
+    @api.model
+    def _l10n_tr_get_amount_integer_partn_text_note(self, amount, currency):
+        sign = math.copysign(1.0, amount)
+        amount_integer_part, amount_decimal_part = divmod(abs(amount), 1)
+        amount_decimal_part = int(amount_decimal_part * 100)
+
+        text_i = num2words(amount_integer_part * sign, lang="tr") or 'Sifir'
+        text_d = num2words(amount_decimal_part * sign, lang="tr") or 'Sifir'
+        return f'YALNIZ : {text_i} {currency.name} {text_d} {currency.currency_subunit_label}'.upper()
 
     def _get_country_vals(self, country):
         # EXTENDS account.edi.xml.ubl_21
@@ -53,6 +74,9 @@ class AccountEdiXmlUblTr(models.AbstractModel):
     def _get_partner_party_identification_vals_list(self, partner):
         # EXTENDS account.edi.xml.ubl_21
         vals = super()._get_partner_party_identification_vals_list(partner)
+        # Nilvera will reject any <ID> without a <schemeID>, so remove all items not
+        # having the following structure : {'id': '...', 'id_attrs': {'schemeID': '...'}}
+        vals = [v for v in vals if v.get('id') and v.get('id_attrs', {}).get('schemeID')]
         vals.append({
             'id_attrs': {
                 'schemeID': 'VKN' if partner.is_company else 'TCKN',
@@ -74,9 +98,18 @@ class AccountEdiXmlUblTr(models.AbstractModel):
 
     def _get_partner_party_tax_scheme_vals_list(self, partner, role):
         # EXTENDS account.edi.xml.ubl_21
+        if partner.l10n_tr_nilvera_customer_status == "einvoice" and not partner.ref:
+            raise UserError(_("E-Invoice customers must have a tax office name in the partner reference field."))
+
         vals_list = super()._get_partner_party_tax_scheme_vals_list(partner, role)
         for vals in vals_list:
             vals.pop('registration_address_vals', None)
+            vals["tax_scheme_vals"].update(
+                {
+                    "id": "",
+                    "name": partner.ref,
+                }
+            )
         return vals_list
 
     def _get_partner_party_legal_entity_vals_list(self, partner):

@@ -15,9 +15,9 @@
 # Morten Paaske, 2024
 # Ejner Sønniksen <ejner@vkdata.dk>, 2024
 # Sammi Iversen <sammi@vkdata.dk>, 2024
-# Sanne Kristensen <sanne@vkdata.dk>, 2024
 # lhmflexerp <lhm@flexerp.dk>, 2025
 # Martin Trigaux, 2025
+# Sanne Kristensen <sanne@vkdata.dk>, 2025
 # Kira Petersen, 2025
 # 
 msgid ""
@@ -10058,7 +10058,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "bill"
-msgstr ""
+msgstr "Faktura"
 
 #. module: web
 #. odoo-javascript
@@ -22962,7 +22962,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "net"
-msgstr ""
+msgstr "netto"
 
 #. module: web
 #. odoo-javascript

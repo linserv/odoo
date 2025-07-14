@@ -1428,7 +1428,7 @@ msgstr "返回「%s」"
 #. module: web
 #: model:ir.model.fields,field_description:web.field_base_document_layout__layout_background_image
 msgid "Background Image"
-msgstr "背景圖像"
+msgstr "背景圖片"
 
 #. module: web
 #. odoo-javascript
@@ -27772,7 +27772,7 @@ msgstr "貝殼"
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "shellfish"
-msgstr "貝類/甲殻類"
+msgstr "貝類/甲殼類"
 
 #. module: web
 #. odoo-javascript

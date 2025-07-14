@@ -13,7 +13,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 17.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-20 18:35+0000\n"
+"POT-Creation-Date: 2025-06-27 02:30+0000\n"
 "PO-Revision-Date: 2023-10-26 23:09+0000\n"
 "Last-Translator: Wil Odoo, 2025\n"
 "Language-Team: Italian (https://app.transifex.com/odoo/teams/41243/it/)\n"
@@ -5855,6 +5855,11 @@ msgid "Display Account Prefix"
 msgstr "Mostra prefisso conto"
 
 #. module: account
+#: model:ir.model.fields,field_description:account.field_account_journal__display_alias_fields
+msgid "Display Alias Fields"
+msgstr "Mostra campi alias"
+
+#. module: account
 #: model:ir.model.fields,field_description:account.field_account_accrued_orders_wizard__display_amount
 msgid "Display Amount"
 msgstr "Visualizza importo"
@@ -11009,7 +11014,7 @@ msgstr "Avviso crediti partner"
 #. module: account
 #: model:ir.actions.act_window,name:account.action_account_moves_ledger_partner
 msgid "Partner Ledger"
-msgstr "Estratto conto cliente - fornitore"
+msgstr "Partitario clienti/fornitori"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_res_partner__use_partner_credit_limit
@@ -17086,6 +17091,8 @@ msgid ""
 "You can't create payments for entries belonging to different branches "
 "without access to parent company."
 msgstr ""
+"Non è possibile creare pagamenti per registrazioni che appartengono a "
+"diverse filiali senza accedere all'azienda principale."
 
 #. module: account
 #. odoo-python

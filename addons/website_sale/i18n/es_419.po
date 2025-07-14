@@ -5,9 +5,8 @@
 # Translators:
 # Iran Villalobos López, 2023
 # Lucia Pacheco, 2024
-# Martin Trigaux, 2024
-# Patricia Gutiérrez Capetillo <pagc@odoo.com>, 2025
 # Wil Odoo, 2025
+# Patricia Gutiérrez Capetillo <pagc@odoo.com>, 2025
 # Fernanda Alvarez, 2025
 # 
 msgid ""
@@ -1374,7 +1373,7 @@ msgstr "Contacto"
 #. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.product
 msgid "Contact Us"
-msgstr "Contáctenos"
+msgstr "Contáctanos"
 
 #. module: website_sale
 #: model:ir.model.fields,field_description:website_sale.field_website__contact_us_button_url
@@ -1730,7 +1729,7 @@ msgstr ""
 #, python-format
 msgid "Do not have access, skip this data for user's digest email"
 msgstr ""
-"No tiene acceso, omita esta información para el correo electrónico de "
+"No tienes acceso, omite esta información para el correo electrónico de "
 "resumen del usuario"
 
 #. module: website_sale
@@ -2089,14 +2088,13 @@ msgstr ""
 #. module: website_sale
 #: model:ir.model.fields,help:website_sale.field_product_template__message_needaction
 msgid "If checked, new messages require your attention."
-msgstr ""
-"Si se encuentra seleccionado, hay nuevos mensajes que requieren su atención."
+msgstr "Si está seleccionado, hay nuevos mensajes que requieren tu atención."
 
 #. module: website_sale
 #: model:ir.model.fields,help:website_sale.field_product_template__message_has_error
 #: model:ir.model.fields,help:website_sale.field_product_template__message_has_sms_error
 msgid "If checked, some messages have a delivery error."
-msgstr "Si se encuentra seleccionado, algunos mensajes tienen error de envío."
+msgstr "Si está seleccionado, algunos mensajes tienen error de envío."
 
 #. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.res_config_settings_view_form
@@ -4288,7 +4286,7 @@ msgstr ""
 #. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.address
 msgid "VAT"
-msgstr "Número de identificación fiscal"
+msgstr "Número de identificación fiscal (RFC, RIF, RUT, NIT, etc.)"
 
 #. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.tax_indication
@@ -4493,7 +4491,7 @@ msgstr "Historial de comunicación del sitio web"
 #: model:ir.model.fields,field_description:website_sale.field_product_public_category__website_meta_description
 #: model:ir.model.fields,field_description:website_sale.field_product_template__website_meta_description
 msgid "Website meta description"
-msgstr "Meta descripción del sitio web"
+msgstr "Metadescripción del sitio web"
 
 #. module: website_sale
 #: model:ir.model.fields,field_description:website_sale.field_product_public_category__website_meta_keywords
@@ -4587,8 +4585,8 @@ msgid ""
 "You are editing your <b>billing and shipping</b> addresses at the same time!<br/>\n"
 "                                            If you want to modify your shipping address, create a"
 msgstr ""
-"Está editando sus direcciones de <b>facturación y de envío</b> al mismo tiempo.<br/>\n"
-"Si quiere modificar su dirección de envío, cree un"
+"Está editando sus direcciones de <b>facturación y envío</b> al mismo "
+"tiempo.<br/>Si quiere modificar su dirección de envío, cree una"
 
 #. module: website_sale
 #. odoo-python
@@ -4636,20 +4634,20 @@ msgstr ""
 #: code:addons/website_sale/static/src/js/website_sale_form_editor.js:0
 #, python-format
 msgid "Your Email"
-msgstr "Su correo electrónico"
+msgstr "Tu correo"
 
 #. module: website_sale
 #. odoo-javascript
 #: code:addons/website_sale/static/src/js/website_sale_form_editor.js:0
 #, python-format
 msgid "Your Name"
-msgstr "Su nombre"
+msgstr "Tu nombre"
 
 #. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.cart_lines
 #: model_terms:ir.ui.view,arch_db:website_sale.checkout_layout
 msgid "Your cart is empty!"
-msgstr "¡Su carrito está vacío!"
+msgstr "¡Tu carrito está vacío!"
 
 #. module: website_sale
 #. odoo-python

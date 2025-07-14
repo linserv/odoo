@@ -10707,6 +10707,8 @@ msgid ""
 "All our contractual relations will be governed exclusively by United States "
 "law."
 msgstr ""
+"Όλες οι συμβατικές μας σχέσεις θα διέπονται αποκλειστικά από το δίκαιο των "
+"Ηνωμένων Πολιτειών."
 
 #. module: base
 #: model:ir.model.fields,help:base.field_res_partner__lang
@@ -14775,7 +14777,7 @@ msgstr ""
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_delivery_dhl
-msgid "DHL Express Shipping"
+msgid "DHL Express Shipping (Legacy)"
 msgstr ""
 
 #. module: base
@@ -16134,7 +16136,7 @@ msgstr ""
 #. module: base
 #: model:ir.module.category,name:base.module_category_services_employee_hourly_cost
 msgid "Employee Hourly Cost"
-msgstr ""
+msgstr "Ωριαίο Κόστος Εργαζομένου"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_hr_hourly_cost
@@ -22085,7 +22087,7 @@ msgstr ""
 #: model:ir.module.module,shortdesc:base.module_mrp_mps
 #: model:ir.module.module,summary:base.module_mrp_mps
 msgid "Master Production Schedule"
-msgstr ""
+msgstr "Κύριο Πρόγραμμα Παραγωγής"
 
 #. module: base
 #: model_terms:res.partner,website_description:base.res_partner_2
@@ -26258,7 +26260,7 @@ msgstr ""
 #: model:ir.module.category,name:base.module_category_productivity
 #: model_terms:ir.ui.view,arch_db:base.user_groups_view
 msgid "Productivity"
-msgstr ""
+msgstr "Παραγωγικότητα"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_product
@@ -28613,7 +28615,10 @@ msgstr ""
 
 #. module: base
 #: model:ir.module.module,description:base.module_delivery_dhl
-msgid "Send your shippings through DHL and track them online"
+msgid ""
+"This is the legacy integration with DHL Express that is no longer supported."
+" Please install the new \"DHL Express Shipping\" module and uninstall this "
+"one as soon as possible."
 msgstr ""
 
 #. module: base
@@ -29454,7 +29459,7 @@ msgstr "Χορηγοί, Κομμάτια, Αντζέντα, Νέας Εκδήλ�
 #: model:ir.module.module,summary:base.module_spreadsheet_dashboard_website_sale_slides
 #: model:ir.module.module,summary:base.module_spreadsheet_edition
 msgid "Spreadsheet"
-msgstr ""
+msgstr "Υπολογιστικό φύλλο"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_spreadsheet_account
@@ -31892,7 +31897,7 @@ msgstr ""
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_timer
 msgid "Timer"
-msgstr ""
+msgstr "Χρονομετρήτης"
 
 #. module: base
 #: model:ir.module.module,shortdesc:base.module_test_timer
@@ -34609,7 +34614,7 @@ msgstr ""
 #. module: base
 #: model:ir.model.fields,field_description:base.field_ir_asset__active
 msgid "active"
-msgstr ""
+msgstr "ενεργός"
 
 #. module: base
 #. odoo-python

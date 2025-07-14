@@ -11,7 +11,6 @@
 # Hongu Cosmin <cosmin513@gmail.com>, 2024
 # Foldi Robert <foldirobert@nexterp.ro>, 2024
 # Martin Trigaux, 2024
-# Larisa_nexterp, 2024
 # Alin Miclea, 2024
 # Betty Keresztesi, 2024
 # Corina Calin, 2024
@@ -19,6 +18,7 @@
 # Fekete Mihai <mihai.fekete@forestandbiomass.ro>, 2024
 # Dorin Hongu <dhongu@gmail.com>, 2025
 # Wil Odoo, 2025
+# Larisa_nexterp, 2025
 # 
 msgid ""
 msgstr ""
@@ -26,7 +26,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-05-14 20:48+0000\n"
 "PO-Revision-Date: 2023-10-26 23:09+0000\n"
-"Last-Translator: Wil Odoo, 2025\n"
+"Last-Translator: Larisa_nexterp, 2025\n"
 "Language-Team: Romanian (https://app.transifex.com/odoo/teams/41243/ro/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -8330,6 +8330,8 @@ msgstr ""
 msgid ""
 "You need to select a model before opening the dynamic placeholder selector."
 msgstr ""
+"Trebuie să selectați un model înainte de a deschide selectorul de "
+"substituenți dinamici."
 
 #. module: web
 #. odoo-javascript
@@ -16053,7 +16055,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "file"
-msgstr ""
+msgstr "fișier"
 
 #. module: web
 #. odoo-javascript
@@ -16566,7 +16568,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "folder"
-msgstr ""
+msgstr "folder"
 
 #. module: web
 #. odoo-javascript
@@ -16654,7 +16656,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "forever"
-msgstr ""
+msgstr "pentru totdeauna"
 
 #. module: web
 #. odoo-javascript
@@ -20184,7 +20186,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "large"
-msgstr ""
+msgstr "mare"
 
 #. module: web
 #. odoo-javascript
@@ -21980,7 +21982,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "medium"
-msgstr ""
+msgstr "mediu"
 
 #. module: web
 #. odoo-javascript
@@ -25912,7 +25914,7 @@ msgstr ""
 #: code:addons/web/static/src/views/fields/many2many_tags_avatar/many2many_tags_avatar_field.xml:0
 #, python-format
 msgid "props.placeholder"
-msgstr ""
+msgstr "placeholder"
 
 #. module: web
 #. odoo-javascript
@@ -26022,7 +26024,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "purple"
-msgstr ""
+msgstr "mov"
 
 #. module: web
 #. odoo-javascript
@@ -26480,7 +26482,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "red"
-msgstr ""
+msgstr "roșu"
 
 #. module: web
 #. odoo-javascript
@@ -28487,7 +28489,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "small"
-msgstr ""
+msgstr "mic"
 
 #. module: web
 #. odoo-javascript
@@ -32266,7 +32268,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "wedding"
-msgstr ""
+msgstr "nuntă"
 
 #. module: web
 #. odoo-javascript
@@ -33595,7 +33597,7 @@ msgstr ""
 #: code:addons/web/static/src/core/emoji_picker/emoji_data.js:0
 #, python-format
 msgid "yellow"
-msgstr ""
+msgstr "galben"
 
 #. module: web
 #. odoo-javascript

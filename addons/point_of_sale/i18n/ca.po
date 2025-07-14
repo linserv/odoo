@@ -30,7 +30,6 @@
 # Quim - coopdevs <quim.rebull@coopdevs.org>, 2024
 # Óscar Fonseca <tecnico@pyming.com>, 2024
 # Martin Trigaux, 2024
-# Santiago Payà <santiagopim@gmail.com>, 2024
 # Carles Antoli <carlesantoli@hotmail.com>, 2024
 # martioodo hola, 2024
 # Marc Tormo i Bochaca <mtbochaca@gmail.com>, 2024
@@ -38,6 +37,7 @@
 # Wil Odoo, 2025
 # Josep Anton Belchi, 2025
 # EstudiTIC - estuditic.com <odoo@estuditic.com>, 2025
+# Santiago Payà <santiagopim@gmail.com>, 2025
 # Noemi Pla, 2025
 # 
 msgid ""
@@ -1693,7 +1693,7 @@ msgstr "Combinació"
 #: model:ir.actions.act_window,name:point_of_sale.action_pos_combo
 #: model_terms:ir.ui.view,arch_db:point_of_sale.product_template_form_view
 msgid "Combo Choices"
-msgstr ""
+msgstr "Opcions de combinacions"
 
 #. module: point_of_sale
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_order_line__combo_line_ids
@@ -2294,7 +2294,7 @@ msgstr "Impost de venda per defecte"
 #: model:ir.model.fields,help:point_of_sale.field_pos_order_line__product_uom_id
 msgid "Default unit of measure used for all stock operations."
 msgstr ""
-"Unit de mesura per defecte utilitzada per totes les operacions d'estoc."
+"Unitat de mesura per defecte utilitzada per a totes les operacions d'estoc."
 
 #. module: point_of_sale
 #: model_terms:ir.actions.act_window,help:point_of_sale.product_pos_category_action

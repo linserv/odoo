@@ -1802,7 +1802,7 @@ msgstr "加上絕佳的口號。"
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_product_catalog
 msgid "Add a menu description."
-msgstr "新增選項說明."
+msgstr "加入選單描述。"
 
 #. module: website
 #. odoo-javascript
@@ -6479,7 +6479,7 @@ msgstr "加入「分享」小工具。"
 #: code:addons/website/static/src/components/wysiwyg_adapter/wysiwyg_adapter.js:0
 #, python-format
 msgid "Insert a text Highlight snippet"
-msgstr "加入焦點文字區塊。"
+msgstr "插入焦點文字片段"
 
 #. module: website
 #. odoo-javascript
@@ -6493,7 +6493,7 @@ msgstr "加入警示區塊。"
 #: code:addons/website/static/src/components/wysiwyg_adapter/wysiwyg_adapter.js:0
 #, python-format
 msgid "Insert an horizontal separator snippet"
-msgstr "加入水平分隔線區塊。"
+msgstr "插入水平分隔線片段"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_table_of_content
@@ -11909,7 +11909,7 @@ msgstr "符合這些篩選條件的網址會用 CDN 根網址改寫"
 #: code:addons/website/models/website_rewrite.py:0
 #, python-format
 msgid "URL must not start with '#'."
-msgstr ""
+msgstr "網址不能以「#」開頭。"
 
 #. module: website
 #: model:ir.model.fields,field_description:website.field_website_rewrite__url_to
@@ -12826,7 +12826,7 @@ msgstr "網站選單"
 #: model:ir.model.fields,field_description:website.field_website_page__website_meta_description
 #: model:ir.model.fields,field_description:website.field_website_seo_metadata__website_meta_description
 msgid "Website meta description"
-msgstr "網站 meta 說明"
+msgstr "網站 meta 描述"
 
 #. module: website
 #: model:ir.model.fields,field_description:website.field_ir_ui_view__website_meta_keywords
@@ -13393,7 +13393,7 @@ msgstr "並複製字型頁面的網址，貼上至此處。"
 #: code:addons/website/models/website_rewrite.py:0
 #, python-format
 msgid "base URL of 'URL to' should not be same as 'URL from'."
-msgstr ""
+msgstr "「導向網址」的基本網址，應與「來源網址」不同。"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.snippets

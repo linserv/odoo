@@ -15,7 +15,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 17.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-20 18:35+0000\n"
+"POT-Creation-Date: 2025-06-27 02:30+0000\n"
 "PO-Revision-Date: 2023-10-26 23:09+0000\n"
 "Last-Translator: Wil Odoo, 2025\n"
 "Language-Team: Dutch (https://app.transifex.com/odoo/teams/41243/nl/)\n"
@@ -5844,6 +5844,11 @@ msgid "Display Account Prefix"
 msgstr "Rekeningvoorvoegsel weergeven"
 
 #. module: account
+#: model:ir.model.fields,field_description:account.field_account_journal__display_alias_fields
+msgid "Display Alias Fields"
+msgstr "Aliasvelden weergeven"
+
+#. module: account
 #: model:ir.model.fields,field_description:account.field_account_accrued_orders_wizard__display_amount
 msgid "Display Amount"
 msgstr "Bedrag weergeven"
@@ -7246,7 +7251,7 @@ msgstr "Goede betaler"
 #: model:ir.model.fields.selection,name:account.selection__account_tax__tax_scope__consu
 #: model_terms:ir.ui.view,arch_db:account.view_account_tax_search
 msgid "Goods"
-msgstr "Goederen"
+msgstr "Diverse goederen"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_account__group_id
@@ -17059,6 +17064,8 @@ msgid ""
 "You can't create payments for entries belonging to different branches "
 "without access to parent company."
 msgstr ""
+"Je kunt geen betalingen aanmaken voor boekingen die bij verschillende "
+"vestigingen horen, als je geen toegang hebt tot het moederbedrijf."
 
 #. module: account
 #. odoo-python
