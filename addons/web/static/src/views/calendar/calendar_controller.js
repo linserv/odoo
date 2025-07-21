@@ -84,7 +84,8 @@ export class CalendarController extends Component {
                     : true,
             showSideBar:
                 !this.env.isSmall &&
-                Boolean(sessionShowSidebar != null ? JSON.parse(sessionShowSidebar) : true),
+                (this.model.hasMultiCreate ||
+                    Boolean(sessionShowSidebar != null ? JSON.parse(sessionShowSidebar) : true)),
             sidePanelMode: this.model.hasMultiCreate
                 ? SIDE_PANEL_MODES.add
                 : SIDE_PANEL_MODES.filter,
@@ -112,7 +113,7 @@ export class CalendarController extends Component {
             resModel: this.props.resModel,
             domain: this.props.domain,
             fields: this.props.fields,
-            date: this.props.state?.date,
+            state: this.props.state,
         };
     }
 

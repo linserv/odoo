@@ -112,12 +112,12 @@ class IrCron(models.Model):
         return super().create(vals_list)
 
     @api.model
-    def default_get(self, fields_list):
+    def default_get(self, fields):
         # only 'code' state is supported for cron job so set it as default
         model = self
         if not model.env.context.get('default_state'):
             model = model.with_context(default_state='code')
-        return super(IrCron, model).default_get(fields_list)
+        return super(IrCron, model).default_get(fields)
 
     def method_direct_trigger(self):
         """Run the CRON job in the current (HTTP) thread.
@@ -222,7 +222,10 @@ class IrCron(models.Model):
         if not jobs:
             raise BadModuleState()
 
-        oldest = min(job['nextcall'] for job in jobs)
+        # use the max(job['nextcall'], job['write_date']) to avoid the cron
+        # reset_module_state for an ongoing module installation process
+        # right after installing a module with an old 'nextcall' cron in data
+        oldest = min(max(job['nextcall'], job['write_date'] or job['nextcall']) for job in jobs)
         if datetime.now() - oldest < MAX_FAIL_TIME:
             raise BadModuleState()
 

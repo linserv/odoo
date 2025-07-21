@@ -141,7 +141,7 @@ class _Relational(Field[BaseModel]):
                 _logger.warning(env._(
                     "Couldn't generate a company-dependent domain for field %s. "
                     "The model doesn't have a 'company_id' or 'company_ids' field, and isn't company-dependent either.",
-                    f'{self.model_name}.{self.name}'
+                    self.model_name + '.' + self.name,
                 ))
                 return domain
             company_domain = env[self.comodel_name]._check_company_domain(companies=unquote(cids))
@@ -440,8 +440,8 @@ class Many2one(_Relational):
                 ids1 = tuple(unique((ids0 or ()) + valid_records._ids))
                 invf._update_cache(corecord, ids1)
 
-    def to_sql(self, model: BaseModel, alias: str, flush: bool = True) -> SQL:
-        sql_field = super().to_sql(model, alias, flush)
+    def to_sql(self, model: BaseModel, alias: str) -> SQL:
+        sql_field = super().to_sql(model, alias)
         if self.company_dependent:
             comodel = model.env[self.comodel_name]
             sql_field = SQL(
@@ -1142,11 +1142,7 @@ class One2many(_RelationalMulti):
 
         comodel = model.env[self.comodel_name].sudo()
         inverse_field = comodel._fields[self.inverse_name]
-        if inverse_field.store:
-            subselect = coquery.subselect(
-                comodel._field_to_sql(coquery.table, inverse_field.name, coquery)
-            )
-        else:
+        if not inverse_field.store:
             # determine ids1 in model related to ids2
             # TODO should we support this in the future?
             recs = comodel.browse(coquery).with_context(prefetch_fields=False)
@@ -1156,12 +1152,21 @@ class One2many(_RelationalMulti):
                 # int values, map them
                 inverses = model.browse(inverse_field.__get__(rec) for rec in recs)
             subselect = inverses._as_query(ordered=False).subselect()
+            return SQL(
+                "%s%s%s",
+                SQL.identifier(alias, 'id'),
+                SQL_OPERATORS['in' if exists else 'not in'],
+                subselect,
+            )
 
+        subselect = coquery.subselect(
+            SQL("%s AS __inverse", comodel._field_to_sql(coquery.table, inverse_field.name, coquery))
+        )
         return SQL(
-            "%s%s%s",
-            SQL.identifier(alias, 'id'),
-            SQL_OPERATORS['in' if exists else 'not in'],
+            "%sEXISTS(SELECT FROM %s AS __sub WHERE __inverse = %s)",
+            SQL() if exists else SQL("NOT "),
             subselect,
+            SQL.identifier(alias, 'id'),
         )
 
 

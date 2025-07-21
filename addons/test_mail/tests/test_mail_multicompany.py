@@ -277,7 +277,7 @@ class TestMultiCompanySetup(TestMailMCCommon, HttpCase):
         company_1_all = user_admin.company_id
         company_2_admin_only = self.company_2
         test_model_name = 'mail.test.multi.company.with.activity'
-        activity_type_todo = 'test_mail.mail_act_test_todo'
+        activity_type_todo = 'test_mail.mail_act_test_todo_generic'
 
         # remove potential demo data on admin, to make test deterministic
         self.env['mail.activity'].search([('user_id', '=', user_admin.id)]).unlink()
@@ -566,4 +566,4 @@ class TestMultiCompanyThreadData(MailCommon, HttpCase):
             },
         )
         self.assertEqual(len(data["mail.followers"]), 1)
-        self.assertEqual(data["mail.followers"][0]["partner_id"]["id"], partner_portal.id)
+        self.assertEqual(data["mail.followers"][0]["partner_id"], partner_portal.id)

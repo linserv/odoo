@@ -2,7 +2,6 @@ import { Component, useRef, useState, onMounted } from "@odoo/owl";
 
 import { browser } from "@web/core/browser/browser";
 import { useService } from "@web/core/utils/hooks";
-import { sprintf } from "@web/core/utils/strings";
 import { _t } from "@web/core/l10n/translation";
 
 export class WelcomePage extends Component {
@@ -36,8 +35,8 @@ export class WelcomePage extends Component {
     }
 
     joinChannel() {
-        if (this.store.self.type === "guest") {
-            this.store.self.updateGuestName(this.state.userName.trim());
+        if (!this.store.self_partner) {
+            this.store.self_guest?.updateGuestName(this.state.userName.trim());
         }
         browser.localStorage.setItem("discuss_call_preview_join_mute", !this.state.audioStream);
         browser.localStorage.setItem(
@@ -126,6 +125,6 @@ export class WelcomePage extends Component {
         }
     }
     getLoggedInAsText() {
-        return sprintf(_t("Logged in as %s"), this.store.self.name);
+        return _t("Logged in as %s", this.store.self.name);
     }
 }

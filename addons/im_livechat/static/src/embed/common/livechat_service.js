@@ -6,6 +6,7 @@ import { rpc } from "@web/core/network/rpc";
 import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
 import { session } from "@web/session";
+import { canLoadLivechat } from "@im_livechat/embed/common/misc";
 
 export const RATING = Object.freeze({
     GOOD: 5,
@@ -114,14 +115,13 @@ export class LivechatService {
             "/im_livechat/get_session",
             {
                 channel_id: this.options.channel_id,
-                anonymous_name: this.options.default_username ?? _t("Visitor"),
                 chatbot_script_id:
                     originThread?.chatbot?.script.id ??
                     this.store.livechat_rule?.chatbot_script_id?.id,
                 previous_operator_id: expirableStorage.getItem(OPERATOR_STORAGE_KEY),
                 persisted: persist,
             },
-            { shadow: true }
+            { silent: true }
         );
         if (!channel_id) {
             this.notificationService.add(_t("No available collaborator, please try again later."));
@@ -147,7 +147,7 @@ export const livechatService = {
     dependencies: ["mail.store", "notification"],
     start(env, services) {
         const livechat = reactive(new LivechatService(env, services));
-        if (session.livechatData?.can_load_livechat) {
+        if (canLoadLivechat()) {
             livechat.initialize();
         }
         return livechat;

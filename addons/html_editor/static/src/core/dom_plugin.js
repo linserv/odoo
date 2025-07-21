@@ -61,6 +61,7 @@ function getConnectedParents(nodes) {
  * @typedef {Object} DomShared
  * @property { DomPlugin['insert'] } insert
  * @property { DomPlugin['copyAttributes'] } copyAttributes
+ * @property { DomPlugin['canSetTag'] } canSetTag
  * @property { DomPlugin['setTag'] } setTag
  * @property { DomPlugin['setTagName'] } setTagName
  */
@@ -68,7 +69,7 @@ function getConnectedParents(nodes) {
 export class DomPlugin extends Plugin {
     static id = "dom";
     static dependencies = ["baseContainer", "selection", "history", "split", "delete", "lineBreak"];
-    static shared = ["insert", "copyAttributes", "setTag", "setTagName"];
+    static shared = ["insert", "copyAttributes", "canSetTag", "setTag", "setTagName"];
     resources = {
         user_commands: [
             {
@@ -121,8 +122,9 @@ export class DomPlugin extends Plugin {
             container.replaceChildren(content);
         }
 
+        const block = closestBlock(selection.anchorNode);
         for (const cb of this.getResource("before_insert_processors")) {
-            container = cb(container);
+            container = cb(container, block);
         }
         selection = this.dependencies.selection.getEditableSelection();
 
@@ -154,13 +156,9 @@ export class DomPlugin extends Plugin {
         }
 
         startNode = startNode || this.dependencies.selection.getEditableSelection().anchorNode;
-        const block = closestBlock(selection.anchorNode);
 
         const shouldUnwrap = (node) =>
-            (isParagraphRelatedElement(node) ||
-                isListItemElement(node) ||
-                // TODO remove: PRE should be a paragraphRelatedElement
-                node.nodeName === "PRE") &&
+            (isParagraphRelatedElement(node) || isListItemElement(node)) &&
             !isEmptyBlock(block) &&
             !isEmptyBlock(node) &&
             (isContentEditable(node) ||
@@ -169,10 +167,7 @@ export class DomPlugin extends Plugin {
             (node.nodeName === block.nodeName ||
                 (this.dependencies.baseContainer.isCandidateForBaseContainer(node) &&
                     this.dependencies.baseContainer.isCandidateForBaseContainer(block)) ||
-                // TODO add: when PRE is considered as a paragraphRelatedElement
-                // again, consider unwrapping in PRE by re-enabling the
-                // following condition:
-                // block.nodeName === "PRE" ||
+                block.nodeName === "PRE" ||
                 (block.nodeName === "DIV" && this.dependencies.split.isUnsplittable(block))) &&
             // If the selection anchorNode is the editable itself, the content
             // should not be unwrapped.
@@ -537,6 +532,19 @@ export class DomPlugin extends Plugin {
         this.dependencies.selection.setSelection({ anchorNode, anchorOffset });
     }
 
+    getBlocksToTag() {
+        const targetedBlocks = [...this.dependencies.selection.getTargetedBlocks()];
+        return targetedBlocks.filter(
+            (block) =>
+                !descendants(block).some((descendant) => targetedBlocks.includes(descendant)) &&
+                block.isContentEditable
+        );
+    }
+
+    canSetTag() {
+        return this.getBlocksToTag().length > 0;
+    }
+
     /**
      * @param {Object} param0
      * @param {string} param0.tagName
@@ -555,18 +563,8 @@ export class DomPlugin extends Plugin {
             newCandidate = baseContainer;
         }
         const cursors = this.dependencies.selection.preserveSelection();
-        const targetedBlocks = [...this.dependencies.selection.getTargetedBlocks()];
-        const deepestTargetedBlocks = targetedBlocks.filter(
-            (block) =>
-                !descendants(block).some((descendant) => targetedBlocks.includes(descendant)) &&
-                block.isContentEditable
-        );
-        for (const block of deepestTargetedBlocks) {
-            if (
-                isParagraphRelatedElement(block) ||
-                block.nodeName === "PRE" || // TODO remove: PRE should be a paragraphRelatedElement
-                isListItemElement(block)
-            ) {
+        for (const block of this.getBlocksToTag()) {
+            if (isParagraphRelatedElement(block) || isListItemElement(block)) {
                 if (newCandidate.matches(baseContainerGlobalSelector) && isListItemElement(block)) {
                     continue;
                 }

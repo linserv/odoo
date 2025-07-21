@@ -306,8 +306,6 @@ class TestUi(HttpCaseWithWebsiteUser):
     def test_02_restricted_editor(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'restricted_editor', login="website_user")
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_04_website_navbar_menu(self):
         website = self.env['website'].search([], limit=1)
         self.env['website.menu'].create({
@@ -463,8 +461,6 @@ class TestUi(HttpCaseWithWebsiteUser):
     def test_15_website_link_tools(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'link_tools', login="admin")
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_16_website_edit_megamenu(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'edit_megamenu', login='admin')
 
@@ -477,8 +473,6 @@ class TestUi(HttpCaseWithWebsiteUser):
     def test_18_website_snippets_menu_tabs(self):
         self.start_tour('/', 'website_snippets_menu_tabs', login='admin')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_19_website_page_options(self):
         self.start_tour("/odoo", "website_page_options", login="admin")
 

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import logging
@@ -12,7 +11,7 @@ from odoo.addons.iap.tools import iap_tools
 from odoo.addons.mail.tools import mail_validation
 from odoo.addons.phone_validation.tools import phone_validation
 from odoo.exceptions import UserError, AccessError, ValidationError
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools.translate import _
 from odoo.tools import date_utils, email_normalize_all, is_html_empty, groupby, parse_contact_from_email, SQL
 from odoo.tools.misc import get_lang
@@ -170,7 +169,7 @@ class CrmLead(models.Model):
         compute='_compute_commercial_partner_id', readonly=False, store=False,
     )
     partner_id = fields.Many2one(
-        'res.partner', string='Customer', check_company=True, index=True, tracking=10,
+        'res.partner', string='Contact', check_company=True, index=True, tracking=10,
         help="Linked partner (optional). Usually created when converting the lead. You can find a partner by its Name, TIN, Email or Internal Reference.")
     partner_is_blacklisted = fields.Boolean('Partner is blacklisted', related='partner_id.is_blacklisted', readonly=True)
     contact_name = fields.Char(
@@ -911,6 +910,7 @@ class CrmLead(models.Model):
         if not order or 'my_activity_date_deadline' not in order:
             return super().search_fetch(domain, field_names, offset, limit, order)
         order_items = [order_item.strip().lower() for order_item in (order or self._order).split(',')]
+        domain = Domain(domain)
 
         # Perform a read_group on my activities to get a mapping lead_id / deadline
         # Remember date_deadline is required, we always have a value for it. Only
@@ -924,7 +924,7 @@ class CrmLead(models.Model):
         )
         my_lead_mapping = dict(my_lead_activities)
         my_lead_ids = list(my_lead_mapping.keys())
-        my_lead_domain = expression.AND([[('id', 'in', my_lead_ids)], domain])
+        my_lead_domain = Domain('id', 'in', my_lead_ids) & domain
         my_lead_order = ', '.join(item for item in order_items if 'my_activity_date_deadline' not in item)
 
         # Search leads linked to those activities and order them. See docstring
@@ -952,7 +952,7 @@ class CrmLead(models.Model):
         lead_order = ', '.join(item for item in order_items if 'my_activity_date_deadline' not in item)
 
         other_lead_res = super().search_fetch(
-            expression.AND([[('id', 'not in', my_lead_ids_skip)], domain]),
+            Domain('id', 'not in', my_lead_ids_skip) & domain,
             field_names, lead_offset, lead_limit, lead_order,
         )
         return self.browse(my_lead_ids_keep) + other_lead_res

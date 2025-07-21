@@ -48,13 +48,13 @@ class SurveyQuestion(models.Model):
     _order = 'sequence,id'
 
     @api.model
-    def default_get(self, fields_list):
-        res = super().default_get(fields_list)
+    def default_get(self, fields):
+        res = super().default_get(fields)
         if default_survey_id := self.env.context.get('default_survey_id'):
             survey = self.env['survey.survey'].browse(default_survey_id)
-            if 'is_time_limited' in fields_list and 'is_time_limited' not in res:
+            if 'is_time_limited' in fields and 'is_time_limited' not in res:
                 res['is_time_limited'] = survey.session_speed_rating
-            if 'time_limit' in fields_list and 'time_limit' not in res:
+            if 'time_limit' in fields and 'time_limit' not in res:
                 res['time_limit'] = survey.session_speed_rating_time_limit
         return res
 
@@ -673,11 +673,11 @@ class SurveyQuestion(models.Model):
             'value': _('Other (see comments)') if not suggested_answer else suggested_answer.value_label,
             'suggested_answer': suggested_answer,
             'count': count_data[suggested_answer],
-            'count_text': _("%s Votes", count_data[suggested_answer]),
+            'count_text': self.env._("%s Votes", count_data[suggested_answer]),
             }
             for suggested_answer in suggested_answers]
         graph_data = [{
-            'text': _('Other (see comments)') if not suggested_answer else suggested_answer.value_label,
+            'text': self.env._('Other (see comments)') if not suggested_answer else suggested_answer.value_label,
             'count': count_data[suggested_answer]
             }
             for suggested_answer in suggested_answers]

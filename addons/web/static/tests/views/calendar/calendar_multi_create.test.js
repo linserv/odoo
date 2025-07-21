@@ -1,12 +1,14 @@
 import { beforeEach, expect, test } from "@odoo/hoot";
-import { click, edit } from "@odoo/hoot-dom";
+import { click, edit, queryAllTexts } from "@odoo/hoot-dom";
 import { advanceTime, animationFrame, mockTimeZone, runAllTimers } from "@odoo/hoot-mock";
 import {
     contains,
     defineModels,
     fields,
+    getService,
     models,
     mountView,
+    mountWithCleanup,
     onRpc,
     patchWithCleanup,
     preloadBundle,
@@ -14,6 +16,7 @@ import {
 } from "@web/../tests/web_test_helpers";
 
 import { CalendarModel } from "@web/views/calendar/calendar_model";
+import { WebClient } from "@web/webclient/webclient";
 import { notificationService } from "@web/core/notifications/notification_service";
 import { markup } from "@odoo/owl";
 
@@ -24,6 +27,7 @@ class Event extends models.Model {
     datetime_end = fields.Datetime();
     type = fields.Many2one({ relation: "event.type" });
     user_id = fields.Many2one({ relation: "calendar.user" });
+    user_ids = fields.Many2many({ relation: "calendar.user" });
 
     // FIXME: needed for the filter to work
     filter_user_id = fields.Many2one({ relation: "calendar.user" });
@@ -127,11 +131,26 @@ class Event extends models.Model {
                 <field name="filter_user_id" invisible="1"/>
             </calendar>
         `,
+        "calendar,calendar_state": `
+            <calendar date_start="datetime_start" date_stop="datetime_end" scales="month" multi_create_view="multi_create_form_state" aggregate="id:count">
+                <!-- Popover -->
+                <field name="name"/>
+            </calendar>
+        `,
         "form,multi_create_form": `
             <form>
                 <group>
                     <field name="name" required="1"/>
                     <field name="type"/>
+                </group>
+            </form>
+        `,
+        "form,multi_create_form_state": `
+            <form>
+                <group>
+                    <field name="name" required="1"/>
+                    <field name="type"/>
+                    <field name="user_ids" widget="many2many_tags"/>
                 </group>
             </form>
         `,
@@ -510,6 +529,61 @@ test("multi_create: input validation (datetime field)", async () => {
 });
 
 test.tags("desktop");
+test("multi_create: use state to keep values of inputs", async () => {
+    onRpc("event.type", "get_formview_action", ({ args, model }) => ({
+        type: "ir.actions.act_window",
+        res_model: model,
+        target: "current",
+        views: [[false, "form"]],
+        res_id: args[0][0],
+    }));
+
+    await mountWithCleanup(WebClient);
+    await getService("action").doAction({
+        name: "Event",
+        res_model: "event",
+        type: "ir.actions.act_window",
+        views: [["calendar_state", "calendar"]],
+    });
+
+    await click(".o_time_picker_input:eq(0)");
+    await animationFrame();
+    await click(".o_time_picker_option:contains(1:30)");
+    await animationFrame();
+
+    await click(".o_time_picker_input:eq(1)");
+    await animationFrame();
+    await click(".o_time_picker_option:contains(8:00)");
+    await animationFrame();
+
+    await click(".o_calendar_sidebar_container .o_form_view [name='name'] input");
+    await animationFrame();
+    await edit("Test state");
+
+    await contains(".o_calendar_sidebar_container .o_form_view [name='type'] input").click();
+    await contains(".o-autocomplete--dropdown-item:contains('Event Type 3')").click();
+
+    await contains(".o_calendar_sidebar_container .o_form_view [name='user_ids'] input").click();
+    await contains(".o-autocomplete--dropdown-item:contains('user 1')").click();
+    await contains(".o_calendar_sidebar_container .o_form_view [name='user_ids'] input").click();
+    await contains(".o-autocomplete--dropdown-item:contains('user 3')").click();
+
+    // Navigate to the many2one record
+    await click(".o_form_view [name='type'] .o_external_button");
+    await animationFrame();
+
+    // Go back to the calendar view
+    await click(".breadcrumb-item");
+    await animationFrame();
+
+    expect(".o_time_picker_input:eq(0)").toHaveValue("1:30");
+    expect(".o_time_picker_input:eq(1)").toHaveValue("8:00");
+    expect(".o_form_view [name='name'] input").toHaveValue("Test state");
+    expect(".o_form_view [name='type'] input").toHaveValue("Event Type 3");
+    expect(queryAllTexts(".o_form_view [name='user_ids'] .o_tag")).toEqual(["user 1", "user 3"]);
+});
+
+test.tags("desktop");
 test("multi_create: filter mode (normal calendar)", async () => {
     await mountView({
         resModel: "event",
@@ -779,4 +853,26 @@ test("multi_create: test required attribute in form", async () => {
     await dropOk();
     await animationFrame();
     expect.verifySteps(["Test required_2019-03-04", "Test required_2019-03-04"]);
+});
+
+test.tags("desktop");
+test("multi_create: display sidebar even if session_storage says no", async () => {
+    patchWithCleanup(sessionStorage, {
+        getItem(key) {
+            if (key === "calendar.showSideBar") {
+                expect.step("read calendar.showSideBar");
+                return false;
+            }
+        },
+    });
+
+    await mountView({
+        type: "calendar",
+        resModel: "event",
+        arch: `<calendar date_start="date_start" scales="month" multi_create_view="multi_create_form" aggregate="id:count"/>`,
+    });
+
+    expect(".o_calendar_sidebar").toHaveCount(1);
+    expect(".o_calendar_sidebar .btn-group .btn").toHaveCount(3);
+    expect.verifySteps(["read calendar.showSideBar"]);
 });

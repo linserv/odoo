@@ -30,13 +30,15 @@ import { _t } from "@web/core/l10n/translation";
 import { compareListTypes, createList, insertListAfter, isListItem } from "./utils";
 import { callbacksForCursorUpdate } from "@html_editor/utils/selection";
 import { withSequence } from "@html_editor/utils/resource";
-import { FONT_SIZE_CLASSES, getFontSizeOrClass } from "@html_editor/utils/formatting";
+import { FONT_SIZE_CLASSES, getFontSizeOrClass, getHtmlStyle } from "@html_editor/utils/formatting";
 import { getTextColorOrClass } from "@html_editor/utils/color";
 import { baseContainerGlobalSelector } from "@html_editor/utils/base_container";
 import { ListSelector } from "./list_selector";
 import { reactive } from "@odoo/owl";
 import { composeToolbarButton } from "../toolbar/toolbar";
 import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
+import { pick } from "@web/core/utils/objects";
+import { weakMemoize } from "@html_editor/utils/functions";
 
 const listSelectorItems = [
     {
@@ -78,7 +80,7 @@ export class ListPlugin extends Plugin {
                 description: _t("Create a simple bulleted list"),
                 icon: "fa-list-ul",
                 run: () => this.toggleListCommand({ mode: "UL" }),
-                isAvailable: isHtmlContentSupported,
+                isAvailable: this.canToggleList.bind(this),
             },
             {
                 id: "toggleListOL",
@@ -86,7 +88,7 @@ export class ListPlugin extends Plugin {
                 description: _t("Create a list with numbering"),
                 icon: "fa-list-ol",
                 run: () => this.toggleListCommand({ mode: "OL" }),
-                isAvailable: isHtmlContentSupported,
+                isAvailable: this.canToggleList.bind(this),
             },
             {
                 id: "toggleListCL",
@@ -94,7 +96,7 @@ export class ListPlugin extends Plugin {
                 description: _t("Track tasks with a checklist"),
                 icon: "fa-check-square-o",
                 run: () => this.toggleListCommand({ mode: "CL" }),
-                isAvailable: isHtmlContentSupported,
+                isAvailable: this.canToggleList.bind(this),
             },
         ],
         shortcuts: [
@@ -113,7 +115,7 @@ export class ListPlugin extends Plugin {
                     getListMode: this.getListMode.bind(this),
                     key: this.toolbarListSelectorKey,
                 },
-                isAvailable: isHtmlContentSupported,
+                isAvailable: this.canToggleList.bind(this),
             }),
         ],
         powerbox_items: [
@@ -154,6 +156,8 @@ export class ListPlugin extends Plugin {
         format_selection_overrides: this.applyFormatToListItem.bind(this),
         node_to_insert_processors: this.processNodeToInsert.bind(this),
         clipboard_content_processors: this.processContentForClipboard.bind(this),
+        before_insert_within_pre_processors: this.insertListWithinPre.bind(this),
+
         fully_selected_node_predicates: (node, selection, range) => {
             if (node.nodeName === "LI") {
                 const nonListChildren = childNodes(node).filter(
@@ -176,11 +180,29 @@ export class ListPlugin extends Plugin {
         this.addDomListener(this.editable, "touchstart", this.onPointerdown);
         this.addDomListener(this.editable, "mousedown", this.onPointerdown);
         this.listSelectorButtons = this.getListSelectorButtons();
+        this.canToggleListMemoized = weakMemoize(
+            (selection) =>
+                isHtmlContentSupported(selection) && this.getBlocksToToggleList().length > 0
+        );
     }
 
     toggleListCommand({ mode } = {}) {
         this.toggleList(mode);
         this.dependencies.history.addStep();
+    }
+
+    getBlocksToToggleList() {
+        const targetedBlocks = [...this.dependencies.selection.getTargetedBlocks()];
+        return targetedBlocks.filter(
+            (block) =>
+                !descendants(block).some((descendant) => targetedBlocks.includes(descendant)) &&
+                block.isContentEditable &&
+                !["OL", "UL"].includes(block.tagName)
+        );
+    }
+
+    canToggleList(selection) {
+        return this.canToggleListMemoized(selection);
     }
 
     onInput(ev) {
@@ -258,23 +280,11 @@ export class ListPlugin extends Plugin {
         // @todo @phoenix: original implementation removed whitespace-only text nodes from targetedNodes.
         // Check if this is necessary.
 
-        const targetedBlocks = this.dependencies.selection.getTargetedBlocks();
-
-        // Keep deepest blocks only.
-        for (const block of targetedBlocks) {
-            if (descendants(block).some((descendant) => targetedBlocks.has(descendant))) {
-                targetedBlocks.delete(block);
-            }
-        }
-
         // Classify targeted blocks.
         const sameModeListItems = new Set();
         const nonListBlocks = new Set();
         const listsToSwitch = new Set();
-        for (const block of targetedBlocks) {
-            if (["OL", "UL"].includes(block.tagName) || !block.isContentEditable) {
-                continue;
-            }
+        for (const block of this.getBlocksToToggleList()) {
             const li = closestElement(block, isListItem);
             if (li) {
                 if (this.getListMode(li.parentElement) === mode) {
@@ -908,12 +918,14 @@ export class ListPlugin extends Plugin {
             ...params,
             blockToSplit: closestLI,
         });
-        if (closestLI.classList.contains("o_checked")) {
-            removeClass(newLI, "o_checked");
+        if (newLI) {
+            if (closestLI.classList.contains("o_checked")) {
+                removeClass(newLI, "o_checked");
+            }
+            const [anchorNode, anchorOffset] = getDeepestPosition(newLI, 0);
+            this.dependencies.selection.setSelection({ anchorNode, anchorOffset });
+            this.adjustListPadding(newLI.parentElement);
         }
-        const [anchorNode, anchorOffset] = getDeepestPosition(newLI, 0);
-        this.dependencies.selection.setSelection({ anchorNode, anchorOffset });
-        this.adjustListPadding(newLI.parentElement);
         return true;
     }
 
@@ -992,6 +1004,29 @@ export class ListPlugin extends Plugin {
             clonedContents = list;
         }
         return clonedContents;
+    }
+
+    insertListWithinPre(node) {
+        const listItems = node.querySelectorAll("li:not(.oe-nested)");
+        for (const li of listItems) {
+            const nestingLvl = ancestors(li).filter(isListElement).length - 1;
+            const list = closestElement(li, "ul, ol");
+            const listMode = this.getListMode(list);
+            let char;
+            if (listMode === "CL") {
+                char = "[] ";
+            } else if (listMode === "OL") {
+                const children = childNodes(li.parentElement).filter(
+                    (n) => !n.classList.contains("oe-nested")
+                );
+                char = `${children.indexOf(li) + 1}. `;
+            } else {
+                char = "* ";
+            }
+            const prefix = " ".repeat(nestingLvl * 4) + char;
+            li.prepend(this.document.createTextNode(prefix));
+        }
+        return node;
     }
 
     // --------------------------------------------------------------------------
@@ -1196,8 +1231,7 @@ export class ListPlugin extends Plugin {
         const largestMarkerPadding = Math.round(largestMarker) * (list.nodeName === "UL" ? 2 : 1);
 
         // bootstrap sets ul { padding-left: 2rem; }
-        const defaultPadding =
-            parseFloat(this.window.getComputedStyle(document.documentElement).fontSize) * 2;
+        const defaultPadding = parseFloat(getHtmlStyle(this.document).fontSize) * 2;
         // Align the whole list based on the item that requires the largest padding.
         // For smaller font sizes, doubling the width of the dot marker is still lower than the
         // default. The default is kept in that case.
@@ -1228,9 +1262,12 @@ export class ListPlugin extends Plugin {
     getListSelectorButtons() {
         return listSelectorItems.map((item) => {
             const command = this.resources.user_commands.find((cmd) => cmd.id === item.commandId);
-            // We want short descriptions for these buttons.
-            item.description = command.title;
-            return composeToolbarButton(command, item);
+            const button = composeToolbarButton(command, item);
+            return {
+                ...pick(button, "id", "icon", "run", "mode"),
+                // We want short descriptions for these buttons.
+                description: command.title,
+            };
         });
     }
 }

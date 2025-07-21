@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from odoo import _, api, fields, models
-from odoo.osv.expression import AND
+from odoo import api, fields, models
+from odoo.fields import Domain
 
 
 class ProductReplenish(models.TransientModel):
@@ -43,7 +42,6 @@ class ProductReplenish(models.TransientModel):
     def _prepare_run_values(self):
         res = super()._prepare_run_values()
         if self.supplier_id:
-            res['supplierinfo_id'] = self.supplier_id
             res['group_id'].partner_id = self.supplier_id.partner_id
         return res
 
@@ -95,5 +93,5 @@ class ProductReplenish(models.TransientModel):
         domain = super()._get_route_domain(product_tmpl_id)
         buy_route = self.env.ref('purchase_stock.route_warehouse0_buy', raise_if_not_found=False)
         if buy_route and not product_tmpl_id.seller_ids:
-            domain = AND([domain, [('id', '!=', buy_route.id)]])
+            domain = Domain.AND([domain, Domain('id', '!=', buy_route.id)])
         return domain

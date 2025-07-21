@@ -29,7 +29,7 @@ class TestHttpWebJson_2(TestHttpBase):
     def test_webjson2_multi_db_no_header(self):
         res = self.multidb_url_open(
             '/json/2/res.users/search',
-            data=r'{"kwargs": {"domain": []}}',
+            data=r'{"domain": []}',
             headers=CT_JSON | self.bearer_header,
             dblist=(get_db_name(), 'another-database'),
         )
@@ -40,7 +40,7 @@ class TestHttpWebJson_2(TestHttpBase):
     def test_webjson2_multi_db_bad_header(self):
         res = self.multidb_url_open(
             '/json/2/res.users/search',
-            data=r'{"kwargs": {"domain": []}}',
+            data=r'{"domain": []}',
             headers={**CT_JSON, **self.bearer_header,
                 'X-odoo-database': f'{get_db_name()}-idontexist',
             },
@@ -67,7 +67,7 @@ class TestHttpWebJson_2(TestHttpBase):
         res = self.db_url_open(
             # application/x-www-form-urlencoded
             '/json/2/res.users/search',
-            data={"kwargs": {"domain": []}},
+            data={"domain": []},
             headers=self.bearer_header,
         )
         self.assertEqual(res.text, Like("""
@@ -76,6 +76,7 @@ class TestHttpWebJson_2(TestHttpBase):
         """))
         self.assertEqual(res.status_code, HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
         self.assertEqual(res.headers.get('Content-Type'), 'text/html; charset=utf-8')
+        self.assertEqual(res.headers.get('Accept'), 'application/json')
 
     def test_webjson2_bad_data(self):
         res = self.db_url_open(
@@ -100,7 +101,7 @@ class TestHttpWebJson_2(TestHttpBase):
     def test_webjson2_missing_auth(self):
         res = self.db_url_open(
             '/json/2/res.users/search',
-            data=r'{"kwargs": {"domain": []}}',
+            data=r'{"domain": []}',
             headers=CT_JSON,
         )
         self.assertEqual(res.status_code, HTTPStatus.UNAUTHORIZED)
@@ -118,7 +119,7 @@ class TestHttpWebJson_2(TestHttpBase):
     def test_webjson2_good(self):
         res = self.db_url_open(
             '/json/2/res.users/search',
-            data=r'{"kwargs": {"domain": [["id","=",%d]]}}' % self.jackoneill.id,
+            data=r'{"domain": [["id","=",%d]]}' % self.jackoneill.id,
             headers=CT_JSON | self.bearer_header,
         )
         self.assertEqual(res.text, f"[{self.jackoneill.id}]")
@@ -128,9 +129,19 @@ class TestHttpWebJson_2(TestHttpBase):
     def test_webjson2_api_model(self):
         res = self.db_url_open(
             '/json/2/res.users/create',
-            data=r'{"ids": [0], "args": [{}]}',
+            data=r'{"ids": [0]}',
             headers=CT_JSON | self.bearer_header,
         )
         self.assertEqual(res.text, '''"cannot call res.users.create with ids"''')
         self.assertEqual(res.status_code, HTTPStatus.UNPROCESSABLE_ENTITY)
+        self.assertEqual(res.headers.get('Content-Type'), 'application/json; charset=utf-8')
+
+    def test_webjson2_missing_method(self):
+        res = self.db_url_open(
+            '/json/2/res.users',
+            data=r'{}',
+            headers=CT_JSON | self.bearer_header,
+        )
+        self.assertEqual(res.text, '''"Did you mean POST /json/2/<model>/<method>?"''')
+        self.assertEqual(res.status_code, HTTPStatus.NOT_FOUND)
         self.assertEqual(res.headers.get('Content-Type'), 'application/json; charset=utf-8')

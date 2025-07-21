@@ -330,7 +330,11 @@ class DiscussChannel(models.Model):
                                 field_name=field_name,
                             )
                         )
-            membership_pids = [cmd[2]['partner_id'] for cmd in membership_ids_cmd if cmd[0] == 0]
+            membership_pids = [
+                cmd[2]["partner_id"]
+                for cmd in membership_ids_cmd
+                if cmd[0] == 0 and "partner_id" in cmd[2]
+            ]
 
             partner_ids_to_add = partner_ids
             # always add current user to new channel to have right values for
@@ -486,7 +490,7 @@ class DiscussChannel(models.Model):
         if not member:
             custom_store.bus_send()
             return
-        if post_leave_message:
+        if self.channel_type != "channel" and post_leave_message:
             notification = Markup('<div class="o_mail_notification" data-oe-type="channel-left">%s</div>') % _(
                 "left the channel"
             )
@@ -565,7 +569,7 @@ class DiscussChannel(models.Model):
                 if not member.is_self and not self.env.user._is_public():
                     payload["invited_by_user_id"] = self.env.user.id
                 member._bus_send("discuss.channel/joined", payload)
-                if post_joined_message:
+                if channel.channel_type != "channel" and post_joined_message:
                     notification = (
                         _("joined the channel")
                         if member.is_self
@@ -788,6 +792,7 @@ class DiscussChannel(models.Model):
         payload = super()._notify_by_web_push_prepare_payload(
             message, msg_vals=msg_vals, force_record_name=force_record_name,
         )
+        msg_vals = msg_vals or {}
         payload['options']['data']['action'] = 'mail.action_discuss'
         record_name = force_record_name or message.record_name
         author_ids = [msg_vals["author_id"]] if msg_vals.get("author_id") else message.author_id.ids
@@ -992,20 +997,10 @@ class DiscussChannel(models.Model):
         if not self.env.user._is_public():
             self._add_members(users=self.env.user, post_joined_message=post_joined_message)
         else:
-            guest = self.env["mail.guest"]._get_guest_from_context()
-            if not guest:
-                guest = self.env["mail.guest"].create(
-                    {
-                        "country_id": self.env["res.country"].search([("code", "=", country_code)]).id,
-                        "lang": get_lang(self.env).code,
-                        "name": guest_name,
-                        "timezone": timezone,
-                    }
-                )
-                guest._set_auth_cookie()
-                guest = guest.sudo(False)
-                self = self.with_context(guest=guest)
-            self._add_members(
+            guest = guest._get_or_create_guest(
+                guest_name=guest_name, country_code=country_code, timezone=timezone
+            )
+            self.with_context(guest=guest)._add_members(
                 guests=guest,
                 create_member_params=create_member_params,
                 post_joined_message=post_joined_message,
@@ -1421,15 +1416,13 @@ class DiscussChannel(models.Model):
             )
         else:
             if members := self.channel_member_ids.filtered(lambda m: not m.is_self):
+                member_names = html_escape(format_list(self.env, [f"%(member_{member.id})s" for member in members])) % {
+                    f"member_{member.id}": member._get_html_link(for_persona=True)
+                    for member in members
+                }
                 msg = _(
                     "You are in a private conversation with %(member_names)s.",
-                    member_names=html_escape(
-                        format_list(self.env, [f"%(member_{member.id})s" for member in members])
-                    )
-                    % {
-                        f"member_{member.id}": member._get_html_link(for_persona=True)
-                        for member in members
-                    },
+                    member_names=member_names,
                 )
             else:
                 msg = _("You are alone in a private conversation.")
@@ -1464,13 +1457,13 @@ class DiscussChannel(models.Model):
                 list_params.append(_("more"))
             else:
                 list_params.append(_("you"))
+            member_names = html_escape(format_list(self.env, list_params)) % {
+                f"member_{member.id}": member._get_html_link(for_persona=True)
+                for member in members
+            }
             msg = _(
                 "Users in this channel: %(members)s.",
-                members=html_escape(format_list(self.env, list_params))
-                % {
-                    f"member_{member.id}": member._get_html_link(for_persona=True)
-                    for member in members
-                },
+                members=member_names,
             )
         else:
             msg = _("You are alone in this channel.")

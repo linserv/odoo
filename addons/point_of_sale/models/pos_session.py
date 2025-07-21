@@ -3,12 +3,15 @@ from collections import defaultdict
 from datetime import timedelta
 from itertools import groupby, starmap
 from markupsafe import Markup
+import logging
 
-from odoo import api, fields, models, _, Command
+from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.fields import Command, Domain
 from odoo.tools import float_is_zero, float_compare, frozendict, plaintext2html, split_every
 from odoo.tools.constants import PREFETCH_MAX
-from odoo.osv.expression import AND
+
+_logger = logging.getLogger(__name__)
 
 
 class PosSession(models.Model):
@@ -95,7 +98,7 @@ class PosSession(models.Model):
     def write(self, vals):
         if vals.get('state') == 'closed':
             for record in self:
-                record.config_id._notify(('CLOSING_SESSION', {'login_number': self.env.context.get('login_number', False)}))
+                record.config_id._notify(('CLOSING_SESSION', {'login_number': self.env.context.get('login_number', False), 'session_id': self.id}))
         return super().write(vals)
 
     @api.model
@@ -161,8 +164,9 @@ class PosSession(models.Model):
 
             try:
                 response[model] = self.env[model]._load_pos_data_search_read(response, self.config_id)
-            except AccessError:
+            except AccessError as e:
                 response[model] = []
+                _logger.info("Could not load model %s due to AccessError: %s", model, e)
 
         return response
 
@@ -241,7 +245,7 @@ class PosSession(models.Model):
             cash_payment_method = session.payment_method_ids.filtered('is_cash_count')[:1]
             if cash_payment_method:
                 total_cash_payment = 0.0
-                captured_cash_payments_domain = AND([session._get_captured_payments_domain(), [('payment_method_id', '=', cash_payment_method.id)]])
+                captured_cash_payments_domain = Domain.AND([session._get_captured_payments_domain(), [('payment_method_id', '=', cash_payment_method.id)]])
                 result = self.env['pos.payment']._read_group(captured_cash_payments_domain, aggregates=['amount:sum'])
                 total_cash_payment = result[0][0] or 0.0
                 if session.state == 'closed':

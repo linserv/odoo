@@ -1471,8 +1471,9 @@ class AccountMoveLine(models.Model):
         )
         return super(AccountMoveLine, contextualized).search_fetch(domain, field_names, offset, limit, order)
 
-    def default_get(self, fields_list):
-        defaults = super().default_get(fields_list)
+    @api.model
+    def default_get(self, fields):
+        defaults = super().default_get(fields)
         quick_encode_suggestion = self.env.context.get('quick_encoding_vals')
         if quick_encode_suggestion and self.env.context.get('default_display_type') not in ('line_section', 'line_note'):
             defaults['account_id'] = quick_encode_suggestion['account_id']
@@ -1836,18 +1837,18 @@ class AccountMoveLine(models.Model):
                 line._copy_data_extend_business_fields(vals)
         return vals_list
 
-    def _field_to_sql(self, alias: str, field_expr: str, query: (Query | None) = None, flush: bool = True) -> SQL:
+    def _field_to_sql(self, alias: str, field_expr: str, query: (Query | None) = None) -> SQL:
         fname, property_name = fields.parse_field_expr(field_expr)
         if fname != 'payment_date':
-            return super()._field_to_sql(alias, field_expr, query, flush)
+            return super()._field_to_sql(alias, field_expr, query)
         sql = SQL("""
             CASE
                  WHEN %(discount_date)s >= %(today)s THEN %(discount_date)s
                  ELSE %(date_maturity)s
             END""",
             today=fields.Date.context_today(self),
-            discount_date=super()._field_to_sql(alias, "discount_date", query, flush),
-            date_maturity=super()._field_to_sql(alias, "date_maturity", query, flush),
+            discount_date=super()._field_to_sql(alias, "discount_date", query),
+            date_maturity=super()._field_to_sql(alias, "date_maturity", query),
         )
         if property_name:
             sql = self._field[fname].property_to_sql(sql, property_name, self, alias, query)

@@ -31,6 +31,15 @@ describe("button style", () => {
         const button = el.querySelector(".o_embedded_toolbar button");
         expect(button).toHaveStyle({ cursor: "pointer" });
     });
+    test("editable button is user-selectable", async () => {
+        await setupEditor('<p><a href="#" class="btn test-btn">button</a></p>');
+        expect(queryOne(".test-btn")).toHaveStyle({ userSelect: "auto" });
+    });
+    test("non-editable button should not be user-selectable", async () => {
+        const { el } = await setupEditor('<p><a href="#" class="btn test-btn">button</a></p>');
+        el.setAttribute("contenteditable", "false");
+        expect(queryOne(".test-btn")).toHaveStyle({ userSelect: "none" });
+    });
 });
 
 const allowCustomOpt = {
@@ -142,14 +151,14 @@ describe("Custom button style", () => {
         await animationFrame();
 
         expect(cleanLinkArtifacts(getContent(el))).toBe(
-            '<p><a href="http://test.test/" class="btn btn-fill-custom" style="color: #FF0000; background-color: #00FF00; border-width: 6px; border-color: #0000FF; border-style: dotted; ">Hello</a></p>'
+            '<p><a href="http://test.test/" class="btn btn-custom" style="color: #FF0000; background-color: #00FF00; border-width: 6px; border-color: #0000FF; border-style: dotted; ">Hello</a></p>'
         );
 
         await click(".o_we_apply_link");
         await animationFrame();
 
         expect(cleanLinkArtifacts(getContent(el))).toBe(
-            '<p><a href="http://test.test/" class="btn btn-fill-custom" style="color: #FF0000; background-color: #00FF00; border-width: 6px; border-color: #0000FF; border-style: dotted; ">Hello[]</a></p>'
+            '<p><a href="http://test.test/" class="btn btn-custom" style="color: #FF0000; background-color: #00FF00; border-width: 6px; border-color: #0000FF; border-style: dotted; ">Hello[]</a></p>'
         );
     });
 
@@ -168,6 +177,41 @@ describe("Custom button style", () => {
 
         expect(cleanLinkArtifacts(getContent(el))).toBe(
             '<p><a href="http://test.test/" target="_blank">Hello[]</a></p>'
+        );
+    });
+
+    test("Editor allow custom shape if config is active", async () => {
+        const { el } = await setupEditor(
+            '<p><a href="https://test.com/">link[]Label</a></p>',
+            allowCustomOpt
+        );
+        await waitFor(".o-we-linkpopover");
+        await click(".o_we_edit_link");
+        await animationFrame();
+        await click('select[name="link_type"]');
+        await select("custom");
+        await animationFrame();
+
+        // test outline
+        await click('select[name="link_style_shape"]');
+        await select("outline");
+        await animationFrame();
+        expect(cleanLinkArtifacts(getContent(el))).toBe(
+            '<p><a href="https://test.com/" class="btn btn-outline-custom" style="color: rgb(0, 0, 0); background-color: rgb(166, 227, 226); border-width: 1px; border-color: rgb(0, 143, 140); border-style: dashed; ">linkLabel</a></p>'
+        );
+
+        // test fill + rounded
+        await click('select[name="link_style_shape"]');
+        await select("fill rounded-circle");
+        await animationFrame();
+        expect(cleanLinkArtifacts(getContent(el))).toBe(
+            '<p><a href="https://test.com/" class="rounded-circle btn btn-fill-custom" style="color: rgb(0, 0, 0); background-color: rgb(166, 227, 226); border-width: 1px; border-color: rgb(0, 143, 140); border-style: dashed; ">linkLabel</a></p>'
+        );
+
+        await click(".o_we_apply_link");
+        await animationFrame();
+        expect(cleanLinkArtifacts(getContent(el))).toBe(
+            '<p><a href="https://test.com/" class="rounded-circle btn btn-fill-custom" style="color: rgb(0, 0, 0); background-color: rgb(166, 227, 226); border-width: 1px; border-color: rgb(0, 143, 140); border-style: dashed; ">link[]Label</a></p>'
         );
     });
 });

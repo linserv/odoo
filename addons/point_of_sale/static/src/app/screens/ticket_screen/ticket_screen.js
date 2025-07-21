@@ -72,7 +72,7 @@ export class TicketScreen extends Component {
             nbrByPage: NBR_BY_PAGE,
             page: 1,
             nbrPage: 1,
-            filter: null,
+            filter: this.pos.config.module_pos_restaurant ? "ONGOING" : null,
             search: this.pos.getDefaultSearchDetails(),
             selectedOrderUuid: this.pos.getOrder()?.uuid || null,
             selectedOrderlineIds: {},
@@ -190,6 +190,12 @@ export class TicketScreen extends Component {
             }
         }
     }
+    async onClickReprintAll(order) {
+        const printingChanges = order.uiState?.lastPrints;
+        if (printingChanges) {
+            await this.pos.printChanges(order, printingChanges, true);
+        }
+    }
     async onNextPage() {
         if (this.state.page < this.getNbrPages()) {
             this.state.page += 1;
@@ -245,7 +251,7 @@ export class TicketScreen extends Component {
                 return this.numberBuffer.reset();
             }
 
-            const refundableQty = toRefundDetail.line.qty - toRefundDetail.line.refunded_qty;
+            const refundableQty = toRefundDetail.line.qty - toRefundDetail.line.refundedQty;
             if (refundableQty <= 0) {
                 return this.numberBuffer.reset();
             }
@@ -583,7 +589,7 @@ export class TicketScreen extends Component {
             return false;
         }
         const theOrderline = orderlines[0];
-        const refundableQty = theOrderline.getQuantity() - theOrderline.refunded_qty;
+        const refundableQty = theOrderline.getQuantity() - theOrderline.refundedQty;
         return this.pos.isProductQtyZero(refundableQty - 1);
     }
     _prepareAutoRefundOnOrder(order) {
@@ -801,7 +807,11 @@ export class TicketScreen extends Component {
             .filter((orderInfo) => {
                 const order = this.pos.models["pos.order"].get(orderInfo[0]);
 
-                if (order && parseDateTime(orderInfo[1]) > order.date_order) {
+                if (
+                    order &&
+                    parseDateTime(orderInfo[1], { tz: "UTC" }).setZone("local").ts >
+                        order.date_order.ts
+                ) {
                     return true;
                 }
 

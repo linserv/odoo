@@ -751,7 +751,8 @@ class HrLeaveAllocation(models.Model):
                 allocation.action_approve()
         return allocations
 
-    def write(self, values):
+    def write(self, vals):
+        values = vals
         employee_id = values.get('employee_id', False)
         if values.get('state'):
             self._check_approval_update(values['state'])
@@ -959,7 +960,7 @@ class HrLeaveAllocation(models.Model):
     def activity_update(self):
         to_clean, to_do, to_second_do = self.env['hr.leave.allocation'], self.env['hr.leave.allocation'], self.env['hr.leave.allocation']
         activity_vals = []
-        model_id = self.env.ref('hr_holidays.model_hr_leave_allocation').id
+        model_id = self.env['ir.model']._get_id('hr.leave.allocation')
         confirm_activity = self.env.ref('hr_holidays.mail_act_leave_allocation_approval')
         approval_activity = self.env.ref('hr_holidays.mail_act_leave_allocation_second_approval')
         for allocation in self:

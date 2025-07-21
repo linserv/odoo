@@ -17,6 +17,7 @@ import {
 import { ReplaceMediaOption, searchSupportedParentLinkEl } from "./replace_media_option";
 import { computeMaxDisplayWidth } from "@html_builder/plugins/image/image_format_option";
 import { BuilderAction } from "@html_builder/core/builder_action";
+import { selectElements } from "@html_editor/utils/dom_traversal";
 
 export const REPLACE_MEDIA_SELECTOR = "img, .media_iframe_video, span.fa, i.fa";
 export const REPLACE_MEDIA_EXCLUDE =
@@ -32,7 +33,6 @@ class ImageToolOptionPlugin extends Plugin {
         "media",
         "builderOptions",
     ];
-    static shared = ["canHaveHoverEffect"];
     resources = {
         builder_options: [
             withSequence(REPLACE_MEDIA, {
@@ -109,17 +109,18 @@ class ImageToolOptionPlugin extends Plugin {
                 }
             }
         },
+        hover_effect_allowed_predicates: (el) => this.canHaveHoverEffect(el),
+        normalize_handlers: this.migrateImages.bind(this),
     };
 
     async canHaveHoverEffect(img) {
         const getDataset = async () => Object.assign({}, img.dataset, await loadImageInfo(img));
-        return (
-            img.tagName === "IMG" &&
-            !this.isDeviceShape(img) &&
-            !this.isAnimatedShape(img) &&
-            this.isImageSupportedForShapes(img, await getDataset()) &&
-            !(await isImageCorsProtected(img))
-        );
+        return img.tagName === "IMG"
+            ? !this.isDeviceShape(img) &&
+                  !this.isAnimatedShape(img) &&
+                  this.isImageSupportedForShapes(img, await getDataset()) &&
+                  !(await isImageCorsProtected(img))
+            : null;
     }
     isDeviceShape(img) {
         const shapeName = img.dataset.shape;
@@ -135,6 +136,21 @@ class ImageToolOptionPlugin extends Plugin {
     }
     isImageSupportedForShapes(img, dataset = img.dataset) {
         return dataset.originalId && isImageSupportedForProcessing(getMimetype(img));
+    }
+    migrateImages(rootEl) {
+        for (const el of selectElements(
+            rootEl,
+            "img[data-original-id]:not([data-attachment-id]), .oe_img_bg[data-original-id]:not([data-attachment-id])"
+        )) {
+            el.dataset.attachmentId = el.dataset.originalId;
+        }
+        for (const el of selectElements(
+            rootEl,
+            "img[data-original-mimetype]:not([data-format-mimetype]), .oe_img_bg[data-original-mimetype]:not([data-format-mimetype])"
+        )) {
+            el.dataset.formatMimetype = el.dataset.originalMimetype;
+            delete el.dataset.originalMimetype;
+        }
     }
 }
 
@@ -194,24 +210,9 @@ export class ResetTransformImageAction extends BuilderAction {
 }
 export class ReplaceMediaAction extends BuilderAction {
     static id = "replaceMedia";
-    static dependencies = ["media", "history", "builderOptions"];
-    async load({ editingElement }) {
-        let image;
-        await this.dependencies.media.openMediaDialog({
-            node: editingElement,
-            save: (newImage) => {
-                image = newImage;
-            },
-        });
-        return image;
-    }
-    apply({ editingElement, loadResult: newImage }) {
-        if (!newImage) {
-            return;
-        }
-        editingElement.replaceWith(newImage);
-        this.dependencies.history.addStep();
-        this.dependencies["builderOptions"].updateContainers(newImage);
+    static dependencies = ["media_website"];
+    async apply({ editingElement: mediaEl }) {
+        await this.dependencies["media_website"].replaceMedia(mediaEl);
     }
 }
 export class SetLinkAction extends BuilderAction {

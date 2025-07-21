@@ -77,7 +77,7 @@ export class FiltersSearchDialog extends Component {
     }
 
     setGlobalFilterValue(node, value) {
-        if (!value && node.globalFilter.type !== "date") {
+        if (value == undefined && node.globalFilter.type !== "date") {
             // preserve the operator.
             node.value = {
                 ...node.value,
@@ -148,6 +148,8 @@ export class FiltersSearchDialog extends Component {
         const models = this.globalFilters
             .filter((filter) => filter.type === "relation")
             .map((filter) => filter.modelName);
-        return this.orm.cached().call("ir.model", "has_searchable_parent_relation", [models]);
+        return this.orm
+            .cache({ type: "disk" })
+            .call("ir.model", "has_searchable_parent_relation", [models]);
     }
 }

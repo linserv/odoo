@@ -38,6 +38,7 @@ Help your customers with this chat, and analyse their feedback.
         "views/digest_views.xml",
         "views/webclient_templates.xml",
         "report/im_livechat_report_channel_views.xml",
+        "report/im_livechat_conversation_report.xml",
     ],
     'demo': [
         "demo/im_livechat_channel/im_livechat_channel.xml",
@@ -169,11 +170,8 @@ Help your customers with this chat, and analyse their feedback.
             'bus/static/tests/mock_websocket.js',
         ],
         "im_livechat.assets_livechat_support_tours": [
-            "web_tour/static/src/tour_pointer/**/*",
+            "web_tour/static/src/js/**/*",
             "web/static/lib/hoot-dom/**/*",
-            # scss not needed in tests and depends on scss variables that are not in this bundle
-            ("remove", "web_tour/static/src/tour_pointer/**/*.scss"),
-            "web_tour/static/src/tour_service/**/*",
             'web_tour/static/src/tour_utils.js',
             "web/static/tests/legacy/helpers/cleanup.js",
             "web/static/tests/legacy/helpers/utils.js",

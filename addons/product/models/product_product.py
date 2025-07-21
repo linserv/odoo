@@ -397,12 +397,12 @@ class ProductProduct(models.Model):
         self.env.registry.clear_cache()
         return products
 
-    def write(self, values):
-        res = super(ProductProduct, self).write(values)
-        if 'product_template_attribute_value_ids' in values:
+    def write(self, vals):
+        res = super().write(vals)
+        if 'product_template_attribute_value_ids' in vals:
             # `_get_variant_id_for_combination` depends on `product_template_attribute_value_ids`
             self.env.registry.clear_cache()
-        elif 'active' in values:
+        elif 'active' in vals:
             # `_get_first_possible_variant_id` depends on variants active state
             self.env.registry.clear_cache()
         return res
@@ -717,6 +717,8 @@ class ProductProduct(models.Model):
                 continue
             if seller.date_end and seller.date_end < date:
                 continue
+            if params and params.get('force_uom') and seller.product_uom_id != uom_id and seller.product_uom_id != self.uom_id:
+                continue
             if partner_id and seller.partner_id not in [partner_id, partner_id.parent_id]:
                 continue
             if quantity is not None and float_compare(quantity_uom_seller, seller.min_qty, precision_digits=precision) == -1:
@@ -734,7 +736,13 @@ class ProductProduct(models.Model):
 
         def sort_function(record):
             vals = {
-                'price_discounted': record.currency_id._convert(record.price_discounted, record.env.company.currency_id, record.env.company, date or fields.Date.context_today(self))
+                'price_discounted': record.currency_id._convert(
+                    record.price_discounted,
+                    record.env.company.currency_id,
+                    record.env.company,
+                    date or fields.Date.context_today(self),
+                    round=False,
+                ),
             }
             return [vals.get(key, record[key]) for key in sort_key]
         sellers = self._get_filtered_sellers(partner_id=partner_id, quantity=quantity, date=date, uom_id=uom_id, params=params)

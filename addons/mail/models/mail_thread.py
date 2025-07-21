@@ -365,18 +365,18 @@ class MailThread(models.AbstractModel):
                     self.env.cr.precommit.data.setdefault(f'mail.tracking.create.{self._name}.{thread.id}', changes)
         return threads
 
-    def write(self, values):
+    def write(self, vals):
         if self.env.context.get('tracking_disable'):
-            return super(MailThread, self).write(values)
+            return super().write(vals)
 
         if not self.env.context.get('mail_notrack'):
             self._track_prepare(self._fields)
 
         # Perform write
-        result = super(MailThread, self).write(values)
+        result = super().write(vals)
 
         # update followers
-        self._message_auto_subscribe(values)
+        self._message_auto_subscribe(vals)
 
         return result
 
@@ -482,26 +482,6 @@ class MailThread(models.AbstractModel):
         self.ensure_one()
         doc_name = self.env['ir.model']._get(self._name).name
         return _('%s created', doc_name)
-
-    @api.model
-    def _get_mail_message_access(self, res_ids, operation, model_name=None):
-        """ mail.message check permission rules for related document. This method is
-            meant to be inherited in order to implement addons-specific behavior.
-            A common behavior would be to allow creating messages when having read
-            access rule on the document, for portal document such as issues. """
-
-        DocModel = self.env[model_name] if model_name else self
-        create_allow = getattr(DocModel, '_mail_post_access', 'write')
-
-        if operation in ['write', 'unlink']:
-            check_operation = 'write'
-        elif operation == 'create' and create_allow in ['create', 'read', 'write', 'unlink']:
-            check_operation = create_allow
-        elif operation == 'create':
-            check_operation = 'write'
-        else:
-            check_operation = operation
-        return check_operation
 
     def _valid_field_parameter(self, field, name):
         # allow tracking on models inheriting from 'mail.thread'

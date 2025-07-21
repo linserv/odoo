@@ -35,14 +35,14 @@ class PaymentToken(models.Model):
     )
     active = fields.Boolean(string="Active", default=True)
 
-    #=== COMPUTE METHODS ===#
+    # === COMPUTE METHODS === #
 
     @api.depends('payment_details', 'create_date')
     def _compute_display_name(self):
         for token in self:
             token.display_name = token._build_display_name()
 
-    #=== CRUD METHODS ===#
+    # === CRUD METHODS === #
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -72,15 +72,15 @@ class PaymentToken(models.Model):
         """
         return dict()
 
-    def write(self, values):
+    def write(self, vals):
         """ Prevent unarchiving tokens and handle their archiving.
 
         :return: The result of the call to the parent method.
         :rtype: bool
         :raise UserError: If at least one token is being unarchived.
         """
-        if 'active' in values:
-            if values['active']:
+        if 'active' in vals:
+            if vals['active']:
                 if any(
                     not token.payment_method_id.active
                     or token.provider_id.state == 'disabled'
@@ -94,7 +94,7 @@ class PaymentToken(models.Model):
                 # Call the handlers in sudo mode because this method might have been called by RPC.
                 self.filtered('active').sudo()._handle_archiving()
 
-        return super().write(values)
+        return super().write(vals)
 
     @api.constrains('partner_id')
     def _check_partner_is_never_public(self):
@@ -113,7 +113,7 @@ class PaymentToken(models.Model):
         """
         return
 
-    #=== BUSINESS METHODS ===#
+    # === BUSINESS METHODS === #
 
     def _get_available_tokens(self, providers_ids, partner_id, is_validation=False, **kwargs):
         """ Return the available tokens linked to the given providers and partner.

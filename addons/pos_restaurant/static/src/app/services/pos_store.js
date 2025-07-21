@@ -95,9 +95,8 @@ patch(PosStore.prototype, {
         }
         return super.defaultScreen;
     },
-
-    createNewOrder(data) {
-        const order = super.createNewOrder(data);
+    createNewOrder() {
+        const order = super.createNewOrder(...arguments);
 
         if (order.table_id) {
             order.setCustomerCount(order.table_id.seats);
@@ -870,8 +869,8 @@ patch(PosStore.prototype, {
                 noteUpdateTitle: _t("Course %s fired", "" + course.index),
                 printNoteUpdateData: false,
             };
-            this.getOrder().uiState.lastPrint = changes;
-            await this.printChanges(this.getOrder(), changes, false);
+            this.getOrder().uiState.lastPrints.push(changes);
+            await this.printChanges(this.getOrder(), [changes], false);
         } catch (e) {
             console.error("Unable to print course", e);
         }

@@ -79,9 +79,7 @@ export class MailComposerFormRenderer extends formView.Renderer {
         };
 
         onCloseWizardModal(async () => {
-            const selectedPartnerIds = this.props.record.data.partner_ids.records.map(
-                (partner) => partner.resId
-            );
+            const selectedPartnerIds = this.props.record.data.partner_ids.currentIds;
             const selectedPartners = await this.orm.searchRead(
                 "res.partner",
                 [["id", "in", selectedPartnerIds]],
@@ -103,7 +101,6 @@ export class MailComposerFormRenderer extends formView.Renderer {
                         lang: partner.lang,
                         name: partner.name,
                         partner_id: partner.id,
-                        persona: { type: "partner", id: partner.id },
                     };
                 }
                 return recipient;
@@ -145,7 +142,6 @@ export class MailComposerFormRenderer extends formView.Renderer {
                             lang: partner.lang,
                             name: partner.name,
                             partner_id: partner.id,
-                            persona: { type: "partner", id: partner.id },
                         });
                     }
                 }

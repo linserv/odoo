@@ -92,6 +92,15 @@ class Base(models.AbstractModel):
             self = self.browse(next_id)
         return self.with_context(bin_size=True).web_read(specification)
 
+    def web_save_multi(self, vals_list: list[dict], specification: dict[str, dict]) -> list[dict]:
+        if len(self) != len(vals_list):
+            raise ValueError("Each record must have a corresponding vals entry.")
+
+        for record, val in zip(self, vals_list):
+            record.write(val)
+
+        return self.with_context(bin_size=True).web_read(specification)
+
     @api.readonly
     def web_read(self, specification: dict[str, dict]) -> list[dict]:
         fields_to_read = list(specification) or ['id']
@@ -643,7 +652,6 @@ class Base(models.AbstractModel):
         grouping_sets: Sequence[Sequence[str]],
         aggregates: Sequence[str] = (),
         *,
-        having: DomainType = (),
         order: str | None = None,
     ):
         """
@@ -710,7 +718,7 @@ class Base(models.AbstractModel):
             information
         """
         grouping_sets = [tuple(groupby) for groupby in grouping_sets]
-        aggregates = self._web_pre_process_aggregates(aggregates)
+        aggregates = tuple(agg.replace(':recordset', ':array_agg') for agg in aggregates)
 
         if not order:
             order = ', '.join(unique(spec for groupby in grouping_sets for spec in groupby))
@@ -817,7 +825,7 @@ class Base(models.AbstractModel):
             information
         """
         groupby = tuple(groupby)
-        aggregates = self._web_pre_process_aggregates(aggregates)
+        aggregates = tuple(agg.replace(':recordset', ':array_agg') for agg in aggregates)
 
         if not order:
             order = ', '.join(groupby)
@@ -851,21 +859,6 @@ class Base(models.AbstractModel):
             groups = self._web_read_group_fill_temporal(groups, groupby, aggregates, **fill_temporal)
 
         return self._web_read_group_format(groupby, aggregates, groups)
-
-    def _web_pre_process_aggregates(self, aggregates):
-        # Avoid recordset in _web_read_group_format as aggregate + Add currency_field aggregates for monetary aggregates
-        return tuple(OrderedSet(
-            [agg.replace(':recordset', ':array_agg') for agg in aggregates]
-            + list(self._get_mapping_currency_aggregates(aggregates).values())
-        ))
-
-    def _get_mapping_currency_aggregates(self, aggregates):
-        return {
-            aggregate: f'{field.get_currency_field(self)}:array_agg_distinct'
-            for aggregate in aggregates
-            if (field := self._fields.get(aggregate.split(':')[0].split('.')[0]))
-            if field.type == 'monetary'
-        }
 
     def _web_read_group_field_expand(self, groupby):
         """ Return the field that should be expand """
@@ -1112,16 +1105,9 @@ class Base(models.AbstractModel):
         for dict_group in result:
             dict_group['__extra_domain'] = AND(dict_group.pop('__extra_domains'))
 
-        column_mapping = dict(zip(aggregates, column_iterator, strict=True))
-        mapping_currency_aggregates = self._get_mapping_currency_aggregates(aggregates)
-
-        for aggregate_spec, values in column_mapping.items():
-            if currency_agg := mapping_currency_aggregates.get(aggregate_spec):
-                for value, currencies, dict_group in zip(values, column_mapping[currency_agg], result):
-                    dict_group[aggregate_spec] = value if len(currencies) == 1 and currencies != [None] else False
-            else:
-                for value, dict_group in zip(values, result, strict=True):
-                    dict_group[aggregate_spec] = value
+        for aggregate_spec, values in zip(aggregates, column_iterator, strict=True):
+            for value, dict_group in zip(values, result, strict=True):
+                dict_group[aggregate_spec] = value
 
         return result
 
@@ -2158,10 +2144,10 @@ class ResCompany(models.Model):
             self._update_asset_style()
         return companies
 
-    def write(self, values):
-        res = super().write(values)
+    def write(self, vals):
+        res = super().write(vals)
         style_fields = {'external_report_layout_id', 'font', 'primary_color', 'secondary_color'}
-        if not style_fields.isdisjoint(values):
+        if not style_fields.isdisjoint(vals):
             self._update_asset_style()
         return res
 

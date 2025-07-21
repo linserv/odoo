@@ -93,20 +93,9 @@ const {
  * @param {Iterable<AggregatedField>} aggregatedFields
  * @param {ModelRecordGroup} group
  * @param {ModelRecord[]} records
- * @param {Record<string, FieldDefinition>} fields
  */
-function aggregateFields(aggregatedFields, group, records, fields) {
+function aggregateFields(aggregatedFields, group, records) {
     for (const { fieldName, func, name } of aggregatedFields) {
-        if (fields[fieldName]?.currency_field) {
-            // Do not aggregate monetary fields with multiple currencies
-            const [firstCurrencyId, ...currencyIds] = records.map(
-                (record) => record[fields[fieldName].currency_field]
-            );
-            if (currencyIds.length && currencyIds.some((id) => id !== firstCurrencyId)) {
-                group[name] = false;
-                continue;
-            }
-        }
         group[name] = AGGREGATOR_FUNCTIONS[func](records, fieldName);
     }
 }
@@ -1850,7 +1839,7 @@ export class Model extends Array {
 
         if (!groupby.length) {
             const group = { __extra_domain: [] };
-            aggregateFields(aggregatedFields, group, records, this._fields);
+            aggregateFields(aggregatedFields, group, records);
             return [group];
         }
 
@@ -1981,7 +1970,7 @@ export class Model extends Array {
                     group.__extra_domain = [[fieldName, "=", value], ...group.__extra_domain];
                 }
             }
-            aggregateFields(aggregatedFields, group, groupRecords, this._fields);
+            aggregateFields(aggregatedFields, group, groupRecords);
             readGroupResult.push(group);
         }
 
@@ -2926,6 +2915,36 @@ export class Model extends Array {
             ids = nextId;
         }
         return this.web_read(ids, specification);
+    }
+
+    /**
+     * @param {number[]} ids - List of record IDs to update
+     * @param {Partial<ModelRecord>[]} values - List of value dicts (same length/order as `ids`)
+     * @param {Record<string, any>} specification - Fields to return after save
+     * @returns {any[]} - List of saved records
+     */
+    web_save_multi(ids, values, specification) {
+        const kwargs = getKwArgs(arguments, "ids", "values", "specification");
+        ({ ids, values, specification } = kwargs);
+
+        if (!Array.isArray(ids) || !Array.isArray(values) || ids.length !== values.length) {
+            throw new Error("web_save_multi requires `ids` and `values` of the same length.");
+        }
+
+        const results = [];
+
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
+            const val = values[i];
+            const res = this.web_save([id], val, specification);
+            if (Array.isArray(res)) {
+                results.push(...res);
+            } else {
+                results.push(res);
+            }
+        }
+
+        return results;
     }
 
     /**

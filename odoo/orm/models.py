@@ -1261,12 +1261,12 @@ class BaseModel(metaclass=MetaModel):
                 check(records)
 
     @api.model
-    def default_get(self, fields_list: Sequence[str]) -> ValuesType:
+    def default_get(self, fields: Sequence[str]) -> ValuesType:
         """Return default values for the fields in ``fields_list``. Default
         values are determined by the context, user defaults, user fallbacks
         and the model itself.
 
-        :param fields_list: names of field whose default is requested
+        :param fields: names of field whose default is requested
         :return: a dictionary mapping field names to their corresponding default values,
             if they have a default value.
 
@@ -1279,7 +1279,7 @@ class BaseModel(metaclass=MetaModel):
         parent_fields = defaultdict(list)
         ir_defaults = self.env['ir.default']._get_model_defaults(self._name)
 
-        for name in fields_list:
+        for name in fields:
             # 1. look up context
             key = 'default_' + name
             if key in self.env.context:
@@ -1975,8 +1975,9 @@ class BaseModel(metaclass=MetaModel):
             # special case for many2many fields: prepare a query on the comodel
             # in order to reuse the mechanism _apply_ir_rules, then inject the
             # query as an extra condition of the left join
-            comodel = self.env[field.comodel_name]
-            coquery = comodel._search([], active_test=False, bypass_access=True)
+            codomain = field.get_comodel_domain(self)
+            comodel = self.env[field.comodel_name].with_context(**field.context)
+            coquery = comodel._search(codomain, bypass_access=True)
             comodel._apply_ir_rules(coquery)
             # LEFT JOIN {field.relation} AS rel_alias ON
             #     alias.id = rel_alias.{field.column1}
@@ -2818,17 +2819,13 @@ class BaseModel(metaclass=MetaModel):
 
         return model, model._fields[last_fname], alias
 
-    def _field_to_sql(self, alias: str, field_expr: str, query: (Query | None) = None, flush: bool = True) -> SQL:
+    def _field_to_sql(self, alias: str, field_expr: str, query: (Query | None) = None) -> SQL:
         """ Return an :class:`SQL` object that represents the value of the given
         field from the given table alias, in the context of the given query.
         The method also checks that the field is accessible for reading.
 
         The query object is necessary for inherited fields, many2one fields and
         properties fields, where joins are added to the query.
-
-        When parameter ``flush`` is true, the method adds some metadata in the
-        result to make method :meth:`~odoo.api.Environment.execute_query` flush
-        the field before executing the query.
         """
         fname, property_name = parse_field_expr(field_expr)
         field = self._fields.get(fname)
@@ -2842,7 +2839,7 @@ class BaseModel(metaclass=MetaModel):
 
         self._check_field_access(field, 'read')
 
-        sql = field.to_sql(self, alias, flush)
+        sql = field.to_sql(self, alias)
         if property_name:
             sql = field.property_to_sql(sql, property_name, self, alias, query)
         return sql
@@ -3805,8 +3802,12 @@ class BaseModel(metaclass=MetaModel):
                     sql = self._field_to_sql(self._table, field.name, query)
                     sql = SQL("pg_size_pretty(length(%s)::bigint)", sql)
                 else:
+                    sql = self._field_to_sql(self._table, field.name, query)
                     # flushing is necessary to retrieve the en_US value of fields without a translation
-                    sql = self._field_to_sql(self._table, field.name, query, flush=bool(field.translate))
+                    # otherwise, re-create the SQL without flushing
+                    if not field.translate:
+                        to_flush = (f for f in sql.to_flush if f != field)
+                        sql = SQL(sql.code, *sql.params, to_flush=to_flush)
                 sql_terms.append(sql)
 
             # select the given columns from the rows in the query
@@ -6647,6 +6648,9 @@ class BaseModel(metaclass=MetaModel):
         self._invalidate_cache(fnames, self._ids)
 
     def _invalidate_cache(self, fnames: Collection[str] | None = None, ids: Sequence[IdType] | None = None) -> None:
+        if ids is not None and not ids:  # Avoid invalidating field_inverses for no reason
+            return
+
         if fnames is None:
             fields = self._fields.values()
         else:

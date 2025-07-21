@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from odoo import _, api, Command, fields, models, tools
 from odoo.addons.base.models.res_partner import _tz_get
 from odoo.exceptions import ValidationError
-from odoo.fields import Domain
+from odoo.fields import Datetime, Domain
 from odoo.tools import format_date, format_datetime, format_time, frozendict
 from odoo.tools.mail import is_html_empty, html_to_inner_content
 from odoo.tools.misc import formatLang
@@ -35,13 +35,13 @@ class EventEvent(models.Model):
     _order = 'date_begin, id'
 
     @api.model
-    def default_get(self, fields_list):
-        result = super().default_get(fields_list)
-        if 'date_begin' in fields_list and 'date_begin' not in result:
-            now = fields.Datetime.now()
+    def default_get(self, fields):
+        result = super().default_get(fields)
+        if 'date_begin' in fields and 'date_begin' not in result:
+            now = Datetime.now()
             # Round the datetime to the nearest half hour (e.g. 08:17 => 08:30 and 08:37 => 09:00)
             result['date_begin'] = now.replace(second=0, microsecond=0) + timedelta(minutes=-now.minute % 30)
-        if 'date_end' in fields_list and 'date_end' not in result and result.get('date_begin'):
+        if 'date_end' in fields and 'date_end' not in result and result.get('date_begin'):
             result['date_end'] = result['date_begin'] + timedelta(days=1)
         return result
 
@@ -672,18 +672,13 @@ class EventEvent(models.Model):
         vals_list = super().copy_data(default=default)
         return [dict(vals, name=self.env._("%s (copy)", event.name)) for event, vals in zip(self, vals_list)]
 
-    @api.model
-    def _get_mail_message_access(self, res_ids, operation, model_name=None):
-        if (
-            operation == 'create'
-            and self.env.user.has_group('event.group_event_registration_desk')
-            and (not model_name or model_name == 'event.event')
-        ):
+    def _mail_get_operation_for_mail_message_operation(self, message_operation):
+        if (message_operation == 'create' and self.env.user.has_group('event.group_event_registration_desk')):
             # allow the registration desk users to post messages on Event
             # can not be done with "_mail_post_access" otherwise public user will be
             # able to post on published Event (see website_event)
-            return 'read'
-        return super(EventEvent, self)._get_mail_message_access(res_ids, operation, model_name)
+            return dict.fromkeys(self, 'read')
+        return super()._mail_get_operation_for_mail_message_operation(message_operation)
 
     def _set_tz_context(self):
         self.ensure_one()

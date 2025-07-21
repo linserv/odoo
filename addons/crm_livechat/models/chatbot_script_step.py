@@ -3,7 +3,7 @@
 from ast import literal_eval
 
 from odoo import models, fields
-from odoo.osv import expression
+from odoo.fields import Domain
 from odoo.tools import html2plaintext
 
 
@@ -84,14 +84,9 @@ class ChatbotScriptStep(models.Model):
         teams = lead.team_id
         if not teams:
             possible_teams = self.env["crm.team"].search(
-                expression.AND(
-                    [
-                        [("assignment_optout", "=", False)],
-                        expression.OR(
-                            [[("use_leads", "=", True)], [("use_opportunities", "=", True)]]
-                        ),
-                    ]
-                )
+                Domain("assignment_optout", "=", False) & (
+                    Domain("use_leads", "=", True) | Domain("use_opportunities", "=", True)
+                ),
             )
             teams = possible_teams.filtered(
                 lambda team: team.assignment_max
@@ -110,10 +105,12 @@ class ChatbotScriptStep(models.Model):
             and lead.filtered_domain(literal_eval(member.assignment_domain or "[]"))
         ]
         previous_operator = discuss_channel.livechat_operator_id
-        # sudo: im_livechat.channel - getting available operators is acceptable
-        users = discuss_channel.livechat_channel_id.sudo()._get_available_operators_by_livechat_channel(
-            self.env["res.users"].browse(assignable_user_ids)
-        )[discuss_channel.livechat_channel_id]
+        users = self.env["res.users"]
+        if discuss_channel.livechat_channel_id:
+            # sudo: im_livechat.channel - getting available operators is acceptable
+            users = discuss_channel.livechat_channel_id.sudo()._get_available_operators_by_livechat_channel(
+                self.env["res.users"].browse(assignable_user_ids)
+            )[discuss_channel.livechat_channel_id]
         message = self._process_step_forward_operator(discuss_channel, users=users)
         if previous_operator != discuss_channel.livechat_operator_id:
             user = next(user for user in users if user.partner_id == discuss_channel.livechat_operator_id)

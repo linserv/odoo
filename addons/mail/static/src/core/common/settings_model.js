@@ -1,5 +1,4 @@
 import { _t } from "@web/core/l10n/translation";
-import { sprintf } from "@web/core/utils/strings";
 import { browser } from "@web/core/browser/browser";
 import { fields, Record } from "./record";
 import { debounce } from "@web/core/utils/timing";
@@ -147,7 +146,7 @@ export class Settings extends Record {
     getMuteUntilText(dt) {
         if (dt) {
             return dt.year <= luxon.DateTime.now().year + 2
-                ? sprintf(_t(`Until %s`), dt.toLocaleString(luxon.DateTime.DATETIME_MED))
+                ? _t(`Until %s`, dt.toLocaleString(luxon.DateTime.DATETIME_MED))
                 : _t("Until I turn it back on");
         }
         return undefined;
@@ -211,7 +210,7 @@ export class Settings extends Record {
      * @param {number} param0.volume
      */
     async saveVolumeSetting({ partnerId, guestId, volume }) {
-        if (this.store.self.type !== "partner") {
+        if (!this.store.self_partner) {
             return;
         }
         const key = `${partnerId}_${guestId}`;
@@ -355,7 +354,7 @@ export class Settings extends Record {
      * @private
      */
     async _saveSettings() {
-        if (this.store.self.type !== "partner") {
+        if (!this.store.self_partner) {
             return;
         }
         browser.clearTimeout(this.globalSettingsTimeout);

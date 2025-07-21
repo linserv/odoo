@@ -20,6 +20,7 @@ import { getContent, setContent, setSelection } from "../_helpers/selection";
 import { expectElementCount } from "../_helpers/ui_expectations";
 import { insertLineBreak, insertText, splitBlock, undo } from "../_helpers/user_actions";
 import { execCommand } from "../_helpers/userCommands";
+import { MAIN_PLUGINS, NO_EMBEDDED_COMPONENTS_FALLBACK_PLUGINS } from "@html_editor/plugin_sets";
 
 const base64Img =
     "data:image/png;base64, iVBORw0KGgoAAAANSUhEUgAAAAUA\n        AAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO\n            9TXL0Y4OHwAAAABJRU5ErkJggg==";
@@ -379,7 +380,7 @@ describe("Link creation", () => {
                 "http://test.test/"
             );
             expect(cleanLinkArtifacts(getContent(el))).toBe(
-                '<p><a href="http://test.test/" class="btn btn-fill-primary">http://test.test/[]</a></p>'
+                '<p><a href="http://test.test/" class="btn btn-primary">http://test.test/[]</a></p>'
             );
         });
         test("Should keep http protocol on valid http url", async () => {
@@ -748,7 +749,7 @@ describe("Link formatting in the popover", () => {
         await click('select[name="link_type"');
         await select("primary");
         expect(cleanLinkArtifacts(getContent(el))).toBe(
-            '<p><a href="http://test.com/" class="btn btn-fill-primary">link2</a></p>'
+            '<p><a href="http://test.com/" class="btn btn-primary">link2</a></p>'
         );
     });
     test("after changing the link format, the link should be updated (2)", async () => {
@@ -764,7 +765,7 @@ describe("Link formatting in the popover", () => {
         await click('select[name="link_type"');
         await select("primary");
         expect(cleanLinkArtifacts(getContent(el))).toBe(
-            '<p><a href="http://test.com/" class="btn btn-fill-primary">link2</a></p>'
+            '<p><a href="http://test.com/" class="btn btn-primary">link2</a></p>'
         );
     });
     test("after changing the link format, the link should be updated (3)", async () => {
@@ -780,7 +781,7 @@ describe("Link formatting in the popover", () => {
         await click('select[name="link_type"');
         await select("primary");
         expect(cleanLinkArtifacts(getContent(el))).toBe(
-            '<p><a href="http://test.com/" class="random-css-class text-muted btn btn-fill-primary">link2</a></p>'
+            '<p><a href="http://test.com/" class="random-css-class text-muted btn btn-primary">link2</a></p>'
         );
     });
     test("after applying the link format, the link's format should be updated", async () => {
@@ -795,7 +796,7 @@ describe("Link formatting in the popover", () => {
 
         await click(".o_we_apply_link");
         expect(cleanLinkArtifacts(getContent(el))).toBe(
-            '<p><a href="http://test.com/" class="btn btn-fill-secondary">link2[]</a></p>'
+            '<p><a href="http://test.com/" class="btn btn-secondary">link2[]</a></p>'
         );
     });
     test("clicking the discard button should revert the link format", async () => {
@@ -806,7 +807,7 @@ describe("Link formatting in the popover", () => {
         await click('select[name="link_type"]');
         await select("secondary");
         expect(cleanLinkArtifacts(getContent(el))).toBe(
-            '<p><a href="http://test.com/" class="btn btn-fill-secondary">link2</a></p>'
+            '<p><a href="http://test.com/" class="btn btn-secondary">link2</a></p>'
         );
         await click(".o_we_discard_link");
         expect(cleanLinkArtifacts(getContent(el))).toBe(
@@ -839,7 +840,7 @@ describe("Link formatting in the popover", () => {
         await click('select[name="link_type"]');
         await select("secondary");
         expect(cleanLinkArtifacts(getContent(el))).toBe(
-            '<p><a href="#" class="btn btn-fill-secondary">link1</a></p>'
+            '<p><a href="#" class="btn btn-secondary">link1</a></p>'
         );
         await click(".o_we_discard_link");
         expect(cleanLinkArtifacts(getContent(el))).toBe("<p>[link1]</p>");
@@ -1283,11 +1284,24 @@ describe("links with inline image", () => {
 
         expect(cleanLinkArtifacts(getContent(el))).toBe(`<p>ab[]c</p>`);
     });
+    test("selecting text and a image with link should not extend the link element", async () => {
+        const { el } = await setupEditor(
+            `<p>ab<a href="http://test.test/">cd<img src="${base64Img}">ef</a>g</p>`
+        );
+        setContent(el, `<p>ab<a href="http://test.test/">c]d<img src="${base64Img}">e[f</a>g</p>`);
+        await waitFor(".o-we-linkpopover", { timeout: 1500 });
+        await waitFor(".o-we-toolbar");
+        setContent(el, `<p>a]b<a href="http://test.test/">cd<img src="${base64Img}">e[f</a>g</p>`);
+        await waitForNone(".o-we-linkpopover", { timeout: 1500 });
+        expect(cleanLinkArtifacts(getContent(el))).toBe(
+            `<p>a]b<a href="http://test.test/">cd<img src="${base64Img}">e[f</a>g</p>`
+        );
+    });
 });
 
 describe("readonly mode", () => {
     test("popover should not display edit buttons in readonly mode", async () => {
-        await setupEditor('<p><a class="o_link_readonly" href="#">link[]</a></p>');
+        await setupEditor('<p><a class="o_link_readonly" href="http://test.test/">link[]</a></p>');
         await waitFor(".o-we-linkpopover");
         // Copy link button should be available
         expect(".o-we-linkpopover .o_we_copy_link").toHaveCount(1);
@@ -1306,7 +1320,9 @@ describe("readonly mode", () => {
 
 describe("upload file via link popover", () => {
     test("should display upload button when url input is empty", async () => {
-        const { editor } = await setupEditor("<p>[]<br></p>");
+        const { editor } = await setupEditor("<p>[]<br></p>", {
+            config: { Plugins: [...MAIN_PLUGINS, ...NO_EMBEDDED_COMPONENTS_FALLBACK_PLUGINS] },
+        });
         execCommand(editor, "openLinkTools");
         await waitFor(".o-we-linkpopover");
         // Upload button should be visible
@@ -1333,7 +1349,9 @@ describe("upload file via link popover", () => {
         return mockedUploadPromise;
     };
     test("can create a link to an uploaded file", async () => {
-        const { editor, el } = await setupEditor("<p>[]<br></p>");
+        const { editor, el } = await setupEditor("<p>[]<br></p>", {
+            config: { Plugins: [...MAIN_PLUGINS, ...NO_EMBEDDED_COMPONENTS_FALLBACK_PLUGINS] },
+        });
         const mockedUpload = patchUpload(editor);
         execCommand(editor, "openLinkTools");
         await waitFor(".o-we-linkpopover");
@@ -1377,7 +1395,9 @@ describe("upload file via link popover", () => {
     });
 
     test("label input does not get filled on file upload if it is already filled", async () => {
-        const { editor } = await setupEditor("<p>[]<br></p>");
+        const { editor } = await setupEditor("<p>[]<br></p>", {
+            config: { Plugins: [...MAIN_PLUGINS, ...NO_EMBEDDED_COMPONENTS_FALLBACK_PLUGINS] },
+        });
         const mockedUpload = patchUpload(editor);
         execCommand(editor, "openLinkTools");
         await waitFor(".o-we-linkpopover");
@@ -1438,11 +1458,11 @@ describe("apply button should be disabled when the URL is empty", () => {
 
 describe("hidden label field", () => {
     test("label field should be hidden if <a> content is not text only", async () => {
-        await setupEditor(`<a href="http://test.com/"><img src="${base64Img}">te[]xt</a>`);
+        await setupEditor(`<p><a href="http://test.com/"><img src="${base64Img}">te[]xt</a></p>`);
         await expectElementCount(".o-we-linkpopover", 1);
         // open edit mode and check if label input is hidden
         await click(".o_we_edit_link");
-        await waitFor(".input-group", { timeout: 1500 });
+        await waitFor(".o_we_href_input_link", { timeout: 1500 });
         expect(".o_we_label_link").not.toBeVisible();
         expect(".o_we_href_input_link").toHaveValue("http://test.com/");
     });

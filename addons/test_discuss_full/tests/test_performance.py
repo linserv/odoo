@@ -25,6 +25,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #       - search employee (_compute_im_status hr_homeworking override)
     #       - fetch employee (_compute_im_status hr_homeworking override)
     #       - fetch res_users (_read_format)
+    #       - fetch hr_employee (res.users _to_store)
     #   5: settings:
     #       - search res_users_settings (_find_or_create_for_user)
     #       - fetch res_users_settings (_format_settings)
@@ -34,7 +35,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #   2: hasCannedResponses
     #       - fetch res_groups_users_rel
     #       - search mail_canned_response
-    _query_count_init_store = 17
+    _query_count_init_store = 18
     # Queries for _query_count_init_messaging (in order):
     #   1: insert res_device_log
     #   3: _search_is_member (for current user, first occurence _search_is_member for chathub given channel ids)
@@ -52,17 +53,17 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #       - search bus_bus (_bus_last_id)
     #       - _get_needaction_count (inbox counter)
     #       - search mail_message (starred counter)
-    #   22: _process_request_for_all (discuss):
+    #   23: _process_request_for_all (discuss):
     #       - search discuss_channel (channels_domain)
-    #       21: channel add:
+    #       22: channel add:
     #           - read group member (prefetch _compute_self_member_id from _compute_is_member)
     #           - read group member (_compute_invited_member_ids)
     #           - search discuss_channel_rtc_session
     #           - fetch discuss_channel_rtc_session
     #           - search member (channel_member_ids)
     #           - fetch discuss_channel_member (manual prefetch)
-    #           9: member _to_store:
-    #               9: partner _to_store:
+    #           10: member _to_store:
+    #               10: partner _to_store:
     #                   - fetch res_partner (partner _to_store)
     #                   - fetch res_users (_compute_im_status)
     #                   - search mail_presence (_compute_im_status)
@@ -70,15 +71,16 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #                   - _get_on_leave_ids (_compute_im_status override)
     #                   - search hr_employee (_compute_im_status override)
     #                   - fetch hr_employee (_compute_im_status override)
-    #                   - fetch res_users (_compute_main_user_id)
+    #                   - search hr_employee (res.users._to_store override)
     #                   - search hr_leave (leave_date_to)
+    #                   - fetch res_users (_compute_main_user_id)
     #           - search bus_bus (_bus_last_id)
     #           - search ir_attachment (_compute_avatar_128)
     #           - count discuss_channel_member (member_count)
     #           - _compute_message_needaction
     #           - search discuss_channel_res_groups_rel (group_ids)
     #           - fetch res_groups (group_public_id)
-    _query_count_init_messaging = 34
+    _query_count_init_messaging = 35
     # Queries for _query_count_discuss_channels (in order):
     #   1: insert res_device_log
     #   3: _search_is_member (for current user, first occurence _get_channels_as_member)
@@ -95,10 +97,10 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #       - fetch discuss_channel_rtc_session
     #       - search member (channel_member_ids)
     #       - fetch discuss_channel_member (manual prefetch)
-    #       19: member _to_store:
+    #       18: member _to_store:
     #           - search im_livechat_channel_member_history (livechat member type)
     #           - fetch im_livechat_channel_member_history (livechat member type)
-    #           12: partner _to_store:
+    #           13: partner _to_store:
     #               - fetch res_partner (partner _to_store)
     #               - fetch res_users (_compute_im_status)
     #               - search mail_presence (_compute_im_status)
@@ -106,10 +108,11 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #               - _get_on_leave_ids (_compute_im_status override)
     #               - search hr_employee (_compute_im_status override)
     #               - fetch hr_employee (_compute_im_status override)
-    #               - fetch res_users (_compute_main_user_id)
+    #               - search hr_employee (res.users._to_store override)
     #               - search hr_leave (leave_date_to)
     #               - search res_users_settings (livechat username)
     #               - fetch res_users_settings (livechat username)
+    #               - fetch res_users (_compute_main_user_id)
     #               - fetch res_country (livechat override)
     #           3: guest _to_store:
     #               - fetch mail_guest
@@ -125,7 +128,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #       - _compute_message_unread
     #       - fetch im_livechat_channel
     #       2: fetch livechat_expertise_ids
-    #   - _get_last_messages
+    #   1: _get_last_messages
     #   20: message _to_store:
     #       - search mail_message_schedule
     #       - fetch mail_message
@@ -236,7 +239,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             self.make_jsonrpc_request(
                 "/im_livechat/get_session",
                 {
-                    "anonymous_name": "anon 1",
                     "channel_id": self.im_livechat_channel.id,
                     "previous_operator_id": self.users[0].partner_id.id,
                 },
@@ -252,7 +254,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 self.make_jsonrpc_request(
                     "/im_livechat/get_session",
                     {
-                        "anonymous_name": "anon 2",
                         "channel_id": self.im_livechat_channel.id,
                         "previous_operator_id": self.users[0].partner_id.id,
                     },
@@ -408,7 +409,11 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 },
             ),
             "res.users": self._filter_users_fields(
-                {"id": self.user_root.id, "leave_date_to": False, "share": False},
+                {
+                    "id": self.user_root.id,
+                    "share": False,
+                    "employee_ids": [],
+                },
                 {
                     "id": self.users[0].id,
                     "is_admin": False,
@@ -429,8 +434,8 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "internalUserGroupId": self.env.ref("base.group_user").id,
                 "mt_comment": self.env.ref("mail.mt_comment").id,
                 "mt_note": self.env.ref("mail.mt_note").id,
-                "odoobot": {"id": self.user_root.partner_id.id, "type": "partner"},
-                "self_partner": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "odoobot": self.user_root.partner_id.id,
+                "self_partner": self.users[0].partner_id.id,
                 "settings": {
                     "channel_notifications": False,
                     "id": self.env["res.users.settings"]._find_or_create_for_user(self.users[0]).id,
@@ -478,6 +483,10 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 self._res_for_user(self.users[0]),
                 self._res_for_user(self.users[14]),
             ),
+            "hr.employee": [
+                self._res_for_employee(self.users[0].employee_ids[0]),
+                self._res_for_employee(self.users[14].employee_ids[0]),
+            ],
             "Store": {
                 "inbox": {
                     "counter": 1,
@@ -610,6 +619,14 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 self._res_for_user(self.user_root),
                 self._res_for_user(self.users[1]),
             ),
+            "hr.employee": [
+                self._res_for_employee(self.users[0].employee_ids[0]),
+                self._res_for_employee(self.users[12].employee_ids[0]),
+                self._res_for_employee(self.users[14].employee_ids[0]),
+                self._res_for_employee(self.users[15].employee_ids[0]),
+                self._res_for_employee(self.users[2].employee_ids[0]),
+                self._res_for_employee(self.users[3].employee_ids[0]),
+            ],
         }
 
     def _expected_result_for_channel(self, channel):
@@ -904,7 +921,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             }
         if channel == self.channel_livechat_1:
             return {
-                "anonymous_name": False,
+                "anonymous_name": "test1",
                 "avatar_cache_key": channel.avatar_cache_key,
                 "channel_type": "livechat",
                 "country_id": self.env.ref("base.in").id,
@@ -926,7 +943,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "livechat_outcome": "no_answer",
                 "livechat_status": "in_progress",
                 "livechat_expertise_ids": [],
-                "livechat_operator_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "livechat_operator_id": self.users[0].partner_id.id,
                 "member_count": 2,
                 "message_needaction_counter_bus_id": bus_last_id,
                 "message_needaction_counter": 0,
@@ -938,7 +955,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             }
         if channel == self.channel_livechat_2:
             return {
-                "anonymous_name": "anon 2",
+                "anonymous_name": "Visitor",
                 "avatar_cache_key": channel.avatar_cache_key,
                 "channel_type": "livechat",
                 "country_id": self.env.ref("base.be").id,
@@ -960,11 +977,11 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "livechat_outcome": "no_answer",
                 "livechat_status": "in_progress",
                 "livechat_expertise_ids": [],
-                "livechat_operator_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "livechat_operator_id": self.users[0].partner_id.id,
                 "member_count": 2,
                 "message_needaction_counter_bus_id": bus_last_id,
                 "message_needaction_counter": 0,
-                "name": "anon 2 Ernest Employee",
+                "name": "Visitor Ernest Employee",
                 "parent_channel_id": False,
                 "requested_by_operator": False,
                 "rtc_session_ids": [["ADD", []]],
@@ -1009,7 +1026,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1026,7 +1043,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": last_message.id + 1,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": last_message.id,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1043,7 +1060,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": last_message.id + 1,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": last_message.id,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1060,14 +1077,14 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": last_message_of_partner_0.id + 1,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": last_message_of_partner_0.id,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_channel_group_1 and partner == self.users[2].partner_id:
             return {
                 "id": member_2.id,
-                "partner_id": {"id": self.users[2].partner_id.id, "type": "partner"},
+                "partner_id": self.users[2].partner_id.id,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_channel_group_2 and partner == self.users[0].partner_id:
@@ -1083,7 +1100,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": last_message.id + 1,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": last_message.id,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1100,7 +1117,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1110,7 +1127,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": False,
                 "fetched_message_id": False,
                 "id": member_12.id,
-                "partner_id": {"id": self.users[12].partner_id.id, "type": "partner"},
+                "partner_id": self.users[12].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1127,7 +1144,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1137,7 +1154,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": False,
                 "fetched_message_id": False,
                 "id": member_14.id,
-                "partner_id": {"id": self.users[14].partner_id.id, "type": "partner"},
+                "partner_id": self.users[14].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1154,7 +1171,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1164,7 +1181,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": False,
                 "fetched_message_id": False,
                 "id": member_15.id,
-                "partner_id": {"id": self.users[15].partner_id.id, "type": "partner"},
+                "partner_id": self.users[15].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1181,7 +1198,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1191,7 +1208,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": False,
                 "fetched_message_id": False,
                 "id": member_2.id,
-                "partner_id": {"id": self.users[2].partner_id.id, "type": "partner"},
+                "partner_id": self.users[2].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1208,7 +1225,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1218,7 +1235,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": False,
                 "fetched_message_id": False,
                 "id": member_3.id,
-                "partner_id": {"id": self.users[3].partner_id.id, "type": "partner"},
+                "partner_id": self.users[3].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1236,7 +1253,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1247,7 +1264,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "fetched_message_id": last_message.id,
                 "id": member_1.id,
                 "livechat_member_type": "visitor",
-                "partner_id": {"id": self.users[1].partner_id.id, "type": "partner"},
+                "partner_id": self.users[1].partner_id.id,
                 "seen_message_id": last_message.id,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1265,7 +1282,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
-                "partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "partner_id": self.users[0].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1276,7 +1293,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "fetched_message_id": last_message.id,
                 "id": member_g.id,
                 "livechat_member_type": "visitor",
-                "guest_id": {"id": guest.id, "type": "guest"},
+                "guest_id": guest.id,
                 "seen_message_id": last_message.id,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
@@ -1293,8 +1310,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
         user_0 = self.users[0]
         user_1 = self.users[1]
         user_2 = self.users[2]
-        user_9 = self.users[9]
-        user_13 = self.users[13]
         members = channel.channel_member_ids
         member_g = members.filtered(lambda m: m.guest_id)
         guest = member_g.guest_id
@@ -1302,7 +1317,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             return {
                 "attachment_ids": [],
                 "author_guest_id": False,
-                "author_id": {"id": user_0.partner_id.id, "type": "partner"},
+                "author_id": user_0.partner_id.id,
                 "body": ["markup", "<p>test</p>"],
                 "create_date": create_date,
                 "date": date,
@@ -1339,7 +1354,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             return {
                 "attachment_ids": [],
                 "author_guest_id": False,
-                "author_id": {"id": user_2.partner_id.id, "type": "partner"},
+                "author_id": user_2.partner_id.id,
                 "body": ["markup", "<p>test</p>"],
                 "create_date": create_date,
                 "date": date,
@@ -1355,7 +1370,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "notification_ids": [last_message.notification_ids.id],
                 "thread": {"id": channel.id, "model": "discuss.channel"},
                 "parent_id": False,
-                "partner_ids": [{"id": self.users[0].partner_id.id, "type": "partner"}],
+                "partner_ids": [self.users[0].partner_id.id],
                 "pinned_at": False,
                 "rating_id": False,
                 "reactions": [
@@ -1376,10 +1391,10 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             return {
                 "attachment_ids": [],
                 "author_guest_id": False,
-                "author_id": {"id": user_0.partner_id.id, "type": "partner"},
+                "author_id": user_0.partner_id.id,
                 "body": [
                     "markup",
-                    f'<div class="o_mail_notification" data-oe-type=\"channel-joined\">invited <a href="#" data-oe-model="res.partner" data-oe-id="{user_9.partner_id.id}">@test9</a> to the channel</div>',
+                    '<div class="o_mail_notification">created this channel.</div>',
                 ],
                 "create_date": create_date,
                 "date": date,
@@ -1412,7 +1427,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             return {
                 "attachment_ids": [],
                 "author_guest_id": False,
-                "author_id": {"id": self.user_root.partner_id.id, "type": "partner"},
+                "author_id": self.user_root.partner_id.id,
                 "body": [
                     "markup",
                     '<div data-oe-type=\"call\" class="o_mail_notification"></div>',
@@ -1449,10 +1464,10 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             return {
                 "attachment_ids": [],
                 "author_guest_id": False,
-                "author_id": {"id": user_0.partner_id.id, "type": "partner"},
+                "author_id": user_0.partner_id.id,
                 "body": [
                     "markup",
-                    f'<div class="o_mail_notification" data-oe-type=\"channel-joined\">invited <a href="#" data-oe-model="res.partner" data-oe-id="{user_13.partner_id.id}">@test13</a> to the channel</div>',
+                    '<div class="o_mail_notification">created this channel.</div>',
                 ],
                 "create_date": create_date,
                 "date": date,
@@ -1485,7 +1500,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             return {
                 "attachment_ids": [],
                 "author_guest_id": False,
-                "author_id": {"id": user_1.partner_id.id, "type": "partner"},
+                "author_id": user_1.partner_id.id,
                 "body": ["markup", "<p>test</p>"],
                 "create_date": create_date,
                 "date": date,
@@ -1517,12 +1532,12 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
         if channel == self.channel_livechat_2:
             return {
                 "attachment_ids": [],
-                "author_guest_id": {"id": guest.id, "type": "guest"},
+                "author_guest_id": guest.id,
                 "author_id": False,
                 "body": ["markup", "<p>test</p>"],
                 "create_date": create_date,
                 "date": date,
-                "default_subject": "anon 2 Ernest Employee",
+                "default_subject": "Visitor Ernest Employee",
                 "email_from": False,
                 "id": last_message.id,
                 "incoming_email_cc": False,
@@ -1538,7 +1553,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "pinned_at": False,
                 "rating_id": False,
                 "reactions": [],
-                "record_name": "anon 2 Ernest Employee",
+                "record_name": "Visitor Ernest Employee",
                 "res_id": channel.id,
                 "scheduledDatetime": False,
                 "starred": False,
@@ -1565,7 +1580,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                     "count": 1,
                     "guests": [],
                     "message": last_message.id,
-                    "partners": [{"id": partner_2, "type": "partner"}],
+                    "partners": [partner_2],
                     "sequence": min(reactions_0.ids),
                 },
                 {
@@ -1573,10 +1588,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                     "count": 2,
                     "guests": [],
                     "message": last_message.id,
-                    "partners": [
-                        {"id": partner_2, "type": "partner"},
-                        {"id": partner_1, "type": "partner"},
-                    ],
+                    "partners": [partner_2, partner_1],
                     "sequence": min(reactions_1.ids),
                 },
                 {
@@ -1584,11 +1596,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                     "count": 3,
                     "guests": [],
                     "message": last_message.id,
-                    "partners": [
-                        {"id": partner_2, "type": "partner"},
-                        {"id": partner_1, "type": "partner"},
-                        {"id": partner_0, "type": "partner"},
-                    ],
+                    "partners": [partner_2, partner_1, partner_0],
                     "sequence": min(reactions_2.ids),
                 },
             ]
@@ -1599,7 +1607,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                     "count": 1,
                     "guests": [],
                     "message": last_message.id,
-                    "partners": [{"id": partner_2, "type": "partner"}],
+                    "partners": [partner_2],
                     "sequence": min(reactions_1.ids),
                 },
                 {
@@ -1607,11 +1615,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                     "count": 3,
                     "guests": [],
                     "message": last_message.id,
-                    "partners": [
-                        {"id": partner_2, "type": "partner"},
-                        {"id": partner_1, "type": "partner"},
-                        {"id": partner_0, "type": "partner"},
-                    ],
+                    "partners": [partner_2, partner_1, partner_0],
                     "sequence": min(reactions_2.ids),
                 },
                 {
@@ -1619,10 +1623,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                     "count": 2,
                     "guests": [],
                     "message": last_message.id,
-                    "partners": [
-                        {"id": partner_1, "type": "partner"},
-                        {"id": partner_0, "type": "partner"},
-                    ],
+                    "partners": [partner_1, partner_0],
                     "sequence": min(reactions_3.ids),
                 },
             ]
@@ -1637,7 +1638,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "mail_message_id": last_message.id,
                 "notification_status": "sent",
                 "notification_type": "inbox",
-                "res_partner_id": {"id": self.users[0].partner_id.id, "type": "partner"},
+                "res_partner_id": self.users[0].partner_id.id,
             }
         return {}
 
@@ -1824,24 +1825,30 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
         if channel == self.channel_livechat_1:
             return {**common_data, "display_name": "test1 Ernest Employee"}
         if channel == self.channel_livechat_2:
-            return {**common_data, "display_name": "anon 2 Ernest Employee"}
+            return {**common_data, "display_name": "Visitor Ernest Employee"}
         return {}
 
     def _res_for_user(self, user):
         if user == self.users[0]:
-            return {"id": user.id, "leave_date_to": False, "share": False}
+            return {"id": user.id, "employee_ids": user.employee_ids.ids, "share": False}
         if user == self.users[1]:
             return {"id": user.id, "share": False}
         if user == self.users[2]:
-            return {"id": user.id, "leave_date_to": False, "share": False}
+            return {"id": user.id, "employee_ids": user.employee_ids.ids, "share": False}
         if user == self.users[3]:
-            return {"id": user.id, "leave_date_to": False, "share": False}
+            return {"id": user.id, "employee_ids": user.employee_ids.ids, "share": False}
         if user == self.users[12]:
-            return {"id": user.id, "leave_date_to": False, "share": False}
+            return {"id": user.id, "employee_ids": user.employee_ids.ids, "share": False}
         if user == self.users[14]:
-            return {"id": user.id, "leave_date_to": False, "share": False}
+            return {"id": user.id, "employee_ids": user.employee_ids.ids, "share": False}
         if user == self.users[15]:
-            return {"id": user.id, "leave_date_to": False, "share": False}
+            return {"id": user.id, "employee_ids": user.employee_ids.ids, "share": False}
         if user == self.user_root:
             return {"id": user.id, "share": False}
         return {}
+
+    def _res_for_employee(self, employee):
+        return {
+            "id": employee.id,
+            "leave_date_to": False,
+        }

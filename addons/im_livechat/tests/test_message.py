@@ -61,7 +61,6 @@ class TestImLivechatMessage(ChatbotCase, MailCommon):
         data = self.make_jsonrpc_request(
             "/im_livechat/get_session",
             {
-                "anonymous_name": "Visitor",
                 "channel_id": self.livechat_channel.id,
                 "chatbot_script_id": self.chatbot_script.id,
                 "persisted": True,
@@ -80,10 +79,7 @@ class TestImLivechatMessage(ChatbotCase, MailCommon):
                 {
                     "attachment_ids": [],
                     "author_guest_id": False,
-                    "author_id": {
-                        "id": self.chatbot_script.operator_partner_id.id,
-                        "type": "partner",
-                    },
+                    "author_id": self.chatbot_script.operator_partner_id.id,
                     "body": ["markup", "<p>Can you give us your email please?</p>"],
                     "chatbotStep": {
                         "message": chatbot_message.id,
@@ -131,7 +127,6 @@ class TestImLivechatMessage(ChatbotCase, MailCommon):
             self.make_jsonrpc_request(
                 "/im_livechat/get_session",
                 {
-                    "anonymous_name": "anon 1",
                     "previous_operator_id": self.users[0].partner_id.id,
                     "channel_id": im_livechat_channel.id,
                 },
@@ -160,7 +155,7 @@ class TestImLivechatMessage(ChatbotCase, MailCommon):
                     {
                         "attachment_ids": [],
                         "author_guest_id": False,
-                        "author_id": {"id": self.users[1].partner_id.id, "type": "partner"},
+                        "author_id": self.users[1].partner_id.id,
                         "body": ["markup", message.body],
                         "date": fields.Datetime.to_string(message.date),
                         "write_date": fields.Datetime.to_string(message.write_date),
@@ -242,7 +237,6 @@ class TestImLivechatMessage(ChatbotCase, MailCommon):
             self.make_jsonrpc_request(
                 "/im_livechat/get_session",
                 {
-                    "anonymous_name": "anon 1",
                     "previous_operator_id": self.users[0].partner_id.id,
                     "channel_id": im_livechat_channel.id,
                 },
@@ -272,10 +266,7 @@ class TestImLivechatMessage(ChatbotCase, MailCommon):
                                     {
                                         "attachment_ids": [],
                                         "author_guest_id": False,
-                                        "author_id": {
-                                            "id": self.env.user.partner_id.id,
-                                            "type": "partner",
-                                        },
+                                        "author_id": self.env.user.partner_id.id,
                                         "body": [
                                             "markup",
                                             '<div class="o_mail_notification o_hide_author">Rating: <img class="o_livechat_emoji_rating" src="/rating/static/src/img/rating_5.png" alt="rating"><br>\nGood service</div>',

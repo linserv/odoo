@@ -171,7 +171,10 @@ export class WebsiteBuilderClientAction extends Component {
             (isEditing) => {
                 document.querySelector("body").classList.toggle("o_builder_open", isEditing);
                 if (isEditing) {
-                    setTimeout(() => {
+                    // When entering edit mode, the navbar animates upwards.
+                    // To avoid an abrupt disappearance, we delay adding the
+                    // 'd-none' class
+                    this.navBarTimeout = setTimeout(() => {
                         websiteSystrayRegistry.remove("website.WebsiteSystrayItem");
                         websiteSystrayRegistry.trigger("EDIT-WEBSITE");
                         document.querySelector(".o_builder_open .o_main_navbar").classList.add("d-none");
@@ -179,6 +182,7 @@ export class WebsiteBuilderClientAction extends Component {
                 } else {
                     document.querySelector(".o_main_navbar")?.classList.remove("d-none");
                 }
+                return () => clearTimeout(this.navBarTimeout);
             },
             () => [this.state.isEditing]
         );
@@ -483,13 +487,14 @@ export class WebsiteBuilderClientAction extends Component {
         // trigger an new instance of the builder menu
         this.state.key++;
 
-        this.notification.add(_t("Your modifications were saved to apply this option."), {
-            title: _t("Content saved."),
+        this.notification.add("Content saved", {
             type: "success",
         });
     }
 
     async reloadIframeAndCloseEditor() {
+        this.initialTab = null;
+        this.target = null;
         const isEditing = false;
         this.state.isEditing = isEditing;
         this.addSystrayItems();

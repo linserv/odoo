@@ -1,9 +1,6 @@
-import {
-    getCSSVariableValue,
-    isCSSVariable,
-    setBuilderCSSVariables,
-} from "@html_builder/utils/utils_css";
+import { isCSSVariable, setBuilderCSSVariables } from "@html_builder/utils/utils_css";
 import { Plugin } from "@html_editor/plugin";
+import { getCSSVariableValue, getHtmlStyle } from "@html_editor/utils/formatting";
 import { parseHTML } from "@html_editor/utils/html";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { _t } from "@web/core/l10n/translation";
@@ -35,6 +32,7 @@ export class CustomizeWebsitePlugin extends Plugin {
         "setPendingThemeRequests",
         "isPluginDestroyed",
         "reloadBundles",
+        "setViewsOnSave",
     ];
 
     resources = {
@@ -47,20 +45,34 @@ export class CustomizeWebsitePlugin extends Plugin {
             RemoveFontAction,
             CustomizeButtonStyleAction,
             WebsiteConfigAction,
+            PreviewableWebsiteConfigAction,
             SelectTemplateAction,
         },
         color_combination_getters: withSequence(5, (el, actionParam) => {
             const combination = actionParam.combinationColor;
             if (combination) {
-                const style = this.window.getComputedStyle(this.document.documentElement);
+                const style = getHtmlStyle(this.document);
                 return `o_cc${getCSSVariableValue(combination, style)}`;
             }
         }),
+        save_handlers: this.onSave.bind(this),
     };
 
+    async onSave() {
+        if (this.viewsToEnableOnSave.size || this.viewsToDisableOnSave.size) {
+            await rpc("/website/theme_customize_data", {
+                is_view_data: true,
+                enable: [...this.viewsToEnableOnSave],
+                disable: [...this.viewsToDisableOnSave],
+                reset_view_arch: false,
+            });
+        }
+    }
     cache = {};
     activeRecords = {};
     activeTemplateViews = {};
+    viewsToEnableOnSave = new Set();
+    viewsToDisableOnSave = new Set();
     pendingViewRequests = new Set();
     pendingAssetRequests = new Set();
     /**
@@ -86,7 +98,7 @@ export class CustomizeWebsitePlugin extends Plugin {
         this.pendingThemeRequests = pendingThemeRequests;
     }
     getWebsiteVariableValue(variable) {
-        const style = this.window.getComputedStyle(this.document.documentElement);
+        const style = getHtmlStyle(this.document);
         let finalValue = getCSSVariableValue(variable, style);
         /* TODO dedicated action ?
         if (!params.colorNames) {
@@ -342,6 +354,26 @@ export class CustomizeWebsitePlugin extends Plugin {
             this.activeRecords[record] = resolvedValue;
         });
     }
+    setViewsOnSave(views, to_enable) {
+        const initialViewsToEnableOnSave = new Set(this.viewsToEnableOnSave);
+        const initialViewsToDisableOnSave = new Set(this.viewsToDisableOnSave);
+        for (let view of views) {
+            const toEnable = view.startsWith("!") ? !to_enable : to_enable;
+            view = view.startsWith("!") ? view.substring(1) : view;
+            if (toEnable) {
+                this.viewsToEnableOnSave.add(view);
+                this.viewsToDisableOnSave.delete(view);
+            } else {
+                this.viewsToDisableOnSave.add(view);
+                this.viewsToEnableOnSave.delete(view);
+            }
+        }
+        return () => {
+            // "Undo" callback
+            this.viewsToEnableOnSave = initialViewsToEnableOnSave;
+            this.viewsToDisableOnSave = initialViewsToDisableOnSave;
+        };
+    }
     isPluginDestroyed() {
         return this.isDestroyed;
     }
@@ -428,7 +460,7 @@ export class CustomizeBodyBgTypeAction extends BuilderAction {
         if (bgImage === "none") {
             return "NONE";
         }
-        const style = this.window.getComputedStyle(this.document.documentElement);
+        const style = getHtmlStyle(this.document);
         return getCSSVariableValue("body-image-type", style);
     }
     async load({ editingElement: el, params, value, historyImageSrc }) {
@@ -686,6 +718,60 @@ export class WebsiteConfigAction extends BuilderAction {
     }
 }
 
+export class PreviewableWebsiteConfigAction extends BuilderAction {
+    static id = "previewableWebsiteConfig";
+    static dependencies = ["customizeWebsite", "history"];
+    getPriority({ params }) {
+        return (params.previewClass || "")?.trim().split(/\s+/).filter(Boolean).length || 0;
+    }
+    isApplied({ editingElement: el, params }) {
+        if (params.previewClass === undefined || params.previewClass === "") {
+            return true;
+        }
+        return params.previewClass.split(/\s+/).every((cls) => el.classList.contains(cls));
+    }
+    apply({ editingElement: el, isPreviewing, params }) {
+        if (params.previewClass) {
+            params.previewClass.split(/\s+/).forEach((cls) => el.classList.add(cls));
+        }
+        if (!isPreviewing) {
+            const viewsToApply = params["views"] || [];
+            let undoApplyCallback;
+            this.dependencies.history.applyCustomMutation({
+                apply: () => {
+                    undoApplyCallback = this.dependencies.customizeWebsite.setViewsOnSave(
+                        viewsToApply,
+                        true
+                    );
+                },
+                revert: () => {
+                    undoApplyCallback();
+                },
+            });
+        }
+    }
+    clean({ editingElement: el, isPreviewing, params }) {
+        if (params.previewClass) {
+            params.previewClass.split(/\s+/).forEach((cls) => el.classList.remove(cls));
+        }
+        if (!isPreviewing) {
+            const viewsToClean = params["views"] || [];
+            let undoCleanCallback;
+            this.dependencies.history.applyCustomMutation({
+                apply: () => {
+                    undoCleanCallback = this.dependencies.customizeWebsite.setViewsOnSave(
+                        viewsToClean,
+                        false
+                    );
+                },
+                revert: () => {
+                    undoCleanCallback();
+                },
+            });
+        }
+    }
+}
+
 export class SelectTemplateAction extends BuilderAction {
     static id = "selectTemplate";
     static dependencies = ["customizeWebsite"];
@@ -742,7 +828,7 @@ export class CustomizeWebsiteColorAction extends BuilderAction {
         this.dependencies.customizeWebsite.withCustomHistory(this);
     }
     getValue({ params: { mainParam: color, colorType, gradientColor, combinationColor } }) {
-        const style = this.window.getComputedStyle(this.document.documentElement);
+        const style = getHtmlStyle(this.document);
         if (gradientColor) {
             const gradientValue =
                 this.dependencies.customizeWebsite.getWebsiteVariableValue(gradientColor);
@@ -796,7 +882,7 @@ export class CustomizeWebsiteColorAction extends BuilderAction {
                 { colorType, combinationColor, resetCcOnEmpty: true, nullValue }
             );
         }
-        setBuilderCSSVariables();
+        setBuilderCSSVariables(getHtmlStyle(this.document));
     }
 }
 
@@ -811,7 +897,7 @@ export class CustomizeButtonStyleAction extends BuilderAction {
         return this.getValue({ params }) === value;
     }
     getValue({ params: { mainParam: which } }) {
-        const style = this.window.getComputedStyle(this.document.documentElement);
+        const style = getHtmlStyle(this.document);
         const isOutline = getCSSVariableValue(`btn-${which}-outline`, style);
         const isFlat = getCSSVariableValue(`btn-${which}-flat`, style);
         return isFlat === "true" ? "flat" : isOutline === "true" ? "outline" : "fill";
