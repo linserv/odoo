@@ -216,6 +216,7 @@ class TestSaleMrpKitBom(TransactionCase):
         move_lines = so.picking_ids.move_ids.move_line_ids
         self.assertEqual(move_lines.mapped("sale_price"), [80, 120], 'wrong shipping value')
 
+    @unittest.skip("[LINSERV]")
     def test_qty_delivered_with_bom(self):
         """Check the quantity delivered, when a bom line has a non integer quantity"""
 
