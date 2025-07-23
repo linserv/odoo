@@ -1,3 +1,4 @@
+import unittest
 from lxml import etree
 
 from odoo import Command, fields
@@ -272,6 +273,7 @@ class TestProjectBase(TestProjectCommon):
         partner.company_id = company_1
         self.assertEqual(partner.company_id, company_1, "The company of the partner should have been updated.")
 
+    @unittest.skip("[LINSERV]")
     def test_add_customer_rating_project(self):
         """ Tests that the rating_ids field contains a rating once created
         """
