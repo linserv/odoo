@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-11 18:38+0000\n"
+"POT-Creation-Date: 2025-07-25 18:39+0000\n"
 "PO-Revision-Date: 2024-09-25 09:41+0000\n"
 "Last-Translator: Raz Omer Hussein, 2025\n"
 "Language-Team: Kurdish (https://app.transifex.com/odoo/teams/41243/ku/)\n"
@@ -589,7 +589,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/mail/static/src/discuss/call/common/call_invitation.xml:0
 msgid "Accept"
-msgstr ""
+msgstr "پەسەندکردن"
 
 #. module: mail
 #. odoo-javascript
@@ -2231,7 +2231,7 @@ msgstr ""
 #: model:ir.model.fields.selection,name:mail.selection__mail_message__message_type__comment
 #: model_terms:ir.ui.view,arch_db:mail.view_mail_search
 msgid "Comment"
-msgstr ""
+msgstr "سەرنج"
 
 #. module: mail
 #: model:ir.model,name:mail.model_res_company
@@ -2490,7 +2490,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:mail.field_mail_link_preview__create_date
 #: model:ir.model.fields,field_description:mail.field_mail_message_translation__create_date
 msgid "Create Date"
-msgstr ""
+msgstr " بەرواری دروستکردن"
 
 #. module: mail
 #. odoo-javascript
@@ -2930,6 +2930,12 @@ msgstr ""
 
 #. module: mail
 #. odoo-javascript
+#: code:addons/mail/static/src/core/common/message.xml:0
+msgid "Deleted document"
+msgstr ""
+
+#. module: mail
+#. odoo-javascript
 #: code:addons/mail/static/src/core/common/notification_model.js:0
 #: model:ir.model.fields.selection,name:mail.selection__mail_notification__notification_status__sent
 msgid "Delivered"
@@ -3021,7 +3027,7 @@ msgstr ""
 #: model:ir.ui.menu,name:mail.menu_root_discuss
 #: model_terms:ir.ui.view,arch_db:mail.res_config_settings_view_form
 msgid "Discuss"
-msgstr ""
+msgstr "گفتوگۆکردن"
 
 #. module: mail
 #: model_terms:ir.ui.view,arch_db:mail.res_users_settings_view_form
@@ -3127,7 +3133,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:mail.mail_activity_view_form
 #: model_terms:ir.ui.view,arch_db:mail.view_document_file_kanban
 msgid "Document"
-msgstr ""
+msgstr "بەڵگەنامە"
 
 #. module: mail
 #: model:ir.model,name:mail.model_mail_followers
@@ -3359,7 +3365,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:mail.field_mail_resend_partner__email
 #: model_terms:ir.ui.view,arch_db:mail.mail_blacklist_remove_view_form
 msgid "Email Address"
-msgstr ""
+msgstr "ناونیشانی ئیمەیڵ"
 
 #. module: mail
 #: model:ir.model.fields,field_description:mail.field_mail_alias_mixin__alias_email
@@ -8837,7 +8843,7 @@ msgstr ""
 #. module: mail
 #: model_terms:ir.ui.view,arch_db:mail.mail_notification_view_form
 msgid "Source"
-msgstr ""
+msgstr "سەرچاوە"
 
 #. module: mail
 #: model:ir.model.fields,field_description:mail.field_mail_message_translation__source_lang
@@ -8864,7 +8870,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:mail.field_mail_mail__starred
 #: model:ir.model.fields,field_description:mail.field_mail_message__starred
 msgid "Starred"
-msgstr ""
+msgstr "بە ئەستێرە"
 
 #. module: mail
 #: model:ir.model.fields,field_description:mail.field_res_partner__starred_message_ids
@@ -9978,7 +9984,7 @@ msgstr ""
 #: model:ir.model.fields,help:mail.field_res_partner__activity_exception_decoration
 #: model:ir.model.fields,help:mail.field_res_users__activity_exception_decoration
 msgid "Type of the exception activity on record."
-msgstr ""
+msgstr "جۆری چالاکیی ئیستسنای تۆمارکراو."
 
 #. module: mail
 #. odoo-javascript
@@ -10062,7 +10068,7 @@ msgstr ""
 #. module: mail
 #: model_terms:ir.ui.view,arch_db:mail.mail_activity_plan_view_form
 msgid "Unit"
-msgstr ""
+msgstr "یەکە"
 
 #. module: mail
 #: model:ir.model.fields,help:mail.field_mail_activity_plan_template__delay_unit
@@ -10575,7 +10581,7 @@ msgstr ""
 #. module: mail
 #: model:ir.model.fields,field_description:mail.field_res_users_settings_volumes__volume
 msgid "Volume"
-msgstr ""
+msgstr "قەبارە"
 
 #. module: mail
 #: model_terms:ir.ui.view,arch_db:mail.res_users_settings_view_form

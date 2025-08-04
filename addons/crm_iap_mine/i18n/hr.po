@@ -7,14 +7,13 @@
 # Antonijo Kovacevic, 2024
 # Karolina Tonković <karolina.tonkovic@storm.hr>, 2024
 # Vladimir Vrgoč, 2024
-# Matej Mijoč, 2024
 # Stjepan Lovasić <stjepan.lovasic@gmail.com>, 2024
 # Bole <bole@dajmi5.com>, 2024
 # Vladimir Olujić <olujic.vladimir@storm.hr>, 2024
 # Alen Komljen, 2024
 # Tina Milas, 2024
-# Luka Carević <luka@uvid.hr>, 2024
 # Martin Trigaux, 2024
+# Luka Carević <luka@uvid.hr>, 2025
 # 
 msgid ""
 msgstr ""
@@ -22,7 +21,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2024-12-16 13:40+0000\n"
 "PO-Revision-Date: 2024-09-25 09:41+0000\n"
-"Last-Translator: Martin Trigaux, 2024\n"
+"Last-Translator: Luka Carević <luka@uvid.hr>, 2025\n"
 "Language-Team: Croatian (https://app.transifex.com/odoo/teams/41243/hr/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -444,13 +443,13 @@ msgstr "Generiranje potencijala"
 #: model:ir.model.fields,field_description:crm_iap_mine.field_crm_lead__lead_mining_request_id
 #: model_terms:ir.ui.view,arch_db:crm_iap_mine.crm_iap_lead_mining_request_view_search
 msgid "Lead Mining Request"
-msgstr "Lead Mining Request"
+msgstr "Zahtjev za generiranje prilika"
 
 #. module: crm_iap_mine
 #: model:ir.actions.act_window,name:crm_iap_mine.crm_iap_lead_mining_request_action
 #: model:ir.ui.menu,name:crm_iap_mine.crm_iap_lead_mining_request_menu_action
 msgid "Lead Mining Requests"
-msgstr "Zahtjev za pronalazak prilika"
+msgstr "Zahtjevi za generiranje prilika"
 
 #. module: crm_iap_mine
 #: model:ir.model.fields,field_description:crm_iap_mine.field_crm_iap_lead_mining_request__lead_total_credits
@@ -493,7 +492,7 @@ msgstr ""
 #. module: crm_iap_mine
 #: model:crm.iap.lead.industry,name:crm_iap_mine.crm_iap_mine_industry_86
 msgid "Media"
-msgstr ""
+msgstr "Datoteka"
 
 #. module: crm_iap_mine
 #: model:ir.model.fields,field_description:crm_iap_mine.field_crm_iap_lead_seniority__name
