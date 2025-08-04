@@ -2,12 +2,12 @@ import { after, beforeEach, expect, getFixture, test } from "@odoo/hoot";
 import {
     click,
     edit,
-    manuallyDispatchProgrammaticEvent,
     on,
     queryAllProperties,
     queryAllTexts,
     queryFirst,
     resize,
+    unload,
 } from "@odoo/hoot-dom";
 import { animationFrame, Deferred, mockSendBeacon, mockTouch, runAllTimers } from "@odoo/hoot-mock";
 import {
@@ -843,7 +843,7 @@ test("Auto save: don't save on closing tab/browser", async () => {
         message: "checkbox should be checked",
     });
 
-    manuallyDispatchProgrammaticEvent(window, "beforeunload");
+    await unload();
     await animationFrame();
     expect.verifySteps([]);
 });
@@ -2295,4 +2295,33 @@ test("Don't cache settings data", async () => {
     expect(
         Object.keys(cache.ramCache.ram.onchange || {})?.[0]?.includes("res.config.settings")
     ).toBe(undefined);
+});
+
+test("settings search is accent-insensitive", async () => {
+    await mountView({
+        type: "form",
+        resModel: "res.config.settings",
+        arch: /* xml */ `
+            <form string="Settings" class="oe_form_configuration o_base_settings" js_class="base_settings">
+                <app string="CRM" name="crm">
+                    <block title="Title of group Bâr">
+                        <setting help="this is bàr" documentation="/applications/technical/web/settings/this_is_a_test.html">
+                            <field name="bar"/>
+                            <button name="buttonName" icon="oi-arrow-right" type="action" string="Manage Users" class="btn-link"/>
+                        </setting>
+                        <setting>
+                            <label string="Big BÄZ" for="baz"/>
+                            <div class="text-muted">this is a báz</div>
+                            <field name="baz"/>
+                            <label>label with content</label>
+                        </setting>
+                    </block>
+                </app>
+            </form>
+        `,
+    });
+    await editSearch("bar");
+    expect(queryAllTexts(".highlighter")).toEqual(["Bâr", "Bar", "bàr"]);
+    await editSearch("àz");
+    expect(queryAllTexts(".highlighter")).toEqual(["ÄZ", "áz"]);
 });

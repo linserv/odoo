@@ -230,10 +230,10 @@ class TestDomain(TransactionExpressionCase):
         res_search = self._search(Child, [('link_sibling_id', 'not any', [('quantity', '>', 5)])])
         self.assertEqual(res_search, parent_1.child_ids[1] + parent_2.child_ids)
 
-        # Check any/not any traversing auto_join Many2one
-        self.assertFalse(Child._fields['link_sibling_id'].auto_join)
-        self.patch(Child._fields['link_sibling_id'], 'auto_join', True)
-        self.assertTrue(Child._fields['link_sibling_id'].auto_join)
+        # Check any/not any traversing bypass_search_access Many2one
+        self.assertFalse(Child._fields['link_sibling_id'].bypass_search_access)
+        self.patch(Child._fields['link_sibling_id'], 'bypass_search_access', True)
+        self.assertTrue(Child._fields['link_sibling_id'].bypass_search_access)
 
         res_search = self._search(Child, [('link_sibling_id', 'any', [('quantity', '>', 5)])])
         self.assertEqual(res_search, parent_1.child_ids[0])
@@ -300,10 +300,10 @@ class TestDomain(TransactionExpressionCase):
         res_search = self._search(Parent, [('child_ids', 'not any', [('quantity', '=', 1)])])
         self.assertEqual(res_search, parent_2 + parent_3)
 
-        # Check any/not any traversing auto_join Many2one
-        self.assertFalse(Parent._fields['child_ids'].auto_join)
-        self.patch(Parent._fields['child_ids'], 'auto_join', True)
-        self.assertTrue(Parent._fields['child_ids'].auto_join)
+        # Check any/not any traversing bypass_search_access Many2one
+        self.assertFalse(Parent._fields['child_ids'].bypass_search_access)
+        self.patch(Parent._fields['child_ids'], 'bypass_search_access', True)
+        self.assertTrue(Parent._fields['child_ids'].bypass_search_access)
 
         res_search = self._search(Parent, [('child_ids', 'any', [('quantity', '=', 1)])])
         self.assertEqual(res_search, parent_1)
@@ -312,7 +312,7 @@ class TestDomain(TransactionExpressionCase):
         self.assertEqual(res_search, parent_2 + parent_3)
 
     def test_anys_many2many(self):
-        # auto_join + without
+        # bypass_search_access + without
         Child = self.env['test_orm.any.child']
 
         child_1, child_2, child_3 = Child.create([
@@ -696,6 +696,19 @@ class TestDomainOptimize(TransactionCase):
             self.assertEqual(Domain('moment', '>=', '+12H').optimize_full(model), Domain('moment', '>=', datetime(2024, 1, 6, 1, 5)))
             today_domain = Domain('moment', '=', 'today').optimize_full(model)
             self.assertIn(datetime(2024, 1, 5), [v for cond in today_domain.iter_conditions() for v in ([cond.value] if isinstance(cond.value, datetime) else cond.value)])
+
+    def test_condition_optimize_datetime_timezone(self):
+        model = self.env['test_orm.mixed'].with_context(tz='Europe/Brussels')
+        self.assertEqual(
+            Domain('moment', '>=', '2024-01-01 10:00:00').optimize(model),
+            Domain('moment', '>=', datetime(2024, 1, 1, 10)),
+            "Timezone should have no effect on datetime"
+        )
+        self.assertEqual(
+            Domain('moment', '>=', '2024-01-02').optimize(model),
+            Domain('moment', '>=', datetime(2024, 1, 1, 22)),
+            "Date should consider timezone of the user"
+        )
 
     def test_condition_optimize_datetime_millisecond(self):
         model = self.env['test_orm.mixed']

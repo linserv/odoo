@@ -95,6 +95,7 @@ class ProjectTask(models.Model):
         'html.field.history.mixin',
     ]
     _mail_post_access = 'read'
+    _mail_thread_customer = True
     _order = "priority desc, sequence, date_deadline asc, id desc"
     _primary_email = 'email_from'
     _systray_view = 'list'
@@ -188,7 +189,11 @@ class ProjectTask(models.Model):
     allocated_hours = fields.Float("Allocated Time", tracking=True)
     subtask_allocated_hours = fields.Float("Sub-tasks Allocated Time", compute='_compute_subtask_allocated_hours', export_string_translation=False,
         help="Sum of the hours allocated for all the sub-tasks (and their own sub-tasks) linked to this task. Usually less than or equal to the allocated hours of this task.")
-    role_ids = fields.Many2many('project.role', string='Project Roles')
+    role_ids = fields.Many2many(
+        'project.role',
+        string='Project Roles',
+        help="When you create a project from a template, you can choose which employee takes each role. These employees will be added to the tasks, along with anyone already assigned.",
+    )
     # Tracking of this field is done in the write function
     user_ids = fields.Many2many('res.users', relation='project_task_user_rel', column1='task_id', column2='user_id',
         string='Assignees', context={'active_test': False}, tracking=True, default=_default_user_ids, domain="[('share', '=', False), ('active', '=', True)]", falsy_value_label=_lt("👤 Unassigned"))
@@ -304,7 +309,9 @@ class ProjectTask(models.Model):
         help="""Use these keywords in the title to set new tasks:\n
             #tags Set tags on the task
             @user Assign the task to a user
-            ! Set the task a high priority\n
+            ! Set the task a medium priority
+            !! Set the task a high priority
+            !!! Set the task a urgent priority\n
             Make sure to use the right format and order e.g. Improve the configuration screen #feature #v16 @Mitchell !""",
     )
     link_preview_name = fields.Char(compute='_compute_link_preview_name', export_string_translation=False)
@@ -725,7 +732,7 @@ class ProjectTask(models.Model):
     def _get_group_pattern(self):
         return {
             'tags_and_users': r'\s([#@]%s[^\s]+)',
-            'priority': r'\s(!)',
+            'priority': r'(?:^|\s)(!{1,3})(?=\s|$)',
         }
 
     def _prepare_pattern_groups(self):
@@ -768,9 +775,11 @@ class ProjectTask(models.Model):
         self.display_name, dummy = re.subn(pattern, '', self.display_name)
 
     def _extract_priority(self):
-        self.priority = "1"
         priority_group = self._get_group_pattern()['priority']
-        self.display_name, dummy = re.subn(priority_group, '', self.display_name)
+        match = re.search(priority_group, self.display_name)
+        if match:
+            self.priority = str(min(len(match.group(1)), 3))
+            self.display_name, _dummy = re.subn(priority_group, '', self.display_name)
 
     def _get_groups(self):
         return [
@@ -1031,6 +1040,18 @@ class ProjectTask(models.Model):
                 return field.name in writeable
         return True
 
+    def _ensure_fields_write(self, vals, defaults=False):
+        if defaults:
+            vals = {
+                **{key[8:]: value for key, value in self.env.context.items() if key.startswith("default_")},
+                **vals
+            }
+
+        for fname, value in vals.items():
+            field = self._fields.get(fname)
+            if field and field.type == 'many2one':
+                self.env[field.comodel_name].browse(value).check_access('read')
+
     def _set_stage_on_project_from_task(self):
         stage_ids_per_project = defaultdict(list)
         for task in self:
@@ -1090,6 +1111,9 @@ class ProjectTask(models.Model):
                 additional_vals['personal_stage_type_id'] = default_personal_stage[0]
             if not vals.get('name') and vals.get('display_name'):
                 vals['name'] = vals['display_name']
+
+            if self.env.user._is_portal() and not self.env.su:
+                self._ensure_fields_write(vals, defaults=True)
 
             if project_id and not "company_id" in vals:
                 additional_vals["company_id"] = self.env["project.project"].browse(
@@ -1175,6 +1199,8 @@ class ProjectTask(models.Model):
         # sudo for portal users, because they do not have access to these
         # fields. Other values must not be written as sudo.
         additional_vals = {}
+        if self.env.user._is_portal() and not self.env.su:
+            self._ensure_fields_write(vals, defaults=False)
 
         if 'milestone_id' in vals:
             # WARNING: has to be done after 'project_id' vals is written on subtasks

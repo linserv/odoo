@@ -48,7 +48,7 @@ class MailActivityMixin(models.AbstractModel):
 
     activity_ids = fields.One2many(
         'mail.activity', 'res_id', 'Activities',
-        auto_join=True,
+        bypass_search_access=True,
         groups="base.group_user",)
     activity_state = fields.Selection([
         ('overdue', 'Overdue'),
@@ -248,6 +248,7 @@ class MailActivityMixin(models.AbstractModel):
         if Domain.is_negative_operator(operator):
             return NotImplemented
         return [('activity_ids', 'any', [
+            ('active', '=', True),  # never overdue if "done"
             ('date_deadline', operator, operand),
             ('res_model', '=', self._name),
             ('user_id', '=', self.env.user.id)

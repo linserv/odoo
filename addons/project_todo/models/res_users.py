@@ -3,7 +3,7 @@
 
 import json
 
-from odoo import _, api, models, modules
+from odoo import _, api, fields, models, modules
 
 
 class ResUsers(models.Model):
@@ -24,9 +24,9 @@ class ResUsers(models.Model):
         # 2. creating groups for todo and task seperately
         query = """SELECT BOOL(t.project_id) as is_task, count(*), act.res_model, act.res_id,
                        CASE
-                           WHEN CURRENT_DATE - act.date_deadline::date = 0 THEN 'today'
-                           WHEN CURRENT_DATE - act.date_deadline::date > 0 THEN 'overdue'
-                           WHEN CURRENT_DATE - act.date_deadline::date < 0 THEN 'planned'
+                           WHEN %(date)s - act.date_deadline::date = 0 THEN 'today'
+                           WHEN %(date)s - act.date_deadline::date > 0 THEN 'overdue'
+                           WHEN %(date)s - act.date_deadline::date < 0 THEN 'planned'
                         END AS states
                      FROM mail_activity AS act
                      JOIN project_task AS t ON act.res_id = t.id
@@ -34,6 +34,7 @@ class ResUsers(models.Model):
                  GROUP BY is_task, states, act.res_model, act.res_id
                 """
         self.env.cr.execute(query, {
+            'date': str(fields.Date.context_today(self)),
             'user_id': self.env.uid,
             'active': self.env.context.get('active_test', True),
         })
@@ -58,6 +59,7 @@ class ResUsers(models.Model):
                     'model': 'project.task',
                     'type': 'activity',
                     'icon': icon,
+                    'domain': [('active', 'in', [True, False])],
                     'total_count': 0, 'today_count': 0, 'overdue_count': 0, 'planned_count': 0,
                     'res_ids': set(),
                     'view_type': view_type,
@@ -69,7 +71,10 @@ class ResUsers(models.Model):
 
         for group in user_activities.values():
             group.update({
-                'domain': json.dumps([['activity_ids.res_id', 'in', list(group['res_ids'])]])
+                'domain': json.dumps([
+                    ['active', 'in', [True, False]],
+                    ['activity_ids.res_id', 'in', list(group['res_ids'])]
+                ])
             })
         activity_groups.extend(list(user_activities.values()))
 

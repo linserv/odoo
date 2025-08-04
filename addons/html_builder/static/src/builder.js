@@ -69,6 +69,7 @@ export class Builder extends Component {
 
         this.lastTrigerUpdateId = 0;
         this.editorBus = new EventBus();
+        this.colorPresetToShow = null;
 
         // TODO: maybe do a different config for the translate mode and the
         // "regular" mode.
@@ -136,6 +137,7 @@ export class Builder extends Component {
                 allowTargetBlank: true,
                 dropImageAsAttachment: true,
                 getAnimateTextConfig: () => ({ editor: this.editor, editorBus: this.editorBus }),
+                baseContainers: ["P"],
             },
             this.env.services
         );
@@ -166,6 +168,7 @@ export class Builder extends Component {
             editor: this.editor,
             editorBus: this.editorBus,
             triggerDomUpdated: this.triggerDomUpdated.bind(this),
+            editColorCombination: this.editColorCombination.bind(this),
         });
         // onMounted(() => {
         //     // actionService.setActionMode("fullscreen");
@@ -213,9 +216,12 @@ export class Builder extends Component {
     discard() {
         if (this.state.canUndo) {
             this.dialog.add(ConfirmationDialog, {
+                title: _t("Discard all changes?"),
                 body: _t(
-                    "If you discard the current edits, all unsaved changes will be lost. You can cancel to return to edit mode."
+                    "Are you sure you want to discard all your changes? Once you do, they're gone for good."
                 ),
+                confirmLabel: _t("Discard changes"),
+                cancelLabel: _t("Keep editing"),
                 confirm: () => this.props.closeEditor(),
                 cancel: () => {},
             });
@@ -239,24 +245,38 @@ export class Builder extends Component {
         // TODO: handle the urgent save and the fail of the save operation
         const snippetMenuEl = this.builder_sidebarRef.el;
         // Add a loading effect on the save button and disable the other actions
-        addButtonLoadingEffect(snippetMenuEl.querySelector("[data-action='save']"));
+        const removeLoadingEffect = addButtonLoadingEffect(
+            snippetMenuEl.querySelector("[data-action='save']")
+        );
         const actionButtonEls = snippetMenuEl.querySelectorAll("[data-action]");
         for (const actionButtonEl of actionButtonEls) {
             actionButtonEl.disabled = true;
         }
-        await this.editor.shared.savePlugin.save();
-        this.props.closeEditor();
+        try {
+            await this.editor.shared.savePlugin.save();
+            this.props.closeEditor();
+        } catch (error) {
+            for (const actionButtonEl of actionButtonEls) {
+                actionButtonEl.removeAttribute("disabled");
+            }
+            removeLoadingEffect();
+            this.editor.shared.edit_interaction.restartInteractions();
+            throw error;
+        }
     }
 
     /**
      * Called when clicking on a tab. Sets the active tab to the given tab.
      *
      * @param {String} tab the tab to set
+     * @param {Number | null} presetId the color preset expanding on "theme" tab
+     * open.
      */
-    onTabClick(tab) {
+    onTabClick(tab, presetId = null) {
         this.setTab(tab);
         // Deactivate the options when clicking on the "BLOCKS" or "THEME" tabs.
         if (tab === "theme" || tab === "blocks") {
+            this.colorPresetToShow = presetId;
             this.editor.shared["builderOptions"].deactivateContainers();
         }
     }
@@ -310,5 +330,9 @@ export class Builder extends Component {
         this.state.invisibleEls = [
             ...this.editor.editable.querySelectorAll(this.getInvisibleSelector(isMobile)),
         ];
+    }
+
+    editColorCombination(presetId) {
+        this.onTabClick("theme", presetId);
     }
 }

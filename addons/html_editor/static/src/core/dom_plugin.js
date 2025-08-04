@@ -26,6 +26,7 @@ import {
     isTangible,
     isUnprotecting,
     listElementSelector,
+    isEditorTab,
 } from "../utils/dom_info";
 import {
     childNodes,
@@ -88,6 +89,7 @@ export class DomPlugin extends Plugin {
             this.removeEmptyClassAndStyleAttributes(root);
         },
         clipboard_content_processors: this.removeEmptyClassAndStyleAttributes.bind(this),
+        functional_empty_node_predicates: [isSelfClosingElement, isEditorTab],
     };
     contentEditableToRemove = new Set();
 
@@ -563,6 +565,7 @@ export class DomPlugin extends Plugin {
             newCandidate = baseContainer;
         }
         const cursors = this.dependencies.selection.preserveSelection();
+        const newEls = [];
         for (const block of this.getBlocksToTag()) {
             if (isParagraphRelatedElement(block) || isListItemElement(block)) {
                 if (newCandidate.matches(baseContainerGlobalSelector) && isListItemElement(block)) {
@@ -584,6 +587,7 @@ export class DomPlugin extends Plugin {
                 if (block.nodeName === "LI") {
                     this.delegateTo("set_tag_overrides", block, newEl);
                 }
+                newEls.push(newEl);
             } else {
                 // eg do not change a <div> into a h1: insert the h1
                 // into it instead.
@@ -593,6 +597,7 @@ export class DomPlugin extends Plugin {
             }
         }
         cursors.restore();
+        this.dispatchTo("set_tag_handlers", newEls);
         this.dependencies.history.addStep();
     }
 

@@ -78,9 +78,7 @@ registry.category("services").add("website_edit", {
             } else {
                 publicInteractions.startInteractions(target);
             }
-            
         };
-        
 
         const refresh = (target) => {
             publicInteractions.isRefreshing = true;
@@ -93,6 +91,10 @@ registry.category("services").add("website_edit", {
 
         const stop = (target) => {
             publicInteractions.stopInteractions(target);
+        };
+
+        const stopInteraction = (name) => {
+            publicInteractions.stopInteractionByName(name);
         };
 
         const isEditingTranslations = () =>
@@ -212,12 +214,6 @@ registry.category("services").add("website_edit", {
                     insert(...args) {
                         const el = args[0];
                         super.insert(...args);
-                        // Avoid deletion accidents.
-                        // E.g. if an interaction inserts a node into a parent
-                        // node, and an option uses replaceChildren on the
-                        // parent node, you do not want the inserted node to be
-                        // reinserted upon undo of the option's action.
-                        el.dataset.skipHistoryHack = "true";
                         el.setAttribute("contenteditable", "false");
                     },
                 }),
@@ -228,6 +224,20 @@ registry.category("services").add("website_edit", {
                             return mustBeRefreshed && interaction.interaction.shouldStop();
                         }
                         return super.shouldStop(el, interaction);
+                    },
+
+                    stopInteractionByName(name) {
+                        const IToStop = registry.category("public.interactions").get(name);
+                        const interactions = [];
+                        for (const interaction of this.interactions) {
+                            if (interaction.interaction.constructor === IToStop) {
+                                interaction.destroy();
+                                this.activeInteractions.delete(interaction.el, IToStop);
+                            } else {
+                                interactions.push(interaction);
+                            }
+                        }
+                        this.interactions = interactions;
                     },
                 })
             );
@@ -262,11 +272,16 @@ registry.category("services").add("website_edit", {
             update,
             refresh,
             stop,
+            stopInteraction,
             installPatches,
             uninstallPatches,
             applyAction,
             callShared,
         };
+
+        window.parent.document.addEventListener("edit_page", (ev) => {
+            stop(ev.detail.iframeDocument);
+        });
 
         // Transfer the iframe website_edit service to the EditInteractionPlugin
         window.parent.document.addEventListener("edit_interaction_plugin_loaded", (ev) => {

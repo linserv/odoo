@@ -160,6 +160,9 @@ class TestUiHtmlEditor(HttpCaseWithUserDemo):
         self.start_tour(self.env['website'].get_client_action_url('/contactus'), 'test_html_editor_scss', login='admin')
         self.start_tour(self.env['website'].get_client_action_url('/'), 'test_html_editor_scss_2', login='demo')
 
+    def test_ace_editor_is_hidden(self):
+        self.start_tour(self.env['website'].get_client_action_url('/'), 'test_ace_editor_is_hidden', login='admin')
+
     def test_media_dialog_undraw(self):
         BASE_URL = self.base_url()
         banner = '/website/static/src/img/snippets_demo/s_banner.jpg'
@@ -198,8 +201,6 @@ class TestUiHtmlEditorWithExternal(HttpCaseWithUserDemo):
 
 @odoo.tests.tagged('-at_install', 'post_install')
 class TestUiTranslate(odoo.tests.HttpCase):
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_admin_tour_rte_translator(self):
         self.env['res.lang'].create({
             'name': 'Parseltongue',
@@ -426,8 +427,6 @@ class TestUi(HttpCaseWithWebsiteUser):
     def test_08_website_style_custo(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'website_style_edition', login='admin')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_09_website_edit_link_popover(self):
         self.start_tour('/@/', 'edit_link_popover', login='admin', timeout=180)
 

@@ -226,7 +226,7 @@ export function containsOrderLine(name, quantity, price_unit, line_price) {
     return [
         {
             content: `Order line with name: ${name}, quantity: ${quantity}, price per unit: ${price_unit}, and line price: ${line_price} exists`,
-            trigger: `.pos-receipt .orderline:has(.product-name:contains('${name}') .qty:contains('${quantity}')):has(.product-price:contains('${line_price}')):has(.price-per-unit:contains('${price_unit}'))`,
+            trigger: `.pos-receipt .orderline:has(.product-name:contains('${name}')):has(.qty:contains('${quantity}')):has(.product-price:contains('${line_price}')):has(.price-per-unit:contains('${price_unit}'))`,
         },
     ];
 }
@@ -237,5 +237,14 @@ export function discardOrderWarningDialog() {
             trigger: `.modal-dialog:contains("It seems that the order has not been sent. Would you like to send it to preparation?")`,
         },
         Dialog.discard(),
+    ];
+}
+
+export function confirmOrderWarningDialog() {
+    return [
+        {
+            trigger: `.modal-dialog:contains("It seems that the order has not been sent. Would you like to send it to preparation?")`,
+        },
+        Dialog.confirm(),
     ];
 }

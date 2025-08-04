@@ -4,7 +4,7 @@ import { registry } from "@web/core/registry";
 export class EditInteractionPlugin extends Plugin {
     static id = "edit_interaction";
 
-    static shared = ["restartInteractions"];
+    static shared = ["restartInteractions", "stopInteraction"];
 
     resources = {
         normalize_handlers: this.refreshInteractions.bind(this),
@@ -28,7 +28,6 @@ export class EditInteractionPlugin extends Plugin {
 
     setup() {
         this.websiteEditService = undefined;
-        this.areInteractionsStartedInEditMode = false;
 
         window.parent.document.addEventListener(
             "transfer_website_edit_service",
@@ -54,15 +53,10 @@ export class EditInteractionPlugin extends Plugin {
             throw new Error("website edit service not loaded");
         }
         this.websiteEditService.update(element, "edit");
-        this.areInteractionsStartedInEditMode = true;
     }
 
     refreshInteractions(element) {
-        if (this.areInteractionsStartedInEditMode) {
-            this.websiteEditService.refresh(element);
-        } else {
-            this.restartInteractions(element);
-        }
+        this.websiteEditService.refresh(element);
     }
 
     stopInteractions(element) {
@@ -70,6 +64,13 @@ export class EditInteractionPlugin extends Plugin {
             throw new Error("website edit service not loaded");
         }
         this.websiteEditService.stop(element);
+    }
+
+    stopInteraction(name) {
+        if (!this.websiteEditService) {
+            throw new Error("website edit service not loaded");
+        }
+        this.websiteEditService.stopInteraction(name);
     }
 }
 

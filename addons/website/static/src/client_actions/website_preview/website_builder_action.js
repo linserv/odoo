@@ -127,7 +127,6 @@ export class WebsiteBuilderClientAction extends Component {
         onMounted(() => {
             this.addListeners(document);
             this.addSystrayItems();
-            this.websiteService.useMysterious = true;
             const edition = !!(this.enableEditor || this.editTranslations);
             if (edition) {
                 this.onEditPage();
@@ -215,8 +214,6 @@ export class WebsiteBuilderClientAction extends Component {
                 },
                 customizeTab: this.translation ? "website.CustomizeTranslationTab" : "",
             },
-            getThemeTab: () =>
-                odoo.loader.modules.get("@website/builder/plugins/theme/theme_tab").ThemeTab,
         };
         return { translation: this.translation, builderProps };
     }
@@ -258,8 +255,16 @@ export class WebsiteBuilderClientAction extends Component {
     }
 
     async onEditPage() {
+        this.websiteContext.showResourceEditor = false;
         this.blockIframe();
         await this.loadIframeAndBundles(true);
+        window.document.dispatchEvent(
+            new CustomEvent("edit_page", {
+                detail: {
+                    iframeDocument: this.websiteContent.el.contentDocument.document,
+                },
+            })
+        );
         this.unblockIframe();
         this.state.isEditing = true;
     }
@@ -361,7 +366,10 @@ export class WebsiteBuilderClientAction extends Component {
                 }
             }
         }
-
+        if (this.lastPageURL !== iframe.contentWindow.location.href) {
+            // Hide Ace Editor when moving to another page.
+            this.websiteService.context.showResourceEditor = false;
+        }
         this.websiteService.pageDocument = this.websiteContent.el.contentDocument;
         if (this.translation) {
             deleteQueryParam("edit_translations", this.websiteService.contentWindow, true);
@@ -374,6 +382,7 @@ export class WebsiteBuilderClientAction extends Component {
         this.resolveIframeLoaded();
         this.addWelcomeMessage();
         this.websiteService.hideLoader();
+        this.lastPageURL = iframe.contentWindow.location.href;
     }
 
     blockIframe() {
@@ -486,10 +495,6 @@ export class WebsiteBuilderClientAction extends Component {
         await this.reloadIframe(this.state.isEditing, param.url);
         // trigger an new instance of the builder menu
         this.state.key++;
-
-        this.notification.add("Content saved", {
-            type: "success",
-        });
     }
 
     async reloadIframeAndCloseEditor() {

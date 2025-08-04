@@ -112,7 +112,7 @@ export class SelectMenu extends Component {
             if (!this.dropdownState.isOpen) {
                 this.dropdownState.open();
             }
-            const searchString = ev.target.value || "";
+            const searchString = ev.target.value;
             this.state.searchValue = searchString;
             this.onInput(searchString);
         }, DEBOUNCED_DELAY);
@@ -193,7 +193,8 @@ export class SelectMenu extends Component {
     get menuClass() {
         return mergeClasses(
             {
-                "o_select_menu_menu my-0": true,
+                "my-0": this.displayInputInToggler,
+                o_select_menu_menu: true,
                 o_select_menu_multi_select: this.props.multiSelect,
             },
             this.props.menuClass
@@ -281,7 +282,7 @@ export class SelectMenu extends Component {
     }
 
     getSelectedChoice(props) {
-        const choices = [...props.choices, ...props.groups.flatMap((g) => g.choices)];
+        const choices = [...props.choices, ...props.groups.flatMap((g) => g.choices || [])];
         if (!this.props.multiSelect) {
             return choices.find((c) => c.value === props.value);
         }
@@ -330,16 +331,15 @@ export class SelectMenu extends Component {
         this.state.choices = [];
 
         for (const group of groupsList) {
-            let filteredOptions = [];
+            let filteredOptions = group.choices || [];
 
             if (searchString) {
                 filteredOptions = fuzzyLookup(
                     searchString.trim(),
-                    group.choices,
+                    filteredOptions,
                     (choice) => choice.label
                 );
             } else {
-                filteredOptions = group.choices || [];
                 if (this.props.autoSort) {
                     filteredOptions.sort((optionA, optionB) =>
                         optionA.label.localeCompare(optionB.label)

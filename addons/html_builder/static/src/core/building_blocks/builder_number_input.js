@@ -19,7 +19,7 @@ export class BuilderNumberInput extends Component {
     static props = {
         ...basicContainerBuilderComponentProps,
         ...textInputBasePassthroughProps,
-        default: { type: Number, optional: true },
+        default: { type: [Number, { value: null }], optional: true },
         unit: { type: String, optional: true },
         saveUnit: { type: String, optional: true },
         step: { type: Number, optional: true },
@@ -32,6 +32,7 @@ export class BuilderNumberInput extends Component {
     static defaultProps = {
         composable: false,
         applyWithUnit: true,
+        default: 0,
     };
 
     setup() {
@@ -42,7 +43,7 @@ export class BuilderNumberInput extends Component {
         useBuilderComponent();
         const { state, commit, preview } = useInputBuilderComponent({
             id: this.props.id,
-            defaultValue: this.props.default?.toString(),
+            defaultValue: this.props.default === null ? null : this.props.default?.toString(),
             formatRawValue: this.formatRawValue.bind(this),
             parseDisplayValue: this.parseDisplayValue.bind(this),
         });
@@ -62,6 +63,9 @@ export class BuilderNumberInput extends Component {
         if (typeof values === "number") {
             return convertSingleValueFn(values.toString());
         }
+        if (values === null) {
+            return values;
+        }
         if (!values) {
             return "";
         }
@@ -74,7 +78,7 @@ export class BuilderNumberInput extends Component {
             const { savedValue, savedUnit } = value.match(
                 /(?<savedValue>[\d.e+-]+)(?<savedUnit>\w*)/
             ).groups;
-            if (savedUnit) {
+            if (savedUnit || this.props.saveUnit) {
                 // Convert value from saveUnit to unit
                 value = convertNumericToUnit(
                     savedValue,
@@ -98,6 +102,9 @@ export class BuilderNumberInput extends Component {
     }
 
     parseDisplayValue(displayValue) {
+        if (!displayValue) {
+            return displayValue;
+        }
         displayValue = displayValue.replace(/,/g, ".");
         // Only accept 0-9, dot, - sign and space if multiple values are allowed
         if (this.props.composable) {

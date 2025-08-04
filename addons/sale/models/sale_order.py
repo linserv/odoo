@@ -222,7 +222,7 @@ class SaleOrder(models.Model):
         comodel_name='sale.order.line',
         inverse_name='order_id',
         string="Order Lines",
-        copy=True, auto_join=True)
+        copy=True, bypass_search_access=True)
 
     amount_untaxed = fields.Monetary(string="Untaxed Amount", store=True, compute='_compute_amounts', tracking=5)
     amount_tax = fields.Monetary(string="Taxes", store=True, compute='_compute_amounts')
@@ -531,7 +531,7 @@ class SaleOrder(models.Model):
                     currency_id=currency,
                     sign=1,
                     special_type='early_payment',
-                    tax_ids=line.tax_ids,
+                    tax_ids=line.tax_ids.flatten_taxes_hierarchy().filtered(lambda tax: tax.amount_type != 'fixed'),
                 ))
                 epd_lines.append(self.env['account.tax']._prepare_base_line_for_taxes_computation(
                     record=self,

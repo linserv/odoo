@@ -91,7 +91,7 @@ const DEFAULT_HOOKS = {
     onWillSaveRecord: () => {},
     /** @type {(record: RelationalRecord) => any} */
     onRecordSaved: () => {},
-    /** @type {(record: RelationalRecord) => any} */
+    /** @type {(record: RelationalRecord, changes: Object) => any} */
     onWillSaveMulti: () => {},
     /** @type {(records: RelationalRecord[]) => any} */
     onSavedMulti: () => {},
@@ -99,6 +99,10 @@ const DEFAULT_HOOKS = {
     onWillSetInvalidField: () => {},
     /** @type {(record: RelationalRecord) => any} */
     onRecordChanged: () => {},
+    /** @type {(warning: Object) => any} */
+    onWillDisplayOnchangeWarning: () => {},
+    /** @type {(changes: Object, validRecords: RelationalRecord[]) => any} */
+    onAskMultiSaveConfirmation: () => true,
 };
 
 rpcBus.addEventListener("RPC:RESPONSE", (ev) => {
@@ -704,17 +708,19 @@ export class RelationalModel extends Model {
             throw e;
         }
         if (response.warning) {
-            const { type, title, message, className, sticky } = response.warning;
-            if (type === "dialog") {
-                this.dialog.add(WarningDialog, { title, message });
-            } else {
-                this.notification.add(message, {
-                    className,
-                    sticky,
-                    title,
-                    type: "warning",
-                });
-            }
+            Promise.resolve(this.hooks.onWillDisplayOnchangeWarning(response.warning)).then(() => {
+                const { type, title, message, className, sticky } = response.warning;
+                if (type === "dialog") {
+                    this.dialog.add(WarningDialog, { title, message });
+                } else {
+                    this.notification.add(message, {
+                        className,
+                        sticky,
+                        title,
+                        type: "warning",
+                    });
+                }
+            });
         }
         return response.value;
     }

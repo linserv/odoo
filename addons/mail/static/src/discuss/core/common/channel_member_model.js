@@ -101,6 +101,14 @@ export class ChannelMember extends Record {
         return this.channel_id.getPersonaName(this.persona);
     }
 
+    get avatarUrl() {
+        return this.partner_id?.avatarUrl || this.guest_id?.avatarUrl;
+    }
+
+    get im_status() {
+        return this.partner_id?.im_status || this.guest_id?.im_status;
+    }
+
     /**
      * @returns {string}
      */

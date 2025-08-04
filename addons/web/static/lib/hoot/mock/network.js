@@ -5,6 +5,7 @@ import {
     mockedCancelAnimationFrame,
     mockedRequestAnimationFrame,
 } from "@web/../lib/hoot-dom/helpers/time";
+import { isInstanceOf } from "../../hoot-dom/hoot_dom_utils";
 import { makeNetworkLogger } from "../core/logger";
 import { ensureArray, MIME_TYPE, MockEventTarget } from "../hoot_utils";
 import { getSyncValue, MockBlob, setSyncValue } from "./sync_values";
@@ -147,8 +148,8 @@ let getNetworkDelay = null;
 let mockFetchFn = null;
 /** @type {((websocket: ServerWebSocket) => any) | null} */
 let mockWebSocketConnection = null;
-/** @type {((worker: MockSharedWorker | MockWorker) => any) | null} */
-let mockWorkerConnection = null;
+/** @type {Array<(worker: MockSharedWorker | MockWorker) => any>} */
+let mockWorkerConnection = [];
 
 //-----------------------------------------------------------------------------
 // Exports
@@ -158,11 +159,11 @@ export function cleanupNetwork() {
     // Mocked functions
     mockFetchFn = null;
     mockWebSocketConnection = null;
-    mockWorkerConnection = null;
+    mockWorkerConnection = [];
 
     // Network instances
     for (const instance of openNetworkInstances) {
-        if (instance instanceof AbortController) {
+        if (isInstanceOf(instance, AbortController)) {
             instance.abort();
         } else if (
             instance instanceof MockBroadcastChannel ||
@@ -232,9 +233,9 @@ export async function mockedFetch(input, init) {
 
     /** @type {Headers} */
     let headers;
-    if (result && result.headers instanceof Headers) {
+    if (result && isInstanceOf(result.headers, Headers)) {
         headers = result.headers;
-    } else if (init.headers instanceof Headers) {
+    } else if (isInstanceOf(init.headers, Headers)) {
         headers = init.headers;
     } else {
         headers = new Headers(init.headers);
@@ -251,7 +252,7 @@ export async function mockedFetch(input, init) {
         return result;
     }
 
-    if (result instanceof Response) {
+    if (isInstanceOf(result, Response)) {
         // Actual fetch
         logResponse(() => "(go to network tab for request content)");
         return result;
@@ -264,7 +265,7 @@ export async function mockedFetch(input, init) {
     if (!contentType) {
         if (typeof result === "string") {
             contentType = MIME_TYPE.text;
-        } else if (result instanceof Blob) {
+        } else if (isInstanceOf(result, Blob)) {
             contentType = MIME_TYPE.blob;
         } else {
             contentType = MIME_TYPE.json;
@@ -338,7 +339,7 @@ export function mockWebSocket(onWebSocketConnected) {
  *  });
  */
 export function mockWorker(onWorkerConnected) {
-    mockWorkerConnection = onWorkerConnected;
+    mockWorkerConnection.push(onWorkerConnected);
 }
 
 /**
@@ -731,7 +732,9 @@ export class MockSharedWorker extends MockEventTarget {
         // First port has to be started manually
         this._messageChannel.port2.start();
 
-        mockWorkerConnection?.(this);
+        for (const onWorkerConnected of mockWorkerConnection) {
+            onWorkerConnected(this);
+        }
     }
 }
 
@@ -832,8 +835,13 @@ export class MockWorker extends MockEventTarget {
 
         this._messageChannel.port1.start();
         this._messageChannel.port2.start();
+        this._messageChannel.port1.addEventListener("message", (ev) => {
+            this.dispatchEvent(new MessageEvent("message", { data: ev.data }));
+        });
 
-        mockWorkerConnection?.(this);
+        for (const onWorkerConnected of mockWorkerConnection) {
+            onWorkerConnected(this);
+        }
     }
 
     /** @type {Worker["postMessage"]} */

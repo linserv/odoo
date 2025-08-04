@@ -53,20 +53,17 @@ export class BuilderOptionsPlugin extends Plugin {
     };
 
     setup() {
-        this.builderOptions = this.getResource("builder_options").map((option) => ({
-            ...option,
-            id: uniqueId(),
-        }));
+        this.builderOptions = withIds(this.getResource("builder_options"));
+        this.elementsToOptionsTitleComponents = withIds(
+            this.getResource("elements_to_options_title_components")
+        );
         this.getResource("patch_builder_options").forEach((option) => {
             this.patchBuilderOptions(option);
         });
-        this.builderHeaderMiddleButtons = this.getResource("builder_header_middle_buttons").map(
-            (headerMiddleButton) => ({ ...headerMiddleButton, id: uniqueId() })
+        this.builderHeaderMiddleButtons = withIds(
+            this.getResource("builder_header_middle_buttons")
         );
-        this.builderContainerTitle = this.getResource("container_title").map((containerTitle) => ({
-            ...containerTitle,
-            id: uniqueId(),
-        }));
+        this.builderContainerTitle = withIds(this.getResource("container_title"));
         // doing this manually instead of using addDomListener. This is because
         // addDomListener will ignore all events from protected targets. But in
         // our case, we still want to update the containers.
@@ -209,6 +206,9 @@ export class BuilderOptionsPlugin extends Plugin {
         const elementToOptions = mapElementsToOptions(this.builderOptions);
         const elementToHeaderMiddleButtons = mapElementsToOptions(this.builderHeaderMiddleButtons);
         const elementToContainerTitle = mapElementsToOptions(this.builderContainerTitle);
+        const elementToOptionTitleComponents = mapElementsToOptions(
+            this.elementsToOptionsTitleComponents
+        );
 
         // Find the closest element with no options that should still have the
         // overlay buttons.
@@ -228,6 +228,7 @@ export class BuilderOptionsPlugin extends Plugin {
                 id: previousElementToIdMap.get(element) || uniqueId(),
                 element,
                 options,
+                optionTitleComponents: elementToOptionTitleComponents.get(element) || [],
                 headerMiddleButtons: elementToHeaderMiddleButtons.get(element) || [],
                 containerTitle: elementToContainerTitle.get(element)
                     ? elementToContainerTitle.get(element)[0]
@@ -295,12 +296,16 @@ export class BuilderOptionsPlugin extends Plugin {
     }
 
     /**
-     * Activates the containers of the given element. They will be activated
-     * once the current step is added (see `onStepAdded`).
+     * Activates the containers of the given element or deactivate them if false
+     * is given. They will be (de)activated once the current step is added (see
+     * `onStepAdded`).
      *
-     * @param {HTMLElement} targetEl the element to activate
+     * @param {HTMLElement|Boolean} targetEl the element to activate or `false`
      */
     setNextTarget(targetEl) {
+        if (this.dependencies.history.getIsPreviewing()) {
+            return;
+        }
         // Store the next target to activate in the current step.
         this.dependencies.history.setStepExtra("nextTarget", targetEl);
     }
@@ -316,6 +321,8 @@ export class BuilderOptionsPlugin extends Plugin {
         const nextTargetEl = step.extraStepInfos.nextTarget;
         if (nextTargetEl) {
             this.updateContainers(nextTargetEl, { forceUpdate: true });
+        } else if (nextTargetEl === false) {
+            this.deactivateContainers();
         } else {
             this.updateContainers();
         }
@@ -332,13 +339,18 @@ export class BuilderOptionsPlugin extends Plugin {
             let targetEl = revertedStep.extraStepInfos.currentTarget;
             // If the step was supposed to activate another target, activate
             // this one instead.
-            if (mode === "redo" && revertedStep.extraStepInfos.nextTarget) {
-                targetEl = revertedStep.extraStepInfos.nextTarget;
+            const nextTarget = revertedStep.extraStepInfos.nextTarget;
+            if (mode === "redo" && (nextTarget || nextTarget === false)) {
+                targetEl = nextTarget;
             }
-            this.updateContainers(targetEl, { forceUpdate: true });
-            // Scroll to the target if not visible.
-            if (!isElementInViewport(targetEl)) {
-                targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (targetEl) {
+                this.updateContainers(targetEl, { forceUpdate: true });
+                // Scroll to the target if not visible.
+                if (!isElementInViewport(targetEl)) {
+                    targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+            } else {
+                this.deactivateContainers();
             }
         }
     }
@@ -423,4 +435,8 @@ export function checkElement(el, { editableOnly = true, exclude = "" }) {
         return shouldEditableMediaBeEditable(el);
     }
     return !el.matches('.o_not_editable:not(.s_social_media) :not([contenteditable="true"])');
+}
+
+function withIds(arr) {
+    return arr.map((el) => ({ ...el, id: uniqueId() }));
 }

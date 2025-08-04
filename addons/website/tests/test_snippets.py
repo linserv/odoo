@@ -27,8 +27,6 @@ class TestSnippets(HttpCase):
     def test_02_default_shape_gets_palette_colors(self):
         self.start_tour('/@/', 'default_shape_gets_palette_colors', login='admin')
 
-    # TODO master-mysterious-egg fix error
-    @unittest.skip("prepare mysterious-egg for merging")
     def test_03_snippets_all_drag_and_drop(self):
         with MockRequest(self.env, website=self.env['website'].browse(1)):
             snippets_template = self.env['ir.ui.view'].render_public_asset('website.snippets')
@@ -91,8 +89,8 @@ class TestSnippets(HttpCase):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'snippet_table_of_content', login='admin')
 
     def test_09_snippet_image_gallery(self):
-        create_image_attachment(self.env, '/web/image/website.s_banner_default_image.jpg', 's_default_image.jpg')
-        create_image_attachment(self.env, '/web/image/website.s_banner_default_image.jpg', 's_default_image2.webp')
+        create_image_attachment(self.env, '/web/image/website.s_banner_default_image', 's_default_image.jpg')
+        create_image_attachment(self.env, '/web/image/website.s_banner_default_image_2', 's_default_image2.webp')
         self.start_tour("/", "snippet_image_gallery_remove", login='admin')
 
     def test_10_parallax(self):

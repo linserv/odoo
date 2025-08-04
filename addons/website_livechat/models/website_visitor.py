@@ -75,7 +75,6 @@ class WebsiteVisitor(models.Model):
                 'livechat_operator_id': self.env.user.partner_id.id,
                 'channel_type': 'livechat',
                 'country_id': country.id,
-                'anonymous_name': visitor_name,
                 'name': ', '.join([visitor_name, operator.livechat_username if operator.livechat_username else operator.name]),
                 'livechat_visitor_id': visitor.id,
             })
@@ -93,10 +92,9 @@ class WebsiteVisitor(models.Model):
                 )
                 channel._add_members(guests=guest, post_joined_message=False)
         # Open empty channel to allow the operator to start chatting with the visitor
-        Store(
+        Store(bus_channel=self.env.user).add(
             discuss_channels,
             extra_fields={"open_chat_window": True},
-            bus_channel=self.env.user,
         ).bus_send()
 
     def _merge_visitor(self, target):
@@ -113,13 +111,10 @@ class WebsiteVisitor(models.Model):
         if upsert == 'inserted':
             visitor_sudo = self.sudo().browse(visitor_id)
             if guest := self.env["mail.guest"]._get_guest_from_context():
-                guest_livechats = guest.channel_ids.filtered(lambda c: c.channel_type == "livechat")
-                guest_livechats.channel_ids.livechat_visitor_id = visitor_sudo.id
-                guest_livechats.channel_ids.anonymous_name = (
-                    "Visitor #%d (%s)" % (visitor_sudo.id, visitor_sudo.country_id.name)
-                    if visitor_sudo.country_id
-                    else f"Visitor #{visitor_sudo.id}"
-                )
+                # sudo: mail.guest - guest can read their own channels
+                guest_livechats = guest.sudo().channel_ids.filtered(lambda c: c.channel_type == "livechat")
+                guest_livechats.livechat_visitor_id = visitor_sudo.id
+                guest_livechats.country_id = visitor_sudo.country_id
         return visitor_id, upsert
 
     def _field_store_repr(self, field_name):

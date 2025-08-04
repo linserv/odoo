@@ -1194,6 +1194,31 @@ test("'Media' command is not available when 'allowImage' = false", async () => {
     expect(queryAllTexts(".o-we-command-name")).not.toInclude("Media");
 });
 
+test("MediaDialog does not contain 'Documents' tab in html field when 'allowMediaDocuments' = false", async () => {
+    await mountView({
+        type: "form",
+        resId: 1,
+        resModel: "partner",
+        arch: `
+            <form>
+            <field name="txt" widget="html" options="{'allowMediaDocuments': False}"/>
+            </form>`,
+    });
+
+    setSelectionInHtmlField();
+    await insertText(htmlEditor, "/media");
+    await expectElementCount(".o-we-powerbox", 1);
+    expect(queryAllTexts(".o-we-command-name")[0]).toBe("Media");
+
+    await press("Enter");
+    await expectElementCount(".o_select_media_dialog", 1);
+    expect(queryAllTexts(".o_select_media_dialog .nav-tabs .nav-item")).toEqual([
+        "Images",
+        "Icons",
+        "Videos",
+    ]);
+});
+
 test("'Upload a file' command is not available when 'allowFile' = false", async () => {
     await mountView({
         type: "form",
@@ -1878,7 +1903,6 @@ describe("save image", () => {
                         expect(args[1].txt).toBe(getImageContainerHTML(newImageSrc, false));
                     } else {
                         // Fail the test if too many write are called.
-                        expect(true).toBe("false");
                         throw new Error("Write should only be called 3 times during this test");
                     }
                     writeCount += 1;
@@ -1935,7 +1959,6 @@ describe("save image", () => {
         // "registered".
         const newImageSrc = "/web/image/1234/cropped_transparent.png";
         onRpc("web_save", () => {
-            expect(true).toBe(false);
             throw new Error("web_save should only be called through sendBeacon");
         });
         onRpc(`/html_editor/modify_image/${imageRecord.id}`, async (request) => {
@@ -1948,7 +1971,6 @@ describe("save image", () => {
                 return newImageSrc;
             } else {
                 // Fail the test if too many modify_image are called.
-                expect(true).toBe(false);
                 throw new Error("The image should only have been modified once during this test");
             }
         });

@@ -23,7 +23,7 @@ DEVICE_TYPES = [
 
 class DriverController(http.Controller):
     @helpers.toggleable
-    @route.iot_route('/iot_drivers/action', type='jsonrpc', cors='*', csrf=False, sign=True)
+    @route.iot_route('/iot_drivers/action', type='jsonrpc', cors='*', csrf=False)
     def action(self, session_id, device_identifier, data):
         """This route is called when we want to make an action with device (take picture, printing,...)
         We specify in data from which session_id that action is called
@@ -40,8 +40,6 @@ class DriverController(http.Controller):
             _logger.warning("IoT Device with identifier %s not found", device_identifier)
             return False
 
-        iot_device.data['owner'] = session_id
-
         _logger.debug("Calling action %s for device %s", data.get('action', ''), device_identifier)
         iot_device.action(data)
         return True
@@ -55,7 +53,7 @@ class DriverController(http.Controller):
         helpers.get_certificate_status()
 
     @helpers.toggleable
-    @route.iot_route('/iot_drivers/event', type='jsonrpc', cors='*', csrf=False, sign=True)
+    @route.iot_route('/iot_drivers/event', type='jsonrpc', cors='*', csrf=False)
     def event(self, listener):
         """
         listener is a dict in witch there are a sessions_id and a dict of device_identifier to listen

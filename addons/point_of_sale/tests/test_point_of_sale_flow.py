@@ -285,6 +285,10 @@ class TestPointOfSaleFlow(CommonPosTest):
         self.assertEqual(tracked_line.location_id, shelf1_location)
         self.assertEqual(untracked_line.location_id, shelf1_location)
 
+        res = order.action_pos_order_invoice()
+        invoice_test = self.env['account.move'].browse(res['res_id'])
+        self.assertEqual(invoice_test.ref, invoice_test.pos_order_ids.display_name)
+
         self.pos_config_usd.current_session_id.action_pos_session_closing_control()
 
     def test_order_to_payment_currency(self):
@@ -1347,3 +1351,99 @@ class TestPointOfSaleFlow(CommonPosTest):
         reversal_moves = self.env['account.move'].search([('reversed_pos_order_id', '=', order_no_invoice.id)])
         self.assertEqual(order_no_invoice.reversed_move_ids, reversal_moves,
                         "Reversal move should be set for the order invoiced after the session is closed.")
+
+    def test_payment_difference_accounting_items(self):
+        """Verify that the amount of the accounting items are correct when closing a session with a payment difference."""
+        self.product1 = self.env['product.product'].create({
+            'name': 'Test Product',
+            'lst_price': 100,
+        })
+        # Make a sale paid by bank
+        self.pos_config_usd.open_ui()
+        session_id = self.pos_config_usd.current_session_id
+        order = self.env['pos.order'].create({
+            'company_id': self.env.company.id,
+            'session_id': session_id.id,
+            'partner_id': False,
+            'lines': [Command.create({
+                'name': 'OL/0001',
+                'product_id': self.product1.id,
+                'price_unit': 100.00,
+                'discount': 0,
+                'qty': 1,
+                'tax_ids': False,
+                'price_subtotal': 100.00,
+                'price_subtotal_incl': 100.00,
+            })],
+            'pricelist_id': self.pos_config_usd.pricelist_id.id,
+            'amount_paid': 100.00,
+            'amount_total': 100.00,
+            'amount_tax': 0.0,
+            'amount_return': 0.0,
+            'to_invoice': False,
+        })
+
+        # Make payment
+        payment_context = {"active_ids": order.ids, "active_id": order.id}
+        order_payment = self.env['pos.make.payment'].with_context(**payment_context).create({
+            'amount': order.amount_total,
+            'payment_method_id': self.bank_payment_method.id
+        })
+        order_payment.with_context(**payment_context).check()
+
+        session_id.action_pos_session_closing_control(bank_payment_method_diffs={self.bank_payment_method.id: -10.00})
+        self.bank_payment_move = session_id._get_related_account_moves().filtered(lambda move: 'Combine Bank' in move.ref)
+        self.assertRecordValues(self.bank_payment_move.line_ids.sorted('balance'), [{
+            'balance': -100.0,
+            'account_id': self.bank_payment_method.receivable_account_id.id,
+        },
+        {
+            'balance': 10.0,
+            'account_id': self.bank_payment_method.journal_id.loss_account_id.id,
+        },
+        {
+            'balance': 90.0,
+            'account_id': self.bank_payment_move.payment_ids.outstanding_account_id.id,
+        }])
+
+    def test_pos_order_partner_bank_id(self):
+        # Setup a running session, with a paid pos order that is not invoiced
+        self.pos_config_usd.open_ui()
+        self.cash_payment_method.journal_id.bank_account_id = self.env['res.partner.bank'].create({
+            'acc_number': 'FR7612345678901234567890123',
+            'partner_id': self.company.partner_id.id,
+            'bank_name': 'Test Bank',
+        })
+        current_session = self.pos_config_usd.current_session_id
+        self.order = self.env['pos.order'].create({
+            'company_id': self.env.company.id,
+            'session_id': current_session.id,
+            'partner_id': self.partner.id,
+            'lines': [[0, 0, {
+                'name': "OL/0001",
+                'product_id': self.product_a.id,
+                'price_unit': 10,
+                'discount': 0,
+                'qty': 1,
+                'tax_ids': [],
+                'price_subtotal': 10,
+                'price_subtotal_incl': 10,
+                'total_cost': 10,
+            }]],
+            'amount_paid': 10.0,
+            'amount_total': 10.0,
+            'amount_tax': 0.0,
+            'amount_return': 0.0,
+            'to_invoice': True,
+            'last_order_preparation_change': '{}'
+            })
+        context_make_payment = {"active_ids": [self.order.id], "active_id": self.order.id}
+        self.pos_make_payment_0 = self.env['pos.make.payment'].with_context(context_make_payment).create({
+            'amount': 10.0,
+            'payment_method_id': self.cash_payment_method.id,
+        })
+        context_payment = {'active_id': self.order.id}
+        self.pos_make_payment_0.with_context(context_payment).check()
+        res = self.order.action_pos_order_invoice()
+        invoice = self.env['account.move'].browse(res['res_id'])
+        self.assertEqual(invoice.partner_bank_id, self.cash_payment_method.journal_id.bank_account_id, "The invoice should have the partner's bank account set.")

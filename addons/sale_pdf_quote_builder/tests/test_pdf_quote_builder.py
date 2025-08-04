@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from werkzeug.datastructures import FileStorage
 
+from odoo.exceptions import ValidationError
 from odoo.fields import Command
 from odoo.tests import Form, tagged
 from odoo.tools.misc import file_open
@@ -148,7 +149,7 @@ class TestPDFQuoteBuilder(SaleManagementCommon):
             'boolean_test': "No",
             'char_test': self.sale_order.name,
             'date_test': "11/04/2020",
-            'datetime_test': "12/21/2121 13:21:12",
+            'datetime_test': "12/21/2121 01:21:12 PM",
             'float_test': "4.99",
             'integer_test': "10",
             'selection_test': "Quotation",
@@ -191,7 +192,24 @@ class TestPDFQuoteBuilder(SaleManagementCommon):
         so_form.sale_order_template_id = so_tmpl_2
         so_form.save()
 
-        self.assertNotEqual(self.sale_order.quotation_document_ids, self.header)
+        self.assertNotIn(self.header, self.sale_order.available_quotation_document_ids)
+        self.assertEqual(len(self.sale_order.quotation_document_ids), 0)
+
+    def test_non_pdf_attachment_inside_quote_form_save(self):
+        non_pdf_att = self.env['ir.attachment'].create({
+            'name': 'Not a PDF',
+            'datas': b64encode(b"hello"),
+            'mimetype': 'text/plain',
+        })
+
+        product_document = self.product_document
+
+        product_document.write({
+            'ir_attachment_id': non_pdf_att.id,
+        })
+        with self.assertRaises(ValidationError):
+            with Form(product_document) as doc_form:
+                doc_form.attached_on_sale = 'inside'
 
     def test_onchange_product_removes_previously_selected_documents(self):
         """ Check that changing a line that has a selected document unselect said document. """

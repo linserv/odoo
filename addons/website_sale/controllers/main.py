@@ -159,7 +159,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             for srch in search.split(" "):
                 subdomains = [
                     Domain('name', 'ilike', srch),
-                    Domain('product_variant_ids.default_code', 'ilike', srch),
+                    Domain('variants_default_code', 'ilike', srch),
                 ]
                 if search_in_description:
                     subdomains.extend((
@@ -458,6 +458,9 @@ class WebsiteSale(payment_portal.PaymentPortal):
         ) or ''
 
         values = {
+            'auto_assign_ribbons': lazy(
+                lambda: self.env['product.ribbon'].sudo().search([('assign', '!=', 'manual')])
+            ),
             'search': fuzzy_search_term or search,
             'original_search': fuzzy_search_term and search,
             'order': post.get('order', ''),
@@ -986,12 +989,13 @@ class WebsiteSale(payment_portal.PaymentPortal):
                 ):
                     order_sudo._set_delivery_method(delivery_method, rate=rate)
 
-        if try_skip_step and can_skip_delivery:
-            return request.redirect('/shop/confirm_order')
-
         checkout_page_values.update(
             request.website._get_checkout_step_values()
         )
+        if try_skip_step and can_skip_delivery:
+            return request.redirect(
+                checkout_page_values['next_website_checkout_step_href']
+            )
 
         return request.render('website_sale.checkout', checkout_page_values)
 
@@ -1345,7 +1349,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             self._include_country_and_state_in_address(shipping_address)
             shipping_address, _side_values = self._parse_form_data(shipping_address)
 
-            if order_sudo.partner_shipping_id.name.endswith(order_sudo.name):
+            if order_sudo.name in order_sudo.partner_shipping_id.name:
                 # The existing partner was created by `process_express_checkout_delivery_choice`, it
                 # means that the partner is missing information, so we update it.
                 order_sudo.partner_shipping_id.write(shipping_address)
@@ -1445,21 +1449,6 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
         order_sudo._update_address(partner_id, partner_fnames)
 
-    @route(['/shop/confirm_order'], type='http', auth="public", website=True, sitemap=False)
-    def shop_confirm_order(self, **post):
-        order_sudo = request.cart
-
-        if redirection := self._check_cart_and_addresses(order_sudo):
-            return redirection
-
-        order_sudo._recompute_taxes()
-        order_sudo._recompute_prices()
-        extra_step = request.website.viewref('website_sale.extra_info')
-        if extra_step.active:
-            return request.redirect("/shop/extra_info")
-
-        return request.redirect("/shop/payment")
-
     # === CHECKOUT FLOW - EXTRA STEP METHODS === #
 
     @route(['/shop/extra_info'], type='http', auth="public", website=True, sitemap=False)
@@ -1545,6 +1534,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
         if redirection := self._check_cart_and_addresses(order_sudo):
             return redirection
 
+        order_sudo._recompute_cart()
         render_values = self._get_shop_payment_values(order_sudo, **post)
         render_values['only_services'] = order_sudo and order_sudo.only_services
 
@@ -1552,8 +1542,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             render_values.pop('payment_methods_sudo', '')
             render_values.pop('tokens_sudo', '')
 
-        # As the initial page sending us to payment is /shop/confirm_order
-        render_values.update(request.website._get_checkout_step_values('/shop/confirm_order'))
+        render_values.update(request.website._get_checkout_step_values())
 
         return request.render("website_sale.payment", render_values)
 
@@ -1829,6 +1818,22 @@ class WebsiteSale(payment_portal.PaymentPortal):
                 domain += [('product_id.product_tmpl_id', '=', int(product_template_id))]
             request.env['website.track'].sudo().search(domain).unlink()
         return {}
+
+    @route('/snippets/category/set_image', type='jsonrpc', auth='user')
+    def set_category_image(self, category_id, attachment_id):
+        """
+        Set the cover image on the category.
+
+        :param int category_id: ID of the category to set the cover image.
+        :param int attachment_id: ID of the attachment containing the image data.
+        :raise Forbidden: If the user does not have website editing access
+        """
+        if not request.env.user.has_group('website.group_website_restricted_editor'):
+            raise Forbidden()
+        category = request.env['product.public.category'].browse(category_id).exists()
+        if category:
+            image_data = request.env['ir.attachment'].browse(attachment_id).datas
+            category.cover_image = image_data
 
     @staticmethod
     def _populate_currency_and_pricelist(kwargs):

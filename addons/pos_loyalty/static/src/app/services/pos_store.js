@@ -165,7 +165,7 @@ patch(PosStore.prototype, {
             ) {
                 Object.assign(oldChanges[idx], pointsAdded[idx]);
             }
-            if (pointsAdded.length < oldChanges.length) {
+            if (pointsAdded.length < oldChanges.length || !order._programIsApplicable(program)) {
                 const removedIds = oldChanges.map((pe) => pe.coupon_id);
                 order.uiState.couponPointChanges = Object.fromEntries(
                     Object.entries(order.uiState.couponPointChanges).filter(
@@ -356,9 +356,12 @@ patch(PosStore.prototype, {
         const order = this.getOrder();
         const linkedPrograms = [
             ...new Set(
-                productIds.flatMap(
-                    (id) => this.models["loyalty.program"].getBy("trigger_product_ids", id) || []
-                )
+                productIds
+                    .flatMap(
+                        (id) =>
+                            this.models["loyalty.program"].getBy("trigger_product_ids", id) || []
+                    )
+                    .filter((p) => ["gift_card", "ewallet"].includes(p.program_type))
             ),
         ];
         let selectedProgram = null;

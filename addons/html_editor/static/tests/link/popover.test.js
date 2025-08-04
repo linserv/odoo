@@ -216,6 +216,27 @@ describe("popover should edit,copy,remove the link", () => {
             '<p>this is a <a href="http://test.com/">http://test.com/[]</a></p>'
         );
     });
+    test("link popover should autoconvert an absolute URL if it's in the domain", async () => {
+        onRpc("/html_editor/link_preview_internal", () => ({}));
+        onRpc("/contactus", () => ({}));
+        const absoluteUrlIndomain = `${window.origin}/contactus`;
+        const { el } = await setupEditor(
+            `<p>this is an absolute href targeting the domain <a href="${absoluteUrlIndomain}">absolute li[]nk</a></p>`,
+            {
+                config: {
+                    allowStripDomain: true,
+                },
+            }
+        );
+        await waitFor(".o-we-linkpopover");
+        await click(".o_we_edit_link");
+        await waitFor(".o_we_apply_link");
+        expect(".strip-domain-option input").toHaveCount(1);
+        await click(".o_we_apply_link");
+        expect(cleanLinkArtifacts(getContent(el))).toBe(
+            '<p>this is an absolute href targeting the domain <a href="/contactus">absolute li[]nk</a></p>'
+        );
+    });
     test("relative URLs should be kept relative URLs", async () => {
         onRpc("/html_editor/link_preview_internal", () => ({}));
         onRpc("/contactus", () => ({}));
@@ -799,6 +820,61 @@ describe("Link formatting in the popover", () => {
             '<p><a href="http://test.com/" class="btn btn-secondary">link2[]</a></p>'
         );
     });
+    const styleForceColor = `p > a.btn { color: black !important; border-color: gray !important }`;
+    test("custom link format fill with solid color should be stored as background-color", async () => {
+        const { el } = await setupEditor(
+            '<p><a href="http://test.com/" class="btn btn-secondary">link2[]</a></p>',
+            {
+                config: {
+                    allowCustomStyle: true,
+                },
+                styleContent: styleForceColor,
+            }
+        );
+        await waitFor(".o-we-linkpopover");
+        await click(".o_we_edit_link");
+        await animationFrame();
+
+        expect(queryOne('select[name="link_type"]').selectedIndex).toBe(2);
+
+        await click('select[name="link_type"');
+        await select("custom");
+        await animationFrame();
+        await click(".o_we_color_preview.custom-fill-picker");
+        await animationFrame();
+        await click('[data-color="#FF9C00"]');
+        expect(cleanLinkArtifacts(getContent(el))).toBe(
+            '<p><a href="http://test.com/" class="btn btn-custom" style="color: rgb(0, 0, 0); background-color: #FF9C00; border-width: 1px; border-color: rgb(128, 128, 128); border-style: solid; ">link2</a></p>'
+        );
+    });
+    test("custom link format fill with gradient should be stored as background-image", async () => {
+        const { el } = await setupEditor(
+            '<p><a href="http://test.com/" class="btn btn-secondary">link2[]</a></p>',
+            {
+                config: {
+                    allowCustomStyle: true,
+                },
+                styleContent: styleForceColor,
+            }
+        );
+        await waitFor(".o-we-linkpopover");
+        await click(".o_we_edit_link");
+        await animationFrame();
+
+        expect(queryOne('select[name="link_type"]').selectedIndex).toBe(2);
+
+        await click('select[name="link_type"');
+        await select("custom");
+        await animationFrame();
+        await click(".o_we_color_preview.custom-fill-picker");
+        await animationFrame();
+        await click(".gradient-tab");
+        await animationFrame();
+        await click(".o_gradient_color_button");
+        expect(cleanLinkArtifacts(getContent(el))).toBe(
+            '<p><a href="http://test.com/" class="btn btn-custom" style="color: rgb(0, 0, 0); background-image: linear-gradient(135deg, rgb(255, 204, 51) 0%, rgb(226, 51, 255) 100%); border-width: 1px; border-color: rgb(128, 128, 128); border-style: solid; ">link2</a></p>'
+        );
+    });
     test("clicking the discard button should revert the link format", async () => {
         const { el } = await setupEditor('<p><a href="http://test.com/">link1[]</a></p>');
         await waitFor(".o-we-linkpopover");
@@ -937,7 +1013,11 @@ describe("link preview", () => {
             link_preview_name: "Task name | Project name",
         }));
         onRpc("/odoo/project/1/tasks/8", () => "", { pure: true });
-        const { editor, el } = await setupEditor(`<p>[]</p>`);
+        const { editor, el } = await setupEditor(`<p>[]</p>`, {
+            config: {
+                allowStripDomain: false,
+            },
+        });
         await insertText(editor, "/link");
         await animationFrame();
         await click(".o-we-command-name:first");
@@ -1037,7 +1117,11 @@ describe("link preview", () => {
             { pure: true }
         );
 
-        const { editor } = await setupEditor(`<p>abc[]</p>`);
+        const { editor } = await setupEditor(`<p>abc[]</p>`, {
+            config: {
+                allowStripDomain: false,
+            },
+        });
         await insertText(editor, "/link");
         await animationFrame();
         await click(".o-we-command-name:first");

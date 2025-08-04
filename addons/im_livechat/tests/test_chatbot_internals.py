@@ -136,7 +136,7 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
 
     @freeze_time("2020-03-22 10:42:06")
     def test_forward_to_specific_operator(self):
-        """Test _process_step_forward_operator takes into account the given users as candidates."""
+        """Test _forward_operator takes into account the given users as candidates."""
         data = self.make_jsonrpc_request(
             "/im_livechat/get_session",
             {
@@ -147,7 +147,7 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
         discuss_channel = (
             self.env["discuss.channel"].sudo().browse(data["channel_id"])
         )
-        self.step_forward_operator._process_step_forward_operator(discuss_channel)
+        discuss_channel._forward_human_operator(self.step_forward_operator)
         self.assertEqual(
             discuss_channel.livechat_operator_id, self.chatbot_script.operator_partner_id
         )
@@ -170,7 +170,7 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
         def get_forward_op_bus_params():
             messages = self.env["mail.message"].search([], order="id desc", limit=3)
             # only data relevant to the test are asserted for simplicity
-            transfer_message_data = Store(messages[1], bus_channel=discuss_channel).get_result()
+            transfer_message_data = Store(bus_channel=discuss_channel).add(messages[1]).get_result()
             transfer_message_data["mail.message"][0].update(
                 {
                     "author_id": self.chatbot_script.operator_partner_id.id,
@@ -181,7 +181,7 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
                 }
             )
             transfer_message_data["mail.thread"][0]["display_name"] = "Testing Bot"
-            joined_message_data = Store(messages[0], bus_channel=discuss_channel).get_result()
+            joined_message_data = Store(bus_channel=discuss_channel).add(messages[0]).get_result()
             joined_message_data["mail.message"][0].update(
                 {
                     "author_id": self.chatbot_script.operator_partner_id.id,
@@ -202,10 +202,9 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
                 lambda m: m.partner_id == self.partner_employee
             )
             # data in-between join and leave
-            channel_data_join = Store(
-                discuss_channel,
-                bus_channel=member_emp._bus_channel(),
-            ).get_result()
+            channel_data_join = (
+                Store(bus_channel=member_emp._bus_channel()).add(discuss_channel).get_result()
+            )
             channel_data_join["discuss.channel"][0]["invited_member_ids"] = [["ADD", []]]
             channel_data_join["discuss.channel"][0]["rtc_session_ids"] = [["ADD", []]]
             channel_data_join["discuss.channel"][0]["livechat_outcome"] = "no_agent"
@@ -237,14 +236,15 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
                     ),
                 },
             )
-            channel_data = Store(discuss_channel).get_result()
+            channel_data = Store().add(discuss_channel).get_result()
             channel_data["discuss.channel"][0]["message_needaction_counter_bus_id"] = 0
-            channel_data_emp = Store(discuss_channel.with_user(self.user_employee)).get_result()
+            channel_data_emp = Store().add(discuss_channel.with_user(self.user_employee)).get_result()
             channel_data_emp["discuss.channel"][0]["message_needaction_counter_bus_id"] = 0
             channel_data_emp["discuss.channel.member"][1]["message_unread_counter_bus_id"] = 0
-            channel_data = Store(discuss_channel).get_result()
+            channel_data = Store().add(discuss_channel).get_result()
             channel_data["discuss.channel"][0]["message_needaction_counter_bus_id"] = 0
-            return (
+
+            channels, message_items = (
                 [
                     (self.cr.dbname, "discuss.channel", discuss_channel.id, "members"),
                     (self.cr.dbname, "discuss.channel", discuss_channel.id),
@@ -374,6 +374,10 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
                                     "write_date": fields.Datetime.to_string(
                                         self.partner_employee.write_date
                                     ),
+                                    **({
+                                        "im_status": "offline",
+                                        "im_status_access_token": self.partner_employee._get_im_status_access_token()
+                                    } if "ai.agent" in self.env else {})
                                 }
                             ),
                         },
@@ -383,11 +387,10 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
                 ],
             )
 
+            return (channels, message_items)
         self._reset_bus()
         with self.assertBus(get_params=get_forward_op_bus_params):
-            self.step_forward_operator._process_step_forward_operator(
-                discuss_channel, users=self.user_employee
-            )
+            discuss_channel._forward_human_operator(self.step_forward_operator, users=self.user_employee)
         self.assertEqual(discuss_channel.name, "OdooBot Ernest Employee")
         self.assertEqual(discuss_channel.livechat_operator_id, self.partner_employee)
         self.assertEqual(discuss_channel.livechat_outcome, "no_answer")

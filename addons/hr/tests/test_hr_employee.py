@@ -99,18 +99,18 @@ class TestHrEmployee(TestHrCommon):
         self.assertEqual(employee.work_email, self.res_users_hr_officer.email)
         self.assertEqual(employee.tz, self.res_users_hr_officer.tz)
 
-    def test_employee_from_user_tz_no_reset(self):
+    def test_employee_from_manager_tz_no_reset(self):
         _tz = 'Pacific/Apia'
-        self.res_users_hr_officer.tz = False
-        Employee = self.env['hr.employee'].with_user(self.res_users_hr_officer)
+        self.res_users_hr_manager.tz = False
+        Employee = self.env['hr.employee'].with_user(self.res_users_hr_manager)
         employee_form = Form(Employee)
         employee_form.name = 'Raoul Grosbedon'
         employee_form.work_email = 'raoul@example.com'
         employee_form.tz = _tz
-        employee_form.user_id = self.res_users_hr_officer
+        employee_form.user_id = self.res_users_hr_manager
         employee = employee_form.save()
         self.assertEqual(employee.name, 'Raoul Grosbedon')
-        self.assertEqual(employee.work_email, self.res_users_hr_officer.email)
+        self.assertEqual(employee.work_email, self.res_users_hr_manager.email)
         self.assertEqual(employee.tz, _tz)
 
     def test_employee_has_avatar_even_if_it_has_no_image(self):
@@ -583,6 +583,56 @@ class TestHrEmployee(TestHrCommon):
         days = employeeA._get_unusual_days(str(datetime(2025, 1, 1)), str(datetime(2025, 12, 31)))
         self.assertTrue(days)
         self.assertFalse(days['2025-01-04'])
+
+    def test_user_creation_from_employee_with_invalid_email(self):
+        employee = self.env['hr.employee'].create({
+            'name': 'Test Employee',
+            'work_email': 'test'
+        })
+
+        action = employee.action_create_users()
+        self.assertEqual(action['params']['message'], f'You need to set a valid work email address for {employee.name}')
+        self.assertFalse(employee.user_id)
+
+    def test_user_creation_from_employee_multi_emails(self):
+        employees = self.env['hr.employee'].create([
+            {
+                'name': 'Existing Email Employee',
+                'work_email': self.user_without_image.email,
+            }, {
+                'name': 'New Employee',
+                'work_email': 'newuser@example.com',
+            }, {
+                'name': 'Invalid Email Employee',
+                'work_email': 'invalid-email',
+            }, {
+                'name': 'Without Email Employee',
+                'work_email': False,
+            }, {
+                'name': 'Formatted Email Employee',
+                'work_email': f'"John Doe" <{self.user_without_image.email_normalized}>',
+            }, {
+                'name': 'Multi Email Employee',
+                'work_email': '"Name1" <name@test.example.com>, "Name 2" <name2@test.example.com>',
+            },
+        ])
+        # Add an existing employee who already has a user to the employee list
+        employees += self.employee_without_image
+        context = {'selected_ids': employees.ids}
+        confirmed_employees = self.env['hr.employee'].with_context(context).browse(employees.ids)
+        action = confirmed_employees.action_create_users()
+
+        params = action.get('params')
+        self.assertEqual(params.get('message'), f"User already exists with the same email for Employees {employees[0].name}, {employees[4].name}")
+        params = params.get('next').get('params')
+        self.assertEqual(params.get('message'), f"You need to set a valid work email address for {employees[2].name}, {employees[5].name}")
+        params = params.get('next').get('params')
+        self.assertEqual(params.get('message'), f"You need to set the work email address for {employees[3].name}")
+        params = params.get('next').get('params')
+        self.assertEqual(params.get('message'), f"User already exists for Those Employees {employees[6].name}")
+        params = params.get('next').get('params')
+        self.assertEqual(params.get('message'), f"Users {employees[1].name} creation successful")
+        self.assertTrue(employees[1].user_id)
 
 
 @tagged('-at_install', 'post_install')

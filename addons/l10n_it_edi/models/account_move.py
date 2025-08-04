@@ -457,7 +457,9 @@ class AccountMove(models.Model):
                     downpayment_moves_description = ', '.join(downpayment_moves.mapped('name'))
                     sep = ', ' if description else ''
                     description = f"{description}{sep}{downpayment_moves_description}"
-            description = description or "NO NAME"
+            # Workaround: remove line breaks due to Tax Agency portal bug.
+            # This deviates from Odoo's standard behavior and must be reviewed if the issue gets fixed.
+            description = description and description.replace('\n', ' ').strip() or "NO NAME"
 
             # Price unit.
             if quantity:
@@ -593,6 +595,22 @@ class AccountMove(models.Model):
         skip = tax_data['is_reverse_charge'] or self._l10n_it_edi_is_neg_split_payment(tax_data)
         return not skip
 
+    def _prepare_product_base_line_for_taxes_computation(self, product_line):
+        """
+            Prepares tax base line. Rounding lines must appear in the XML,
+            so they are converted to regular lines with tax exemption code ('N2.2').
+        """
+        base_line = super()._prepare_product_base_line_for_taxes_computation(product_line)
+
+        if product_line.display_type == 'rounding':
+            base_line.update({
+                'quantity': 1,
+                'price_unit': -product_line.amount_currency,
+                'tax_ids': self._l10n_it_edi_search_tax_for_import(self.company_id, 0.0, l10n_it_exempt_reason='N2.2'),
+            })
+
+        return base_line
+
     def _l10n_it_edi_get_values(self, pdf_values=None):
         self.ensure_one()
 
@@ -607,7 +625,7 @@ class AccountMove(models.Model):
         convert_to_euros = self.currency_id.name != 'EUR'
 
         # Base lines.
-        base_amls = self.line_ids.filtered(lambda x: x.display_type == 'product')
+        base_amls = self.line_ids.filtered(lambda x: x.display_type == 'product' or x.display_type == 'rounding')
         base_lines = [self._prepare_product_base_line_for_taxes_computation(x) for x in base_amls]
         tax_amls = self.line_ids.filtered('tax_repartition_line_id')
         tax_lines = [self._prepare_tax_line_for_taxes_computation(x) for x in tax_amls]
@@ -703,8 +721,11 @@ class AccountMove(models.Model):
             abs(self.amount_total / self.amount_total_signed), precision_digits=5,
         ) if convert_to_euros and self.invoice_line_ids else None
 
+        # Aggregated linked invoices
+        linked_moves = (self._get_reconciled_invoices() | self.reversed_entry_id).filtered(lambda move: move.date <= self.date)
+
         # Reduce downpayment views to a single recordset
-        downpayment_moves = self.invoice_line_ids._get_downpayment_lines().move_id
+        linked_moves |= self.invoice_line_ids._get_downpayment_lines().move_id
 
         return {
             'record': self,
@@ -733,8 +754,7 @@ class AccountMove(models.Model):
             'formato_trasmissione': formato_trasmissione,
             'document_type': document_type,
             'payment_method': self.l10n_it_payment_method,
-            'downpayment_moves': downpayment_moves,
-            'reconciled_moves': self._get_reconciled_invoices(),
+            'linked_moves': linked_moves,
             'rc_refund': reverse_charge_refund,
             'conversion_rate': conversion_rate,
             'balance_multiplicator': -1 if self.is_inbound() else 1,

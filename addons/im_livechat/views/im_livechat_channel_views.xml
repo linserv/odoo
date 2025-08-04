@@ -234,7 +234,7 @@
                         <group>
                             <field name="action" widget="radio"/>
                             <label for="chatbot_script_id" string="Chatbot" invisible="action == 'hide_button'"/>
-                            <div invisible="action == 'hide_button'">
+                            <div name="Chatbot" invisible="action == 'hide_button'">
                                 <field name="chatbot_script_id" class="oe_inline" style="width: 60% !important;"
                                        options="{'no_create': True, 'no_open': True}"/>
                             </div>
@@ -271,9 +271,22 @@
             id="menu_livechat_sessions"
             name="Sessions"
             parent="menu_livechat_root"
-            action="discuss_channel_action"
             groups="im_livechat_group_user"
             sequence="10"/>
+
+        <menuitem
+            id="menu_livechat_all_conversations"
+            name="All Conversations"
+            action="discuss_channel_action"
+            parent="menu_livechat_sessions"
+            sequence="25"/>
+
+        <menuitem
+            id="menu_livechat_looking_for_help"
+            name="Looking for Help"
+            action="discuss_channel_looking_for_help_action"
+            parent="menu_livechat_sessions"
+            sequence="50"/>
 
         <menuitem
             id="menu_reporting_livechat"

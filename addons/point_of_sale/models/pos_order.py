@@ -699,6 +699,8 @@ class PosOrder(models.Model):
         amount_total = sum(order.amount_total for order in self)
         if amount_total <= 0 and self.partner_id.bank_ids:
             bank_partner_id = self.partner_id.bank_ids[0].id
+        elif amount_total >= 0 and self.payment_ids and self.payment_ids[0].payment_method_id.journal_id.bank_account_id:
+            bank_partner_id = self.payment_ids[0].payment_method_id.journal_id.bank_account_id.id
         elif amount_total >= 0 and self.company_id.partner_id.bank_ids:
             bank_partner_id = self.company_id.partner_id.bank_ids[0].id
         return bank_partner_id
@@ -817,6 +819,7 @@ class PosOrder(models.Model):
             'invoice_origin': ', '.join(ref or '' for ref in self.mapped('pos_reference')),
             'pos_refunded_invoice_ids': pos_refunded_invoice_ids,
             'pos_order_ids': self.ids,
+            'ref': self.name if is_single_order else False,
             'journal_id': self.config_id.invoice_journal_id.id,
             'move_type': move_type,
             'partner_id': self.partner_id.address_get(['invoice'])['invoice'],
@@ -895,7 +898,13 @@ class PosOrder(models.Model):
         # Cash rounding.
         cash_rounding = self.config_id.rounding_method
         if self.config_id.cash_rounding and cash_rounding and (not self.config_id.only_round_cash_method or any(p.payment_method_id.is_cash_count for p in self.payment_ids)):
-            amount_currency = cash_rounding.compute_difference(self.currency_id, total_amount_currency)
+            if self.config_id.only_round_cash_method and any(not p.payment_method_id.is_cash_count for p in self.payment_ids):
+                # If only_round_cash_method is True, and there are non-cash payments, cash rounding must be computed
+                # based on the total amount of the order, and total payment amount.
+                total_payment_amount = self.currency_id.round(sum(p.amount for p in self.payment_ids))
+                amount_currency = sign * self.currency_id.round(self.currency_id.round(total_amount_currency) + total_payment_amount)
+            else:
+                amount_currency = cash_rounding.compute_difference(self.currency_id, total_amount_currency)
             if not self.currency_id.is_zero(amount_currency):
                 balance = company_currency.round(amount_currency * rate)
 
@@ -1157,6 +1166,7 @@ class PosOrder(models.Model):
         return order.read_pos_data([], order.config_id)
 
     def read_pos_data(self, data, config):
+        account_moves = self.sudo().account_move | self.sudo().payment_ids.account_move_id
         return {
             'pos.order': self._load_pos_data_read(self, config) if config else [],
             'pos.session': [],
@@ -1164,6 +1174,7 @@ class PosOrder(models.Model):
             'pos.order.line': self.env['pos.order.line']._load_pos_data_read(self.lines, config) if config else [],
             'pos.pack.operation.lot': self.env['pos.pack.operation.lot']._load_pos_data_read(self.lines.pack_lot_ids, config) if config else [],
             'product.attribute.custom.value': self.env['product.attribute.custom.value']._load_pos_data_read(self.lines.custom_attribute_value_ids, config) if config else [],
+            'account.move': self.env['account.move'].sudo()._load_pos_data_read(account_moves, config) if config else [],
         }
 
     @api.model

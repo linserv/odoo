@@ -3,14 +3,13 @@
 import logging
 import re
 
-from werkzeug.urls import url_join
-
 from odoo import api, fields, models, _
 from odoo.fields import Domain
 from odoo.addons.website.tools import text_from_html
 from odoo.http import request
 from odoo.exceptions import AccessError
 from odoo.tools import escape_psql
+from odoo.tools.urls import urljoin as url_join
 from odoo.tools.json import scriptsafe as json_safe
 
 logger = logging.getLogger(__name__)
@@ -256,11 +255,7 @@ class WebsitePublishedMixin(models.AbstractModel):
         the 'website_published' value if this method sets can_publish False """
         for record in self:
             try:
-                # Some main_record might be in sudo because their content needs
-                # to be rendered by a template even if they were not supposed
-                # to be accessible
-                plain_record = record.sudo(flag=False) if self.env.context.get('can_publish_unsudo_main_object', False) else record
-                self.env['website'].get_current_website()._check_user_can_modify(plain_record)
+                self.env['website'].get_current_website()._check_user_can_modify(record)
                 record.can_publish = True
             except AccessError:
                 record.can_publish = False
@@ -387,7 +382,7 @@ class WebsiteSearchableMixin(models.AbstractModel):
             limit=limit,
             order=search_detail.get('order', order)
         )
-        count = model.search_count(domain)
+        count = model.search_count(domain) if limit and limit == len(results) else len(results)
         return results, count
 
     def _search_render_results(self, fetch_fields, mapping, icon, limit):

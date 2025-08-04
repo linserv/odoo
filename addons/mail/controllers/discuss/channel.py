@@ -4,7 +4,6 @@ from werkzeug.exceptions import NotFound
 
 from odoo import http
 from odoo.http import request
-from odoo.tools.misc import OrderedSet
 from odoo.addons.mail.controllers.webclient import WebclientController
 from odoo.addons.mail.tools.discuss import add_guest_to_context, Store
 
@@ -46,10 +45,6 @@ class DiscussChannelWebclientController(WebclientController):
         if name == "discuss.channel":
             channels = request.env["discuss.channel"].search([("id", "in", params)])
             request.update_context(channels=request.env.context["channels"] | channels)
-            if not_found_channels := request.env["discuss.channel"].browse(
-                OrderedSet(int(cid) for cid in params) - OrderedSet(channels.ids)
-            ):
-                store.delete(not_found_channels)
         if name == "/discuss/get_or_create_chat":
             channel = request.env["discuss.channel"]._get_or_create_chat(
                 params["partners_to"], params.get("pin", True)
@@ -78,7 +73,7 @@ class ChannelController(http.Controller):
             domain=[("id", "not in", known_member_ids), ("channel_id", "=", channel.id)],
             limit=100,
         )
-        store = Store(channel, "member_count").add(unknown_members)
+        store = Store().add(channel, "member_count").add(unknown_members)
         return store.get_result()
 
     @http.route("/discuss/channel/update_avatar", methods=["POST"], type="jsonrpc")
@@ -105,7 +100,7 @@ class ChannelController(http.Controller):
             messages.set_message_done()
         return {
             **res,
-            "data": Store(messages).get_result(),
+            "data": Store().add(messages).get_result(),
             "messages": messages.ids,
         }
 
@@ -116,7 +111,7 @@ class ChannelController(http.Controller):
         if not channel:
             raise NotFound()
         messages = channel.pinned_message_ids.sorted(key="pinned_at", reverse=True)
-        return Store(messages).get_result()
+        return Store().add(messages).get_result()
 
     @http.route("/discuss/channel/mark_as_read", methods=["POST"], type="jsonrpc", auth="public")
     @add_guest_to_context
@@ -180,7 +175,7 @@ class ChannelController(http.Controller):
             domain.append(["id", "<", before])
         # sudo: ir.attachment - reading attachments of a channel that the current user can access
         attachments = request.env["ir.attachment"].sudo().search(domain, limit=limit, order="id DESC")
-        return Store(attachments).get_result()
+        return Store().add(attachments).get_result()
 
     @http.route("/discuss/channel/join", methods=["POST"], type="jsonrpc", auth="public")
     @add_guest_to_context
@@ -189,7 +184,7 @@ class ChannelController(http.Controller):
         if not channel:
             raise NotFound()
         channel._find_or_create_member_for_self()
-        return Store(channel).get_result()
+        return Store().add(channel).get_result()
 
     @http.route("/discuss/channel/sub_channel/create", methods=["POST"], type="jsonrpc", auth="public")
     def discuss_channel_sub_channel_create(self, parent_channel_id, from_message_id=None, name=None):
@@ -197,7 +192,7 @@ class ChannelController(http.Controller):
         if not channel:
             raise NotFound()
         sub_channel = channel._create_sub_channel(from_message_id, name)
-        return {"data": Store(sub_channel).get_result(), "sub_channel": sub_channel.id}
+        return {"data": Store().add(sub_channel).get_result(), "sub_channel": sub_channel.id}
 
     @http.route("/discuss/channel/sub_channel/fetch", methods=["POST"], type="jsonrpc", auth="public")
     @add_guest_to_context
@@ -211,4 +206,4 @@ class ChannelController(http.Controller):
         if search_term:
             domain.append(("name", "ilike", search_term))
         sub_channels = request.env["discuss.channel"].search(domain, order="id desc", limit=limit)
-        return Store(sub_channels).add(sub_channels._get_last_messages()).get_result()
+        return Store().add(sub_channels).add(sub_channels._get_last_messages()).get_result()

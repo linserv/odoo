@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import inspect
 import logging
 from contextlib import contextmanager
 from unittest.mock import patch
 from odoo import Command, api
 
 from odoo.tools import DEFAULT_SERVER_DATE_FORMAT
-from odoo.tests import tagged
+from odoo.tests import tagged, loaded_demo_data
 from odoo.addons.account.tests.common import TestTaxCommon, AccountTestInvoicingHttpCommon
 from odoo.addons.point_of_sale.tests.common_setup_methods import setup_product_combo_items
 from datetime import date, timedelta
@@ -27,6 +28,13 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
     def _get_url(self, pos_config=None):
         pos_config = pos_config or self.main_pos_config
         return f"/pos/ui/{pos_config.id}"
+
+    def get_method_additional_tags(self, test_method):
+        additional_tags = super().get_method_additional_tags(test_method)
+        method_source = inspect.getsource(test_method)
+        if "self.start_pos_tour" in method_source:
+            additional_tags.append("is_tour")
+        return additional_tags
 
     def start_pos_tour(self, tour_name, login="pos_user", **kwargs):
         self.start_tour(self._get_url(pos_config=kwargs.get('pos_config')), tour_name, login=login, **kwargs)
@@ -658,6 +666,9 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.product_a.available_in_pos = True
         self.pos_admin.write({
             'group_ids': [Command.link(self.env.ref('base.group_system').id)],
+        })
+        self.main_pos_config.write({
+            'is_margins_costs_accessible_to_every_user': True,
         })
         self.assertFalse(self.product_a.is_storable)
         self.main_pos_config.with_user(self.pos_admin).open_ui()
@@ -2088,26 +2099,28 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_zero_decimal_places_currency', login="pos_user")
 
     def test_quantity_package_of_non_basic_unit(self):
-        inch = self.env.ref('uom.product_uom_inch')
-        inch.write({'active': True})
-        pack_of_12_inch = self.env['uom.uom'].create({
-            'name': 'Pack of 12_inch',
+        test_uom_unit = self.env['uom.uom'].create({
+            "name": "test unit uom",
+            "relative_factor": "1.0",
+        })
+        pack_of_12_unit = self.env['uom.uom'].create({
+            'name': 'Pack of 12 unit',
             'relative_factor': 12,
-            'relative_uom_id': inch.id,
+            'relative_uom_id': test_uom_unit.id,
             'is_pos_groupable': True,
         })
         product_cord = self.env['product.product'].create({
             'name': 'Cord',
             'is_storable': True,
             'available_in_pos': True,
-            'uom_id': inch.id,
-            'uom_ids': [pack_of_12_inch.id],
+            'uom_id': test_uom_unit.id,
+            'uom_ids': [pack_of_12_unit.id],
             'lst_price': 10.0,
         })
         self.env['product.uom'].create({
             'barcode': '555555',
             'product_id': product_cord.id,
-            'uom_id': pack_of_12_inch.id,
+            'uom_id': pack_of_12_unit.id,
         })
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_quantity_package_of_non_basic_unit', login="pos_user")
@@ -2361,6 +2374,40 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.assertEqual(load_product_from_pos_stats['items']['orange'], 2, "Orange should have 2 pricelist items")
         self.assertEqual(load_product_from_pos_stats['items']['kiwi'], 1, "Kiwi should have 1 pricelist item")
 
+    def test_available_children_categories(self):
+        parent_categ = self.env['pos.category'].create({
+            'name': 'Parent Category',
+        })
+        children_categs = self.env['pos.category'].create([{
+            'name': 'Child Category 1',
+            'parent_id': parent_categ.id,
+        }, {
+            'name': 'Child Category 2',
+            'parent_id': parent_categ.id,
+        }])
+        self.env['product.product'].create([{
+            'name': 'parent product',
+            'pos_categ_ids': [(6, 0, [parent_categ.id])],
+            'available_in_pos': True,
+        }, {
+            'name': 'child product 1',
+            'pos_categ_ids': [(6, 0, [parent_categ.id, children_categs[0].id])],
+            'available_in_pos': True,
+        }, {
+            'name': 'child product 2',
+            'pos_categ_ids': [(6, 0, [parent_categ.id, children_categs[1].id])],
+            'available_in_pos': True,
+        }])
+        self.main_pos_config.write({
+            'limit_categories': True,
+            'iface_available_categ_ids': [(6, 0, [parent_categ.id, children_categs[1].id])],
+        })
+        self.main_pos_config.open_ui()
+        loaded_data = self.main_pos_config.current_session_id.load_data([])
+        category_id = [category['id'] for category in loaded_data['pos.category']]
+        self.assertNotIn(children_categs[0].id, category_id, "Child category is unavailable and shouldn't appear in the POS")
+        self.assertIn(children_categs[1].id, category_id, "Child category is available and should appear in the POS")
+
     def test_pos_order_shipping_date(self):
         self.main_pos_config.write({'ship_later': True})
         self.main_pos_config.with_user(self.pos_user).open_ui()
@@ -2453,6 +2500,35 @@ class TestUi(TestPointOfSaleHttpCommon):
         """ Test that deleting a line in the POS through the popup works correctly. """
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('test_delete_line')
+
+    def test_order_invoice_search(self):
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'test_order_invoice_search', login="pos_user")
+
+    def test_automatic_receipt_printing(self):
+        self.main_pos_config.write({
+            'iface_print_auto': True,
+            'iface_print_skip_screen': True,
+        })
+
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_automatic_receipt_printing', login="pos_user")
+
+    def test_load_pos_demo_data(self):
+        """ Test that the demo data can be loaded by admin but not by user. """
+
+        if loaded_demo_data(self.env):
+            self.skipTest('Cannot test with demo data.')
+
+        # Unlink existing product records
+        Product = self.env['product.product']
+        pos_product_domain = [('available_in_pos', '=', True)]
+        Product.search(pos_product_domain).action_archive()
+
+        # cannot load by pos user
+        self.start_pos_tour('test_load_pos_demo_data_by_pos_user', login='pos_user')
+        pos_products = Product.search(pos_product_domain)
+        self.assertFalse(pos_products, 'Demo data should not be loaded by user.')
 
 
 # This class just runs the same tests as above but with mobile emulation

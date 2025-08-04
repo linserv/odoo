@@ -51,6 +51,7 @@ export class FormOptionPlugin extends Plugin {
         "applyFormModel",
         "addHiddenField",
         "fetchAuthorizedFields",
+        "loadFieldOptionData",
         "prepareFields",
         "replaceField",
         "prepareConditionInputs",
@@ -157,9 +158,8 @@ export class FormOptionPlugin extends Plugin {
             SetFormCustomFieldValueListAction,
             PropertyAction,
         },
-        system_classes: ["o_builder_form_show_message"],
-        normalize_handlers: (el) => {
-            for (const formEl of el.querySelectorAll(".s_website_form form")) {
+        normalize_handlers: (rootEl) => {
+            for (const formEl of rootEl.querySelectorAll(".s_website_form form")) {
                 // Disable text edition
                 formEl.contentEditable = "false";
                 // Identify editable elements of the form: buttons, description,
@@ -177,11 +177,12 @@ export class FormOptionPlugin extends Plugin {
                 }
             }
         },
-        clean_for_save_handlers: ({ root: el }) => {
+        clean_for_save_handlers: ({ root: rootEl }) => {
             // Maybe useless if all contenteditable are removed
-            for (const formEl of el.querySelectorAll(".s_website_form form")) {
+            for (const formEl of rootEl.querySelectorAll(".s_website_form form")) {
                 formEl.removeAttribute("contenteditable");
             }
+            this.removeSuccessMessagePreviews(rootEl);
         },
         dropzone_selector: [
             {
@@ -229,7 +230,10 @@ export class FormOptionPlugin extends Plugin {
         return await this.services.orm.call("ir.model", "get_compatible_form_models");
     }
     async fetchFieldRecords(field) {
-        return this.fieldRecordsCache.preload(field);
+        if (field) {
+            field.records = await this.fieldRecordsCache.preload(field);
+            return field.records;
+        }
     }
     /**
      * Returns a promise which is resolved once the records of the field
@@ -475,7 +479,7 @@ export class FormOptionPlugin extends Plugin {
             ".s_website_form_submit, .s_website_form_recaptcha"
         );
         locationEl.insertAdjacentElement("beforebegin", fieldEl);
-        this.dependencies["builderOptions"].updateContainers(fieldEl);
+        this.dependencies.builderOptions.setNextTarget(fieldEl);
     }
     addFieldAfterField(fieldEl) {
         const formEl = fieldEl.closest("form");
@@ -486,7 +490,7 @@ export class FormOptionPlugin extends Plugin {
         field.formatInfo.mark = getMark(formEl);
         const newFieldEl = renderField(field);
         fieldEl.insertAdjacentElement("afterend", newFieldEl);
-        this.dependencies["builderOptions"].updateContainers(newFieldEl);
+        this.dependencies["builderOptions"].setNextTarget(newFieldEl);
     }
     /**
      * To be used in load for any action that uses getActiveField or
@@ -725,26 +729,24 @@ export class FormOptionPlugin extends Plugin {
     /**
      * Handler called when a snippet is dropped.
      *
-     * Re-renders all the fields inside the dropped snippet to ensure each
-     * field gets a unique ID.
-     *
      * @param {Object} params
      * @param {HTMLElement} params.snippetEl - The dropped snippet element.
      */
     async onSnippetDropped({ snippetEl }) {
+        // Re-render the fields to ensure each field gets a unique ID.
         await this.rerenderFieldsInElement(snippetEl);
     }
     /**
      * Handler called when an element is cloned.
      *
-     * Re-renders all the fields in the cloned element to ensure each field gets
-     * a unique ID.
-     *
      * @param {Object} params
      * @param {HTMLElement} params.cloneEl - The cloned element.
      */
     async onCloned({ cloneEl }) {
+        // Re-render the fields to ensure each field gets a unique ID.
         await this.rerenderFieldsInElement(cloneEl);
+
+        this.removeSuccessMessagePreviews(cloneEl);
     }
     /**
      * Re-renders all valid fields inside the given element to ensure
@@ -778,6 +780,16 @@ export class FormOptionPlugin extends Plugin {
                 }
             }
         }
+    }
+    /**
+     * Removes all the success form message previews that are in the given root
+     * element.
+     *
+     * @param {HTMLElement} rootEl
+     */
+    removeSuccessMessagePreviews(rootEl) {
+        const toCleanEls = rootEl.querySelectorAll(".o_show_form_success_message");
+        toCleanEls.forEach((el) => el.classList.remove("o_show_form_success_message"));
     }
 }
 
@@ -934,8 +946,8 @@ export class OnSuccessAction extends BuilderAction {
             }
         } else {
             messageEl?.remove();
-            messageEl?.classList.remove("o_builder_form_show_message");
-            el.classList.remove("o_builder_form_show_message");
+            messageEl?.classList.remove("o_show_form_success_message");
+            el.classList.remove("o_show_form_success_message");
         }
     }
     isApplied({ editingElement: el, value }) {
@@ -945,20 +957,21 @@ export class OnSuccessAction extends BuilderAction {
 }
 export class ToggleEndMessageAction extends BuilderAction {
     static id = "toggleEndMessage";
+    static dependencies = ["builderOptions"];
     apply({ editingElement: el }) {
         const messageEl = el.parentElement.querySelector(".s_website_form_end_message");
-        messageEl.classList.add("o_builder_form_show_message");
-        el.classList.add("o_builder_form_show_message");
-        this.dependencies["builderOptions"].updateContainers(messageEl);
+        messageEl.classList.add("o_show_form_success_message");
+        el.classList.add("o_show_form_success_message");
+        this.dependencies.builderOptions.setNextTarget(messageEl);
     }
     clean({ editingElement: el }) {
         const messageEl = el.parentElement.querySelector(".s_website_form_end_message");
-        messageEl.classList.remove("o_builder_form_show_message");
-        el.classList.remove("o_builder_form_show_message");
-        this.dependencies["builderOptions"].updateContainers(el);
+        messageEl.classList.remove("o_show_form_success_message");
+        el.classList.remove("o_show_form_success_message");
+        this.dependencies.builderOptions.setNextTarget(el);
     }
     isApplied({ editingElement: el, value }) {
-        return el.classList.contains("o_builder_form_show_message");
+        return el.classList.contains("o_show_form_success_message");
     }
 }
 export class FormToggleRecaptchaLegalAction extends BuilderAction {
@@ -1065,7 +1078,8 @@ export class MultiCheckboxDisplayAction extends BuilderAction {
 }
 export class SetLabelTextAction extends BuilderAction {
     static id = "setLabelText";
-    apply({ editingElement: fieldEl, value }) {
+    static dependencies = ["websiteFormOption"];
+    async apply({ editingElement: fieldEl, value }) {
         const labelEl = fieldEl.querySelector(".s_website_form_label_content");
         labelEl.textContent = value;
         if (isFieldCustom(fieldEl)) {
@@ -1075,17 +1089,16 @@ export class SetLabelTextAction extends BuilderAction {
                 multiple.dataset.name = value;
             }
             const inputEls = fieldEl.querySelectorAll(".s_website_form_input");
-            const previousInputName = fieldEl.name;
+            const previousInputName = inputEls[0].name;
             inputEls.forEach((el) => (el.name = value));
 
             // Synchronize the fields whose visibility depends on this field
-            const dependentEls = fieldEl
-                .closest("form")
-                .querySelectorAll(
-                    `.s_website_form_field[data-visibility-dependency="${CSS.escape(
-                        previousInputName
-                    )}"]`
-                );
+            const dependentEls = fieldEl.closest("form").querySelectorAll(
+                `.s_website_form_field[data-visibility-dependency="${CSS.escape(
+                    previousInputName
+                )}"],
+                    .s_website_form_field[data-visibility-dependency="${CSS.escape(value)}"]`
+            );
             for (const dependentEl of dependentEls) {
                 if (findCircular(fieldEl, dependentEl)) {
                     // For all the fields whose visibility depends on this
@@ -1098,15 +1111,21 @@ export class SetLabelTextAction extends BuilderAction {
                     dependentEl.dataset.visibilityDependency = value;
                 }
             }
-            /* TODO: make sure this is handled on non-preview:
-            if (!previewMode) {
-                // TODO: @owl-options is this still true ?
-                // As the field label changed, the list of available visibility
-                // dependencies needs to be updated in order to not propose a
-                // field that would create a circular dependency.
-                this.rerender = true;
-            }
-            */
+            const fieldWithVisibilityDependencyEls = [
+                ...fieldEl.closest("form").querySelectorAll("[data-visibility-dependency]"),
+            ];
+            await Promise.all(
+                fieldWithVisibilityDependencyEls.map(async (fieldWithConditionEl) => {
+                    const conditionFieldName = fieldWithConditionEl.dataset.visibilityDependency;
+                    const fieldData = await this.dependencies.websiteFormOption.loadFieldOptionData(
+                        fieldWithConditionEl
+                    );
+                    const names = fieldData.conditionInputs.map((entry) => CSS.escape(entry.name));
+                    if (!names.includes(conditionFieldName)) {
+                        deleteConditionalVisibility(fieldWithConditionEl);
+                    }
+                })
+            );
         }
     }
     getValue({ editingElement: fieldEl }) {
@@ -1217,8 +1236,10 @@ export class SetVisibilityDependencyAction extends BuilderAction {
 export class SetFormCustomFieldValueListAction extends BuilderAction {
     static id = "setFormCustomFieldValueList";
     static dependencies = ["websiteFormOption"];
-    apply({ editingElement: fieldEl, value }) {
-        const fields = [];
+    load(context) {
+        return this.dependencies.websiteFormOption.prepareFields(context);
+    }
+    apply({ editingElement: fieldEl, value, loadResult: fields }) {
         let valueList = JSON.parse(value);
         if (getSelect(fieldEl)) {
             valueList = valueList.filter((value) => value.id !== "" || value.display_name !== "");

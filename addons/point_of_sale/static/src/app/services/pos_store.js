@@ -34,7 +34,6 @@ import { WithLazyGetterTrap } from "@point_of_sale/lazy_getter";
 import { debounce } from "@web/core/utils/timing";
 import DevicesSynchronisation from "../utils/devices_synchronisation";
 import { deserializeDateTime, formatDate } from "@web/core/l10n/dates";
-import { openProxyCustomerDisplay } from "@point_of_sale/customer_display/utils";
 import { ProductInfoPopup } from "@point_of_sale/app/components/popups/product_info_popup/product_info_popup";
 import { RetryPrintPopup } from "@point_of_sale/app/components/popups/retry_print_popup/retry_print_popup";
 import { PresetSlotsPopup } from "@point_of_sale/app/components/popups/preset_slots_popup/preset_slots_popup";
@@ -372,7 +371,7 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     get company() {
-        return this.data.models["res.company"].getFirst();
+        return this.config.company_id;
     }
 
     async processServerData() {
@@ -635,7 +634,6 @@ export class PosStore extends WithLazyGetterTrap {
 
         this.markReady();
         await this.deviceSync.readDataFromServer();
-        openProxyCustomerDisplay(this.getDisplayDeviceIP(), this);
     }
 
     get productListViewMode() {
@@ -981,7 +979,7 @@ export class PosStore extends WithLazyGetterTrap {
                     decimalAccuracy,
                     this.getProductPrice(values.product_id)
                 );
-                const weight = await makeAwaitable(this.env.services.dialog, ScaleScreen);
+                const weight = await this.weighProduct();
                 if (weight) {
                     values.qty = weight;
                 } else if (weight !== null) {
@@ -1394,7 +1392,10 @@ export class PosStore extends WithLazyGetterTrap {
             }
 
             if (error instanceof ConnectionLostError) {
-                console.warn("Offline mode active, order will be synced later");
+                console.info(
+                    "%cOffline mode active, order will be synced later",
+                    "color: red; font-weight: bold;"
+                );
             } else {
                 this.deviceSync.readDataFromServer();
             }
@@ -1967,6 +1968,14 @@ export class PosStore extends WithLazyGetterTrap {
         );
     }
     async loadSampleData() {
+        const isPosManager = await user.hasGroup("point_of_sale.group_pos_manager");
+        if (!isPosManager) {
+            this.dialog.add(AlertDialog, {
+                title: _t("Access Denied"),
+                body: _t("It seems like you don't have enough rights to load data."),
+            });
+            return;
+        }
         await this.data.call("pos.config", "load_demo_data", [[this.config.id]]);
         await this.reloadData(true);
     }
@@ -2257,7 +2266,6 @@ export class PosStore extends WithLazyGetterTrap {
      * Close other tabs that contain the same pos session.
      */
     closeOtherTabs() {
-        // FIXME POSREF use the bus?
         localStorage["message"] = "";
         localStorage["message"] = JSON.stringify({
             message: "close_tabs",
@@ -2400,7 +2408,6 @@ export class PosStore extends WithLazyGetterTrap {
         const allProducts = this.models["product.template"].getAll();
         let list = [];
         const isSearchByWord = searchWord !== "";
-        const isSelectedCategory = this.selectedCategory?.id;
 
         if (isSearchByWord) {
             if (!this._searchTriggered) {
@@ -2409,11 +2416,11 @@ export class PosStore extends WithLazyGetterTrap {
             }
             list = this.getProductsBySearchWord(
                 searchWord,
-                isSelectedCategory ? this.selectedCategory.associatedProducts : allProducts
+                this.selectedCategory?.id ? this.selectedCategory.associatedProducts : allProducts
             );
         } else {
             this._searchTriggered = false;
-            if (isSelectedCategory) {
+            if (this.selectedCategory?.id) {
                 list = this.selectedCategory.associatedProducts;
             } else {
                 list = allProducts;
@@ -2446,7 +2453,11 @@ export class PosStore extends WithLazyGetterTrap {
             filteredList.push(p);
         }
 
-        if (!isSearchByWord && !isSelectedCategory && this.areAllProductsSpecial(filteredList)) {
+        if (
+            !isSearchByWord &&
+            !this.selectedCategory?.id &&
+            this.areAllProductsSpecial(filteredList)
+        ) {
             return [];
         }
 
@@ -2515,7 +2526,6 @@ export class PosStore extends WithLazyGetterTrap {
 
     orderDone(order) {
         order.setScreenData({ name: "" });
-        order.uiState.locked = true;
         if (this.getOrder() === order) {
             this.searchProductWord = "";
         }
@@ -2531,6 +2541,16 @@ export class PosStore extends WithLazyGetterTrap {
                 type: "warning",
             });
         }
+    }
+
+    async isSessionDeleted() {
+        return (
+            (await this.data.orm.searchCount("pos.session", [["id", "=", this.session.id]])) === 0
+        );
+    }
+
+    weighProduct() {
+        return makeAwaitable(this.env.services.dialog, ScaleScreen);
     }
 }
 

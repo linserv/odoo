@@ -29,14 +29,13 @@ patch(Thread.prototype, {
                         (channel_notifications === "mentions" &&
                             message.partner_ids?.includes(this.store.self)))))
         ) {
-            if (this.model === "discuss.channel") {
+            if (this.model === "discuss.channel" && this.inChathubOnNewMessage) {
                 await this.store.chatHub.initPromise;
                 let chatWindow = this.store.ChatWindow.get({ thread: this });
                 if (!chatWindow) {
                     chatWindow = this.store.ChatWindow.insert({ thread: this });
                     if (
                         this.autoOpenChatWindowOnNewMessage &&
-                        !this.store.discuss.isActive &&
                         this.store.chatHub.opened.length < this.store.chatHub.maxOpened
                     ) {
                         chatWindow.open();
@@ -47,6 +46,10 @@ patch(Thread.prototype, {
             }
             this.store.env.services["mail.out_of_focus"].notify(message, this);
         }
+    },
+    /** Condition for whether the conversation should become present in chat hub on new message */
+    get inChathubOnNewMessage() {
+        return !this.store.discuss.isActive;
     },
     get autoOpenChatWindowOnNewMessage() {
         return false;
@@ -87,13 +90,6 @@ patch(Thread.prototype, {
             // Keep the action stack up to date (used by breadcrumbs).
             this.store.env.services.action.currentController.action.context.active_id = activeId;
         }
-    },
-    open(options) {
-        if (this.store.env.services.ui.isSmall) {
-            this.openChatWindow(options);
-            return;
-        }
-        this.setAsDiscussThread();
     },
     async unpin() {
         this.isLocallyPinned = false;

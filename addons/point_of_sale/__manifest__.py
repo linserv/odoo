@@ -7,7 +7,7 @@
     'category': 'Sales/Point of Sale',
     'sequence': 40,
     'summary': 'Handle checkouts and payments for shops and restaurants.',
-    'depends': ['resource', 'stock_account', 'barcodes', 'web_editor', 'digest', 'phone_validation', 'partner_autocomplete', 'iot_base'],
+    'depends': ['resource', 'stock_account', 'barcodes', 'web_editor', 'digest', 'phone_validation', 'partner_autocomplete', 'iot_base', 'google_address_autocomplete'],
     'uninstall_hook': 'uninstall_hook',
     'data': [
         'security/point_of_sale_security.xml',
@@ -93,30 +93,23 @@
             'point_of_sale/static/tests/customer_display/**/*',
             'point_of_sale/static/src/utils.js',
         ],
+        'web.assets_unit_tests_setup': [
+            ('include', 'point_of_sale.assets_prod'),
+            ('remove', 'point_of_sale/static/src/app/main.js'),
+
+            # Remove CSS files since we're not testing the UI with hoot in PoS
+            # CSS files make html_editor tests fail
+            ('remove', 'point_of_sale/static/src/**/*.css'),
+
+            # Adding error handler back since they are removed in the prod bundle
+            'web/static/src/core/errors/error_handlers.js',
+            'web/static/src/core/dialog/dialog.scss',
+        ],
         'web.assets_unit_tests': [
-            # Load it first to be sure models registry is loaded
-            'point_of_sale/static/src/app/models/**/*',
             'point_of_sale/static/tests/unit/**/*',
-
-            # for the data_service.test.js
-            'point_of_sale/static/src/utils.js',
-            'point_of_sale/static/src/proxy_trap.js',
-            'point_of_sale/static/src/lazy_getter.js',
-            'point_of_sale/static/src/app/services/data_service.js',
-            'point_of_sale/static/src/app/utils/numbers.js',
-
-            'point_of_sale/static/src/app/utils/html-to-image.js',
-            'point_of_sale/static/src/app/services/render_service.js',
-
-            'point_of_sale/static/src/app/components/odoo_logo/*',
-            'point_of_sale/static/src/app/components/centered_icon/*',
-            'point_of_sale/static/src/app/components/inputs/**/*',
-            'point_of_sale/static/tests/generic_components/**/*',
-
         ],
 
         # PoS assets
-
         'point_of_sale.base_app': [
             ("include", "web._assets_helpers"),
             ("include", "web._assets_backend_helpers"),
@@ -133,8 +126,12 @@
             "web/static/lib/odoo_ui_icons/*",
             "point_of_sale/static/src/utils.js",
             'bus/static/src/services/bus_service.js',
+            'bus/static/src/services/worker_service.js',
             'bus/static/src/bus_parameters_service.js',
+            'bus/static/src/legacy_multi_tab_service.js',
             'bus/static/src/multi_tab_service.js',
+            'bus/static/src/multi_tab_shared_worker_service.js',
+            'bus/static/src/multi_tab_fallback_service.js',
             'bus/static/src/workers/*',
             'iot_base/static/src/network_utils/*',
             'iot_base/static/src/device_controller.js',
@@ -200,6 +197,7 @@
             ('remove', 'web/static/src/webclient/actions/reports/layout_assets/**/*'),
             ('remove', 'web/static/src/webclient/actions/**/*css'),
             'partner_autocomplete/static/src/**/*',
+            'google_address_autocomplete/static/src/**/*',
         ],
         'point_of_sale.base_tests': [
             "web/static/lib/hoot-dom/**/*",

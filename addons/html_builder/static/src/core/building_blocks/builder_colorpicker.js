@@ -135,10 +135,12 @@ export class BuilderColorPicker extends Component {
                 getUsedCustomColors:
                     this.props.getUsedCustomColors || this.getUsedCustomColors.bind(this),
                 colorPrefix: "color-prefix-",
+                themeColorPrefix: "hb-cp-",
                 showRgbaField: true,
                 noTransparency: this.props.noTransparency,
                 enabledTabs: this.props.enabledTabs,
                 className: "o-hb-colorpicker",
+                editColorCombination: this.env.editColorCombination,
             },
             {
                 onClose: onPreviewRevert,

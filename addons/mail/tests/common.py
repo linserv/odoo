@@ -90,7 +90,7 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
 
     @contextmanager
     def mock_mail_gateway(self, mail_unlink_sent=False):
-        build_email_origin = IrMail_Server.build_email
+        build_email_origin = IrMail_Server._build_email__
         send_email_origin = IrMail_Server.send_email
         mail_create_origin = MailMail.create
         mail_private_send_origin = MailMail._send
@@ -119,7 +119,7 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
             return True
 
         with self.mock_smtplib_connection(), \
-             patch.object(IrMail_Server, 'build_email', autospec=True, wraps=IrMail_Server, side_effect=_ir_mail_server_build_email) as build_email_mocked, \
+             patch.object(IrMail_Server, '_build_email__', autospec=True, wraps=IrMail_Server, side_effect=_ir_mail_server_build_email) as build_email_mocked, \
              patch.object(IrMail_Server, 'send_email', autospec=True, wraps=IrMail_Server, side_effect=send_email_origin) as send_email_mocked, \
              patch.object(MailMail, 'create', autospec=True, wraps=MailMail, side_effect=_mail_mail_create) as mail_mail_create_mocked, \
              patch.object(MailMail, '_send', autospec=True, wraps=MailMail, side_effect=mail_private_send_origin) as mail_mail_private_send_mocked, \
@@ -1956,14 +1956,9 @@ class MailCommon(MailCase):
         Not written in a modular way to avoid complex override for a simple test tool.
         """
         for data in channels_data:
-            if "im_livechat.channel" not in self.env:
-                data.pop("country_id", None)
-                data.pop("livechat_channel_id", None)
-                data.pop("operator", None)
-            if "whatsapp.message" not in self.env:
-                data.pop("wa_account_id", None)
-                data.pop("whatsapp_channel_valid_until", None)
-                data.pop("whatsapp_partner_id", None)
+            # if 'ai_livechat' module is not installed
+            if not ('ai.agent' in self.env and 'im_livechat.channel' in self.env):
+                data.pop("livechat_with_ai_agent", None)
         return list(channels_data)
 
     def _filter_messages_fields(self, /, *messages_data):

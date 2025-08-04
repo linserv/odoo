@@ -1,6 +1,14 @@
 import { BuilderAction } from "@html_builder/core/builder_action";
 import { describe, expect, test } from "@odoo/hoot";
-import { advanceTime, animationFrame, clear, click, fill, queryFirst } from "@odoo/hoot-dom";
+import {
+    advanceTime,
+    animationFrame,
+    clear,
+    click,
+    fill,
+    freezeTime,
+    queryFirst,
+} from "@odoo/hoot-dom";
 import { Deferred } from "@odoo/hoot-mock";
 import { xml } from "@odoo/owl";
 import { contains } from "@web/../tests/web_test_helpers";
@@ -84,8 +92,7 @@ test("input with classAction and styleAction", async () => {
                 <div class="test-options-target">10</div>
             `);
     await contains(":iframe .test-options-target").click();
-    await click(".options-container input");
-    await fill(2);
+    await contains(".options-container input").edit("2");
     expect(":iframe .test-options-target").toHaveStyle({
         "--custom-property": "2",
     });
@@ -173,8 +180,8 @@ describe("default value", () => {
 
         await clear();
         await click(".options-container");
-        expect("[data-action-id='customAction'] input").toHaveValue("");
-        expect(":iframe .test-options-target").toHaveInnerHTML("");
+        expect("[data-action-id='customAction'] input").toHaveValue("0");
+        expect(":iframe .test-options-target").toHaveInnerHTML("0");
     });
     test("clear BuilderNumberInput with default value", async () => {
         addActionOption({
@@ -203,6 +210,41 @@ describe("default value", () => {
         await click(".options-container");
         expect("[data-action-id='customAction'] input").toHaveValue("1");
         expect(":iframe .test-options-target").toHaveInnerHTML("1");
+    });
+    test("clear BuilderNumberInput with null default value", async () => {
+        addActionOption({
+            customAction: class extends BuilderAction {
+                static id = "customAction";
+                getValue({ editingElement }) {
+                    return editingElement.innerText;
+                }
+                apply({ editingElement, value }) {
+                    editingElement.innerText = value;
+                    if (value === null) {
+                        editingElement.innerText = "10";
+                    }
+                }
+            },
+        });
+        addOption({
+            selector: ".test-options-target",
+            template: xml`<BuilderNumberInput action="'customAction'" default="null"/>`,
+        });
+        await setupWebsiteBuilder(`
+                    <div class="test-options-target">10</div>
+                `);
+        await contains(":iframe .test-options-target").click();
+        await click("[data-action-id='customAction'] input");
+        expect("[data-action-id='customAction'] input").toHaveValue(10);
+
+        await contains("[data-action-id='customAction'] input").edit("5");
+        expect(":iframe .test-options-target").toHaveInnerHTML("5");
+
+        await clear();
+        await click(".options-container");
+        await animationFrame();
+        expect(":iframe .test-options-target").toHaveInnerHTML("10");
+        expect("[data-action-id='customAction'] input").toHaveValue("10");
     });
 });
 describe("operations", () => {
@@ -421,6 +463,7 @@ describe("keyboard triggers", () => {
         await setupWebsiteBuilder(`<div class="test-options-target">Non empty div.</div>`);
         await contains(":iframe .test-options-target").click();
         await click("[data-action-id='customAction'] input");
+        await clear();
         expect("[data-action-id='customAction'] input").toHaveValue("");
 
         await contains("[data-action-id='customAction'] input").keyDown("ArrowUp");
@@ -446,6 +489,7 @@ describe("keyboard triggers", () => {
         await setupWebsiteBuilder(`<div class="test-options-target">Non empty div.</div>`);
         await contains(":iframe .test-options-target").click();
         await click("[data-action-id='customAction'] input");
+        await clear();
         expect("[data-action-id='customAction'] input").toHaveValue("");
 
         await contains("[data-action-id='customAction'] input").keyDown("ArrowDown");
@@ -454,6 +498,7 @@ describe("keyboard triggers", () => {
         expect(":iframe .test-options-target").toHaveAttribute("data-number", "-1");
     });
     test("apply preview on keydown and debounce commit operation", async () => {
+        freezeTime();
         addActionOption({
             customAction: class extends BuilderAction {
                 static id = "customAction";
@@ -479,9 +524,9 @@ describe("keyboard triggers", () => {
         await contains(".options-container input").keyDown("ArrowUp");
         await advanceTime(500); // Default browser delay between 1st & 2nd keydown.
         await contains(".options-container input").keyDown("ArrowUp");
-        await advanceTime();
+        await advanceTime(50);
         await contains(".options-container input").keyDown("ArrowUp");
-        await advanceTime();
+        await advanceTime(50);
         expect(":iframe .test-options-target").toHaveInnerHTML("13");
         // 3 previews
         expect.verifySteps(["customAction 11", "customAction 12", "customAction 13"]);
@@ -548,6 +593,29 @@ describe("unit & saveUnit", () => {
         await fill("7");
         expect.verifySteps(["customAction 57000ms"]);
         expect(":iframe .test-options-target").toHaveInnerHTML("57000ms");
+    });
+    test("should handle saveUnit even without explicit unit", async () => {
+        addActionOption({
+            customAction: class extends BuilderAction {
+                static id = "customAction";
+                getValue({ editingElement }) {
+                    return editingElement.innerHTML;
+                }
+            },
+        });
+        addOption({
+            selector: ".test-options-target",
+            template: xml`<BuilderNumberInput action="'customAction'" unit="'s'" saveUnit="'ms'"/>`,
+        });
+        // note that 5000 has no unit of measure
+        await setupWebsiteBuilder(`
+                    <div class="test-options-target">5000</div>
+                `);
+        await contains(":iframe .test-options-target").click();
+        expect(".options-container").toBeDisplayed();
+        await click(".options-container input");
+        const input = queryFirst(".options-container input");
+        expect(input).toHaveValue("5");
     });
     test("should handle empty saveUnit", async () => {
         addActionOption({
@@ -716,7 +784,7 @@ describe("sanitized values", () => {
         `);
         await contains(":iframe .test-options-target").click();
         await contains(".options-container input").edit(" a&$*+>");
-        expect(".options-container input").toHaveValue("");
+        expect(".options-container input").toHaveValue("0");
         expect(":iframe .test-options-target").not.toHaveAttribute("data-number");
     });
     test("after copy / pasting, displayed value is cleaned to match only numbers", async () => {

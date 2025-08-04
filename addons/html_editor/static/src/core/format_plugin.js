@@ -10,6 +10,7 @@ import {
     isContentEditable,
     isEmptyBlock,
     isEmptyTextNode,
+    isParagraphRelatedElement,
     isSelfClosingElement,
     isTextNode,
     isVisibleTextNode,
@@ -108,7 +109,7 @@ export class FormatPlugin extends Plugin {
                         ? _t("Remove Format")
                         : _t("Selection has no format"),
                 icon: "fa-eraser",
-                run: this.removeFormat.bind(this),
+                run: this.removeAllFormats.bind(this),
                 isAvailable: isHtmlContentSupported,
             },
         ],
@@ -145,7 +146,6 @@ export class FormatPlugin extends Plugin {
             {
                 id: "strikethrough",
                 groupId: "decoration",
-                namespaces: ["compact", "expanded"],
                 commandId: "formatStrikethrough",
                 isActive: isFormatted(this, "strikeThrough"),
             },
@@ -161,14 +161,17 @@ export class FormatPlugin extends Plugin {
         clean_for_save_handlers: this.cleanForSave.bind(this),
         normalize_handlers: this.normalize.bind(this),
         selectionchange_handlers: this.removeEmptyInlineElement.bind(this),
+        set_tag_handlers: this.removeFontSizeFormat.bind(this),
 
         intangible_char_for_keyboard_navigation_predicates: (_, char) => char === "\u200b",
     };
 
-    removeFormat() {
-        const targetedNodes = this.dependencies.selection.getTargetedNodes();
-        this.dispatchTo("remove_format_handlers");
-        for (const format of Object.keys(formatsSpecs)) {
+    /**
+     * @param {string[]} formats
+     * @param {Node[]} targetedNodes
+     */
+    removeFormats(formats, targetedNodes) {
+        for (const format of formats) {
             if (
                 !formatsSpecs[format].removeStyle ||
                 !this.hasSelectionFormat(format, targetedNodes)
@@ -178,6 +181,19 @@ export class FormatPlugin extends Plugin {
             this.formatSelection(format, { applyStyle: false, removeFormat: true });
         }
         this.dependencies.history.addStep();
+    }
+
+    removeAllFormats() {
+        const targetedNodes = this.dependencies.selection.getTargetedNodes();
+        this.dispatchTo("remove_all_formats_handlers");
+        this.removeFormats(Object.keys(formatsSpecs), targetedNodes);
+    }
+
+    removeFontSizeFormat(els) {
+        if (els.every((el) => isParagraphRelatedElement(el))) {
+            const targetedNodes = this.dependencies.selection.getTargetedNodes();
+            this.removeFormats(["fontSize", "setFontSizeClassName"], targetedNodes);
+        }
     }
 
     /**
@@ -191,7 +207,7 @@ export class FormatPlugin extends Plugin {
     hasSelectionFormat(format, targetedNodes = this.dependencies.selection.getTargetedNodes()) {
         const targetedTextNodes = targetedNodes.filter(isTextNode);
         const isFormatted = formatsSpecs[format].isFormatted;
-        return targetedTextNodes.some((n) => isFormatted(n, this.editable));
+        return targetedTextNodes.some((n) => isFormatted(n, { editable: this.editable }));
     }
     /**
      * Return true if the current selection on the editable appears as the given
@@ -209,7 +225,9 @@ export class FormatPlugin extends Plugin {
             targetedTextNodes.length &&
             targetedTextNodes.every(
                 (node) =>
-                    isZwnbsp(node) || isEmptyTextNode(node) || isFormatted(node, this.editable)
+                    isZwnbsp(node) ||
+                    isEmptyTextNode(node) ||
+                    isFormatted(node, { editable: this.editable })
             )
         );
     }
@@ -229,7 +247,7 @@ export class FormatPlugin extends Plugin {
     }
 
     formatSelection(formatName, options) {
-        this.delegateTo("format_selection_overrides", formatName, options);
+        this.delegateTo("format_selection_handlers", formatName, options);
         if (this._formatSelection(formatName, options) && !options?.removeFormat) {
             this.dependencies.history.addStep();
         }
@@ -301,7 +319,7 @@ export class FormatPlugin extends Plugin {
             // with a class that is not indicated as splittable.
             const isClassListSplittable = (classList) =>
                 [...classList].every((className) =>
-                    this.getResource("format_splittable_class").some((cb) => cb(className))
+                    this.getResource("format_class_predicates").some((cb) => cb(className))
                 );
 
             while (
@@ -488,7 +506,11 @@ export class FormatPlugin extends Plugin {
         if (this.getResource("unremovable_node_predicates").some((p) => p(element))) {
             return;
         }
-        if (element.classList.length) {
+        if (
+            ![...element.classList].every((c) =>
+                this.getResource("format_class_predicates").some((p) => p(c))
+            )
+        ) {
             // Original comment from web_editor:
             // We only remove the empty element if it has no class, to ensure we
             // don't break visual styles (in that case, its ZWS was kept to

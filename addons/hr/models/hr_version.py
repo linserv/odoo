@@ -261,8 +261,11 @@ class HrVersion(models.Model):
 
     @api.ondelete(at_uninstall=False)
     def _unlink_except_last_version(self):
-        if self.employee_id.versions_count == len(self):
-            raise ValidationError(_('An employee must always have at least one version.'))
+        for employee_id, versions in self.grouped('employee_id').items():
+            if employee_id.versions_count == len(versions):
+                raise ValidationError(
+                    self.env._('Employee %s must always have at least one active version.') % employee_id.name
+                )
 
     def write(self, vals):
         values = vals
@@ -553,3 +556,17 @@ class HrVersion(models.Model):
         self.ensure_one()
         self_sudo = self.sudo()
         return self_sudo.structure_type_id and self_sudo.structure_type_id.country_id.code == country_code
+
+    def action_open_version(self):
+        self.ensure_one()
+
+        return {
+            'type': "ir.actions.act_window",
+            'res_model': "hr.employee",
+            'res_id': self.employee_id.id,
+            'views': [[False, "form"]],
+            'target': "current",
+            'context': {
+                'version_id': self.id,
+            },
+        }

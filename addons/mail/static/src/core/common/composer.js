@@ -36,6 +36,7 @@ import { isDisplayStandalone, isIOS, isMobileOS } from "@web/core/browser/featur
 import { Dropdown } from "@web/core/dropdown/dropdown";
 import { DropdownItem } from "@web/core/dropdown/dropdown_item";
 import { useComposerActions } from "./composer_actions";
+import { DiscussActions } from "./discuss_actions";
 
 const EDIT_CLICK_TYPE = {
     CANCEL: "cancel",
@@ -58,6 +59,7 @@ const EDIT_CLICK_TYPE = {
 export class Composer extends Component {
     static components = {
         AttachmentList,
+        DiscussActions,
         Dropdown,
         DropdownItem,
         FileUploader,
@@ -445,6 +447,12 @@ export class Composer extends Component {
             this.props.onCloseFullComposerCallback(isDiscard);
         } else {
             this.thread?.fetchNewMessages();
+        }
+    }
+
+    onInput(ev) {
+        if (!this.props.composer.isDirty) {
+            this.props.composer.isDirty = true;
         }
     }
 

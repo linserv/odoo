@@ -256,8 +256,8 @@ export class HtmlField extends Component {
             ...this.props.editorConfig,
         };
 
-        if (!("baseContainer" in config)) {
-            config.baseContainer = "DIV";
+        if (!("baseContainers" in config)) {
+            config.baseContainers = ["DIV", "P"];
         }
 
         if (this.props.embeddedComponents) {
@@ -338,6 +338,9 @@ export const htmlField = {
         if ("allowMediaDialogVideo" in options) {
             editorConfig.allowMediaDialogVideo = Boolean(options.allowMediaDialogVideo);
         }
+        if ("allowMediaDocuments" in options) {
+            editorConfig.allowMediaDocuments = Boolean(options.allowMediaDocuments);
+        }
         if ("allowFile" in options) {
             editorConfig.allowFile = Boolean(options.allowFile);
         }
@@ -345,8 +348,8 @@ export const htmlField = {
             editorConfig.allowImage = Boolean(options.allowAttachmentCreation);
             editorConfig.allowFile = Boolean(options.allowAttachmentCreation);
         }
-        if ("baseContainer" in options) {
-            editorConfig.baseContainer = options.baseContainer;
+        if ("baseContainers" in options) {
+            editorConfig.baseContainers = options.baseContainers;
         }
         return {
             editorConfig,

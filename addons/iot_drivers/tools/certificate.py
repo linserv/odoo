@@ -56,10 +56,10 @@ def get_certificate_end_date():
         common_name == 'OdooTempIoTBoxCertificate'
         or datetime.datetime.now() > cert_end_date - datetime.timedelta(days=10)
     ):
-        _logger.info("SSL certificate '%s' must be updated.", common_name)
+        _logger.debug("SSL certificate '%s' must be updated.", common_name)
         return None
 
-    _logger.info("SSL certificate '%s' is valid until %s", common_name, cert_end_date)
+    _logger.debug("SSL certificate '%s' is valid until %s", common_name, cert_end_date)
     return str(cert_end_date)
 
 
@@ -76,7 +76,7 @@ def download_odoo_certificate():
         response = requests.post(
             'https://www.odoo.com/odoo-enterprise/iot/x509',
             json={'params': {'db_uuid': db_uuid, 'enterprise_code': enterprise_code}},
-            timeout=5,
+            timeout=10,
         )
         response.raise_for_status()
         response_body = response.json()

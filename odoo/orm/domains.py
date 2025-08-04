@@ -56,6 +56,7 @@ import functools
 import itertools
 import logging
 import operator
+import pytz
 import typing
 import warnings
 from datetime import date, datetime, time, timedelta, timezone
@@ -92,7 +93,7 @@ This should be supported in the framework at all levels.
 - `any` works for relational fields and `id` to check if a record matches
   the condition
   - if value is SQL or Query, see `any!`
-  - if auto_join is set on the field, see `any!`
+  - if bypass_search_access is set on the field, see `any!`
   - if value is a Domain for a many2one (or `id`),
     _search with active_test=False
   - if value is a Domain for a x2many,
@@ -926,7 +927,7 @@ class DomainCondition(Domain):
 
         if level == OptimizationLevel.FULL:
             # resolve inherited fields
-            # inherits implies both Field.delegate=True and Field.auto_join=True
+            # inherits implies both Field.delegate=True and Field.bypass_search_access=True
             # so no additional permissions will be added by the 'any' operator below
             if field.inherited:
                 parent_fname = field.related.split('.')[0]
@@ -1516,7 +1517,17 @@ def _value_to_datetime(value, env, iso_only=False):
             value = parse_date(value, env)
         return _value_to_datetime(value, env)
     if isinstance(value, date):
-        return datetime.combine(value, time.min), True
+        tz = env.context.get('tz') or env.user.tz or None
+        if value.year == 9999:
+            # avoid overflow errors, treat as UTC timezone
+            tz = None
+        elif tz:
+            # get the tzinfo (without LMT)
+            tz = pytz.timezone(tz).localize(datetime.now()).tzinfo
+        value = datetime.combine(value, time.min, tz)
+        if tz is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value, True
     if isinstance(value, COLLECTION_TYPES):
         value, is_date = zip(*(_value_to_datetime(v, env=env, iso_only=iso_only) for v in value))
         return OrderedSet(value), all(is_date)
@@ -1858,11 +1869,6 @@ def _optimize_same_conditions(cls, conditions, model):
     Quick optimization for some conditions, just compare if we have the same
     condition twice.
     """
-    # just check the adjacent conditions for simple domains
-    # TODO replace this by:
-    # 1. optimize inequalities
-    # 2. optimize like with same prefixes
-    # 3. remove this function as equalities and existence is already covered
     for a, b in itertools.pairwise(itertools.chain([None], conditions)):
         if a == b:
             continue

@@ -27,7 +27,7 @@ dpkg-reconfigure locales
 # Aliases
 echo  "alias ll='ls -al'" | tee -a ~/.bashrc /home/pi/.bashrc
 echo  "alias odoo='sudo systemctl stop odoo; sudo -u odoo /usr/bin/python3 /home/pi/odoo/odoo-bin --config /home/pi/odoo.conf'" | tee -a ~/.bashrc /home/pi/.bashrc
-echo  "alias odoo_logs='less +F /var/log/odoo/odoo-server.log'" | tee -a ~/.bashrc /home/pi/.bashrc
+echo  "alias odoo_logs='less -R +F /var/log/odoo/odoo-server.log'" | tee -a ~/.bashrc /home/pi/.bashrc
 echo  "alias write_mode='sudo mount -o remount,rw / && sudo mount -o remount,rw /root_bypass_ramdisks'" | tee -a ~/.bashrc /home/pi/.bashrc
 echo  "alias odoo_conf='cat /home/pi/odoo.conf'" | tee -a ~/.bashrc /home/pi/.bashrc
 echo  "alias read_mode='sudo mount -o remount,ro / && sudo mount -o remount,ro /root_bypass_ramdisks'" | tee -a ~/.bashrc /home/pi/.bashrc
@@ -181,8 +181,8 @@ pip3 install -r /home/pi/odoo/addons/iot_box_image/configuration/requirements.tx
 # Create Odoo user for odoo service and disable password login
 adduser --disabled-password --gecos "" --shell /usr/sbin/nologin odoo
 
-# Replace pi user with odoo user in sudoers file: odoo user doesn't need to type its password to run sudo commands
-mv /etc/sudoers.d/010_pi-nopasswd /etc/sudoers.d/010_odoo-nopasswd
+# odoo user doesn't need to type its password to run sudo commands
+cp /etc/sudoers.d/010_pi-nopasswd /etc/sudoers.d/010_odoo-nopasswd
 sed -i 's/pi/odoo/g' /etc/sudoers.d/010_odoo-nopasswd
 
 # copy the odoo.conf file to the overwrite directory

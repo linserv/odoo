@@ -137,6 +137,9 @@ export class LinkPlugin extends Plugin {
         "baseContainer",
         "feff",
     ];
+    static defaultConfig = {
+        allowStripDomain: true,
+    };
     // @phoenix @todo: do we want to have createLink and insertLink methods in link plugin?
     static shared = ["createLink", "insertLink", "getPathAsUrlCommand"];
     resources = {
@@ -340,11 +343,14 @@ export class LinkPlugin extends Plugin {
      */
     createLink(url, label = "") {
         const link = this.document.createElement("a");
-        link.setAttribute("href", url);
+        if (url !== undefined) {
+            link.setAttribute("href", url);
+        }
         for (const [param, value] of Object.entries(this.config.defaultLinkAttributes || {})) {
             link.setAttribute(param, `${value}`);
         }
         link.innerText = label;
+        this.dispatchTo("create_link_handlers", link);
         return link;
     }
 
@@ -442,10 +448,7 @@ export class LinkPlugin extends Plugin {
         this.linkInDocument = linkElement;
         if (!linkElement) {
             // create a new link element
-            linkElement = this.document.createElement("a");
-            if (!selection.isCollapsed) {
-                linkElement.append(selection.textContent());
-            }
+            linkElement = this.createLink(undefined, selection.textContent());
         }
 
         const selectionTextContent = selection?.textContent();
@@ -576,11 +579,6 @@ export class LinkPlugin extends Plugin {
                 this.linkInDocument = null;
                 this.currentOverlay.close();
             },
-            onClose: () => {
-                this.linkInDocument = null;
-                this.currentOverlay.close();
-                this.dependencies.selection.focusEditable();
-            },
             onEdit: () => {
                 this.restoreSavePoint = this.dependencies.history.makeSavePoint();
             },
@@ -598,6 +596,7 @@ export class LinkPlugin extends Plugin {
             showReplaceTitleBanner: this.newlyInsertedLinks.has(linkElement),
             allowCustomStyle: this.config.allowCustomStyle,
             allowTargetBlank: this.config.allowTargetBlank,
+            allowStripDomain: this.config.allowStripDomain,
         };
 
         const popover = this.getActivePopover(linkElement);
@@ -768,16 +767,14 @@ export class LinkPlugin extends Plugin {
             }
         } else {
             const closestLinkElement = closestElement(selection.anchorNode, "A");
+            const isLinkEditable = this.delegateTo(
+                "is_link_editable_predicates",
+                closestLinkElement) || false;
             if (closestLinkElement && closestLinkElement.isContentEditable) {
                 if (closestLinkElement !== this.linkInDocument || !this.currentOverlay.isOpen) {
                     this.openLinkTools(closestLinkElement);
                 }
-            } else if (
-                closestLinkElement &&
-                (closestLinkElement.getAttribute("role") === "menuitem" ||
-                    closestLinkElement.classList.contains("nav-link")) &&
-                !closestLinkElement.dataset.bsToggle
-            ) {
+            } else if (isLinkEditable) {
                 this.openLinkTools(closestLinkElement);
             } else {
                 this.linkInDocument = null;

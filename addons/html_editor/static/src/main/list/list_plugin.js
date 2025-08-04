@@ -153,7 +153,7 @@ export class ListPlugin extends Plugin {
         shift_tab_overrides: this.handleShiftTab.bind(this),
         split_element_block_overrides: this.handleSplitBlock.bind(this),
         color_apply_overrides: this.applyColorToListItem.bind(this),
-        format_selection_overrides: this.applyFormatToListItem.bind(this),
+        format_selection_handlers: this.applyFormatToListItem.bind(this),
         node_to_insert_processors: this.processNodeToInsert.bind(this),
         clipboard_content_processors: this.processContentForClipboard.bind(this),
         before_insert_within_pre_processors: this.insertListWithinPre.bind(this),
@@ -956,6 +956,7 @@ export class ListPlugin extends Plugin {
         if (!closestLIendContainer.classList.contains("oe-nested")) {
             // Remove LI marker on first backspace.
             closestLIendContainer.classList.add("oe-nested");
+            closestLIendContainer.classList.remove("o_checked");
         } else {
             // Fully outdent the LI but keep its direction.
             const list = closestElement(closestLIendContainer, "ul[dir], ol[dir]");
@@ -1053,6 +1054,15 @@ export class ListPlugin extends Plugin {
 
         if (isChecklistItem && this.isPointerInsideCheckbox(node, offsetX, offsetY)) {
             toggleClass(node, "o_checked");
+            const { documentSelectionIsInEditable } =
+                this.dependencies.selection.getSelectionData();
+            // When the editable is not focused, clicking on checkbox
+            // wont make it focused So changes will be lost
+            // as no blur event will occur when clicking outside.
+            if (!documentSelectionIsInEditable) {
+                this.editable.focus();
+                this.dependencies.selection.setSelection({ anchorNode: node, anchorOffset: 0 });
+            }
             ev.preventDefault();
             this.dependencies.history.addStep();
         }

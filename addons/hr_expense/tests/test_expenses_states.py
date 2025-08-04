@@ -160,6 +160,7 @@ class TestExpensesStates(TestExpenseCommon):
         self.get_new_payment(self.expenses_employee, self.expenses_employee.total_amount)
 
         self.expenses_employee.account_move_id.button_draft()
+        self.expenses_employee.account_move_id.line_ids.remove_move_reconcile()
         self.assertEqual(self.expenses_employee.state, 'posted')
         self.assertRecordValues(self.expenses_employee.account_move_id, [
             {'state': 'draft', 'payment_state': 'not_paid'},
@@ -192,3 +193,10 @@ class TestExpensesStates(TestExpenseCommon):
         self.expenses_all.manager_id = False
         self.expenses_all.action_submit()
         self.assertSequenceEqual(['approved', 'approved'], self.expenses_all.mapped('state'))
+
+    def test_expense_next_activity(self):
+        """ Test the auto-validation flow skips 'submitted' state when there is no manager"""
+        self.expenses_employee.manager_id = self.expense_user_manager_2
+        self.expenses_all.action_submit()
+        mail_activity = self.env['mail.activity'].search([('res_model', '=', 'hr.expense'), ('res_id', '=', self.expenses_employee.id)])
+        self.assertEqual(mail_activity.user_id.id, self.expense_user_manager_2.id)

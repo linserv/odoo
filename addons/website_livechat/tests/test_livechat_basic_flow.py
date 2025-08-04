@@ -190,21 +190,15 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
         operator_member = channel.channel_member_ids.filtered(lambda m: m.partner_id == self.operator.partner_id)
         guest_member = channel.channel_member_ids.filtered(lambda m: m.guest_id == guest)
         self.assertEqual(
-            Store(channel).get_result(),
+            Store().add(channel).get_result(),
             {
                 "discuss.channel": self._filter_channels_fields(
                     {
-                        "anonymous_name": f"Visitor #{self.visitor.id}",
-                        "avatar_cache_key": "no-avatar",
                         "channel_type": "livechat",
                         "country_id": False,
                         "create_uid": self.user_public.id,
                         "default_display_mode": False,
-                        "description": False,
                         "fetchChannelInfoState": "fetched",
-                        "from_message_id": False,
-                        "group_ids": [],
-                        "group_public_id": False,
                         "id": channel.id,
                         "invited_member_ids": [("ADD", [])],
                         "is_editable": True,
@@ -221,13 +215,10 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "message_needaction_counter": 0,
                         "message_needaction_counter_bus_id": 0,
                         "name": f"Visitor #{self.visitor.id} El Deboulonnator",
-                        "parent_channel_id": False,
                         "requested_by_operator": False,
                         "rtc_session_ids": [("ADD", [])],
                         "uuid": channel.uuid,
-                        "wa_account_id": False,
-                        "whatsapp_channel_valid_until": False,
-                        "whatsapp_partner_id": False,
+                        'livechat_with_ai_agent': False,
                     }
                 ),
                 "discuss.channel.member": [
@@ -314,22 +305,16 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
             channel.channel_member_ids.filtered(lambda m: m.partner_id == self.operator.partner_id)
         )
         self.assertEqual(
-            Store(
+            Store().add(
                 channel.with_user(self.user_public).with_context(guest=guest),
             ).get_result()["discuss.channel"],
             self._filter_channels_fields(
                 {
-                    "anonymous_name": f"Visitor #{self.visitor.id}",
-                    "avatar_cache_key": "no-avatar",
                     "channel_type": "livechat",
                     "country_id": False,
                     "create_uid": self.user_public.id,
                     "default_display_mode": False,
-                    "description": False,
                     "fetchChannelInfoState": "fetched",
-                    "from_message_id": False,
-                    "group_ids": [],
-                    "group_public_id": False,
                     "id": channel.id,
                     "invited_member_ids": [("ADD", [])],
                     "is_editable": False,
@@ -341,15 +326,12 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                     "message_needaction_counter": 0,
                     "message_needaction_counter_bus_id": 0,
                     "name": f"Visitor #{self.visitor.id} El Deboulonnator",
-                    "parent_channel_id": False,
                     "requested_by_operator": False,
                     "rtc_session_ids": [("ADD", [])],
                     "uuid": channel.uuid,
-                    "wa_account_id": False,
-                    "whatsapp_channel_valid_until": False,
-                    "whatsapp_partner_id": False,
-                }
-            ),
+                    'livechat_with_ai_agent': False,
+                },
+            )
         )
 
     def test_livechat_not_available_with_hide_button_rule(self):

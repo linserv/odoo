@@ -731,6 +731,7 @@ class AccountMove(models.Model):
 
     abnormal_amount_warning = fields.Text(compute='_compute_abnormal_warnings')
     abnormal_date_warning = fields.Text(compute='_compute_abnormal_warnings')
+    alerts = fields.Json(compute='_compute_alerts')
 
     taxes_legal_notes = fields.Html(string='Taxes Legal Notes', compute='_compute_taxes_legal_notes')
 
@@ -2153,6 +2154,21 @@ class AccountMove(models.Model):
                 wiggle=move.currency_id.format(wiggle_room_amount),
             )
 
+    @api.depends(
+        'state',
+        'invoice_line_ids',
+        'tax_lock_date_message',
+        'auto_post',
+        'auto_post_until',
+        'is_being_sent',
+        'partner_credit_warning',
+        'abnormal_amount_warning',
+        'abnormal_date_warning',
+    )
+    def _compute_alerts(self):
+        for move in self:
+            move.alerts = move._get_alerts()
+
     @api.depends('line_ids.tax_ids')
     def _compute_taxes_legal_notes(self):
         for move in self:
@@ -2186,6 +2202,74 @@ class AccountMove(models.Model):
     def _compute_checked(self):
         for move in self:
             move.checked = move.state == 'posted' and (move.journal_id.type == 'general' or move._is_user_able_to_review())
+
+    # -------------------------------------------------------------------------
+    # ALERTS
+    # -------------------------------------------------------------------------
+
+    def _get_alerts(self):
+        self.ensure_one()
+        alerts = {}
+        has_account_group = self.env.user.has_groups('account.group_account_readonly,account.group_account_invoice')
+
+        if self.state == 'draft':
+            if has_account_group and self.tax_lock_date_message:
+                alerts['account_tax_lock_date'] = {
+                    'level': 'warning',
+                    'message': self.tax_lock_date_message,
+                }
+            if self.auto_post == 'at_date':
+                alerts['account_auto_post_at_date'] = {
+                    'level': 'info',
+                    'message': _("This move is configured to be posted automatically at the accounting date: %s.", self.date),
+                }
+            if self.auto_post in ('yearly', 'quarterly', 'monthly'):
+                message = _(
+                    "%(auto_post_name)s auto-posting enabled. Next accounting date: %(move_date)s.",
+                    auto_post_name=self.auto_post,
+                    move_date=self.date,
+                )
+                if self.auto_post_until:
+                    message += " "
+                    message += _("The recurrence will end on %s (included).", self.auto_post_until)
+                alerts['account_auto_post_on_period'] = {
+                    'level': 'info',
+                    'message': message,
+                }
+            if (
+                self.is_purchase_document(include_receipts=True)
+                and (zero_lines := self.invoice_line_ids.filtered(lambda line: line.price_total == 0))
+                and len(zero_lines) >= 2
+            ):
+                alerts['account_remove_empty_lines'] = {
+                    'level': 'info',
+                    'message': _("We've noticed some empty lines on your invoice."),
+                    'action_text': _("Remove empty lines"),
+                    'action_call': ('account.move.line', 'unlink', zero_lines.ids),
+                }
+
+        if self.is_being_sent:
+            alerts['account_is_being_sent'] = {
+                'level': 'info',
+                'message': _("This invoice is being sent in the background."),
+            }
+        if has_account_group and self.partner_credit_warning:
+            alerts['account_partner_credit_warning'] = {
+                'level': 'warning',
+                'message': self.partner_credit_warning,
+            }
+        if self.abnormal_amount_warning:
+            alerts['account_abnormal_amount_warning'] = {
+                'level': 'warning',
+                'message': self.abnormal_amount_warning,
+            }
+        if self.abnormal_date_warning:
+            alerts['account_abnormal_date_warning'] = {
+                'level': 'warning',
+                'message': self.abnormal_date_warning,
+            }
+
+        return alerts
 
     # -------------------------------------------------------------------------
     # SEARCH METHODS
@@ -3860,7 +3944,8 @@ class AccountMove(models.Model):
             reference will be 'RF67 INV0 0003 7'.
         """
         self.ensure_one()
-        return format_structured_reference_iso(f'{self.journal_id.code}{str(self.id).zfill(6)}')
+        journal_identifier = self.journal_id.code if self.journal_id.code.isascii() else self.journal_id.id
+        return format_structured_reference_iso(f'{journal_identifier}{str(self.id).zfill(6)}')
 
     def _get_invoice_reference_euro_partner(self):
         """ This computes the reference based on the RF Creditor Reference.
@@ -3874,9 +3959,10 @@ class AccountMove(models.Model):
             be used.
         """
         self.ensure_one()
+        journal_identifier = self.journal_id.code if self.journal_id.code.isascii() else self.journal_id.id
         partner_ref = self.partner_id.ref
         partner_ref_nr = re.sub(r'\D', '', partner_ref or '')[-21:] or str(self.partner_id.id)[-21:]
-        partner_ref_nr = f'{self.journal_id.code}{partner_ref_nr}'[-21:]
+        partner_ref_nr = f'{journal_identifier}{partner_ref_nr}'[-21:]
         return format_structured_reference_iso(partner_ref_nr)
 
     def _get_invoice_reference_number_invoice(self):
@@ -5499,7 +5585,6 @@ class AccountMove(models.Model):
         self._check_draftable()
         # We remove all the analytics entries for this journal
         self.line_ids.analytic_line_ids.with_context(skip_analytic_sync=True).unlink()
-        self.mapped('line_ids').remove_move_reconcile()
         self.state = 'draft'
 
         self._detach_attachments()
@@ -5579,6 +5664,7 @@ class AccountMove(models.Model):
         if any(move.state != 'draft' for move in self):
             raise UserError(_("Only draft journal entries can be cancelled."))
 
+        self.line_ids.remove_move_reconcile()
         self.payment_ids.state = "canceled"
         self.write({'auto_post': 'no', 'state': 'cancel'})
 

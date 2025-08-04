@@ -141,7 +141,7 @@ class MailThread(models.AbstractModel):
     )
     message_ids = fields.One2many(
         'mail.message', 'res_id', string='Messages',
-        domain=lambda self: [('message_type', '!=', 'user_notification')], auto_join=True)
+        domain=lambda self: [('message_type', '!=', 'user_notification')], bypass_search_access=True)
     has_message = fields.Boolean(compute="_compute_has_message", search="_search_has_message", store=False)
     message_needaction = fields.Boolean(
         'Action Needed',
@@ -1973,7 +1973,7 @@ class MailThread(models.AbstractModel):
             self.ensure_one()
         return self._partner_find_from_emails(
             {self: emails}, avoid_alias=avoid_alias, filter_found=filter_found, additional_values=additional_values, no_create=no_create
-        )[self._origin.id]
+        )[self.id]
 
     def _partner_find_from_emails(self, records_emails, avoid_alias=True, ban_emails=None,
                                   filter_found=None, additional_values=None, no_create=False):
@@ -3319,9 +3319,8 @@ class MailThread(models.AbstractModel):
                 ]
             )
             for user in users:
-                Store(
+                Store(bus_channel=user).add(
                     message.with_user(user).with_context(allowed_company_ids=[]),
-                    bus_channel=user,
                     msg_vals=msg_vals,
                     add_followers=True,
                     followers=followers,
@@ -4780,22 +4779,25 @@ class MailThread(models.AbstractModel):
             Store.Many("partner_ids", ["avatar_128", "name"]),
             "pinned_at",
             "write_date",
+            *message._get_store_linked_messages_fields(),
         ]
         if body is not None:
             # sudo: mail.message.translation - discarding translations of message after editing it
             self.env["mail.message.translation"].sudo().search([("message_id", "=", message.id)]).unlink()
             res.append({"translationValue": False})
-        Store(message, res, bus_channel=message._bus_channel()).bus_send()
+        Store(bus_channel=message._bus_channel()).add(message, res).bus_send()
 
     # ------------------------------------------------------
     # STORE
     # ------------------------------------------------------
 
     def _thread_to_store(self, store: Store, fields, *, request_list=None):
+        is_request = request_list is not None
+        request_list = request_list or []
         store.add_records_fields(self, fields, as_thread=True)
         for thread in self:
             res = {}
-            if request_list:
+            if is_request:
                 res["hasReadAccess"] = True
                 res["hasWriteAccess"] = False
                 res["canPostOnReadonly"] = self._mail_post_access == "read"
@@ -4805,16 +4807,18 @@ class MailThread(models.AbstractModel):
                 except AccessError:
                     pass
             if (
-                request_list
-                and "activities" in request_list
+               "activities" in request_list
                 and isinstance(self.env[self._name], self.env.registry["mail.activity.mixin"])
             ):
                 res["activities"] = Store.Many(thread.with_context(active_test=True).activity_ids)
-            if request_list and "attachments" in request_list:
+            if "attachments" in request_list:
                 res["attachments"] = Store.Many(thread._get_mail_thread_data_attachments())
                 res["areAttachmentsLoaded"] = True
                 res["isLoadingAttachments"] = False
-            if request_list and "followers" in request_list:
+            if "contact_fields" in request_list:
+                res["primary_email_field"] = thread._mail_get_primary_email_field()
+                res["partner_fields"] = thread._mail_get_partner_fields()
+            if "followers" in request_list:
                 res["followersCount"] = self.env["mail.followers"].search_count(
                     [("res_id", "=", thread.id), ("res_model", "=", self._name)]
                 )
@@ -4838,13 +4842,13 @@ class MailThread(models.AbstractModel):
                     ]
                 )
                 thread._message_followers_to_store(store, filter_recipients=True, reset=True)
-            if request_list and "display_name" in request_list:
+            if "display_name" in request_list:
                 res["display_name"] = thread.display_name
-            if request_list and "scheduledMessages" in request_list:
+            if "scheduledMessages" in request_list:
                 res["scheduledMessages"] = Store.Many(self.env['mail.scheduled.message'].search([
                     ['model', '=', self._name], ['res_id', '=', thread.id]
                 ]))
-            if request_list and "suggestedRecipients" in request_list:
+            if "suggestedRecipients" in request_list:
                 res["suggestedRecipients"] = thread._message_get_suggested_recipients(
                     reply_discussion=True, no_create=True,
                 )

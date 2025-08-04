@@ -1197,7 +1197,7 @@ class TestOrmAttachmentHost(models.Model):
     _description = 'Attachment Host'
 
     attachment_ids = fields.One2many(
-        'test_orm.attachment', 'res_id', auto_join=True,
+        'test_orm.attachment', 'res_id', bypass_search_access=True,
         domain=lambda self: [('res_model', '=', self._name)],
     )
 
@@ -1649,6 +1649,41 @@ class TestOrmComputeMember(models.Model):
     def _search_container_context(self, operator, value):
         field_name = 'container_super_id' if self.env.user._is_superuser() else 'container_id'
         return [(field_name, operator, value)]
+
+
+class TestOrmComputeCreator(models.Model):
+    """ This model has a computed field that creates a new record. """
+    _name = 'test_orm.compute.creator'
+    _description = 'test_orm.compute.creator'
+
+    name = fields.Char()
+    created_id = fields.Many2one('test_orm.compute.created', compute='_compute_created', store=True)
+
+    @api.depends('name')
+    def _compute_created(self):
+        model = self.env['test_orm.compute.created']
+        for record in self:
+            record.created_id = (
+                model.search([('name', '=', record.name)], limit=1)
+                or model.create({'name': record.name})
+            )
+
+
+class TestOrmComputeCreated(models.Model):
+    """ This model has records created by another model, and has a stored
+    computed field. The purpose of that field is to make sure that flushing the
+    field above creates a record here and also flushes its computed field.
+    """
+    _name = 'test_orm.compute.created'
+    _description = 'test_orm.compute.created'
+
+    name = fields.Char()
+    value = fields.Integer(compute='_compute_value', store=True)
+
+    @api.depends('name')
+    def _compute_value(self):
+        for record in self:
+            record.value = len(record.name or "")
 
 
 class TestOrmUser(models.Model):

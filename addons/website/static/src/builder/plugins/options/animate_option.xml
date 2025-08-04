@@ -11,7 +11,7 @@
 <t t-name="website.AnimateOption">
     <t t-if="this.state.isOptionActive">
         <BuilderRow label.translate="Animation">
-            <BuilderSelect t-if="!this.isActiveItem('transformImage')" preview="false">
+            <BuilderSelect t-if="!this.isActiveItem('transform_image')" preview="false">
                 <BuilderSelectItem action="'setAnimationMode'" actionValue="''"
                             classAction="''"
                             id="'no_animation_opt'"
@@ -81,7 +81,7 @@
         <BuilderContext t-if="this.isActiveItem('animation_on_appearance_opt')">
             <!-- Start After -->
             <BuilderRow label.translate="Start After" level="1">
-                <BuilderNumberInput styleAction="'animation-delay'" action="'forceAnimation'" default="0" unit="'s'" />
+                <BuilderNumberInput styleAction="'animation-delay'" action="'forceAnimation'" unit="'s'" />
             </BuilderRow>
             <!-- Duration -->
             <BuilderRow label.translate="Duration" level="1">

@@ -138,14 +138,13 @@ class DiscussChannelMember(models.Model):
         sessions_to_be_unpinned.write({'unpin_dt': fields.Datetime.now()})
         sessions_to_be_unpinned.channel_id.livechat_end_dt = fields.Datetime.now()
         for member in sessions_to_be_unpinned:
-            Store(
+            Store(bus_channel=member._bus_channel()).add(
                 member.channel_id,
                 {
                     "close_chat_window": True,
                     "is_pinned": False,
                     "livechat_end_dt": fields.Datetime.now(),
                 },
-                bus_channel=member._bus_channel(),
             ).bus_send()
 
     def _to_store_defaults(self, target):
@@ -186,10 +185,14 @@ class DiscussChannelMember(models.Model):
 
     def _get_rtc_invite_members_domain(self, *a, **kw):
         domain = super()._get_rtc_invite_members_domain(*a, **kw)
-        chatbot = self.channel_id.chatbot_current_step_id.chatbot_script_id
-        if self.channel_id.channel_type == "livechat" and chatbot:
-            domain &= Domain("partner_id", "!=", chatbot.operator_partner_id.id)
+        if self.channel_id.channel_type == "livechat":
+            domain &= Domain("partner_id", "not in", self._get_excluded_rtc_members_partner_ids())
         return domain
+
+    def _get_excluded_rtc_members_partner_ids(self):
+        chatbot = self.channel_id.chatbot_current_step_id.chatbot_script_id
+        excluded_partner_ids = [chatbot.operator_partner_id.id] if chatbot else []
+        return excluded_partner_ids
 
     def _get_html_link_title(self):
         if self.channel_id.channel_type == "livechat" and self.partner_id.user_livechat_username:

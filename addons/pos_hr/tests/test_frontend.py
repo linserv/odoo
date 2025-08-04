@@ -52,8 +52,14 @@ class TestPosHrHttpCommon(TestPointOfSaleHttpCommon):
             "company_id": cls.env.company.id,
         })
 
+        cls.emp4 = cls.env['hr.employee'].create({
+            'name': 'Test Employee 4',
+            "company_id": cls.env.company.id,
+        })
+
         cls.main_pos_config.write({
-            'basic_employee_ids': [Command.link(cls.emp1.id), Command.link(cls.emp2.id), Command.link(cls.emp3.id)]
+            'basic_employee_ids': [Command.link(cls.emp1.id), Command.link(cls.emp2.id), Command.link(cls.emp3.id)],
+            'minimal_employee_ids': [Command.link(cls.emp4.id)],
         })
 
 
@@ -154,3 +160,54 @@ class TestUi(TestPosHrHttpCommon):
         order = self.main_pos_config.current_session_id.order_ids[0]
         self.assertEqual(order.cashier, "Test Employee 3")
         self.assertEqual(order.employee_id.display_name, "Test Employee 3")
+
+    def test_minimal_employee_refund(self):
+        minimal_emp = self.env['hr.employee'].create({
+            'name': 'Minimal Employee',
+            "company_id": self.env.company.id,
+        })
+        self.main_pos_config.update({
+            'minimal_employee_ids': [(6, 0, minimal_emp.ids)],
+        })
+        self.main_pos_config.with_user(self.pos_admin).open_ui()
+        current_session = self.main_pos_config.current_session_id
+        current_session.set_opening_control(0, None)
+        order = self.env['pos.order'].create({
+            'company_id': self.env.company.id,
+            'session_id': current_session.id,
+            'partner_id': self.partner_a.id,
+            'pricelist_id': self.partner_a.property_product_pricelist.id,
+            'lines': [
+                Command.create({
+                    'product_id': self.product_a.id,
+                    'qty': 1,
+                    'price_subtotal': 100.0,
+                    'price_subtotal_incl': 100.0,
+                }),
+            ],
+            'amount_tax': 0.0,
+            'amount_total': 100.0,
+            'amount_paid': 0.0,
+            'amount_return': 0.0,
+        })
+
+        payment_context = {"active_ids": order.ids, "active_id": order.id}
+        order_payment = self.env['pos.make.payment'].with_context(**payment_context).create({
+            'amount': 100,
+            'payment_method_id': self.bank_payment_method.id
+        })
+        order_payment.with_context(**payment_context).check()
+        self.start_pos_tour("test_minimal_employee_refund", login="pos_admin")
+
+    def test_cost_and_margin_visibility(self):
+        self.product_a.available_in_pos = True
+        self.main_pos_config.write({
+            'is_margins_costs_accessible_to_every_user': True,
+        })
+        self.main_pos_config.with_user(self.pos_admin).open_ui()
+
+        self.start_tour(
+            "/pos/ui?config_id=%d" % self.main_pos_config.id,
+            "test_cost_and_margin_visibility",
+            login="pos_admin",
+        )

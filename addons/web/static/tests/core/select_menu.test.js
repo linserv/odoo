@@ -975,7 +975,7 @@ test("Choices are updated and filtered when props change", async () => {
     expect(".o_select_menu_toggler").toHaveValue("Hello");
 
     await open();
-    expect(".o_select_menu_menu").toHaveText("Coucou\nHello");
+    expect(queryAllTexts(".o_select_menu_item")).toEqual(["Coucou", "Hello"]);
 
     // edit the input, to trigger onInput and update the props
     await editInput("aft");
@@ -985,7 +985,7 @@ test("Choices are updated and filtered when props change", async () => {
     expect(".o_select_menu_toggler").toHaveValue("Good afternoon");
 
     await open();
-    expect(".o_select_menu_menu").toHaveText("Coucou\nGood afternoon");
+    expect(queryAllTexts(".o_select_menu_item")).toEqual(["Coucou", "Good afternoon"]);
 });
 
 test("SelectMenu group items only after being opened", async () => {
@@ -1102,6 +1102,34 @@ test("search value is cleared when reopening the menu", async () => {
     expect(".o_select_menu input").toHaveValue("");
 });
 
+test("Groups can be used without choices", async () => {
+    class Parent extends Component {
+        static props = ["*"];
+        static components = { SelectMenu };
+        static template = xml`
+            <SelectMenu choices="choices" groups="groups" />
+        `;
+        setup() {
+            this.choices = [{ label: "Hello", value: "hello" }];
+            this.groups = [
+                { label: "Group A" },
+                {
+                    label: "Subgroup 1",
+                    choices: [
+                        { label: "Option I", value: "optionI" },
+                        { label: "Option II", value: "optionII" },
+                    ],
+                },
+                { label: "Subgroup 2", choices: [] },
+            ];
+        }
+    }
+    await mountSingleApp(Parent);
+    await open();
+    expect(".o_select_menu_group").toHaveCount(2);
+    expect(".o_select_menu_item").toHaveCount(3);
+});
+
 test("Can add custom data to choices", async () => {
     class Parent extends Component {
         static props = ["*"];
@@ -1198,4 +1226,32 @@ test("Fetch choices", async () => {
     await open();
     await editInput("test");
     expect(queryAllTexts(".o_select_menu_item")).toEqual(["test"]);
+});
+
+test.tags("mobile");
+test("In the BottomSheet, a 'Clear' button is present", async () => {
+    class MyParent extends Component {
+        static props = ["*"];
+        static components = { SelectMenu };
+        static template = xml`
+            <SelectMenu
+                choices="choices"
+                value="'test'"
+                onSelect.bind="this.onSelect"
+            />
+        `;
+        setup() {
+            this.state = useState({ value: "hello" });
+            this.choices = [{ label: "Test", value: "test" }];
+        }
+        onSelect(value) {
+            expect.step("Cleared");
+            expect(value).toBe(null);
+        }
+    }
+    await mountSingleApp(MyParent);
+    await contains(".o_select_menu_toggler").click();
+    expect(".o_select_menu_menu .o_clear_button").toHaveCount(1);
+    await contains(".o_select_menu_menu .o_clear_button").click();
+    expect.verifySteps(["Cleared"]);
 });

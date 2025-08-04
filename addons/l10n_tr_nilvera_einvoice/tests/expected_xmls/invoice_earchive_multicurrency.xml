@@ -11,6 +11,7 @@
   <cbc:Note>3 products</cbc:Note>
   <cbc:Note>YALNIZ : ALTIBINYÜZYIRMIDÖRT TRY SEKSEN KURUS</cbc:Note>
   <cbc:Note>YALNIZ : YÜZELLIÜÇ USD ONIKI CENTS</cbc:Note>
+  <cbc:Note>KUR : 40.000000 TL</cbc:Note>
   <cbc:DocumentCurrencyCode>USD</cbc:DocumentCurrencyCode>
   <cbc:PricingCurrencyCode>USD</cbc:PricingCurrencyCode>
   <cbc:LineCountNumeric>4</cbc:LineCountNumeric>
@@ -45,7 +46,7 @@
         <cbc:RegistrationName>company_1_data</cbc:RegistrationName>
         <cbc:CompanyID>3297552117</cbc:CompanyID>
         <cac:TaxScheme>
-          <cbc:ID>NOT_EU_VAT</cbc:ID>
+          <cbc:Name>Ulus</cbc:Name>
         </cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
@@ -82,7 +83,7 @@
         <cbc:RegistrationName>partner_1</cbc:RegistrationName>
         <cbc:CompanyID>17291716060</cbc:CompanyID>
         <cac:TaxScheme>
-          <cbc:ID>NOT_EU_VAT</cbc:ID>
+          <cbc:Name>Ulus</cbc:Name>
         </cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
@@ -108,6 +109,11 @@
       <cbc:ID>TR0123456789</cbc:ID>
     </cac:PayeeFinancialAccount>
   </cac:PaymentMeans>
+  <cac:AllowanceCharge>
+    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
+    <cbc:AllowanceChargeReason>Discount</cbc:AllowanceChargeReason>
+    <cbc:Amount currencyID="USD">18.00</cbc:Amount>
+  </cac:AllowanceCharge>
   <cac:PricingExchangeRate>
     <cbc:SourceCurrencyCode>USD</cbc:SourceCurrencyCode>
     <cbc:TargetCurrencyCode>TRY</cbc:TargetCurrencyCode>
@@ -143,7 +149,7 @@
     <cbc:LineExtensionAmount currencyID="USD">132.00</cbc:LineExtensionAmount>
     <cbc:TaxExclusiveAmount currencyID="USD">132.00</cbc:TaxExclusiveAmount>
     <cbc:TaxInclusiveAmount currencyID="USD">153.12</cbc:TaxInclusiveAmount>
-    <cbc:AllowanceTotalAmount currencyID="USD">0.00</cbc:AllowanceTotalAmount>
+    <cbc:AllowanceTotalAmount currencyID="USD">18.00</cbc:AllowanceTotalAmount>
     <cbc:PayableAmount currencyID="USD">153.12</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
   <cac:InvoiceLine>

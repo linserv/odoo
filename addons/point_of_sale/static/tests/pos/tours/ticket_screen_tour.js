@@ -134,22 +134,19 @@ registry.category("web_tour.tours").add("TicketScreenTour", {
             inLeftSide([
                 ...ProductScreen.clickLine("Desk Pad"),
                 ...ProductScreen.selectedOrderlineHasDirect("Desk Pad", "-1"),
-                // Try changing the refund line to positive number.
+                // Try changing the refund line's qty, price, discount but altering of refund line not allowed.
                 // Error popup should show.
                 Numpad.click("2"),
                 Dialog.confirm(),
-                // Change the refund line quantity to -3 -- not allowed
-                // so error popup.
-                ...["+/-", "3"].map(Numpad.click),
+                ...["Price", "2"].map(Numpad.click),
                 Dialog.confirm(),
-                // Change the refund line quantity to -2 -- allowed.
-                ...["+/-", "2"].map(Numpad.click),
-                ...ProductScreen.selectedOrderlineHasDirect("Desk Pad", "-2"),
+                ...["%", "5"].map(Numpad.click),
+                Dialog.confirm(),
             ]),
             // Check if the amount being refunded changed to 2.
             ...ProductScreen.clickRefund(),
             TicketScreen.selectOrder("005"),
-            TicketScreen.toRefundTextContains("Refunding 2.00"),
+            TicketScreen.toRefundTextContains("Refunding 1.00"),
             Chrome.clickRegister(),
             { ...ProductScreen.back(), isActive: ["mobile"] },
             // Pay the refund order.
@@ -161,7 +158,7 @@ registry.category("web_tour.tours").add("TicketScreenTour", {
             // Check refunded quantity.
             ...ProductScreen.clickRefund(),
             TicketScreen.selectOrder("005"),
-            TicketScreen.refundedNoteContains("2.00 Refunded"),
+            TicketScreen.refundedNoteContains("1.00 Refunded"),
         ].flat(),
 });
 
@@ -398,5 +395,25 @@ registry.category("web_tour.tours").add("test_paid_order_with_archived_product_l
             inLeftSide([
                 ...Order.hasLine({ productName: "Archived Product", withClass: ".selected" }),
             ]),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_order_invoice_search", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickDisplayedProduct("Desk Pad"),
+            ProductScreen.clickPartnerButton(),
+            ProductScreen.clickCustomer("Partner Test 1"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.clickPaymentMethod("Bank"),
+            PaymentScreen.clickInvoiceButton(),
+            PaymentScreen.clickValidate(),
+            ReceiptScreen.isShown(),
+            Chrome.clickOrders(),
+            TicketScreen.selectFilter("Paid"),
+            TicketScreen.search("Invoice Number", "00001"),
+            TicketScreen.nthRowContains(1, "001", false),
         ].flat(),
 });

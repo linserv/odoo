@@ -14,10 +14,7 @@ class ProductTemplate(models.Model):
         default=True,
     )
 
-    self_order_visible = fields.Boolean(
-        compute='_compute_self_order_visible',
-        store=True
-    )
+    self_order_visible = fields.Boolean(compute='_compute_self_order_visible')
 
     def _load_pos_self_data_read(self, data, config):
         domain = self._load_pos_self_data_domain(data, config)
@@ -44,10 +41,8 @@ class ProductTemplate(models.Model):
         return products
 
     def _process_pos_self_ui_products(self, products):
+        self._add_archived_combinations(products)
         for product in products:
-            product['_archived_combinations'] = []
-            for product_product in self.env['product.product'].with_context(active_test=False).search([('product_tmpl_id', '=', product['id']), ('active', '=', False)]):
-                product['_archived_combinations'].append(product_product.product_template_attribute_value_ids.ids)
             product['image_128'] = bool(product['image_128'])
 
     @api.model
@@ -67,12 +62,10 @@ class ProductTemplate(models.Model):
             if not record.available_in_pos:
                 record.self_order_available = False
 
-    @api.depends('pos_categ_ids', 'pos_categ_ids.pos_config_ids.self_ordering_mode')
     def _compute_self_order_visible(self):
-        config_with_self = self.env['pos.config'].search([('self_ordering_mode', '!=', 'nothing')])
-        categ_ids = config_with_self.iface_available_categ_ids.ids
+        active_self_order_configs = self.env['pos.config'].sudo().search_count([('self_ordering_mode', '!=', 'nothing')])
         for product in self:
-            product.self_order_visible = any(p_cat_id in categ_ids for p_cat_id in product.pos_categ_ids.ids)
+            product.self_order_visible = bool(active_self_order_configs)
 
     def write(self, vals):
         if 'available_in_pos' in vals:
@@ -120,9 +113,13 @@ class ProductProduct(models.Model):
         config_self = self.env['pos.config'].sudo().search([('self_ordering_mode', '!=', 'nothing')])
         for config in config_self:
             if config.current_session_id and config.access_token:
-                config._notify('PRODUCT_CHANGED', {
-                    'product.product': self.read(self._load_pos_self_data_fields(config), load=False)
-                })
+                records = self.env["product.template"].load_product_from_pos(config.id, [('id', '=', self.product_tmpl_id.id)])
+                payload = {}
+                self_models = self.env["pos.config"]._load_self_data_models()
+                for model in records:
+                    if model in self_models:
+                        payload[model] = records[model]
+                config._notify('PRODUCT_CHANGED', payload)
 
     def _can_return_content(self, field_name=None, access_token=None):
         if field_name == "image_512" and self.sudo().self_order_available:

@@ -4,6 +4,7 @@
 from unittest.mock import patch
 
 from odoo.addons.mail.tests.common import MailCommon
+from odoo.exceptions import UserError
 from odoo.tests import tagged, users
 from odoo.tools import config, mute_logger
 
@@ -80,7 +81,7 @@ class TestIrMailServer(MailCommon):
         ]:
             with self.subTest(mail_values=mail_values, smtp_to_lst=smtp_to_lst):
                 with self.mock_smtplib_connection():
-                    smtp_session = mail_server.connect(smtp_from=mail_from)
+                    smtp_session = mail_server._connect__(smtp_from=mail_from)
                     message = self._build_email(mail_from=mail_from, **mail_values)
                     mail_server.send_email(message, smtp_session=smtp_session)
 
@@ -122,7 +123,7 @@ class TestIrMailServer(MailCommon):
                     self.env.company.alias_domain_id = self.mail_alias_domain
                 else:
                     self.env.company.alias_domain_id = False
-                message = self.env["ir.mail_server"].build_email(
+                message = self.env["ir.mail_server"]._build_email__(
                     False, "recipient@example.com", "Subject",
                     "The body of an email",
                 )
@@ -174,7 +175,7 @@ class TestIrMailServer(MailCommon):
                 with self.subTest(mail_from=mail_from, provide_smtp=provide_smtp):
                     with self.mock_smtplib_connection():
                         if provide_smtp:
-                            smtp_session = IrMailServer.connect(smtp_from=mail_from)
+                            smtp_session = IrMailServer._connect__(smtp_from=mail_from)
                             message = self._build_email(mail_from=mail_from)
                             IrMailServer.send_email(message, smtp_session=smtp_session)
                         else:
@@ -319,7 +320,7 @@ class TestIrMailServer(MailCommon):
             ], [
                 # A mail server is configured for the email
                 ('specific_user@test.mycompany.com', 'specific_user@test.mycompany.com', self.mail_server_user),
-                # No mail server are configured for the email address, so it will use the
+                # No mail server is configured for the email address, so it will use the
                 # notifications email instead and encapsulate the old email
                 (f'{self.default_from}@{self.alias_domain}', f'"Name" <{self.default_from}@{self.alias_domain}>', self.mail_server_notification),
                 # same situation, but the original email has no name part
@@ -334,7 +335,7 @@ class TestIrMailServer(MailCommon):
                 with self.subTest(mail_from=mail_from):
                     with self.mock_smtplib_connection():
                         if provide_smtp:
-                            smtp_session = IrMailServer.connect(smtp_from=mail_from)
+                            smtp_session = IrMailServer._connect__(smtp_from=mail_from)
                             message = self._build_email(mail_from=mail_from)
                             IrMailServer.send_email(message, smtp_session=smtp_session)
                         else:
@@ -358,7 +359,7 @@ class TestIrMailServer(MailCommon):
         for provide_smtp in [False, True]:
             with self.mock_smtplib_connection():
                 if provide_smtp:
-                    smtp_session = IrMailServer.connect(smtp_from='"Name" <test@unknown_domain.com>')
+                    smtp_session = IrMailServer._connect__(smtp_from='"Name" <test@unknown_domain.com>')
                     message = self._build_email(mail_from='"Name" <test@unknown_domain.com>')
                     IrMailServer.send_email(message, smtp_session=smtp_session)
                 else:
@@ -387,3 +388,56 @@ class TestIrMailServer(MailCommon):
             message_from='"specific_user" <test@custom_domain.com>',
             from_filter='random.domain',
         )
+
+    @mute_logger('odoo.models.unlink', 'odoo.addons.base.models.ir_mail_server')
+    @patch.dict(config.options, {
+        "from_filter": "cli@example.com",
+        "smtp_server": "example.com",
+    })
+    def test_personal_mail_server(self):
+        """Test that the personal mail servers can not be used as fallback."""
+        IrMailServer = self.env['ir.mail_server']
+        self.env['ir.mail_server'].search([]).from_filter = "random.domain"
+        self.mail_alias_domain.default_from = 'test'
+        self.mail_alias_domain.name = 'custom_domain.com'
+
+        # Sanity check, no owner so it can be used as fallback
+        (self.env['ir.mail_server'].search([]) - self.mail_server_user).unlink()
+        self.mail_server_user.write({
+            'from_filter': 'user@custom_domain.com',
+            'owner_user_id': False,
+        })
+        with self.mock_smtplib_connection():
+            message = self._build_email(mail_from='test@custom_domain.com')
+            IrMailServer.send_email(message)
+
+        self.connect_mocked.assert_called_once()
+        self.assertSMTPEmailsSent(
+            smtp_from='test@custom_domain.com',
+            message_from='test@custom_domain.com',
+            from_filter='user@custom_domain.com',
+        )
+
+        # Check that even if there is no other mail server,
+        # we don't use the mail server having an owner as fallback
+        # (to avoid leaking outgoing emails)
+        self.mail_server_user.write({
+            'from_filter': 'user@custom_domain.com',
+            'owner_user_id': self.env.user.id,
+        })
+        with self.mock_smtplib_connection():
+            message = self._build_email(mail_from='test@custom_domain.com')
+            IrMailServer.send_email(message)
+
+        self.connect_mocked.assert_called_once()
+        self.assertSMTPEmailsSent(
+            smtp_from='test@custom_domain.com',
+            message_from='test@custom_domain.com',
+            from_filter='cli@example.com',
+        )
+
+        with self.mock_smtplib_connection(), self.assertRaises(UserError):
+            # We can't even force it
+            message = self._build_email(mail_from='test@custom_domain.com')
+            IrMailServer.send_email(message, mail_server_id=self.mail_server_user.id)
+        self.assertFalse(self.emails)

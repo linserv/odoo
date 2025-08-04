@@ -58,10 +58,19 @@ test("basic rendering", async () => {
     await contains(".o-discuss-CallActionList button[aria-label='Disconnect']");
     await click("[title='More']");
     await contains("[title='Raise Hand']");
-    await contains("[title='Enter Full Screen']");
-    // screen sharing not available in mobile OS
+    await contains("[title='Fullscreen']");
+});
+
+test("mobile UI", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
     mockUserAgent("Chrome/0.0.0 Android (OdooMobile; Linux; Android 13; Odoo TestSuite)");
+    await start();
+    await openDiscuss(channelId);
+    await click("[title='Start Call']");
+    await contains(".o-discuss-Call");
     expect(isMobileOS()).toBe(true);
+    await contains(".o-discuss-CallActionList button[aria-label='Deafen']");
     await contains("[title='Share Screen']", { count: 0 });
 });
 
@@ -74,8 +83,7 @@ test("keep the `more` popover active when hovering it", async () => {
     await contains(".o-discuss-Call");
     await contains(".o-discuss-CallActionList");
     await click("[title='More']");
-    const enterFullScreenSelector =
-        ".o-discuss-CallActionList-dropdownItem[title='Enter Full Screen']";
+    const enterFullScreenSelector = ".o-discuss-CallActionList-dropdownItem[title='Fullscreen']";
     await contains(enterFullScreenSelector);
     await hover(queryFirst(enterFullScreenSelector));
     await contains(enterFullScreenSelector);
@@ -313,7 +321,7 @@ test("'Start a meeting' in mobile", async () => {
     await start();
     await openDiscuss();
     await contains("button.active", { text: "Inbox" });
-    await click("button", { text: "Chat" });
+    await click("button", { text: "Chats" });
     await click("button", { text: "Start a meeting" });
     await click(".o-discuss-ChannelInvitation-selectable", { text: "Partner 2" });
     await click("button:not([disabled])", { text: "Invite to Group Chat" });
@@ -524,6 +532,7 @@ test("Use saved volume settings", async () => {
     await contains(".o-discuss-CallContextMenu");
     const rangeInput = queryFirst(".o-discuss-CallContextMenu input[type='range']");
     expect(rangeInput.value).toBe(expectedVolume.toString());
+    rangeInput.dispatchEvent(new Event("change")); // to trigger the volume change
     await click(".o-discuss-CallActionList button[aria-label='Disconnect']");
 });
 

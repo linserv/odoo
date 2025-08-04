@@ -31,8 +31,8 @@ messageActionsRegistry
     .add("reply-all", {
         condition: (component) => component.props.message.canReplyAll(component.props.thread),
         icon: "fa fa-reply",
-        title: _t("Reply All"),
-        onClick: async (component) => {
+        name: _t("Reply All"),
+        onSelected: async (component) => {
             const message = component.props.message;
             const thread = component.props.thread;
             const recipients = await rpc("/mail/thread/recipients", {
@@ -41,7 +41,7 @@ messageActionsRegistry
                 message_id: message.id,
             });
             const recipientIds = recipients.map((r) => r.id);
-            const emailFrom = message.author?.email || message.email_from;
+            const emailFrom = message.author_id?.email || message.email_from;
             const [name, email] = parseEmail(emailFrom);
             const datetime = _t("%(date)s at %(time)s", {
                 date: message.datetime.toFormat("ccc, MMM d, yyyy"),
@@ -67,10 +67,10 @@ messageActionsRegistry
     .add("forward", {
         condition: (component) => component.props.message.canForward(component.props.thread),
         icon: "fa fa-share",
-        title: _t("Forward"),
-        onClick: async (component) => {
+        name: _t("Forward"),
+        onSelected: async (component) => {
             const message = component.props.message;
-            const emailFrom = message.author?.email || message.email_from;
+            const emailFrom = message.author_id?.email || message.email_from;
             const [name, email] = parseEmail(emailFrom);
             const datetime = _t("%(date)s at %(time)s", {
                 date: message.datetime.toFormat("ccc, MMM d, yyyy"),

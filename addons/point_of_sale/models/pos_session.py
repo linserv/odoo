@@ -98,7 +98,7 @@ class PosSession(models.Model):
     def write(self, vals):
         if vals.get('state') == 'closed':
             for record in self:
-                record.config_id._notify(('CLOSING_SESSION', {'login_number': self.env.context.get('login_number', False), 'session_id': self.id}))
+                record.config_id._notify(('CLOSING_SESSION', {'login_number': self.env.context.get('login_number', False), 'session_id': record.id}))
         return super().write(vals)
 
     @api.model
@@ -141,7 +141,7 @@ class PosSession(models.Model):
             'pos.category', 'pos.bill', 'res.company', 'account.tax', 'account.tax.group', 'product.template', 'product.product', 'product.attribute', 'product.attribute.custom.value',
             'product.template.attribute.line', 'product.template.attribute.value', 'product.template.attribute.exclusion', 'product.combo', 'product.combo.item', 'res.users', 'res.partner', 'product.uom',
             'decimal.precision', 'uom.uom', 'res.country', 'res.country.state', 'res.lang', 'product.category', 'product.pricelist', 'product.pricelist.item',
-            'account.cash.rounding', 'account.fiscal.position', 'stock.picking.type', 'res.currency', 'pos.note', 'product.tag', 'ir.module.module']
+            'account.cash.rounding', 'account.fiscal.position', 'stock.picking.type', 'res.currency', 'pos.note', 'product.tag', 'ir.module.module', 'account.move']
 
     @api.model
     def _load_pos_data_domain(self, data, config):
@@ -671,10 +671,10 @@ class PosSession(models.Model):
     def _get_diff_account_move_ref(self, payment_method):
         return _('Closing difference in %(payment_method)s (%(session)s)', payment_method=payment_method.name, session=self.name)
 
-    def _get_diff_vals(self, payment_method_id, diff_amount):
+    def _get_diff_vals(self, payment_method_id, diff_amount, outstanding_account=False):
         payment_method = self.env['pos.payment.method'].browse(payment_method_id)
         diff_compare_to_zero = self.currency_id.compare_amounts(diff_amount, 0)
-        source_account = payment_method.outstanding_account_id
+        source_account = payment_method.outstanding_account_id or outstanding_account
         destination_account = self.env['account.account']
 
         if (diff_compare_to_zero > 0):
@@ -1125,7 +1125,7 @@ class PosSession(models.Model):
         destination_account = self._get_receivable_account(payment_method)
 
         account_payment = self.env['account.payment'].with_context(pos_payment=True).create({
-            'amount': abs(amounts['amount']) + diff_amount,
+            'amount': abs(amounts['amount']),
             'journal_id': payment_method.journal_id.id,
             'force_outstanding_account_id': outstanding_account.id,
             'destination_account_id': destination_account.id,
@@ -1157,7 +1157,7 @@ class PosSession(models.Model):
         return account_payment.move_id.line_ids.filtered(lambda line: line.account_id == self._get_receivable_account(payment_method))
 
     def _apply_diff_on_account_payment_move(self, account_payment, payment_method, diff_amount):
-        diff_vals = self._get_diff_vals(payment_method.id, diff_amount)
+        diff_vals = self._get_diff_vals(payment_method.id, diff_amount, account_payment.outstanding_account_id)
         if not diff_vals:
             return
         source_vals, dest_vals = diff_vals
@@ -1173,6 +1173,9 @@ class PosSession(models.Model):
                     'credit': new_balance_compare_to_zero < 0 and -new_balance or 0.0
                 })
             ]
+        })
+        account_payment.write({
+            'amount': abs(new_balance),
         })
         account_payment.move_id.action_post()
 
@@ -1735,9 +1738,12 @@ class PosSession(models.Model):
             return
         self.state = 'opened'
         self.start_at = fields.Datetime.now()
-        self.name = self.config_id.name + self.env['ir.sequence'].with_context(
+
+        sequence = self.env['ir.sequence'].with_context(
             company_id=self.config_id.company_id.id
-        ).next_by_code('pos.session') + (self.name if self.name != '/' else '')
+        ).search([('code', '=', 'pos.session'), ('company_id', 'in', [self.config_id.company_id.id, False])], order='company_id', limit=1)
+
+        self.name = (self.config_id.name if sequence.prefix == '/' else '') + sequence.next_by_code('pos.session') + (self.name if self.name != '/' else '')
 
         cash_payment_method_ids = self.config_id.payment_method_ids.filtered(lambda pm: pm.is_cash_count)
         if cash_payment_method_ids:

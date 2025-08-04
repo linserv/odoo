@@ -1,5 +1,5 @@
 import { Builder } from "@html_builder/builder";
-import { BuilderOptionsPlugin } from "@html_builder/core/builder_options_plugin_translate";
+import { BuilderOptionsTranslationPlugin } from "@html_builder/core/builder_options_plugin_translate";
 import { CORE_PLUGINS, MAIN_PLUGINS } from "@html_builder/core/core_plugins";
 import { DisableSnippetsPlugin } from "@html_builder/core/disable_snippets_plugin_translation";
 import { OperationPlugin } from "@html_builder/core/operation_plugin";
@@ -10,9 +10,11 @@ import { removePlugins } from "@html_builder/utils/utils";
 import { closestElement } from "@html_editor/utils/dom_traversal";
 import { Component } from "@odoo/owl";
 import { registry } from "@web/core/registry";
+import { useService } from "@web/core/utils/hooks";
 import { HighlightPlugin } from "./plugins/highlight/highlight_plugin";
 import { PopupVisibilityPlugin } from "./plugins/popup_visibility_plugin";
 import { SaveTranslationPlugin } from "./plugins/save_translation_plugin";
+import { TranslateLinkInlinePlugin } from "./plugins/translate_link_inline_plugin";
 import { TranslationPlugin } from "./plugins/translation_plugin";
 import { WebsiteVisibilityPlugin } from "./plugins/website_visibility_plugin";
 import { EditInteractionPlugin } from "./plugins/edit_interaction_plugin";
@@ -20,9 +22,11 @@ import { AnimateOptionPlugin } from "./plugins/options/animate_option_plugin";
 import { BuilderComponentPlugin } from "@html_builder/core/builder_component_plugin";
 import { BuilderActionsPlugin } from "@html_builder/core/builder_actions_plugin";
 import { CoreBuilderActionPlugin } from "@html_builder/core/core_builder_action_plugin";
+import { CarouselOptionTranslationPlugin } from "./plugins/carousel_option_translation_plugin";
+import { ThemeTab } from "./plugins/theme/theme_tab";
 
 const TRANSLATION_PLUGINS = [
-    BuilderOptionsPlugin,
+    BuilderOptionsTranslationPlugin,
     BuilderActionsPlugin,
     BuilderComponentPlugin,
     CoreBuilderActionPlugin,
@@ -32,12 +36,14 @@ const TRANSLATION_PLUGINS = [
     VisibilityPlugin,
     PopupVisibilityPlugin,
     SaveTranslationPlugin,
+    TranslateLinkInlinePlugin,
     TranslationPlugin,
     WebsiteVisibilityPlugin,
     AnimateOptionPlugin,
     HighlightPlugin,
     OperationPlugin,
     EditInteractionPlugin,
+    CarouselOptionTranslationPlugin,
 ];
 
 export class WebsiteBuilder extends Component {
@@ -47,6 +53,10 @@ export class WebsiteBuilder extends Component {
         translation: { type: Boolean },
         builderProps: { type: Object },
     };
+
+    setup() {
+        this.websiteService = useService("website");
+    }
 
     get builderProps() {
         const builderProps = Object.assign({}, this.props.builderProps);
@@ -91,6 +101,7 @@ export class WebsiteBuilder extends Component {
                 type: editableEl.dataset["oeType"],
             };
         };
+        builderProps.getThemeTab = () => this.websiteService.isDesigner && ThemeTab;
         return builderProps;
     }
 }

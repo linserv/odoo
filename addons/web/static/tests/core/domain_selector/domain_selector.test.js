@@ -152,6 +152,28 @@ test("creating a domain from scratch", async () => {
     expect(SELECTORS.debugArea).toHaveValue(`["&", ("bar", "!=", False), ("bar", "!=", False)]`);
 });
 
+test("creating domain for binary field", async () => {
+    // Add a binary field to the Partner model
+    Partner._fields.image = fields.Binary({
+        string: "Image",
+        searchable: true,
+    });
+
+    await makeDomainSelector({
+        isDebugMode: true,
+    });
+
+    // Add new rule to select field
+    await addNewRule();
+    await openModelFieldSelectorPopover();
+
+    // Find and select the binary field
+    await contains(".o_model_field_selector_popover_item_name:contains('Image')").click();
+
+    // Check that the operator options are limited to 'set' and 'not set'
+    expect(getOperatorOptions()).toEqual(["is set", "is not set"]);
+});
+
 test("building a domain with a datetime", async () => {
     expect.assertions(4);
 
@@ -167,7 +189,7 @@ test("building a domain with a datetime", async () => {
     expect(".o_datetime_input").toHaveCount(1, { message: "there should be a datepicker" });
 
     // The input field should display the date and time in the user's timezone
-    expect(".o_datetime_input").toHaveValue("03/27/2017 16:42");
+    expect(".o_datetime_input").toHaveValue("03/27/2017 16:42:00");
 
     // Change the date in the datepicker
     await contains(".o_datetime_input").click();
@@ -176,7 +198,7 @@ test("building a domain with a datetime", async () => {
     await animationFrame();
 
     // The input field should display the date and time in the user's timezone
-    expect(".o_datetime_input").toHaveValue("03/26/2017 16:42");
+    expect(".o_datetime_input").toHaveValue("03/26/2017 16:42:00");
 });
 
 test("building a domain with an invalid path", async () => {
@@ -289,7 +311,7 @@ test("building a domain with an expression for value", async () => {
 
     expect(getCurrentValue()).toBe("context_today()");
     await clearNotSupported();
-    expect(getCurrentValue()).toBe("04/20/2023 00:00");
+    expect(getCurrentValue()).toBe("04/20/2023 00:00:00");
 });
 
 test("building a domain with an expression in value", async () => {
@@ -1991,7 +2013,7 @@ test("date/datetime edition: switch is_set to other operators", async () => {
 
     await selectOperator(">");
     expect(".o_datetime_input").toHaveCount(1);
-    expect(getCurrentValue()).toBe("04/20/2023 23:59");
+    expect(getCurrentValue()).toBe("04/20/2023 23:59:59");
     expect(getCurrentOperator()).toBe(label(">", "datetime"));
     expect.verifySteps(['[("datetime", ">", "2023-04-20 23:59:59")]']);
 });
@@ -2599,7 +2621,7 @@ test(`datetime: "in range" operator`, async () => {
     await animationFrame();
     expect.verifySteps([
         formatDomain(
-            `["&", ("datetime", ">=", "2023-04-20 00:00:00"), ("datetime", "<=", "2023-04-26 23:59:00")]`
+            `["&", ("datetime", ">=", "2023-04-20 00:00:00"), ("datetime", "<=", "2023-04-26 23:59:59")]`
         ),
     ]);
 

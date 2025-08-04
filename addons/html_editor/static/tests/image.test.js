@@ -72,20 +72,17 @@ test("shape_circle and shape_rounded are mutually exclusive", async () => {
     }
 
     await click(buttons["shape_rounded"]);
-    await animationFrame();
-    expect(buttons["shape_rounded"]).toHaveClass("active");
+    await waitFor(buttons["shape_rounded"] + ".active");
     expect(img).toHaveClass("rounded");
 
     await click(buttons["shape_circle"]);
-    await animationFrame();
-    expect(buttons["shape_circle"]).toHaveClass("active");
+    await waitFor(buttons["shape_circle"] + ".active");
     expect(img).toHaveClass("rounded-circle");
     expect(buttons["shape_rounded"]).not.toHaveClass("active");
     expect(img).not.toHaveClass("rounded");
 
     await click(buttons["shape_rounded"]);
-    await animationFrame();
-    expect(buttons["shape_rounded"]).toHaveClass("active");
+    await waitFor(buttons["shape_rounded"] + ".active");
     expect(img).toHaveClass("rounded");
     expect(buttons["shape_circle"]).not.toHaveClass("active");
     expect(img).not.toHaveClass("rounded-circle");
@@ -117,10 +114,10 @@ test("can add an image description & tooltip", async () => {
     await click(".o-we-toolbar .btn-group[name='image_description'] button");
     await animationFrame();
 
-    expect(".modal-body").toHaveCount(1);
+    expect(".o-we-image-description-popover").toHaveCount(1);
     await contains("input[name='description']").edit("description modified");
     await contains("input[name='tooltip']").edit("tooltip modified");
-    await click(".modal-footer button");
+    await click(".o-we-image-description-popover button");
     await animationFrame();
     expect("img").toHaveAttribute("alt", "description modified");
     expect("img").toHaveAttribute("title", "tooltip modified");
@@ -136,12 +133,12 @@ test("can edit an image description & tooltip", async () => {
     await click(".o-we-toolbar .btn-group[name='image_description'] button");
     await animationFrame();
 
-    expect(".modal-body").toHaveCount(1);
+    expect(".o-we-image-description-popover").toHaveCount(1);
     expect("input[name='description']").toHaveValue("description");
     expect("input[name='tooltip']").toHaveValue("tooltip");
     await contains("input[name='description']").edit("description modified");
     await contains("input[name='tooltip']").edit("tooltip modified");
-    await click(".modal-footer button");
+    await click(".o-we-image-description-popover button");
     await animationFrame();
     expect("img").toHaveAttribute("alt", "description modified");
     expect("img").toHaveAttribute("title", "tooltip modified");
@@ -330,7 +327,9 @@ test("Image transformation disappears on backspace/delete", async () => {
     `);
     click("img.test-image");
     await expectElementCount(".o-we-toolbar", 1);
-    await contains(".o-we-toolbar div[name='image_modifiers'] button[name='image_transform']").click();
+    await contains(
+        ".o-we-toolbar div[name='image_modifiers'] button[name='image_transform']"
+    ).click();
     await expectElementCount(".transfo-container", 1);
     press("backspace");
     await expectElementCount(".transfo-container", 0);
@@ -339,12 +338,13 @@ test("Image transformation disappears on backspace/delete", async () => {
     click("img.test-image");
     await waitFor(".o-we-toolbar");
     await expectElementCount(".o-we-toolbar", 1);
-    await contains(".o-we-toolbar div[name='image_modifiers'] button[name='image_transform']").click();
+    await contains(
+        ".o-we-toolbar div[name='image_modifiers'] button[name='image_transform']"
+    ).click();
     await expectElementCount(".transfo-container", 1);
     press("delete");
     await expectElementCount(".transfo-container", 0);
 });
-
 
 test("Image transformation disappears on character key press", async () => {
     const { editor } = await setupEditor(`
@@ -352,7 +352,9 @@ test("Image transformation disappears on character key press", async () => {
     `);
     click("img.test-image");
     await expectElementCount(".o-we-toolbar", 1);
-    await contains(".o-we-toolbar div[name='image_modifiers'] button[name='image_transform']").click();
+    await contains(
+        ".o-we-toolbar div[name='image_modifiers'] button[name='image_transform']"
+    ).click();
     await expectElementCount(".transfo-container", 1);
     insertText(editor, "a");
     await expectElementCount(".transfo-container", 0);

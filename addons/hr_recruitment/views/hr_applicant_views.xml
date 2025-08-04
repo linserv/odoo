@@ -160,7 +160,7 @@
                         <field name="job_id" invisible="is_pool_applicant"/>
                         <field name="talent_pool_ids" widget="many2many_tags" options="{'color_field': 'color'}" invisible="not is_pool_applicant"/>
                         <field name="user_id" widget="many2one_avatar_user" placeholder="Unassigned"/>
-                        <field name="interviewer_ids" options="{'no_create': True, 'no_create_edit': True}" widget="many2many_avatar_user" invisible="is_pool_applicant" placeholder="Who can access applicants" />
+                        <field name="interviewer_ids" options="{'no_create': True}" widget="many2many_avatar_user" invisible="is_pool_applicant" placeholder="Who can access applicants" />
                         <field name="date_closed" invisible="not date_closed" />
                         <field name="categ_ids" placeholder="e.g. Trainee" widget="many2many_tags" options="{'color_field': 'color', 'no_create_edit': True}"/>
                     </group>
@@ -275,7 +275,7 @@
                 <filter string="Ready for Next Stage" name="done" domain="[('kanban_state', '=', 'done')]"/>
                 <filter string="Blocked" name="blocked" domain="[('kanban_state', '=', 'blocked')]"/>
                 <separator/>
-                <filter string="Directly Available" name="applicant_availability" domain="['|',('availability', '&lt;=', context_today().strftime('%Y-%m-%d')),('availability','=', False)]"/>
+                <filter string="Directly Available" name="applicant_availability" domain="['|',('availability', '&lt;=', 'today'),('availability','=', False)]"/>
                 <separator/>
                 <filter string="Creation Date" name="filter_create" date="create_date"/>
                 <filter string="Last Stage Update" name="filter_date_last_stage_update" date="date_last_stage_update"/>
@@ -289,12 +289,12 @@
                     domain="[('activity_user_id', '=', uid)]"/>
                 <separator invisible="1"/>
                 <filter invisible="1" string="Late Activities" name="activities_overdue"
-                    domain="[('activity_date_deadline', '&lt;', context_today().strftime('%Y-%m-%d'))]"
+                    domain="[('activity_date_deadline', '&lt;', 'today')]"
                     help="Show all records whose next activity date is past"/>
                 <filter invisible="1" string="Today Activities" name="activities_today"
-                    domain="[('activity_date_deadline', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                    domain="[('activity_date_deadline', '=', 'today')]"/>
                 <filter invisible="1" string="Future Activities" name="activities_upcoming_all"
-                    domain="[('activity_date_deadline', '&gt;', context_today().strftime('%Y-%m-%d'))]"/>
+                    domain="[('activity_date_deadline', '&gt;', 'today')]"/>
                 <separator/>
                 <filter invisible="1" string="Running Applicants" name="running_applicant_activities"
                     domain="[('stage_id.hired_stage', '=', False)]"/>

@@ -15,6 +15,7 @@ import { registry } from "@web/core/registry";
 import * as Numpad from "@point_of_sale/../tests/generic_helpers/numpad_util";
 import * as TextInputPopup from "@point_of_sale/../tests/generic_helpers/text_input_popup_util";
 import * as PreparationReceipt from "@point_of_sale/../tests/pos/tours/utils/preparation_receipt_util";
+import * as NumberPopup from "@point_of_sale/../tests/generic_helpers/number_popup_util";
 import { negate } from "@point_of_sale/../tests/generic_helpers/utils";
 
 const ProductScreen = { ...ProductScreenPos, ...ProductScreenResto };
@@ -446,12 +447,16 @@ registry.category("web_tour.tours").add("PreparationPrinterContent", {
             Chrome.startPoS(),
             Dialog.confirm("Open Register"),
             FloorScreen.clickTable("5"),
+            ProductScreen.clickControlButton("Guests"),
+            NumberPopup.enterValue("5"),
+            NumberPopup.isShown("5"),
+            Dialog.confirm(),
             ProductScreen.clickDisplayedProduct("Product Test"),
             Chrome.freezeDateTime(1739370000000),
             Dialog.confirm("Add"),
             ProductScreen.totalAmountIs("10"),
             {
-                content: "Check if order preparation contains always Variant",
+                content: "Check the content of the preparation receipt",
                 trigger: "body",
                 run: async () => {
                     const receipts = await PreparationReceipt.generatePreparationReceipts();
@@ -464,6 +469,11 @@ registry.category("web_tour.tours").add("PreparationPrinterContent", {
                     }
                     if (receipts[0].innerHTML.includes("DUPLICATA!")) {
                         throw new Error("DUPLICATA! should not be present in printed receipt");
+                    }
+
+                    const guestInfo = receipts[0].querySelector(".pos-customer-info");
+                    if (!guestInfo || !guestInfo.innerHTML.includes("Guest: 5")) {
+                        throw new Error("Guest info not found in printed receipt");
                     }
                 },
             },
@@ -687,6 +697,7 @@ registry.category("web_tour.tours").add("test_multiple_preparation_printer_diffe
 registry.category("web_tour.tours").add("test_preset_timing_restaurant", {
     steps: () =>
         [
+            Chrome.freezeDateTime(1749965940000), // June 15, 2025
             Chrome.startPoS(),
             Dialog.confirm("Open Register"),
             FloorScreen.clickNewOrder(),
@@ -702,8 +713,17 @@ registry.category("web_tour.tours").add("test_preset_timing_restaurant", {
             Chrome.clickOrders(),
             TicketScreen.nthRowContains(1, "John"),
             TicketScreen.nthRowContains(1, "Takeaway", false),
+            TicketScreen.nthRowNotContains(1, "06/15/2025", false),
             TicketScreen.nthRowContains(2, "002"),
             TicketScreen.nthRowContains(2, "Eat in", false),
+            Chrome.clickPlanButton(),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.selectPreset("Eat in", "Takeaway"),
+            Chrome.selectPresetDateButton("06/16/2025"),
+            Chrome.selectPresetTimingSlotHour("11:00"),
+            Chrome.clickOrders(),
+            TicketScreen.nthRowContains(3, "06/16/2025", false),
         ].flat(),
 });
 
@@ -768,5 +788,108 @@ registry.category("web_tour.tours").add("test_open_default_register_screen_confi
             Dialog.confirm("Open Register"),
             ProductScreen.clickDisplayedProduct("Coca-Cola"),
             Chrome.endTour(),
+        ].flat(),
+});
+registry.category("web_tour.tours").add("test_transfering_orders", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+
+            // Create a floating order with 3 cola
+            FloorScreen.clickNewOrder(),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.setTab("Cola"),
+            Chrome.clickPlanButton(),
+
+            // Create a floating order with 3 water
+            FloorScreen.clickNewOrder(),
+            ProductScreen.clickDisplayedProduct("Water"),
+            ProductScreen.clickDisplayedProduct("Water"),
+            ProductScreen.clickDisplayedProduct("Water"),
+            ProductScreen.setTab("Water"),
+            Chrome.clickPlanButton(),
+
+            // Create an order on table 5 with 3 minute maid
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickDisplayedProduct("Minute Maid"),
+            ProductScreen.clickDisplayedProduct("Minute Maid"),
+            ProductScreen.clickDisplayedProduct("Minute Maid"),
+            Chrome.clickPlanButton(),
+
+            // Create an order on table 4 with 3 coca-cola
+            FloorScreen.clickTable("4"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            ProductScreen.clickDisplayedProduct("Coca-Cola"),
+            Chrome.clickPlanButton(),
+
+            // Should have 4 orders
+            Chrome.clickOrders(),
+            TicketScreen.nbOrdersIs(4),
+
+            // Transfer floating order to another floating order
+            TicketScreen.selectOrder("Cola"),
+            TicketScreen.loadSelectedOrder(),
+            ProductScreen.clickControlButton("Transfer"),
+            Chrome.clickOrders(),
+            TicketScreen.selectOrder("Water"),
+            ProductScreen.isShown(),
+            ProductScreen.clickLine("Coca-Cola", "3"),
+            ProductScreen.clickLine("Water", "3"),
+            Chrome.clickOrders(),
+            TicketScreen.nbOrdersIs(3),
+
+            // Transfering order from table 5 to table 4
+            Chrome.clickPlanButton(),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickControlButton("Transfer"),
+            FloorScreen.clickTable("4"),
+            ProductScreen.clickLine("Minute Maid", "3"),
+            ProductScreen.clickLine("Coca-Cola", "3"),
+            Chrome.clickOrders(),
+            TicketScreen.nbOrdersIs(2),
+
+            // Transfering order from table to floating order
+            Chrome.clickPlanButton(),
+            FloorScreen.clickTable("4"),
+            ProductScreen.clickControlButton("Transfer"),
+            Chrome.clickOrders(),
+            TicketScreen.selectOrder("Water"),
+            ProductScreen.isShown(),
+            ProductScreen.clickLine("Coca-Cola", "6"),
+            ProductScreen.clickLine("Water", "3"),
+            ProductScreen.clickLine("Minute Maid", "3"),
+            Chrome.clickOrders(),
+            TicketScreen.nbOrdersIs(1),
+
+            // Transfering floating order to empty table
+            TicketScreen.selectOrder("Water"),
+            TicketScreen.loadSelectedOrder(),
+            ProductScreen.clickControlButton("Transfer"),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickLine("Coca-Cola", "6"),
+            ProductScreen.clickLine("Water", "3"),
+            ProductScreen.clickLine("Minute Maid", "3"),
+            Chrome.clickPlanButton(),
+            FloorScreen.orderCountSyncedInTableIs("5", "1"),
+
+            // Create a new floating order and transfer it to filled table
+            FloorScreen.clickNewOrder(),
+            ProductScreen.clickDisplayedProduct("Water"),
+            ProductScreen.setTab("Water2"),
+            Chrome.clickPlanButton(),
+            Chrome.clickOrders(),
+            TicketScreen.selectOrder("Water2"),
+            TicketScreen.loadSelectedOrder(),
+            ProductScreen.clickControlButton("Transfer"),
+            FloorScreen.clickTable("5"),
+            ProductScreen.clickLine("Water", "4"),
+            ProductScreen.clickLine("Coca-Cola", "6"),
+            ProductScreen.clickLine("Minute Maid", "3"),
+            Chrome.clickOrders(),
+            TicketScreen.nbOrdersIs(1),
         ].flat(),
 });

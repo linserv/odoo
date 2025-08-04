@@ -68,7 +68,6 @@ export class PosOrder extends Base {
             screen_data: {},
             selected_orderline_uuid: undefined,
             selected_paymentline_uuid: undefined,
-            locked: this.state !== "draft",
             // Pos restaurant specific to most proper way is to override this
             TipScreen: {
                 inputTipAmount: "",
@@ -81,7 +80,7 @@ export class PosOrder extends Base {
     }
 
     get company() {
-        return this.models["res.company"].getFirst();
+        return this.config.company_id;
     }
 
     get config() {
@@ -116,6 +115,14 @@ export class PosOrder extends Base {
         return this.models["pos.order"].getBy("uuid", this.uiState.splittedOrderUuid);
     }
 
+    get presetDate() {
+        return this.preset_time?.toFormat(localization.dateFormat) || "";
+    }
+
+    get isFutureDate() {
+        return this.preset_time?.startOf("day") > DateTime.now().startOf("day");
+    }
+
     get presetTime() {
         return this.preset_time && this.preset_time.isValid
             ? this.preset_time.toFormat("HH:mm")
@@ -124,10 +131,8 @@ export class PosOrder extends Base {
     get presetDateTime() {
         return this.preset_time?.isValid
             ? this.preset_time.hasSame(this.date_order, "day")
-                ? this.preset_time.toFormat(localization.shortTimeFormat)
-                : this.preset_time.toFormat(
-                      `${localization.dateFormat} ${localization.shortTimeFormat}`
-                  )
+                ? this.preset_time.toFormat(localization.timeFormat)
+                : this.preset_time.toFormat(`${localization.dateFormat} ${localization.timeFormat}`)
             : false;
     }
 
@@ -790,6 +795,10 @@ export class PosOrder extends Base {
 
     getPartnerName() {
         return this.partner_id ? this.partner_id.name : "";
+    }
+
+    getInvoiceNumber() {
+        return this.account_move ? this.account_move.name : "";
     }
 
     getCardHolderName() {

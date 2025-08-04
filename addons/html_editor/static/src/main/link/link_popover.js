@@ -1,3 +1,4 @@
+import { session } from "@web/session";
 import { _t } from "@web/core/l10n/translation";
 import { Component, useState, useRef, useEffect, useExternalListener } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
@@ -9,6 +10,17 @@ import { CheckBox } from "@web/core/checkbox/checkbox";
 const DEFAULT_CUSTOM_TEXT_COLOR = "#714B67";
 const DEFAULT_CUSTOM_FILL_COLOR = "#ffffff";
 
+const isCSSVariable = (color) => color.match(/^o-color-\d$|^\d{3}$/);
+const formatColor = (color) => {
+    if (color.match(/^o-color-\d$/gm)) {
+        return `var(--hb-cp-${color})`;
+    }
+    if (color.match(/^\d{3}$/gm)) {
+        return `var(--${color})`;
+    }
+    return color;
+};
+
 export class LinkPopover extends Component {
     static template = "html_editor.linkPopover";
     static props = {
@@ -19,7 +31,6 @@ export class LinkPopover extends Component {
         onDiscard: Function,
         onRemove: Function,
         onCopy: Function,
-        onClose: Function,
         onEdit: Function,
         getInternalMetaData: Function,
         getExternalMetaData: Function,
@@ -35,10 +46,13 @@ export class LinkPopover extends Component {
         onUpload: { type: Function, optional: true },
         allowCustomStyle: { type: Boolean, optional: true },
         allowTargetBlank: { type: Boolean, optional: true },
+        allowStripDomain: { type: Boolean, optional: true },
+        formatColor: { type: Function, optional: true },
     };
     static defaultProps = {
         canEdit: true,
         canRemove: true,
+        formatColor: formatColor,
     };
     static components = { CheckBox };
     colorsData = [
@@ -76,17 +90,17 @@ export class LinkPopover extends Component {
         this.notificationService = useService("notification");
         this.uploadService = useService("uploadLocalFiles");
 
-        const textContent = cleanZWChars(this.props.linkElement.textContent);
+        const linkElement = this.props.linkElement;
+        const textContent = cleanZWChars(linkElement.textContent);
         const labelEqualsUrl =
-            textContent === this.props.linkElement.getAttribute("href") ||
-            textContent + "/" === this.props.linkElement.getAttribute("href");
-        const computedStyle = this.props.document.defaultView.getComputedStyle(
-            this.props.linkElement
-        );
+            textContent === linkElement.getAttribute("href") ||
+            textContent + "/" === linkElement.getAttribute("href");
+
+        const computedStyle = this.props.document.defaultView.getComputedStyle(linkElement);
         this.state = useState({
             editing: this.props.LinkPopoverState.editing,
             // `.getAttribute("href")` instead of `.href` to keep relative url
-            url: this.props.linkElement.getAttribute("href") || this.deduceUrl(textContent),
+            url: linkElement.getAttribute("href") || this.deduceUrl(textContent),
             label: labelEqualsUrl ? "" : textContent,
             previewIcon: {
                 /** @type {'fa'|'imgSrc'|'mimetype'} */
@@ -99,20 +113,21 @@ export class LinkPopover extends Component {
             imgSrc: "",
             type:
                 this.props.type ||
-                this.props.linkElement.className
+                linkElement.className
                     .match(/btn(-[a-z0-9_-]*)(primary|secondary|custom)/)
                     ?.pop() ||
                 "",
-            linkTarget: this.props.linkElement.target === "_blank" ? "_blank" : "",
+            linkTarget: linkElement.target === "_blank" ? "_blank" : "",
             directDownload: true,
             isDocument: false,
-            buttonSize: this.props.linkElement.className.match(/btn-(sm|lg)/)?.[1] || "",
+            buttonSize: linkElement.className.match(/btn-(sm|lg)/)?.[1] || "",
             buttonShape: this.getButtonShape(),
             customBorderSize: computedStyle.borderWidth.replace("px", "") || "1",
             customBorderStyle: computedStyle.borderStyle || "solid",
             isImage: this.props.isImage,
             showReplaceTitleBanner: this.props.showReplaceTitleBanner,
-            showLabel: !this.props.linkElement.childElementCount,
+            showLabel: !linkElement.childElementCount,
+            stripDomain: true,
         });
 
         this.customTextColorState = useState({
@@ -121,7 +136,12 @@ export class LinkPopover extends Component {
         });
         this.customTextResetPreviewColor = this.customTextColorState.selectedColor;
         this.customFillColorState = useState({
-            selectedColor: computedStyle.backgroundColor || DEFAULT_CUSTOM_FILL_COLOR,
+            selectedColor:
+                (computedStyle.backgroundImage === "none"
+                    ? undefined
+                    : computedStyle.backgroundImage) ||
+                computedStyle.backgroundColor ||
+                DEFAULT_CUSTOM_FILL_COLOR,
             defaultTab: "solid",
         });
         this.customFillResetPreviewColor = this.customFillColorState.selectedColor;
@@ -137,8 +157,13 @@ export class LinkPopover extends Component {
                     refName,
                     {
                         state: this[colorStateRef],
+                        enabledTabs:
+                            colorStateRef === "customFillColorState"
+                                ? ["solid", "custom", "gradient"]
+                                : ["solid", "custom"],
                         getUsedCustomColors: () => [],
                         colorPrefix: "",
+                        themeColorPrefix: "hb-cp-",
                         applyColor: (colorValue) => {
                             this[colorStateRef].selectedColor = colorValue;
                             this[resetValueRef] = colorValue;
@@ -234,6 +259,16 @@ export class LinkPopover extends Component {
         this.state.url = deducedUrl
             ? this.correctLink(deducedUrl)
             : this.correctLink(this.state.url);
+        if (
+            this.props.allowStripDomain &&
+            this.state.stripDomain &&
+            this.isAbsoluteURLInCurrentDomain()
+        ) {
+            const urlObj = new URL(this.state.url, window.location.origin);
+            // Not necessarily equal to window.location.origin
+            // (see isAbsoluteURLInCurrentDomain)
+            this.state.url = this.state.url.replace(urlObj.origin, "");
+        }
     }
     onClickEdit() {
         this.state.editing = true;
@@ -273,27 +308,13 @@ export class LinkPopover extends Component {
         if (ev.key === "Escape") {
             ev.preventDefault();
             ev.stopImmediatePropagation();
-            this.props.onClose();
+            this.onClickApply();
         }
     }
 
     onClickReplaceTitle() {
         this.state.label = this.state.urlTitle;
         this.onClickApply();
-    }
-
-    onClickForceEditMode(ev) {
-        if (this.props.linkElement.href) {
-            const currentUrl = new URL(this.props.linkElement.href);
-            if (
-                browser.location.hostname === currentUrl.hostname &&
-                !currentUrl.pathname.startsWith("/@/")
-            ) {
-                ev.preventDefault();
-                currentUrl.pathname = `/@${currentUrl.pathname}`;
-                browser.open(currentUrl);
-            }
-        }
     }
 
     onClickDirectDownload(checked) {
@@ -306,6 +327,10 @@ export class LinkPopover extends Component {
 
     onClickNewWindow(checked) {
         this.state.linkTarget = checked ? "_blank" : "";
+    }
+
+    onClickStripDomain(checked) {
+        this.state.stripDomain = checked;
     }
 
     /**
@@ -497,7 +522,8 @@ export class LinkPopover extends Component {
 
     get classes() {
         let classes = [...this.props.linkElement.classList]
-            .filter((value) => !value.match(/^(btn.*|rounded-circle|flat)$/))
+            .filter((value) =>
+                !value.match(/^(btn.*|rounded-circle|flat|(text|bg)-(o-color-\d$|\d{3}$))$/))
             .join(" ");
 
         let stylePrefix = "";
@@ -516,6 +542,17 @@ export class LinkPopover extends Component {
         if (this.state.type) {
             classes += ` btn btn-${stylePrefix}${this.state.type}`;
         }
+
+        const textColor = this.customTextColorState.selectedColor;
+        if (isCSSVariable(textColor)) {
+            classes += " text-" + textColor;
+        }
+
+        const fillColor = this.customFillColorState.selectedColor;
+        if (isCSSVariable(fillColor)) {
+            classes += " bg-" + fillColor;
+        }
+
         return classes.trim();
     }
 
@@ -523,10 +560,24 @@ export class LinkPopover extends Component {
         if (!this.props.allowCustomStyle || this.state.type !== "custom") {
             return false;
         }
-        let customStyles = `color: ${this.customTextColorState.selectedColor}; `;
-        customStyles += `background-color: ${this.customFillColorState.selectedColor}; `;
+        let customStyles = "";
+
+        const textColor = this.customTextColorState.selectedColor;
+        if (!isCSSVariable(textColor)) {
+            customStyles += `color: ${textColor}; `;
+        }
+
+        const fillColor = this.customFillColorState.selectedColor;
+        if (!isCSSVariable(fillColor)) {
+            const backgroundProperty = fillColor.includes("gradient")
+                ? "background-image"
+                : "background-color";
+            customStyles += `${backgroundProperty}: ${fillColor}; `;
+        }
+
+        const borderColor = this.customBorderColorState.selectedColor;
         customStyles += `border-width: ${this.state.customBorderSize}px; `;
-        customStyles += `border-color: ${this.customBorderColorState.selectedColor}; `;
+        customStyles += `border-color: ${formatColor(borderColor)}; `;
         customStyles += `border-style: ${this.state.customBorderStyle}; `;
 
         return customStyles;
@@ -552,5 +603,38 @@ export class LinkPopover extends Component {
     }
     isAttachmentUrl() {
         return !!this.state.url.match(/\/web\/content\/\d+/);
+    }
+    /**
+     * Checks if the given URL is using the domain where the content being
+     * edited is reachable, i.e. if this URL should be stripped of its domain
+     * part and converted to a relative URL if put as a link in the content.
+     *
+     * @private
+     * @returns {boolean}
+     */
+    isAbsoluteURLInCurrentDomain() {
+        // First check if it is a relative URL: if it is, we don't want to check
+        // further as we will always leave those untouched.
+        let hasProtocol;
+        try {
+            hasProtocol = !!new URL(this.state.url).protocol;
+        } catch {
+            hasProtocol = false;
+        }
+        if (!hasProtocol) {
+            return false;
+        }
+
+        const urlObj = new URL(this.state.url, window.location.origin);
+        // Chosen heuristic to detect someone trying to enter a link using
+        // its Odoo instance domain. We just suppose it should be a relative
+        // URL (if unexpected behavior, the user can just not enter its Odoo
+        // instance domain but its real domain, or opt-out from the domain
+        // stripping). Mentioning an .odoo.com domain, especially its own
+        // one, is always a bad practice anyway.
+        return (
+            urlObj.origin === window.location.origin ||
+            new RegExp(`^https?://${session.db}\\.odoo\\.com(/.*)?$`).test(urlObj.origin)
+        );
     }
 }

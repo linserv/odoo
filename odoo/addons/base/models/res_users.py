@@ -25,7 +25,7 @@ from odoo.api import SUPERUSER_ID
 from odoo.exceptions import AccessDenied, AccessError, UserError, ValidationError
 from odoo.fields import Command, Domain
 from odoo.http import request, DEFAULT_LANG
-from odoo.tools import is_html_empty, frozendict, reset_cached_properties, SQL
+from odoo.tools import email_domain_extract, is_html_empty, frozendict, reset_cached_properties, SQL
 
 
 _logger = logging.getLogger(__name__)
@@ -211,7 +211,7 @@ class ResUsers(models.Model):
             groups += default_group.implied_ids
         return groups
 
-    partner_id = fields.Many2one('res.partner', required=True, ondelete='restrict', auto_join=True, index=True,
+    partner_id = fields.Many2one('res.partner', required=True, ondelete='restrict', bypass_search_access=True, index=True,
         string='Related Partner', help='Partner-related data of the user')
     login = fields.Char(required=True, help="Used to log into the system")
     password = fields.Char(
@@ -251,6 +251,7 @@ class ResUsers(models.Model):
     # access to the user but not its corresponding partner
     name = fields.Char(related='partner_id.name', inherited=True, readonly=False)
     email = fields.Char(related='partner_id.email', inherited=True, readonly=False)
+    email_domain_placeholder = fields.Char(compute="_compute_email_domain_placeholder")
     phone = fields.Char(related='partner_id.phone', inherited=True, readonly=False)
 
     group_ids = fields.Many2many('res.groups', 'res_groups_users_rel', 'uid', 'gid', string='Groups', default=lambda s: s._default_groups(), help="Groups explicitly assigned to the user")
@@ -399,6 +400,11 @@ class ResUsers(models.Model):
                 )
 
         raise AccessDenied()
+
+    @api.depends_context('uid')
+    def _compute_email_domain_placeholder(self):
+        domain = email_domain_extract(self.env.user.email)
+        self.email_domain_placeholder = _('e.g. %(placeholder)s', placeholder=f'email@{domain}') if domain else _('Email')
 
     def _compute_password(self):
         for user in self:
@@ -801,22 +807,21 @@ class ResUsers(models.Model):
                     _logger.exception("Failed to update web.base.url configuration parameter")
         return auth_info
 
-    @classmethod
+    @api.model
     @tools.ormcache('uid', 'passwd')
-    def check(cls, db, uid, passwd):
-        """Verifies that the given (uid, password) is authorized for the database ``db`` and
+    def _check_uid_passwd(self, uid, passwd):
+        """Verifies that the given (uid, password) is authorized and
            raise an exception if it is not."""
         if not passwd:
             # empty passwords disallowed for obvious security reasons
             raise AccessDenied()
 
-        with contextlib.closing(cls.pool.cursor()) as cr:
-            self = api.Environment(cr, uid, {})[cls._name]
-            with self._assert_can_auth(user=uid):
-                if not self.env.user.active:
-                    raise AccessDenied()
-                credential = {'login': self.env.user.login, 'password': passwd, 'type': 'password'}
-                self._check_credentials(credential, {'interactive': False})
+        with self._assert_can_auth(user=uid):
+            user = self.with_user(uid).env.user
+            if not user.active:
+                raise AccessDenied()
+            credential = {'login': user.login, 'password': passwd, 'type': 'password'}
+            user._check_credentials(credential, {'interactive': False})
 
     def _get_session_token_fields(self):
         return {'id', 'login', 'password', 'active'}

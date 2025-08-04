@@ -18,30 +18,31 @@ const threadStaticPatch = {
         if (data.model !== "discuss.channel" || data.id < 1) {
             return super.getOrFetch(...arguments);
         }
-        const thread = this.insert({ id: data.id, model: data.model });
-        if (thread.fetchChannelInfoState === "fetched") {
+        const thread = this.store.Thread.get({ id: data.id, model: data.model });
+        if (thread?.fetchChannelInfoState === "fetched") {
             return Promise.resolve(thread);
         }
-        if (thread.fetchChannelInfoState === "fetching") {
-            return thread.fetchChannelInfoDeferred;
+        const fetchChannelInfoDeferred = this.store.channelIdsFetchingDeferred.get(data.id);
+        if (fetchChannelInfoDeferred) {
+            return fetchChannelInfoDeferred;
         }
-        thread.fetchChannelInfoState = "fetching";
         const def = new Deferred();
-        thread.fetchChannelInfoDeferred = def;
-        this.store.fetchChannel(thread.id).then(
+        this.store.channelIdsFetchingDeferred.set(data.id, def);
+        this.store.fetchChannel(data.id).then(
             () => {
-                if (thread.exists()) {
+                this.store.channelIdsFetchingDeferred.delete(data.id);
+                const thread = this.store.Thread.get({ id: data.id, model: data.model });
+                if (thread?.exists()) {
                     thread.fetchChannelInfoState = "fetched";
-                    thread.fetchChannelInfoDeferred = undefined;
                     def.resolve(thread);
                 } else {
                     def.resolve();
                 }
             },
             () => {
-                if (thread.exists()) {
-                    thread.fetchChannelInfoState = "not_fetched";
-                    thread.fetchChannelInfoDeferred = undefined;
+                this.store.channelIdsFetchingDeferred.delete(data.id);
+                const thread = this.store.Thread.get({ id: data.id, model: data.model });
+                if (thread?.exists()) {
                     def.reject(thread);
                 } else {
                     def.reject();
@@ -177,9 +178,7 @@ const threadPatch = {
             /** @this {import("models").Thread} */
             compute() {
                 return this.channel_member_ids
-                    .filter((member) =>
-                        this.store.onlineMemberStatuses.includes(member.persona.im_status)
-                    )
+                    .filter((member) => this.store.onlineMemberStatuses.includes(member.im_status))
                     .sort((m1, m2) => this.store.sortMembers(m1, m2)); // FIXME: sort are prone to infinite loop (see test "Display livechat custom name in typing status")
             },
         });
@@ -217,7 +216,7 @@ const threadPatch = {
     /** @returns {import("models").ChannelMember[]} */
     _computeOfflineMembers() {
         return this.channel_member_ids.filter(
-            (member) => !this.store.onlineMemberStatuses.includes(member.persona?.im_status)
+            (member) => !this.store.onlineMemberStatuses.includes(member.im_status)
         );
     },
     get areAllMembersLoaded() {
@@ -230,12 +229,21 @@ const threadPatch = {
             });
         }
         if (this.channel_type === "chat" && this.correspondent) {
-            return this.correspondent.persona.avatarUrl;
+            return this.correspondent.avatarUrl;
         }
         return super.avatarUrl;
     },
     get showCorrespondentCountry() {
         return false;
+    },
+    /** @override */
+    async checkReadAccess() {
+        const res = await super.checkReadAccess();
+        if (!res && this.model === "discuss.channel") {
+            // channel is assumed to be readable if its channel_type is known
+            return this.channel_type;
+        }
+        return res;
     },
     /** @returns {import("models").ChannelMember} */
     computeCorrespondent() {
@@ -322,6 +330,17 @@ const threadPatch = {
         if (this.isChatChannel && this.selfMember?.message_unread_counter_ui) {
             return this.selfMember.message_unread_counter_ui;
         }
+        if (this.discussAppCategory?.id === "channels") {
+            if (this.store.settings.channel_notifications === "no_notif") {
+                return 0;
+            }
+            if (
+                this.store.settings.channel_notifications === "all" &&
+                !this.selfMember?.mute_until_dt
+            ) {
+                return this.selfMember?.message_unread_counter_ui;
+            }
+        }
         return super.importantCounter;
     },
     /** @override */
@@ -394,6 +413,27 @@ const threadPatch = {
         this.selfMember.new_message_separator = message.id + 1;
         this.selfMember.new_message_separator_ui = this.selfMember.new_message_separator;
         this.markedAsUnread = false;
+    },
+    /** @override */
+    open(options) {
+        if (this.model === "discuss.channel") {
+            if (!this.selfMember) {
+                this.store.env.services["bus_service"].addChannel(this.busChannel);
+            }
+            const res = this.openChannel();
+            if (res) {
+                return res;
+            }
+            this.openChatWindow(options);
+            return true;
+        }
+        return super.open(...arguments);
+    },
+    /**
+     * @returns {boolean} true if the channel was opened, false otherwise
+     */
+    openChannel() {
+        return false;
     },
     /** @param {string} body */
     async post(body) {

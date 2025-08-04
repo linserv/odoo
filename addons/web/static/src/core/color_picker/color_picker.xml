@@ -45,19 +45,22 @@
                 <t t-foreach="[1, 2, 3, 4, 5]" t-as="number" t-key="number">
                     <t t-set="className" t-value="'o_cc' + number"/>
                     <t t-set="activeClass" t-value="this.props.state.selectedColorCombination === className ? 'selected' : ''"/>
-                    <button
-                            type="button"
-                            class="w-100 p-0 border-0 color-combination-button"
-                            t-att-class="[className, activeClass].join(' ')"
-                            t-att-data-color="className"
-                            t-attf-title="Preset {{number}}">
-                        <div inert="" class="p-2 d-flex justify-content-between align-items-center">
-                            <h1 class="m-0 fs-4">Title</h1>
-                            <p class="m-0 flex-grow-1">Text</p>
-                            <span class="py-1 px-1 rounded-1 fs-6 btn btn-sm lh-1 btn btn-sm me-1 d-flex flex-column justify-content-center btn-primary"><small>Button</small></span>
-                            <span class="py-1 px-1 rounded-1 fs-6 btn btn-sm lh-1 btn btn-sm d-flex flex-column justify-content-center btn-secondary"><small>Button</small></span>
-                        </div>
-                    </button>
+                    <div class="d-flex align-items-center">
+                        <button
+                                type="button"
+                                class="w-100 p-0 border-0 color-combination-button"
+                                t-att-class="[className, activeClass].join(' ')"
+                                t-att-data-color="className"
+                                t-attf-title="Preset {{number}}">
+                            <div inert="" class="p-2 d-flex justify-content-between align-items-center">
+                                <h1 class="m-0 fs-4">Title</h1>
+                                <p class="m-0 flex-grow-1">Text</p>
+                                <span class="py-1 px-1 rounded-1 fs-6 btn btn-sm lh-1 btn btn-sm me-1 d-flex flex-column justify-content-center btn-primary"><small>Button</small></span>
+                                <span class="py-1 px-1 rounded-1 fs-6 btn btn-sm lh-1 btn btn-sm d-flex flex-column justify-content-center btn-secondary"><small>Button</small></span>
+                            </div>
+                        </button>
+                        <button t-on-click="() => this.props.editColorCombination(number)" class="o-hb-edit-color-combination o_colorpicker_ignore fa fa-pencil btn pe-1" title="Edit"/>
+                    </div>
                 </t>
             </div>
         </t>
@@ -71,11 +74,11 @@
                 t-on-focusin="onColorFocusin"
                 t-on-focusout="onColorFocusout">
                 <div class="o_colorpicker_section">
-                    <button data-color="o-color-1" t-attf-style="background-color: var(--o-color-1)" class="btn p-0 o_color_button"/>
-                    <button data-color="o-color-3" t-attf-style="background-color: var(--o-color-3)" class="btn p-0 o_color_button"/>
-                    <button data-color="o-color-2" t-attf-style="background-color: var(--o-color-2)" class="btn p-0 o_color_button"/>
-                    <button data-color="o-color-4" t-attf-style="grid-column: 5; background-color: var(--o-color-4)" class="btn p-0 o_color_button"/>
-                    <button data-color="o-color-5" t-attf-style="background-color: var(--o-color-5)" class="btn p-0 o_color_button"/>
+                    <button data-color="o-color-1" t-attf-style="background-color: var(--{{props.themeColorPrefix}}o-color-1)" class="btn p-0 o_color_button"/>
+                    <button data-color="o-color-3" t-attf-style="background-color: var(--{{props.themeColorPrefix}}o-color-3)" class="btn p-0 o_color_button"/>
+                    <button data-color="o-color-2" t-attf-style="background-color: var(--{{props.themeColorPrefix}}o-color-2)" class="btn p-0 o_color_button"/>
+                    <button data-color="o-color-4" t-attf-style="background-color: var(--{{props.themeColorPrefix}}o-color-4); grid-column: 5;" class="btn p-0 o_color_button"/>
+                    <button data-color="o-color-5" t-attf-style="background-color: var(--{{props.themeColorPrefix}}o-color-5)" class="btn p-0 o_color_button"/>
                 </div>
 
                 <div class="o_color_section">
@@ -122,7 +125,7 @@
             </div>
             <div class="px-2">
                 <button t-attf-style="background-image: {{ currentGradient }};" class="w-50 border btn mb-2 o_custom_gradient_button" t-att-class="{'selected': currentGradient and !this.DEFAULT_GRADIENT_COLORS.includes(currentGradient)}" t-att-data-color="currentGradient" t-on-click="this.toggleGradientPicker" title="Define a custom gradient">Custom</button>
-                <GradientPicker t-if="state.showGradientPicker" onGradientChange.bind="applyColor" selectedGradient="currentGradient"/>
+                <GradientPicker t-if="state.showGradientPicker" onGradientChange.bind="applyColor" selectedGradient="getCurrentGradientColor()"/>
             </div>
         </t>
     </div>

@@ -15,7 +15,6 @@ import { debounce } from "@web/core/utils/timing";
 import { loadBundle, loadJS } from "@web/core/assets";
 import { memoize } from "@web/core/utils/functions";
 import { url } from "@web/core/utils/urls";
-import { callActionsRegistry } from "./call_actions";
 
 let sequence = 1;
 const getSequence = () => sequence++;
@@ -53,9 +52,7 @@ const SCREEN_CONFIG = {
         max: 24,
     },
 };
-const CAMERA_CONFIG = {
-    width: 1280,
-};
+
 const IS_CLIENT_RTC_COMPATIBLE = Boolean(window.RTCPeerConnection && window.MediaStream);
 function GET_DEFAULT_ICE_SERVERS() {
     return [{ urls: ["stun:stun1.l.google.com:19302", "stun:stun2.l.google.com:19302"] }];
@@ -74,6 +71,7 @@ export const CROSS_TAB_CLIENT_MESSAGE = {
 };
 const PING_INTERVAL = 30_000;
 const UNAVAILABLE_AS_REMOTE = _t("This action can only be done in the call tab.");
+const CALL_FULLSCREEN_ID = Symbol("CALL_FULLSCREEN");
 
 /**
  * @param {Array<RTCIceServer>} iceServers
@@ -320,7 +318,8 @@ export class Rtc extends Record {
 
     callActions = fields.Attr([], {
         compute() {
-            return callActionsRegistry
+            return registry
+                .category("discuss.call/actions")
                 .getEntries()
                 .filter(([key, action]) => action.condition({ rtc: this }))
                 .map(([key, action]) => [key, action.isActive({ rtc: this }), action.isTracked]);
@@ -377,6 +376,7 @@ export class Rtc extends Record {
              */
             fallbackMode: false,
             isPipMode: false,
+            isFullscreen: false,
         });
         this.blurManager = undefined;
     }
@@ -412,6 +412,16 @@ export class Rtc extends Record {
         onChange(this.store.settings, "audioInputDeviceId", async () => {
             if (this.localSession) {
                 await this.resetMicAudioTrack({ force: true });
+            }
+        });
+        onChange(this.store.settings, "audioOutputDeviceId", async () => {
+            if (this.localSession) {
+                await this.setOutputDevice(this.store.settings.audioOutputDeviceId);
+            }
+        });
+        onChange(this.store.settings, "cameraInputDeviceId", async () => {
+            if (this.localSession && this.state.cameraTrack) {
+                await this.toggleVideo("camera", { force: true, refreshStream: true });
             }
         });
         this.store.env.bus.addEventListener("RTC-SERVICE:PLAY_MEDIA", () => {
@@ -653,8 +663,8 @@ export class Rtc extends Record {
     setVolume(session, volume) {
         session.volume = volume;
         this.store.settings.saveVolumeSetting({
-            guestId: session?.guest_id.id,
-            partnerId: session?.partner_id.id,
+            guestId: session?.guest_id?.id,
+            partnerId: session?.partner_id?.id,
             volume,
         });
         this._postToTabs({
@@ -672,15 +682,22 @@ export class Rtc extends Record {
         this.soundEffectsService.play("mic-off");
     }
 
+    async enterFullscreen() {
+        const Call = registry.category("discuss.call/components").get("Call");
+        await this.fullscreen.enter(Call, { id: CALL_FULLSCREEN_ID });
+    }
+
+    async exitFullscreen() {
+        await this.fullscreen.exit(CALL_FULLSCREEN_ID);
+    }
+
     /**
      * @param {import("models").Thread} channel
      * @param {Object} [initialState={}]
      * @param {boolean} [initialState.audio]
-     * @param {{ exit: () => {} }} [initialState.fullscreen] if set, the call view is using fullscreen.
-     *   Providing fullscreen object allows to exit on call leave.
      * @param {boolean} [initialState.camera]
      */
-    async toggleCall(channel, { audio = true, fullscreen, camera } = {}) {
+    async toggleCall(channel, { audio = true, camera } = {}) {
         if (channel.id === this._remotelyHostedChannelId) {
             this._postToTabs({ type: CROSS_TAB_CLIENT_MESSAGE.LEAVE });
             this.clear();
@@ -696,7 +713,6 @@ export class Rtc extends Record {
         }
         const isActiveCall = channel.eq(this.state.channel);
         if (this.state.channel) {
-            fullscreen?.exit();
             await this.leaveCall(this.state.channel);
         }
         if (!isActiveCall) {
@@ -1154,7 +1170,7 @@ export class Rtc extends Record {
                     return;
                 }
                 this._p2pRecoveryCount++;
-                if (this._p2pRecoveryCount > 1) {
+                if (this._p2pRecoveryCount > 1 || !hasTurn(this.iceServers)) {
                     this.upgradeConnectionDebounce();
                 }
             }
@@ -1368,6 +1384,9 @@ export class Rtc extends Record {
         if (camera) {
             await this.toggleVideo("camera");
         }
+        if (!this.selfSession) {
+            return;
+        }
         await this._initConnection();
         await this.resetMicAudioTrack({ force: audio });
         if (!this.state.channel?.id) {
@@ -1533,6 +1552,7 @@ export class Rtc extends Record {
                 session.isTalking = false;
             }
         }
+        this.exitFullscreen();
         this._remotelyHostedSessionId = undefined;
         this._remotelyHostedChannelId = undefined;
         browser.clearTimeout(this._crossTabTimeoutId);
@@ -1595,6 +1615,17 @@ export class Rtc extends Record {
         await this.refreshMicAudioStatus();
     }
 
+    async setOutputDevice(deviceId) {
+        const promises = [];
+        for (const session of this.state.channel.rtc_session_ids) {
+            if (!session.audioElement) {
+                continue;
+            }
+            promises.push(session.audioElement.setSinkId(deviceId));
+        }
+        await Promise.all(promises);
+    }
+
     /**
      * @param {Boolean} is_muted
      */
@@ -1637,15 +1668,18 @@ export class Rtc extends Record {
      * @param {Object} [param1]
      * @param {boolean} [param1.force]
      * @param {boolean} [param1.env]
+     * @param {boolean} [param1.refreshStream]
      */
     async toggleVideo(type, options) {
         let force;
         let env;
+        let refreshStream;
         if (typeof options === "boolean") {
             force = options;
         } else {
             force = options?.force;
             env = options?.env;
+            refreshStream = options?.refreshStream;
         }
         if (this.isRemote) {
             this.notification.add(UNAVAILABLE_AS_REMOTE, {
@@ -1661,7 +1695,7 @@ export class Rtc extends Record {
                 const track = this.state.cameraTrack;
                 const sendCamera = force ?? !this.state.sendCamera;
                 this.state.sendCamera = false;
-                await this.setVideo(track, type, { activateVideo: sendCamera, env });
+                await this.setVideo(track, type, { activateVideo: sendCamera, env, refreshStream });
                 break;
             }
             case "screen": {
@@ -1740,7 +1774,8 @@ export class Rtc extends Record {
      * @param {String} type 'camera' or 'screen'
      * @param {Object} [param1] options
      * @param {Boolean} [param1.activateVideo=false] options
-     * @param {Env} [param1.env] options
+     * @param {Env} [param1.env]
+     * @param {Boolean} [param1.refreshStream] whether we are requesting a new stream
      */
     async setVideo(track, type, options) {
         let activateVideo;
@@ -1785,11 +1820,12 @@ export class Rtc extends Record {
         const sourceWindow = env?.pipWindow ?? browser;
         try {
             if (type === "camera") {
-                if (this.state.sourceCameraStream) {
+                if (this.state.sourceCameraStream && !options?.refreshStream) {
                     sourceStream = this.state.sourceCameraStream;
                 } else {
+                    closeStream(this.state.sourceCameraStream);
                     sourceStream = await sourceWindow.navigator.mediaDevices.getUserMedia({
-                        video: CAMERA_CONFIG,
+                        video: this.store.settings.cameraConstraints,
                     });
                 }
             }
@@ -1811,6 +1847,10 @@ export class Rtc extends Record {
                     : _t('%s" requires "screen recording" access', window.location.host);
             this.notification.add(str, { type: "warning" });
             stopVideo();
+            return;
+        }
+        if (!this.selfSession) {
+            closeStream(sourceStream);
             return;
         }
         let outputTrack = sourceStream ? sourceStream.getVideoTracks()[0] : undefined;
@@ -2158,9 +2198,10 @@ export const rtcService = {
         "discuss.p2p",
         "discuss.pip_service",
         "discuss.ptt_extension",
+        "mail.fullscreen",
         "mail.sound_effects",
         "mail.store",
-        "multi_tab",
+        "legacy_multi_tab",
         "notification",
         "presence",
     ],
@@ -2182,6 +2223,10 @@ export const rtcService = {
                 type: CROSS_TAB_HOST_MESSAGE.PIP_CHANGE,
                 changes: { isPipMode },
             });
+        });
+        rtc.fullscreen = services["mail.fullscreen"];
+        onChange(rtc.fullscreen, "id", () => {
+            rtc.state.isFullscreen = rtc.fullscreen.id === CALL_FULLSCREEN_ID;
         });
         rtc.p2pService = services["discuss.p2p"];
         rtc.p2pService.acceptOffer = async (id, sequence) => {

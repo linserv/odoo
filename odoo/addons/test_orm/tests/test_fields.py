@@ -948,6 +948,24 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
         self.assertEqual(user1.group_count, 1)
         self.assertEqual(user2.group_count, 1)
 
+    def test_18_flush_all(self):
+        """ check that env.flush_all() effectively recomputes all fields. """
+        self.env.invalidate_all()
+        self.assertFalse(self.env['test_orm.compute.created'].search_count([('name', '=', 'foo')]))
+
+        # the computation of field 'created_id' should create a new record with
+        # a stored computed field
+        record = self.env['test_orm.compute.creator'].create({'name': 'foo'})
+        self.assertIn(record._fields['created_id'], self.env.fields_to_compute())
+
+        # now recompute and flush all fields; make sure there is no leftover
+        self.env.flush_all()
+        self.assertFalse(self.env.fields_to_compute())
+
+        # check the computed field of the created record
+        self.env.invalidate_all()
+        self.assertEqual(record.created_id.value, 3)
+
     def test_20_float(self):
         """ test rounding of float fields """
         record = self.env['test_orm.mixed'].create({})
@@ -4123,11 +4141,11 @@ class TestMany2oneReference(TransactionExpressionCase):
         foo = m.browse(1 if not ids[0] else (ids[0] + 1))
         self.assertTrue(foo.unlink())
 
-    def test_search_inverse_one2many_autojoin(self):
+    def test_search_inverse_one2many_bypass_search_access(self):
         record = self.env['test_orm.inverse_m2o_ref'].create({})
 
-        # the one2many field 'model_ids' should be auto_join=True
-        self.patch(type(record).model_ids, 'auto_join', True)
+        # the one2many field 'model_ids' should be bypass_search_access=True
+        self.patch(type(record).model_ids, 'bypass_search_access', True)
 
         # create a reference to record
         reference = self.env['test_orm.model_many2one_reference'].create({'res_id': record.id})

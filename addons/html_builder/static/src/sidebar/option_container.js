@@ -26,6 +26,7 @@ export class OptionsContainer extends BaseOptionComponent {
         removeDisabledReason: { type: String, optional: true },
         isClonable: false,
         cloneDisabledReason: { type: String, optional: true },
+        optionTitleComponents: { type: Array, optional: true },
         containerTopButtons: { type: Array },
         containerTitle: { type: Object, optional: true },
         headerMiddleButtons: { type: Array, optional: true },
@@ -33,6 +34,7 @@ export class OptionsContainer extends BaseOptionComponent {
     static defaultProps = {
         containerTitle: {},
         headerMiddleButtons: [],
+        optionTitleComponents: [],
     };
 
     setup() {
@@ -115,9 +117,7 @@ export class OptionsContainer extends BaseOptionComponent {
     // Actions of the buttons in the title bar.
     removeElement() {
         this.callOperation(() => {
-            this.env.editor.shared.remove.removeElementAndUpdateContainers(
-                this.props.editingElement
-            );
+            this.env.editor.shared.remove.removeElement(this.props.editingElement);
         });
     }
 

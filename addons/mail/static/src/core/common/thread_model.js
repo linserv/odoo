@@ -40,7 +40,7 @@ export class Thread extends Record {
                 request_list: fieldNames,
             });
             thread = this.get(data);
-            if (!thread.exists() || !thread.hasReadAccess) {
+            if (!thread?.exists()) {
                 return;
             }
         }
@@ -247,6 +247,10 @@ export class Thread extends Record {
      * current model and includes the recipients of the last message. (e.g: for
      * a crm lead, the model will suggest the customer associated to the lead). */
     suggestedRecipients = fields.Attr([]);
+    /** @type {String[]|undefined} */
+    partner_fields;
+    /** @type {String|undefined} */
+    primary_email_field;
     hasLoadingFailed = false;
     canPostOnReadonly;
     /** @type {Boolean} */
@@ -432,6 +436,11 @@ export class Thread extends Record {
 
     get rpcParams() {
         return {};
+    }
+
+    async checkReadAccess() {
+        await this.store.Thread.getOrFetch(this, ["hasReadAccess"]);
+        return this.hasReadAccess;
     }
 
     executeCommand(command, body = "") {
@@ -725,8 +734,13 @@ export class Thread extends Record {
     /** @param {import("models").Message} message */
     onNewSelfMessage(message) {}
 
-    /** @param {Object} [options] */
-    open(options) {}
+    /**
+     * @param {Object} [options]
+     * @return {boolean} true if the thread was opened, false otherwise
+     */
+    open(options) {
+        return false;
+    }
 
     async openChatWindow({ focus = false, fromMessagingMenu, bypassCompact } = {}) {
         const thread = await this.store.Thread.getOrFetch(this);
@@ -745,19 +759,6 @@ export class Thread extends Record {
         await this.store.chatHub.initPromise;
         const chatWindow = this.store.ChatWindow.get({ thread: this });
         await chatWindow?.close({ notifyState: false, ...options });
-    }
-
-    pin() {
-        if (this.model !== "discuss.channel" || !this.store.self_partner) {
-            return;
-        }
-        this.is_pinned = true;
-        return this.store.env.services.orm.silent.call(
-            "discuss.channel",
-            "channel_pin",
-            [this.id],
-            { pinned: true }
-        );
     }
 
     /** @param {string} name */

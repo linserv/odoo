@@ -889,6 +889,24 @@ class TestPoSBasicConfig(TestPoSCommon):
         open_and_check(pos01_data)
         open_and_check(pos02_data)
 
+    def test_pos_session_name_sequencing(self):
+        """ This test check if the session name is correctly set according to the sequence """
+
+        sequence = self.env['ir.sequence'].search([('code', '=', 'pos.session')])
+        sequence.prefix = '/'
+        sequence.write({'number_next_actual': 1000})
+        name = self.config.name
+
+        self.open_new_session(0)
+        self.assertEqual(self.pos_session.name, name + '/01000')
+
+        self.pos_session.close_session_from_ui()
+
+        sequence.prefix = 'TEST/'
+
+        self.open_new_session(0)
+        self.assertEqual(self.pos_session.name, 'TEST/01001')
+
     def test_load_data_should_not_fail(self):
         """load_data shouldn't fail
 
@@ -1317,3 +1335,74 @@ class TestPoSBasicConfig(TestPoSCommon):
         self.assertEqual(order.picking_count, 1, 'Order should have one picking')
         self.assertEqual(len(order.payment_ids), 1, 'Order should have one payment')
         self.assertEqual(self.env['account.move'].search_count([('pos_order_ids', 'in', order.ids)]), 1, 'Order should have one invoice')
+
+    def test_pos_archived_combination(self):
+        product = self.env['product.template'].create({
+            'name': 'Product Test',
+            'available_in_pos': True,
+            'list_price': 10,
+            'taxes_id': False,
+        })
+
+        attribute_1, attribute_2, attribute_3 = self.env['product.attribute'].create([{
+            'name': 'Attribute 1',
+            'create_variant': 'always',
+            'value_ids': [(0, 0, {
+                'name': 'Value 1',
+            }), (0, 0, {
+                'name': 'Value 2',
+            })],
+        }, {
+            'name': 'Attribute 2',
+            'create_variant': 'always',
+            'value_ids': [(0, 0, {
+                'name': 'Value 1',
+            }), (0, 0, {
+                'name': 'Value 2',
+            })],
+        }, {
+            'name': 'Attribute 3',
+            'create_variant': 'always',
+            'value_ids': [(0, 0, {
+                'name': 'Value 1',
+            }), (0, 0, {
+                'name': 'Value 2',
+            })],
+        }])
+
+        _, _, ptal = self.env['product.template.attribute.line'].create([{
+            'product_tmpl_id': product.id,
+            'attribute_id': attribute_1.id,
+            'value_ids': [(6, 0, attribute_1.value_ids.ids)],
+            'sequence': 3,
+        }, {
+            'product_tmpl_id': product.id,
+            'attribute_id': attribute_2.id,
+            'value_ids': [(6, 0, attribute_2.value_ids.ids)],
+            'sequence': 2,
+        }, {
+            'product_tmpl_id': product.id,
+            'attribute_id': attribute_3.id,
+            'value_ids': [(6, 0, attribute_3.value_ids.ids)],
+            'sequence': 1,
+        }])
+
+        product.write({
+            'attribute_line_ids': [(2, ptal.id)],
+        })
+
+        self.open_new_session()
+        response = self.pos_session.load_data([])
+        product_data = next((item for item in response['product.template'] if item['id'] == product.id), None)
+
+        self.assertEqual(len(product_data['_archived_combinations']), 0, "There should be no archived combinations for the product")
+
+        first_variant = product.product_variant_ids[0]
+        first_variant.write({'active': False})
+
+        response = self.pos_session.load_data([])
+        product_data = next((item for item in response['product.template'] if item['id'] == product.id), None)
+
+        self.assertEqual(len(product_data['_archived_combinations']), 1, "There should be one archived combination for the product")
+        self.assertEqual(len(product_data['_archived_combinations'][0]), 2, "Archived combination should have two values")
+        self.assertTrue(all(value in product_data['_archived_combinations'][0] for value in first_variant.product_template_attribute_value_ids.ids), "Archived combination should match the first variant's attribute values")

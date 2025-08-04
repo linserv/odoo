@@ -5,6 +5,7 @@ from . import test_common
 from . import test_customize
 from . import test_delivery_controller
 from . import test_delivery_ui
+from . import test_dynamic_snippet_category
 from . import test_ecommerce_access
 from . import test_express_checkout_flows
 from . import test_fuzzy
@@ -37,3 +38,4 @@ from . import test_website_sale_show_compare_list_price
 from . import test_website_sale_snippets
 from . import test_website_sale_visitor
 from . import test_website_sequence
+from . import test_website_sale_product_ribbon
