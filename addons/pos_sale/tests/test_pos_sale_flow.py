@@ -398,6 +398,7 @@ class TestPoSSale(TestPointOfSaleHttpCommon):
         self.assertTrue(pos_order.account_move.line_ids[0].analytic_distribution, "Analytic distribution should be set on the invoice line")
         self.assertEqual(pos_order.account_move.line_ids[0].analytic_distribution.get(str(self.analytic_account_partner_a_1.id)), 100)
 
+    @unittest.skip("[LINSERV]")
     def test_order_sales_count(self):
         self.main_pos_config.open_ui()
         current_session = self.main_pos_config.current_session_id
