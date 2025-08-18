@@ -100,7 +100,7 @@ class AccountMove(models.Model):
             prehash_content = etree.tostring(root)
             invoice_hash = edi_format._l10n_sa_generate_invoice_xml_hash(prehash_content, 'digest')
 
-            amount_total = float(xpath_ns('//cbc:TaxInclusiveAmount'))
+            amount_total = float(xpath_ns('//cbc:PayableAmount'))
             amount_tax = float(xpath_ns('//cac:TaxTotal/cbc:TaxAmount'))
             seller_name_enc = self._l10n_sa_get_qr_code_encoding(1, journal_id.company_id.display_name.encode())
             seller_vat_enc = self._l10n_sa_get_qr_code_encoding(2, journal_id.company_id.vat.encode())
@@ -225,6 +225,16 @@ class AccountMove(models.Model):
     def _is_l10n_sa_eligibile_invoice(self):
         self.ensure_one()
         return self.is_invoice() and self.l10n_sa_confirmation_datetime and self.country_code == 'SA'
+
+    def _l10n_sa_is_legal(self):
+        # Extends l10n_sa
+        # Accounts for both ZATCA phases
+        # Phase 1: no documents
+        # Phase 2: checks the state of documents
+        self.ensure_one()
+        result = super()._l10n_sa_is_legal()
+        zatca_document = self.edi_document_ids.filtered(lambda d: d.edi_format_id.code == 'sa_zatca')
+        return result or (self.company_id.country_id.code == 'SA' and zatca_document and self.edi_state == "sent")
 
     def _get_report_base_filename(self):
         """
