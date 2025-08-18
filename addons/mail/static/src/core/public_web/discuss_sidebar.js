@@ -1,10 +1,10 @@
-import { Component, useSubEnv } from "@odoo/owl";
-import { Dropdown } from "@web/core/dropdown/dropdown";
-import { DiscussActions } from "../common/discuss_actions";
+import { Component, onMounted, useSubEnv } from "@odoo/owl";
+import { ActionList } from "../common/action_list";
+import { DiscussSearch } from "./discuss_search";
 
 import { registry } from "@web/core/registry";
+import { ResizablePanel } from "@web/core/resizable_panel/resizable_panel";
 import { useService } from "@web/core/utils/hooks";
-import { _t } from "@web/core/l10n/translation";
 
 export const discussSidebarItemsRegistry = registry.category("mail.discuss_sidebar_items");
 
@@ -15,29 +15,26 @@ export const discussSidebarItemsRegistry = registry.category("mail.discuss_sideb
 export class DiscussSidebar extends Component {
     static template = "mail.DiscussSidebar";
     static props = {};
-    static components = { DiscussActions, Dropdown };
+    static components = { ActionList, DiscussSearch, ResizablePanel };
 
     setup() {
         super.setup();
         this.store = useService("mail.store");
+        this.ui = useService("ui");
         useSubEnv({ inDiscussSidebar: true });
+        onMounted(() => {
+            this.mounted = true;
+        });
     }
 
     get discussSidebarItems() {
         return discussSidebarItemsRegistry.getAll();
     }
 
-    get optionActions() {
-        return [
-            {
-                id: "toggle-size",
-                name: this.store.discuss.isSidebarCompact
-                    ? _t("Expand panel")
-                    : _t("Collapse panel"),
-                icon: this.store.discuss.isSidebarCompact ? "fa fa-expand" : "fa fa-compress",
-                onSelected: () =>
-                    (this.store.discuss.isSidebarCompact = !this.store.discuss.isSidebarCompact),
-            },
-        ];
+    onResize(width) {
+        if (!this.mounted) {
+            return; // ignore resize from mount not triggered by user
+        }
+        this.store.discuss.isSidebarCompact = width <= 100;
     }
 }

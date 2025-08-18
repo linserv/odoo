@@ -26,6 +26,7 @@ class MrpUnbuild(models.Model):
         required=True, index=True)
     product_qty = fields.Float(
         'Quantity', default=1.0,
+        digits='Product Unit',
         compute='_compute_product_qty', store=True, precompute=True, readonly=False,
         required=True)
     product_uom_id = fields.Many2one(
@@ -219,6 +220,8 @@ class MrpUnbuild(models.Model):
                 taken_quantity = move.product_uom.round(taken_quantity)
                 if taken_quantity:
                     move_line_vals = self._prepare_move_line_vals(move, move_line, taken_quantity)
+                    if move_line.owner_id:
+                        move_line_vals['owner_id'] = move_line.owner_id.id
                     unbuild_move_line = self.env["stock.move.line"].create(move_line_vals)
                     needed_quantity -= taken_quantity
                     qty_already_used[move_line] += taken_quantity

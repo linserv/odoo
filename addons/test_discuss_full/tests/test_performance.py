@@ -30,12 +30,13 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #       - search res_users_settings (_find_or_create_for_user)
     #       - fetch res_users_settings (_format_settings)
     #       - search res_users_settings_volumes (_format_settings)
+    #       - search res_users_settings_embedded_action (_format_settings)
     #       - search res_lang_res_users_settings_rel (_format_settings)
     #       - search im_livechat_expertise_res_users_settings_rel (_format_settings)
     #   2: hasCannedResponses
     #       - fetch res_groups_users_rel
     #       - search mail_canned_response
-    _query_count_init_store = 18
+    _query_count_init_store = 19
     # Queries for _query_count_init_messaging (in order):
     #   1: insert res_device_log
     #   3: _search_is_member (for current user, first occurence _search_is_member for chathub given channel ids)
@@ -96,6 +97,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #       - search discuss_channel_rtc_session
     #       - fetch discuss_channel_rtc_session
     #       - search member (channel_member_ids)
+    #       - search member (channel_name_member_ids)
     #       - fetch discuss_channel_member (manual prefetch)
     #       18: member _to_store:
     #           - search im_livechat_channel_member_history (livechat member type)
@@ -150,7 +152,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #       - fetch discuss_call_history
     #       - search mail_tracking_value
     #       - _compute_rating_stats
-    _query_count_discuss_channels = 61
+    _query_count_discuss_channels = 62
 
     def setUp(self):
         super().setUp()
@@ -449,6 +451,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                     "user_id": {"id": self.users[0].id},
                     "voice_active_duration": 200,
                     "volumes": [("ADD", [])],
+                    "embedded_actions_config_ids": {},
                 },
             },
         }
@@ -635,6 +638,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
         members = channel.channel_member_ids
         member_0 = members.filtered(lambda m: m.partner_id == self.users[0].partner_id)
         member_2 = members.filtered(lambda m: m.partner_id == self.users[2].partner_id)
+        member_12 = members.filtered(lambda m: m.partner_id == self.users[12].partner_id)
         last_interest_dt = fields.Datetime.to_string(channel.last_interest_dt)
         if channel == self.channel_general:
             return {
@@ -650,7 +654,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": len(self.group_user.all_user_ids),
                 "message_needaction_counter_bus_id": bus_last_id,
@@ -674,7 +677,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": 5,
                 "message_needaction_counter_bus_id": bus_last_id,
@@ -698,7 +700,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": 5,
                 "message_needaction_counter_bus_id": bus_last_id,
@@ -722,15 +723,12 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", [member_0.id]]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": 5,
                 "message_needaction_counter_bus_id": bus_last_id,
                 "message_needaction_counter": 0,
                 "name": "group restricted channel 1",
                 "parent_channel_id": False,
-                # sudo: discuss.channel.rtc.session - reading a session in a test file
-                "rtcInvitingSession": member_2.sudo().rtc_session_ids.id,
                 # sudo: discuss.channel.rtc.session - reading a session in a test file
                 "rtc_session_ids": [["ADD", [member_2.sudo().rtc_session_ids.id]]],
                 "uuid": channel.uuid,
@@ -749,7 +747,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": 5,
                 "message_needaction_counter_bus_id": bus_last_id,
@@ -762,6 +759,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
         if channel == self.channel_group_1:
             return {
                 "avatar_cache_key": channel.avatar_cache_key,
+                "channel_name_member_ids": [member_0.id, member_12.id],
                 "channel_type": "group",
                 "create_uid": self.env.user.id,
                 "default_display_mode": False,
@@ -771,7 +769,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": 2,
                 "message_needaction_counter_bus_id": bus_last_id,
@@ -790,7 +787,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": 2,
                 "message_needaction_counter_bus_id": bus_last_id,
@@ -808,7 +804,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": 2,
                 "message_needaction_counter_bus_id": bus_last_id,
@@ -826,7 +821,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": 2,
                 "message_needaction_counter_bus_id": bus_last_id,
@@ -844,7 +838,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "member_count": 2,
                 "message_needaction_counter_bus_id": bus_last_id,
@@ -863,7 +856,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "livechat_end_dt": False,
                 "livechat_channel_id": self.im_livechat_channel.id,
@@ -891,7 +883,6 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "id": channel.id,
                 "invited_member_ids": [["ADD", []]],
                 "is_editable": True,
-                "is_pinned": True,
                 "last_interest_dt": last_interest_dt,
                 "livechat_end_dt": False,
                 "livechat_channel_id": self.im_livechat_channel.id,
@@ -949,7 +940,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": False,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_channel_public_1 and partner == self.users[0].partner_id:
@@ -966,7 +959,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": last_message.id + 1,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": last_message.id,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_channel_public_2 and partner == self.users[0].partner_id:
@@ -983,7 +978,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": last_message.id + 1,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": last_message.id,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_channel_group_1 and partner == self.users[0].partner_id:
@@ -1000,7 +997,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": last_message_of_partner_0.id + 1,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": member_0.rtc_inviting_session_id.id,
                 "seen_message_id": last_message_of_partner_0.id,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_channel_group_1 and partner == self.users[2].partner_id:
@@ -1023,7 +1022,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": last_message.id + 1,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": last_message.id,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_group_1 and partner == self.users[0].partner_id:
@@ -1040,7 +1041,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": False,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_group_1 and partner == self.users[12].partner_id:
@@ -1067,7 +1070,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": False,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_chat_1 and partner == self.users[14].partner_id:
@@ -1094,7 +1099,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": False,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_chat_2 and partner == self.users[15].partner_id:
@@ -1121,7 +1128,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": False,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_chat_3 and partner == self.users[2].partner_id:
@@ -1148,7 +1157,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": False,
+                "unpin_dt": False,
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_chat_4 and partner == self.users[3].partner_id:
@@ -1176,7 +1187,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": False,
+                "unpin_dt": fields.Datetime.to_string(member_0.unpin_dt),
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_livechat_1 and partner == self.users[1].partner_id:
@@ -1205,7 +1218,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "last_seen_dt": member_0_last_seen_dt,
                 "new_message_separator": 0,
                 "partner_id": self.users[0].partner_id.id,
+                "rtc_inviting_session_id": False,
                 "seen_message_id": False,
+                "unpin_dt": fields.Datetime.to_string(member_0.unpin_dt),
                 "channel_id": {"id": channel.id, "model": "discuss.channel"},
             }
         if channel == self.channel_livechat_2 and guest:

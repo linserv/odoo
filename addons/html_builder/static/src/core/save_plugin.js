@@ -6,7 +6,7 @@ import { uniqueId } from "@web/core/utils/functions";
 
 export class SavePlugin extends Plugin {
     static id = "savePlugin";
-    static shared = ["save", "isAlreadySaved", "saveView"];
+    static shared = ["save", "saveView", "ignoreDirty"];
     static dependencies = ["history"];
 
     resources = {
@@ -42,6 +42,9 @@ export class SavePlugin extends Plugin {
             // }
         ],
         get_dirty_els: () => this.editable.querySelectorAll(".o_dirty"),
+        // Do not change the sequence of this resource, it must stay the first
+        // one to avoid marking dirty when not needed during the drag and drop.
+        on_prepare_drag_handlers: withSequence(0, this.ignoreDirty.bind(this)),
     };
 
     setup() {
@@ -95,25 +98,18 @@ export class SavePlugin extends Plugin {
                 .map((saveElementHandler) => saveElementHandler(cleanedEls[0]))
                 .filter(Boolean);
             if (!proms.length) {
-                console.warning("no save_element_handlers for dirty element", cleanedEls[0]);
+                console.warn("no save_element_handlers for dirty element", cleanedEls[0]);
             }
             await Promise.all(proms);
         });
         // used to track dirty out of the editable scope, like header, footer or wrapwrap
         const willSaves = this.getResource("save_handlers").map((c) => c());
         await Promise.all(saveProms.concat(willSaves));
-        this.lastSavedStep = this.dependencies.history.getHistorySteps().at(-1);
+        this.dependencies.history.reset();
     }
 
     groupElementHandler(model, field) {
         return model === "ir.ui.view" && field === "arch" ? uniqueId("view-part-to-save-") : "";
-    }
-
-    isAlreadySaved() {
-        return (
-            !this.dependencies.history.getHistorySteps().length ||
-            this.lastSavedStep === this.dependencies.history.getHistorySteps().at(-1)
-        );
     }
 
     /**
@@ -187,5 +183,18 @@ export class SavePlugin extends Plugin {
             }
             savableEl.classList.add("o_dirty");
         }
+    }
+
+    /**
+     * Prevents elements to be marked as dirty until it is reactivated with the
+     * returned callback.
+     *
+     * @returns {Function}
+     */
+    ignoreDirty() {
+        this.canObserve = false;
+        return () => {
+            this.canObserve = true;
+        };
     }
 }

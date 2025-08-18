@@ -139,6 +139,7 @@ export class DragAndDropPlugin extends Plugin {
                 });
                 const restoreDragSavePoint = this.dependencies.history.makeSavePoint();
                 this.cancelDragAndDrop = () => {
+                    this.dependencies.dropzone.removeDropzones();
                     // Undo the changes needed to ease the drag and drop.
                     this.dragState.restoreCallbacks?.forEach((restore) => restore());
                     restoreDragSavePoint();
@@ -162,11 +163,12 @@ export class DragAndDropPlugin extends Plugin {
                 this.dragState.mousePositionYOnElement = boundedYMousePosition - targetRect.y;
                 this.dragState.mousePositionXOnElement = x - targetRect.x;
 
-                // Make some changes on the page to ease the drag and drop.
+                // Stop marking the elements with mutations as dirty and make
+                // some changes on the page to ease the drag and drop.
                 const restoreCallbacks = [];
                 for (const prepareDrag of this.getResource("on_prepare_drag_handlers")) {
                     const restore = prepareDrag();
-                    restoreCallbacks.push(restore);
+                    restoreCallbacks.unshift(restore);
                 }
                 this.dragState.restoreCallbacks = restoreCallbacks;
 
@@ -284,13 +286,7 @@ export class DragAndDropPlugin extends Plugin {
             onDragEnd: async ({ x, y }) => {
                 this.dragStarted = false;
                 let currentDropzoneEl = this.dragState.currentDropzoneEl;
-
-                if (currentDropzoneEl) {
-                    this.dispatchTo("on_element_dropped_over_handlers", {
-                        droppedEl: this.overlayTarget,
-                        dragState: this.dragState,
-                    });
-                }
+                const isDroppedOver = !!currentDropzoneEl;
 
                 // If the snippet was dropped outside of a dropzone, find the
                 // dropzone that is the nearest to the dropping point.
@@ -301,14 +297,41 @@ export class DragAndDropPlugin extends Plugin {
                         return;
                     }
                     currentDropzoneEl = closestDropzoneEl;
-                    currentDropzoneEl.after(this.overlayTarget);
+                }
 
+                if (isDroppedOver) {
+                    this.dispatchTo("on_element_dropped_over_handlers", {
+                        droppedEl: this.overlayTarget,
+                        dragState: this.dragState,
+                    });
+                } else {
+                    currentDropzoneEl.after(this.overlayTarget);
                     this.dispatchTo("on_element_dropped_near_handlers", {
                         droppedEl: this.overlayTarget,
                         dropzoneEl: currentDropzoneEl,
                         dragState: this.dragState,
                     });
                 }
+
+                // In order to mark only the concerned elements as dirty, place
+                // the element back where it started. The move will then be
+                // replayed after re-allowing to mark dirty.
+                const { startPreviousEl, startNextEl, startParentEl } = this.dragState;
+                if (startPreviousEl) {
+                    startPreviousEl.after(this.overlayTarget);
+                } else if (startNextEl) {
+                    startNextEl.before(this.overlayTarget);
+                } else {
+                    startParentEl.prepend(this.overlayTarget);
+                }
+
+                // Undo the changes needed to ease the drag and drop and
+                // re-allow to mark dirty.
+                this.dragState.restoreCallbacks.forEach((restore) => restore());
+                this.dragState.restoreCallbacks = null;
+
+                // Replay the move.
+                currentDropzoneEl.after(this.overlayTarget);
 
                 this.dependencies.dropzone.removeDropzones();
                 this.dragState.dropCloneEl?.remove();
@@ -326,10 +349,6 @@ export class DragAndDropPlugin extends Plugin {
                     }
                 }
 
-                // Undo the changes needed to ease the drag and drop.
-                this.dragState.restoreCallbacks.forEach((restore) => restore());
-                this.dragState.restoreCallbacks = null;
-
                 // Add a history step only if the element was not dropped where
                 // it was before, otherwise cancel everything.
                 let hasSamePositionAsStart;
@@ -338,9 +357,11 @@ export class DragAndDropPlugin extends Plugin {
                 } else {
                     const previousEl = this.overlayTarget.previousElementSibling;
                     const nextEl = this.overlayTarget.nextElementSibling;
-                    const { startPreviousEl, startNextEl } = this.dragState;
+                    const parentEl = this.overlayTarget.parentElement;
                     hasSamePositionAsStart =
-                        startPreviousEl === previousEl && startNextEl === nextEl;
+                        startPreviousEl === previousEl &&
+                        startNextEl === nextEl &&
+                        startParentEl === parentEl;
                 }
                 if (!hasSamePositionAsStart) {
                     this.dependencies.history.addStep();

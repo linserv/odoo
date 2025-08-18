@@ -47,7 +47,7 @@ test("can create a new channel", async () => {
     );
     await contains(".o-mail-Discuss");
     await contains(".o-mail-DiscussSidebar-item", { text: "abc", count: 0 });
-    await click("input[placeholder='Find or start a conversation']");
+    await click("input[placeholder='Search conversations']");
     await insertText("input[placeholder='Search a conversation']", "abc");
     await waitForSteps([`/discuss/search - {"term":""}`, `/discuss/search - {"term":"abc"}`]);
     await click("a", { text: "Create Channel" });
@@ -104,7 +104,7 @@ test("can make a DM chat", async () => {
     });
     await contains(".o-mail-Discuss");
     await contains(".o-mail-DiscussSidebar-item", { text: "Mario", count: 0 });
-    await click("input[placeholder='Find or start a conversation']");
+    await click("input[placeholder='Search conversations']");
     await insertText("input[placeholder='Search a conversation']", "mario");
     await click("a", { text: "Mario" });
     await contains(".o-mail-DiscussSidebar-item", { text: "Mario" });
@@ -130,7 +130,7 @@ test("can create a group chat conversation", async () => {
     pyEnv["res.users"].create([{ partner_id: partnerId_1 }, { partner_id: partnerId_2 }]);
     await start();
     await openDiscuss();
-    await click("input[placeholder='Find or start a conversation']");
+    await click("input[placeholder='Search conversations']");
     await click("a", { text: "Create Chat" });
     await click("li", { text: "Mario" });
     await click("li", { text: "Luigi" });
@@ -143,9 +143,9 @@ test("mobile chat search should allow to create group chat", async () => {
     patchUiSize({ size: SIZES.SM });
     await start();
     await openDiscuss();
-    await contains("button.active", { text: "Inbox" });
+    await contains("button.o-active", { text: "Notifications" });
     await click("button", { text: "Chats" });
-    await contains("button", { text: "Start a conversation" });
+    await contains(".o-mail-DiscussSearch-inputContainer");
 });
 
 test("Chat is pinned on other tabs when joined", async () => {
@@ -156,7 +156,7 @@ test("Chat is pinned on other tabs when joined", async () => {
     const env2 = await start({ asTab: true });
     await openDiscuss(undefined, { target: env1 });
     await openDiscuss(undefined, { target: env2 });
-    await click("input[placeholder='Find or start a conversation']", { target: env1 });
+    await click("input[placeholder='Search conversations']", { target: env1 });
     await insertText("input[placeholder='Search a conversation']", "Jer", { target: env1 });
     await click("a", { text: "Jerry Golay", target: env1 });
     await contains(".o-mail-DiscussSidebar-item", { target: env1, text: "Jerry Golay" });
@@ -207,16 +207,16 @@ test("can access portal partner profile from avatar popover", async () => {
 test("Preserve letter case and accents when creating channel from sidebar", async () => {
     await start();
     await openDiscuss();
-    await click("input[placeholder='Find or start a conversation']");
+    await click("input[placeholder='Search conversations']");
     await insertText("input[placeholder='Search a conversation']", "Crème brûlée Fan Club");
     await click("a", { text: "Create Channel" });
-    await contains(".o-mail-Discuss-threadName", { value: "Crème brûlée Fan Club" });
+    await contains(".o-mail-DiscussContent-threadName", { value: "Crème brûlée Fan Club" });
 });
 
 test("Create channel must have a name", async () => {
     await start();
     await openDiscuss();
-    await click("input[placeholder='Find or start a conversation']");
+    await click("input[placeholder='Search conversations']");
     await click("a", { text: "Create Channel" });
     await click("input[placeholder='Channel name']");
     await triggerHotkey("Enter");

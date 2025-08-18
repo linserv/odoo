@@ -1298,6 +1298,73 @@ class TestPointOfSaleFlow(CommonPosTest):
         order.action_pos_order_cancel()
         self.assertEqual(order.state, 'cancel')
 
+    def test_sum_only_pos_locations(self):
+        """Test that quantities are summed only from POS source locations"""
+
+        self.product = self.env['product.product'].create({
+            'name': 'Test Product',
+            'tracking': 'lot',
+            'is_storable': True,
+        })
+
+        self.warehouse = self.env['stock.warehouse'].create({
+            'name': 'Test Warehouse',
+            'code': 'TWH',
+        })
+
+        self.pos_child_location = self.env['stock.location'].create({
+            'name': 'POS Child Location',
+            'usage': 'internal',
+            'location_id': self.warehouse.lot_stock_id.id,
+        })
+
+        self.other_location = self.env['stock.location'].create({
+            'name': 'Other Location',
+            'usage': 'internal',
+        })
+
+        picking_type = self.env['stock.picking.type'].create({
+            'name': 'POS Operations',
+            'code': 'outgoing',
+            'sequence_code': 'POS',
+            'warehouse_id': self.warehouse.id,
+            'default_location_src_id': self.warehouse.lot_stock_id.id,
+        })
+
+        self.pos_config = self.env['pos.config'].create({
+            'name': 'Test POS Config',
+            'picking_type_id': picking_type.id,
+        })
+
+        self.lot = self.env['stock.lot'].create({
+            'name': 'TEST_LOT',
+            'product_id': self.product.id,
+        })
+
+        # Create quants in different locations for the same lot
+        self.env['stock.quant'].create([{
+            'product_id': self.product.id,
+            'location_id': self.warehouse.lot_stock_id.id,
+            'lot_id': self.lot.id,
+            'quantity': 10.0,
+        }, {
+            'product_id': self.product.id,
+            'location_id': self.pos_child_location.id,
+            'lot_id': self.lot.id,
+            'quantity': 5.0,
+        }, {
+            'product_id': self.product.id,
+            'location_id': self.other_location.id,
+            'lot_id': self.lot.id,
+            'quantity': 20.0,
+        }])
+
+        result = self.env['pos.order.line'].get_existing_lots(self.env.company.id, self.pos_config.id, self.product.id)
+
+        self.assertEqual(len(result), 1, "Should return exactly one lot")
+        self.assertEqual(result[0]['name'], 'TEST_LOT')
+        self.assertEqual(result[0]['product_qty'], 15.0, "Should sum only quantities from POS source locations")
+
     def test_order_invoiced_after_session_closed(self):
         """Test that an order can be invoiced after its session is closed.
         Scenario:
@@ -1447,3 +1514,71 @@ class TestPointOfSaleFlow(CommonPosTest):
         res = self.order.action_pos_order_invoice()
         invoice = self.env['account.move'].browse(res['res_id'])
         self.assertEqual(invoice.partner_bank_id, self.cash_payment_method.journal_id.bank_account_id, "The invoice should have the partner's bank account set.")
+
+    def test_invoice_rounding_overpaid_backend(self):
+        rouding_method = self.env['account.cash.rounding'].create({
+            'name': 'Rounding up',
+            'rounding': 0.05,
+            'rounding_method': 'UP',
+            'profit_account_id': self.company_data['default_account_revenue'].id,
+            'loss_account_id': self.company_data['default_account_expense'].id,
+        })
+
+        self.product_a.write({
+            'name': 'Product Test',
+            'list_price': 149.99,
+            'taxes_id': False,
+        })
+
+        self.pos_config_usd.write({
+            'rounding_method': rouding_method.id,
+            'cash_rounding': True,
+            'only_round_cash_method': True,
+        })
+
+        self.pos_config_usd.open_ui()
+        current_session = self.pos_config_usd.current_session_id
+
+        pos_order_data = {
+            'amount_paid': 149.99,
+            'amount_tax': 0,
+            'amount_return': 0.01,
+            'amount_total': 149.99,
+            'date_order': fields.Datetime.to_string(fields.Datetime.now()),
+            'fiscal_position_id': False,
+            'lines': [[0, 0, {
+                'discount': 0,
+                'pack_lot_ids': [],
+                'price_unit': 149.99,
+                'product_id': self.product_a.id,
+                'price_subtotal': 149.99,
+                'price_subtotal_incl': 149.99,
+                'tax_ids': [[6, False, []]],
+                'qty': 1,
+            }]],
+            'name': 'Order 12345-123-1234',
+            'partner_id': self.partner.id,
+            'session_id': current_session.id,
+            'sequence_number': 2,
+            'payment_ids': [[0, 0, {
+                'amount': 100,
+                'name': fields.Datetime.now(),
+                'payment_method_id': self.cash_payment_method.id
+            }], [0, 0, {
+                'amount': 50,
+                'name': fields.Datetime.now(),
+                'payment_method_id': self.bank_payment_method.id
+            }]],
+            'uuid': '12345-123-1234',
+            'user_id': self.env.uid,
+            'to_invoice': False,
+        }
+        self.env['pos.order'].sync_from_ui([pos_order_data])
+
+        total_cash_payment = sum(current_session.mapped('order_ids.payment_ids').filtered(lambda payment: payment.payment_method_id.type == 'cash').mapped('amount'))
+        current_session.post_closing_cash_details(total_cash_payment)
+        current_session.close_session_from_ui()
+
+        pos_order = self.env['pos.order'].search([])
+        pos_order.action_pos_order_invoice()
+        self.assertEqual(pos_order.state, 'done')

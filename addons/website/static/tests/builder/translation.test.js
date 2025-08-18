@@ -1,11 +1,16 @@
 import { Builder } from "@html_builder/builder";
 import { EditWebsiteSystrayItem } from "@website/client_actions/website_preview/edit_website_systray_item";
 import { setContent, setSelection } from "@html_editor/../tests/_helpers/selection";
-import { insertText } from "@html_editor/../tests/_helpers/user_actions";
+import { deleteForward, insertText } from "@html_editor/../tests/_helpers/user_actions";
 import { beforeEach, describe, expect, test } from "@odoo/hoot";
 import { animationFrame, manuallyDispatchProgrammaticEvent, queryAllTexts } from "@odoo/hoot-dom";
 import { contains, mockService, onRpc, patchWithCleanup } from "@web/../tests/web_test_helpers";
-import { defineWebsiteModels, invisibleEl, setupWebsiteBuilder } from "./website_helpers";
+import {
+    defineWebsiteModels,
+    getStructureSnippet,
+    invisibleEl,
+    setupWebsiteBuilder,
+} from "./website_helpers";
 import { expectElementCount } from "@html_editor/../tests/_helpers/ui_expectations";
 
 defineWebsiteModels();
@@ -140,7 +145,7 @@ test("translate attribute", async () => {
     onRpc("ir.ui.view", "save", ({ args }) => true);
     await setupSidebarBuilderForTranslation({
         websiteContent: `
-            <img src="/web/image/website.s_text_image_default_image" class="img img-fluid mx-auto rounded o_editable" loading="lazy" title="<span data-oe-model=&quot;ir.ui.view&quot; data-oe-id=&quot;544&quot; data-oe-field=&quot;arch_db&quot; data-oe-translation-state=&quot;to_translate&quot; data-oe-translation-source-sha=&quot;sourceSha&quot;>title</span>" style="" contenteditable="false"></img>
+            <img src="/web/image/website.s_text_image_default_image" class="img img-fluid mx-auto rounded o_editable" loading="lazy" title="<span data-oe-model=&quot;ir.ui.view&quot; data-oe-id=&quot;544&quot; data-oe-field=&quot;arch_db&quot; data-oe-translation-state=&quot;to_translate&quot; data-oe-translation-source-sha=&quot;sourceSha&quot;>title</span>" style=""></img>
         `,
     });
     await contains(".modal .btn:contains(Ok, never show me this again)").click();
@@ -155,7 +160,7 @@ test("translate attribute", async () => {
 test("translate attribute history", async () => {
     const { getEditableContent } = await setupSidebarBuilderForTranslation({
         websiteContent: `
-            <img src="/web/image/website.s_text_image_default_image" class="img img-fluid o_editable" loading="lazy" title="<span data-oe-model=&quot;ir.ui.view&quot; data-oe-id=&quot;544&quot; data-oe-field=&quot;arch_db&quot; data-oe-translation-state=&quot;to_translate&quot; data-oe-translation-source-sha=&quot;sourceSha&quot;>title</span>" style="" contenteditable="false"></img>
+            <img src="/web/image/website.s_text_image_default_image" class="img img-fluid o_editable" loading="lazy" title="<span data-oe-model=&quot;ir.ui.view&quot; data-oe-id=&quot;544&quot; data-oe-field=&quot;arch_db&quot; data-oe-translation-state=&quot;to_translate&quot; data-oe-translation-source-sha=&quot;sourceSha&quot;>title</span>" style=""></img>
         `,
     });
     const editable = getEditableContent();
@@ -166,7 +171,7 @@ test("translate attribute history", async () => {
     const getImg = ({ titleName, translated }) =>
         `<img src="/web/image/website.s_text_image_default_image" class="img img-fluid o_editable o_translatable_attribute${
             translated ? " oe_translated" : ""
-        }" loading="lazy" title="${titleName}" style="" contenteditable="false" data-oe-translation-state="to_translate"></img>`;
+        }" loading="lazy" title="${titleName}" style="" data-oe-translation-state="to_translate"></img>`;
     expect(editable).toHaveInnerHTML(getImg({ titleName: "titre", translated: true }));
     await contains(".o-snippets-menu button.fa-undo").click();
     expect(editable).toHaveInnerHTML(getImg({ titleName: "title", translated: false }));
@@ -265,6 +270,27 @@ describe("save translation", () => {
         await modifyBothTextsAndSave(getEditor());
         expect.verifySteps([{ srcSha1: "a1bc" }, { srcSha2: "d1ef" }]);
     });
+});
+
+test("table of content snippet headings' translation updates its navbar items", async () => {
+    const snippet = "s_table_of_content";
+    const websiteContent = (await getStructureSnippet(snippet)).outerHTML;
+    const { getEditor } = await setupSidebarBuilderForTranslation({ websiteContent });
+    const editor = getEditor();
+    const oldTitle = editor.editable.querySelector("#table_of_content_heading_1_1").textContent;
+    expect(":iframe .s_table_of_content_navbar .table_of_content_link:first-child").toHaveText(
+        oldTitle
+    );
+    const titleEl = editor.editable.querySelector("#table_of_content_heading_1_1");
+    setSelection({ anchorNode: titleEl });
+    const oldTitleLength = titleEl.textContent.length;
+    for (let i = 0; i < oldTitleLength; i++) {
+        deleteForward(editor);
+    }
+    await insertText(editor, "New title");
+    expect(":iframe .s_table_of_content_navbar .table_of_content_link:first-child").toHaveText(
+        "New title"
+    );
 });
 
 function getTranslateEditable({ inWrap, oeId = "526", sourceSha = "sourceSha" }) {

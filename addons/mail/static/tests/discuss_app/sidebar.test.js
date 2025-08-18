@@ -14,7 +14,7 @@ import {
 } from "@mail/../tests/mail_test_helpers";
 import { DISCUSS_SIDEBAR_COMPACT_LS } from "@mail/core/public_web/discuss_app_model";
 import { describe, expect, test } from "@odoo/hoot";
-import { animationFrame, press, queryFirst } from "@odoo/hoot-dom";
+import { animationFrame, drag, press, queryFirst } from "@odoo/hoot-dom";
 import { Deferred, mockDate } from "@odoo/hoot-mock";
 import {
     asyncStep,
@@ -203,15 +203,15 @@ test("default thread rendering", async () => {
     await start();
     await openDiscuss();
     await contains("button", { text: "Inbox" });
-    await contains("button", { text: "Starred" });
+    await contains("button", { text: "Starred messages" });
     await contains("button", { text: "History" });
     await contains(".o-mail-DiscussSidebar-item", { text: "General" });
     await contains("button.o-active", { text: "Inbox" });
     await contains(".o-mail-Thread", {
         text: "Your inbox is emptyChange your preferences to receive new notifications in your inbox.",
     });
-    await click("button", { text: "Starred" });
-    await contains("button.o-active", { text: "Starred" });
+    await click("button", { text: "Starred messages" });
+    await contains("button.o-active", { text: "Starred messages" });
     await contains(".o-mail-Thread", {
         text: "No starred messages You can mark any message as 'starred', and it shows up in this mailbox.",
     });
@@ -265,7 +265,7 @@ test("sidebar: open pinned channel", async () => {
     await openDiscuss();
     await click(".o-mail-DiscussSidebarChannel", { text: "General" });
     await contains(".o-mail-Composer-input[placeholder='Message #General…']");
-    await contains(".o-mail-Discuss-threadName", { value: "General" });
+    await contains(".o-mail-DiscussContent-threadName", { value: "General" });
 });
 
 test("sidebar: open channel and leave it", async () => {
@@ -279,13 +279,13 @@ test("sidebar: open channel and leave it", async () => {
     await start();
     await openDiscuss();
     await click(".o-mail-DiscussSidebarChannel", { text: "General" });
-    await contains(".o-mail-Discuss-threadName", { value: "General" });
+    await contains(".o-mail-DiscussContent-threadName", { value: "General" });
     await waitForSteps([]);
     await click("[title='Channel Actions']");
     await click(".o-dropdown-item:contains('Leave Channel')");
     await click("button", { text: "Leave Conversation" });
     await contains(".o-mail-DiscussSidebarChannel", { count: 0, text: "General" });
-    await contains(".o-mail-Discuss-threadName", { value: "Inbox" });
+    await contains(".o-mail-DiscussContent-threadName", { value: "Inbox" });
     await waitForSteps(["action_unfollow"]);
 });
 
@@ -304,12 +304,12 @@ test("sidebar: unpin chat from bus", async () => {
     await contains(".o-mail-DiscussSidebarChannel", { text: "Demo" });
     await click(".o-mail-DiscussSidebarChannel", { text: "Demo" });
     await contains(".o-mail-Composer-input[placeholder='Message Demo…']");
-    await contains(".o-mail-Discuss-threadName", { value: "Demo" });
+    await contains(".o-mail-DiscussContent-threadName", { value: "Demo" });
     // Simulate receiving a unpin chat notification
     // (e.g. from user interaction from another device or browser tab)
     pyEnv["discuss.channel"].channel_pin([channelId], false);
     await contains(".o-mail-DiscussSidebarChannel", { count: 0, text: "Demo" });
-    await contains(".o-mail-Discuss-threadName", { count: 0, value: "Demo" });
+    await contains(".o-mail-DiscussContent-threadName", { count: 0, value: "Demo" });
 });
 
 test.tags("focus required");
@@ -1172,7 +1172,7 @@ test("Update channel data via bus notification", async () => {
     await openDiscuss(channelId, { target: env1 });
     await openDiscuss(channelId, { target: env2 });
     await contains(".o-mail-DiscussSidebarChannel", { text: "Sales", target: env1 });
-    await insertText(".o-mail-Discuss-threadName", "test", { target: env1 });
+    await insertText(".o-mail-DiscussContent-threadName", "test", { target: env1 });
     await triggerHotkey("Enter");
     await contains(".o-mail-DiscussSidebarChannel", { text: "Salestest", target: env2 });
 });
@@ -1214,8 +1214,11 @@ test("Can make sidebar smaller", async () => {
     await openDiscuss();
     await contains(".o-mail-DiscussSidebar");
     const normalWidth = queryFirst(".o-mail-DiscussSidebar").getBoundingClientRect().width;
-    await click(".o-mail-DiscussSidebar [title='Options']");
-    await click(".dropdown-item", { text: "Collapse panel" });
+    await (
+        await drag(".o-mail-DiscussSidebar-resizablePanelContainer .o_resizable_panel_handle")
+    ).drop(".o-mail-DiscussSidebar-resizablePanelContainer .o_resizable_panel_handle", {
+        position: { x: 0 },
+    });
     await contains(".o-mail-DiscussSidebar.o-compact");
     const compactWidth = queryFirst(".o-mail-DiscussSidebar").getBoundingClientRect().width;
     expect(normalWidth).toBeGreaterThan(compactWidth);
@@ -1229,12 +1232,18 @@ test("Sidebar compact is locally persistent (saved in local storage)", async () 
     await start();
     await openDiscuss();
     await contains(".o-mail-DiscussSidebar.o-compact");
-    await click(".o-mail-DiscussSidebar [title='Options']");
-    await click(".dropdown-item", { text: "Expand panel" });
+    await (
+        await drag(".o-mail-DiscussSidebar-resizablePanelContainer .o_resizable_panel_handle")
+    ).drop(".o-mail-DiscussSidebar-resizablePanelContainer .o_resizable_panel_handle", {
+        position: { x: 1000 },
+    });
     await contains(".o-mail-DiscussSidebar:not(.o-compact)");
     expect(browser.localStorage.getItem(DISCUSS_SIDEBAR_COMPACT_LS)).toBe(null);
-    await click(".o-mail-DiscussSidebar [title='Options']");
-    await click(".dropdown-item", { text: "Collapse panel" });
+    await (
+        await drag(".o-mail-DiscussSidebar-resizablePanelContainer .o_resizable_panel_handle")
+    ).drop(".o-mail-DiscussSidebar-resizablePanelContainer .o_resizable_panel_handle", {
+        position: { x: 0 },
+    });
     await contains(".o-mail-DiscussSidebar.o-compact");
     expect(browser.localStorage.getItem(DISCUSS_SIDEBAR_COMPACT_LS)).toBe("true");
 });
@@ -1251,8 +1260,18 @@ test("Sidebar compact is crosstab synced", async () => {
     await openDiscuss(channelId, { target: env2 });
     await contains(".o-mail-DiscussSidebar:not(.o-compact)", { target: env1 });
     await contains(".o-mail-DiscussSidebar:not(.o-compact)", { target: env2 });
-    await click(".o-mail-DiscussSidebar [title='Options']", { target: env1 });
-    await click(".dropdown-item:contains('Collapse panel')", { target: env1 });
+    await (
+        await drag(
+            `.o-mail-Discuss-asTabContainer[data-as-tab-id='${env1.discussAsTabId}']
+            .o-mail-DiscussSidebar-resizablePanelContainer
+            .o_resizable_panel_handle`
+        )
+    ).drop(
+        `.o-mail-Discuss-asTabContainer[data-as-tab-id='${env1.discussAsTabId}']
+        .o-mail-DiscussSidebar-resizablePanelContainer
+        .o_resizable_panel_handle`,
+        { position: { x: 0 } }
+    );
     await contains(".o-mail-DiscussSidebar.o-compact", { target: env1 });
     await contains(".o-mail-DiscussSidebar.o-compact", { target: env2 });
 });
@@ -1272,7 +1291,7 @@ test("Redirect to the thread containing the starred message and highlight the me
     await openDiscuss();
     await click(".o-mail-DiscussSidebarChannel", { text: "General" });
     await click(".o-mail-Message [title='Mark as Todo']");
-    await click("button", { text: "Starred", contains: [".badge", { count: 1 }] });
+    await click("button", { text: "Starred messages", contains: [".badge", { count: 1 }] });
     await click(".o-mail-Message-header a", { text: "#General" });
     await contains(".o-mail-DiscussSidebarChannel.o-active", { text: "General" });
     await contains(".o-mail-Message.o-highlighted", { text: "Hello there!!!" });

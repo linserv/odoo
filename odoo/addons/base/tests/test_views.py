@@ -545,6 +545,51 @@ class TestViewInheritance(ViewCase):
         self.assertEqual(child_view3.invalid_locators, [{'tag': 'xpath', 'attrib': {'expr': "//div[hasclass('parasite')]", 'position': 'inside'}, 'sourceline': 2}])
         self.assertEqual(child_view4.invalid_locators, False)
 
+    def test_nested_move_invalid_locator(self):
+        """ Check ir.ui.view's invalid_locators field is computed correctly."""
+        base_view_arch = """
+            <form string="View">
+                <div name="div1">
+                    <div>
+                        <span />
+                    </div>
+                </div>
+            </form>
+        """
+        base_view = self.makeView('invalid_xpath_base_view', arch=base_view_arch)
+
+        child_view = self.View.create({
+            'model': self.model,
+            'name': "child_view",
+            'inherit_id': base_view.id,
+            'priority': 10,
+            'active': False,
+            'arch': """
+            <data>
+                <xpath expr="/form/div/div" position="replace">
+                    <xpath expr="/form/div/div/span" position="move" />
+                </xpath>
+            </data>
+            """,
+        })
+        self.assertEqual(child_view.invalid_locators, False)
+
+        child_view.arch = """
+            <data>
+                <xpath expr="/form/div/div" position="replace">
+                    <xpath expr="/form/div/div/h1" position="move" />
+                </xpath>
+            </data>"""
+        self.assertEqual(child_view.invalid_locators,
+            [{
+                'attrib': {
+                    'expr': '/form/div/div/h1',
+                    'position': 'move',
+                },
+                'sourceline': 3,
+                'tag': 'xpath',
+            }])
+
     def test_broken_hierarchy_locators(self):
         self.patch(self.env.registry.get("ir.ui.view"), "_check_xml", lambda self: True)
         view = self.View.create({
@@ -686,6 +731,28 @@ class TestApplyInheritanceSpecs(ViewCase):
         # applying spec to both base_arch and adv_arch is expected to give the same result
         self.View.apply_inheritance_specs(self.base_arch, spec)
         self.assertEqual(self.base_arch, expected)
+
+        self.View.apply_inheritance_specs(self.adv_arch, spec)
+        self.assertEqual(self.adv_arch, expected)
+
+    def test_replace_inner_2(self):
+        spec = E.field(
+            "TEXT 4",
+            E.xpath(position="move", expr="//field[2]"),
+            "TEXT 5",
+            E.xpath(expr="//field[@name='subtarget']", position="move"),
+            "TEXT 6",
+            name="target", position="replace", mode="inner")
+
+        expected = E.form(
+            E.field(
+                "TEXT 4",
+                E.field(name="anothersubtarget"),
+                "TEXT 5",
+                E.field(name="subtarget"),
+                "TEXT 6",
+                name="target"),
+            string="Title")
 
         self.View.apply_inheritance_specs(self.adv_arch, spec)
         self.assertEqual(self.adv_arch, expected)
@@ -4670,7 +4737,7 @@ class TestRenderAllViews(TransactionCaseWithUserDemo):
             count, self.env.user.name, elapsed)
 
 
-@common.tagged('post_install', '-at_install')
+@common.tagged('post_install', '-at_install', 'post_install_l10n')
 class TestInvisibleField(TransactionCaseWithUserDemo):
     def test_uncommented_invisible_field(self):
         # NEVER add new name in this list ! The new addons must add comment for all always invisible field.

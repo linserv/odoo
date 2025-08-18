@@ -1,20 +1,16 @@
 .o-mail-DiscussSidebar {
     box-shadow: 1px 0px 6px -3px rgba(50, 50, 50, 0.15);
-    width: 60px;
+    max-width: $o-mail-Discuss-inspector;
     --border-opacity: 0.25;
+}
 
-    &:not(.o-compact) {
-        width: $o-mail-Discuss-inspector;
-    }
+.o-mail-DiscussSidebar-resizablePanelContainer {
+    max-width: $o-mail-Discuss-inspector;
 }
 
 .o-mail-DiscussSidebar-optionsBtn {
     --border-opacity: 0.5;
     padding: map-get($spacers, 1) / 2;
-
-    &:not(.o-compact) {
-        right: map-get($spacers, 2) + map-get($spacers, 1);
-    }
 }
 
 .o-mail-DiscussSidebar-badge {

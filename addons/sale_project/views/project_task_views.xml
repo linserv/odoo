@@ -55,7 +55,6 @@
                 <field name="privacy_visibility" invisible="1" />
                 <button class="oe_stat_button" type="object" name="action_customer_preview" icon="fa-globe icon" invisible="not partner_id or not allow_billable or privacy_visibility != 'portal' or is_template">
                     <div class="o_field_widget o_stat_info">
-                        <span class="o_stat_text">Customer</span>
                         <span class="o_stat_text">Preview</span>
                     </div>
                 </button>
@@ -170,7 +169,7 @@
                 </button>
             </xpath>
             <xpath expr="//field[@name='milestone_id']" position="attributes">
-                <attribute name="context">{'default_project_id': context.get('default_project_id'), 'default_sale_line_id': sale_line_id}</attribute>
+                <attribute name="context">{'default_project_id': project_id, 'default_sale_line_id': sale_line_id}</attribute>
             </xpath>
             <xpath expr="//field[@name='partner_id']" position="attributes">
                 <attribute name="invisible">not allow_billable or has_template_ancestor</attribute>

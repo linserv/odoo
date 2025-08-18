@@ -6,8 +6,9 @@ export const DISCUSS_SIDEBAR_COMPACT_LS = "mail.user_setting.discuss_sidebar_com
 
 export class DiscussApp extends Record {
     INSPECTOR_WIDTH = 300;
-    /** @type {'main'|'channel'|'chat'|'livechat'} */
-    activeTab = "main";
+    COMPACT_SIDEBAR_WIDTH = 60;
+    /** @type {'notification'|'channel'|'chat'|'livechat'|'inbox'} */
+    activeTab = "notification";
     searchTerm = "";
     isActive = false;
     isMemberPanelOpenByDefault = fields.Attr(true, {

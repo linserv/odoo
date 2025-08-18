@@ -247,9 +247,9 @@ def loaded_demo_data(env):
     return bool(env.ref('base.user_demo', raise_if_not_found=False))
 
 class RecordCapturer:
-    def __init__(self, model, domain):
+    def __init__(self, model, domain=None):
         self._model = model
-        self._domain = domain
+        self._domain = domain or []
 
     def __enter__(self):
         self._before = self._model.search(self._domain, order='id')
@@ -745,6 +745,7 @@ class BaseCase(case.TestCase):
                         # don't round if there's no currency set
                         if c := record[currency_field_name]:
                             record_value = Approx(record_value, c, decorate=False)
+
                 r[field_name] = record_value
             record_reformatted.append(r)
 
@@ -968,6 +969,18 @@ class Like:
 
     def __repr__(self):
         return repr(self.pattern)
+
+
+class WhitespaceInsensitive(str):
+    __slots__ = ()
+
+    def __hash__(self):
+        return hash(re.sub(r'\s+', ' ', self))
+
+    def __eq__(self, other):
+        if not isinstance(other, str):
+            return NotImplemented
+        return re.sub(r'\s+', ' ', self) == re.sub(r'\s+', ' ', other)
 
 
 class Approx:  # noqa: PLW1641
@@ -2284,7 +2297,7 @@ class HttpCase(TransactionCase):
         # An alternative would be to set the cookie to None (unsetting it
         # completely) or clear-ing session.cookies.
         self.opener = Opener(self)
-        self.opener.cookies['session_id'] = session.sid
+        self.opener.cookies.set("session_id", session.sid, domain=HOST)
         if browser:
             self._logger.info('Setting session cookie in browser')
             browser.set_cookie('session_id', session.sid, '/', HOST)

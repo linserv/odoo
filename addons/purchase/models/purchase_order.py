@@ -88,12 +88,20 @@ class PurchaseOrder(models.Model):
     date_order = fields.Datetime('Order Deadline', required=True, index=True, copy=False, default=fields.Datetime.now,
         help="Depicts the date within which the Quotation should be confirmed and converted into a purchase order.")
     date_approve = fields.Datetime('Confirmation Date', readonly=True, index=True, copy=False)
-    partner_id = fields.Many2one('res.partner', string='Vendor', required=True, change_default=True, tracking=True, check_company=True, help="You can find a vendor by its Name, TIN, Email or Internal Reference.")
+    partner_id = fields.Many2one(
+        'res.partner', string='Vendor', required=True, change_default=True,
+        tracking=True, check_company=True,
+        help="You can find a vendor by its Name, TIN, Email or Internal Reference.")
     dest_address_id = fields.Many2one('res.partner', check_company=True, string='Dropship Address',
         help="Put an address if you want to deliver directly from the vendor to the customer. "
              "Otherwise, keep empty to deliver to your own company.")
-    currency_id = fields.Many2one('res.currency', 'Currency', required=True,
-        default=lambda self: self.env.company.currency_id.id)
+    currency_id = fields.Many2one('res.currency', 'Currency',
+        required=True,
+        compute='_compute_currency_id',
+        store=True,
+        readonly=False,
+        precompute=True,
+    )
     state = fields.Selection([
         ('draft', 'RFQ'),
         ('sent', 'RFQ Sent'),
@@ -420,17 +428,23 @@ class PurchaseOrder(models.Model):
         # are taken with the company of the order
         # if not defined, with_company doesn't change anything.
         self = self.with_company(self.company_id)
-        default_currency = self.env.context.get("default_currency_id")
         if not self.partner_id:
             self.fiscal_position_id = False
-            self.currency_id = default_currency or self.env.company.currency_id.id
         else:
             self.fiscal_position_id = self.env['account.fiscal.position']._get_fiscal_position(self.partner_id)
             self.payment_term_id = self.partner_id.property_supplier_payment_term_id.id
-            self.currency_id = default_currency or self.partner_id.property_purchase_currency_id.id or self.env.company.currency_id.id
             if self.partner_id.buyer_id:
                 self.user_id = self.partner_id.buyer_id
         return {}
+
+    @api.depends('partner_id', 'company_id')
+    def _compute_currency_id(self):
+        for order in self:
+            order = order.with_company(order.company_id)
+            if not order.partner_id:
+                order.currency_id = order.company_id.currency_id
+            else:
+                order.currency_id = order.partner_id.property_purchase_currency_id or order.company_id.currency_id
 
     @api.onchange('fiscal_position_id', 'company_id')
     def _compute_tax_id(self):
@@ -733,7 +747,7 @@ class PurchaseOrder(models.Model):
             invoice_vals = order._prepare_invoice()
             # Invoice line values (keep only necessary sections).
             for line in order.order_line:
-                if line.display_type == 'line_section':
+                if line.display_type in ('line_section', 'line_subsection'):
                     pending_section = line
                     continue
                 if pending_section:
@@ -822,7 +836,7 @@ class PurchaseOrder(models.Model):
                 # Merge RFQs into the oldest purchase order
                 rfqs -= oldest_rfq
                 for rfq_line in rfqs.order_line:
-                    existing_line = oldest_rfq.order_line.filtered(lambda l: l.display_type not in ['line_note', 'line_section'] and
+                    existing_line = oldest_rfq.order_line.filtered(lambda l: l.display_type not in ['line_section', 'line_subsection', 'line_note'] and
                                                                                 l.product_id == rfq_line.product_id and
                                                                                 l.product_uom_id == rfq_line.product_uom_id and
                                                                                 l.analytic_distribution == rfq_line.analytic_distribution and
@@ -928,7 +942,8 @@ class PurchaseOrder(models.Model):
             result = {'type': 'ir.actions.act_window_close'}
 
         result['context'] = literal_eval(result['context'])
-        result['context']['default_partner_id'] = self.partner_id.id
+        if len(self.partner_id) == 1:
+            result['context']['default_partner_id'] = self.partner_id.id
         return result
 
     @api.model
@@ -1118,6 +1133,7 @@ class PurchaseOrder(models.Model):
             'product_catalog_currency_id': self.currency_id.id,
             'product_catalog_digits': self.order_line._fields['price_unit'].get_digits(self.env),
             'search_default_seller_ids': self.partner_id.name,
+            'show_sections': bool(self.id),
         }
 
     def _get_product_catalog_domain(self):
@@ -1129,10 +1145,14 @@ class PurchaseOrder(models.Model):
             res[product.id] |= self._get_product_price_and_data(product)
         return res
 
-    def _get_product_catalog_record_lines(self, product_ids, **kwargs):
+    def _get_product_catalog_record_lines(self, product_ids, *, selected_section_id=False, **kwargs):
         grouped_lines = defaultdict(lambda: self.env['purchase.order.line'])
         for line in self.order_line:
-            if line.display_type or line.product_id.id not in product_ids:
+            if (
+                line.display_type
+                or line.product_id.id not in product_ids
+                or line.section_line_id.id != selected_section_id
+            ):
                 continue
             grouped_lines[line.product_id] |= line
         return grouped_lines
@@ -1229,16 +1249,29 @@ class PurchaseOrder(models.Model):
         for line, date in updated_dates:
             line._update_date_planned(date)
 
-    def _update_order_line_info(self, product_id, quantity, **kwargs):
+    def _update_order_line_info(
+            self,
+            product_id,
+            quantity,
+            *,
+            selected_section_id=False,
+            child_field='order_line',
+            **kwargs,
+        ):
         """ Update purchase order line information for a given product or create
         a new one if none exists yet.
         :param int product_id: The product, as a `product.product` id.
+        :param int quantity: The quantity selected in the catalog.
+        :param int selected_section_id: The id of section selected in the catalog.
         :return: The unit price of the product, based on the pricelist of the
                  purchase order and the quantity selected.
         :rtype: float
         """
         self.ensure_one()
-        pol = self.order_line.filtered(lambda line: line.product_id.id == product_id)
+        pol = self.order_line.filtered_domain([
+            ('product_id', '=', product_id),
+            ('section_line_id', '=', selected_section_id),
+        ])
         if pol:
             if quantity != 0:
                 pol.product_qty = quantity
@@ -1253,12 +1286,22 @@ class PurchaseOrder(models.Model):
                 'order_id': self.id,
                 'product_id': product_id,
                 'product_qty': quantity,
-                'sequence': ((self.order_line and self.order_line[-1].sequence + 1) or 10),  # put it at the end of the order
+                'sequence': self._get_new_line_sequence(child_field, selected_section_id),
             })
             if pol.selected_seller_id:
                 # Fix the PO line's price on the seller's one.
                 pol.price_unit = pol.selected_seller_id.price_discounted
         return pol.price_unit_discounted
+
+    def _create_order_section(self, child_field, name, position, **kwargs):
+        return super()._create_order_section(child_field, name, position, product_qty=0, **kwargs)
+
+    def _get_section_model_info(self):
+        """ Override of `product` to return the model name and parent field for the order lines.
+
+        :return: line_model, parent_field
+        """
+        return 'purchase.order.line', 'order_id'
 
     def _create_update_date_activity(self, updated_dates):
         note = Markup('<p>%s</p>\n') % _('%s modified receipt dates for the following products:', self.partner_id.name)

@@ -949,14 +949,39 @@ class TestInvoicePurchaseMatch(TestPurchaseToInvoiceCommon):
             match_lines = self.env['purchase.bill.line.match'].search([('partner_id', '=', self.partner_a.id)])
             match_lines.action_match_lines()
 
-    def test_manual_matching_restrict_multi_bill(self):
-        """ raises when multiple bill selected """
-        with self.assertRaisesRegex(UserError, "can't select lines from multiple Vendor Bill"):
-            self.init_purchase(confirm=True, products=[self.product_order])
-            self.init_invoice('in_invoice', partner=self.partner_a, products=[self.product_order])
-            self.init_invoice('in_invoice', partner=self.partner_a, products=[self.product_order])
-            match_lines = self.env['purchase.bill.line.match'].search([('partner_id', '=', self.partner_a.id)])
-            match_lines.action_match_lines()
+    def test_manual_matching_allow_multi_bill(self):
+        """ test matching with multiple bills """
+        po = self.init_purchase(partner=self.partner_a, confirm=True, products=[
+            self.product_order,
+            self.product_order_other_price,
+            self.product_order_var_name
+        ])
+        po.order_line[0].product_qty = 2
+        po.order_line[0].qty_received = 2
+        po.order_line[1].qty_received = 1
+        po.order_line[2].qty_received = 1
+
+        bill_1 = self.init_invoice(move_type='in_invoice', partner=self.partner_a, products=[self.product_order, self.product_order_other_price])
+        bill_2 = self.init_invoice(move_type='in_invoice', partner=self.partner_a, products=[self.product_order, self.product_order_var_name])
+        bill_2.invoice_line_ids[1].product_id = None
+
+        match_lines = self.env['purchase.bill.line.match'].search([('partner_id', '=', self.partner_a.id)])
+        match_lines.action_match_lines()  # Match by product and leave residual bill and po lines unmatched because multiple bills
+
+        self.assertEqual(po.order_line[0], bill_1.invoice_line_ids[0].purchase_line_id)
+        self.assertEqual(po.order_line[0], bill_2.invoice_line_ids[0].purchase_line_id)
+        self.assertEqual(po.order_line[1], bill_1.invoice_line_ids[1].purchase_line_id)
+        self.assertFalse(bill_2.invoice_line_ids[1].purchase_line_id)
+        self.assertFalse(self.env['account.move.line'].search([('purchase_line_id', '=', po.order_line[2].id)]))
+        self.env['purchase.order.line'].flush_model()
+        match_lines = self.env['purchase.bill.line.match'].search([('partner_id', '=', self.partner_a.id)])
+        self.assertEqual(len(match_lines), 2)
+
+        match_lines.action_match_lines()  # Can't match by product but delete residual bill line and create new bill line for residual po line as only one bill
+        self.assertEqual(po.order_line[2], bill_2.invoice_line_ids[1].purchase_line_id)
+        self.env['purchase.order.line'].flush_model()
+        match_lines = self.env['purchase.bill.line.match'].search([('partner_id', '=', self.partner_a.id)])
+        self.assertEqual(len(match_lines), 0)
 
     def test_manual_matching_create_bill(self):
         """ Selecting POL without AML will create bill with the selected POL as the lines """
@@ -1164,3 +1189,41 @@ class TestInvoicePurchaseMatch(TestPurchaseToInvoiceCommon):
         move_form.purchase_vendor_bill_id = self.env['purchase.bill.union'].browse(-po2.id)
         invoice2 = move_form.save()
         self.assertFalse(invoice2.invoice_user_id)
+
+    def test_create_invoice_from_multiple_purchase_orders(self):
+        """ Test that invoices can be created from purchase orders with different
+        vendors without raising errors and with correct vendor mapping per invoice.
+        """
+        purchase_orders = self.env['purchase.order'].with_context(tracking_disable=True).create([
+            {
+                'partner_id': self.partner_a.id,
+                'order_line': [
+                    Command.create({
+                        'product_id': self.product_order.id,
+                        'product_qty': 1.0,
+                        'price_unit': self.product_order.list_price,
+                        'tax_ids': False,
+                    }),
+                ],
+            },
+            {
+                'partner_id': self.partner_b.id,
+                'order_line': [
+                    Command.create({
+                        'product_id': self.product_deliver.id,
+                        'product_qty': 2.0,
+                        'price_unit': self.product_deliver.list_price,
+                        'tax_ids': False,
+                    }),
+                ],
+            },
+        ])
+        purchase_orders.button_confirm()
+        purchase_orders.action_create_invoice()
+
+        self.assertEqual(len(purchase_orders.invoice_ids), 2, "Each PO should generate one invoice")
+        self.assertEqual(
+            set(purchase_orders.invoice_ids.partner_id.ids),
+            set(purchase_orders.partner_id.ids),
+            "Each invoice should be linked to the correct vendor"
+        )

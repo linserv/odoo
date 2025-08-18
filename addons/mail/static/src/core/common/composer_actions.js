@@ -4,8 +4,34 @@ import { useEmojiPicker } from "@web/core/emoji_picker/emoji_picker";
 import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
 import { markEventHandled } from "@web/core/utils/misc";
+import { Action } from "./action";
 
 export const composerActionsRegistry = registry.category("mail.composer/actions");
+
+/** @typedef {import("@odoo/owl").Component} Component */
+
+/** @typedef {import("@mail/core/common/action").ActionDefinition} ActionDefinition */
+
+/**
+ * @typedef {Object} ComposerActionSpecificDefinition
+ * @property {boolean|(comp: Component) => boolean} [condition=true]
+ * @property {boolean} [isPicker]
+ * @property {string|(comp: Component) => string} [pickerName]
+ * @property {boolean|(comp: Component) => boolean} [sequenceGroup]
+ * @property {boolean|(comp: Component) => boolean} [sequenceQuick]
+ */
+
+/**
+ * @typedef {ActionDefinition & ComposerActionSpecificDefinition} ComposerActionDefinition
+ */
+
+/**
+ * @param {string} id
+ * @param {ComposerActionDefinition} definition
+ */
+export function registerComposerAction(id, definition) {
+    composerActionsRegistry.add(id, definition);
+}
 
 export function pickerOnClick(component, action, ev) {
     let anchorEl;
@@ -20,7 +46,7 @@ export function pickerOnClick(component, action, ev) {
     }
     const previousPicker = component.getActivePicker();
     previousPicker?.close();
-    if (previousPicker === action.picker) {
+    if (toRaw(previousPicker) === toRaw(action.picker)) {
         component.setActivePicker(null);
     } else {
         component.setActivePicker(action.picker);
@@ -37,158 +63,133 @@ export function pickerSetup(action, func) {
     action.picker = func();
 }
 
-composerActionsRegistry
-    .add("send-message", {
-        btnClass: (component) => {
-            if (component.sendMessageState.active) {
-                return "o-sendMessageActive o-text-white shadow-sm";
-            }
-            return "";
-        },
-        condition: (component) =>
-            !component.env.inChatter && (!component.props.composer.message || component.ui.isSmall),
-        disabledCondition: (component) => component.isSendButtonDisabled,
-        icon: "fa fa-paper-plane-o",
-        name(component) {
-            if (component.props.composer.message) {
-                return _t("Save editing");
-            }
-            if (component.thread?.model === "discuss.channel") {
-                return _t("Send");
-            }
-            return component.props.type === "note" ? _t("Log") : _t("Send");
-        },
-        onSelected: (component) => component.sendMessage(),
-        setup: () => {
-            const component = useComponent();
-            component.sendMessageState = useState({ active: false });
-            useEffect(
-                () => {
-                    component.sendMessageState.active = !component.isSendButtonDisabled;
+registerComposerAction("send-message", {
+    btnClass(component) {
+        if (this.isActive) {
+            return "o-sendMessageActive o-text-white shadow-sm";
+        }
+        return "";
+    },
+    condition: (component) =>
+        !component.env.inChatter && (!component.props.composer.message || component.ui.isSmall),
+    disabledCondition: (component) => component.isSendButtonDisabled,
+    icon: "fa fa-paper-plane-o",
+    iconLarge: "fa fa-lg fa-paper-plane-o",
+    isActive: (component) => component.sendMessageState.active,
+    name(component) {
+        if (component.props.composer.message) {
+            return _t("Save editing");
+        }
+        if (component.thread?.model === "discuss.channel") {
+            return _t("Send");
+        }
+        return component.props.type === "note" ? _t("Log") : _t("Send");
+    },
+    onSelected: (component) => component.sendMessage(),
+    setup: (component) => {
+        component.sendMessageState = useState({ active: false });
+        useEffect(
+            () => {
+                component.sendMessageState.active = !component.isSendButtonDisabled;
+            },
+            () => [component.isSendButtonDisabled]
+        );
+    },
+    sequenceQuick: 30,
+});
+registerComposerAction("add-emoji", {
+    icon: "fa fa-smile-o",
+    iconLarge: "fa fa-lg fa-smile-o",
+    isPicker: true,
+    pickerName: _t("Emoji"),
+    name: _t("Add Emojis"),
+    onSelected: (component, action, ev) => {
+        pickerOnClick(component, action, ev);
+        markEventHandled(ev, "Composer.onClickAddEmoji");
+    },
+    setup(component) {
+        pickerSetup(this, () =>
+            useEmojiPicker(
+                undefined,
+                {
+                    onSelect: (emoji) => component.addEmoji(emoji),
+                    onClose: () => component.setActivePicker(null),
                 },
-                () => [component.isSendButtonDisabled]
-            );
-        },
-        sequenceQuick: 30,
-    })
-    .add("add-emoji", {
-        icon: "fa fa-smile-o",
-        isPicker: true,
-        pickerName: _t("Emoji"),
-        name: _t("Add Emojis"),
-        onSelected: (component, action, ev) => {
-            pickerOnClick(component, action, ev);
-            markEventHandled(ev, "Composer.onClickAddEmoji");
-        },
-        setup: (action) => {
-            const component = useComponent();
-            pickerSetup(action, () =>
-                useEmojiPicker(
-                    undefined,
-                    {
-                        onSelect: (emoji) => component.addEmoji(emoji),
-                        onClose: () => component.setActivePicker(null),
-                    },
-                    { arrow: false }
-                )
-            );
-        },
-        sequenceQuick: 20,
-    })
-    .add("upload-files", {
-        condition: (component) => component.allowUpload,
-        icon: "fa fa-paperclip",
-        name: _t("Attach Files"),
-        onSelected: (component, action, ev) => {
-            component.fileUploaderRef.el?.click();
-            const composer = toRaw(component.props.composer);
-            markEventHandled(ev, "composer.clickOnAddAttachment");
-            composer.autofocus++;
-        },
-        setup: () => {
-            const component = useComponent();
-            component.fileUploaderRef = useRef("file-uploader");
-        },
-        sequence: 20,
-    })
-    .add("open-full-composer", {
-        condition: (component) =>
-            component.props.showFullComposer &&
-            component.thread &&
-            component.thread.model !== "discuss.channel" &&
-            !component.env.inFrontendPortalChatter,
-        hotkey: "shift+c",
-        icon: "fa fa-expand",
-        name: _t("Open Full Composer"),
-        onSelected: (component) => component.onClickFullComposer(),
-        sequence: 30,
-    })
-    .add("add-canned-response", {
-        condition: (component) =>
-            component.store.hasCannedResponses &&
-            component.thread &&
-            component.env.services["mail.suggestion"]
-                .getSupportedDelimiters(component.thread)
-                .find(([delimiter]) => delimiter === "::"),
-        icon: "fa fa-file-text-o",
-        name: _t("Insert a Canned response"),
-        onSelected: (component, action, ev) => component.onClickInsertCannedResponse(ev),
-        sequence: 5,
-    });
+                { arrow: false }
+            )
+        );
+    },
+    sequenceQuick: 20,
+});
+registerComposerAction("upload-files", {
+    condition: (component) => component.allowUpload,
+    icon: "fa fa-paperclip",
+    iconLarge: "fa fa-lg fa-paperclip",
+    name: _t("Attach Files"),
+    onSelected: (component, action, ev) => {
+        component.fileUploaderRef.el?.click();
+        const composer = toRaw(component.props.composer);
+        markEventHandled(ev, "composer.clickOnAddAttachment");
+        composer.autofocus++;
+    },
+    setup: (component) => {
+        component.fileUploaderRef = useRef("file-uploader");
+    },
+    sequence: 20,
+});
+registerComposerAction("open-full-composer", {
+    condition: (component) =>
+        component.props.showFullComposer &&
+        component.thread &&
+        component.thread.model !== "discuss.channel" &&
+        !component.env.inFrontendPortalChatter,
+    hotkey: "shift+c",
+    icon: "fa fa-expand",
+    iconLarge: "fa fa-lg fa-expand",
+    name: _t("Open Full Composer"),
+    onSelected: (component) => component.onClickFullComposer(),
+    sequence: 30,
+});
+registerComposerAction("add-canned-response", {
+    condition: (component) =>
+        component.store.hasCannedResponses &&
+        component.thread &&
+        component.env.services["mail.suggestion"]
+            .getSupportedDelimiters(component.thread)
+            .find(([delimiter]) => delimiter === "::"),
+    icon: "fa fa-file-text-o",
+    iconLarge: "fa fa-lg fa-file-text-o",
+    name: _t("Insert a Canned response"),
+    onSelected: (component, action, ev) => component.onClickInsertCannedResponse(ev),
+    sequence: 5,
+});
 
-function transformAction(component, id, action) {
-    return {
-        get btnClass() {
-            return typeof action.btnClass === "function"
-                ? action.btnClass(component)
-                : action.btnClass;
-        },
-        component: action.component,
-        get componentProps() {
-            return action.componentProps?.(component, this);
-        },
-        get condition() {
-            return composerActionsInternal.condition(component, id, action);
-        },
-        get disabledCondition() {
-            return action.disabledCondition?.(component);
-        },
-        get hotkey() {
-            return typeof action.hotkey === "function" ? action.hotkey(component) : action.hotkey;
-        },
-        get icon() {
-            return typeof action.icon === "function" ? action.icon(component) : action.icon;
-        },
-        id,
-        isPicker: action.isPicker,
-        get name() {
-            return typeof action.name === "function" ? action.name(component) : action.name;
-        },
-        onSelected(ev) {
-            action.onSelected?.(component, this, ev);
-        },
-        get pickerName() {
-            return typeof action.pickerName === "function"
-                ? action.pickerName(component)
-                : action.pickerName;
-        },
-        get sequence() {
-            return typeof action.sequence === "function"
-                ? action.sequence(component)
-                : action.sequence;
-        },
-        get sequenceGroup() {
-            return typeof action.sequenceGroup === "function"
-                ? action.sequenceGroup(component)
-                : action.sequenceGroup;
-        },
-        get sequenceQuick() {
-            return typeof action.sequenceQuick === "function"
-                ? action.sequenceQuick(component)
-                : action.sequenceQuick;
-        },
-        setup: action.setup,
-    };
+class ComposerAction extends Action {
+    get condition() {
+        return composerActionsInternal.condition(this._component, this.id, this.explicitDefinition);
+    }
+
+    get isPicker() {
+        return this.explicitDefinition.isPicker;
+    }
+
+    get pickerName() {
+        return typeof this.explicitDefinition.pickerName === "function"
+            ? this.explicitDefinition.pickerName(this._component)
+            : this.explicitDefinition.pickerName;
+    }
+
+    get sequenceGroup() {
+        return typeof this.explicitDefinition.sequenceGroup === "function"
+            ? this.explicitDefinition.sequenceGroup(this._component)
+            : this.explicitDefinition.sequenceGroup;
+    }
+
+    get sequenceQuick() {
+        return typeof this.explicitDefinition.sequenceQuick === "function"
+            ? this.explicitDefinition.sequenceQuick(this._component)
+            : this.explicitDefinition.sequenceQuick;
+    }
 }
 
 export const composerActionsInternal = {
@@ -206,11 +207,9 @@ export function useComposerActions() {
     const component = useComponent();
     const transformedActions = composerActionsRegistry
         .getEntries()
-        .map(([id, action]) => transformAction(component, id, action));
+        .map(([id, action]) => new ComposerAction(component, id, action));
     for (const action of transformedActions) {
-        if (action.setup) {
-            action.setup(action);
-        }
+        action.setup();
     }
     const state = useState({
         get actions() {

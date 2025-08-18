@@ -13,9 +13,8 @@ from odoo.addons.iot_drivers.tools.helpers import (
     require_db,
     start_nginx_server,
     update_conf,
-    writable,
 )
-from odoo.addons.iot_drivers.tools.system import IS_RPI, IS_WINDOWS
+from odoo.addons.iot_drivers.tools.system import IS_RPI, IS_TEST, IS_WINDOWS
 
 _logger = logging.getLogger(__name__)
 
@@ -67,6 +66,9 @@ def download_odoo_certificate():
     """Send a request to Odoo with customer db_uuid and enterprise_code
     to get a true certificate
     """
+    if IS_TEST:
+        _logger.info("Skipping certificate download in test mode.")
+        return None
     db_uuid = get_conf('db_uuid')
     enterprise_code = get_conf('enterprise_code')
     if not db_uuid:
@@ -104,11 +106,10 @@ def download_odoo_certificate():
         return None
 
     if IS_RPI:
-        with writable():
-            Path('/etc/ssl/certs/nginx-cert.crt').write_text(certificate, encoding='utf-8')
-            Path('/root_bypass_ramdisks/etc/ssl/certs/nginx-cert.crt').write_text(certificate, encoding='utf-8')
-            Path('/etc/ssl/private/nginx-cert.key').write_text(private_key, encoding='utf-8')
-            Path('/root_bypass_ramdisks/etc/ssl/private/nginx-cert.key').write_text(private_key, encoding='utf-8')
+        Path('/etc/ssl/certs/nginx-cert.crt').write_text(certificate, encoding='utf-8')
+        Path('/root_bypass_ramdisks/etc/ssl/certs/nginx-cert.crt').write_text(certificate, encoding='utf-8')
+        Path('/etc/ssl/private/nginx-cert.key').write_text(private_key, encoding='utf-8')
+        Path('/root_bypass_ramdisks/etc/ssl/private/nginx-cert.key').write_text(private_key, encoding='utf-8')
         start_nginx_server()
         return str(x509.load_pem_x509_certificate(certificate.encode()).not_valid_after)
     else:

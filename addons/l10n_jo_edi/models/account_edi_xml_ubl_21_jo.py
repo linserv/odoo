@@ -1,4 +1,5 @@
 import functools
+import re
 from types import SimpleNamespace
 
 from odoo import models
@@ -93,6 +94,9 @@ class AccountEdiXmlUBL21JO(models.AbstractModel):
             return "S"
         return "O"
 
+    def _sanitize_phone(self, raw):
+        return re.sub(r'[^0-9]', '', raw or '')[:15]
+
     # -------------------------------------------------------------------------
     # EXPORT: Templates for document header nodes
     # -------------------------------------------------------------------------
@@ -165,7 +169,7 @@ class AccountEdiXmlUBL21JO(models.AbstractModel):
             # For non-refund invoices, use the standard party node
             document_node['cac:AccountingCustomerParty']['cac:AccountingContact'] = {
                 'cbc:Telephone': {
-                    '_text': invoice.partner_id.phone
+                    '_text': self._sanitize_phone(invoice.partner_id.phone)
                 }
             }
 
@@ -367,7 +371,7 @@ class AccountEdiXmlUBL21JO(models.AbstractModel):
 
         refund_move = line.move_id
         invoice_move = refund_move.reversed_entry_id
-        invoice_lines = invoice_move.invoice_line_ids.filtered(lambda line: line.display_type not in ('line_note', 'line_section'))
+        invoice_lines = invoice_move.invoice_line_ids.filtered(lambda line: line.display_type not in ('line_section', 'line_subsection', 'line_note'))
         n = len(invoice_lines)
 
         line_id = -1

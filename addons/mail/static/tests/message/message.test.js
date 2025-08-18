@@ -174,7 +174,7 @@ test("Editing message keeps the mentioned channels", async () => {
     await click(".o-mail-Message button", { text: "save" });
     await contains(".o-mail-Message-content", { text: "other bye (edited)" });
     await click(".o_channel_redirect", { text: "other" });
-    await contains(".o-mail-Discuss-threadName", { value: "other" });
+    await contains(".o-mail-DiscussContent-threadName", { value: "other" });
 });
 
 test("Can edit message comment in chatter", async () => {
@@ -939,8 +939,8 @@ test("open author avatar card", async () => {
     await start();
     await openDiscuss(channelId_1);
     await contains(".o-mail-DiscussSidebarChannel.o-active", { text: "General" });
-    await contains(".o-mail-Discuss-content .o-mail-Message-avatarContainer img");
-    await click(".o-mail-Discuss-content .o-mail-Message-avatarContainer img");
+    await contains(".o-mail-DiscussContent .o-mail-Message-avatarContainer img");
+    await click(".o-mail-DiscussContent .o-mail-Message-avatarContainer img");
     await contains(".o_avatar_card");
     await contains(".o_card_user_infos > span", { text: "Demo" });
     await contains(".o_card_user_infos > a", { text: "demo@example.com" });
@@ -964,14 +964,14 @@ test("toggle_star message", async () => {
     await contains(".o-mail-Message");
     await contains(".o-mail-Message [title='Mark as Todo']");
     await contains(".o-mail-Message [title='Mark as Todo']" + " i.fa-star-o");
-    await contains("button", { text: "Starred", contains: [".badge", { count: 0 }] });
+    await contains("button", { text: "Starred messages", contains: [".badge", { count: 0 }] });
     await click(".o-mail-Message [title='Mark as Todo']");
-    await contains("button", { text: "Starred", contains: [".badge", { text: "1" }] });
+    await contains("button", { text: "Starred messages", contains: [".badge", { text: "1" }] });
     await waitForSteps(["rpc:toggle_message_starred"]);
     await contains(".o-mail-Message");
     await contains(".o-mail-Message [title='Mark as Todo']" + " i.fa-star");
     await click(".o-mail-Message [title='Mark as Todo']");
-    await contains("button", { text: "Starred", contains: [".badge", { count: 0 }] });
+    await contains("button", { text: "Starred messages", contains: [".badge", { count: 0 }] });
     await waitForSteps(["rpc:toggle_message_starred"]);
     await contains(".o-mail-Message");
     await contains(".o-mail-Message [title='Mark as Todo']" + " i.fa-star-o");
@@ -1293,7 +1293,7 @@ test("Toggle star should update starred counter on all tabs", async () => {
     await click(".o-mail-Message [title='Mark as Todo']", { target: env1 });
     await contains("button", {
         target: env2,
-        text: "Starred",
+        text: "Starred messages",
         contains: [".badge", { text: "1" }],
     });
 });

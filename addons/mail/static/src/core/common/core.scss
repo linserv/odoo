@@ -21,6 +21,10 @@ $o-discuss-talkingColor: lighten($success, 10%);
     background-color: $body-bg !important;
 }
 
+.o-border-opacity-25 {
+    --border-opacity: 0.25;
+}
+
 .o-border-opacity-50 {
     --border-opacity: 0.5;
 }
@@ -41,6 +45,24 @@ $o-discuss-talkingColor: lighten($success, 10%);
 
     & .o-innerBadge {
         min-width: 2.7ch; // same as .badge, without using .badge to keep semantics of a single .badge
+    }
+}
+
+@function o-rounded-bubble() {
+    @return calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4);
+}
+
+.o-discuss-dropdownMenu {
+    background-color: $gray-100;
+    --Dropdown_menu-margin-y: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-radius: o-rounded-bubble();
+    box-shadow: $box-shadow-sm;
+
+    .o_bottom_sheet_sheet:has(&) {
+        background-color: $gray-100;
+        box-shadow: unset !important;
     }
 }
 
@@ -105,7 +127,8 @@ $o-mail-rounded-sizes: () !default;
 $o-mail-rounded-sizes: map-merge(
     $o-mail-rounded-sizes,
     (
-        "bubble": calc((#{$border-radius} + #{$border-radius-lg}) * 3 / 4),
+        "2_5": calc((#{$border-radius} + #{$border-radius-lg}) / 2),
+        "bubble": o-rounded-bubble(),
     )
 );
 
@@ -339,6 +362,7 @@ a.o-discuss-mention {
 .o-mail-systrayFullscreenDropdownMenu {
     top: $o-navbar-height !important;
     height: calc(100% - #{$o-navbar-height}); // no bottom-0 otherwise performance issue
+    border-radius: 0 !important;
 }
 
 .o-pointer-events-none {

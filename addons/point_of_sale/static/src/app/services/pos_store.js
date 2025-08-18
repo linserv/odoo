@@ -162,7 +162,7 @@ export class PosStore extends WithLazyGetterTrap {
             });
         }
 
-        window.addEventListener("online", () => {
+        window.addEventListener("pos-network-online", () => {
             // Sync should be done before websocket connection when going online
             this.syncAllOrdersDebounced();
         });
@@ -636,14 +636,6 @@ export class PosStore extends WithLazyGetterTrap {
         await this.deviceSync.readDataFromServer();
     }
 
-    get productListViewMode() {
-        const viewMode = this.productListView && this.ui.isSmall ? this.productListView : "grid";
-        if (viewMode === "grid") {
-            return "d-grid gap-1 gap-lg-2";
-        } else {
-            return "";
-        }
-    }
     get productViewMode() {
         const viewMode = this.productListView && this.ui.isSmall ? this.productListView : "grid";
         if (viewMode === "grid") {
@@ -656,25 +648,19 @@ export class PosStore extends WithLazyGetterTrap {
         const info = await this.getProductInfo(productTemplate, 1);
         this.dialog.add(ProductInfoPopup, { info: info, productTemplate: productTemplate });
     }
-    getProductPriceFormatted(productTemplate) {
-        const formattedUnitPrice = this.env.utils.formatCurrency(
-            this.getProductPrice({ productTemplate })
-        );
-
-        if (productTemplate.to_weight) {
-            return `${formattedUnitPrice}/${productTemplate.uom_id.name}`;
-        } else {
-            return formattedUnitPrice;
-        }
-    }
     async openConfigurator(pTemplate, opts = {}) {
         const attrById = this.models["product.attribute"].getAllBy("id");
         const attributeLines = pTemplate.attribute_line_ids.filter(
             (attr) => attr.attribute_id?.id in attrById
         );
         let attributeLinesValues = attributeLines.map((attr) => attr.product_template_value_ids);
-        if (opts.code) {
-            const product = this.models["product.product"].getBy("barcode", opts.code.base_code);
+        if (opts.code || opts.presetVariant) {
+            let product;
+            if (opts.code) {
+                product = this.models["product.product"].getBy("barcode", opts.code.base_code);
+            } else {
+                product = opts.presetVariant;
+            }
             attributeLinesValues = attributeLinesValues.map((values) =>
                 values[0].attribute_id.create_variant === "no_variant"
                     ? values
@@ -686,6 +672,8 @@ export class PosStore extends WithLazyGetterTrap {
         if (attributeLinesValues.some((values) => values.length > 1 || values[0].is_custom)) {
             return await makeAwaitable(this.dialog, ProductConfiguratorPopup, {
                 productTemplate: pTemplate,
+                hideAlwaysVariants: opts.hideAlwaysVariants,
+                forceVariantValue: opts.forceVariantValue,
             });
         }
         return {
@@ -749,11 +737,10 @@ export class PosStore extends WithLazyGetterTrap {
     // the information without having to be calculated. For example, importing a SO.
     async addLineToCurrentOrder(vals, opts = {}, configure = true) {
         let order = this.getOrder();
-        order.assertEditable();
-
         if (!order) {
             order = this.addNewOrder();
         }
+        order.assertEditable();
         return await this.addLineToOrder(vals, order, opts, configure);
     }
 
@@ -1269,12 +1256,12 @@ export class PosStore extends WithLazyGetterTrap {
         const orderToUpdate = this.models["pos.order"]
             .readMany(Array.from(this.pendingOrder.write))
             .filter(Boolean);
-        const orderToDelele = this.models["pos.order"]
+        const orderToDelete = this.models["pos.order"]
             .readMany(Array.from(this.pendingOrder.delete))
             .filter(Boolean);
 
         return {
-            orderToDelele,
+            orderToDelete,
             orderToCreate,
             orderToUpdate,
         };
@@ -1665,8 +1652,41 @@ export class PosStore extends WithLazyGetterTrap {
     changesToOrder(order, skipped = false, orderPreparationCategories, cancelled = false) {
         return changesToOrder(order, skipped, orderPreparationCategories, cancelled);
     }
+    async checkPreparationStateAndSentOrderInPreparation(order, cancelled = false) {
+        if (typeof order.id !== "number") {
+            return this.sendOrderInPreparation(order, cancelled);
+        }
+
+        const data = await this.data.call("pos.order", "get_preparation_change", [order.id]);
+        const rawchange = data.last_order_preparation_change || "{}";
+        const lastChanges = JSON.parse(rawchange);
+        const lastServerDate = DateTime.fromSQL(lastChanges.metadata?.serverDate).toUTC();
+        const lastLocalDate = DateTime.fromSQL(
+            order.last_order_preparation_change?.metadata?.serverDate
+        ).toUTC();
+
+        if (lastServerDate.isValid && lastServerDate.ts != lastLocalDate.ts) {
+            this.dialog.add(AlertDialog, {
+                title: _t("Order Outdated"),
+                body: _t(
+                    "The order has been modified on another device. If you have modified existing " +
+                        "order lines, check that your changes have not been overwritten.\n\n" +
+                        "The order will be sent to the server with the last changes made on this device."
+                ),
+            });
+
+            // Update before syncing otherwise it will overwrite the last change
+            order.last_order_preparation_change = lastChanges;
+            await this.syncAllOrders({ orders: [order] });
+            return;
+        }
+
+        return this.sendOrderInPreparation(order, cancelled);
+    }
     // Now the printer should work in PoS without restaurant
     async sendOrderInPreparation(order, opts = {}) {
+        let isPrinted = false;
+
         if (this.config.printerCategories.size && !opts.byPassPrint) {
             try {
                 let reprint = false;
@@ -1694,19 +1714,25 @@ export class PosStore extends WithLazyGetterTrap {
                 if (reprint && opts.orderDone) {
                     return;
                 }
-                await this.printChanges(order, orderChange, reprint);
+                isPrinted = await this.printChanges(order, orderChange, reprint);
             } catch (e) {
                 console.info("Failed in printing the changes in the order", e);
             }
         }
         order.updateLastOrderChange();
+        // Ensure that other devices are aware of the changes
+        // Otherwise several devices can print the same changes
+        // We need to check if a preparation display is configured to avoid unnecessary sync
+        if (isPrinted && !this.models["pos.prep.display"]?.length) {
+            await this.syncAllOrders({ orders: [order] });
+        }
     }
     async sendOrderInPreparationUpdateLastChange(o, cancelled = false) {
         if (this.data.network.offline) {
             this.data.network.warningTriggered = false;
             throw new ConnectionLostError();
         }
-        await this.sendOrderInPreparation(o, { cancelled });
+        await this.checkPreparationStateAndSentOrderInPreparation(o, { cancelled });
     }
 
     getStrNotes(note) {
@@ -1800,6 +1826,7 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     async printChanges(order, orderChange, reprint = false, printers = this.unwatched.printers) {
+        let isPrinted = false;
         const unsuccessfulPrints = [];
         const retryPrinters = new Set();
 
@@ -1819,6 +1846,10 @@ export class PosStore extends WithLazyGetterTrap {
                 let result = {};
                 for (const data of receiptsData) {
                     result = await this.printOrderChanges(data, printer);
+                    if (result.successful) {
+                        isPrinted = true;
+                    }
+
                     if (!result.successful) {
                         retryPrinters.add(printer);
                         unsuccessfulPrints.push(printer.config.name + ": " + result.message.body);
@@ -1840,6 +1871,8 @@ export class PosStore extends WithLazyGetterTrap {
                 },
             });
         }
+
+        return isPrinted;
     }
 
     async prepareReceiptGroupedData(data) {
@@ -1885,12 +1918,6 @@ export class PosStore extends WithLazyGetterTrap {
             cancelled: currentOrderChange["cancelled"].filter(filterFn),
             noteUpdate: currentOrderChange["noteUpdate"].filter(filterFn),
         };
-    }
-
-    addOrderIfEmpty(forceEmpty) {
-        if (!this.getOrder()) {
-            return this.addNewOrder();
-        }
     }
 
     connectToProxy() {
@@ -2374,16 +2401,8 @@ export class PosStore extends WithLazyGetterTrap {
         });
     }
 
-    get isTicketScreenShown() {
-        return this.router.state.current === "TicketScreen";
-    }
-
     redirectToBackend() {
         window.location = "/odoo/action-point_of_sale.action_client_pos_menu";
-    }
-
-    getDisplayDeviceIP() {
-        return this.config.proxy_ip;
     }
 
     getExcludedProductIds() {
@@ -2471,6 +2490,33 @@ export class PosStore extends WithLazyGetterTrap {
                   }
                   return a.name.localeCompare(b.name);
               });
+    }
+
+    get productToDisplayByCateg() {
+        const sortedProducts = this.productsToDisplay;
+        if (!this.config.iface_group_by_categ) {
+            return sortedProducts.length ? [[0, sortedProducts]] : [];
+        } else {
+            const groupedByCategory = {};
+            for (const product of sortedProducts) {
+                for (const categ of product.pos_categ_ids) {
+                    if (!groupedByCategory[categ.id]) {
+                        groupedByCategory[categ.id] = [];
+                    }
+                    groupedByCategory[categ.id].push(product);
+                }
+            }
+            const res = Object.entries(groupedByCategory).sort(([a], [b]) => {
+                const catA = this.models["pos.category"].get(a);
+                const catB = this.models["pos.category"].get(b);
+
+                const isRootA = !catA.parent_id;
+                const isRootB = !catB.parent_id;
+
+                return isRootA !== isRootB ? (isRootA ? -1 : 1) : catA.sequence - catB.sequence;
+            });
+            return res;
+        }
     }
 
     sortByWordIndex(products, words) {

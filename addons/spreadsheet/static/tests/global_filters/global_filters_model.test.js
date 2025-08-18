@@ -320,11 +320,10 @@ test("Domain of simple date filter", async function () {
         list: { 1: { chain: "date", type: "date" } },
         chart: { [chartId]: { chain: "date", type: "date" } },
     });
-    const result = await setGlobalFilterValue(model, {
+    await setGlobalFilterValue(model, {
         id: THIS_YEAR_GLOBAL_FILTER.id,
         value: { type: "year", year: 2021 },
     });
-    console.log(result);
     const pivotDomain = model.getters.getPivotComputedDomain("PIVOT#1");
     expect(pivotDomain[0]).toBe("&");
     expect(pivotDomain[1]).toEqual(["date", ">=", "2021-01-01"]);
@@ -2475,7 +2474,10 @@ test("field matching is removed when an Odoo chart is deleted", async function (
         type: "date",
     };
     expect(model.getters.getOdooChartFieldMatching(chartId, filter.id)).toEqual(matching);
-    model.dispatch("DELETE_FIGURE", { figureId: chartId, sheetId });
+    model.dispatch("DELETE_FIGURE", {
+        figureId: model.getters.getFigureIdFromChartId(chartId),
+        sheetId,
+    });
     expect(() => model.getters.getOdooChartFieldMatching(chartId, filter.id)).toThrow(undefined, {
         message: "Chart does not exist",
     });

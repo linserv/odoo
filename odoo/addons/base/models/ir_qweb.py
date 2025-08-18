@@ -428,6 +428,7 @@ _SAFE_QWEB_OPCODES = _EXPR_OPCODES.union(to_opcodes([
     'LOAD_FAST', 'STORE_FAST', 'UNPACK_SEQUENCE',
     'STORE_SUBSCR',
     'LOAD_GLOBAL',
+    'EXTENDED_ARG',
     # Following opcodes were added in 3.11 https://docs.python.org/3/whatsnew/3.11.html#new-opcodes
     'RESUME',
     'CALL',
@@ -2850,10 +2851,15 @@ def render(template_name, values, load, **options):
         def _get_asset_nodes(self, *args):
             raise NotImplementedError("Assets are not allowed in this rendering mode. Please use \"env['ir.qweb']._render\" method")
 
+    class MockCr:
+        def __init__(self):
+            self.cache = {}
+
     class MockEnv(dict):
         def __init__(self):
             super().__init__()
             self.context = {}
+            self.cr = MockCr()
 
         def __call__(self, cr=None, user=None, context=None, su=None):
             """ Return an mocked environment based and update the sent context.

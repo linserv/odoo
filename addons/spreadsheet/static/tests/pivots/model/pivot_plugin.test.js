@@ -8,7 +8,7 @@ import {
 import {
     makeServerError,
     onRpc,
-    patchTranslations,
+    allowTranslations,
     patchWithCleanup,
     serverState,
 } from "@web/../tests/web_test_helpers";
@@ -36,7 +36,6 @@ import { localization } from "@web/core/l10n/localization";
 import { user } from "@web/core/user";
 
 import { Model } from "@odoo/o-spreadsheet";
-import { THIS_YEAR_GLOBAL_FILTER } from "@spreadsheet/../tests/helpers/global_filter";
 
 import * as spreadsheet from "@odoo/o-spreadsheet";
 import { waitForDataLoaded } from "@spreadsheet/helpers/model";
@@ -1704,7 +1703,13 @@ test("can import a pivot with a calculated field", async function () {
 test("Can duplicate a pivot", async () => {
     const { model, pivotId } = await createSpreadsheetWithPivot();
     const matching = { chain: "product_id", type: "many2one" };
-    const filter = { ...THIS_YEAR_GLOBAL_FILTER, id: "42" };
+    const filter = {
+        id: "42",
+        type: "relation",
+        modelName: "product",
+        label: "Product",
+        defaultValue: { operator: "in", ids: [41] },
+    };
     await addGlobalFilter(model, filter, {
         pivot: { [pivotId]: matching },
     });
@@ -1718,6 +1723,8 @@ test("Can duplicate a pivot", async () => {
 
     expect(model.getters.getPivotFieldMatching(pivotId, "42")).toEqual(matching);
     expect(model.getters.getPivotFieldMatching("2", "42")).toEqual(matching);
+    expect(model.getters.getPivotComputedDomain(pivotId)).toEqual([["product_id", "in", [41]]]);
+    expect(model.getters.getPivotComputedDomain("2")).toEqual([["product_id", "in", [41]]]);
 });
 
 test("Duplicate pivot respects the formula id increment", async () => {
@@ -1738,7 +1745,7 @@ test("Cannot duplicate unknown pivot", async () => {
 });
 
 test("Spreadsheet pivot table ignored by global fiter plugin", () => {
-    patchTranslations();
+    allowTranslations();
 
     const model = new Model();
     model.selection.selectZone({ cell: { col: 0, row: 0 }, zone: toZone("A1:A4") });

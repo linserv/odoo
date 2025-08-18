@@ -25,6 +25,18 @@ export const CSS_SHORTHANDS = {
         "border-bottom-right-radius",
         "border-bottom-left-radius",
     ],
+    "--box-border-width": [
+        "--box-border-top-width",
+        "--box-border-right-width",
+        "--box-border-bottom-width",
+        "--box-border-left-width",
+    ],
+    "--box-border-radius": [
+        "--box-border-top-left-radius",
+        "--box-border-top-right-radius",
+        "--box-border-bottom-right-radius",
+        "--box-border-bottom-left-radius",
+    ],
     "border-color": [
         "border-top-color",
         "border-right-color",
@@ -308,15 +320,9 @@ export function shouldEditableMediaBeEditable(mediaEl) {
     // inner media that should be editable (the fact the container
     // is not is to prevent adding text in between those medias).
     // This case is complex and the solution to support it is not
-    // perfect: we mark those media with a class and check that the
-    // first non editable ancestor is in fact in an editable parent.
-    const parentEl = mediaEl.parentElement;
-    const nonEditableAncestorRootEl = parentEl && parentEl.closest('[contenteditable="false"]');
-    return (
-        nonEditableAncestorRootEl &&
-        nonEditableAncestorRootEl.parentElement &&
-        nonEditableAncestorRootEl.parentElement.isContentEditable
-    );
+    // perfect: we mark those media with a class and check that they
+    // are descendant of a savable.
+    return mediaEl.closest(".o_editable");
 }
 /**
  * Returns the label of a link element.

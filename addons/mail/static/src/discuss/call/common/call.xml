@@ -7,9 +7,11 @@
             'o-fullSize': isFullSize,
             'o-compact': props.compact and !isMobileOs,
             'o-minimized': minimized,
-            'position-relative rounded-2 o-mx-0_5 o-mt-0_5 p-1': !rtc.state.isFullscreen and !props.isPip,
+            'position-relative o-mx-0_5 o-mt-0_5 p-1': !rtc.state.isFullscreen and !props.isPip,
+            'rounded-2': !rtc.state.isFullscreen and !props.isPip and isActiveCall,
             'o-hasVideo': channel.videoCount > 0,
             'o-selfInCall': isActiveCall,
+            'border-bottom': !isActiveCall,
         }">
             <div class="o-discuss-Call-main d-flex flex-grow-1 flex-column align-items-center justify-content-center position-relative overflow-auto o-scrollbar-thin" t-on-mouseleave="onMouseleaveMain">
                 <BlurPerformanceWarning t-if="store.settings.blurPerformanceWarning"/>
@@ -53,7 +55,7 @@
                 </div>
             </div>
             <div t-if="state.sidebar and channel.activeRtcSession" class="o-discuss-Call-sidebar d-flex align-items-center h-100 flex-column">
-                <CallParticipantCard t-foreach="visibleCards" t-as="cardData" t-key="cardData.key"
+                <CallParticipantCard t-foreach="channel.visibleCards" t-as="cardData" t-key="cardData.key"
                     cardData="cardData"
                     className="'o-discuss-Call-sidebarCard w-100 p-1'"
                     thread="channel"

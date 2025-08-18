@@ -793,6 +793,48 @@ registry.category("web_tour.tours").add("test_product_long_press", {
         ].flat(),
 });
 
+registry.category("web_tour.tours").add("test_barcode_search_attributes_preset", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+
+            // Step 1: Search and add first variant
+            ProductScreen.searchProduct("12341357"),
+            ProductScreen.productIsDisplayed("Product with Attributes", 0),
+            ProductScreen.clickDisplayedProduct("Product with Attributes"),
+            ProductScreen.selectedOrderlineHas(
+                "Product with Attributes",
+                "1.0",
+                "10.0",
+                "Value 1, Value 3, Value 5, Value 7"
+            ),
+            // Step 2: Search and add product without attributes (used to delay UI update)
+            ProductScreen.searchProduct("987654321"),
+            {
+                content: "Wait for the product without attributes to be visible",
+                trigger: '.product:contains("Product without Attributes")',
+            },
+            ProductScreen.clickDisplayedProduct("Product without Attributes"),
+            ProductScreen.selectedOrderlineHas("Product without Attributes", "1.0"),
+
+            // Step 3: Search and add second variant of the original product
+            ProductScreen.searchProduct("123424689"),
+            ProductScreen.productIsDisplayed("Product with Attributes", 0).map(negateStep),
+            ProductScreen.searchProduct("12342468"),
+            ProductScreen.productIsDisplayed("Product with Attributes", 0),
+            ProductScreen.clickDisplayedProduct("Product with Attributes"),
+            ProductScreen.selectedOrderlineHas(
+                "Product with Attributes",
+                "1.0",
+                "10.0",
+                "Value 2, Value 4, Value 6, Value 8"
+            ),
+
+            Chrome.endTour(),
+        ].flat(),
+});
+
 registry.category("web_tour.tours").add("test_remove_archived_product_from_cache", {
     steps: () =>
         [
@@ -855,6 +897,21 @@ registry.category("web_tour.tours").add("test_preset_timing_retail", {
         ].flat(),
 });
 
+registry.category("web_tour.tours").add("test_only_existing_lots", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickDisplayedProduct("Product with existing lots"),
+            ProductScreen.selectNthLotNumber(1),
+            ProductScreen.selectedOrderlineHas("Product with existing lots", "1.0"),
+            inLeftSide({
+                trigger: ".order-container .orderline .lot-number:contains('Lot Number 1001')",
+            }),
+            Chrome.endTour(),
+        ].flat(),
+});
+
 registry.category("web_tour.tours").add("test_delete_line", {
     steps: () =>
         [
@@ -870,6 +927,14 @@ registry.category("web_tour.tours").add("test_delete_line", {
             },
             inLeftSide([
                 ...ProductScreen.selectedOrderlineHasDirect("Desk Organizer", "1"),
+                Numpad.click("⌫"),
+                {
+                    content: "Click 0",
+                    trigger: ".modal " + Numpad.buttonTriger("0"),
+                    run: "click",
+                },
+                ...Chrome.confirmPopup(),
+                ...ProductScreen.selectedOrderlineHasDirect("Desk Organizer", "0"),
                 Numpad.click("⌫"),
                 {
                     content: "Click 0",

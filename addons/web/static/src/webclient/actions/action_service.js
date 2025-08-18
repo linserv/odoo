@@ -167,7 +167,11 @@ export function makeActionManager(env, router = _router) {
      * @returns {Promise<object[]>} an array of virtual controllers
      */
     async function _controllersFromState() {
-        const state = router.current;
+        const currentState = JSON.parse(browser.sessionStorage.getItem("current_state") || "{}");
+        let state = router.current;
+        if (router.stateToUrl(currentState) === browser.location.pathname) {
+            state = currentState;
+        }
         if (!state?.actionStack?.length) {
             return [];
         }
@@ -805,11 +809,14 @@ export function makeActionManager(env, router = _router) {
 
         // Store current action of the current window
         const currentAction = browser.sessionStorage.getItem("current_action");
+        const currentState = browser.sessionStorage.getItem("current_state");
         // Store on the session the action for the new window
         browser.sessionStorage.setItem("current_action", action._originalAction || "{}");
+        browser.sessionStorage.setItem("current_state", JSON.stringify(state));
         _openURL(stateToUrl(state));
         // restore the current action from the current window
         browser.sessionStorage.setItem("current_action", currentAction);
+        browser.sessionStorage.setItem("current_state", currentState);
     }
 
     /**
@@ -1509,11 +1516,10 @@ export function makeActionManager(env, router = _router) {
             throw new InvalidButtonParamsError("Missing type for doActionButton request");
         }
         if (!isEmbeddedAction && action.embedded_action_ids?.length) {
-            const embeddedActionsOrder = JSON.parse(
-                browser.localStorage.getItem(
-                    `orderEmbedded${action.id}+${params.resId || ""}+${user.userId}`
-                )
-            );
+            const embeddedActionsKey = `${action.id}+${params.resId || ""}`;
+            const embeddedActionsOrder =
+                user.settings.embedded_actions_config_ids?.[embeddedActionsKey]
+                    ?.embedded_actions_order;
             const embeddedActionId = embeddedActionsOrder?.[0];
             const embeddedAction = action.embedded_action_ids?.find(
                 (embeddedAction) => embeddedAction.id === embeddedActionId
@@ -1776,6 +1782,7 @@ export function makeActionManager(env, router = _router) {
         }
 
         const newState = makeState(cStack);
+        browser.sessionStorage.setItem("current_state", JSON.stringify(newState));
 
         cStack.at(-1).state = newState;
         router.pushState(newState, { replace: true });

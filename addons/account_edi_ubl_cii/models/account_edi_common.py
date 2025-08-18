@@ -96,6 +96,19 @@ EAS_MAPPING = {
     'SM': {'9951': 'vat'},
     'TR': {'9952': 'vat'},
     'VA': {'9953': 'vat'},
+    # DOM-TOM
+    'BL': {'0009': 'siret', '9957': 'vat', '0002': None},  # Saint Barthélemy
+    'GF': {'0009': 'siret', '9957': 'vat', '0002': None},  # French Guiana
+    'GP': {'0009': 'siret', '9957': 'vat', '0002': None},  # Guadeloupe
+    'MF': {'0009': 'siret', '9957': 'vat', '0002': None},  # Saint Martin
+    'MQ': {'0009': 'siret', '9957': 'vat', '0002': None},  # Martinique
+    'NC': {'0009': 'siret', '9957': 'vat', '0002': None},  # New Caledonia
+    'PF': {'0009': 'siret', '9957': 'vat', '0002': None},  # French Polynesia
+    'PM': {'0009': 'siret', '9957': 'vat', '0002': None},  # Saint Pierre and Miquelon
+    'RE': {'0009': 'siret', '9957': 'vat', '0002': None},  # Réunion
+    'TF': {'0009': 'siret', '9957': 'vat', '0002': None},  # French Southern and Antarctic Lands
+    'WF': {'0009': 'siret', '9957': 'vat', '0002': None},  # Wallis and Futuna
+    'YT': {'0009': 'siret', '9957': 'vat', '0002': None},  # Mayotte
 }
 
 # -------------------------------------------------------------------------
@@ -343,7 +356,7 @@ class AccountEdiCommon(models.AbstractModel):
 
     def _invoice_constraints_common(self, invoice):
         # check that there is a tax on each line
-        for line in invoice.invoice_line_ids.filtered(lambda x: x.display_type not in ('line_note', 'line_section') and x._check_edi_line_tax_required()):
+        for line in invoice.invoice_line_ids.filtered(lambda x: x.display_type not in ('line_section', 'line_subsection', 'line_note') and x._check_edi_line_tax_required()):
             if not line.tax_ids:
                 return {'tax_on_line': _("Each invoice line should have at least one tax.")}
         return {}

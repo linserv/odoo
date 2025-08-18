@@ -3,8 +3,9 @@ from datetime import date
 from freezegun import freeze_time
 
 from odoo.exceptions import ValidationError
-from odoo.fields import Date
+from odoo.fields import Date, Datetime
 from odoo.tests import Form, tagged, users
+from odoo.tools import format_date
 
 from odoo.addons.hr_holidays.tests.common import TestHrHolidaysCommon
 
@@ -472,7 +473,7 @@ class TestAllocations(TestHrHolidaysCommon):
                 allocation_form.name_validity,
                 "%(allocation_name)s (from %(date_from)s to No Limit)" % {
                     'allocation_name': allocation_form.name,
-                    'date_from': allocation_form.date_from.strftime("%b %d %Y"),
+                    'date_from': format_date(allocation.env, Date.context_today(allocation, Datetime.to_datetime(allocation_form.date_from))),
                 },
                 "The name_validity field was not set correctly."
             )
@@ -490,3 +491,33 @@ class TestAllocations(TestHrHolidaysCommon):
                 allocation_form.number_of_hours_display = 10
                 allocation_form.employee_id = self.env["hr.employee"]
             allocation_form.save()
+
+    def test_employee_holidays_archived_display(self):
+        admin_user = self.env.ref('base.user_admin')
+
+        employee = self.env['hr.employee'].create({
+            'name': 'test_employee',
+        })
+
+        leave_type = self.env['hr.leave.type'].with_user(admin_user)
+
+        holidays_type_1 = leave_type.create({
+            'name': 'archived_holidays',
+            'allocation_validation_type': 'no_validation',
+        })
+
+        self.env['hr.leave.allocation'].create({
+            'name': 'archived_holidays_allocation',
+            'employee_id': employee.id,
+            'holiday_status_id': holidays_type_1.id,
+            'number_of_days': 10,
+            'state': 'confirm',
+            'date_from': '2022-01-01',
+        })
+
+        self.assertEqual(employee.allocation_display, '10')
+
+        holidays_type_1.active = False
+        employee._compute_allocation_remaining_display()
+
+        self.assertEqual(employee.allocation_display, '0')

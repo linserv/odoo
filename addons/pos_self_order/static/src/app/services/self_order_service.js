@@ -601,6 +601,7 @@ export class SelfOrder extends Reactive {
         }
 
         try {
+            const tableIdentifier = this.router.getTableIdentifier([]);
             let uuid = this.selectedOrderUuid;
             this.currentOrder.recomputeOrderData();
             const data = await rpc(
@@ -608,7 +609,7 @@ export class SelfOrder extends Reactive {
                 {
                     order: this.currentOrder.serializeForORM(),
                     access_token: this.access_token,
-                    table_identifier: this.currentOrder?.table_id?.identifier || false,
+                    table_identifier: this.currentOrder?.table_id?.identifier || tableIdentifier,
                 }
             );
             const result = this.models.connectNewData(data);
@@ -689,34 +690,6 @@ export class SelfOrder extends Reactive {
                 this.models["pos.order"].map((order) => order.access_token)
             );
         }
-    }
-
-    changeOrderState(access_token, state) {
-        const order = this.orders.filter((o) => o.access_token === access_token);
-        let message = _t("Your order status has been changed");
-
-        if (order.length === 0) {
-            this.handleErrorNotification(new Error("Warning, no order with this access_token"));
-        } else if (order.length !== 1) {
-            this.handleErrorNotification(
-                new Error("Warning, two orders with the same access_token")
-            );
-        } else {
-            order[0].state = state;
-        }
-
-        if (state === "paid") {
-            this.selectedOrderUuid = null;
-            message = _t("Your order has been paid");
-        } else if (state === "cancel") {
-            this.selectedOrderUuid = null;
-            message = _t("Your order has been cancelled");
-        }
-
-        this.notification.add(message, {
-            type: "success",
-        });
-        this.router.navigate("default");
     }
 
     isOrder() {
@@ -851,9 +824,6 @@ export class SelfOrder extends Reactive {
 
     isTaxesIncludedInPrice() {
         return this.config.iface_tax_included === "total";
-    }
-    getLinePrice(line) {
-        return this.config.iface_tax_included ? line.price_subtotal_incl : line.price_subtotal;
     }
     getSelectedAttributes(line) {
         const attributeValues = line.attribute_value_ids;

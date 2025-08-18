@@ -27,9 +27,9 @@ test("can make DM chat in mobile", async () => {
     pyEnv["res.users"].create({ partner_id: partnerId });
     await start();
     await openDiscuss();
-    await contains("button.active", { text: "Inbox" });
+    await contains("button.o-active", { text: "Notifications" });
     await click("button", { text: "Chats" });
-    await click("button", { text: "Start a conversation" });
+    await click(".o-mail-DiscussSearch-inputContainer");
     await insertText("input[placeholder='Search a conversation']", "Gandalf");
     await click(".o_command_name", { text: "Gandalf" });
     await contains(".o-mail-ChatWindow", { text: "Gandalf" });
@@ -41,9 +41,9 @@ test("can search channel in mobile", async () => {
     pyEnv["discuss.channel"].create({ name: "Gryffindors" });
     await start();
     await openDiscuss();
-    await contains("button.active", { text: "Inbox" });
+    await contains("button.o-active", { text: "Notifications" });
     await click("button", { text: "Channels" });
-    await click("button", { text: "Start a conversation" });
+    await click(".o-mail-DiscussSearch-inputContainer");
     await insertText("input[placeholder='Search a conversation']", "Gryff");
     await click("a", { text: "Gryffindors" });
     await contains(".o-mail-ChatWindow div[title='Gryffindors']");
@@ -53,9 +53,9 @@ test("can make new channel in mobile", async () => {
     patchUiSize({ size: SIZES.SM });
     await start();
     await openDiscuss();
-    await contains("button.active", { text: "Inbox" });
+    await contains("button.o-active", { text: "Notifications" });
     await click("button", { text: "Channels" });
-    await click("button", { text: "Start a conversation" });
+    await click(".o-mail-DiscussSearch-inputContainer");
     await insertText("input[placeholder='Search a conversation']", "slytherins");
     await click("a", { text: "Create Channel" });
     await contains(".o-mail-ChatWindow", { text: "slytherins" });
@@ -94,6 +94,37 @@ test("channel preview show deleted messages", async () => {
     await contains(".o-mail-NotificationItem-text", {
         text: "Demo: This message has been removed",
     });
+});
+
+test("deleted message should not show parent message reference and mentions", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
+    const messageId = pyEnv["mail.message"].create({
+        body: "<p>Parent Message</p>",
+        message_type: "comment",
+        model: "discuss.channel",
+        res_id: channelId,
+    });
+    pyEnv["mail.message"].create({
+        body: "<p>reply message</p>",
+        message_type: "comment",
+        model: "discuss.channel",
+        parent_id: messageId,
+        partner_ids: [serverState.partnerId],
+        res_id: channelId,
+    });
+    await start();
+    await openDiscuss(channelId);
+    await contains(".o-mail-MessageInReply", { text: "Parent Message" });
+    await click("[title='Expand']", {
+        parent: [".o-mail-Message:has(.o-mail-Message-bubble.o-orange)", { text: "reply message" }],
+    });
+    await click(".o-mail-Message-moreMenu .o-dropdown-item:contains(Delete)");
+    await click(".o_dialog button:contains(Delete)");
+    await contains(".o-mail-Message:not(:has(.o-mail-Message-bubble.o-orange))", {
+        text: "This message has been removed",
+    });
+    await contains(".o-mail-MessageInReply", { count: 0 });
 });
 
 test("channel preview ignores transient message", async () => {

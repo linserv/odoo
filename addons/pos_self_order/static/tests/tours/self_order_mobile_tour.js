@@ -337,3 +337,48 @@ registry.category("web_tour.tours").add("test_self_order_product_availability", 
         Utils.clickBtn("Ok"),
     ],
 });
+
+registry.category("web_tour.tours").add("self_order_mobile_0_price_order", {
+    steps: () =>
+        [
+            Utils.checkIsNoBtn("My Order"),
+            Utils.clickBtn("Order Now"),
+            LandingPage.selectLocation("Test-In"),
+            ProductPage.clickProduct("Ketchup"),
+            Utils.clickBtn("Checkout"),
+            CartPage.checkProduct("Ketchup", "0", "1"),
+            Utils.clickBtn("Order"),
+            CartPage.selectTable("3"),
+            ConfirmationPage.isShown(),
+            Utils.clickBtn("Ok"),
+            Utils.clickBtn("My Order"),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_order_table_assignement_each", {
+    steps: () =>
+        [
+            Utils.checkIsNoBtn("My Order"),
+            Utils.clickBtn("Order Now"),
+            ProductPage.clickProduct("Coca-Cola"),
+            Utils.clickBtn("Checkout"),
+            CartPage.checkProduct("Coca-Cola", "0.00", "1"),
+            Utils.clickBtn("Order"),
+            ...CartPage.selectTable("1"),
+            Utils.clickBtn("Ok"),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_order_table_assignement_meal", {
+    steps: () =>
+        [
+            Utils.checkIsNoBtn("My Order"),
+            Utils.clickBtn("Order Now"),
+            ProductPage.clickProduct("Coca-Cola"),
+            Utils.clickBtn("Checkout"),
+            CartPage.checkProduct("Coca-Cola", "0.00", "1"),
+            Utils.clickBtn("Order"),
+            ...CartPage.selectTable("1"),
+            Utils.clickBtn("Ok"),
+        ].flat(),
+});

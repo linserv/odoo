@@ -4755,12 +4755,12 @@ class MailThread(models.AbstractModel):
             )
         elif attachment_ids is not None:  # None means "no update"
             message.attachment_ids._delete_and_notify()
-        if partner_ids:
-            msg_values.update({
-                'partner_ids': list(partner_ids or [])
-            })
+        if partner_ids is not None:
+            msg_values.update({"partner_ids": [int(pid) for pid in partner_ids] or False})
         if msg_values:
             message.write(msg_values)
+        if message._filter_empty():
+            self._clean_empty_message(message)
 
         if 'scheduled_date' in kwargs:
             # update scheduled datetime
@@ -4780,12 +4780,19 @@ class MailThread(models.AbstractModel):
             "pinned_at",
             "write_date",
             *message._get_store_linked_messages_fields(),
+            *self._get_store_message_update_extra_fields(),
         ]
         if body is not None:
             # sudo: mail.message.translation - discarding translations of message after editing it
             self.env["mail.message.translation"].sudo().search([("message_id", "=", message.id)]).unlink()
             res.append({"translationValue": False})
         Store(bus_channel=message._bus_channel()).add(message, res).bus_send()
+
+    def _clean_empty_message(self, message):
+        pass
+
+    def _get_store_message_update_extra_fields(self):
+        return []
 
     # ------------------------------------------------------
     # STORE
@@ -4797,15 +4804,10 @@ class MailThread(models.AbstractModel):
         store.add_records_fields(self, fields, as_thread=True)
         for thread in self:
             res = {}
-            if is_request:
-                res["hasReadAccess"] = True
-                res["hasWriteAccess"] = False
+            if is_request and store.target.is_current_user(self.env):
+                res["hasReadAccess"] = thread.sudo(False).has_access("read")
+                res["hasWriteAccess"] = thread.sudo(False).has_access("write")
                 res["canPostOnReadonly"] = self._mail_post_access == "read"
-                try:
-                    thread.check_access("write")
-                    res["hasWriteAccess"] = True
-                except AccessError:
-                    pass
             if (
                "activities" in request_list
                 and isinstance(self.env[self._name], self.env.registry["mail.activity.mixin"])

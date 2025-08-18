@@ -99,6 +99,7 @@ class PosConfig(models.Model):
     iface_print_via_proxy = fields.Boolean(string='Print via Proxy', help="Bypass browser printing and prints via the hardware proxy.")
     iface_scan_via_proxy = fields.Boolean(string='Scan via Proxy', help="Enable barcode scanning with a remotely connected barcode scanner and card swiping with a Vantiv card reader.")
     iface_big_scrollbars = fields.Boolean('Large Scrollbars', help='For imprecise industrial touchscreens.')
+    iface_group_by_categ = fields.Boolean("Group products by categories", help='Display products grouped by categories.')
     iface_print_auto = fields.Boolean(string='Automatic Receipt Printing', default=False,
         help='The receipt will automatically be printed at the end of each order.')
     iface_print_skip_screen = fields.Boolean(string='Skip Preview Screen', default=True,
@@ -417,12 +418,13 @@ class PosConfig(models.Model):
 
     @api.constrains('payment_method_ids')
     def _check_payment_method_ids_journal(self):
-        for cash_method in self.payment_method_ids.filtered(lambda m: m.journal_id.type == 'cash'):
-            if self.env['pos.config'].search_count([('id', '!=', self.id), ('payment_method_ids', 'in', cash_method.ids)], limit=1):
-                raise ValidationError(_("This cash payment method is already used in another Point of Sale.\n"
-                                        "A new cash payment method should be created for this Point of Sale."))
-            if len(cash_method.journal_id.pos_payment_method_ids) > 1:
-                raise ValidationError(_("You cannot use the same journal on multiples cash payment methods."))
+        for config in self:
+            for cash_method in config.payment_method_ids.filtered(lambda m: m.journal_id.type == 'cash'):
+                if self.env['pos.config'].search_count([('id', '!=', config.id), ('payment_method_ids', 'in', cash_method.ids)], limit=1):
+                    raise ValidationError(_("This cash payment method is already used in another Point of Sale.\n"
+                                            "A new cash payment method should be created for this Point of Sale."))
+                if len(cash_method.journal_id.pos_payment_method_ids) > 1:
+                    raise ValidationError(_("You cannot use the same journal on multiples cash payment methods."))
 
     @api.constrains('trusted_config_ids')
     def _check_trusted_config_ids_currency(self):

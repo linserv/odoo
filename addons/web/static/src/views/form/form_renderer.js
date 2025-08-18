@@ -90,13 +90,15 @@ export class FormRenderer extends Component {
                             elementToFocus = rootEl.querySelector(`#${id}`);
                             if (elementToFocus) {
                                 break;
-                            };
-                        };
-                        elementToFocus = elementToFocus || rootEl.querySelector(
-                            focusableSelectors
-                                .map((sel) => `.o_content .o_field_widget ${sel}`)
-                                .join(", ")
-                        );
+                            }
+                        }
+                        elementToFocus =
+                            elementToFocus ||
+                            rootEl.querySelector(
+                                focusableSelectors
+                                    .map((sel) => `.o_content .o_field_widget ${sel}`)
+                                    .join(", ")
+                            );
                     }
                     if (elementToFocus) {
                         elementToFocus.focus();

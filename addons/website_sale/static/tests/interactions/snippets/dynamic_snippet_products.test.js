@@ -34,7 +34,7 @@ test("dynamic snippet products loads items and displays them through template", 
         const json = JSON.parse(new TextDecoder().decode(await args.arrayBuffer()));
         expect(json.params.filter_id).toBe(3);
         expect(json.params.template_key).toBe(
-            "website_sale.dynamic_filter_template_product_product_borderless_1"
+            "website_sale.dynamic_filter_template_product_product_products_item"
         );
         expect(json.params.limit).toBe(16);
         expect(json.params.search_domain).toEqual([["public_categ_ids", "child_of", 2]]);
@@ -68,14 +68,14 @@ test("dynamic snippet products loads items and displays them through template", 
     });
     const { core } = await startInteractions(`
       <div id="wrapwrap">
-          <section data-snippet="s_dynamic_snippet_products" class="s_dynamic_snippet_products s_dynamic s_dynamic_empty pt32 pb32 o_colored_level s_product_product_borderless_1"
+          <section data-snippet="s_dynamic_snippet_products" class="s_dynamic_snippet_products s_dynamic pt32 pb32 o_colored_level s_product_product_borderless_1"
                   data-name="Products"
                   data-filter-id="3"
                   data-product-category-id="current"
                   data-show-variants="true"
                   data-custom-template-data="{}"
                   data-number-of-records="16"
-                  data-template-key="website_sale.dynamic_filter_template_product_product_borderless_1"
+                  data-template-key="website_sale.dynamic_filter_template_product_product_products_item"
                   data-carousel-interval="5000"
           >
               <div class="container">

@@ -3,6 +3,7 @@
 import base64
 import json
 import logging
+from lxml import etree
 
 from werkzeug import urls
 from werkzeug.exceptions import NotFound
@@ -108,11 +109,25 @@ class Website(models.Model):
         store=True,
     )
     shop_ppg = fields.Integer(
-        string="Number of products in the grid on the shop", default=20,
+        string="Number of products in the grid on the shop", default=21,
     )
-    shop_ppr = fields.Integer(string="Number of grid columns on the shop", default=4)
+    shop_ppr = fields.Integer(string="Number of grid columns on the shop", default=3)
 
     shop_gap = fields.Char(string="Grid-gap on the shop", default="16px", required=False)
+
+    shop_opt_products_design_classes = fields.Char(
+        string="Shop Design Class",
+        default=(
+            'o_wsale_products_opt_layout_catalog o_wsale_products_opt_design_thumbs '
+            'o_wsale_products_opt_name_color_regular o_wsale_products_opt_thumb_6_5 '
+            'o_wsale_products_opt_thumb_cover o_wsale_products_opt_img_secondary_show '
+            'o_wsale_products_opt_img_hover_zoom_out_light o_wsale_products_opt_has_cta '
+            'o_wsale_products_opt_actions_onhover o_wsale_products_opt_has_wishlist '
+            'o_wsale_products_opt_wishlist_fixed o_wsale_products_opt_has_description '
+            'o_wsale_products_opt_actions_subtle o_wsale_products_opt_cc1'
+        ),
+        help="CSS class for shop products design"
+    )
 
     shop_default_sort = fields.Selection(
         selection='_get_product_sort_mapping', required=True, default='website_sequence asc')
@@ -195,7 +210,7 @@ class Website(models.Model):
     def _compute_currency_id(self):
         for website in self:
             website.currency_id = (
-                request and request.pricelist.currency_id or website.company_id.currency_id
+                request and request.pricelist.currency_id or website.company_id.sudo().currency_id
             )
 
     @api.depends('send_abandoned_cart_email')
@@ -264,12 +279,15 @@ class Website(models.Model):
         website_settings = {}
         views_to_disable = []
         views_to_enable = []
+        scss_customization_params = {}
         ThemeUtils = self.env['theme.utils'].with_context(website_id=website.id)
+        Assets = self.env['web_editor.assets']
 
         def parse_style_config(style_config_):
             website_settings.update(style_config_['website_fields'])
             views_to_disable.extend(style_config_['views']['disable'])
             views_to_enable.extend(style_config_['views']['enable'])
+            scss_customization_params.update(style_config_.get('scss_customization_params', {}))
 
         # Extract shop page settings.
         if shop_page_style_option:
@@ -293,6 +311,72 @@ class Website(models.Model):
             ThemeUtils.disable_view(xml_id)
         for xml_id in views_to_enable:
             ThemeUtils.enable_view(xml_id)
+
+        for footer_id in ThemeUtils._footer_templates:
+            footer_view = self.with_context(website_id=website.id).viewref(
+                footer_id,
+                raise_if_not_found=False,  # don't raise on custom footers not installed on website
+            )
+            if not footer_view.active:
+                continue
+
+            footer_updated = False
+            try:
+                arch_tree = etree.fromstring(footer_view.arch)
+            except etree.XMLSyntaxError as e:
+                logger.warning("Failed to update ecommerce footer view %s: %s", footer_id, e)
+            else:
+                # TODO this should be moved as a website feature (not eCommerce-specific)
+                footer_div_node = arch_tree.xpath(
+                    "//section/div[hasclass('container') or hasclass('o_container_small') or hasclass('container-fluid')]",
+                )
+                # The xml view could have been modified in the backend, we don't
+                # want the xpath error to break the configurator feature
+                if not footer_div_node:
+                    logger.warning(
+                        "Failed to match footer width with header in ecommerce footer view %s",
+                        footer_id,
+                    )
+                else:
+                    # Logic for matching header width
+                    if 'website.footer_copyright_content_width_fluid' in views_to_enable:
+                        footer_updated = True
+                        footer_div_node[0].set("class", "container-fluid s_allow_columns")
+                    elif 'website.footer_copyright_content_width_small' in views_to_enable:
+                        footer_updated = True
+                        footer_div_node[0].set("class", "o_container_small s_allow_columns")
+
+                if footer_id == 'website_sale.template_footer_website_sale':
+                    ecommerce_categories_node = arch_tree.xpath("//t[@t-set='ecommerce_categories']")
+                    if not ecommerce_categories_node:
+                        logger.warning("Skipping ecommerce categories in ecommerce footer view %s", footer_id)
+                    else:
+                        # Logic for inserting eCommerce categories in footer
+                        ecommerce_categories = self.env['product.public.category'].search([], limit=6)
+                        # Deliberately hardcode categories inside the view arch, it will be transformed into
+                        # static nodes after a save/edit thanks to the t-ignore in parent node.
+                        footer_updated = True
+                        ecommerce_categories_node[0].attrib['t-value'] = json.dumps([
+                            {
+                                'name': cat.name,
+                                'id': cat.id,
+                            }
+                            for cat in ecommerce_categories
+                        ])
+
+                if footer_updated:
+                    footer_view.write({'arch': etree.tostring(arch_tree)})
+
+        if 'website_sale.template_footer_website_sale' in views_to_enable:
+            scss_customization_params['footer-template'] = 'website_sale'
+
+        # For a website editor to recognize the correct header/footer templates
+        # (reason `isApplied` method of footer plugin)
+        if scss_customization_params:
+            Assets.make_scss_customization(
+                '/website/static/src/scss/options/user_values.scss',
+                scss_customization_params,
+            )
 
         return res
 

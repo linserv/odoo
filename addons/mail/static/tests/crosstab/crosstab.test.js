@@ -50,12 +50,12 @@ test("Thread rename", async () => {
     const env2 = await start({ asTab: true });
     await openDiscuss(channelId, { target: env1 });
     await openDiscuss(channelId, { target: env2 });
-    await insertText(".o-mail-Discuss-threadName:enabled", "Sales", {
+    await insertText(".o-mail-DiscussContent-threadName:enabled", "Sales", {
         replace: true,
         target: env1,
     });
     triggerHotkey("Enter");
-    await contains(".o-mail-Discuss-threadName[title='Sales']", { target: env2 });
+    await contains(".o-mail-DiscussContent-threadName[title='Sales']", { target: env2 });
     await contains(".o-mail-DiscussSidebarChannel", { target: env2, text: "Sales" });
 });
 
@@ -70,12 +70,12 @@ test("Thread description update", async () => {
     const env2 = await start({ asTab: true });
     await openDiscuss(channelId, { target: env1 });
     await openDiscuss(channelId, { target: env2 });
-    await insertText(".o-mail-Discuss-threadDescription", "The very best channel", {
+    await insertText(".o-mail-DiscussContent-threadDescription", "The very best channel", {
         replace: true,
         target: env1,
     });
     triggerHotkey("Enter");
-    await contains(".o-mail-Discuss-threadDescription[title='The very best channel']", {
+    await contains(".o-mail-DiscussContent-threadDescription[title='The very best channel']", {
         target: env2,
     });
 });
@@ -178,12 +178,12 @@ test("Message (hard) delete notification", async () => {
     await openDiscuss();
     await click("[title='Mark as Todo']");
     await contains("button", { text: "Inbox", contains: [".badge", { text: "1" }] });
-    await contains("button", { text: "Starred", contains: [".badge", { text: "1" }] });
+    await contains("button", { text: "Starred messages", contains: [".badge", { text: "1" }] });
     const [partner] = pyEnv["res.partner"].read(serverState.partnerId);
     pyEnv["bus.bus"]._sendone(partner, "mail.message/delete", {
         message_ids: [messageId],
     });
     await contains(".o-mail-Message", { count: 0 });
     await contains("button", { text: "Inbox", contains: [".badge", { count: 0 }] });
-    await contains("button", { text: "Starred", contains: [".badge", { count: 0 }] });
+    await contains("button", { text: "Starred messages", contains: [".badge", { count: 0 }] });
 });

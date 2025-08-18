@@ -40,6 +40,7 @@ import { renderToElement } from "@web/core/utils/render";
 import { selectElements } from "@html_editor/utils/dom_traversal";
 import { BuilderAction } from "@html_builder/core/builder_action";
 import { FormOption } from "./form_option";
+import { isSmallInteger } from "@html_builder/utils/utils";
 
 const DEFAULT_EMAIL_TO_VALUE = "info@yourcompany.example.com";
 export class FormOptionPlugin extends Plugin {
@@ -158,30 +159,14 @@ export class FormOptionPlugin extends Plugin {
             SetFormCustomFieldValueListAction,
             PropertyAction,
         },
-        normalize_handlers: (rootEl) => {
-            for (const formEl of rootEl.querySelectorAll(".s_website_form form")) {
-                // Disable text edition
-                formEl.contentEditable = "false";
-                // Identify editable elements of the form: buttons, description,
-                // recaptcha and columns which are not fields.
-                const formEditableSelector = [
-                    ".s_website_form_send",
-                    ".s_website_form_field_description",
-                    ".s_website_form_recaptcha",
-                    ".row > div:not(.s_website_form_field, .s_website_form_submit, .s_website_form_field *, .s_website_form_submit *)",
-                ]
-                    .map((selector) => `:scope ${selector}`)
-                    .join(", ");
-                for (const formEditableEl of formEl.querySelectorAll(formEditableSelector)) {
-                    formEditableEl.contentEditable = "true";
-                }
-            }
-        },
+        force_not_editable_selector: ".s_website_form form",
+        force_editable_selector: [
+            ".s_website_form_send",
+            ".s_website_form_field_description",
+            ".s_website_form_recaptcha",
+            ".row > div:not(.s_website_form_field, .s_website_form_submit, .s_website_form_field *, .s_website_form_submit *)",
+        ].map((selector) => `.s_website_form form ${selector}`),
         clean_for_save_handlers: ({ root: rootEl }) => {
-            // Maybe useless if all contenteditable are removed
-            for (const formEl of rootEl.querySelectorAll(".s_website_form form")) {
-                formEl.removeAttribute("contenteditable");
-            }
             this.removeSuccessMessagePreviews(rootEl);
         },
         dropzone_selector: [
@@ -540,6 +525,27 @@ export class FormOptionPlugin extends Plugin {
                 field.id = targetEl.id;
             }
         }
+
+        // Synchronize the possible values with the fields whose visibility
+        // depends on the current field
+        const newValuesText = field.records.map((record) => record.id);
+        const inputEls = oldFieldEl.querySelectorAll(".s_website_form_input, option");
+        const inputName = oldFieldEl.querySelector(".s_website_form_input")?.name;
+        const formEl = oldFieldEl.closest(".s_website_form");
+        for (let i = 0; i < inputEls.length; i++) {
+            const input = inputEls[i];
+            if (newValuesText[i] && input.value && !newValuesText.includes(input.value)) {
+                for (const dependentEl of formEl.querySelectorAll(
+                    `[data-visibility-condition="${CSS.escape(
+                        input.value
+                    )}"][data-visibility-dependency="${CSS.escape(inputName)}"]`
+                )) {
+                    dependentEl.dataset.visibilityCondition = newValuesText[i];
+                }
+                break;
+            }
+        }
+
         const fieldEl = renderField(field);
         replaceFieldElement(oldFieldEl, fieldEl);
     }
@@ -699,7 +705,7 @@ export class FormOptionPlugin extends Plugin {
                 ? [_t("Radio"), "exclusive_boolean"]
                 : [_t("Checkbox"), "boolean"];
             const defaults = [...fieldEl.querySelectorAll("[checked], [selected]")].map((el) =>
-                /^-?[0-9]{1,15}$/.test(el.value) ? parseInt(el.value) : el.value
+                isSmallInteger(el.value) ? parseInt(el.value) : el.value
             );
             let availableRecords = undefined;
             if (!isFieldCustom(fieldEl)) {
@@ -1120,7 +1126,7 @@ export class SetLabelTextAction extends BuilderAction {
                     const fieldData = await this.dependencies.websiteFormOption.loadFieldOptionData(
                         fieldWithConditionEl
                     );
-                    const names = fieldData.conditionInputs.map((entry) => CSS.escape(entry.name));
+                    const names = fieldData.conditionInputs.map((entry) => entry.name);
                     if (!names.includes(conditionFieldName)) {
                         deleteConditionalVisibility(fieldWithConditionEl);
                     }

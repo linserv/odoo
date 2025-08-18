@@ -1,7 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import configparser
-import contextlib
 from enum import Enum
 from functools import cache, wraps
 from importlib import util
@@ -16,13 +15,14 @@ import subprocess
 import socket
 from urllib.parse import parse_qs
 import urllib3.util
+import sys
 from threading import Thread, Lock
 import time
 import zipfile
 from werkzeug.exceptions import Locked
 
 from odoo import http, release, service
-from odoo.addons.iot_drivers.tools.system import IOT_RPI_CHAR, IOT_SYSTEM, IOT_WINDOWS_CHAR, IS_RPI, IS_WINDOWS
+from odoo.addons.iot_drivers.tools.system import IOT_CHAR, IOT_RPI_CHAR, IOT_WINDOWS_CHAR, IS_RPI, IS_TEST, IS_WINDOWS
 from odoo.tools.func import reset_cached_properties
 from odoo.tools.misc import file_path
 
@@ -80,22 +80,6 @@ def toggleable(function):
     return devtools_wrapper
 
 
-if IS_WINDOWS:
-    writable = contextlib.nullcontext
-elif IS_RPI:
-    @contextlib.contextmanager
-    def writable():
-        with lock:
-            try:
-                subprocess.run(["sudo", "mount", "-o", "remount,rw", "/"], check=False)
-                subprocess.run(["sudo", "mount", "-o", "remount,rw", "/root_bypass_ramdisks/"], check=False)
-                yield
-            finally:
-                subprocess.run(["sudo", "mount", "-o", "remount,ro", "/"], check=False)
-                subprocess.run(["sudo", "mount", "-o", "remount,ro", "/root_bypass_ramdisks/"], check=False)
-                subprocess.run(["sudo", "mount", "-o", "remount,rw", "/root_bypass_ramdisks/etc/cups"], check=False)
-
-
 def require_db(function):
     """Decorator to check if the IoT Box is connected to the internet
     and to a database before executing the function.
@@ -128,6 +112,9 @@ if IS_WINDOWS:
 elif IS_RPI:
     def start_nginx_server():
         subprocess.check_call(["sudo", "service", "nginx", "restart"])
+else:
+    def start_nginx_server():
+        pass
 
 
 def check_image():
@@ -188,8 +175,7 @@ def generate_password():
     try:
         shadow_password = crypt.crypt(password, crypt.mksalt())
         subprocess.run(('sudo', 'usermod', '-p', shadow_password, 'pi'), check=True)
-        with writable():
-            subprocess.run(('sudo', 'cp', '/etc/shadow', '/root_bypass_ramdisks/etc/shadow'), check=True)
+        subprocess.run(('sudo', 'cp', '/etc/shadow', '/root_bypass_ramdisks/etc/shadow'), check=True)
         return password
     except subprocess.CalledProcessError as e:
         _logger.exception("Failed to generate password: %s", e.output)
@@ -217,6 +203,8 @@ def get_ip():
 def get_identifier():
     if IS_RPI:
         return read_file_first_line('/sys/firmware/devicetree/base/serial-number').strip("\x00")
+    elif IS_TEST:
+        return 'test_identifier'
 
     # On windows, get motherboard's uuid (serial number isn't reliable as it's not always present)
     command = ['powershell', '-Command', "(Get-CimInstance Win32_ComputerSystemProduct).UUID"]
@@ -267,8 +255,10 @@ def get_version(detailed_version=False):
     elif IS_WINDOWS:
         # updated manually when big changes are made to the windows virtual IoT
         image_version = '23.11'
+    elif IS_TEST:
+        image_version = 'test'
 
-    version = IOT_SYSTEM[0] + image_version
+    version = IOT_CHAR + image_version
     if detailed_version:
         # Note: on windows IoT, the `release.version` finish with the build date
         version += f"-{release.version}"
@@ -336,8 +326,7 @@ def download_iot_handlers(auto=True, server_url=None):
 
     delete_iot_handlers()
     path = path_file('odoo', 'addons', 'iot_drivers', 'iot_handlers')
-    with writable():
-        zip_file.extractall(path)
+    zip_file.extractall(path)
 
 
 def compute_iot_handlers_addon_name(handler_kind, handler_file_name):
@@ -378,6 +367,7 @@ def get_handlers_files_to_load(handler_path):
         return [x.name for x in Path(handler_path).glob(f'*[!{IOT_WINDOWS_CHAR}].*')]
     elif IS_WINDOWS:
         return [x.name for x in Path(handler_path).glob(f'*[!{IOT_RPI_CHAR}].*')]
+    return []
 
 
 def odoo_restart(delay=0):
@@ -395,10 +385,7 @@ def path_file(*args):
 
     :return: The path to the file
     """
-    if IS_RPI:
-        return Path("~pi", *args).expanduser()  # Path.home() returns odoo user's home instead of pi's
-    elif IS_WINDOWS:
-        return Path().absolute().parent.joinpath(*args)
+    return Path(sys.path[0]).parent.joinpath(*args)
 
 
 def read_file_first_line(filename):
@@ -409,11 +396,10 @@ def read_file_first_line(filename):
 
 
 def unlink_file(*filenames):
-    with writable():
-        for filename in filenames:
-            path = path_file(filename)
-            if path.exists():
-                path.unlink()
+    for filename in filenames:
+        path = path_file(filename)
+        if path.exists():
+            path.unlink()
 
 
 def write_file(filename, text, mode='w'):
@@ -423,10 +409,9 @@ def write_file(filename, text, mode='w'):
     :param text: The text to write to the file
     :param mode: The mode to open the file in (Default: 'w')
     """
-    with writable():
-        path = path_file(filename)
-        with open(path, mode) as f:
-            f.write(text)
+    path = path_file(filename)
+    with open(path, mode) as f:
+        f.write(text)
 
 
 def download_from_url(download_url, path_to_filename):
@@ -454,11 +439,10 @@ def unzip_file(path_to_filename, path_to_extract):
     Will extract all the contents of 'downloaded_file.zip' to the 'new_folder' location)
     """
     try:
-        with writable():
-            path = path_file(path_to_filename)
-            with zipfile.ZipFile(path) as zip_file:
-                zip_file.extractall(path_file(path_to_extract))
-            Path(path).unlink()
+        path = path_file(path_to_filename)
+        with zipfile.ZipFile(path) as zip_file:
+            zip_file.extractall(path_file(path_to_extract))
+        Path(path).unlink()
         _logger.info('Unzipped %s to %s', path_to_filename, path_to_extract)
     except Exception:
         _logger.exception('Failed to unzip %s', path_to_filename)
@@ -470,16 +454,15 @@ def update_conf(values, section='iot.box'):
     :param dict values: key-value pairs to update the config with.
     :param str section: The section to update the key-value pairs in (Default: iot.box).
     """
-    with writable():
-        _logger.debug("Updating odoo.conf with values: %s", values)
-        conf = get_conf()
+    _logger.debug("Updating odoo.conf with values: %s", values)
+    conf = get_conf()
 
-        if not conf.has_section(section):
-            _logger.debug("Creating new section '%s' in odoo.conf", section)
-            conf.add_section(section)
+    if not conf.has_section(section):
+        _logger.debug("Creating new section '%s' in odoo.conf", section)
+        conf.add_section(section)
 
-        for key, value in values.items():
-            conf.set(section, key, value) if value else conf.remove_option(section, key)
+    for key, value in values.items():
+        conf.set(section, key, value) if value else conf.remove_option(section, key)
 
         with open(path_file("odoo.conf"), "w", encoding='utf-8') as f:
             conf.write(f)
@@ -587,7 +570,7 @@ def reset_log_level():
 
 
 def _get_system_uptime():
-    if IS_WINDOWS:
+    if not IS_RPI:
         return 0
     uptime_string = read_file_first_line("/proc/uptime")
     return float(uptime_string.split(" ")[0])
@@ -599,7 +582,7 @@ def _get_raspberry_pi_model():
 
     :rtype: int
     """
-    if IS_WINDOWS:
+    if not IS_RPI:
         return -1
     with open('/proc/device-tree/model', encoding='utf-8') as model_file:
         match = re.search(r'Pi (\d)', model_file.read())

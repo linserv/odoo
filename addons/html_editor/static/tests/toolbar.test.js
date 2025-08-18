@@ -46,6 +46,7 @@ import { expandToolbar } from "./_helpers/toolbar";
 import { nodeSize } from "@html_editor/utils/position";
 import { expectElementCount } from "./_helpers/ui_expectations";
 import { ToolbarPlugin } from "@html_editor/main/toolbar/toolbar_plugin";
+import { ImageCrop } from "@html_editor/main/media/image_crop";
 
 test.tags("desktop");
 test("toolbar is only visible when selection is not collapsed in desktop", async () => {
@@ -1177,7 +1178,9 @@ test("toolbar buttons should have title attribute with translated text", async (
     editor.destroy();
 
     // Patch translations to return "Translated" for these terms
-    patchTranslations(Object.fromEntries(descriptions.map((title) => [title, "Translated"])));
+    patchTranslations({
+        html_editor: Object.fromEntries(descriptions.map((title) => [title, "Translated"])),
+    });
 
     // Instantiate a new editor.
     const { plugins: postPatchPlugins } = await setupEditor("<p>[abc]</p>");
@@ -1280,6 +1283,18 @@ test("should not close image cropper while loading media", async () => {
     const base64Image =
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=";
 
+    // This promise is needed to ensure that the `show` method has completed
+    // before clicking on `Discard` button as it sets `isCropperActive` true
+    // at the end. In `closeCropper` method `isCropperActive` must be true
+    // to close the cropper.
+    const cropperReadyPromise = new Promise((resolve) => {
+        patchWithCleanup(ImageCrop.prototype, {
+            async show(...args) {
+                await super.show(...args);
+                resolve();
+            },
+        });
+    });
     // Mock backend image RPCs
     onRpc("/html_editor/get_image_info", async () => {
         await delay(50);
@@ -1303,8 +1318,7 @@ test("should not close image cropper while loading media", async () => {
     expect('.btn[title="Discard"]').toHaveCount(1);
 
     // Once the image loaded we should be able to close
-    await waitFor('img[src^="blob:"]', { timeout: 2000 });
-    await advanceTime(200);
+    await cropperReadyPromise;
     await click('.btn[title="Discard"]');
     await waitForNone('.btn[title="Discard"]', { timeout: 1500 });
 });
@@ -1648,4 +1662,23 @@ test("toolbar update should be run only once", async () => {
     await animationFrame();
     expect(getContent(el)).toBe("<p><strong>[test]</strong></p>");
     expect(counter).toBe(1);
+});
+
+test("toolbar strikethrough buttons should not be active when checked list is strikethrough using o_checked class", async () => {
+    const { el } = await setupEditor(
+        '<ul class="o_checklist"><li class="o_checked">[test]</li></ul>'
+    );
+    await expandToolbar();
+    expect(".o-we-toolbar .btn[name='strikethrough']").toHaveCount(1);
+    expect(".o-we-toolbar .btn[name='strikethrough']").not.toHaveClass("active");
+    await contains(".o-we-toolbar .btn[name='strikethrough']").click();
+    await waitFor(".btn[name='strikethrough'].active");
+    expect(getContent(el)).toBe(
+        '<ul class="o_checklist"><li class="o_checked"><s>[test]</s></li></ul>'
+    );
+    expect(".o-we-toolbar .btn[name='strikethrough']").toHaveClass("active");
+    await contains(".o-we-toolbar .btn[name='strikethrough']").click();
+    await waitFor(".btn[name='strikethrough']:not(.active)");
+    expect(getContent(el)).toBe('<ul class="o_checklist"><li class="o_checked">[test]</li></ul>');
+    expect(".o-we-toolbar .btn[name='strikethrough']").not.toHaveClass("active");
 });

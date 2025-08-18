@@ -2,6 +2,7 @@ import { mailDataHelpers } from "@mail/../tests/mock_server/mail_mock_server";
 
 import { fields, getKwArgs, makeKwArgs, models } from "@web/../tests/web_test_helpers";
 import { serializeDateTime, today } from "@web/core/l10n/dates";
+import { ensureArray } from "@web/core/utils/arrays";
 
 const { DateTime } = luxon;
 
@@ -9,9 +10,72 @@ export class DiscussChannelMember extends models.ServerModel {
     _name = "discuss.channel.member";
 
     is_pinned = fields.Generic({ compute: "_compute_is_pinned" });
+    is_self = fields.Boolean({ compute: "_compute_is_self" });
     unpin_dt = fields.Datetime({ string: "Unpin date" });
     message_unread_counter = fields.Generic({ default: 0 });
-    last_interest_dt = fields.Datetime({ default: () => serializeDateTime(today()) });
+    last_interest_dt = fields.Datetime({
+        default: () => serializeDateTime(today().minus({ seconds: 1 })),
+    });
+
+    create(values) {
+        const idOrIds = super.create(values);
+        this.env["discuss.channel"]._compute_channel_name_member_ids();
+        const channels_needing_name_update = this.env["discuss.channel"]
+            ._filter([
+                ["channel_name_member_ids", "in", ensureArray(idOrIds)],
+                ["name", "=", false],
+                [
+                    "channel_type",
+                    "in",
+                    this.env["discuss.channel"]._member_based_naming_channel_types(),
+                ],
+            ])
+            .filter((channel) => channel.channel_name_member_ids.length <= 3);
+        for (const channel of channels_needing_name_update) {
+            const store = new mailDataHelpers.Store().add(
+                this.env["discuss.channel"].browse(channel.id),
+                makeKwArgs({ fields: [mailDataHelpers.Store.many("channel_name_member_ids")] })
+            );
+            this.env["bus.bus"]._sendone(channel, "mail.record/insert", store.get_result());
+        }
+        return idOrIds;
+    }
+
+    write(ids, vals) {
+        const membersToUpdate = this.browse(ids);
+        const syncFields = this._sync_field_names();
+        const oldValsByMember = new Map();
+        for (const member of membersToUpdate) {
+            const oldVals = {};
+            for (const fieldName of syncFields) {
+                oldVals[fieldName] = member[fieldName];
+            }
+            oldValsByMember.set(member.id, oldVals);
+        }
+        const result = super.write(ids, vals);
+        for (const member of membersToUpdate) {
+            const oldVals = oldValsByMember.get(member.id);
+            const diff = [];
+            for (const fieldName of syncFields) {
+                if (member[fieldName] !== oldVals[fieldName]) {
+                    diff.push(fieldName);
+                }
+            }
+            if (diff.length > 0) {
+                const store = new mailDataHelpers.Store();
+                diff.push("channel", "persona");
+                this.browse(member.id)._to_store(store, diff);
+                const [partner, guest] = this.env["res.partner"]._get_current_persona();
+                const busChannel = guest ?? partner;
+                this.env["bus.bus"]._sendone(busChannel, "mail.record/insert", store.get_result());
+            }
+        }
+        return result;
+    }
+
+    _sync_field_names() {
+        return ["last_interest_dt", "message_unread_counter", "new_message_separator", "unpin_dt"];
+    }
 
     /**
      * @param {number[]} ids
@@ -56,6 +120,15 @@ export class DiscussChannelMember extends models.ServerModel {
                 !member.unpin_dt ||
                 member?.last_interest_dt >= member.unpin_dt ||
                 channel?.last_interest_dt >= member.unpin_dt;
+        }
+    }
+
+    _compute_is_self() {
+        const [partner, guest] = this.env["res.partner"]._get_current_persona();
+        for (const member of this) {
+            member.is_self = member.partner_id
+                ? member.partner_id === partner?.id
+                : member.guest_id === guest?.id;
         }
     }
 
@@ -251,25 +324,6 @@ export class DiscussChannelMember extends models.ServerModel {
         });
         const message_unread_counter = this._compute_message_unread_counter([member.id]);
         this.env["discuss.channel.member"].write([member.id], { message_unread_counter });
-        const [partner, guest] = this.env["res.partner"]._get_current_persona();
-        this.env["bus.bus"]._sendone(
-            guest ?? partner,
-            "mail.record/insert",
-            new mailDataHelpers.Store(
-                DiscussChannelMember.browse(member.id),
-                [
-                    mailDataHelpers.Store.one(
-                        "channel_id",
-                        makeKwArgs({ as_thread: true, only_id: true })
-                    ),
-
-                    "message_unread_counter",
-                    "new_message_separator",
-                ].concat(this._to_store_persona())
-            )
-                .add("discuss.channel.member", { id: member.id })
-                .get_result()
-        );
     }
 
     set_custom_notifications(ids, custom_notifications) {

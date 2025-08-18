@@ -6,13 +6,17 @@ from odoo.exceptions import ValidationError
 from odoo.fields import Domain
 from odoo.http import request
 from odoo.tools.json import scriptsafe as json_safe
+from odoo.tools.translate import LazyTranslate
 
+from odoo.addons.account_payment.controllers import portal as account_payment_portal
 from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment.controllers import portal as payment_portal
 
+_lt = LazyTranslate(__name__)
+
 
 class PaymentPortal(payment_portal.PaymentPortal):
-    @http.route('/donation/pay', type='http', methods=['GET', 'POST'], auth='public', website=True, sitemap=False)
+    @http.route('/donation/pay', type='http', methods=['GET', 'POST'], auth='public', website=True, sitemap=False, list_as_website_content=_lt("Donation Payment"))
     def donation_pay(self, **kwargs):
         """ Behaves like PaymentPortal.payment_pay but for donation
 
@@ -204,3 +208,9 @@ class PaymentPortal(payment_portal.PaymentPortal):
             # Loading the image via this url caches the image on the client browser
             'image_url': request.env['website'].image_url(pm, 'image'),
         })
+
+
+class PortalAccount(account_payment_portal.PortalAccount):
+    def _invoice_get_page_view_values(self, *args, **kwargs):
+        """Override of `account_payment` to make the providers filtering website-aware."""
+        return super()._invoice_get_page_view_values(*args, website_id=request.website.id, **kwargs)

@@ -312,7 +312,7 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
             )
         if add_to_lst:
             replying_to = f'{replying_to},{",".join(add_to_lst)}'
-        with RecordCapturer(self.env['mail.message'], []) as capture_messages, \
+        with RecordCapturer(self.env['mail.message']) as capture_messages, \
              self.mock_mail_gateway():
             self._gateway_mail_reply(
                 template, email=email,
@@ -328,7 +328,7 @@ class MockEmail(common.BaseCase, MockSmtplibCase):
         """ Tool to automatically reply to last outgoing mail. """
         self.assertEqual(len(self._mails), 1)
         email = self._mails[0]  # keep out of mock, otherwise _mails is rewritten
-        with RecordCapturer(self.env['mail.message'], []) as capture_messages, \
+        with RecordCapturer(self.env['mail.message']) as capture_messages, \
              self.mock_mail_gateway():
             self._gateway_mail_reply(
                 template, email=email,
@@ -1360,6 +1360,7 @@ class MailCase(common.TransactionCase, MockEmail):
         def notif_to_string(notif):
             return f"{format_notif(notif)}\n{notif.message}"
 
+        self._reset_bus()
         try:
             with self.mock_bus():
                 yield
@@ -1957,7 +1958,7 @@ class MailCommon(MailCase):
         """
         for data in channels_data:
             # if 'ai_livechat' module is not installed
-            if not ('ai.agent' in self.env and 'im_livechat.channel' in self.env):
+            if "livechat_with_ai_agent" not in self.env["discuss.channel"]._fields:
                 data.pop("livechat_with_ai_agent", None)
         return list(channels_data)
 

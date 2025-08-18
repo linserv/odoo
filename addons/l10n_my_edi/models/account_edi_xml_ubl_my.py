@@ -174,12 +174,28 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
         # The API expects the iso3166-2 code for the state, in the same way as it expects the iso3166 code for the countries.
         # In Odoo, we mostly use these (although there is no standard format) so we'll try to use what Odoo gives us.
         # For malaysia, the codes were updated..
-        subentity_code = partner.state_id.code or ''
+
+        subentity_code = ''
         country = partner.country_id
 
-        # The API does not expect the country code inside the state code, only the number part.
-        if f'{country.code}-' in subentity_code:
-            subentity_code = subentity_code.split('-')[1]
+        if partner.state_id:
+            if (
+                partner._l10n_my_edi_get_tin_for_myinvois() == 'EI00000000010'
+                and partner.l10n_my_identification_number == 'NA'
+            ):
+                # Special case for consolidated entities (e.g., general public).
+                # When TIN is 'EI00000000010' and Identification Number is 'NA', MyInvois requires
+                # the CountrySubentityCode to be fixed as '17' regardless of the actual state.
+                subentity_code = '17'
+            elif country.code != 'MY':
+                # For non-Malaysian partners return the state name instead of state code
+                subentity_code = partner.state_id.name
+            else:
+                # Get the subentity code for the partner, based on its state.
+                subentity_code = partner.state_id.code
+
+            # Strip 'MY-' prefix if present as we only need number part
+            subentity_code = subentity_code.split('-')[1] if 'MY-' in subentity_code else subentity_code
 
         return {
             'cbc:CityName': {'_text': partner.city},
@@ -312,7 +328,8 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
         super()._add_invoice_line_item_nodes(line_node, vals)
 
         base_line = vals['base_line']
-        class_code = base_line['record'].product_id.product_tmpl_id.l10n_my_edi_classification_code
+        class_code = base_line['record'].l10n_my_edi_classification_code or \
+                     base_line['record'].product_id.product_tmpl_id.l10n_my_edi_classification_code
         if class_code:
             line_node['cac:Item']['cac:CommodityClassification'] = {
                 'cbc:ItemClassificationCode': {
@@ -364,7 +381,7 @@ class AccountEdiXmlUBLMyInvoisMY(models.AbstractModel):
             if partner.commercial_partner_id.sst_registration_number and len(partner.commercial_partner_id.sst_registration_number.split(';')) > 2:
                 self._l10n_my_edi_make_validation_error(constraints, 'too_many_sst', partner_type, partner.commercial_partner_id.display_name)
 
-        for line in invoice.invoice_line_ids.filtered(lambda line: line.display_type not in ('line_note', 'line_section')):
+        for line in invoice.invoice_line_ids.filtered(lambda line: line.display_type not in ('line_section', 'line_subsection', 'line_note')):
             if (not line.product_id or not line.product_id.product_tmpl_id.l10n_my_edi_classification_code) and not line.l10n_my_edi_classification_code:
                 self._l10n_my_edi_make_validation_error(constraints, 'class_code_required', line.id, line.display_name)
             if not line.tax_ids:

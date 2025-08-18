@@ -113,7 +113,7 @@
                 <field name="provider_id"/>
                 <field name="partner_id"/>
                 <field name="partner_name"/>
-                <group string="Group By">
+                <group>
                     <filter string="Provider" name="provider_id" context="{'group_by': 'provider_id'}"/>
                     <filter string="Partner" name="partner_id" context="{'group_by': 'partner_id'}"/>
                     <filter string="Status" name="state" context="{'group_by': 'state'}"/>
@@ -149,6 +149,7 @@
     <record id="action_payment_transaction" model="ir.actions.act_window">
         <field name="name">Payment Transactions</field>
         <field name="res_model">payment.transaction</field>
+        <field name="path">payment-transactions</field>
         <field name="view_mode">list,kanban,form,graph,pivot</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_neutral_face">

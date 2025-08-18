@@ -20,14 +20,14 @@ registry.category("web_tour.tours").add("discuss_channel_public_tour.js", {
                 document.body.classList.add("o_discuss_channel_public_modules_loaded");
                 if (
                     !document.title.includes(
-                        document.querySelector(".o-mail-Discuss-threadName")?.value
+                        document.querySelector(".o-mail-DiscussContent-threadName")?.value
                     )
                 ) {
                     console.error(
                         `Tab title should match conversation name. Got "${
                             document.title
                         }" instead of "${
-                            document.querySelector(".o-mail-Discuss-threadName")?.value
+                            document.querySelector(".o-mail-DiscussContent-threadName")?.value
                         }".`
                     );
                 }
@@ -129,7 +129,7 @@ registry.category("web_tour.tours").add("discuss_channel_public_tour.js", {
             run: "click",
         },
         {
-            trigger: ".o-mail-Message:not(:has(.o-mail-MessageReaction))",
+            trigger: ".o-mail-Message:not(:has(.o-mail-MessageReaction:contains('🙂')))",
         },
         {
             content: "Click on more menu",

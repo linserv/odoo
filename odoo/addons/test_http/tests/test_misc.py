@@ -1,6 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import json
+from importlib import metadata
 from io import StringIO
 from socket import gethostbyname
 from unittest.mock import patch
@@ -16,12 +17,7 @@ from odoo.addons import test_http
 from odoo.addons.test_http.controllers import CT_JSON
 from odoo.addons.test_http.utils import TEST_IP
 
-try:
-    from importlib import metadata
-    werkzeug_version = metadata.version('werkzeug')
-except ImportError:
-    import werkzeug
-    werkzeug_version = werkzeug.__version__
+werkzeug_version = metadata.version('werkzeug')
 
 
 @tagged('post_install', '-at_install')
@@ -260,7 +256,7 @@ class TestHttpEnsureDb(TestHttpBase):
         self.assertEqual(new_session.uid, None)
 
         # follow redirection
-        self.opener.cookies['session_id'] = new_session.sid
+        self.opener.cookies.set("session_id", new_session.sid, domain=HOST)
         res = self.multidb_url_open('/test_http/ensure_db')
         res.raise_for_status()
         self.assertEqual(res.status_code, 200)

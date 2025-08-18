@@ -3,14 +3,22 @@
 from collections import defaultdict
 from datetime import date
 from dateutil.relativedelta import relativedelta
+from babel.dates import format_date, get_date_format
 
 from odoo import _, api, fields, models
 from odoo.fields import Domain
 from odoo.exceptions import ValidationError
-from odoo.tools import format_date
+from odoo.tools import get_lang, babel_locale_parse
 
 import logging
 _logger = logging.getLogger(__name__)
+
+
+def format_date_abbr(env, date):
+    lang = get_lang(env)
+    locale = babel_locale_parse(lang.code)
+    date_format = get_date_format('medium', locale=locale).pattern
+    return format_date(date, date_format, locale=locale)
 
 
 class HrVersion(models.Model):
@@ -52,9 +60,14 @@ class HrVersion(models.Model):
     # Personal Information
     country_id = fields.Many2one(
         'res.country', 'Nationality (Country)', groups="hr.group_hr_user", tracking=True)
-    identification_id = fields.Char(string='Identification No', groups="hr.group_hr_user", tracking=True)
+    identification_id = fields.Char(
+        string='Identification No',
+        help="Enter the employee's National Identification Number issued by the government (e.g., Aadhaar, SIN, NIN). This is used for official records and statutory compliance.",
+        groups="hr.group_hr_user",
+        tracking=True)
     ssnid = fields.Char('SSN No', help='Social Security Number', groups="hr.group_hr_user", tracking=True)
     passport_id = fields.Char('Passport No', groups="hr.group_hr_user", tracking=True)
+    passport_expiration_date = fields.Date('Passport Expiration Date', groups="hr.group_hr_user", tracking=True)
     sex = fields.Selection([
         ('male', 'Male'),
         ('female', 'Female'),
@@ -242,9 +255,9 @@ class HrVersion(models.Model):
                         'Overlapping contracts for %(employee)s:\n%(overlaps)s',
                         employee=version.employee_id.display_name,
                         overlaps='\n'.join(
-                            [f'Version {format_date(v.env, v.date_version, date_format="MMM d, y")}: '
-                             f'from {format_date(v.env, v.contract_date_start, date_format="MMM d, y")} '
-                             f'to {format_date(v.env, v.contract_date_end, date_format="MMM d, y") if v.contract_date_end else "Indefinite"}'
+                            [self.env._('Version') + f' ({format_date_abbr(v.env, v.date_version)}): '
+                             f'{format_date_abbr(v.env, v.contract_date_start)} '
+                             f'- {format_date_abbr(v.env, v.contract_date_end) if v.contract_date_end else self.env._("Indefinite")}'
                              for v in (versions | version)])))
             if not contract_period_exists:
                 dates_per_employee[version.employee_id].append((version.contract_date_start, version.contract_date_end, version))
@@ -262,7 +275,7 @@ class HrVersion(models.Model):
     @api.ondelete(at_uninstall=False)
     def _unlink_except_last_version(self):
         for employee_id, versions in self.grouped('employee_id').items():
-            if employee_id.versions_count == len(versions):
+            if employee_id.version_ids == versions:
                 raise ValidationError(
                     self.env._('Employee %s must always have at least one active version.') % employee_id.name
                 )
@@ -280,6 +293,9 @@ class HrVersion(models.Model):
 
         if self.env.context.get('sync_contract_dates'):
             return super().write(values)
+
+        if values.get('contract_date_start', False) and len(self.employee_id.version_ids) == 1:
+            values['date_version'] = values['contract_date_start']
 
         new_vals = {
             f_name: f_value
@@ -338,7 +354,7 @@ class HrVersion(models.Model):
     @api.depends('date_version')
     def _compute_display_name(self):
         for version in self:
-            version.display_name = version.name if not version.employee_id else format_date(version.env, version.date_version, date_format='dd MMM yyyy')
+            version.display_name = version.name if not version.employee_id else format_date_abbr(version.env, version.date_version)
 
     def _compute_is_current(self):
         today = fields.Date.today()
@@ -390,7 +406,7 @@ class HrVersion(models.Model):
     def _get_whitelist_fields_from_template(self):
         # Add here any field that you want to copy from a contract template
         # Those fields should have tracking=True in hr.version to see the change
-        return ['job_id', 'department_id', 'contract_type_id', 'structure_type_id', 'wage', 'resource_calendar_id']
+        return ['job_id', 'department_id', 'contract_type_id', 'structure_type_id', 'wage', 'resource_calendar_id', 'hr_responsible_id']
 
     def get_values_from_contract_template(self, contract_template_id):
         if not contract_template_id:

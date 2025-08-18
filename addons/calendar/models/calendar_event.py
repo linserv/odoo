@@ -128,11 +128,15 @@ class CalendarEvent(models.Model):
 
     # description
     name = fields.Char('Meeting Subject', required=True)
-    description = fields.Html('Description')
+    description = fields.Html('Description',
+        help="""When synchronization with an external calendar is active, this description is synchronized \
+        with the one of the associated meeting in that external calendar. Any update will be propagated there \
+        and vice versa.""")
     user_id = fields.Many2one('res.users', 'Organizer', default=lambda self: self.env.user, index='btree_not_null')
     partner_id = fields.Many2one(
         'res.partner', string='Scheduled by', related='user_id.partner_id', readonly=True)
     location = fields.Char('Location', tracking=True)
+    notes = fields.Html('Notes')  # Unlike description, internal use only
     videocall_location = fields.Char('Meeting URL', compute='_compute_videocall_location', store=True, copy=True)
     access_token = fields.Char('Invitation Token', store=True, copy=False, index=True)
     videocall_source = fields.Selection([('discuss', 'Discuss'), ('custom', 'Custom')], compute='_compute_videocall_source')
@@ -581,7 +585,8 @@ class CalendarEvent(models.Model):
                 'allday': vals.get('allday', defaults.get('allday')),
                 'description': vals.get('description', defaults.get('description')),
                 'name': vals.get('name', defaults.get('name')),
-                'res_id': vals.get('res_id', defaults.get('res_id')),
+                # when res_id is not defined or vals['res_id'] == 0, fallback on default
+                'res_id': vals.get('res_id') or defaults.get('res_id'),
                 'res_model': vals.get('res_model', defaults.get('res_model')),
                 'res_model_id': vals.get('res_model_id', defaults.get('res_model_id')),
                 'start': vals.get('start', defaults.get('start')),
@@ -1044,11 +1049,14 @@ class CalendarEvent(models.Model):
         # Sub query user settings from calendars that are not private ('public' and 'confidential').
         public_calendars_settings = self.env['res.users.settings'].sudo()._search([('calendar_default_privacy', '!=', 'private')]).select('user_id')
         # display public, confidential events and events with default privacy when owner's default privacy is not private
-        return [
-            '|',
-                '|', ('privacy', 'in', ['public', 'confidential']), ('user_id', '=', self.env.user.id),
-                '&', ('privacy', '=', False), ('user_id', 'in', public_calendars_settings)
-        ]
+        return ['|', '|',
+            ('privacy', 'in', ['public', 'confidential']),
+            ('user_id', '=', self.env.user.id),
+            '&',
+                ('privacy', '=', False),
+                '|',
+                    ('user_id', '=', False),
+                    ('user_id', 'in', public_calendars_settings)]
 
     def _is_event_over(self):
         """Check if the event is over. This method is used to check if the event
@@ -1225,7 +1233,7 @@ class CalendarEvent(models.Model):
         events_to_notify = self.env['calendar.event']
         triggers_by_events = {}
         for event in self:
-            existing_trigger = event.recurrence_id.trigger_id
+            existing_trigger = event.recurrence_id.sudo().trigger_id
             for alarm in (alarm for alarm in event.alarm_ids if alarm.alarm_type in alarm_types):
                 at = event.start - timedelta(minutes=alarm.duration_minutes)
                 create_trigger = not existing_trigger or existing_trigger and existing_trigger.call_at != at

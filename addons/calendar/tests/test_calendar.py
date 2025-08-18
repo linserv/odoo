@@ -396,6 +396,47 @@ class TestCalendar(SavepointCaseWithUserDemo):
         self.assertEqual(new_calendar_event.start_date, calendar_event.start_date, "Start date should match the original.")
         self.assertEqual(new_calendar_event.stop_date, calendar_event.stop_date, "Stop date should match the original.")
 
+    def test_event_privacy_domain(self):
+        """Test privacy domain filtering in _read_group for events with user_id=False and default privacy (False)"""
+        now = datetime.now()
+        test_user = self.user_demo
+
+        self.env['calendar.event'].create([
+            {
+                'name': 'event_a',
+                'start': now + timedelta(days=-1),
+                'stop': now + timedelta(days=-1, hours=2),
+                'user_id': False,
+                'privacy': 'public',
+            },
+            {
+                'name': 'event_b',
+                'start': now + timedelta(days=1),
+                'stop': now + timedelta(days=1, hours=1),
+                'user_id': False,
+                'privacy': False,
+            },
+            {
+                'name': 'event_c',
+                'start': now + timedelta(days=-1, hours=3),
+                'stop': now + timedelta(days=-1, hours=5),
+                'user_id': False,
+                'privacy': 'private',
+            }
+        ])
+
+        meetings = self.env['calendar.event'].with_user(test_user)
+        result = meetings._read_group(
+            domain=[['user_id', '=', False]],
+            aggregates=["__count", "duration:sum"],
+            groupby=['create_date:month']
+        )
+
+        # Verify privacy domain filtered out the private event only
+        total_visible_events = sum(group[1] for group in result)
+        self.assertEqual(total_visible_events, 2,
+                        "Should see 2 events (public and no-privacy), private event filtered out")
+
     def test_default_duration(self):
         # Check the default duration depending on various parameters
         user_demo = self.user_demo
@@ -436,3 +477,26 @@ class TestCalendar(SavepointCaseWithUserDemo):
         channel_member_2 = self.event_tech_presentation.videocall_channel_id.channel_member_ids[1]
         channel_member._rtc_join_call()
         self.assertFalse(channel_member_2.rtc_inviting_session_id)
+
+    def test_calendar_res_id_fallback_when_res_id_is_0(self):
+        user_admin = self.env.ref('base.user_admin')
+        context_defaults = {
+            'default_res_model': user_admin._name,
+            'default_res_id': user_admin.id,
+        }
+
+        self.env['mail.activity.type'].create({
+            'name': 'Meeting',
+            'category': 'meeting'
+        })
+
+        event = self.env['calendar.event'].with_user(user_admin).with_context(**context_defaults).create({
+            'name': 'All Day',
+            'start': "2018-10-16 00:00:00",
+            'start_date': "2018-10-16",
+            'stop': "2018-10-18 00:00:00",
+            'stop_date': "2018-10-18",
+            'allday': True,
+            'res_id': 0,
+        })
+        self.assertTrue(event.res_id)

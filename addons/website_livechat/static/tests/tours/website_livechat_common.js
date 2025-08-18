@@ -1,5 +1,4 @@
-import { queryAll } from "@odoo/hoot-dom";
-import { waitForStable } from "@web/core/macro";
+import { waitFor } from "@odoo/hoot-dom";
 
 /*******************************
  *         Common Steps
@@ -26,37 +25,23 @@ export const start = [
         run: "press Enter",
     },
     {
-        content: "Verify your message has been typed",
-        trigger: ".o-livechat-root:shadow .o-mail-Message:contains('Hello Sir!')",
-        run: "click",
-    },
-    {
-        content: "Verify there is no duplicates",
-        trigger: ".o-livechat-root:shadow .o-mail-Thread",
-        run() {
-            const el = queryAll(".o-mail-Message:contains('Hello Sir!')", { root: this.anchor });
-            if (el.length === 1) {
-                document.querySelector("body").classList.add("no_duplicated_message");
-            }
-        },
-    },
-    {
-        content: "Is your message correctly sent ?",
-        trigger: "body.no_duplicated_message",
-        async run() {
-            await waitForStable(document.body, 1000);
-        },
-    },
-    {
+        content: "Verify the message has been sent",
         trigger:
             ".o-livechat-root:shadow .o-mail-ChatWindow:contains(El Deboulonnator) .o-mail-Thread:not([data-transient])",
+        async run() {
+            await waitFor(".o-mail-Message:contains('Hello Sir!')", {
+                root: this.anchor,
+                only: true,
+                timeout: 5000,
+            });
+        },
     },
 ];
 
 export const closeChat = [
     {
         content: "Close the chat window",
-        trigger: ".o-livechat-root:shadow .o-mail-ChatWindow-command[title*=Close]",
+        trigger: ".o-livechat-root:shadow .o-mail-ChatWindow-header [title*=Close]",
         run: "click",
     },
 ];
@@ -121,7 +106,7 @@ export const downloadTranscript = [
 export const close = [
     {
         content: "Close the conversation with the x button",
-        trigger: ".o-livechat-root:shadow .o-mail-ChatWindow-command[title*=Close]",
+        trigger: ".o-livechat-root:shadow .o-mail-ChatWindow-header [title*=Close]",
         run: "click",
     },
     {

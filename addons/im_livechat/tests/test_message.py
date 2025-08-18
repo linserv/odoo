@@ -252,8 +252,6 @@ class TestImLivechatMessage(ChatbotCase, MailCommon):
                     (self.env.cr.dbname, "discuss.channel", channel.id),
                     # unread counter/new message separator (not asserted below)
                     (self.env.cr.dbname, "res.partner", self.env.user.partner_id.id),
-                    # channel is_pinned (not asserted below)
-                    (self.env.cr.dbname, "discuss.channel", channel.id, "members"),
                     # new_message
                     (self.env.cr.dbname, "discuss.channel", channel.id),
                 ],

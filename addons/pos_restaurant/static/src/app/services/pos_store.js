@@ -61,40 +61,6 @@ patch(PosStore.prototype, {
             },
         ];
     },
-    get firstScreen() {
-        const screen = super.firstScreen;
-        const isFirstSession = this.config.raw.session_ids.length === 1;
-        const hasNoProducts = this.productsToDisplay.length === 0;
-
-        if (!this.config.module_pos_restaurant) {
-            return screen;
-        }
-
-        if (screen.page === "LoginScreen") {
-            return { page: "LoginScreen", params: {} };
-        }
-
-        if (isFirstSession && hasNoProducts) {
-            return {
-                page: "ProductScreen",
-                params: {
-                    orderUuid: this.getOrder()?.uuid,
-                },
-            };
-        }
-
-        return this.defaultPage;
-    },
-    get defaultScreen() {
-        if (this.config.module_pos_restaurant) {
-            const screens = {
-                register: "ProductScreen",
-                tables: "FloorScreen",
-            };
-            return screens[this.config.default_screen];
-        }
-        return super.defaultScreen;
-    },
     createNewOrder() {
         const order = super.createNewOrder(...arguments);
 
@@ -103,6 +69,17 @@ patch(PosStore.prototype, {
         }
 
         return order;
+    },
+    async preSyncAllOrders(orders) {
+        if (this.config.module_pos_restaurant) {
+            for (const order of orders) {
+                // Avoid to block others devices on register screen when no table and name is set.
+                if (!order.table_id && !order.floating_order_name) {
+                    order.floating_order_name = order.pos_reference;
+                }
+            }
+        }
+        return super.preSyncAllOrders(...arguments);
     },
     async setCustomerCount(o = false) {
         const currentOrder = o || this.getOrder();
@@ -478,11 +455,6 @@ patch(PosStore.prototype, {
         const page = this.defaultPage;
         this.navigate(page.page, page.params);
     },
-    addOrderIfEmpty(forceEmpty) {
-        if (!this.config.module_pos_restaurant || forceEmpty) {
-            return super.addOrderIfEmpty(...arguments);
-        }
-    },
     async handleUrlParams(event) {
         await super.handleUrlParams(...arguments);
         if (this.config.module_pos_restaurant && this.router.state.current === "ProductScreen") {
@@ -616,18 +588,6 @@ patch(PosStore.prototype, {
                 order.floating_order_name = payload;
             }
         }
-    },
-    setFloatingOrder(floatingOrder) {
-        if (this.getOrder()?.isFilledDirectSale) {
-            this.transferOrder(this.getOrder().uuid, null, floatingOrder);
-            return;
-        }
-        this.setOrder(floatingOrder);
-
-        const screenName = floatingOrder.getScreenData().name;
-        this.navigate(screenName || "ProductScreen", {
-            orderUuid: floatingOrder.uuid,
-        });
     },
     async handleSelectNamePreset(order) {
         if (this.config.module_pos_restaurant) {
@@ -859,17 +819,6 @@ patch(PosStore.prototype, {
         await this.mergeOrders(sourceOrder, destinationOrder);
         await this.setTable(destinationTable);
     },
-    updateTables(...tables) {
-        this.data.call("restaurant.table", "update_tables", [
-            tables.map((t) => t.id),
-            Object.fromEntries(
-                tables.map((t) => [
-                    t.id,
-                    { ...t.serializeForORM(), parent_id: t.parent_id?.id || false },
-                ])
-            ),
-        ]);
-    },
     getCustomerCount(tableId) {
         const tableOrders = this.getTableOrders(tableId).filter((order) => !order.finalized);
         return tableOrders.reduce((count, order) => count + order.getCustomerCount(), 0);
@@ -925,7 +874,10 @@ patch(PosStore.prototype, {
         const order = course.order_id;
         course.fired = true;
         order.deselectCourse();
-        await this.sendOrderInPreparation(order, { firedCourseId: course.id, byPassPrint: true });
+        await this.checkPreparationStateAndSentOrderInPreparation(order, {
+            firedCourseId: course.id,
+            byPassPrint: true,
+        });
         await this.printCourseTicket(course);
         return true;
     },

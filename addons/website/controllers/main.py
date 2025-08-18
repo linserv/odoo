@@ -26,6 +26,7 @@ from odoo.exceptions import AccessError, UserError
 from odoo.fields import Domain
 from odoo.http import request, SessionExpiredException
 from odoo.tools import OrderedSet, escape_psql, html_escape as escape, py_to_js_locale
+from odoo.tools.translate import LazyTranslate
 from odoo.addons.base.models.ir_http import EXTENSION_TO_WEB_MIMETYPES
 from odoo.addons.base.models.ir_qweb import QWebException
 from odoo.addons.portal.controllers.portal import pager as portal_pager
@@ -35,6 +36,7 @@ from odoo.addons.web.controllers.session import Session
 from odoo.addons.website.tools import get_base_domain
 from odoo.tools.json import scriptsafe as json
 
+_lt = LazyTranslate(__name__)
 logger = logging.getLogger(__name__)
 
 # Completely arbitrary limits
@@ -334,7 +336,7 @@ class Website(Home):
         if not qs or qs.lower() in '/website/info':
             yield {'loc': '/website/info'}
 
-    @http.route('/website/info', type='http', auth="public", website=True, sitemap=sitemap_website_info, readonly=True)
+    @http.route('/website/info', type='http', auth="public", website=True, sitemap=sitemap_website_info, readonly=True, list_as_website_content=_lt("Website Information"))
     def website_info(self, **kwargs):
         Module = request.env['ir.module.module'].sudo()
         apps = Module.search([('state', '=', 'installed'), ('application', '=', True)])
@@ -412,11 +414,13 @@ class Website(Home):
         request.session[f'website_{view_id}_layout_mode'] = layout_mode
 
     @http.route('/website/snippet/filters', type='jsonrpc', auth='public', website=True, readonly=True)
-    def get_dynamic_filter(self, filter_id, template_key, limit=None, search_domain=None, with_sample=False, **custom_template_data):
-        dynamic_filter = request.env['website.snippet.filter'].sudo().search(
-            Domain('id', '=', filter_id) & request.website.website_domain()
-        )
-        return dynamic_filter and dynamic_filter._render(template_key, limit, search_domain, with_sample, **custom_template_data) or []
+    def get_dynamic_filter(self, filter_id, **kwargs):
+        dynamic_filter_sudo = request.env['website.snippet.filter'].sudo()
+        if filter_id:
+            dynamic_filter_sudo = dynamic_filter_sudo.search(
+                Domain('id', '=', filter_id) & request.website.website_domain()
+            )
+        return dynamic_filter_sudo._render(**kwargs) or []
 
     @http.route('/website/snippet/options_filters', type='jsonrpc', auth='user', website=True, readonly=True)
     def get_dynamic_snippet_filters(self, model_name=None, search_domain=None):
@@ -453,6 +457,9 @@ class Website(Home):
             t['rowPerSlide'] = attribs.get('data-row-per-slide')
             t['arrowPosition'] = attribs.get('data-arrow-position')
             t['extraClasses'] = attribs.get('data-extra-classes')
+            t['extraSnippetClasses'] = attribs.get('data-extra-snippet-classes')
+            t['containerClasses'] = attribs.get('data-container-classes')
+            t['contentClasses'] = attribs.get('data-content-classes')
             t['columnClasses'] = attribs.get('data-column-classes')
             t['thumb'] = attribs.get('data-thumb')
         return templates

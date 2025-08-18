@@ -932,8 +932,8 @@ class SaleOrder(models.Model):
                 # come first.
                 update_commands = [Command.update(
                     order_line.id,
-                    {'sequence': line.sequence + len(selected_combo_items) + line_index - index},
-                ) for line_index, order_line in enumerate(self.order_line) if line_index > index]
+                    {'sequence': order_line.sequence + len(selected_combo_items)},
+                ) for order_line in self.order_line if order_line.sequence > line.sequence]
 
                 # Clear `selected_combo_items` to avoid applying the same changes multiple times.
                 line.selected_combo_items = False
@@ -1323,6 +1323,7 @@ class SaleOrder(models.Model):
             **super()._get_action_add_from_catalog_extra_context(),
             'product_catalog_currency_id': self.currency_id.id,
             'product_catalog_digits': self.order_line._fields['price_unit'].get_digits(self.env),
+            'show_sections': bool(self.id),
         }
 
     def _get_product_catalog_domain(self):
@@ -1437,7 +1438,7 @@ class SaleOrder(models.Model):
         precision = self.env['decimal.precision'].precision_get('Product Unit')
 
         for line in self.order_line:
-            if line.display_type == 'line_section':
+            if line.display_type in ('line_section', 'line_subsection'):
                 section_line_ids = [line.id]  # Start a new section.
                 continue
             if line.display_type != 'line_note' and float_is_zero(line.qty_to_invoice, precision_digits=precision):
@@ -1681,7 +1682,7 @@ class SaleOrder(models.Model):
         )
         lang_code = render_context.get('lang')
         record = render_context['record']
-        subtitles = [f"{record.name} - {record.partner_id.name}" if record.partner_id else record.name]
+        subtitles = [f"{record.name} - {record.partner_id.name}" if record.partner_id.name else record.name]
         if self.amount_total:
             # Do not show the price in subtitles if zero (e.g. e-commerce orders are created empty)
             subtitles.append(
@@ -2068,10 +2069,14 @@ class SaleOrder(models.Model):
                 res[product.id]['warning'] = product.sale_line_warn_msg
         return res
 
-    def _get_product_catalog_record_lines(self, product_ids, **kwargs):
+    def _get_product_catalog_record_lines(self, product_ids, *, selected_section_id=False, **kwargs):
         grouped_lines = defaultdict(lambda: self.env['sale.order.line'])
         for line in self.order_line:
-            if line.display_type or line.product_id.id not in product_ids:
+            if (
+                line.display_type
+                or line.product_id.id not in product_ids
+                or line.section_line_id.id != selected_section_id
+            ):
                 continue
             grouped_lines[line.product_id] |= line
         return grouped_lines
@@ -2092,16 +2097,29 @@ class SaleOrder(models.Model):
                 or (self.state == 'sale' and document.attached_on_sale == 'sale_order')
         )
 
-    def _update_order_line_info(self, product_id, quantity, **kwargs):
+    def _update_order_line_info(
+            self,
+            product_id,
+            quantity,
+            *,
+            selected_section_id=False,
+            child_field='order_line',
+            **kwargs,
+        ):
         """ Update sale order line information for a given product or create a
         new one if none exists yet.
         :param int product_id: The product, as a `product.product` id.
+        :param int quantity: The quantity selected in the catalog.
+        :param int selected_section_id: The id of section selected in the catalog.
         :return: The unit price of the product, based on the pricelist of the
                  sale order and the quantity selected.
         :rtype: float
         """
         request.update_context(catalog_skip_tracking=True)
-        sol = self.order_line.filtered(lambda line: line.product_id.id == product_id)
+        sol = self.order_line.filtered_domain([
+            ('product_id', '=', product_id),
+            ('section_line_id', '=', selected_section_id),
+        ])
         if sol:
             if quantity != 0:
                 sol.product_uom_qty = quantity
@@ -2122,9 +2140,16 @@ class SaleOrder(models.Model):
                 'order_id': self.id,
                 'product_id': product_id,
                 'product_uom_qty': quantity,
-                'sequence': ((self.order_line and self.order_line[-1].sequence + 1) or 10),  # put it at the end of the order
+                'sequence': self._get_new_line_sequence(child_field, selected_section_id),
             })
         return sol.price_unit * (1-(sol.discount or 0.0)/100.0)
+
+    def _get_section_model_info(self):
+        """ Override of `product` to return the model name and parent field for the order lines.
+
+        :return: line_model, parent_field
+        """
+        return 'sale.order.line', 'order_id'
 
     #=== TOOLING ===#
 
@@ -2167,3 +2192,10 @@ class SaleOrder(models.Model):
         :return: None
         """
         self.with_context(send_email=True).action_confirm()
+
+    @api.model
+    def get_import_templates(self):
+        return [{
+            'label': _('Import Template for Quotations'),
+            'template': '/sale/static/xls/quotations_import_template.xlsx',
+        }]

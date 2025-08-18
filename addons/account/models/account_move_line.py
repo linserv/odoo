@@ -7,7 +7,7 @@ import re
 from odoo import api, fields, models, _
 from odoo.exceptions import ValidationError, UserError, RedirectWarning
 from odoo.fields import Command, Domain
-from odoo.tools import frozendict, float_compare, Query, SQL, OrderedSet
+from odoo.tools import frozendict, float_compare, groupby, Query, SQL, OrderedSet
 from odoo.addons.web.controllers.utils import clean_action
 
 from odoo.addons.account.models.account_move import MAX_HASH_VERSION
@@ -325,6 +325,7 @@ class AccountMoveLine(models.Model):
             ('rounding', "Rounding"),
             ('payment_term', 'Payment Term'),
             ('line_section', 'Section'),
+            ('line_subsection', 'Subsection'),
             ('line_note', 'Note'),
             ('epd', 'Early Payment Discount'),
             ('non_deductible_product_total', 'Non Deductible Products Total'),
@@ -334,6 +335,25 @@ class AccountMoveLine(models.Model):
         compute='_compute_display_type', store=True, readonly=False, precompute=True,
         required=True,
     )
+    # section related fields
+    collapse_composition = fields.Boolean(
+        string="Hide Composition",
+        help="If checked, the lines below this section will not be displayed in reports and portal.",
+        compute="_compute_section_visibility_fields", store=True, readonly=False,
+    )
+    collapse_prices = fields.Boolean(
+        string="Hide Prices",
+        help="If checked, the prices of the lines below this section will not be displayed in reports and portal.",
+        compute="_compute_section_visibility_fields", store=True, readonly=False,
+    )
+    parent_id = fields.Many2one(
+        'account.move.line',
+        string="Parent Section Line",
+        compute='_compute_parent_id',
+        search='_search_parent_id',
+        copy=False,
+    )
+    child_ids = fields.One2many(comodel_name='account.move.line', inverse_name='parent_id')
     product_id = fields.Many2one(
         comodel_name='product.product',
         string='Product',
@@ -363,6 +383,11 @@ class AccountMoveLine(models.Model):
         tracking=True,
         help="This field is used for payable and receivable journal entries. "
              "You can put the limit date for the payment of this line.",
+    )
+    section_line_id = fields.Many2one(
+        comodel_name='account.move.line',
+        compute='_compute_section_line_id',
+        store=True,
     )
 
     # === Price fields === #
@@ -441,19 +466,19 @@ class AccountMoveLine(models.Model):
     is_refund = fields.Boolean(compute='_compute_is_refund')
 
     _check_credit_debit = models.Constraint(
-        "CHECK(display_type IN ('line_section', 'line_note') OR credit * debit=0)",
+        "CHECK(display_type IN ('line_section', 'line_subsection', 'line_note') OR credit * debit=0)",
         'Wrong credit or debit value in accounting entry!',
     )
     _check_amount_currency_balance_sign = models.Constraint(
-        "CHECK(\n                display_type IN ('line_section', 'line_note')\n                OR (\n                    (balance <= 0 AND amount_currency <= 0)\n                    OR\n                    (balance >= 0 AND amount_currency >= 0)\n                )\n            )",
+        "CHECK(\n                display_type IN ('line_section', 'line_subsection', 'line_note')\n                OR (\n                    (balance <= 0 AND amount_currency <= 0)\n                    OR\n                    (balance >= 0 AND amount_currency >= 0)\n                )\n            )",
         'The amount expressed in the secondary currency must be positive when account is debited and negative when account is credited. If the currency is the same as the one from the company, this amount must strictly be equal to the balance.',
     )
     _check_accountable_required_fields = models.Constraint(
-        "CHECK(display_type IN ('line_section', 'line_note') OR account_id IS NOT NULL)",
+        "CHECK(display_type IN ('line_section', 'line_subsection', 'line_note') OR account_id IS NOT NULL)",
         'Missing required account on accountable line.',
     )
     _check_non_accountable_fields_null = models.Constraint(
-        "CHECK(display_type NOT IN ('line_section', 'line_note') OR (amount_currency = 0 AND debit = 0 AND credit = 0 AND account_id IS NULL))",
+        "CHECK(display_type NOT IN ('line_section', 'line_subsection', 'line_note') OR (amount_currency = 0 AND debit = 0 AND credit = 0 AND account_id IS NULL))",
         'Forbidden balance or account on non-accountable line',
     )
 
@@ -548,7 +573,7 @@ class AccountMoveLine(models.Model):
                     and line._origin.name == f'{line._origin.move_id.ref} - {line._origin.move_id.payment_reference}'
                 ):
                     line.name = name
-            if not line.product_id or line.display_type in ('line_section', 'line_note'):
+            if not line.product_id or line.display_type in ('line_section', 'line_subsection', 'line_note'):
                 continue
 
             if not line.name or line._origin.name == get_name(line._origin):
@@ -628,7 +653,7 @@ class AccountMoveLine(models.Model):
                 if account_id:
                     line.account_id = account_id
         for line in self:
-            if not line.account_id and line.display_type not in ('line_section', 'line_note'):
+            if not line.account_id and line.display_type not in ('line_section', 'line_subsection', 'line_note'):
                 previous_two_accounts = line.move_id.line_ids.filtered(
                     lambda l: l.account_id and l.display_type == line.display_type
                 )[-2:].account_id
@@ -665,7 +690,7 @@ class AccountMoveLine(models.Model):
     @api.depends('move_id')
     def _compute_balance(self):
         for line in self:
-            if line.display_type in ('line_section', 'line_note'):
+            if line.display_type in ('line_section', 'line_subsection', 'line_note'):
                 line.balance = False
             elif not line.move_id.is_invoice(include_receipts=True):
                 # Only act as a default value when none of balance/debit/credit is specified
@@ -841,7 +866,8 @@ class AccountMoveLine(models.Model):
         for line in self.filtered(lambda l: l.parent_state == 'draft'):
             # vendor bills should have the product purchase UOM
             if line.move_id.is_purchase_document():
-                line.product_uom_id = line.product_id.seller_ids.filtered(lambda s: s.partner_id == line.partner_id).product_uom_id or line.product_id.uom_id
+                seller_ids = line.product_id.seller_ids._get_filtered_supplier(line.company_id, line.product_id, False)
+                line.product_uom_id = seller_ids[:1].product_uom_id or line.product_id.uom_id
             else:
                 line.product_uom_id = line.product_id.uom_id
 
@@ -852,6 +878,17 @@ class AccountMoveLine(models.Model):
                 line.quantity = line.quantity if line.quantity else 1
             else:
                 line.quantity = False
+
+    @api.depends('move_id.line_ids.sequence')
+    def _compute_section_line_id(self):
+        for move, lines in self.grouped('move_id').items():
+            current_section_line = False
+            for line in lines.sorted('sequence'):
+                if line.display_type == 'line_section':
+                    current_section_line = line
+                    line.section_line_id = False
+                else:
+                    line.section_line_id = current_section_line
 
     @api.depends('display_type')
     def _compute_sequence(self):
@@ -883,7 +920,7 @@ class AccountMoveLine(models.Model):
     @api.depends('product_id', 'product_uom_id')
     def _compute_price_unit(self):
         for line in self:
-            if not line.product_id or line.display_type in ('line_section', 'line_note') or line.is_imported:
+            if not line.product_id or line.display_type in ('line_section', 'line_subsection', 'line_note') or line.is_imported:
                 continue
             if line.move_id.is_sale_document(include_receipts=True):
                 document_type = 'sale'
@@ -903,7 +940,7 @@ class AccountMoveLine(models.Model):
     @api.depends('product_id', 'product_uom_id')
     def _compute_tax_ids(self):
         for line in self:
-            if line.display_type in ('line_section', 'line_note', 'payment_term') or line.is_imported:
+            if line.display_type in ('line_section', 'line_subsection', 'line_note', 'payment_term') or line.is_imported:
                 continue
             # /!\ Don't remove existing taxes if there is no explicit taxes set on the account.
             if line.product_id or (line.display_type != 'discount' and (line.account_id.tax_ids or not line.tax_ids)):
@@ -1153,6 +1190,36 @@ class AccountMoveLine(models.Model):
             )
             line.reconciled_lines_excluding_exchange_diff_ids = all_lines - excluded_ids
 
+    @api.depends('sequence', 'move_id')
+    def _compute_parent_id(self):
+        for _move, lines in self.grouped('move_id').items():
+            last_section = False
+            last_sub = False
+            for line in lines.sorted('sequence'):
+                if line.display_type == 'line_section':
+                    last_section = line
+                    line.parent_id = False
+                    last_sub = False
+                elif line.display_type == 'line_subsection':
+                    line.parent_id = last_section
+                    last_sub = line
+                elif line.display_type == 'product':
+                    line.parent_id = last_sub or last_section or False
+                else:
+                    line.parent_id = False
+
+    @api.depends('parent_id')
+    def _compute_section_visibility_fields(self):
+        for line in self:
+            if line.display_type in ('line_section', 'line_subsection'):
+                continue
+
+            line.collapse_prices = line.parent_id.collapse_prices
+            line.collapse_composition = line.parent_id.collapse_composition
+
+    def _search_parent_id(self, operator, value):
+        return [('id', operator, value)]
+
     def _search_payment_date(self, operator, value):
         if operator == 'in':
             # recursive call with operator '='
@@ -1251,6 +1318,15 @@ class AccountMoveLine(models.Model):
         lines_to_modify = self.env['account.move.line'].browse([
             line.id for line in self if line.parent_state == "posted"
         ]).with_context(skip_analytic_sync=True)
+        old_distributions = dict(self.env.execute_query(SQL(
+            "SELECT id, analytic_distribution FROM account_move_line WHERE id = ANY(%s)",
+            self.ids,
+        )))
+        for line in self:
+            line.analytic_distribution = self._merge_distribution(
+                old_distribution=old_distributions.get(line._origin.id) or {},
+                new_distribution=line.analytic_distribution or {},
+            )
         lines_to_modify.analytic_line_ids.unlink()
         lines_to_modify._create_analytic_lines()
 
@@ -1276,7 +1352,7 @@ class AccountMoveLine(models.Model):
         # Avoid using api.constrains for fields journal_id and account_id as in case of a write on
         # account move and account move line in the same operation, the check would be done
         # before all write are complete, causing a false positive
-        for line in self.filtered(lambda x: x.display_type not in ('line_section', 'line_note')):
+        for line in self.filtered(lambda x: x.display_type not in ('line_section', 'line_subsection', 'line_note')):
             account = line.account_id
             journal = line.move_id.journal_id
 
@@ -1478,7 +1554,7 @@ class AccountMoveLine(models.Model):
     def default_get(self, fields):
         defaults = super().default_get(fields)
         quick_encode_suggestion = self.env.context.get('quick_encoding_vals')
-        if quick_encode_suggestion and self.env.context.get('default_display_type') not in ('line_section', 'line_note'):
+        if quick_encode_suggestion and self.env.context.get('default_display_type') not in ('line_section', 'line_subsection', 'line_note'):
             defaults['account_id'] = quick_encode_suggestion['account_id']
             defaults['price_unit'] = quick_encode_suggestion['price_unit']
             defaults['tax_ids'] = [Command.set(quick_encode_suggestion['tax_ids'])]
@@ -1517,7 +1593,7 @@ class AccountMoveLine(models.Model):
                 res_vals.pop('debit', 0)
                 res_vals.pop('credit', 0)
 
-            if res_vals['display_type'] in ('line_section', 'line_note'):
+            if res_vals['display_type'] in ('line_section', 'line_subsection', 'line_note'):
                 res_vals.pop('account_id')
 
         return result_vals_list
@@ -1825,7 +1901,7 @@ class AccountMoveLine(models.Model):
             if line.display_type == 'payment_term' and line.move_id.is_invoice(True):
                 del vals['name']
             # Don't copy restricted fields of notes
-            if line.display_type in ('line_section', 'line_note'):
+            if line.display_type in ('line_section', 'line_subsection', 'line_note'):
                 del vals['balance']
                 del vals['account_id']
             # Will be recomputed from the price_unit
@@ -2163,10 +2239,7 @@ class AccountMoveLine(models.Model):
                 and company_currency.compare_amounts(partial_credit_amount, partial_debit_amount_range[2]) <= 0
                 and company_currency.compare_amounts(partial_credit_amount, partial_debit_amount_range[0]) >= 0
             ):
-                if debit_fully_matched:
-                    partial_amount = remaining_debit_amount
-                else:
-                    partial_amount = -remaining_credit_amount
+                partial_amount = min(remaining_debit_amount, -remaining_credit_amount)
                 partial_debit_amount = partial_amount
                 partial_credit_amount = partial_amount
 
@@ -3288,6 +3361,41 @@ class AccountMoveLine(models.Model):
         self.ensure_one()
         return self.move_id.state == 'posted'
 
+    def get_lines_grouped_by_section(self):
+        """
+        Return a tax-wise summary of sale order lines linked to section.
+        Groups lines by their tax IDs and computes subtotal and total for each group.
+        """
+        self.ensure_one()
+
+        section_lines = self.child_ids + self.child_ids.child_ids
+        result = []
+        for taxes, lines in groupby(section_lines, key=lambda l: l.tax_ids):
+            tax_labels = [tax.tax_label for tax in taxes if tax.tax_label]
+            subtotal = sum(l.price_subtotal for l in lines)
+            price_total = sum(l.price_total for l in lines)
+
+            if subtotal or tax_labels:
+                result.append({
+                    'name': self.name,
+                    'taxes': tax_labels,
+                    'ids': [line.id for line in section_lines],
+                    'price_subtotal': subtotal,
+                    'price_total': price_total,
+                })
+
+        return result or [{
+            'name': self.name,
+            'taxes': [],
+            'ids': [],
+            'price_subtotal': 0.0,
+            'price_total': 0.0,
+        }]
+
+    def get_section_subtotal(self):
+        section_lines = self.child_ids + self.child_ids.child_ids
+        return sum(section_lines.mapped('price_subtotal'))
+
     # -------------------------------------------------------------------------
     # PUBLIC ACTIONS
     # -------------------------------------------------------------------------
@@ -3317,7 +3425,7 @@ class AccountMoveLine(models.Model):
     def action_add_from_catalog(self):
         """ Will open the catalog view """
         move = self.env['account.move'].browse(self.env.context.get('order_id'))
-        return move.action_add_from_catalog()
+        return move.with_context(child_field='line_ids').action_add_from_catalog()
 
     # -------------------------------------------------------------------------
     # Catalog

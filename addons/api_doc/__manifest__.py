@@ -7,8 +7,8 @@ Odoo Dynamic API Documentation
 ==============================
 
 This module provides a dynamic documentation page for developpers at the
-/doc URL. The documentation is generated using the database to lists the
-models and their fields and methods. It also provide a playground to run
+/doc URL. The documentation is generated using the database to list the
+models and their fields and methods. It also provides a playground to run
 the methods over HTTP, with examples in various programming languages.
 """,
     'depends': ['web'],
@@ -40,7 +40,18 @@ the methods over HTTP, with examples in various programming languages.
             'web/static/src/core/assets.js',
             'web/static/src/core/code_editor/**',
 
-            'api_doc/static/src/**/*',
+            # Bootstrap
+            ('include', 'web._assets_helpers'),
+            'web/static/src/scss/pre_variables.scss',
+            'web/static/lib/bootstrap/scss/_variables.scss',
+            'web/static/lib/bootstrap/scss/_variables-dark.scss',
+            'web/static/lib/bootstrap/scss/_maps.scss',
+            ('include', 'web._assets_bootstrap'),
+
+            # Static files
+            'api_doc/static/src/**/*.xml',
+            'api_doc/static/src/**/*.js',
+            'api_doc/static/src/doc_client.css',
         ],
     },
     'bootstrap': True,

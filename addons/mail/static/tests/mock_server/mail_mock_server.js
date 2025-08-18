@@ -227,7 +227,10 @@ async function channel_call_leave(request) {
     const ResPartner = this.env["res.partner"];
 
     const { channel_id } = await parseRequestParams(request);
-    const channelMembers = DiscussChannelMember._filter([["channel_id", "=", channel_id]]);
+    const channelMembers = DiscussChannelMember._filter([
+        ["channel_id", "=", channel_id],
+        ["is_self", "=", true],
+    ]);
     const rtcSessions = DiscussChannelRtcSession._filter([
         ["channel_member_id", "in", channelMembers.map((channelMember) => channelMember.id)],
     ]);
@@ -263,6 +266,7 @@ async function channel_call_leave(request) {
             { sessionId: rtcSession.id },
         ]);
     }
+    this.env["discuss.channel.rtc.session"].unlink(Array.from(rtcSessions).map(({ id }) => id));
     BusBus._sendmany(notifications);
 }
 
@@ -721,6 +725,10 @@ async function mail_message_update_content(request) {
         );
         msg_values.attachment_ids = attachment_ids;
     }
+    if (!body && attachment_ids.length === 0) {
+        msg_values.partner_ids = false;
+        msg_values.parent_id = false;
+    }
     MailMessage.write([message_id], msg_values);
     BusBus._sendone(
         MailMessage._bus_notification_target(message.id),
@@ -728,6 +736,7 @@ async function mail_message_update_content(request) {
         new mailDataHelpers.Store(MailMessage.browse(message.id), {
             attachment_ids: mailDataHelpers.Store.many(IrAttachment.browse(message.attachment_ids)),
             body: ["markup", message.body],
+            parent_id: mailDataHelpers.Store.one(MailMessage.browse(message.parent_id)),
             partner_ids: mailDataHelpers.Store.many(
                 this.env["res.partner"].browse(message.partner_ids),
                 makeKwArgs({ fields: ["avatar_128", "name"] })
@@ -1228,12 +1237,6 @@ export class StoreOne extends StoreRelation {
         }
         if (this.records._name === "discuss.channel") {
             return { id, model: "discuss.channel" };
-        }
-        if (this.records._name === "mail.guest") {
-            return { id, type: "guest" };
-        }
-        if (this.records._name === "res.partner") {
-            return { id, type: "partner" };
         }
         return id;
     }

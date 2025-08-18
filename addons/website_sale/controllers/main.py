@@ -16,7 +16,7 @@ from odoo.fields import Command, Domain
 from odoo.http import request, route
 from odoo.tools import SQL, clean_context, float_round, groupby, lazy, str2bool
 from odoo.tools.json import scriptsafe as json_scriptsafe
-from odoo.tools.translate import _
+from odoo.tools.translate import _, LazyTranslate
 
 from odoo.addons.payment.controllers import portal as payment_portal
 from odoo.addons.sale.controllers import portal as sale_portal
@@ -28,6 +28,8 @@ from odoo.addons.website_sale.models.website import (
     PRICELIST_SELECTED_SESSION_CACHE_KEY,
     PRICELIST_SESSION_CACHE_KEY,
 )
+
+_lt = LazyTranslate(__name__)
 
 
 def handle_product_params_error(exc, product, category=None, **kwargs):
@@ -280,6 +282,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
         type='http',
         auth='public',
         website=True,
+        list_as_website_content=_lt("Shop"),
         sitemap=sitemap_shop,
         # Sends a 404 error in case of any Access error instead of 403.
         handle_params_access_error=lambda e, **kwargs: NotFound.code,
@@ -311,7 +314,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
         website = request.env['website'].get_current_website()
         website_domain = website.website_domain()
 
-        ppg = website.shop_ppg or 20
+        ppg = website.shop_ppg or 21
         ppr = website.shop_ppr or 4
         gap = website.shop_gap or "16px"
 
@@ -954,7 +957,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
     # === CHECKOUT FLOW - ADDRESS METHODS === #
 
     @route(
-        '/shop/checkout', type='http', methods=['GET'], auth='public', website=True, sitemap=False
+        '/shop/checkout', type='http', methods=['GET'], auth='public', website=True, sitemap=False, list_as_website_content=_lt("Shop Checkout")
     )
     def shop_checkout(self, try_skip_step=None, **query_params):
         """ Display the checkout page.
@@ -1451,7 +1454,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
     # === CHECKOUT FLOW - EXTRA STEP METHODS === #
 
-    @route(['/shop/extra_info'], type='http', auth="public", website=True, sitemap=False)
+    @route(['/shop/extra_info'], type='http', auth="public", website=True, sitemap=False, list_as_website_content=_lt("Shop Checkout - Extra Information"))
     def extra_info(self, **post):
         # Check that this option is activated
         extra_step = request.website.viewref('website_sale.extra_info')
@@ -1518,7 +1521,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             ))
         return errors
 
-    @route('/shop/payment', type='http', auth='public', website=True, sitemap=False)
+    @route('/shop/payment', type='http', auth='public', website=True, sitemap=False, list_as_website_content=_lt("Shop Payment"))
     def shop_payment(self, **post):
         """ Payment step. This page proposes several payment means based on available
         payment.provider. State at this point :
@@ -1589,7 +1592,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
         return request.redirect('/shop/confirmation')
 
-    @route(['/shop/confirmation'], type='http', auth="public", website=True, sitemap=False)
+    @route(['/shop/confirmation'], type='http', auth="public", website=True, sitemap=False, list_as_website_content=_lt("Shop Confirmation"))
     def shop_payment_confirmation(self, **post):
         """ End of checkout process controller. Confirmation is basically seing
         the status of a sale.order. State at this point :
@@ -1748,7 +1751,8 @@ class WebsiteSale(payment_portal.PaymentPortal):
         writable_fields = {
             'shop_ppg', 'shop_ppr', 'shop_default_sort', 'shop_gap',
             'product_page_image_layout', 'product_page_image_width',
-            'product_page_grid_columns', 'product_page_image_spacing'
+            'product_page_grid_columns', 'product_page_image_spacing',
+            'shop_opt_products_design_classes',
         }
         # Default ppg to 1.
         if 'ppg' in options and not options['ppg']:

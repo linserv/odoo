@@ -14,7 +14,7 @@
                 <filter string="Confirmed Orders" name="confirmed" domain="[('state', '=', 'sale')]"/>
                 <separator/>
                 <filter name="filter_date" date="date" default_period="month"/>
-                <group string="Group By">
+                <group>
                     <filter string="Website" name="groupby_website" context="{'group_by':'website_id'}" groups="website.group_multi_website"/>
                     <filter string="Product" name="groupby_product" context="{'group_by':'product_id'}"/>
                     <filter string="Product Category" name="groupby_product_category" context="{'group_by':'categ_id'}"/>
@@ -75,6 +75,7 @@
     <record id="sale_report_action_dashboard" model="ir.actions.act_window">
         <field name="name">Online Sales Analysis</field>
         <field name="res_model">sale.report</field>
+        <field name="path">online-sales-analysis</field>
         <field name="view_mode">pivot,graph</field>
         <field name="domain">[('website_id', '!=', False)]</field>
         <field name="context">{'search_default_confirmed': 1}</field>

@@ -18,6 +18,7 @@ import {
     toggleMenuItem,
     toggleSearchBarMenu,
 } from "@web/../tests/web_test_helpers";
+import { browser } from "@web/core/browser/browser";
 import { WebClient } from "@web/webclient/webclient";
 import { HierarchyModel } from "@web_hierarchy/hierarchy_model";
 
@@ -1524,3 +1525,49 @@ test("Avoid fetching subnodes if those subnodes are already in the view", async 
     // The button to show the subnodes should be displayed for Georges and Josephine
     expect(".o_hierarchy_node_button.btn-primary").toHaveCount(2);
 });
+
+test("Open record on new window", async () => {
+    patchWithCleanup(browser, {
+        open: (url) => {
+            expect.step(`opened in new window: ${url}`);
+        },
+    });
+    patchWithCleanup(browser.sessionStorage, {
+        setItem(key, value) {
+            expect.step(`set ${key}-${value}`);
+            super.setItem(key, value);
+        },
+        getItem(key) {
+            const res = super.getItem(key);
+            expect.step(`get ${key}-${res}`);
+            return res;
+        },
+    });
+    await mountWithCleanup(WebClient);
+    await getService("action").doAction({
+        res_model: "hr.employee",
+        type: "ir.actions.act_window",
+        views: [
+            [false, "hierarchy"],
+            [false, "form"],
+        ],
+    });
+
+    await contains(".o_hierarchy_node_container:eq(1) .o_hierarchy_node").click({ ctrlKey: true });
+    expect(".o_hierarchy_view").toHaveCount(1);
+    expect(".o_form_view").toHaveCount(0);
+    expect.verifySteps([
+        "get current_state-null",
+        "get current_action-null",
+        'set current_state-{"actionStack":[{"displayName":"","model":"hr.employee","view_type":"hierarchy"}],"model":"hr.employee"}',
+        'set current_action-{"res_model":"hr.employee","type":"ir.actions.act_window","views":[[false,"hierarchy"],[false,"form"]]}',
+        'get current_action-{"res_model":"hr.employee","type":"ir.actions.act_window","views":[[false,"hierarchy"],[false,"form"]]}',
+        'get current_state-{"actionStack":[{"displayName":"","model":"hr.employee","view_type":"hierarchy"}],"model":"hr.employee"}',
+        'set current_action-{"res_model":"hr.employee","type":"ir.actions.act_window","views":[[false,"hierarchy"],[false,"form"]]}',
+        'set current_state-{"actionStack":[{"displayName":"","model":"hr.employee","view_type":"hierarchy"},{"displayName":"","model":"hr.employee","view_type":"form","resId":2}],"resId":2,"model":"hr.employee"}',
+        "opened in new window: /odoo/hr.employee/hr.employee/2",
+        'set current_action-{"res_model":"hr.employee","type":"ir.actions.act_window","views":[[false,"hierarchy"],[false,"form"]]}',
+        'set current_state-{"actionStack":[{"displayName":"","model":"hr.employee","view_type":"hierarchy"}],"model":"hr.employee"}',
+    ]);
+});
+

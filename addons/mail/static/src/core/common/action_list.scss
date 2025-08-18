@@ -1,0 +1,76 @@
+.o-mail-ActionList-group {
+    &.o-inline {
+        gap: 1px;
+    }
+    &:not(.o-inline) {
+        gap: 1px;
+    }
+}
+
+.o-mail-ActionList {
+    hr {
+        opacity: 12.5% !important;
+    }
+
+    button {
+        z-index: 1;
+        --btn-disabled-opacity: 0.25;
+
+        &.o-danger {
+            color: var(--mail-ActionList-dangerColor, darken($danger, 5%)) !important;
+        }
+
+        &.o-success {
+            color: darken($success, 5%) !important;
+        }
+
+        &:not(.o-odooControlPanelSwitchStyle) {
+            background-color: inherit;
+        }
+
+        &.o-inline {
+            i {
+                opacity: 35%;
+            }
+            &.o-odooControlPanelSwitchStyle i {
+                opacity: var(--mail-ActionList-buttonInlineIconOpacity, 65%);
+            }
+        }
+        &:not(.o-inline) i {
+            opacity: 65%;
+            .o_bottom_sheet_sheet:has(&) {
+                opacity: 100%;
+            }
+        }
+
+        .o-mail-ActionList-actionLabel {
+            opacity: 65%;
+            .o_bottom_sheet_sheet:has(&) {
+                opacity: 100%;
+            }
+        }
+
+        &:hover:not(.o-dropdown-item), &.o-isActive, &.o-active, &.focus, &.show, &.active {
+            .o-mail-ActionList-actionLabel {
+                opacity: 100%;
+            }
+
+            color: var(--mail-ActionList-activeItemColor, black);
+            &:not(.o-inline) {
+                background-color: $dropdown-link-hover-bg !important;
+            }
+            &.o-danger {
+                background-color: var(--mail-ActionList-dangerBgColor, rgba($danger, .75)) !important;
+                color: white !important;
+            }
+            &.o-success {
+                background-color: var(--mail-ActionList-successBgColor, rgba($success, .6)) !important;
+                color: white !important;
+            }
+            z-index: 2 !important;
+            i {
+                opacity: 100%;
+            }
+        }
+    }
+}

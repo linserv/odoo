@@ -1,4 +1,5 @@
 import { Component, useEffect } from "@odoo/owl";
+import { _t } from "@web/core/l10n/translation";
 import { x2ManyCommands } from "@web/core/orm_service";
 import { registry } from "@web/core/registry";
 import { CharField } from "@web/views/fields/char/char_field";
@@ -6,6 +7,9 @@ import { standardFieldProps } from "@web/views/fields/standard_field_props";
 import { ListTextField, TextField } from "@web/views/fields/text/text_field";
 import { X2ManyField, x2ManyField } from "@web/views/fields/x2many/x2many_field";
 import { ListRenderer } from "@web/views/list/list_renderer";
+
+const SHOW_ALL_ITEMS_TOOLTIP = _t("Some lines can be on the next page, display them to unlock actions on section.");
+const DISABLED_MOVE_DOWN_ITEM_TOOLTIP = _t("Some lines of the next section can be on the next page, display them to unlock the action.");
 
 const DISPLAY_TYPES = {
     NOTE: "line_note",
@@ -66,6 +70,10 @@ function getRecordsUntilSection(list, record, asc, subSection) {
 export class SectionAndNoteListRenderer extends ListRenderer {
     static template = "account.SectionAndNoteListRenderer";
     static recordRowTemplate = "account.SectionAndNoteListRenderer.RecordRow";
+    static props = [
+        ...super.props,
+        "aggregatedFields",
+    ];
 
     /**
      * The purpose of this extension is to allow sections and notes in the one2many list
@@ -80,6 +88,69 @@ export class SectionAndNoteListRenderer extends ListRenderer {
             (editedRecord) => this.focusToName(editedRecord),
             () => [this.editedRecord]
         );
+    }
+
+    get canAddSubSection() {
+        const selection = new Map(this.props.list.fields.display_type.selection);
+        return selection.has(DISPLAY_TYPES.SUBSECTION);
+    }
+
+    get disabledMoveDownItemTooltip() {
+        return DISABLED_MOVE_DOWN_ITEM_TOOLTIP;
+    }
+
+    get showAllItemsTooltip() {
+        return SHOW_ALL_ITEMS_TOOLTIP;
+    }
+
+    get hidePrices() {
+        return this.record.data.collapse_prices;
+    }
+
+    get hideCompositions() {
+        return this.record.data.collapse_composition;
+    }
+
+    get showPricesButton() {
+        if (this.record.data.display_type === DISPLAY_TYPES.SUBSECTION) {
+            const parent_record = this.getParentSectionRecord(this.record);
+            return !parent_record?.data?.collapse_prices && !parent_record?.data?.collapse_composition;
+        }
+        return true;
+    }
+
+    get showCompositionButton() {
+        if (this.record.data.display_type === DISPLAY_TYPES.SUBSECTION) {
+            return !this.getParentSectionRecord(this.record)?.data?.collapse_composition;
+        }
+        return true;
+    }
+
+    getParentSectionRecord(record) {
+        const parentRecord = this.props.list.records.filter((r) => r.resId === record.data?.parent_id?.id);
+        return parentRecord.length === 1 ? parentRecord[0] : false;
+    }
+
+    async toggleHidePrices(record) {
+        const sectionRecords = getSectionRecords(this.props.list, record);
+        const commands = [];
+        for (const sectionRecord of sectionRecords) {
+            commands.push(x2ManyCommands.update(sectionRecord.resId || sectionRecord._virtualId, {
+                collapse_prices: !record.data.collapse_prices,
+            }));
+        }
+        await this.props.list.applyCommands(commands, { sort: true });
+    }
+
+    async toggleHideComposition(record) {
+        const sectionRecords = getSectionRecords(this.props.list, record);
+        const commands = [];
+        for (const sectionRecord of sectionRecords) {
+            commands.push(x2ManyCommands.update(sectionRecord.resId || sectionRecord._virtualId, {
+                collapse_composition: !record.data.collapse_composition,
+            }));
+        }
+        await this.props.list.applyCommands(commands, { sort: true });
     }
 
     async addRowAfterSection(record, addSubSection) {
@@ -131,9 +202,14 @@ export class SectionAndNoteListRenderer extends ListRenderer {
         await this.props.list.addNewRecordAtIndex(index, { context });
     }
 
-    canAddSubSection() {
-        const selection = new Map(this.props.list.fields.display_type.selection);
-        return selection.has(DISPLAY_TYPES.SUBSECTION);
+    canUseFormatter(column, record) {
+        if (
+            this.isSection(record) &&
+            this.props.aggregatedFields.includes(column.name)
+        ) {
+            return true;
+        }
+        return super.canUseFormatter(column, record);
     }
 
     async deleteSection(record) {
@@ -162,8 +238,13 @@ export class SectionAndNoteListRenderer extends ListRenderer {
             return;
         }
 
-        const sectionRecords = getSectionRecords(this.props.list, record);
-        await this.props.list.duplicateRecords(sectionRecords);
+        const { sectionRecords, indexAtEnd } = getRecordsUntilSection(this.props.list, record, true)
+        const recordsToDuplicate = sectionRecords.filter((record) => {
+            return this.shouldDuplicateSectionItem(record);
+        });
+        await this.props.list.duplicateRecords(recordsToDuplicate, {
+            targetIndex: indexAtEnd,
+        });
     }
 
     async editNextRecord(record, group) {
@@ -178,6 +259,10 @@ export class SectionAndNoteListRenderer extends ListRenderer {
         } else {
             return super.editNextRecord(record, group);
         }
+    }
+
+    expandPager() {
+        return this.props.list.load({ limit: this.props.list.count });
     }
 
     focusToName(editRec) {
@@ -195,6 +280,21 @@ export class SectionAndNoteListRenderer extends ListRenderer {
         return hasPreviousSection(this.props.list, record);
     }
 
+    isNextSectionInPage(record) {
+        if (this.props.list.count <= this.props.list.offset + this.props.list.limit) {
+            // if last page
+            return true;
+        }
+        const sectionRecords = getSectionRecords(this.props.list, record);
+        const index = this.props.list.records.indexOf(record) + sectionRecords.length;
+        if (index >= this.props.list.limit) {
+            return false;
+        }
+
+        const { indexAtEnd } = getRecordsUntilSection(this.props.list, this.props.list.records[index], true);
+        return indexAtEnd < this.props.list.limit;
+    }
+
     isSectionOrNote(record = null) {
         record = record || this.record;
         return [DISPLAY_TYPES.SECTION, DISPLAY_TYPES.SUBSECTION, DISPLAY_TYPES.NOTE].includes(
@@ -207,6 +307,15 @@ export class SectionAndNoteListRenderer extends ListRenderer {
         return [DISPLAY_TYPES.SECTION, DISPLAY_TYPES.SUBSECTION].includes(record.data.display_type);
     }
 
+    isSectionInPage(record) {
+        if (this.props.list.count <= this.props.list.offset + this.props.list.limit) {
+            // if last page
+            return true;
+        }
+        const { indexAtEnd } = getRecordsUntilSection(this.props.list, record, true);
+        return indexAtEnd < this.props.list.limit;
+    }
+
     isSortable() {
         return false;
     }
@@ -215,35 +324,85 @@ export class SectionAndNoteListRenderer extends ListRenderer {
         return record.data.display_type === DISPLAY_TYPES.SECTION;
     }
 
+    isSubSection(record) {
+        return record.data.display_type === DISPLAY_TYPES.SUBSECTION;
+    }
+
+    isHidden(record, state) {
+        if (!this.isSection(record)) {
+            return true;
+        }
+
+        if (this.isTopSection(record)) {
+            return false;
+        }
+
+        if (this.isSubSection(record)) {
+            if (state === 'composition' && this.getParentSectionRecord(record)?.data?.collapse_composition) {
+                return true;
+            }
+
+            if (state === 'prices' && this.getParentSectionRecord(record)?.data?.collapse_prices) {
+                return true;
+            }
+        }
+    }
+
     getRowClass(record) {
         const existingClasses = super.getRowClass(record);
-        return `${existingClasses} o_is_${record.data.display_type}`;
+        let newClasses = `${existingClasses} o_is_${record.data.display_type}`;
+        if (this.isHidden(record, 'composition') && record.data.collapse_composition) {
+            newClasses += " text-muted";
+        }
+        return newClasses;
     }
 
     getCellClass(column, record) {
-        const classNames = super.getCellClass(column, record);
+        let classNames = super.getCellClass(column, record);
         if (
             this.isSectionOrNote(record) &&
             column.widget !== "handle" &&
-            column.name !== this.titleField
+            ![column.name, ...this.props.aggregatedFields].includes(column.name)
         ) {
             return `${classNames} o_hidden`;
         }
+
+        if (this.isHidden(record, 'prices') && this.props.aggregatedFields.includes(column.name) && record.data.collapse_prices) {
+            classNames += " text-muted";
+        }
+
         return classNames;
     }
 
     getColumns(record) {
         const columns = super.getColumns(record);
         if (this.isSectionOrNote(record)) {
-            return this.getSectionColumns(columns);
+            return this.getSectionColumns(columns, record);
         }
         return columns;
     }
 
-    getSectionColumns(columns) {
+    getFormattedValue(column, record) {
+        if (this.isSection(record) && this.props.aggregatedFields.includes(column.name)) {
+            const total = getSectionRecords(this.props.list, record)
+                .filter((record) => !this.isSection(record))
+                .reduce((total, record) => total + record.data[column.name], 0);
+            const formatter = registry.category("formatters").get(column.fieldType, (val) => val);
+            return formatter(total, {
+                ...formatter.extractOptions?.(column),
+                data: record.data,
+                field: record.fields[column.name],
+            });
+        }
+        return super.getFormattedValue(column, record);
+    }
+
+    getSectionColumns(columns, record) {
         const sectionCols = columns.filter(
             (col) =>
-                col.widget === "handle" || (col.type === "field" && col.name === this.titleField)
+                col.widget === "handle"
+                || col.name === this.titleField
+                || (this.isSection(record) && this.props.aggregatedFields.includes(col.name))
         );
         return sectionCols.map((col) => {
             if (col.name === this.titleField) {
@@ -277,6 +436,10 @@ export class SectionAndNoteListRenderer extends ListRenderer {
         return this.swapSections(previousSectionRecords, sectionRecords);
     }
 
+    shouldDuplicateSectionItem(record) {
+        return true;
+    }
+
     async swapSections(sectionRecords1, sectionRecords2) {
         const commands = [];
         let sequence = sectionRecords1[0].data[this.props.list.handleField];
@@ -296,9 +459,21 @@ export class SectionAndNoteListRenderer extends ListRenderer {
 
 export class SectionAndNoteFieldOne2Many extends X2ManyField {
     static components = {
-        ...X2ManyField.components,
+        ...super.components,
         ListRenderer: SectionAndNoteListRenderer,
     };
+    static props = {
+        ...super.props,
+        aggregatedFields: Array,
+    };
+
+    get rendererProps() {
+        const rp = super.rendererProps;
+        if (this.props.viewMode === "list") {
+            rp.aggregatedFields = this.props.aggregatedFields;
+        }
+        return rp;
+    }
 }
 
 export class SectionAndNoteText extends Component {
@@ -322,6 +497,14 @@ export const sectionAndNoteFieldOne2Many = {
     ...x2ManyField,
     component: SectionAndNoteFieldOne2Many,
     additionalClasses: [...(x2ManyField.additionalClasses || []), "o_field_one2many"],
+    extractProps: (staticInfo, dynamicInfo) => {
+        return {
+            ...x2ManyField.extractProps(staticInfo, dynamicInfo),
+            aggregatedFields: staticInfo.attrs.aggregated_fields
+                ? staticInfo.attrs.aggregated_fields.split(/\s*,\s*/)
+                : [],
+        };
+    },
 };
 
 export const sectionAndNoteText = {

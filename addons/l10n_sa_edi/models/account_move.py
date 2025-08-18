@@ -6,6 +6,7 @@ from odoo.tools import float_repr
 from datetime import datetime
 from base64 import b64decode, b64encode
 from lxml import etree
+from odoo.exceptions import UserError
 
 
 class AccountMove(models.Model):
@@ -46,12 +47,12 @@ class AccountMove(models.Model):
             if move.country_code == 'SA' and move.move_type in ('out_invoice', 'out_refund') and zatca_document and move.state != 'draft':
                 qr_code_str = ''
                 if move._l10n_sa_is_simplified():
-                    x509_cert_sudo = move.journal_id.sudo().l10n_sa_production_csid_certificate_id
+                    x509_cert = move.journal_id.l10n_sa_production_csid_certificate_id
                     xml_content = self.env.ref('l10n_sa_edi.edi_sa_zatca')._l10n_sa_generate_zatca_template(move)
-                    qr_code_str = move._l10n_sa_get_qr_code(move.journal_id, xml_content, x509_cert_sudo,
+                    qr_code_str = move._l10n_sa_get_qr_code(move.journal_id, xml_content, x509_cert,
                                                             move.l10n_sa_invoice_signature, True)
                     qr_code_str = b64encode(qr_code_str).decode()
-                elif zatca_document.state == 'sent' and zatca_document.sudo().attachment_id.datas:
+                elif zatca_document.state == 'sent' and zatca_document.attachment_id.datas:
                     document_xml = zatca_document.attachment_id.with_context(bin_size=False).datas.decode()
                     root = etree.fromstring(b64decode(document_xml))
                     qr_node = root.xpath('//*[local-name()="ID"][text()="QR"]/following-sibling::*/*')[0]
@@ -106,7 +107,7 @@ class AccountMove(models.Model):
             prehash_content = etree.tostring(root)
             invoice_hash = edi_format._l10n_sa_generate_invoice_xml_hash(prehash_content, 'digest')
 
-            amount_total = float(xpath_ns('//cbc:TaxInclusiveAmount'))
+            amount_total = float(xpath_ns('//cbc:PayableAmount'))
             amount_tax = float(xpath_ns('//cac:TaxTotal/cbc:TaxAmount'))
             seller_name_enc = self._l10n_sa_get_qr_code_encoding(1, journal_id.company_id.display_name.encode())
             seller_vat_enc = self._l10n_sa_get_qr_code_encoding(2, journal_id.company_id.vat.encode())
@@ -284,6 +285,11 @@ class AccountMove(models.Model):
         """
         self.ensure_one()
         return self.l10n_sa_edi_chain_head_id._get_records_action(name=_("Chain Head"))
+
+    def action_post(self):
+        if self.filtered(lambda move: move.country_code == "SA" and move.move_type in ('out_invoice', 'out_refund') and move.company_id != move.journal_id.company_id):
+            raise UserError(_("Please make sure that the invoice company matches the journal company on all invoices you wish to confirm"))
+        return super().action_post()
 
 
 class AccountMoveLine(models.Model):

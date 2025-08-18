@@ -4,266 +4,298 @@ import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
 import { SearchMessagesPanel } from "@mail/core/common/search_messages_panel";
 import { markEventHandled } from "@web/core/utils/misc";
+import { Action } from "./action";
 
 export const threadActionsRegistry = registry.category("mail.thread/actions");
 
-threadActionsRegistry
-    .add("fold-chat-window", {
-        condition(component) {
-            return component.props.chatWindow;
-        },
-        icon: "oi oi-fw oi-minus",
-        iconLarge: "oi oi-fw fa-lg oi-minus",
-        name(component) {
-            return !component.props.chatWindow?.isOpen ? _t("Open") : _t("Fold");
-        },
-        open(component) {
-            component.toggleFold();
-        },
-        displayActive(component) {
-            return !component.props.chatWindow?.isOpen;
-        },
-        sequence: 99,
-        sequenceQuick: 20,
-    })
-    .add("rename-thread", {
-        condition(component) {
-            return (
-                component.thread &&
-                component.props.chatWindow?.isOpen &&
-                (component.thread.is_editable || component.thread.channel_type === "chat")
-            );
-        },
-        icon: "fa fa-fw fa-pencil",
-        iconLarge: "fa fa-lg fa-fw fa-pencil",
-        name: _t("Rename Thread"),
-        open(component) {
-            component.state.editingName = true;
-        },
-        sequence: 30,
-        sequenceGroup: 20,
-    })
-    .add("close", {
-        condition(component) {
-            return component.props.chatWindow;
-        },
-        icon: "oi fa-fw oi-close",
-        iconLarge: "oi fa-lg fa-fw oi-close",
-        name: _t("Close Chat Window (ESC)"),
-        open(component) {
-            component.close();
-        },
-        sequence: 100,
-        sequenceQuick: 10,
-    })
-    .add("search-messages", {
-        component: SearchMessagesPanel,
-        condition(component) {
-            return (
-                ["discuss.channel", "mail.box"].includes(component.thread?.model) &&
-                (!component.props.chatWindow || component.props.chatWindow.isOpen)
-            );
-        },
-        panelOuterClass: "o-mail-SearchMessagesPanel bg-inherit",
-        icon: "oi oi-fw oi-search",
-        iconLarge: "oi oi-fw fa-lg oi-search",
-        name: _t("Search Messages"),
-        nameActive: _t("Close Search"),
-        sequence: 20,
-        sequenceGroup: 20,
-        setup(action) {
-            useSubEnv({
-                searchMenu: {
-                    open: () => action.open(),
-                    close: () => {
-                        if (action.isActive) {
-                            action.close();
-                        }
-                    },
-                },
-            });
-        },
-        toggle: true,
-    });
+/** @typedef {import("@odoo/owl").Component} Component */
 
-function transformAction(component, id, action) {
-    return {
-        /** Closes this action. */
-        close() {
-            if (this.toggle) {
-                component.threadActions.activeAction = component.threadActions.actionStack.pop();
-            }
-            action.close?.(component, this);
-        },
-        /** Optional component that should be displayed in the view when this action is active. */
-        component: action.component,
-        /** Condition to display the component of this action. */
-        get componentCondition() {
-            return this.isActive && this.component && this.condition && !this.popover;
-        },
-        /** Props to pass to the component of this action. */
-        get componentProps() {
-            return action.componentProps?.(this, component);
-        },
-        /** Condition to display this action. */
-        get condition() {
-            return threadActionsInternal.condition(component, id, action);
-        },
-        /** If set, this is considered as a danger (destructive) action. */
-        get danger() {
-            return typeof action.danger === "function" ? action.danger(component) : action.danger;
-        },
-        /** Condition to disable the button of this action (but still display it). */
-        get disabledCondition() {
-            return action.disabledCondition?.(component);
-        },
-        /** Determines whether this action opens a dropdown on selection. Value is shaped { template, menuClass } */
-        dropdown: action.dropdown,
-        /**
-         * Icon for the button this action.
-         * - When a string, this is considered an icon as classname (.fa and .oi).
-         * - When an object with property `template`, this is an icon rendered in template.
-         *   Template params are provided in `params` and passed to template as a `t-set="templateParams"`
-         */
-        get icon() {
-            return typeof action.icon === "function" ? action.icon(component) : action.icon;
-        },
-        /**
-         * Large icon for the button this action.
-         * - When a string, this is considered an icon as classname (.fa and .oi).
-         * - When an object with property `template`, this is an icon rendered in template.
-         *   Template params are provided in `params` and passed to template as a `t-set="templateParams"`
-         */
-        get iconLarge() {
-            return typeof action.iconLarge === "function"
-                ? action.iconLarge(component)
-                : action.iconLarge ?? action.icon;
-        },
-        /** Unique id of this action. */
-        id,
-        /** States whether this action is currently active. */
-        get isActive() {
-            return id === component.threadActions.activeAction?.id;
-        },
-        /** Name of this action, displayed to the user. */
-        get name() {
-            const res = this.isActive && action.nameActive ? action.nameActive : action.name;
-            return typeof res === "function" ? res(component) : res;
-        },
-        /** ClassName on name of this action */
-        get nameClass() {
-            return typeof action.nameClass === "function"
-                ? action.nameClass(component)
-                : action.nameClass;
-        },
-        /**
-         * Action to execute when this action is selected (on or off).
-         *
-         * @param {MouseEvent} [ev]
-         * @param {object} [param0]
-         * @param {boolean} [param0.keepPrevious] Whether the previous action
-         * should be kept so that closing the current action goes back
-         * to the previous one.
-         * */
-        onSelected(ev, { keepPrevious } = {}) {
-            if (ev) {
-                markEventHandled(ev, "DiscussAction.onSelected");
-            }
-            if (this.toggle && this.isActive) {
-                this.close();
-            } else {
-                this.open({ keepPrevious });
-            }
-        },
-        /**
-         * Opens this action.
-         *
-         * @param {object} [param0]
-         * @param {boolean} [param0.keepPrevious] Whether the previous action
-         * should be kept so that closing the current action goes back
-         * to the previous one.
-         * */
-        open({ keepPrevious } = {}) {
-            if (this.toggle) {
-                if (component.threadActions.activeAction) {
-                    if (keepPrevious) {
-                        component.threadActions.actionStack.push(
-                            component.threadActions.activeAction
-                        );
-                    } else {
-                        component.threadActions.activeAction.close();
+/** @typedef {import("@mail/core/common/action").ActionDefinition} ActionDefinition */
+
+/**
+ * @typedef {Object} ThreadActionSpecificDefinition
+ * @property {Component} [actionPanelComponent]
+ * @property {(Component) => Object} [actionPanelComponentProps]
+ * @property {(Component) => void} [close]
+ * @property {boolean|(comp: Component) => boolean} [condition=true]
+ * @property {string} [nameActive]
+ * @property {string|(comp: Component) => string} [nameClass]
+ * @property {(comp: Component) => void} [open]
+ * @property {(comp: Component) => string} [panelOuterClass]
+ * @property {boolean|(comp: Component) => boolean} [partition=true]
+ * @property {boolean|(comp: Component) => boolean} [sequenceGroup]
+ * @property {boolean|(comp: Component) => boolean} [sequenceQuick]
+ * @property {boolean|(comp: Component) => boolean} [sidebar=false]
+ * @property {boolean|(comp: Component) => boolean} [sidebarSequence]
+ * @property {boolean|(comp: Component) => boolean} [sidebarSequenceGroup]
+ * @property {boolean} [toggle]
+ */
+
+/**
+ * @typedef {ActionDefinition & ThreadActionSpecificDefinition} ThreadActionDefinition
+ */
+
+/**
+ * @param {string} id
+ * @param {ThreadActionDefinition} definition
+ */
+export function registerThreadAction(id, definition) {
+    threadActionsRegistry.add(id, definition);
+}
+
+registerThreadAction("fold-chat-window", {
+    condition(component) {
+        return component.props.chatWindow;
+    },
+    icon: "oi oi-fw oi-minus",
+    iconLarge: "oi oi-fw fa-lg oi-minus",
+    name(component) {
+        return !component.props.chatWindow?.isOpen ? _t("Open") : _t("Fold");
+    },
+    open(component) {
+        component.toggleFold();
+    },
+    displayActive(component) {
+        return !component.props.chatWindow?.isOpen;
+    },
+    sequence: 99,
+    sequenceQuick: 20,
+});
+registerThreadAction("rename-thread", {
+    condition(component) {
+        return (
+            component.thread &&
+            component.props.chatWindow?.isOpen &&
+            (component.thread.is_editable || component.thread.channel_type === "chat")
+        );
+    },
+    icon: "fa fa-fw fa-pencil",
+    iconLarge: "fa fa-lg fa-fw fa-pencil",
+    name: _t("Rename Thread"),
+    open(component) {
+        component.state.editingName = true;
+    },
+    sequence: 30,
+    sequenceGroup: 20,
+});
+registerThreadAction("close", {
+    condition(component) {
+        return component.props.chatWindow;
+    },
+    icon: "oi fa-fw oi-close",
+    iconLarge: "oi fa-lg fa-fw oi-close",
+    name: _t("Close Chat Window (ESC)"),
+    open(component) {
+        component.close();
+    },
+    sequence: 100,
+    sequenceQuick: 10,
+});
+registerThreadAction("search-messages", {
+    actionPanelComponent: SearchMessagesPanel,
+    condition(component) {
+        return (
+            ["discuss.channel", "mail.box"].includes(component.thread?.model) &&
+            (!component.props.chatWindow || component.props.chatWindow.isOpen)
+        );
+    },
+    panelOuterClass: "o-mail-SearchMessagesPanel bg-inherit",
+    icon: "oi oi-fw oi-search",
+    iconLarge: "oi oi-fw fa-lg oi-search",
+    name: _t("Search Messages"),
+    nameActive: _t("Close Search"),
+    sequence: 20,
+    sequenceGroup: 20,
+    setup() {
+        useSubEnv({
+            searchMenu: {
+                open: () => this.open(),
+                close: () => {
+                    if (this.isActive) {
+                        this.close();
                     }
+                },
+            },
+        });
+    },
+    toggle: true,
+});
+
+class ThreadAction extends Action {
+    /** Determines whether this is a popover linked to this action. */
+    popover = null;
+
+    /** Optional component that is used as action panel of this component, i.e. when action is active. */
+    get actionPanelComponent() {
+        return this.explicitDefinition.actionPanelComponent;
+    }
+
+    /** Condition to display the action panel component of this action. */
+    get actionPanelComponentCondition() {
+        return this.isActive && this.actionPanelComponent && this.condition && !this.popover;
+    }
+
+    /** Props to pass to the action panel component of this action. */
+    get actionPanelComponentProps() {
+        return this.explicitDefinition.actionPanelComponentProps?.(this._component, this);
+    }
+
+    /** Closes this action. */
+    close() {
+        if (this.toggle) {
+            this._component.threadActions.activeAction =
+                this._component.threadActions.actionStack.pop();
+        }
+        this.explicitDefinition.close?.(this._component, this);
+    }
+
+    /** Condition to display this action. */
+    get condition() {
+        return threadActionsInternal.condition(this._component, this.id, this.explicitDefinition);
+    }
+
+    /** States whether this action is currently active. */
+    get isActive() {
+        return this.id === this._component.threadActions.activeAction?.id;
+    }
+
+    /** @override **/
+    get name() {
+        const res =
+            this.isActive && this.explicitDefinition.nameActive
+                ? this.explicitDefinition.nameActive
+                : this.explicitDefinition.name;
+        return typeof res === "function" ? res(this._component) : res;
+    }
+
+    /** ClassName on name of this action */
+    get nameClass() {
+        return typeof this.explicitDefinition.nameClass === "function"
+            ? this.explicitDefinition.nameClass(this._component)
+            : this.explicitDefinition.nameClass;
+    }
+
+    /**
+     * @override
+     * @param {MouseEvent} [ev]
+     * @param {object} [param0]
+     * @param {boolean} [param0.keepPrevious] Whether the previous action
+     * should be kept so that closing the current action goes back
+     * to the previous one.
+     * */
+    onSelected(ev, { keepPrevious } = {}) {
+        if (ev) {
+            markEventHandled(ev, "DiscussAction.onSelected");
+        }
+        if (this.toggle && this.isActive) {
+            this.close();
+        } else {
+            this.open({ keepPrevious });
+        }
+    }
+
+    /**
+     * Opens this action.
+     *
+     * @param {object} [param0]
+     * @param {boolean} [param0.keepPrevious] Whether the previous action
+     * should be kept so that closing the current action goes back
+     * to the previous one.
+     * */
+    open({ keepPrevious } = {}) {
+        if (this.toggle) {
+            if (this._component.threadActions.activeAction) {
+                if (keepPrevious) {
+                    this._component.threadActions.actionStack.push(
+                        this._component.threadActions.activeAction
+                    );
+                } else {
+                    this._component.threadActions.activeAction.close();
                 }
-                component.threadActions.activeAction = this;
             }
-            action.open?.(component, this);
-        },
-        get panelOuterClass() {
-            return typeof action.panelOuterClass === "function"
-                ? action.panelOuterClass(component)
-                : action.panelOuterClass;
-        },
-        /**
-         * - In action definition: indicate whether the action is elligible as partition actions. @see useThreadActions::partition
-         * - While action is being used: indicate that the action is being used as a partitioned action.
-         */
-        get partition() {
-            if (action._partition) {
-                return action._partition;
-            }
-            return typeof action.partition === "function"
-                ? action.partition(component)
-                : action.partition ?? true;
-        },
-        set partition(partition) {
-            action._partition = partition;
-        },
-        /** Determines whether this is a popover linked to this action. */
-        popover: null,
-        /** Determines the order of this action (smaller first). */
-        get sequence() {
-            return typeof action.sequence === "function"
-                ? action.sequence(component)
-                : action.sequence;
-        },
-        get sequenceGroup() {
-            return typeof action.sequenceGroup === "function"
-                ? action.sequenceGroup(component)
-                : action.sequenceGroup;
-        },
-        get sequenceQuick() {
-            return typeof action.sequenceQuick === "function"
-                ? action.sequenceQuick(component)
-                : action.sequenceQuick;
-        },
-        /**
-         * - In action definition: indicate whether the action is elligible as sidebar actions. @see useThreadActions::sidebarActions
-         * - While action is being used: indicate that the action is being used as a sidebar action.
-         */
-        sidebar: action.sidebar ?? action.sidebarSequence ?? false,
-        sidebarSequence: action.sidebarSequence,
-        sidebarSequenceGroup: action.sidebarSequenceGroup,
-        /** Component setup to execute when this action is registered. */
-        setup: action.setup,
-        /** If set, this is considered as a success (high-commitment positive) action. */
-        get success() {
-            return typeof action.success === "function"
-                ? action.success(component)
-                : action.success;
-        },
-        /** Text for the button of this action */
-        text: action.text,
-        /** Determines whether this action is a one time effect or can be toggled (on or off). */
-        toggle: action.toggle,
-    };
+            this._component.threadActions.activeAction = this;
+        }
+        this.explicitDefinition.open?.(this._component, this);
+    }
+
+    get panelOuterClass() {
+        return typeof this.explicitDefinition.panelOuterClass === "function"
+            ? this.explicitDefinition.panelOuterClass(this._component)
+            : this.explicitDefinition.panelOuterClass;
+    }
+
+    /**
+     * - In action definition: indicate whether the action is elligible as partition actions. @see useThreadActions::partition
+     * - While action is being used: indicate that the action is being used as a partitioned action.
+     */
+    get partition() {
+        if (this.explicitDefinition._partition) {
+            return this.explicitDefinition._partition;
+        }
+        return typeof this.explicitDefinition.partition === "function"
+            ? this.explicitDefinition.partition(this._component)
+            : this.explicitDefinition.partition ?? true;
+    }
+
+    set partition(partition) {
+        this.explicitDefinition._partition = partition;
+    }
+
+    get sequenceGroup() {
+        return typeof this.explicitDefinition.sequenceGroup === "function"
+            ? this.explicitDefinition.sequenceGroup(this._component)
+            : this.explicitDefinition.sequenceGroup;
+    }
+
+    get sequenceQuick() {
+        return typeof this.explicitDefinition.sequenceQuick === "function"
+            ? this.explicitDefinition.sequenceQuick(this._component)
+            : this.explicitDefinition.sequenceQuick;
+    }
+
+    /**
+     * - In action definition: indicate whether the action is elligible as sidebar actions. @see useThreadActions::sidebarActions
+     * - While action is being used: indicate that the action is being used as a sidebar action.
+     */
+    get sidebar() {
+        return (
+            this._sidebar ??
+            this.explicitDefinition.sidebar ??
+            this.explicitDefinition.sidebarSequence ??
+            false
+        );
+    }
+
+    set sidebar(sidebar) {
+        this._sidebar = sidebar;
+    }
+
+    get sidebarSequence() {
+        return typeof this.explicitDefinition.sidebarSequence === "function"
+            ? this.explicitDefinition.sidebarSequence(this._component)
+            : this.explicitDefinition.sidebarSequence;
+    }
+
+    get sidebarSequenceGroup() {
+        return typeof this.explicitDefinition.sidebarSequenceGroup === "function"
+            ? this.explicitDefinition.sidebarSequenceGroup(this._component)
+            : this.explicitDefinition.sidebarSequenceGroup;
+    }
+
+    /** Determines whether this action is a one time effect or can be toggled (on or off). */
+    get toggle() {
+        return this.explicitDefinition.toggle;
+    }
 }
 
 export const threadActionsInternal = {
     condition(component, id, action) {
-        if (action.condition === undefined) {
+        if (!action?.condition) {
             return true;
         }
-        return action.condition(component);
+        return typeof action.condition === "function"
+            ? action.condition(component)
+            : action.condition;
     },
 };
 
@@ -275,11 +307,9 @@ export function useThreadActions() {
     const component = useComponent();
     const transformedActions = threadActionsRegistry
         .getEntries()
-        .map(([id, action]) => transformAction(component, id, action));
+        .map(([id, action]) => new ThreadAction(component, id, action));
     for (const action of transformedActions) {
-        if (action.setup) {
-            action.setup(action);
-        }
+        action.setup();
     }
     const state = useState({
         get actions() {
