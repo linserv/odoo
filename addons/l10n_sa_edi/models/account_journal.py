@@ -377,7 +377,7 @@ class AccountJournal(models.Model):
         xml_content = self._l10n_sa_prepare_invoice_xml(xml_raw)
         signed_xml = self.env.ref('l10n_sa_edi.edi_sa_zatca')._l10n_sa_sign_xml(xml_content, PCSID, signature)
         if xml_name.startswith('simplified'):
-            qr_code_str = self.env['account.move']._l10n_sa_get_qr_code(self, signed_xml, b64decode(PCSID).decode(),
+            qr_code_str = self.env['account.move']._l10n_sa_get_qr_code(self.company_id, signed_xml, b64decode(PCSID).decode(),
                                                                         signature, True)
             root = etree.fromstring(signed_xml)
             qr_node = root.xpath('//*[local-name()="ID"][text()="QR"]/following-sibling::*/*')[0]
@@ -618,7 +618,7 @@ class AccountJournal(models.Model):
             # In the 401+ cases, it is like the server is overloaded e.g. and we still need to resend later.  We do not
             # erase the index chain (excepted) because for ZATCA, one ICV (index chain) needs to correspond to one invoice.
             status_code = ex.response.status_code
-            if status_code != 400:
+            if status_code not in {400, 409}:
                 return {
                     'error': (Markup("<b>[%s]</b>") % status_code) + _("Server returned an unexpected error: %(error)s",
                                error=(request_response.text or str(ex))),
@@ -643,6 +643,9 @@ class AccountJournal(models.Model):
                 'blocking_level': 'error'
             }
         response_data['status_code'] = request_response.status_code
+
+        if status_code == 409:
+            return response_data
 
         val_res = response_data.get('validationResults', {})
         if not request_response.ok and (val_res.get('errorMessages') or val_res.get('warningMessages')):
