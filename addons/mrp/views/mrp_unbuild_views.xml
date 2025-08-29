@@ -31,12 +31,12 @@
                             domain="[('activity_user_id', '=', uid)]"/>
                         <separator invisible="1"/>
                         <filter invisible="1" string="Late Activities" name="activities_overdue"
-                            domain="[('activity_date_deadline', '&lt;', 'today')]"
+                            domain="[('my_activity_date_deadline', '&lt;', 'today')]"
                             help="Show all records whose next activity date is past"/>
                         <filter invisible="1" string="Today Activities" name="activities_today"
-                            domain="[('activity_date_deadline', '=', 'today')]"/>
+                            domain="[('my_activity_date_deadline', '=', 'today')]"/>
                         <filter invisible="1" string="Future Activities" name="activities_upcoming_all"
-                            domain="[('activity_date_deadline', '&gt;', 'today')]"/>
+                            domain="[('my_activity_date_deadline', '&gt;', 'today')]"/>
                     </group>
                     <group>
                         <filter string='Product' name="productgroup" context="{'group_by': 'product_id'}"/>
@@ -107,7 +107,7 @@
                                 <field name="location_id" options="{'no_create': True}" groups="stock.group_stock_multi_locations" readonly="state == 'done'"/>
                                 <field name="location_dest_id" options="{'no_create': True}" groups="stock.group_stock_multi_locations" readonly="state == 'done'"/>
                                 <field name="has_tracking" invisible="1"/>
-                                <field name="lot_id" invisible="has_tracking == 'none'" readonly="mo_id or state == 'done'" required="has_tracking != 'none'" groups="stock.group_production_lot" force_save="1"/>
+                                <field name="lot_id" invisible="has_tracking == 'none'" readonly="state == 'done'" required="has_tracking != 'none'" groups="stock.group_production_lot" force_save="1"/>
                                 <field name="company_id" groups="base.group_multi_company" readonly="state == 'done'"/>
                             </group>
                         </group>
@@ -142,7 +142,7 @@
                                 <field name="location_id" options="{'no_create': True}" groups="stock.group_stock_multi_locations" readonly="state == 'done'"/>
                                 <field name="location_dest_id" options="{'no_create': True}" groups="stock.group_stock_multi_locations" readonly="state == 'done'"/>
                                 <field name="has_tracking" invisible="1"/>
-                                <field name="lot_id" readonly="1" invisible="has_tracking == 'none'" required="has_tracking != 'none'" groups="stock.group_production_lot"/>
+                                <field name="lot_id" invisible="has_tracking == 'none'" required="has_tracking != 'none'" groups="stock.group_production_lot"/>
                                 <field name="company_id" groups="base.group_multi_company" readonly="1"/>
                             </group>
                         </group>

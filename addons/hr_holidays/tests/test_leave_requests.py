@@ -67,6 +67,42 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'requires_allocation': False,
             'leave_validation_type': 'no_validation',
         })
+        cls.holidays_type_half = LeaveType.create({
+            'name': 'Time off in half-days',
+            'requires_allocation': False,
+            'leave_validation_type': 'no_validation',
+            'request_unit': 'half_day',
+        })
+        cls.holidays_type_hours = LeaveType.create({
+            'name': 'Time off in hours',
+            'requires_allocation': False,
+            'leave_validation_type': 'no_validation',
+            'request_unit': 'hour',
+        })
+
+        cls.irregular_calendar = cls.env['resource.calendar'].create({
+            'name': 'Irregular Calendar With Gaps',
+            'tz': 'Europe/Brussels',
+            'company_id': False,
+            'attendance_ids': [(5, 0, 0),
+                ## Hours Per Week: 33, Avg hours_per_day = 6.6, 75% = 4.95
+                (0, 0, {'name': 'Monday Morning', 'dayofweek': '0', 'hour_from': 8, 'hour_to': 12, 'day_period': 'morning'}),
+                (0, 0, {'name': 'Monday Lunch', 'dayofweek': '0', 'hour_from': 12, 'hour_to': 13, 'day_period': 'lunch'}),
+                (0, 0, {'name': 'Monday Afternoon', 'dayofweek': '0', 'hour_from': 13, 'hour_to': 17.6, 'day_period': 'afternoon'}),
+                ## For a single period day, an attendance is considered a full day if hours are more than 75% of avg hours per day
+                (0, 0, {'name': 'Tuesday Afternoon', 'dayofweek': '1', 'hour_from': 14, 'hour_to': 19.6, 'day_period': 'afternoon'}),
+
+                (0, 0, {'name': 'Wednesday Morning', 'dayofweek': '2', 'hour_from': 6, 'hour_to': 10, 'day_period': 'morning'}),
+                (0, 0, {'name': 'Wednesday Lunch', 'dayofweek': '2', 'hour_from': 10, 'hour_to': 11, 'day_period': 'lunch'}),
+                (0, 0, {'name': 'Wednesday Afternoon', 'dayofweek': '2', 'hour_from': 11, 'hour_to': 15.6, 'day_period': 'afternoon'}),
+
+                (0, 0, {'name': 'Thursday Morning', 'dayofweek': '3', 'hour_from': 7, 'hour_to': 10, 'day_period': 'morning'}),
+                (0, 0, {'name': 'Thursday Lunch', 'dayofweek': '3', 'hour_from': 10, 'hour_to': 11, 'day_period': 'lunch'}),
+                (0, 0, {'name': 'Thursday Afternoon', 'dayofweek': '3', 'hour_from': 11, 'hour_to': 14.6, 'day_period': 'afternoon'}),
+                ## Normal Half-Day since it doesn't exceed 75% of average hours per day
+                (0, 0, {'name': 'Friday Morning', 'dayofweek': '4', 'hour_from': 8, 'hour_to': 11.6, 'day_period': 'morning'}),
+            ],
+        })
 
         cls.set_employee_create_date(cls.employee_emp_id, '2010-02-03 00:00:00')
         cls.set_employee_create_date(cls.employee_hruser_id, '2010-02-03 00:00:00')
@@ -270,7 +306,6 @@ class TestLeaveRequests(TestHrHolidaysCommon):
         leave = self.env['hr.leave'].new({
             'employee_id': self.employee_emp.id,
             'holiday_status_id': self.holidays_type_1.id,
-            'request_unit_hours': True,
             'request_date_from': date(2019, 5, 6),
             'request_date_to': date(2019, 5, 6),
             'request_hour_from': 8,  # 8:00 AM in the employee's timezone
@@ -287,7 +322,6 @@ class TestLeaveRequests(TestHrHolidaysCommon):
         leave = self.env['hr.leave'].new({
             'employee_id': self.employee_emp.id,
             'holiday_status_id': self.holidays_type_1.id,
-            'request_unit_hours': True,
             'company_id': company.id,
             'request_date_from': date(2019, 5, 6),
             'request_date_to': date(2019, 5, 6),
@@ -356,7 +390,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'state': 'confirm',
             'date_from': time.strftime('2018-01-01'),
             'date_to': time.strftime('%Y-01-01'),
-        })
+        }).action_approve()
 
         leave1 = self.env['hr.leave'].create({
             'name': 'Holiday 1 week',
@@ -420,7 +454,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'state': 'confirm',
             'date_from': time.strftime('2018-01-01'),
             'date_to': time.strftime('%Y-01-01'),
-        })
+        }).action_approve()
 
         leave0 = self.env['hr.leave'].create({
             'name': 'Holiday 1 day',
@@ -458,22 +492,26 @@ class TestLeaveRequests(TestHrHolidaysCommon):
 
         self.assertEqual(leave2.number_of_hours, 8)
 
+        leave_type.request_unit = 'half_day'
         leave3 = self.env['hr.leave'].create({
             'name': 'Holiday 1/2 Day',
             'employee_id': employee.id,
             'holiday_status_id': leave_type.id,
             'request_date_from': fields.Datetime.from_string('2019-12-24'),
-            'request_unit_half': True,
+            'request_date_to': fields.Datetime.from_string('2019-12-24'),
+            'request_date_from_period': 'am',
+            'request_date_to_period': 'am',
         })
 
         self.assertEqual(leave3.number_of_hours, 4)
 
+        leave_type.request_unit = 'hour'
         leave4 = self.env['hr.leave'].create({
             'name': 'Holiday 3 Hours',
             'employee_id': employee.id,
             'holiday_status_id': leave_type.id,
             'request_date_from': fields.Datetime.from_string('2019-12-25'),
-            'request_unit_hours': True,
+            'request_date_to': fields.Datetime.from_string('2019-12-25'),
             'request_hour_from': 7,
             'request_hour_to': 10,
         })
@@ -485,7 +523,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'employee_id': employee.id,
             'holiday_status_id': leave_type.id,
             'request_date_from': fields.Datetime.from_string('2019-12-26'),
-            'request_unit_hours': True,
+            'request_date_to': fields.Datetime.from_string('2019-12-26'),
             'request_hour_from': 7,
             'request_hour_to': 17,
         })
@@ -701,8 +739,8 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'date_from': '2022-01-01',
             'date_to': '2022-12-31',
         }
-        self.env['hr.leave.allocation'].create(allocation_vals)
-        self.env['hr.leave.allocation'].create(allocation_vals)
+        self.env['hr.leave.allocation'].create(allocation_vals).action_approve()
+        self.env['hr.leave.allocation'].create(allocation_vals).action_approve()
 
         # Able to create a leave of 10 days with two allocations of 5 days
         self.env['hr.leave'].with_user(self.user_employee_id).create({
@@ -747,10 +785,6 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             })
             leave_confirm = Leave.create(leave_vals)
             leave_confirm.action_refuse()
-            leave_vals.update({
-                'request_date_from': '2022-01-03',
-                'request_date_to': '2022-01-06',
-            })
             leave_4days = Leave.create(leave_vals)
             leave_vals.update({
                 'request_date_from': '2022-01-07',
@@ -999,7 +1033,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
                 'state': 'confirm',
                 'date_from': '2020-01-01',
                 'date_to': '2020-12-31',
-            })
+            }).action_approve()
 
             leave = self.env['hr.leave'].with_user(self.user_employee_id).create({
                 'name': 'Holiday Request',
@@ -1133,6 +1167,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'name': 'Sick Leave (days)',
             'request_unit': 'day',
             'leave_validation_type': 'hr',
+            'requires_allocation': False,
         })
         sick_leave = self.env['hr.leave'].create({
             'name': 'Sick 3 days',
@@ -1145,12 +1180,12 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'name': 'OT Compensation (hours)',
             'request_unit': 'hour',
             'leave_validation_type': 'manager',
+            'requires_allocation': False,
         })
         comp_leave = self.env['hr.leave'].create({
             'name': 'OT Comp (4 hours)',
             'employee_id': employee.id,
             'holiday_status_id': comp_leave_type.id,
-            'request_unit_hours': True,
             'request_date_from': '2019-12-26',
             'request_date_to': '2019-12-26',
             'request_hour_from': 8,
@@ -1183,6 +1218,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'name': 'Sick Leave (days)',
             'request_unit': 'day',
             'leave_validation_type': 'hr',
+            'requires_allocation': False,
         })
         sick_leave = self.env['hr.leave'].create({
             'name': 'Sick 3 days',
@@ -1246,8 +1282,8 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'request_date_to': '2024-01-27',
         })
         holiday_status = self.holidays_type_4.with_user(self.user_employee_id)
-        self._check_holidays_status(holiday_status, employee, 20.0, 0.0, 20.0, 16.0)
-        self.assertEqual(leave.duration_display, '4 days')
+        self._check_holidays_status(holiday_status, employee, 20.0, 0.0, 20.0, 15.0)
+        self.assertEqual(leave.duration_display, '5 days')
 
     def test_default_request_date_timezone(self):
         """
@@ -1261,7 +1297,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'default_date_to': '2024-03-28 08:00:00',
         }
         leave_form = Form(self.env['hr.leave'].with_user(self.user_employee).with_context(context))
-        leave_form.holiday_status_id = self.holidays_type_2
+        leave_form.holiday_status_id = self.holidays_type_3
         leave = leave_form.save()
         self.assertEqual(leave.number_of_days, 1.0)
 
@@ -1333,6 +1369,15 @@ class TestLeaveRequests(TestHrHolidaysCommon):
         activities = test_holiday_1.activity_ids
         self.assertFalse(activities, "No activity should be created if no Time Off Officer is set for approval.")
 
+        allocation = self.env['hr.leave.allocation'].create({
+            'name': 'Allocation for hruser',
+            'employee_id': self.employee_hruser_id,
+            'holiday_status_id': self.holidays_type_2.id,
+            'number_of_days': 5,
+            'state': 'confirm',
+            'date_from': '2024-01-01',
+        })
+        allocation.action_approve()
         self.holidays_type_2.responsible_ids = [Command.link(self.user_employee.id)]
         test_holiday_2 = self.env['hr.leave'].create({
             'name': 'Test leave',
@@ -1350,7 +1395,15 @@ class TestLeaveRequests(TestHrHolidaysCommon):
 
         # Case 2: Approved by Time Off Officer and Employee's Approver, but no Time Off Officer is set
         self.holidays_type_4.responsible_ids = False     # No Time Off Officer set
-
+        allocation = self.env['hr.leave.allocation'].create({
+            'name': 'Allocation for hrmanager',
+            'employee_id': self.employee_hrmanager_id,
+            'holiday_status_id': self.holidays_type_4.id,
+            'number_of_days': 5,
+            'state': 'confirm',
+            'date_from': '2024-01-01',
+        })
+        allocation.action_approve()
         test_holiday_3 = self.env['hr.leave'].create({
             'name': 'Test leave',
             'employee_id': self.employee_hrmanager_id,
@@ -1373,7 +1426,7 @@ class TestLeaveRequests(TestHrHolidaysCommon):
         leave = self.env['hr.leave'].with_user(user_id).create({
             'name': 'Test leave',
             'employee_id': employee_id,
-            'holiday_status_id': self.holidays_type_2.id,
+            'holiday_status_id': self.holidays_type_1.id,
             'date_from': (datetime.today() - relativedelta(days=2)),
             'date_to': datetime.today()
         })
@@ -1452,3 +1505,322 @@ class TestLeaveRequests(TestHrHolidaysCommon):
             'default_request_unit_hours': True,
         }).default_get(list(self.env['hr.leave'].fields_get()) + ['holiday_status_id'])
         self.assertEqual(hr_leave_default_value.get('holiday_status_id'), False)
+
+    def test_leave_duration_on_public_holiday_with_flexible_request(self):
+        """
+            Test the cases with flexible request and having no calendar in public holidays
+            Scenarios covered:
+            - Leave fully on a public holiday: duration should be 0.
+            - Leave partially overlapping with a multi-day public holiday: only working days should count.
+            - Leave fully outside any public holidays: all days should count.
+            - Single-day leave that falls entirely on a public holiday: duration should be 0.
+            - Leave starting before and ending during a public holiday: only non-overlapping portion counts.
+        """
+        calendar = self.env['resource.calendar'].create({
+            'name': 'Test calendar',
+            'hours_per_day': 8,
+            'full_time_required_hours': 56,
+            'flexible_hours': True
+        })
+        self.employee_emp.resource_calendar_id = calendar
+        self.env['resource.calendar.leaves'].create([
+            {
+                'date_from': datetime(2022, 3, 8, 0, 0, 0),
+                'date_to': datetime(2022, 3, 10, 23, 59, 59),
+                'calendar_id': calendar.id,
+                'company_id': self.employee_emp.company_id.id,
+                'resource_id': False,
+            },
+            {
+                'date_from': datetime(2022, 3, 15, 0, 0, 0),
+                'date_to': datetime(2022, 3, 17, 23, 59, 59),
+                'calendar_id': calendar.id,
+                'company_id': self.employee_emp.company_id.id,
+                'resource_id': False,
+            }
+        ])
+        leave_data = [
+            {
+                'name': 'Leave fully on last day of first public holidays (Mar 10)',
+                'request_date_from': date(2022, 3, 10),
+                'request_date_to': date(2022, 3, 10),
+            },
+            {
+                'name': 'Leave partially overlapping first holiday (Mar 7 to Mar 9)',
+                'request_date_from': date(2022, 3, 7),
+                'request_date_to': date(2022, 3, 9),
+            },
+            {
+                'name': 'Leave fully outside holidays (Mar 11 to Mar 13)',
+                'request_date_from': date(2022, 3, 11),
+                'request_date_to': date(2022, 3, 13),
+            },
+            {
+                'name': 'Single day leave overlapping second holiday (Mar 17)',
+                'request_date_from': date(2022, 3, 17),
+                'request_date_to': date(2022, 3, 17),
+            },
+            {
+                'name': 'Leave partially overlapping second holiday (Mar 14 to Mar 16)',
+                'request_date_from': date(2022, 3, 14),
+                'request_date_to': date(2022, 3, 16),
+            }
+        ]
+        leaves = self.env["hr.leave"].with_user(self.user_employee_id).create([
+            {
+                **data,
+                'employee_id': self.employee_emp.id,
+                'holiday_status_id': self.holidays_type_1.id,
+            }
+            for data in leave_data
+        ])
+        expected_days_list = [0, 1, 3, 0, 1]
+        for leave, expected_days, data in zip(leaves, expected_days_list, leave_data):
+            self.assertEqual(
+                leave.number_of_days,
+                expected_days,
+                f"{data['name']} should have {expected_days} days duration"
+            )
+
+    @freeze_time('2011-12-24 10:00:00')
+    def test_validated_leave_back_to_approval(self):
+        """
+        =====================================================================================================================
+        | case 1: An approved leave can be moved back to confirm state if user has group `group_hr_holidays_user`           |
+        | case 2: An approved leave can't be moved back to confirm state if user doesn't have group `group_hr_holidays_user`|
+        =====================================================================================================================
+        """
+        sick_leave_type = self.env['hr.leave.type'].create({
+            'name': 'leave in days',
+            'request_unit': 'day',
+            'leave_validation_type': 'both',
+            'requires_allocation': False,
+        })
+        sick_leave = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'leave for 3 days',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': sick_leave_type.id,
+            'request_date_from': '2011-12-23',
+            'request_date_to': '2011-12-25',
+        })
+
+        sick_leave.with_user(self.user_hruser_id).action_approve()
+        sick_leave.with_user(self.user_hruser_id).action_back_to_approval()
+        self.assertEqual(sick_leave.state, 'confirm')
+
+        sick_leave.with_user(self.user_hruser_id).action_approve()
+        sick_leave.with_user(self.user_employee_id).action_back_to_approval()
+        self.assertEqual(sick_leave.state, 'validate')
+
+    def test_unified_time_off_half_day_scenarios(self):
+        leave_half_day_am = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Half Day Morning',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-01'),
+            'request_date_to': time.strftime('2024-04-01'),
+            'request_date_from_period': 'am',
+            'request_date_to_period': 'am',
+        })
+        self.assertEqual(leave_half_day_am.duration_display, '0.5 days')
+
+        leave_half_day_pm = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Half Day Afternoon',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-02'),
+            'request_date_to': time.strftime('2024-04-02'),
+            'request_date_from_period': 'pm',
+            'request_date_to_period': 'pm',
+        })
+        self.assertEqual(leave_half_day_pm.duration_display, '0.5 days')
+
+        leave_half_day_multi = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Day and half starting Afternoon',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-03'),
+            'request_date_to': time.strftime('2024-04-04'),
+            'request_date_from_period': 'pm',
+            'request_date_to_period': 'pm',
+        })
+        self.assertEqual(leave_half_day_multi.duration_display, '1.5 days')
+
+        leave_half_day_multi2 = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Day and half starting Morning',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-08'),
+            'request_date_to': time.strftime('2024-04-09'),
+            'request_date_from_period': 'am',
+            'request_date_to_period': 'am',
+        })
+        self.assertEqual(leave_half_day_multi2.duration_display, '1.5 days')
+
+        leave_half_day_multi3 = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': '2 Days starting Morning',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-10'),
+            'request_date_to': time.strftime('2024-04-11'),
+            'request_date_from_period': 'am',
+            'request_date_to_period': 'pm',
+        })
+        self.assertEqual(leave_half_day_multi3.duration_display, '2 days')
+
+        leave_half_day_multi4 = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': '2 Days starting Afternoon',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-12'),
+            'request_date_to': time.strftime('2024-04-16'),
+            'request_date_from_period': 'pm',
+            'request_date_to_period': 'am',
+        })
+        self.assertEqual(leave_half_day_multi4.duration_display, '2 days')
+
+    def test_unified_time_off_half_day_scenarios_irregular_calendar(self):
+        employee = self.employee_emp
+        employee.resource_calendar_id = self.irregular_calendar
+
+        irregular_leave = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Monday and Tuesday Morning',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-01'),
+            'request_date_to': time.strftime('2024-04-02'),
+            'request_date_from_period': 'am',
+            'request_date_to_period': 'am',
+        })
+        self.assertEqual(irregular_leave.duration_display, '1 days')
+
+        irregular_leave2 = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Tuesday Afternoon and Wednesday Morning',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-02'),
+            'request_date_to': time.strftime('2024-04-03'),
+            'request_date_from_period': 'pm',
+            'request_date_to_period': 'am',
+        })
+        self.assertEqual(irregular_leave2.duration_display, '1.5 days')
+
+        irregular_leave3 = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Thursday and Friday',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-04'),
+            'request_date_to': time.strftime('2024-04-05'),
+            'request_date_from_period': 'am',
+            'request_date_to_period': 'pm',
+        })
+        self.assertEqual(irregular_leave3.duration_display, '1.5 days')
+
+        irregular_leave4 = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Friday/Weekend/Monday Morning',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_half.id,
+            'request_date_from': time.strftime('2024-04-12'),
+            'request_date_to': time.strftime('2024-04-15'),
+            'request_date_from_period': 'am',
+            'request_date_to_period': 'am',
+        })
+        self.assertEqual(irregular_leave4.duration_display, '1 days')
+
+    def test_unified_time_off_hours_scenarios(self):
+        with self.assertRaises(UserError):
+            self.env['hr.leave'].with_user(self.user_employee_id).create({
+                'name': 'Non Working Hours',
+                'employee_id': self.employee_emp_id,
+                'holiday_status_id': self.holidays_type_hours.id,
+                'request_date_from': time.strftime('2024-04-01'),
+                'request_date_to': time.strftime('2024-04-01'),
+                'request_hour_from': 4,
+                'request_hour_to': 6,
+            })
+
+        leave_hours_day_mid_break = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'A leave that surrounds the lunch break',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_hours.id,
+            'request_date_from': time.strftime('2024-04-01'),
+            'request_date_to': time.strftime('2024-04-01'),
+            'request_hour_from': 11,
+            'request_hour_to': 15,
+        })
+        self.assertEqual(leave_hours_day_mid_break.duration_display, '3:00 hours')
+
+        leave_hours_day_end = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Leave at end of day',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_hours.id,
+            'request_date_from': time.strftime('2024-04-01'),
+            'request_date_to': time.strftime('2024-04-01'),
+            'request_hour_from': 16,
+            'request_hour_to': 23,
+        })
+        self.assertEqual(leave_hours_day_end.duration_display, '1:00 hours')
+
+        leave_hours_multi = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Leave Spanning 2 days',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_hours.id,
+            'request_date_from': time.strftime('2024-04-02'),
+            'request_date_to': time.strftime('2024-04-03'),
+            'request_hour_from': 8,
+            'request_hour_to': 9,
+        })
+        self.assertEqual(leave_hours_multi.duration_display, '9:00 hours')
+
+        leave_hours_multi2 = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Leave at the end of a day spanning 3 days',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_hours.id,
+            'request_date_from': time.strftime('2024-04-03'),
+            'request_date_to': time.strftime('2024-04-05'),
+            'request_hour_from': 22,
+            'request_hour_to': 14,
+        })
+        self.assertEqual(leave_hours_multi2.duration_display, '13:00 hours')
+
+    def test_unified_time_off_hours_scenarios_irregular_calendar(self):
+
+        employee = self.employee_emp
+        employee.resource_calendar_id = self.irregular_calendar
+
+        irregular_leave = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Hour in Monday and all Tuesday',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_hours.id,
+            'request_date_from': time.strftime('2024-04-01'),
+            'request_date_to': time.strftime('2024-04-02'),
+            'request_hour_from': 17,
+            'request_hour_to': 20,
+        })
+        self.assertEqual(irregular_leave.duration_display, '6:12 hours')
+
+        irregular_leave2 = self.env['hr.leave'].with_user(self.user_employee_id).create({
+            'name': 'Wednesday To Friday',
+            'employee_id': self.employee_emp_id,
+            'holiday_status_id': self.holidays_type_hours.id,
+            'request_date_from': time.strftime('2024-04-03'),
+            'request_date_to': time.strftime('2024-04-05'),
+            'request_hour_from': 14.6,
+            'request_hour_to': 9,
+        })
+        self.assertEqual(irregular_leave2.duration_display, '8:36 hours')
+
+    def test_time_off_creation_without_allocation(self):
+        leave_type = self.env['hr.leave.type'].create({
+            'name': 'Smart Leave',
+            'requires_allocation': True,
+            'leave_validation_type': 'hr',
+        })
+        with self.assertRaises(ValidationError):
+            self.env['hr.leave'].create({
+                'name': 'Smart Leave Request',
+                'employee_id': self.employee_emp_id,
+                'holiday_status_id': leave_type.id,
+                'request_date_from': '2024-07-01',
+                'request_date_to': '2024-07-02',
+            })

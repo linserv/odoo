@@ -148,8 +148,10 @@ test("input should remove invalid char", async () => {
         selector: ".test-options-target-composable",
         template: xml`<BuilderNumberInput action="'customAction'" composable="true"/>`,
     });
-    await setupWebsiteBuilder(`<div class="test-options-target" data-test="1">Hello</div><div class="test-options-target-composable" data-test="2">World</div>`);
-    
+    await setupWebsiteBuilder(
+        `<div class="test-options-target" data-test="1">Hello</div><div class="test-options-target-composable" data-test="2">World</div>`
+    );
+
     // Single
     await contains(":iframe .test-options-target").click();
 
@@ -163,9 +165,9 @@ test("input should remove invalid char", async () => {
 
     await contains(".options-container:first input").edit(" .$a?,6.b$?,7.$?c,  ");
     await animationFrame();
-    expect(".options-container:first input").toHaveValue(".67");
+    expect(".options-container:first input").toHaveValue("0.67");
 
-    // Composable 
+    // Composable
     await contains(":iframe .test-options-target-composable").click();
 
     await contains(".options-container:last input").edit("-12 12 -12 12");
@@ -208,7 +210,7 @@ describe("default value", () => {
         await delay();
         input.dispatchEvent(new Event("change"));
         await delay();
-        expect.verifySteps(["customAction ", "customAction 20"]);
+        expect.verifySteps(["customAction 20", "customAction 20"]);
         expect(input).toHaveValue("20");
     });
     test("clear BuilderNumberInput without default value", async () => {
@@ -235,6 +237,8 @@ describe("default value", () => {
         expect("[data-action-id='customAction'] input").toHaveValue("10");
 
         await clear();
+        expect("[data-action-id='customAction'] input").toHaveValue("");
+        expect(":iframe .test-options-target").toHaveInnerHTML("0"); //Check that default value is used during preview
         await click(".options-container");
         expect("[data-action-id='customAction'] input").toHaveValue("0");
         expect(":iframe .test-options-target").toHaveInnerHTML("0");
@@ -778,7 +782,7 @@ describe("sanitized values", () => {
         `);
         await contains(":iframe .test-options-target").click();
         await contains(".options-container input").edit("-1", { instantly: true });
-        expect.verifySteps(["customAction ", "customAction 0"]); // input, change
+        expect.verifySteps(["customAction 0", "customAction 0"]); // input, change
         expect(".options-container input").toHaveValue("0");
     });
     test("use max when the given value is bigger", async () => {
@@ -803,7 +807,7 @@ describe("sanitized values", () => {
         await contains(":iframe .test-options-target").click();
         await contains(".options-container input").edit("11", { instantly: true });
         await animationFrame();
-        expect.verifySteps(["customAction ", "customAction 10"]); // input, change
+        expect.verifySteps(["customAction 0", "customAction 10"]); // input, change
         expect(".options-container input").toHaveValue("10");
     });
     test("multi values: trailing space in BuilderNumberInput is ignored", async () => {
@@ -881,5 +885,41 @@ describe("sanitized values", () => {
         await contains(".options-container input").edit("3,3");
         expect(".options-container input").toHaveValue("3.3");
         expect(":iframe .test-options-target").toHaveAttribute("data-number", "3.3");
+    });
+    test("displays the correct value (no floating point precision error)", async () => {
+        addOption({
+            selector: ".test-options-target",
+            template: xml`<BuilderNumberInput dataAttributeAction="'number'" step="0.1"/>`,
+        });
+        await setupWebsiteBuilder(`
+            <div class="test-options-target" data-number="10">Test</div>
+        `);
+        await contains(":iframe .test-options-target").click();
+        await contains(".options-container input").edit("0.2");
+        expect(".options-container input").toHaveValue("0.2");
+        // simulate arrow keys
+        await contains(".options-container input").keyDown("ArrowUp");
+        await advanceTime();
+        expect(".options-container input").toHaveValue("0.3");
+        await contains(".options-container input").keyDown("ArrowDown");
+        await advanceTime();
+        expect(".options-container input").toHaveValue("0.2");
+    });
+    test("rounds the number to 3 decimals", async () => {
+        addOption({
+            selector: ".test-options-target",
+            template: xml`<BuilderNumberInput dataAttributeAction="'number'"/>`,
+        });
+        await setupWebsiteBuilder(`
+            <div class="test-options-target" data-number="10">Test</div>
+        `);
+        await contains(":iframe .test-options-target").click();
+        await contains(".options-container input").edit("3.33333333333");
+        expect(".options-container input").toHaveValue("3.333");
+        expect(":iframe .test-options-target").toHaveAttribute("data-number", "3.333");
+
+        await contains(".options-container input").edit("1.284778323");
+        expect(".options-container input").toHaveValue("1.285");
+        expect(":iframe .test-options-target").toHaveAttribute("data-number", "1.285");
     });
 });

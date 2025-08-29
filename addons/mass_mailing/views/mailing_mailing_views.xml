@@ -84,7 +84,7 @@
                             string="Remove from Templates"/>
                         <field name="state" readonly="1" widget="statusbar" statusbar_visible="draft,in_queue,sending,done"/>
                     </header>
-                    <div class="alert alert-info" role="alert"
+                    <div class="alert alert-info o_mass_mailing_alert_message" role="alert"
                             invisible="state not in ['in_queue', 'done'] and sent == 0 and canceled == 0 and scheduled == 0 and failed == 0 and not warning_message">
                         <div class="o_mails_canceled" invisible="canceled == 0">
                             <button class="btn btn-link py-0"
@@ -384,6 +384,8 @@
                                         <field name="name" string="Name" required="False" readonly="state in ('sending', 'done')"/>
                                         <field name="mail_server_id" invisible="not mail_server_available" readonly="state in ('sending', 'done')"/>
                                         <field name="keep_archives" readonly="state in ('sending', 'done')"/>
+                                        <!-- Not using a dedicated server and being set means generic sending, won't allow disabling it. -->
+                                        <field name="use_exclusion_list" invisible="not mail_server_id and use_exclusion_list" readonly="state != 'draft'"/>
                                     </group>
                                 </group>
                             </page>

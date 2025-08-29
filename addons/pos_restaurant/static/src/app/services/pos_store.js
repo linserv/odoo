@@ -1,11 +1,12 @@
 import { patch } from "@web/core/utils/patch";
-import { PosStore } from "@point_of_sale/app/services/pos_store";
+import { CONSOLE_COLOR, PosStore } from "@point_of_sale/app/services/pos_store";
 import { ConnectionLostError } from "@web/core/network/rpc";
 import { _t } from "@web/core/l10n/translation";
 import { EditOrderNamePopup } from "@pos_restaurant/app/components/popup/edit_order_name_popup/edit_order_name_popup";
 import { NumberPopup } from "@point_of_sale/app/components/popups/number_popup/number_popup";
 import { SelectionPopup } from "@point_of_sale/app/components/popups/selection_popup/selection_popup";
 import { makeAwaitable } from "@point_of_sale/app/utils/make_awaitable_dialog";
+import { logPosMessage } from "@point_of_sale/app/utils/pretty_console_log";
 
 patch(PosStore.prototype, {
     /**
@@ -101,13 +102,13 @@ patch(PosStore.prototype, {
         this.addPendingOrder([currentOrder.id]);
         return true;
     },
-    async sendOrderInPreparationUpdateLastChange(order, cancelled = false) {
+    async sendOrderInPreparationUpdateLastChange(order, opts = {}) {
         const currentPreset = order.preset_id;
         if (
             this.config.use_presets &&
             currentPreset?.use_guest &&
             !order.uiState.guestSetted &&
-            !cancelled
+            !opts.cancelled
         ) {
             const response = await this.setCustomerCount(order);
             if (!response) {
@@ -116,7 +117,7 @@ patch(PosStore.prototype, {
             order.uiState.guestSetted = true;
         }
 
-        if (!cancelled) {
+        if (!opts.cancelled) {
             order.cleanCourses();
             const firstCourse = order.getFirstCourse();
             if (firstCourse && !firstCourse.fired) {
@@ -125,7 +126,7 @@ patch(PosStore.prototype, {
             }
         }
 
-        return await super.sendOrderInPreparationUpdateLastChange(order, cancelled);
+        return await super.sendOrderInPreparationUpdateLastChange(order, opts);
     },
     handlePreparationHistory(srcPrep, destPrep, srcLine, destLine, qty) {
         const srcKey = srcLine.preparationKey;
@@ -663,6 +664,9 @@ patch(PosStore.prototype, {
         if (order && !order.isBooked) {
             this.removeOrder(order);
         } else if (order) {
+            if (order.isDirty()) {
+                this.addPendingOrder([order.id]);
+            }
             if (!this.isOrderTransferMode) {
                 this.syncAllOrders();
             } else if (order && this.previousScreen !== "ReceiptScreen") {
@@ -875,6 +879,7 @@ patch(PosStore.prototype, {
         course.fired = true;
         order.deselectCourse();
         await this.checkPreparationStateAndSentOrderInPreparation(order, {
+            cancelled: false,
             firedCourseId: course.id,
             byPassPrint: true,
         });
@@ -893,7 +898,9 @@ patch(PosStore.prototype, {
             this.getOrder().uiState.lastPrints.push(changes);
             await this.printChanges(this.getOrder(), [changes], false);
         } catch (e) {
-            console.error("Unable to print course", e);
+            logPosMessage("Store", "printCourseTicket", "Unable to print course", CONSOLE_COLOR, [
+                e,
+            ]);
         }
     },
     async transferLinesToCourse() {
@@ -959,7 +966,13 @@ patch(PosStore.prototype, {
                     this.showScreen(screen);
                 }
             } catch (err) {
-                console.error(err);
+                logPosMessage(
+                    "Store",
+                    "restoreSampleDataState",
+                    "Error while restoring sample data state",
+                    CONSOLE_COLOR,
+                    [err]
+                );
             }
         }
     },
@@ -968,5 +981,13 @@ patch(PosStore.prototype, {
             ...super.getOrderData(order, reprint),
             customer_count: order.getCustomerCount(),
         };
+    },
+
+    async validateOrderFast(paymentMethod) {
+        const currentOrder = this.getOrder();
+        if (!currentOrder) {
+            return false;
+        }
+        await super.validateOrderFast(...arguments);
     },
 });

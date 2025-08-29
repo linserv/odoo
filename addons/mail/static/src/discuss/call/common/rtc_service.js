@@ -607,6 +607,7 @@ export class Rtc extends Record {
      * Notifies the server and does the cleanup of the current call.
      */
     async leaveCall(channel = this.state.channel) {
+        this.store.fullscreenChannel = null;
         this.state.hasPendingRequest = true;
         await this.rpcLeaveCall(channel);
         this.endCall(channel);
@@ -618,8 +619,8 @@ export class Rtc extends Record {
      */
     endCall(channel = this.state.channel) {
         this._endHost();
-        if (channel.selfMember) {
-            channel.selfMember.rtc_inviting_session_id = undefined;
+        if (channel.self_member_id) {
+            channel.self_member_id.rtc_inviting_session_id = undefined;
         }
         channel.activeRtcSession = undefined;
         if (channel.eq(this.state.channel)) {
@@ -685,12 +686,19 @@ export class Rtc extends Record {
         this.soundEffectsService.play("mic-off");
     }
 
-    async enterFullscreen() {
-        const Call = registry.category("discuss.call/components").get("Call");
-        await this.fullscreen.enter(Call, { id: CALL_FULLSCREEN_ID });
+    /** @param {Object} props Properties to pass to the meeting component. */
+    async enterFullscreen(props) {
+        const Meeting = registry.category("discuss.call/components").get("Meeting");
+        this.store.fullscreenChannel = this.channel;
+        await this.fullscreen.enter(Meeting, {
+            id: CALL_FULLSCREEN_ID,
+            keepBrowserHeader: true,
+            props,
+        });
     }
 
     async exitFullscreen() {
+        this.store.fullscreenChannel = null;
         await this.fullscreen.exit(CALL_FULLSCREEN_ID);
     }
 
@@ -1255,13 +1263,6 @@ export class Rtc extends Record {
                 if (!session || !this.channel) {
                     return;
                 }
-                if (
-                    this.channel.activeRtcSession === session &&
-                    session.is_screen_sharing_on &&
-                    !info.isScreenSharingOn
-                ) {
-                    this.channel.activeRtcSession = undefined;
-                }
                 // `isRaisingHand` is turned into the Date `raisingHand`
                 this.setRemoteRaiseHand(session, info.isRaisingHand);
                 delete info.isRaisingHand;
@@ -1389,8 +1390,8 @@ export class Rtc extends Record {
             3000,
             { leading: true, trailing: true }
         );
-        if (this.state.channel.selfMember) {
-            this.state.channel.selfMember.rtc_inviting_session_id = undefined;
+        if (this.state.channel.self_member_id) {
+            this.state.channel.self_member_id.rtc_inviting_session_id = undefined;
         }
         if (camera) {
             await this.toggleVideo("camera");
@@ -1412,6 +1413,7 @@ export class Rtc extends Record {
                 event.preventDefault();
             })
         );
+        this.channel?.focusAvailableVideo();
     }
 
     newLogs() {
@@ -1675,6 +1677,23 @@ export class Rtc extends Record {
     }
 
     /**
+     * Applies blur effect to a video stream using BlurManager.
+     *
+     * @param {MediaStream} videoStream - input video stream.
+     * @returns {Promise<{stream: MediaStream, close: Function}>} - Blurred video stream and a function to close the blur manager.
+     */
+    async applyBlurEffect(videoStream) {
+        const blurManager = new BlurManager(videoStream, {
+            backgroundBlur: this.store.settings.backgroundBlurAmount,
+            edgeBlur: this.store.settings.edgeBlurAmount,
+        });
+        return {
+            stream: await blurManager.stream,
+            close: () => blurManager.close(),
+        };
+    }
+
+    /**
      * @param {string} type
      * @param {Object} [param1]
      * @param {boolean} [param1.force]
@@ -1880,20 +1899,16 @@ export class Rtc extends Record {
             }
         }
         if (this.store.settings.useBlur && type === "camera") {
+            this.blurManager?.close();
+            this.blurManager = undefined;
             try {
-                this.blurManager?.close();
-                this.blurManager = new BlurManager(sourceStream, {
-                    backgroundBlur: this.store.settings.backgroundBlurAmount,
-                    edgeBlur: this.store.settings.edgeBlurAmount,
-                });
-                const bluredStream = await this.blurManager.stream;
-                outputTrack = bluredStream.getVideoTracks()[0];
+                this.blurManager = await this.applyBlurEffect(sourceStream);
+                const blurredStream = this.blurManager.stream;
+                outputTrack = blurredStream.getVideoTracks()[0];
             } catch (_e) {
-                this.notification.add(
-                    _t("%(name)s: %(message)s)", { name: _e.name, message: _e.message }),
-                    { type: "warning" }
-                );
+                this.notification.add(_e.message, { type: "warning" });
                 this.store.settings.useBlur = false;
+                outputTrack = sourceStream.getVideoTracks()[0];
             }
         }
         switch (type) {

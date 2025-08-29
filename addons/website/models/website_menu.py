@@ -39,7 +39,7 @@ class WebsiteMenu(models.Model):
                 menu.mega_menu_classes = False
 
     name = fields.Char('Menu', required=True, translate=True)
-    url = fields.Char("Url", compute="_compute_url", store=True, required=True, default="#", copy=True)
+    url = fields.Char("Url", compute="_compute_url", store=True, required=True, readonly=False, default="#", copy=True)
     page_id = fields.Many2one('website.page', 'Related Page', ondelete='cascade', index='btree_not_null')
     controller_page_id = fields.Many2one('website.controller.page', 'Related Model Page', ondelete='cascade', index='btree_not_null')
     new_window = fields.Boolean('New Window')
@@ -110,7 +110,7 @@ class WebsiteMenu(models.Model):
     def create(self, vals_list):
         ''' In case a menu without a website_id is trying to be created, we duplicate
             it for every website.
-            Note: Particulary useful when installing a module that adds a menu like
+            Note: Particularly useful when installing a module that adds a menu like
                   /shop. So every website has the shop menu.
                   Be careful to return correct record for ir.model.data xml_id in case
                   of default main menus creation.
@@ -130,14 +130,20 @@ class WebsiteMenu(models.Model):
                 menus |= super().create(vals)
                 continue
             else:
-                # create for every site
-                w_vals = [dict(vals, **{
-                    'website_id': website.id,
-                    'parent_id': website.menu_id.id,
-                }) for website in self.env['website'].search([])]
-                new_menu = super().create(w_vals)[-1:]  # take the last one
                 # if creating a default menu, we should also save it as such
                 default_menu = self.env.ref('website.main_menu', raise_if_not_found=False)
+                # create for every site
+                w_vals = []
+                for website in self.env["website"].search([]):
+                    parent_id = vals.get("parent_id")
+                    if not parent_id or (default_menu and parent_id == default_menu.id):
+                        parent_id = website.menu_id.id
+                    w_vals.append({
+                        **vals,
+                        'website_id': website.id,
+                        'parent_id': parent_id,
+                    })
+                new_menu = super().create(w_vals)[-1:]  # take the last record
                 if default_menu and vals.get('parent_id') == default_menu.id:
                     new_menu = super().create(vals)
                 menus |= new_menu

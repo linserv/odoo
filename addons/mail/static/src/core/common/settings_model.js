@@ -57,6 +57,20 @@ export class Settings extends Record {
             }
         },
     });
+    useCallAutoFocus = fields.Attr(true, {
+        /** @this {import("models").Settings} */
+        compute() {
+            return !browser.localStorage.getItem("mail_user_setting_disable_call_auto_focus");
+        },
+        /** @this {import("models").Settings} */
+        onUpdate() {
+            if (this.useCallAutoFocus) {
+                browser.localStorage.removeItem("mail_user_setting_disable_call_auto_focus");
+                return;
+            }
+            browser.localStorage.setItem("mail_user_setting_disable_call_auto_focus", "true");
+        },
+    });
 
     // Voice settings
     // DeviceId of the audio input selected by the user
@@ -77,7 +91,19 @@ export class Settings extends Record {
     backgroundBlurAmount = 10;
     edgeBlurAmount = 10;
     showOnlyVideo = false;
-    useBlur = false;
+    useBlur = fields.Attr(false, {
+        compute() {
+            return browser.localStorage.getItem("mail_user_setting_use_blur") === "true";
+        },
+        /** @this {import("models").Settings} */
+        onUpdate() {
+            if (this.useBlur) {
+                browser.localStorage.setItem("mail_user_setting_use_blur", "true");
+            } else {
+                browser.localStorage.removeItem("mail_user_setting_use_blur");
+            }
+        },
+    });
     blurPerformanceWarning = fields.Attr(false, {
         compute() {
             const rtc = this.store.rtc;
@@ -356,13 +382,15 @@ export class Settings extends Record {
         );
         this.showOnlyVideo =
             browser.localStorage.getItem("mail_user_setting_show_only_video") === "true";
-        this.useBlur = browser.localStorage.getItem("mail_user_setting_use_blur") === "true";
         const backgroundBlurAmount = browser.localStorage.getItem(
             "mail_user_setting_background_blur_amount"
         );
         this.backgroundBlurAmount = backgroundBlurAmount ? parseInt(backgroundBlurAmount) : 10;
         const edgeBlurAmount = browser.localStorage.getItem("mail_user_setting_edge_blur_amount");
         this.edgeBlurAmount = edgeBlurAmount ? parseInt(edgeBlurAmount) : 10;
+        this.useCallAutoFocus = !browser.localStorage.getItem(
+            "mail_user_setting_disable_call_auto_focus"
+        );
     }
     /**
      * @private
@@ -400,6 +428,9 @@ export class Settings extends Record {
     onStorage(ev) {
         if (ev.key === MESSAGE_SOUND) {
             this.messageSound = ev.newValue !== "false";
+        }
+        if (ev.key === "mail_user_setting_use_blur") {
+            this.useBlur = ev.newValue === "true";
         }
     }
     /**

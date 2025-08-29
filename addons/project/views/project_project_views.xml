@@ -36,7 +36,7 @@
                     <field name="company_id" invisible="1"/>
                     <header>
                         <button name="action_open_share_project_wizard" string="Share Project" type="object" class="oe_highlight" groups="project.group_project_manager"
-                        invisible="privacy_visibility != 'portal' or is_template" context="{'default_access_mode': 'read'}" data-hotkey="r"/>
+                        invisible="privacy_visibility in ['followers', 'employees'] or is_template" context="{'default_access_mode': 'read'}" data-hotkey="r"/>
                         <field name="stage_id" widget="statusbar_duration" options="{'clickable': '1', 'fold_field': 'fold'}" groups="project.group_project_stages" domain="[('company_id', 'in', (company_id, False))]"/>
                     </header>
                 <sheet string="Project">
@@ -191,12 +191,12 @@
                             domain="[('activity_user_id', '=', uid)]"/>
                     <separator/>
                     <filter invisible="1" string="Late Activities" name="activities_overdue"
-                        domain="[('activity_date_deadline', '&lt;', 'today')]"
+                        domain="[('my_activity_date_deadline', '&lt;', 'today')]"
                         help="Show all records whose next activity date is past"/>
                     <filter invisible="1" string="Today Activities" name="activities_today"
-                        domain="[('activity_date_deadline', '=', 'today')]"/>
+                        domain="[('my_activity_date_deadline', '=', 'today')]"/>
                     <filter invisible="1" string="Future Activities" name="activities_upcoming_all"
-                        domain="[('activity_date_deadline', '&gt;', 'today')]"/>
+                        domain="[('my_activity_date_deadline', '&gt;', 'today')]"/>
                     <group>
                         <filter string="Project Manager" name="Manager" context="{'group_by': 'user_id'}"/>
                         <filter string="Stage" name="groupby_stage" context="{'group_by': 'stage_id'}" groups="project.group_project_stages"/>
@@ -424,7 +424,7 @@
                                     </div>
                                     <div role="menuitem" class="col-6" groups="project.group_project_manager">
 
-                                        <a t-if="record.privacy_visibility.raw_value == 'portal' and !record.is_template.raw_value" class="dropdown-item" role="menuitem" name="action_open_share_project_wizard" type="object">Share Project</a>
+                                        <a t-if="['portal', 'invited_users'].includes(record.privacy_visibility.raw_value) and !record.is_template.raw_value" class="dropdown-item" role="menuitem" name="action_open_share_project_wizard" type="object">Share Project</a>
 
                                         <a class="dropdown-item" role="menuitem" name="copy" type="object">Duplicate</a>
                                         <a class="dropdown-item" role="menuitem" type="open">Settings</a>

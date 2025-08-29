@@ -28,7 +28,6 @@ from odoo.http import request, SessionExpiredException
 from odoo.tools import OrderedSet, escape_psql, html_escape as escape, py_to_js_locale
 from odoo.tools.translate import LazyTranslate
 from odoo.addons.base.models.ir_http import EXTENSION_TO_WEB_MIMETYPES
-from odoo.addons.base.models.ir_qweb import QWebException
 from odoo.addons.portal.controllers.portal import pager as portal_pager
 from odoo.addons.portal.controllers.web import Home
 from odoo.addons.web.controllers.binary import Binary
@@ -373,7 +372,8 @@ class Website(Home):
         current_website = request.website
 
         matching_pages = []
-        for page in current_website.search_pages(needle, limit=int(limit)):
+        limit = None if limit == "no_limit" else int(limit)
+        for page in current_website.search_pages(needle, limit):
             matching_pages.append({
                 'value': page['loc'],
                 'label': 'name' in page and '%s (%s)' % (page['loc'], page['name']) or page['loc'],
@@ -673,7 +673,13 @@ class Website(Home):
         if website_id:
             website = request.env['website'].browse(int(website_id))
             website._force()
-        page = request.env['website'].new_page(path, add_menu=add_menu, sections_arch=kwargs.get('sections_arch'), **template)
+        page = request.env['website'].new_page(
+            path,
+            add_menu=add_menu,
+            sections_arch=kwargs.get('sections_arch'),
+            page_title=kwargs.get('page_title'),
+            **template
+        )
         url = page['url']
         # In case the page is created through the 404 "Create Page" button, the
         # URL may use special characters which are slugified on page creation.
@@ -721,7 +727,10 @@ class Website(Home):
                 continue
             for template in View.search([
                 ('mode', '=', 'primary'),
+                '|',
                 ('key', 'like', escape_psql(f'new_page_template_sections_{group["id"]}_')),
+                ('key', 'like', f'configurator_pages_{group["id"]}'),
+                request.website.website_domain(),
             ], order='key'):
                 try:
                     html_tree = html.fromstring(View.with_context(inherit_branding=False)._render_template(
@@ -742,10 +751,14 @@ class Website(Home):
                     group['templates'].append({
                         'key': template.key,
                         'template': html.tostring(html_tree),
+                        'is_from_configurator': 'configurator_pages' in template.key,
                     })
-                except QWebException as qe:
-                    # Do not fail if theme is not compatible.
-                    logger.warning("Theme not compatible with template %r: %s", template.key, qe)
+                except Exception as error:
+                    if hasattr(error, 'qweb'):
+                        # Do not fail if theme is not compatible.
+                        logger.warning("Theme not compatible with template %r: %s", template.key, error)
+                    else:
+                        raise
             if group['templates']:
                 result.append(group)
         return result

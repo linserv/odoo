@@ -320,7 +320,7 @@ class RepairOrder(models.Model):
     @api.depends('move_ids.quantity', 'move_ids.product_uom_qty', 'move_ids.product_uom.rounding')
     def _compute_has_uncomplete_moves(self):
         for repair in self:
-            repair.has_uncomplete_moves = any(move.product_uom.compare(move.quantity, move.product_uom_qty) < 0 for move in repair.move_ids)
+            repair.has_uncomplete_moves = any(move.product_uom and move.product_uom.compare(move.quantity, move.product_uom_qty) < 0 for move in repair.move_ids)
 
     @api.depends('move_ids', 'state', 'move_ids.product_uom_qty')
     def _compute_unreserve_visible(self):
@@ -337,7 +337,10 @@ class RepairOrder(models.Model):
     def _search_date_category(self, operator, value):
         if operator != 'in':
             return NotImplemented
-        return self.env['stock.picking'].date_category_to_domain('scheduled_date', value)
+        return Domain.OR(
+            self.env['stock.picking'].date_category_to_domain('schedule_date', item)
+            for item in value
+        )
 
     @api.onchange('product_uom')
     def onchange_product_uom(self):

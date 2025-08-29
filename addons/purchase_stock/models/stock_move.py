@@ -56,6 +56,44 @@ class StockMove(models.Model):
     def _get_description(self):
         return self.purchase_line_id.name if self.purchase_line_id else super()._get_description()
 
+    def _action_synch_order(self):
+        purchase_order_lines_vals = []
+        for move in self:
+            purchase_order = move.picking_id.purchase_id or move.picking_id.return_id.purchase_id
+            # Creates new PO line only when pickings linked to a purchase order and
+            # for moves with qty. done and not already linked to a PO line.
+            if not purchase_order \
+                or (move.location_id.usage not in ['supplier', 'transit'] and not (move.location_dest_id.usage == 'supplier' and move.to_refund)) \
+                or move.purchase_line_id \
+                or not move.picked:
+                continue
+            product = move.product_id
+            if line := purchase_order.order_line.filtered(lambda l: l.product_id == product):
+                move.purchase_line_id = line[:1]
+                continue
+            quantity = move.quantity
+            if move.location_dest_id.usage in ['supplier', 'transit']:
+                quantity *= -1
+            po_line_vals = {
+                'move_ids': [Command.link(move.id)],
+                'order_id': purchase_order.id,
+                'product_id': product.id,
+                'product_qty': 0,
+                'product_uom_id': move.product_uom.id,
+                'qty_received': quantity
+            }
+            if product.purchase_method == 'purchase':
+                # No unit price if the product is purchased on the ordered qty.
+                po_line_vals['price_unit'] = 0
+            purchase_order_lines_vals.append(po_line_vals)
+        if purchase_order_lines_vals:
+            self.env['purchase.order.line'].create(purchase_order_lines_vals)
+        return super()._action_synch_order()
+
+    def _should_ignore_pol_price(self):
+        self.ensure_one()
+        return self.origin_returned_move_id or not self.purchase_line_id or not self.product_id.id
+
     def _prepare_move_split_vals(self, uom_qty):
         vals = super(StockMove, self)._prepare_move_split_vals(uom_qty)
         vals['purchase_line_id'] = self.purchase_line_id.id
@@ -106,16 +144,19 @@ class StockMove(models.Model):
     # --------------------------------------------------------
 
     def _get_value_from_account_move(self, quantity, at_date=None):
+        valuation_data = super()._get_value_from_account_move(quantity, at_date=at_date)
         if not (self.purchase_line_id and self.purchase_line_id):
-            return 0, 0
+            return valuation_data
 
         quantity = 0
         value = 0
+        aml_ids = set()
         for aml in self.purchase_line_id.invoice_lines:
             if at_date and aml.date > at_date:
                 continue
             if aml.move_id.state != 'posted':
                 continue
+            aml_ids.add(aml.id)
             if aml.move_type == 'in_invoice':
                 quantity += aml.quantity
                 value += aml.price_subtotal
@@ -123,7 +164,13 @@ class StockMove(models.Model):
                 quantity -= aml.quantity
                 value -= aml.price_subtotal
 
-        return value, quantity
+        valuation_data['quantity'] = quantity
+        valuation_data['value'] = value
+        account_moves = self.env['account.move.line'].browse(aml_ids).move_id
+        valuation_data['description'] = _('%(value)s for %(quantity)s %(unit)s from %(bills)s',
+            value=value, quantity=quantity, unit=self.product_id.uom_id.name,
+            bills=', '.join(account_move.name for account_move in account_moves))
+        return valuation_data
 
     def _get_value_from_quotation(self, quantity, at_date=None):
         # TODO: Start from global value
@@ -133,7 +180,11 @@ class StockMove(models.Model):
             return super()._get_value_from_quotation(quantity)
         price_unit = self.purchase_line_id._get_stock_move_price_unit()
         quantity = min(quantity, self.quantity)
-        return price_unit * quantity, quantity
+        return {
+            'value': price_unit * quantity,
+            'quantity': quantity,
+            'description': _('From %(quotation)s', quotation=self.purchase_line_id.order_id.name),
+        }
 
     def _get_related_invoices(self):
         """ Overridden to return the vendor bills related to this stock move.

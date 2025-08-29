@@ -198,6 +198,17 @@ export class DiscussChannel extends models.ServerModel {
         this.write([channel.id], { description });
     }
 
+    unlink(ids) {
+        /** @type {import("mock_models").BusBus} */
+        const BusBus = this.env["bus.bus"];
+
+        const channels = this.browse(ids);
+        for (const channel of channels) {
+            BusBus._sendone(channel, "discuss.channel/delete", { id: channel.id });
+        }
+        return super.unlink(...arguments);
+    }
+
     /**
      * @param {string} name
      * @param {string} [group_id]
@@ -521,6 +532,14 @@ export class DiscussChannel extends models.ServerModel {
 
         const [channel] = this.browse(ids);
         this.write([channel.id], { name });
+        this.message_post(
+            channel.id,
+            makeKwArgs({
+                body: `<div data-oe-type="channel_rename" class="o_mail_notification">${name}</div>`,
+                message_type: "notification",
+                subtype_xmlid: "mail.mt_comment",
+            })
+        );
     }
 
     /**

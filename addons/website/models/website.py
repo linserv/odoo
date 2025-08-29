@@ -247,8 +247,11 @@ class Website(models.Model):
             website.language_count = len(website.language_ids)
 
     def _compute_menu(self):
+        # prefetch all accessible menus at once
+        all_menus = self.env['website.menu'].search_fetch(Domain('website_id', 'in', self.ids))
+
         for website in self:
-            menus = self.env['website.menu'].browse(website._get_menu_ids())
+            menus = all_menus.filtered(lambda m: m.website_id == website)
 
             # use field parent_id (1 query) to determine field child_id (2 queries by level)"
             children = dict.fromkeys(menus, ())
@@ -297,16 +300,12 @@ class Website(models.Model):
 
     # self.env.uid for ir.rule groups on menu
     @tools.ormcache('self.env.uid', 'self.id', cache='templates')
-    def _get_menu_ids(self):
-        return self.env['website.menu'].search([('website_id', '=', self.id)]).ids
-
-    @tools.ormcache('self.env.uid', 'self.id', cache='templates')
     def is_menu_cache_disabled(self):
         """
         Checks if the website menu contains a record like url.
         :return: True if the menu contains a record like url
         """
-        return any(self.env['website.menu'].browse(self._get_menu_ids()).filtered(
+        return any(self.env['website.menu'].search_fetch(Domain('website_id', '=', self.id), ['url']).filtered(
             lambda menu: re.search(r"[/](([^/=?&]+-)?[0-9]+)([/]|$)", menu.url) or menu.group_ids
         ))
 
@@ -939,7 +938,7 @@ class Website(models.Model):
             return replacement
 
         # Configure the pages
-        for page_code in requested_pages:
+        for index, page_code in enumerate(requested_pages):
             snippet_list = configurator_snippets.get(page_code, [])
             if page_code == 'homepage':
                 page_view_id = self.with_context(website_id=website.id).viewref('website.homepage')
@@ -983,6 +982,11 @@ class Website(models.Model):
                     logger.warning(e)
             page_view_id.save(value=f'<div class="oe_structure">{"".join(rendered_snippets)}</div>',
                               xpath="(//div[hasclass('oe_structure')])[last()]")
+            # Copy the configurator pages to preserve the original untouched
+            # pages in the landing page category when creating a new page.
+            page_view_id.copy({
+                'key': f"{index}_{page_view_id.key}_configurator_pages_landing",
+            })
 
         # Configure the images
         images = custom_resources.get('images', {})
@@ -1158,7 +1162,7 @@ class Website(models.Model):
                 copy_menu(submenu, new_top_menu)
 
     @api.model
-    def new_page(self, name=False, add_menu=False, template='website.default_page', ispage=True, namespace=None, page_values=None, menu_values=None, sections_arch=None):
+    def new_page(self, name=False, add_menu=False, template='website.default_page', ispage=True, namespace=None, page_values=None, menu_values=None, sections_arch=None, page_title=None):
         """ Create a new website page, and assign it a xmlid based on the given one
             :param name: the name of the page
             :param add_menu: if True, add a menu for that page
@@ -1167,6 +1171,7 @@ class Website(models.Model):
             :param page_values: default values for the page to be created
             :param menu_values: default values for the menu to be created
             :param sections_arch: HTML content of sections
+            :param page_title: if set, it allows using 'name' for the URL and a different title
         """
         if namespace:
             template_module = namespace
@@ -1195,7 +1200,7 @@ class Website(models.Model):
 
         view.with_context(lang=None).write({
             'arch': arch.replace(template, key),
-            'name': name,
+            'name': page_title or name,
         })
         result['view_id'] = view.id
 

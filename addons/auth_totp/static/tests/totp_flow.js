@@ -1,7 +1,8 @@
-import { queryAll, waitFor } from "@odoo/hoot-dom";
+import { WORKER_STATE } from "@bus/workers/websocket_worker";
 import { rpc } from "@web/core/network/rpc";
 import { registry } from "@web/core/registry";
 import { stepUtils } from "@web_tour/tour_utils";
+import { whenReady } from "@odoo/owl";
 
 function openRoot() {
     return [{
@@ -27,6 +28,9 @@ function openUserProfileAtSecurityTab() {
         trigger: '[data-menu=settings]',
         run: 'click',
     }, {
+        content: "wait for security tab",
+        trigger: 'a[role=tab]:contains("Account Security")',
+    }, {
         content: "Switch to security tab",
         trigger: 'a[role=tab]:contains("Account Security")',
         run: 'click',
@@ -51,16 +55,18 @@ function closeProfileDialog({content, totp_state}) {
 
     return [{
         content,
-        //TODO: remove when PIPU macro PR is merged: https://github.com/odoo/odoo/pull/194508
         trigger: 'a[role=tab]:contains("Account Security").active',
+    }, 
+    {
+        trigger,
         async run(helpers) {
-            await waitFor(trigger, { timeout: 5000 });
             const modal = document.querySelector(".o_dialog");
             if (modal) {
                 modal.querySelector("button[name=preference_cancel]").click();
             }
         }
-    }, {
+    },
+    {
         trigger: 'body',
         async run() {
             while (document.querySelector('.o_dialog')) {
@@ -77,12 +83,11 @@ registry.category("web_tour.tours").add('totp_tour_setup', {
     url: '/odoo',
     steps: () => [...openUserProfileAtSecurityTab(), {
     content: "Open totp wizard",
-    //TODO: remove when PIPU macro PR is merged: https://github.com/odoo/odoo/pull/194508
     trigger: 'a[role=tab]:contains("Account Security").active',
-    async run(actions) {
-        const el = await waitFor('button[name=action_totp_enable_wizard]', { timeout: 5000 });
-        await actions.click(el);
-    }
+},
+{
+    trigger: "button[name=action_totp_enable_wizard]",
+    run: "click",
 },
 {
     trigger: ".modal div:contains(entering your password)",
@@ -251,6 +256,20 @@ registry.category("web_tour.tours").add('totp_login_device', {
     expectUnloadPage: true,
 },
 {
+    trigger: ".o_web_client .o_navbar",
+    async run() {
+        await whenReady();
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        await new Promise((resolve) => {
+            const bus = odoo.__WOWL_DEBUG__.root.env.services.bus_service;
+            bus.addEventListener("BUS:CONNECT", resolve, { once: true });
+            if (bus.workerState === WORKER_STATE.CONNECTED) {
+                resolve();
+            }
+        });
+    },
+},
+{
     content: "check we're logged in",
     trigger: ".o_user_menu .dropdown-toggle",
     run: 'click',
@@ -368,6 +387,7 @@ registry.category("web_tour.tours").add('totp_admin_disables', {
     content: "Find test_user User",
     trigger: 'td.o_data_cell:contains("test_user")',
     run(helpers) {
+        const { queryAll } = odoo.loader.modules.get("@odoo/hoot-dom");
         const titles = queryAll("tr:first th", { root: this.anchor.closest("table") });
         titles.forEach((el, i) => {
             columns[el.getAttribute('data-name')] = i;
@@ -406,6 +426,9 @@ registry.category("web_tour.tours").add('totp_admin_disables', {
     trigger: "td.o_data_cell:contains(test_user)",
     run: "click",
 }, {
+    content: "wait for Account security Tab to appear",
+    trigger: "a.nav-link:contains(Account Security)",
+},{
     content: "go to Account security Tab",
     trigger: "a.nav-link:contains(Account Security)",
     run: "click",

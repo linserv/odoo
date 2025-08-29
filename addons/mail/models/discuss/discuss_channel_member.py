@@ -294,6 +294,7 @@ class DiscussChannelMember(models.Model):
         # always unlink members of sub-channels as well
         domains = [
             [
+                ("id", "not in", self.ids),
                 ("partner_id", "=", member.partner_id.id),
                 ("guest_id", "=", member.guest_id.id),
                 ("channel_id", "in", member.channel_id.sub_channel_ids.ids),
@@ -352,7 +353,13 @@ class DiscussChannelMember(models.Model):
             # sudo: res.partner - reading partner related to a member is considered acceptable
             Store.Attr(
                 "partner_id",
-                lambda m: Store.One(m.partner_id.sudo(), m._get_store_partner_fields(fields)),
+                lambda m: Store.One(
+                    m.partner_id.sudo(),
+                    (p_fields := m._get_store_partner_fields(fields)),
+                    extra_fields=self.env["res.partner"]._get_store_mention_fields()
+                    if p_fields or p_fields is None
+                    else None,
+                ),
                 predicate=lambda m: m.partner_id,
             ),
             # sudo: mail.guest - reading guest related to a member is considered acceptable

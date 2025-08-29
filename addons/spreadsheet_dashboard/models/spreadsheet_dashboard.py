@@ -15,7 +15,7 @@ class SpreadsheetDashboard(models.Model):
     sequence = fields.Integer()
     sample_dashboard_file_path = fields.Char(export_string_translation=False)
     is_published = fields.Boolean(default=True)
-    company_id = fields.Many2one('res.company')
+    company_ids = fields.Many2many('res.company', string="Companies")
     group_ids = fields.Many2many('res.groups', default=lambda self: self.env.ref('base.group_user'))
     favorite_user_ids = fields.Many2many(
         'res.users',
@@ -53,6 +53,7 @@ class SpreadsheetDashboard(models.Model):
             'snapshot': snapshot,
             'revisions': [],
             'default_currency': default_currency,
+            'translation_namespace': self._get_dashboard_translation_namespace(),
         })
 
     def _get_sample_dashboard(self):
@@ -64,6 +65,13 @@ class SpreadsheetDashboard(models.Model):
 
     def _dashboard_is_empty(self):
         return any(self.env[model].search_count([], limit=1) == 0 for model in self.main_data_model_ids.sudo().mapped("model"))
+
+    def _get_dashboard_translation_namespace(self):
+        data = self.env['ir.model.data'].sudo().search([
+            ('model', '=', self._name),
+            ('res_id', 'in', self.ids),
+        ], limit=1)
+        return data.module
 
     def copy_data(self, default=None):
         default = dict(default or {})

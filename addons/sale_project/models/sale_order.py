@@ -67,7 +67,7 @@ class SaleOrder(models.Model):
 
     @api.model
     def _search_tasks_ids(self, operator, value):
-        if Domain.is_negative_operator(operator):
+        if operator in Domain.NEGATIVE_OPERATORS:
             return NotImplemented
         task_domain = [
             ('display_name' if isinstance(value, str) else 'id', operator, value),
@@ -122,6 +122,7 @@ class SaleOrder(models.Model):
             projects_per_so[project.sale_order_id.id] |= project
         for order in self:
             projects = order.order_line.mapped('product_id.project_id')
+            projects |= order.project_id
             projects |= order.order_line.mapped('project_id')
             projects |= projects_per_so[order.id or order._origin.id]
             if not is_project_manager:
@@ -200,7 +201,7 @@ class SaleOrder(models.Model):
         return action
 
     def _tasks_ids_domain(self):
-        return ['&', ('project_id', '!=', False), '|', ('sale_line_id', 'in', self.order_line.ids), ('sale_order_id', 'in', self.ids), ('has_template_ancestor', '=', False)]
+        return ['&', ('is_template', '=', False), ('project_id', '!=', False), '|', ('sale_line_id', 'in', self.order_line.ids), ('sale_order_id', 'in', self.ids), ('has_template_ancestor', '=', False)]
 
     def action_create_project(self):
         self.ensure_one()

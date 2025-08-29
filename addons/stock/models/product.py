@@ -133,10 +133,7 @@ class ProductProduct(models.Model):
     @api.depends('product_tmpl_id')
     def _compute_show_qty_update_button(self):
         for product in self:
-            product.show_qty_update_button = (
-                product.product_tmpl_id._should_open_product_quants()
-                or product.tracking != 'none'
-            )
+            product.show_qty_update_button = product.product_tmpl_id._should_open_product_quants()
 
     @api.depends('barcode')
     def _compute_valid_ean(self):
@@ -376,20 +373,34 @@ class ProductProduct(models.Model):
         if self.env.context.get('strict'):
             loc_domain = Domain('location_id', 'in', locations.ids)
             dest_loc_domain = Domain('location_dest_id', 'in', locations.ids)
+            dest_loc_domain_out = Domain('location_dest_id', 'in', locations.ids)
         elif locations:
             paths_domain = Domain.OR(Domain('parent_path', '=like', loc.parent_path + '%') for loc in locations)
             loc_domain = Domain('location_id', 'any', paths_domain)
+            # The condition should be split for done and not-done moves as the final_dest_id only make sense
+            # for the part of the move chain that is not done yet.
+            dest_loc_domain_done = Domain('location_dest_id', 'any', paths_domain)
+            dest_loc_domain_in_progress = Domain([
+                '|',
+                    '&', ('location_final_id', '!=', False), ('location_final_id', 'any', paths_domain),
+                    '&', ('location_final_id', '=', False), ('location_dest_id', 'any', paths_domain),
+            ])
             dest_loc_domain = Domain([
                 '|',
-                ('location_dest_id', 'any', paths_domain),
-                '&', ('location_final_id', '!=', False), ('location_final_id', 'any', paths_domain),
+                    '&', ('state', '=', 'done'), dest_loc_domain_done,
+                    '&', ('state', '!=', 'done'), dest_loc_domain_in_progress,
+            ])
+            dest_loc_domain_out = Domain([
+                '|',
+                    '&', ('state', '=', 'done'), ~dest_loc_domain_done,
+                    '&', ('state', '!=', 'done'), ~dest_loc_domain_in_progress,
             ])
 
         # returns: (domain_quant_loc, domain_move_in_loc, domain_move_out_loc)
         return (
             loc_domain,
             dest_loc_domain & ~loc_domain,
-            loc_domain & ~dest_loc_domain,
+            loc_domain & dest_loc_domain_out,
         )
 
     def _search_qty_available(self, operator, value):
@@ -880,7 +891,6 @@ class ProductTemplate(models.Model):
             product.show_qty_update_button = (
                 product._should_open_product_quants()
                 or product.product_variant_count > 1
-                or product.tracking != 'none'
             )
 
     @api.depends(

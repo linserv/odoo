@@ -116,16 +116,14 @@ class MailMail(models.Model):
         Compute the attachments we have access to,
         and the number of attachments we do not have access to.
         """
-        IrAttachment = self.env['ir.attachment']
         for mail_sudo, mail in zip(self.sudo(), self):
-            mail.unrestricted_attachment_ids = IrAttachment._filter_attachment_access(mail_sudo.attachment_ids.ids)
+            mail.unrestricted_attachment_ids = mail_sudo.attachment_ids.sudo(False)._filtered_access('read')
             mail.restricted_attachment_count = len(mail_sudo.attachment_ids) - len(mail.unrestricted_attachment_ids)
 
     def _inverse_unrestricted_attachment_ids(self):
         """We can only remove the attachments we have access to."""
-        IrAttachment = self.env['ir.attachment']
         for mail_sudo, mail in zip(self.sudo(), self):
-            restricted_attaments = mail_sudo.attachment_ids - IrAttachment._filter_attachment_access(mail_sudo.attachment_ids.ids)
+            restricted_attaments = mail_sudo.attachment_ids - mail_sudo.attachment_ids.sudo(False)._filtered_access('read')
             mail_sudo.attachment_ids = restricted_attaments | mail.unrestricted_attachment_ids
 
     def _search_body_content(self, operator, value):
@@ -149,7 +147,7 @@ class MailMail(models.Model):
             if values.get('attachment_ids'):
                 new_mails_w_attach += mail
         if new_mails_w_attach:
-            new_mails_w_attach.mapped('attachment_ids').check(mode='read')
+            new_mails_w_attach.attachment_ids.check_access('read')
 
         return new_mails
 
@@ -159,8 +157,7 @@ class MailMail(models.Model):
             vals['scheduled_date'] = parsed_datetime.replace(tzinfo=None) if parsed_datetime else False
         res = super(MailMail, self).write(vals)
         if vals.get('attachment_ids'):
-            for mail in self:
-                mail.attachment_ids.check(mode='read')
+            self.attachment_ids.check_access('read')
         return res
 
     def unlink(self):
@@ -242,7 +239,7 @@ class MailMail(models.Model):
 
         return res
 
-    def _postprocess_sent_message(self, success_pids, failure_reason=False, failure_type=None):
+    def _postprocess_sent_message(self, success_pids, success_emails, failure_reason=False, failure_type=None):
         """Perform any post-processing necessary after sending ``mail``
         successfully, including deleting it completely along with its
         attachment if the ``auto_delete`` flag of the mail was set.
@@ -261,7 +258,10 @@ class MailMail(models.Model):
                 # find all notification linked to a failure
                 failed = self.env['mail.notification']
                 if failure_type:
-                    failed = notifications.filtered(lambda notif: notif.res_partner_id not in success_pids)
+                    failed = notifications.filtered(lambda notif:
+                        notif.res_partner_id not in success_pids
+                        and notif.mail_email_address not in success_emails
+                    )
                 (notifications - failed).sudo().write({
                     'notification_status': 'sent',
                     'failure_type': '',
@@ -464,6 +464,16 @@ class MailMail(models.Model):
             link_ids = {int(link) for link in re.findall(r'/web/(?:content|image)/([0-9]+)', body)}
             if link_ids:
                 attachments = attachments - self.env['ir.attachment'].browse(list(link_ids))
+
+        # Convert URL-only attachments (e.g. cloud or plain external links) into email links
+        url_attachments = attachments.sudo().filtered(
+            lambda a: a.url and not a.file_size and a.url.startswith(('http://', 'https://', 'ftp://')))
+        if url_attachments:
+            url_attachments.sudo().generate_access_token()
+            attachments_links = self.env['ir.qweb']._render('mail.mail_attachment_links', {'attachments': url_attachments})
+            body = tools.mail.append_content_to_html(body, attachments_links, plaintext=False)
+            attachments -= url_attachments
+
         # Turn remaining attachments into links if they are too heavy and
         # their ownership are business models (i.e. something != mail.message,
         # otherwise they will be deleted along with the mail message leading to a 404)
@@ -617,7 +627,7 @@ class MailMail(models.Model):
                 else:
                     batch = self.browse(batch_ids)
                     batch.write({'state': 'exception', 'failure_reason': tools.exception_to_unicode(exc)})
-                    batch._postprocess_sent_message(success_pids=[], failure_type="mail_smtp")
+                    batch._postprocess_sent_message(success_pids=[], success_emails=[], failure_type="mail_smtp")
             else:
                 mail_server = self.env['ir.mail_server'].browse(mail_server_id)
                 self.browse(batch_ids)._send(
@@ -668,6 +678,7 @@ class MailMail(models.Model):
 
         for mail_id in self.ids:
             success_pids = []
+            success_emails = []
             failure_reason = None
             failure_type = None
             mail = None
@@ -754,6 +765,8 @@ class MailMail(models.Model):
                             msg, mail_server_id=mail.mail_server_id.id, smtp_session=smtp_session)
                         if processing_pid:
                             success_pids.append(processing_pid)
+                        else:
+                            success_emails.extend(email['email_to'] or [])
                         processing_pid = None
                     except AssertionError as error:
                         if str(error) == IrMailServer.NO_VALID_RECIPIENT:
@@ -796,7 +809,7 @@ class MailMail(models.Model):
                         mail_vals['failure_type'] = failure_type
                     if mail_vals:
                         mail.write(mail_vals)
-                mail._postprocess_sent_message(success_pids=success_pids, failure_type=failure_type, failure_reason=failure_reason)
+                mail._postprocess_sent_message(success_pids=success_pids, success_emails=success_emails, failure_type=failure_type, failure_reason=failure_reason)
             except MemoryError:
                 # prevent catching transient MemoryErrors, bubble up to notify user or abort cron job
                 # instead of marking the mail as failed
@@ -840,7 +853,7 @@ class MailMail(models.Model):
                     "state": "exception",
                 })
                 mail._postprocess_sent_message(
-                    success_pids=success_pids,
+                    success_pids=success_pids, success_emails=success_emails,
                     failure_reason=failure_reason, failure_type=failure_type
                 )
                 if raise_exception:
@@ -858,3 +871,35 @@ class MailMail(models.Model):
         if post_send_callback:
             post_send_callback(self.ids)
         return True
+
+# ============================================================
+# Mail -> Notification Helpers
+# ============================================================
+
+    def _get_notification_values(self):
+        """Get list of base notification values to create a notification for existing emails.
+
+        Recipient-specific values should be added separately.
+        """
+        return [
+            {
+                'author_id': mail.author_id.id,
+                'is_read': True,  # no mechanism to update this for outgoing emails
+                'mail_mail_id': mail.id,
+                'mail_message_id': mail.mail_message_id.id,
+                'notification_type': 'email',
+                'notification_status': mail._get_notification_status(),
+                'failure_type': mail.failure_type,
+            }
+            for mail in self
+        ]
+
+    def _get_notification_status(self):
+        """Return the equivalent status for notifications based on state."""
+        return {
+            'outgoing': 'ready',
+            'sent': 'sent',
+            'received': 'sent',
+            'exception': 'exception',
+            'cancel': 'canceled',
+        }.get(self.state, 'ready')

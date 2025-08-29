@@ -151,7 +151,7 @@
                     </page>
                     <page string="Payments" name="payments">
                         <field name="payment_ids" colspan="4" nolabel="1" readonly="account_move or state == 'done' or nb_print > 0">
-                            <list string="Payments" create="1" editable="bottom">
+                            <list string="Payments" create="1" editable="bottom" open_form_view="True">
                                 <field name="currency_id" column_invisible="True" />
                                 <field name="payment_date"/>
                                 <field name="payment_method_id" domain="[('id', 'in', parent.available_payment_method_ids)]" />
@@ -383,7 +383,7 @@
         <field name="res_model">pos.order.line</field>
         <field name="view_mode">list</field>
         <field name="view_id" ref="view_pos_order_line"/>
-        <field name="domain">[('create_date', '&gt;=', time.strftime('%Y-%m-%d 00:00:00')),('create_date', '&lt;=', time.strftime('%Y-%m-%d 23:59:59'))]</field>
+        <field name="domain">[('create_date', '&gt;=', 'today'), ('create_date', '&lt;', 'today +1d')]</field>
     </record>
 
     <record id="view_pos_order_tree_all_sales_lines" model="ir.ui.view">

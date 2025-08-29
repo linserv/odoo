@@ -1,4 +1,5 @@
 import { isBrowserFirefox } from "@web/core/browser/feature_detection";
+import { getActiveHotkey } from "@web/core/hotkeys/hotkey_service";
 import { rpc } from "@web/core/network/rpc";
 import { renderToElement } from "@web/core/utils/render";
 import { useAutofocus, useService } from '@web/core/utils/hooks';
@@ -295,6 +296,7 @@ class AddPageTemplates extends Component {
         this.website = useService("website");
         this.tabsRef = useRef("tabs");
         this.panesRef = useRef("panes");
+        useAutofocus();
 
         this.state = useState({
             pages: [{
@@ -350,7 +352,7 @@ class AddPageTemplates extends Component {
         return pages;
     }
 
-    onTabClick(id) {
+    onTabListBtnClick(id) {
         for (const page of this.state.pages) {
             if (page.id === id) {
                 page.isAccessed = true;
@@ -359,12 +361,29 @@ class AddPageTemplates extends Component {
         const activeTabEl = this.tabsRef.el.querySelector(".active");
         const activePaneEl = this.panesRef.el.querySelector(".active");
         activeTabEl?.classList?.remove("active");
+        activeTabEl?.setAttribute("tabIndex", "-1");
         activePaneEl?.classList?.remove("active");
+        activePaneEl?.setAttribute("inert", "inert"); // Make sure trapFocus() works.
         const tabEl = this.tabsRef.el.querySelector(`[data-id=${id}]`);
         const paneEl = this.panesRef.el.querySelector(`[data-id=${id}]`);
         tabEl.classList.add("active");
+        tabEl.tabIndex = 0;
         paneEl.classList.add("active");
+        paneEl.removeAttribute("inert");
         this.props.onTemplatePageChanged(tabEl.dataset.id === "basic" ? "" : tabEl.textContent);
+    }
+
+    onTabListBtnKeydown(ev) {
+        const hotkey = getActiveHotkey(ev);
+        if (!["arrowleft", "arrowright", "arrowdown", "arrowup"].includes(hotkey)) {
+            return;
+        }
+        const currentTabEl = this.tabsRef.el.querySelector(`[data-id=${ev.target.dataset.id}]`);
+        if (["arrowleft", "arrowup"].includes(hotkey)) {
+            currentTabEl.previousElementSibling?.focus();
+        } else {
+            currentTabEl.nextElementSibling?.focus();
+        }
     }
 }
 
@@ -383,9 +402,18 @@ export class AddPageDialog extends Component {
             type: String,
             optional: true,
         },
+        goToPage: {
+            type: Boolean,
+            optional: true,
+        },
+        pageTitle: {
+            type: String,
+            optional: true,
+        },
     };
     static defaultProps = {
         onAddPage: NO_OP,
+        goToPage: true,
     };
     static components = {
         WebsiteDialog,
@@ -422,7 +450,7 @@ export class AddPageDialog extends Component {
             // We also skip the possibility to choose to add in menu in that
             // case (e.g. in creation from 404 page button). The user can still
             // create its menu afterwards if needed.
-            await this.createPage(sectionsArch, this.props.forcedURL);
+            await this.createPage(sectionsArch, this.props.forcedURL, false, this.props.pageTitle);
         } else {
             this.dialogs.add(AddPageConfirmDialog, {
                 createPage: (...args) => this.createPage(sectionsArch, ...args),
@@ -431,7 +459,7 @@ export class AddPageDialog extends Component {
         }
     }
 
-    async createPage(sectionsArch, name = "", addMenu = false) {
+    async createPage(sectionsArch, name = "", addMenu = false, pageTitle = "") {
         // Remove any leading slash.
         const pageName = name.replace(/^\/*/, "") || _t("New Page");
         const data = await this.http.post(`/website/add/${encodeURIComponent(pageName)}`, {
@@ -442,6 +470,7 @@ export class AddPageDialog extends Component {
 
             'website_id': this.props.websiteId,
             'csrf_token': odoo.csrf_token,
+            'page_title': pageTitle,
         });
         if (data.view_id) {
             this.action.doAction({
@@ -451,7 +480,7 @@ export class AddPageDialog extends Component {
                 'type': 'ir.actions.act_window',
                 'view_mode': 'form',
             });
-        } else {
+        } else if (this.props.goToPage) {
             this.website.goToWebsite({path: data.url, edition: true, websiteId: this.props.websiteId});
         }
         this.props.onAddPage();

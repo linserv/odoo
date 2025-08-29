@@ -270,7 +270,7 @@ test("Create a direct message channel when clicking on start a meeting", async (
     await click("button[title='New Meeting']");
     await contains(".o-mail-DiscussSidebarChannel", { text: "Mitchell Admin" });
     await contains(".o-discuss-Call");
-    await contains(".o-discuss-ChannelInvitation");
+    await contains(".o-mail-Meeting-sidePanel:contains('Invite people')");
 });
 
 test("Can share user camera and screen together", async () => {
@@ -341,6 +341,7 @@ test("'New Meeting' in mobile", async () => {
     await click(".o-discuss-ChannelInvitation-selectable", { text: "Partner 2" });
     await click("button:not([disabled])", { text: "Invite to Group Chat" });
     await contains(".o-discuss-Call");
+    await click("[title='Exit Fullscreen']");
     // dropdown requires an extra delay before click (because handler is registered in useEffect)
     await contains("[title='Open Actions Menu']");
     await click("[title='Open Actions Menu']");
@@ -507,7 +508,7 @@ test("start call when accepting from push notification", async () => {
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({ name: "General" });
     await start();
-    await openDiscuss();
+    await openDiscuss("mail.box_inbox");
     await contains(".o-mail-DiscussContent-threadName[title=Inbox]");
     serviceWorker.dispatchEvent(
         new MessageEvent("message", {
@@ -516,6 +517,16 @@ test("start call when accepting from push notification", async () => {
     );
     await contains(".o-mail-DiscussContent-threadName[title=General]");
     await contains(`.o-discuss-CallParticipantCard[title='${serverState.partnerName}']`);
+});
+
+test("Clicking sidebar call participant opens avatar card", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
+    await start();
+    await openDiscuss(channelId);
+    await click("[title='Start Call']");
+    await click(".o-mail-DiscussSidebarCallParticipants-participant", { text: "Mitchell Admin" });
+    await contains(".o_avatar_card .o_card_user_infos", { text: "Mitchell Admin" });
 });
 
 test("Use saved volume settings", async () => {
@@ -745,4 +756,47 @@ test("single 'join' (with camera) button when last call had camera on", async ()
         text: "Join",
         contains: [".fa-video-camera"],
     });
+});
+
+test("dynamic focus switches to talking participant", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
+    const aliceSessionId = pyEnv["discuss.channel.rtc.session"].create({
+        channel_member_id: pyEnv["discuss.channel.member"].create({
+            channel_id: channelId,
+            partner_id: pyEnv["res.partner"].create({ name: "Alice" }),
+        }),
+        channel_id: channelId,
+    });
+    const bobSessionId = pyEnv["discuss.channel.rtc.session"].create({
+        channel_member_id: pyEnv["discuss.channel.member"].create({
+            channel_id: channelId,
+            partner_id: pyEnv["res.partner"].create({ name: "Bob" }),
+        }),
+        channel_id: channelId,
+    });
+
+    const env = await start();
+    const rtc = env.services["discuss.rtc"];
+    await openDiscuss(channelId);
+    await click("[title='Join Call']");
+    await click(".o-discuss-CallParticipantCard[title='Alice']");
+    await contains(".o-discuss-CallParticipantCard[title='Alice']");
+    await contains(".o-discuss-CallParticipantCard[title='Bob']", {
+        count: 0,
+    });
+    rtc.updateSessionInfo({ [bobSessionId]: { isTalking: true } });
+    await contains(".o-discuss-CallParticipantCard[title='Bob']");
+    rtc.updateSessionInfo({ [aliceSessionId]: { isTalking: true } });
+    await contains(".o-discuss-CallParticipantCard[title='Bob']", {
+        count: 0,
+    });
+    await contains(".o-discuss-CallParticipantCard[title='Alice']");
+    rtc.updateSessionInfo({ [aliceSessionId]: { isTalking: false } });
+    await contains(".o-discuss-CallParticipantCard[title='Bob']");
+    await click("[title='More']");
+    await click(".o-discuss-CallActionList-dropdownItem:contains('Disable speaker autofocus')");
+    await contains(".o-discuss-CallActionList-dropdownItem", { count: 0 });
+    await click("[title='More']");
+    await contains(".o-discuss-CallActionList-dropdownItem:contains('Autofocus speaker')");
 });

@@ -1,7 +1,14 @@
 import { expect, test } from "@odoo/hoot";
 import { click, queryAll, queryOne, waitFor } from "@odoo/hoot-dom";
-import { contains, dataURItoBlob, onRpc } from "@web/../tests/web_test_helpers";
-import { defineWebsiteModels, dummyBase64Img, setupWebsiteBuilder } from "../website_helpers";
+import { contains, dataURItoBlob, onRpc, patchWithCleanup } from "@web/../tests/web_test_helpers";
+import {
+    defineWebsiteModels,
+    dummyBase64Img,
+    setupWebsiteBuilder,
+    confirmAddSnippet,
+    waitForEndOfOperation,
+} from "../website_helpers";
+import { uniqueId } from "@web/core/utils/functions";
 
 defineWebsiteModels();
 
@@ -63,7 +70,7 @@ test("Add image in gallery", async () => {
     await contains("[data-action-id='addImage']").click();
     // We use "click" instead of contains.click because contains wait for the image to be visible.
     // In this test we don't want to wait ~800ms for the image to be visible but we can still click on it
-    await click("img.o_we_attachment_highlight");
+    await click(".o_existing_attachment_cell .o_button_area");
     await waitDomUpdated();
     await contains(".modal-footer button").click();
     await waitFor(":iframe .o_masonry_col img[data-index='6']");
@@ -175,4 +182,40 @@ test("Change gallery restore the container to the cloned equivalent image", asyn
     expectOptionContainerToInclude(queryOne(":iframe .first_img"));
     await contains(".o-snippets-top-actions .fa-repeat").click();
     expectOptionContainerToInclude(queryOne(":iframe .first_img"));
+});
+
+test("Dropping multiple image galleries should produce unique IDs", async () => {
+    await setupWebsiteBuilder("");
+    patchWithCleanup(uniqueId, { nextId: 0 });
+
+    const imageSnippetButtonSelector =
+        ".o-website-builder_sidebar  #snippet_groups .o_snippet[name='Images'] button";
+    for (let i = 0; i < 2; i++) {
+        await contains(imageSnippetButtonSelector).click();
+        await confirmAddSnippet("s_image_gallery");
+        await waitForEndOfOperation();
+    }
+    expect(":iframe .s_image_gallery:nth-child(1) .carousel").toHaveAttribute("id");
+    expect(":iframe .s_image_gallery:nth-child(2) .carousel").toHaveAttribute("id");
+    const imageCarousels = queryAll(":iframe .s_image_gallery .carousel");
+    expect(imageCarousels[0].id).not.toEqual(imageCarousels[1].id);
+});
+
+test("Cloning an image gallery should produce a unique ID", async () => {
+    await setupWebsiteBuilder("");
+    patchWithCleanup(uniqueId, { nextId: 0 });
+
+    const imageSnippetButtonSelector =
+        ".o-website-builder_sidebar  #snippet_groups .o_snippet[name='Images'] button";
+    await contains(imageSnippetButtonSelector).click();
+    await confirmAddSnippet("s_image_gallery");
+    await waitForEndOfOperation();
+    expect(":iframe .s_image_gallery").toHaveCount(1);
+
+    await contains(":iframe .s_image_gallery").click();
+    await contains(".o_snippet_clone").click();
+    expect(":iframe .s_image_gallery:nth-child(1) .carousel").toHaveAttribute("id");
+    expect(":iframe .s_image_gallery:nth-child(2) .carousel").toHaveAttribute("id");
+    const imageCarousels = queryAll(":iframe .s_image_gallery .carousel");
+    expect(imageCarousels[0].id).not.toEqual(imageCarousels[1].id);
 });

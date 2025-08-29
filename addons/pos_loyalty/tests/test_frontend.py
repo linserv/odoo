@@ -531,7 +531,9 @@ class TestUi(TestPointOfSaleHttpCommon):
         # Check that gift cards are used (Whiteboard Pen price is 1.20)
         self.assertEqual(gift_card_program.coupon_ids.points, 46.8)
         loyalty_history = self.env['loyalty.history'].search([('card_id','=',gift_card_program.coupon_ids.id)])
-        self.assertEqual(loyalty_history.used, 3.2)
+        self.assertEqual(loyalty_history[0].used, 3.2)
+        last_order = self.env['pos.order'].search([], order='id desc', limit=1).name
+        self.assertEqual(loyalty_history[1].description, f"Assigning order {last_order}")
 
     def test_ewallet_program(self):
         """
@@ -2787,7 +2789,7 @@ class TestUi(TestPointOfSaleHttpCommon):
         # Deactivate all other programs to avoid interference and activate the gift_card_product_50
         LoyaltyProgram.search([]).write({'pos_ok': False})
         self.env.ref('loyalty.gift_card_product_50').product_tmpl_id.write({'active': True})
-        partner = self.env['res.partner'].create({'name': 'Test Partner'})
+        partner = self.env['res.partner'].create({'name': 'AABBCC Test Partner'})
         # Create gift card program
         gift_card_program = self.create_programs([('arbitrary_name', 'gift_card')])['arbitrary_name']
 
@@ -2991,6 +2993,61 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_refund_does_not_decrease_points', login="pos_user")
         self.assertEqual(card.points, 30)
 
+    def test_loyalty_reward_with_variant(self):
+        self.env['loyalty.program'].search([]).write({'active': False})
+
+        product_tag = self.env['product.tag'].create({'name': 'Test Tag'})
+        product_test = self.env['product.product'].create({
+            'name': 'Test Product',
+            'list_price': 10,
+            'available_in_pos': True,
+            'taxes_id': False,
+            'product_tag_ids': [(4, product_tag.id)],
+        })
+        attribute = self.env['product.attribute'].create({
+            'name': 'Attribute 1',
+            'create_variant': 'always',
+        })
+        attribute_value_1 = self.env['product.attribute.value'].create({
+            'name': 'Value 1',
+            'attribute_id': attribute.id,
+        })
+        attribute_value_2 = self.env['product.attribute.value'].create({
+            'name': 'Value 2',
+            'attribute_id': attribute.id,
+        })
+        self.env['product.template.attribute.line'].create({
+            'product_tmpl_id': product_test.product_tmpl_id.id,
+            'attribute_id': attribute.id,
+            'value_ids': [(6, 0, [attribute_value_1.id, attribute_value_2.id])],
+        })
+
+        self.env['loyalty.program'].create({
+            'name': 'Buy 2 Take 1 with tag',
+            'program_type': 'buy_x_get_y',
+            'trigger': 'auto',
+            'applies_on': 'current',
+            'rule_ids': [(0, 0, {
+                'product_tag_id': product_tag.id,
+                'reward_point_mode': 'unit',
+                'minimum_qty': 2,
+            })],
+            'reward_ids': [(0, 0, {
+                'reward_type': 'product',
+                'reward_product_tag_id': product_tag.id,
+                'reward_product_qty': 1,
+                'required_points': 2,
+            })],
+            'pos_config_ids': [Command.link(self.main_pos_config.id)],
+        })
+
+        self.main_pos_config.open_ui()
+        self.start_tour(
+            "/pos/web?config_id=%d" % self.main_pos_config.id,
+            "test_loyalty_reward_with_variant",
+            login="pos_user",
+        )
+
     def test_multiple_loyalty_products(self):
         """This test makes sure that when a product is linked to multiple loyalty programs, the user is not asked to select
         a program every time he adds the product to the cart."""
@@ -3080,6 +3137,83 @@ class TestUi(TestPointOfSaleHttpCommon):
             "test_max_usage_partner_with_point",
             login="pos_user",
         )
+
+    def test_physical_gift_card(self):
+        self.env['loyalty.program'].search([]).write({'active': False})
+        self.env.ref('loyalty.gift_card_product_50').product_tmpl_id.write({'active': True})
+        gift_card_program = self.create_programs([('arbitrary_name', 'gift_card')])['arbitrary_name']
+        example_order = self.env['pos.order'].create({
+            'name': 'Gift Card Sold',
+            'amount_paid': 60.0,
+            'amount_total': 60.0,
+            'amount_tax': 0.0,
+            'amount_return': 0.0,
+            'session_id': self.main_pos_config.current_session_id.id,
+        })
+        gift_card_valid = self.env['loyalty.card'].create({
+            'program_id': gift_card_program.id,
+            'source_pos_order_id': example_order.id,
+            'code': 'gift_card_valid',
+            'points': 60.0,
+            'history_ids': [(0, 0, {
+                'order_model': 'pos.order',
+                'order_id': example_order.id,
+                'description': 'sold',
+                'used': 0,
+                'issued': 60.0,
+            })]
+        })
+        gift_card_partner = self.env['loyalty.card'].create({
+            'program_id': gift_card_program.id,
+            'source_pos_order_id': example_order.id,
+            'code': 'gift_card_partner',
+            'points': 60.0,
+            'partner_id': self.env['res.partner'].create({'name': 'Test Partner'}).id,
+            'history_ids': [(0, 0, {
+                'order_model': 'pos.order',
+                'order_id': example_order.id,
+                'description': 'sold',
+                'used': 0,
+                'issued': 60.0,
+            })]
+        })
+        gift_card_expired = self.env['loyalty.card'].create({
+            'program_id': gift_card_program.id,
+            'code': 'gift_card_expired',
+            'points': 60.0,
+            'expiration_date': date.today() - timedelta(days=1),
+        })
+        gift_card_sold = self.env['loyalty.card'].create({
+            'program_id': gift_card_program.id,
+            'source_pos_order_id': example_order.id,
+            'code': 'gift_card_sold',
+            'points': 60.0,
+            'history_ids': [(0, 0, {
+                'order_model': 'pos.order',
+                'order_id': example_order.id,
+                'description': 'sold',
+                'used': 0,
+                'issued': 60.0,
+            })]
+        })
+        gift_card_generated_but_not_sold = self.env['loyalty.card'].create({
+            'program_id': gift_card_program.id,
+            'code': 'gift_card_generated_but_not_sold',
+            'points': 60.0,
+        })
+
+        self.start_pos_tour("test_physical_gift_card")
+        self.assertEqual(gift_card_valid.points, 56.80)
+        self.assertEqual(gift_card_sold.points, 53.60)
+        self.assertEqual(gift_card_partner.points, 56.80)
+        self.assertEqual(gift_card_generated_but_not_sold.points, 47.20)
+        self.assertEqual(gift_card_expired.points, 60.0)
+
+        created_gift_card = self.env['loyalty.card'].search([('points', '=', 999)], order='id desc', limit=1)
+        last_order = self.env['pos.order'].search([], order='id desc', limit=1)
+        self.assertEqual(created_gift_card.points, 999.00)
+        self.assertEqual(created_gift_card.partner_id.name, 'A powerful PoS man!')
+        self.assertEqual(created_gift_card.source_pos_order_id.id, last_order.id)
 
     def test_combo_product_dont_grant_point(self):
         """

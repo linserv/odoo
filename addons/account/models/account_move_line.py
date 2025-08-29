@@ -465,6 +465,15 @@ class AccountMoveLine(models.Model):
     # === Misc Information === #
     is_refund = fields.Boolean(compute='_compute_is_refund')
 
+    no_followup = fields.Boolean(
+        string="No Follow-Up",
+        compute='_compute_no_followup',
+        inverse='_inverse_no_followup',
+        store=True,
+        readonly=False,
+        help="Exclude this journal item from follow-up reports.",
+    )
+
     _check_credit_debit = models.Constraint(
         "CHECK(display_type IN ('line_section', 'line_subsection', 'line_note') OR credit * debit=0)",
         'Wrong credit or debit value in accounting entry!',
@@ -679,7 +688,7 @@ class AccountMoveLine(models.Model):
                 operator = {'any': 'in', 'not any': 'not in'}[operator]
 
             if isinstance(value, (Query, SQL)):
-                query_value = value.select('id') if isinstance(value, Query) else value
+                query_value = value.select() if isinstance(value, Query) else value
                 value = [row[0] for row in self.env.execute_query(query_value)]
             else:  # isinstance(value, Domain) is True
                 # sudo reason: ignore ir.rules, `account_id` is with `bypass_search_access=True`
@@ -720,7 +729,7 @@ class AccountMoveLine(models.Model):
     def _compute_currency_rate(self):
         for line in self:
             if line.move_id.is_invoice(include_receipts=True):
-                line.currency_rate = line.move_id.invoice_currency_rate
+                line.currency_rate = line.move_id.invoice_currency_rate or 1.0
             elif line.currency_id:
                 line.currency_rate = self.env['res.currency']._get_conversion_rate(
                     from_currency=line.company_currency_id,
@@ -741,7 +750,7 @@ class AccountMoveLine(models.Model):
         for line in self:
             if line.amount_currency is False:
                 line.amount_currency = line.currency_id.round(line.balance * line.currency_rate)
-            if line.currency_id == line.company_id.currency_id:
+            if line.currency_id == line.company_id.currency_id and not line.move_id.is_invoice(True):
                 line.amount_currency = line.balance
 
     @api.depends_context('order_cumulated_balance', 'domain_cumulated_balance')
@@ -912,10 +921,12 @@ class AccountMoveLine(models.Model):
                 line.price_total = line.price_subtotal = False
                 continue
 
+            company = line.company_id or self.env.company
             base_line = line.move_id._prepare_product_base_line_for_taxes_computation(line)
-            AccountTax._add_tax_details_in_base_line(base_line, line.company_id)
-            line.price_subtotal = base_line['tax_details']['raw_total_excluded_currency']
-            line.price_total = base_line['tax_details']['raw_total_included_currency']
+            AccountTax._add_tax_details_in_base_line(base_line, company)
+            AccountTax._round_base_lines_tax_details([base_line], company)
+            line.price_subtotal = base_line['tax_details']['total_excluded_currency']
+            line.price_total = base_line['tax_details']['total_included_currency']
 
     @api.depends('product_id', 'product_uom_id')
     def _compute_price_unit(self):
@@ -1220,11 +1231,24 @@ class AccountMoveLine(models.Model):
     def _search_parent_id(self, operator, value):
         return [('id', operator, value)]
 
+    @api.depends('move_id.move_type')
+    def _compute_no_followup(self):
+        for aml in self:
+            aml.no_followup = aml.move_id.is_entry() and not aml.move_id.origin_payment_id
+
+    def _inverse_no_followup(self):
+        # If one line of an invoice gets excluded from or included in the follow up report, we want all
+        # payable/receivable lines of that invoice to do the same.
+        for aml in self:
+            move = aml.move_id
+            if move.is_invoice():
+                move.no_followup = aml.no_followup
+
     def _search_payment_date(self, operator, value):
         if operator == 'in':
             # recursive call with operator '='
             return Domain.OR(self._search_payment_date('=', v) for v in value)
-        if Domain.is_negative_operator(operator):
+        if operator in Domain.NEGATIVE_OPERATORS:
             return NotImplemented
         if operator == '=':
             operator = '<='
@@ -1495,6 +1519,7 @@ class AccountMoveLine(models.Model):
     # -------------------------------------------------------------------------
 
     @api.model
+    @api.deprecated("Override of a deprecated method")
     def check_field_access_rights(self, operation, field_names):
         result = super().check_field_access_rights(operation, field_names)
         if not field_names:
@@ -1536,7 +1561,7 @@ class AccountMoveLine(models.Model):
         return super().invalidate_recordset(fnames, flush)
 
     @api.model
-    def search_fetch(self, domain, field_names, offset=0, limit=None, order=None):
+    def search_fetch(self, domain, field_names=None, offset=0, limit=None, order=None):
         def to_tuple(t):
             return tuple(map(to_tuple, t)) if isinstance(t, (list, tuple)) else t
         order = (order or self._order)
@@ -1625,6 +1650,13 @@ class AccountMoveLine(models.Model):
         after = existing()
         for line in after:
             if (
+                (changed('balance') or changed('move_type'))
+                 and not self.env.is_protected(self._fields['amount_currency'], line)
+                 and (not changed('amount_currency') or (line not in before and not line.amount_currency))
+                 and line.currency_id == line.company_id.currency_id
+            ):
+                line.amount_currency = line.balance
+            if (
                 (changed('amount_currency') or changed('currency_rate') or changed('move_type'))
                 and not self.env.is_protected(self._fields['balance'], line)
                 and (not changed('balance') or (line not in before and not line.balance))
@@ -1670,6 +1702,8 @@ class AccountMoveLine(models.Model):
 
         lines.move_id._synchronize_business_models(['line_ids'])
         lines._check_constrains_account_id_journal_id()
+        # Remove analytic lines created for draft AMLs, after analytic_distribution has been updated
+        lines.filtered(lambda l: l.parent_state == 'draft').analytic_line_ids.with_context(skip_analytic_sync=True).unlink()
         return lines
 
     def write(self, vals):
@@ -1786,6 +1820,8 @@ class AccountMoveLine(models.Model):
                                 body=msg,
                                 tracking_value_ids=tracking_value_ids
                             )
+            if 'analytic_line_ids' in vals:
+                self.filtered(lambda l: l.parent_state == 'draft').analytic_line_ids.with_context(skip_analytic_sync=True).unlink()
 
         return result
 
@@ -2442,6 +2478,8 @@ class AccountMoveLine(models.Model):
 
         def process_amls(amls):
             remaining_amls = amls.filtered(lambda aml: aml.id not in all_fully_reconciled_aml_ids)
+            if len(remaining_amls.mapped('partner_id')) > 1:
+                remaining_amls = remaining_amls.sorted(lambda aml: (aml.partner_id and aml.partner_id.id) or False)
             amls_results, fully_reconciled_aml_ids = self._prepare_reconciliation_amls(
                 [
                     amls_values_map[aml]

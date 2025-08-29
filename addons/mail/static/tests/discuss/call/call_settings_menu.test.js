@@ -9,7 +9,7 @@ import {
     start,
     startServer,
 } from "@mail/../tests/mail_test_helpers";
-import { describe, test } from "@odoo/hoot";
+import { describe, test, expect } from "@odoo/hoot";
 import { advanceTime } from "@odoo/hoot-mock";
 import { asyncStep, patchWithCleanup, waitForSteps } from "@web/../tests/web_test_helpers";
 
@@ -19,22 +19,20 @@ describe.current.tags("desktop");
 defineMailModels();
 
 test("Renders the call settings", async () => {
-    patchWithCleanup(browser.navigator, {
-        mediaDevices: {
-            enumerateDevices: () =>
-                Promise.resolve([
-                    {
-                        deviceId: "mockAudioDeviceId",
-                        kind: "audioinput",
-                        label: "mockAudioDeviceLabel",
-                    },
-                    {
-                        deviceId: "mockVideoDeviceId",
-                        kind: "videoinput",
-                        label: "mockVideoDeviceLabel",
-                    },
-                ]),
-        },
+    patchWithCleanup(browser.navigator.mediaDevices, {
+        enumerateDevices: () =>
+            Promise.resolve([
+                {
+                    deviceId: "mockAudioDeviceId",
+                    kind: "audioinput",
+                    label: "mockAudioDeviceLabel",
+                },
+                {
+                    deviceId: "mockVideoDeviceId",
+                    kind: "videoinput",
+                    label: "mockVideoDeviceLabel",
+                },
+            ]),
     });
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({ name: "test" });
@@ -120,9 +118,12 @@ test("local storage for call settings", async () => {
 
     // testing save to local storage
     await click("input[title='Show video participants only']");
-    await waitForSteps(["mail_user_setting_show_only_video: false"]);
+    await waitForSteps([
+        "mail_user_setting_use_blur: true",
+        "mail_user_setting_show_only_video: false",
+    ]);
     await click("input[title='Blur video background']");
-    await waitForSteps(["mail_user_setting_use_blur: false"]);
+    expect(localStorage.getItem("mail_user_setting_use_blur")).toBe(null);
     await editInput(document.body, ".o-Discuss-CallSettings-thresholdInput", 0.3);
     await advanceTime(2000); // threshold setting debounce timer
     await waitForSteps(["mail_user_setting_voice_threshold: 0.3"]);

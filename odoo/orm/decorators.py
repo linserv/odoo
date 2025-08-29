@@ -6,13 +6,44 @@ from __future__ import annotations
 
 import logging
 import typing
+import warnings
 from collections.abc import Mapping
 from functools import wraps
 
 try:
-    from decorator import decoratorx as decorator
+    # available since python 3.13
+    from warnings import deprecated
 except ImportError:
-    from decorator import decorator
+    # simplified version
+    class deprecated:
+        def __init__(
+            self,
+            message: str,
+            /,
+            *,
+            category: type[Warning] | None = DeprecationWarning,
+            stacklevel: int = 1,
+        ) -> None:
+            self.message = message
+            self.category = category
+            self.stacklevel = stacklevel
+
+        def __call__(self, obj, /):
+            message = self.message
+            category = self.category
+            stacklevel = self.stacklevel
+            if category is None:
+                obj.__deprecated__ = message
+                return obj
+            if callable(obj):
+                @wraps(obj)
+                def wrapper(*args, **kwargs):
+                    warnings.warn(message, category=category, stacklevel=stacklevel + 1)
+                    return obj(*args, **kwargs)
+
+                obj.__deprecated__ = wrapper.__deprecated__ = message
+                return wrapper
+            raise TypeError(f"@deprecated decorator cannot be applied to {obj!r}")
 
 if typing.TYPE_CHECKING:
     from collections.abc import Callable, Collection

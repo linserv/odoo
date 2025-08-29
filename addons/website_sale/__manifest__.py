@@ -98,7 +98,6 @@
             'website_sale/static/src/scss/product_configurator.scss',
 
             'website_sale/static/src/js/cart_service.js',
-            'website_sale/static/src/js/payment_form.js',
             'website_sale/static/src/js/sale_variant_mixin.js',
             'website_sale/static/src/js/website_sale.js',
             'website_sale/static/src/xml/website_sale.xml',
@@ -154,6 +153,7 @@
         'website.website_builder_assets': [
             'website_sale/static/src/js/website_sale_form_editor.js',
             'website_sale/static/src/website_builder/**/*',
+            'website_sale/static/src/js/website_sale_utils.js',
             ('remove', 'website_sale/static/src/**/*.inside.scss'),
         ],
         'website.assets_wysiwyg': [

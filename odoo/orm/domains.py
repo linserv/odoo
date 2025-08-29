@@ -57,6 +57,7 @@ import itertools
 import logging
 import operator
 import pytz
+import types
 import typing
 import warnings
 from datetime import date, datetime, time, timedelta, timezone
@@ -121,6 +122,7 @@ The non-standard operators can be reduced to standard operators by using the
 optimization function. See the respective optimization functions for the
 details.
 """
+INTERNAL_CONDITION_OPERATORS = frozenset(('any!', 'not any!'))
 
 NEGATIVE_CONDITION_OPERATORS = {
     'not any': 'any',
@@ -246,7 +248,7 @@ class Domain:
                         # process subdomains when processing internal operators
                         if item[1] in ('any', 'any!', 'not any', 'not any!') and isinstance(item[2], (list, tuple)):
                             item = (item[0], item[1], Domain(item[2], internal=True))
-                    elif item[1] in ('any!', 'not any!'):
+                    elif item[1] in INTERNAL_CONDITION_OPERATORS:
                         # internal operators are not accepted
                         raise ValueError(f"Domain() invalid item in domain: {item!r}")
                     stack.append(Domain(*item))
@@ -275,9 +277,7 @@ class Domain:
     def FALSE(cls) -> Domain:
         return _FALSE_DOMAIN
 
-    @staticmethod
-    def is_negative_operator(operator: str) -> bool:
-        return operator in NEGATIVE_CONDITION_OPERATORS
+    NEGATIVE_OPERATORS = types.MappingProxyType(NEGATIVE_CONDITION_OPERATORS)
 
     @staticmethod
     def custom(
@@ -1293,7 +1293,7 @@ def _optimize_any_domain(condition, model):
     """Make sure the value is an optimized domain (or Query or SQL)"""
     value = condition.value
     if isinstance(value, ANY_TYPES) and not isinstance(value, Domain):
-        if '!' not in condition.operator:
+        if condition.operator in ('any', 'not any'):
             # update operator to 'any!'
             return DomainCondition(condition.field_expr, condition.operator + '!', condition.value)
         return condition
@@ -1303,16 +1303,6 @@ def _optimize_any_domain(condition, model):
         # id ANY domain  <=>  domain
         # id NOT ANY domain  <=>  ~domain
         return domain if condition.operator in ('any', 'any!') else ~domain
-    # get the model to optimize with
-    try:
-        comodel = model.env[field.comodel_name]
-    except KeyError:
-        condition._raise("Cannot determine the comodel relation")
-    domain = domain._optimize(comodel, OptimizationLevel.BASIC)
-    # const if the domain is empty, the result is a constant
-    # if the domain is True, we keep it as is
-    if domain.is_false():
-        return _FALSE_DOMAIN if condition.operator in ('any', 'any!') else _TRUE_DOMAIN
     return DomainCondition(condition.field_expr, condition.operator, domain)
 
 
@@ -1329,13 +1319,17 @@ def _optimize_any_domain_at_level(level: OptimizationLevel, condition, model):
     except KeyError:
         condition._raise("Cannot determine the comodel relation")
     domain = domain._optimize(comodel, level)
+    # const if the domain is empty, the result is a constant
+    # if the domain is True, we keep it as is
+    if domain.is_false():
+        return _FALSE_DOMAIN if condition.operator in ('any', 'any!') else _TRUE_DOMAIN
     return DomainCondition(condition.field_expr, condition.operator, domain)
 
 
 [
     operator_optimization(('any', 'not any', 'any!', 'not any!'), level)(functools.partial(_optimize_any_domain_at_level, level))
     for level in OptimizationLevel
-    if level > OptimizationLevel.BASIC
+    if level > OptimizationLevel.NONE
 ]
 
 
@@ -1735,6 +1729,50 @@ def _operator_parent_of_domain(comodel: BaseModel, parent):
             parent_ids.update(comodel._ids)
             comodel = comodel[parent].filtered(lambda p: p.id not in parent_ids)
     return parent_ids
+
+
+@operator_optimization(['any', 'not any'], level=OptimizationLevel.FULL)
+def _optimize_any_with_rights(condition, model):
+    if model.env.su or condition._field(model).bypass_search_access:
+        return DomainCondition(condition.field_expr, condition.operator + '!', condition.value)
+    return condition
+
+
+@field_type_optimization(['many2one'], level=OptimizationLevel.FULL)
+def _optimize_m2o_bypass_comodel_id_lookup(condition, model):
+    """Avoid comodel's subquery, if it can be compared with the field directly"""
+    operator = condition.operator
+    if (
+        operator in ('any!', 'not any!')
+        and isinstance(subdomain := condition.value, DomainCondition)
+        and subdomain.field_expr == 'id'
+        and (suboperator := subdomain.operator) in ('in', 'not in', 'any!', 'not any!')
+    ):
+        # We are bypassing permissions, we can transform:
+        #  a ANY (id IN X)  =>  a IN (X - {False})
+        #  a ANY (id NOT IN X)  =>  a NOT IN (X | {False})
+        #  a ANY (id ANY X)  =>  a ANY X
+        #  a ANY (id NOT ANY X)  =>  a != False AND a NOT ANY X
+        #  a NOT ANY (id IN X)  =>  a NOT IN (X - {False})
+        #  a NOT ANY (id NOT IN X)  =>  a IN (X | {False})
+        #  a NOT ANY (id ANY X)  =>  a NOT ANY X
+        #  a NOT ANY (id NOT ANY X)  =>  a = False OR a ANY X
+        val = subdomain.value
+        match suboperator:
+            case 'in':
+                domain = DomainCondition(condition.field_expr, 'in', val - {False})
+            case 'not in':
+                domain = DomainCondition(condition.field_expr, 'not in', val | {False})
+            case 'any!':
+                domain = DomainCondition(condition.field_expr, 'any!', val)
+            case 'not any!':
+                domain = DomainCondition(condition.field_expr, '!=', False) \
+                    & DomainCondition(condition.field_expr, 'not any!', val)
+        if operator == 'not any!':
+            domain = ~domain
+        return domain
+
+    return condition
 
 
 # --------------------------------------------------

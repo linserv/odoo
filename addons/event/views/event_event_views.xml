@@ -40,13 +40,6 @@
                                 help="Total Registrations for this Event">
                             <field name="seats_taken" widget="statinfo" string="Attendees"/>
                         </button>
-                        <button name="%(event.act_event_slot_from_event)d"
-                                type="action"
-                                class="oe_stat_button"
-                                icon="fa-calendar"
-                                invisible="not is_multi_slots">
-                            <field name="event_slot_count" widget="statinfo" string="Slots"/>
-                        </button>
                     </div>
                     <field name="active" invisible="1"/>
                     <field name="company_id" invisible="1"/>
@@ -62,7 +55,16 @@
                             <field name="date_begin" string="Date" widget="daterange" options="{'end_date_field': 'date_end'}" />
                             <field name="date_end" invisible="1" />
                             <field name="date_tz"/>
-                            <field name="is_multi_slots" string="Multiple Slots"/>
+                            <label for="is_multi_slots"/>
+                            <div class="o_row">
+                                <field name="is_multi_slots" string="Multiple Slots"/>
+                                <div invisible="not is_multi_slots">
+                                     <button name="action_open_slot_calendar"
+                                        type="object" class="btn-link p-0 pb-sm-1">
+                                        <field name="event_slot_count" class="oe_inline"/> Slot(s)
+                                    </button>
+                                </div>
+                            </div>
                             <field name="lang"/>
                             <field name="event_type_id" string="Template"/>
                             <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color', 'no_quick_create': True}"/>
@@ -114,7 +116,7 @@
                             </field>
                         </page>
                          <page string="Questions" name="questions">
-                            <field name="question_ids" string="Question" nolabel="1">
+                            <field name="question_ids" string="Question" nolabel="1" domain="[('is_reusable', '=', True)]" context="{'list_view_ref': 'event.event_question_view_list_add'}">
                                 <list>
                                     <field name="sequence" widget="handle" />
                                     <field name="title"/>
@@ -123,38 +125,17 @@
                                     <field name="question_type" string="Type" />
                                     <field name="answer_ids" widget="many2many_tags"
                                         invisible="question_type != 'simple_choice'" />
-                                    <button name="action_view_question_answers" type="object" class="p-0" icon="fa-bar-chart pe-1" string="Stats"
-                                            title="Answer Breakdown" invisible="question_type not in ['simple_choice', 'text_box']"/>
+                                    <field name="is_default" optional="hide"/>
+                                    <field name="is_reusable" optional="hide"/>
+                                    <button name="action_view_question_answers"
+                                        type="object"
+                                        class="p-0"
+                                        icon="fa-bar-chart pe-1"
+                                        string="Stats"
+                                        title="Answer Breakdown"
+                                        context="{'search_default_event_id': parent.id}"
+                                        invisible="question_type not in ['simple_choice', 'text_box']"/>
                                 </list>
-                                <!-- Need to repeat the whole tree form here to be able to create answers properly
-                                    Without this, the sub-fields of answer_ids are unknown to the web framework.
-                                    We need this because we create questions and answers when the event type changes. -->
-                                <form string="Question">
-                                    <sheet>
-                                        <h1 class="d-flex"><field name="title" placeholder='e.g. "Do you have any diet restrictions?"' class="flex-grow-1"/></h1>
-                                        <group>
-                                            <group>
-                                                <field name="is_mandatory_answer"/>
-                                                <field name="question_type" widget="radio"/>
-                                            </group>
-                                            <group>
-                                                <field name="once_per_order"/>
-                                            </group>
-                                        </group>
-                                        <notebook invisible="question_type != 'simple_choice'">
-                                            <page string="Answers" name="answers">
-                                                <field name="answer_ids">
-                                                    <list editable="bottom">
-                                                        <!-- 'display_name' is necessary for the many2many_tags to work on the event view -->
-                                                        <field name="display_name" column_invisible="True" />
-                                                        <field name="sequence" widget="handle" />
-                                                        <field name="name"/>
-                                                    </list>
-                                                </field>
-                                            </page>
-                                        </notebook>
-                                    </sheet>
-                                </form>
                             </field>
                         </page>
                         <page string="Notes &amp; Documents" name="event_notes">
@@ -320,6 +301,7 @@
                 <field name="stage_id"/>
                 <field name="activity_user_id" string="Activities of"/>
                 <field name="activity_type_id" string="Activity type"/>
+                <field name="question_ids"/>
                 <filter string="My Events" name="myevents" help="My Events" domain="[('user_id', '=', uid)]"/>
                 <separator/>
                 <filter string="Upcoming/Running" name="upcoming"
@@ -333,12 +315,12 @@
                     domain="[('activity_user_id', '=', uid)]"/>
                 <separator invisible="1"/>
                 <filter invisible="1" string="Late Activities" name="activities_overdue"
-                    domain="[('activity_date_deadline', '&lt;', 'today')]"
+                    domain="[('my_activity_date_deadline', '&lt;', 'today')]"
                     help="Show all records whose next activity date is past"/>
                 <filter invisible="1" string="Today Activities" name="activities_today"
-                    domain="[('activity_date_deadline', '=', 'today')]"/>
+                    domain="[('my_activity_date_deadline', '=', 'today')]"/>
                 <filter invisible="1" string="Future Activities" name="activities_upcoming_all"
-                    domain="[('activity_date_deadline', '&gt;', 'today')]"/>
+                    domain="[('my_activity_date_deadline', '&gt;', 'today')]"/>
                 <filter string="Online" name="filter_online" domain="[('address_id', '=', False)]"/>
                 <group>
                     <filter string="Responsible" name="responsible" context="{'group_by': 'user_id'}"/>

@@ -10,16 +10,16 @@ export class YoutubePlugin extends Plugin {
     static id = "youtube";
     static dependencies = ["history", "powerbox", "link", "dom"];
     resources = {
-        paste_url_overrides: this.handlePasteUrl.bind(this),
+        ...(this.config.allowVideo && {
+            paste_url_overrides: this.handlePasteUrl.bind(this),
+        }),
     };
     /**
      * @param {string} text
      * @param {string} url
      */
     handlePasteUrl(text, url) {
-        // to know if this logic should be executed or not. Do we still want an
-        // option of do we want to add a plugin whenever we want the feature?
-        const youtubeUrl = this.config.allowMediaDialogVideo && YOUTUBE_URL_GET_VIDEO_ID.exec(url);
+        const youtubeUrl = YOUTUBE_URL_GET_VIDEO_ID.exec(url);
         if (youtubeUrl) {
             const restoreSavepoint = this.dependencies.history.makeSavePoint();
             // Open powerbox with commands to embed media or paste as link.
@@ -48,13 +48,36 @@ export class YoutubePlugin extends Plugin {
     // @todo @phoenix: Should this be in this plugin?
     /**
      * @param {string} url
+     * @returns {HTMLElement} saved video element or undefined if the URL
+     * is not a valid YouTube video URL.
      */
     async getYoutubeVideoElement(url) {
-        const { embed_url: src } = await rpc("/html_editor/video_url/data", {
+        if (!URL.canParse(url)) {
+            return;
+        }
+        const parsedUrl = new URL(url);
+        const urlParams = parsedUrl.searchParams;
+        const start_from = urlParams.get("start") || urlParams.get("t");
+
+        const autoplay = urlParams.get("autoplay") === "1";
+        const loop = urlParams.get("loop") === "1";
+        const hide_controls = urlParams.get("controls") === "0";
+        const hide_fullscreen = urlParams.get("fs") === "0";
+
+        const videoData = await rpc("/html_editor/video_url/data", {
             video_url: url,
+            autoplay,
+            loop,
+            hide_controls,
+            hide_fullscreen,
+            start_from,
         });
-        const [savedVideo] = VideoSelector.createElements([{ src }]);
+        const savedVideo = this.createVideoElement(videoData);
         savedVideo.classList.add(...VideoSelector.mediaSpecificClasses);
         return savedVideo;
+    }
+
+    createVideoElement(videoData) {
+        return VideoSelector.createElements([{ src: videoData.embed_url }])[0];
     }
 }

@@ -6,8 +6,8 @@ import uuid
 from datetime import timedelta
 from urllib.parse import urlencode
 
-from odoo import _, fields, models
-from odoo.exceptions import RedirectWarning
+from odoo import _, api, fields, models
+from odoo.exceptions import RedirectWarning, ValidationError
 from odoo.http import request
 
 from odoo.addons.payment.logging import get_payment_logger
@@ -63,6 +63,22 @@ class PaymentProvider(models.Model):
             )
         return supported_currencies
 
+    # === CONSTRAINT METHODS === #
+
+    @api.constrains('state')
+    def _check_razorpay_credentials_are_set_before_enabling(self):
+        """ Check that the Razorpay credentials are valid when the provider is enabled.
+
+        :raise ValidationError: If the Razorpay credentials are not valid.
+        """
+        for provider in self.filtered(lambda p: p.code == 'razorpay' and p.state != 'disabled'):
+            if not provider.razorpay_account_id:
+                if not provider.razorpay_key_id or not provider.razorpay_key_secret:
+                    raise ValidationError(_(
+                        "Razorpay credentials are missing. Click the \"Connect\" button to set up"
+                        " your account."
+                    ))
+
     # === CRUD METHODS === #
 
     def _get_default_payment_method_codes(self):
@@ -111,24 +127,18 @@ class PaymentProvider(models.Model):
             'target': 'self',
         }
 
-    def action_razorpay_reset_oauth_account(self):
-        """ Reset the Razorpay OAuth account.
+    def _get_reset_values(self):
+        """Override of `payment` to supply the provider-specific credential values to reset."""
+        if self.code != 'razorpay':
+            return super()._get_reset_values()
 
-        Note: self.ensure_one()
-
-        :return: None
-        """
-        self.ensure_one()
-
-        return self.write({
+        return {
             'razorpay_account_id': None,
             'razorpay_public_token': None,
             'razorpay_refresh_token': None,
             'razorpay_access_token': None,
             'razorpay_access_token_expiry': None,
-            'state': 'disabled',
-            'is_published': False,
-        })
+        }
 
     def action_razorpay_create_webhook(self):
         """ Create a webhook and display a toast notification.
@@ -251,6 +261,8 @@ class PaymentProvider(models.Model):
 
         headers = None
         if not is_proxy_request and self.razorpay_access_token:
+            if self.razorpay_access_token_expiry < fields.Datetime.now():
+                self._razorpay_refresh_access_token()
             headers = {'Authorization': f'Bearer {self.razorpay_access_token}'}
         return headers
 

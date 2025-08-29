@@ -198,6 +198,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "country_id": False,
                         "create_uid": self.user_public.id,
                         "default_display_mode": False,
+                        "description": False,
                         "fetchChannelInfoState": "fetched",
                         "id": channel.id,
                         "invited_member_ids": [("ADD", [])],
@@ -271,6 +272,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "im_status": "online",
                         "im_status_access_token": self.operator.partner_id._get_im_status_access_token(),
                         "is_public": False,
+                        "mention_token": self.operator.partner_id._get_mention_token(),
                         "user_livechat_username": "El Deboulonnator",
                         "write_date": fields.Datetime.to_string(
                             self.operator.partner_id.write_date

@@ -350,7 +350,9 @@ class ProductTemplate(models.Model):
             )
             if available_attribute_lines:
                 previewed_ptal = available_attribute_lines[0]
-                previewed_ptavs = previewed_ptal.product_template_value_ids._only_active()
+                previewed_ptavs = previewed_ptal.product_template_value_ids.filtered(
+                    lambda ptav: ptav.ptav_active and ptav.ptav_product_variant_ids
+                )
                 if len(previewed_ptavs) > 1:
                     previewed_ptavs_data = []
                     for ptav in previewed_ptavs[:show_count]:
@@ -1055,3 +1057,15 @@ class ProductTemplate(models.Model):
                     return rb
 
         return ribbon
+
+    def _get_access_action(self, access_uid=None, force_website=False):
+        """ Instead of the classic form view, redirect to website if it is published. """
+        self.ensure_one()
+        if force_website or self.website_published:
+            return {
+                "type": "ir.actions.act_url",
+                "url": self.website_url,
+                "target": "self",
+                "target_type": "public",
+            }
+        return super()._get_access_action(access_uid=access_uid, force_website=force_website)

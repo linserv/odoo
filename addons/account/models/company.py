@@ -125,9 +125,9 @@ class ResCompany(models.Model):
     account_sale_receipt_tax_id = fields.Many2one('account.tax', string="Default Sale Receipt Tax", check_company=True)
     account_purchase_receipt_tax_id = fields.Many2one('account.tax', string="Default Purchase Receipt Tax", check_company=True)
     tax_calculation_rounding_method = fields.Selection([
+        ('round_globally', 'Round per Tax'),
         ('round_per_line', 'Round per Line'),
-        ('round_globally', 'Round Globally'),
-        ], default='round_per_line', string='Tax Calculation Rounding Method')
+        ], default='round_globally', string='Tax Calculation Rounding Method')
     currency_exchange_journal_id = fields.Many2one('account.journal', string="Exchange Gain or Loss Journal", domain=[('type', '=', 'general')])
     income_currency_exchange_account_id = fields.Many2one(
         comodel_name='account.account',
@@ -213,6 +213,7 @@ class ResCompany(models.Model):
         store=True,
         readonly=False,
         help="The country to use the tax reports from for this company")
+    account_fiscal_country_group_codes = fields.Json(compute="_compute_account_fiscal_country_group_codes")
 
     account_enabled_tax_country_ids = fields.Many2many(
         string="l10n-used countries",
@@ -357,6 +358,13 @@ class ResCompany(models.Model):
         for company in self:
             potential_domestic_fps = company.fiscal_position_ids.filtered_domain([('country_id', '=', company.country_id.id)]).sorted('sequence')
             company.domestic_fiscal_position_id = potential_domestic_fps[0] if potential_domestic_fps else False
+
+    @api.depends('account_fiscal_country_id')
+    def _compute_account_fiscal_country_group_codes(self):
+        for company in self:
+            company.account_fiscal_country_group_codes = (
+                company.account_fiscal_country_id.country_group_codes if company.account_fiscal_country_id else ['']
+            )
 
     @api.depends('fiscal_position_ids.foreign_vat')
     def _compute_multi_vat_foreign_country(self):

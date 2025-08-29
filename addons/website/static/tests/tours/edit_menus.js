@@ -1,6 +1,7 @@
 /** @odoo-module */
 
 import { delay } from '@odoo/hoot-dom';
+import { registry } from "@web/core/registry";
 import {
     clickOnEditAndWaitEditMode,
     clickOnExtraMenuItem,
@@ -10,6 +11,65 @@ import {
     openLinkPopup,
     registerWebsitePreviewTour,
 } from '@website/js/tours/tour_utils';
+
+registry.category("web_tour.tours").add("parent_child_menu", {
+    url: "/odoo/action-website.action_website_menu",
+    steps: () => [
+        {
+            content: "Open Menu Form View",
+            trigger: ".o_list_button_add",
+            run: "click",
+        },
+        {
+            content: "Insert Menu Name",
+            trigger: "input[id='name_0']",
+            run: "edit Parent",
+        },
+        {
+            content: "Insert Menu URL",
+            trigger: "input[id='url_0']",
+            run: "edit /parent",
+        },
+        {
+            content: "Click on Save Button",
+            trigger: ".o_form_button_save",
+            run: "click",
+        },
+        {
+            content: "Click on Add a line button",
+            trigger: "div[name='child_id'] td.o_field_x2many_list_row_add a",
+            run: "click",
+        },
+        {
+            content: "Insert Child Menu Name",
+            trigger: ".o_dialog input[id='name_0']",
+            run: "edit Child",
+        },
+        {
+            content: "Insert Child Menu URL",
+            trigger: ".o_dialog input[id='url_0']",
+            run: "edit /child",
+        },
+        {
+            content: "Click on Save & Close Button",
+            trigger: "button:contains(Save & Close)",
+            run: "click",
+        },
+        {
+            content: "Click on Save Button",
+            trigger: ".o_form_button_save",
+            run: "click",
+        },
+        {
+            content: "Check the Parent's URL",
+            trigger: "div[name='url']:contains('#')",
+        },
+        {
+            content: "Check the Child's URL",
+            trigger: "td[name='url']:contains('/child')",
+        },
+    ],
+});
 
 registerWebsitePreviewTour('edit_menus', {
     url: '/',
@@ -43,7 +103,7 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Confirm the mega menu label",
-        trigger: ".modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(ok)",
+        trigger: ".modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(Continue)",
         run: "click",
     },
     {
@@ -70,7 +130,7 @@ registerWebsitePreviewTour('edit_menus', {
     ...openLinkPopup(":iframe .top_menu .nav-item a:contains('Home')", "Home"),
     {
         content: "Click on Edit Menu",
-        trigger: '.o-we-linkpopover a.js_edit_menu',
+        trigger: '.o-we-linkpopover .js_edit_menu',
         run: "click",
     },
     {
@@ -86,7 +146,7 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Confirm the new menu entry without a label",
-        trigger: ".modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(ok)",
+        trigger: ".modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(Continue)",
         run: "click",
     },
     {
@@ -101,7 +161,7 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Confirm the new menu entry without a url",
-        trigger: ".modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(ok)",
+        trigger: ".modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(Continue)",
         run: "click",
     },
     {
@@ -111,7 +171,7 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Confirm the new menu entry with # url",
-        trigger: ".modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(ok)",
+        trigger: ".modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(Continue)",
         run: "click",
     },
     {
@@ -156,10 +216,26 @@ registerWebsitePreviewTour('edit_menus', {
     // Edit the menu item from the "edit menu" popover button
     ...clickOnEditAndWaitEditMode(),
     clickOnExtraMenuItem({}, true),
+    {
+        content: "Wait for the builder sidebar to fully open",
+        trigger: ":iframe .editor_enable",
+        run: async function() {
+            // Entering the edit mode opens the builder sidebar, which triggers
+            // multiple iframe resize events, which in turn rebuilds the extra
+            // menu items dropdown (see `auto_hide_menu.js` resize handler).
+            //
+            // We wait briefly to ensure all recalculations complete,
+            // avoiding race conditions when opening the link popover.
+            //
+            // NOTE: the delay below (200ms) matches the CSS `transition-delay`
+            // defined for `o-website-builder_sidebar`.
+            await delay(200);
+        },
+    },
     ...openLinkPopup(":iframe .top_menu .nav-item a:contains('Modnar')", "Modnar"),
     {
         content: "Click on the popover Edit Menu button",
-        trigger: '.o-we-linkpopover a.js_edit_menu',
+        trigger: '.o-we-linkpopover .js_edit_menu',
         run: "click",
     },
     {
@@ -177,7 +253,7 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Confirm the new menu label",
-        trigger: ".modal:not(.o_inactive_modal) .modal-footer button:contains(ok)",
+        trigger: ".modal:not(.o_inactive_modal) .modal-footer button:contains(Continue)",
         run: "click",
     },
     {
@@ -187,6 +263,9 @@ registerWebsitePreviewTour('edit_menus', {
         content: "Save the website menu with the new menu label",
         trigger: ".modal:not(.o_inactive_modal) .modal-footer button:contains(save)",
         run: "click",
+    },
+    {
+        trigger: "body:not(:has(.oe_menu_editor))",
     },
     // Drag a block to be able to scroll later.
     goBackToBlocks(),
@@ -210,7 +289,7 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: `Drag "Contact Us" menu below "Home" menu`,
-        trigger: '.oe_menu_editor li:contains("Contact us") .fa-bars',
+        trigger: '.oe_menu_editor li:contains("Contact us") .oi-draggable',
         run(helpers) {
             return helpers.drag_and_drop('.oe_menu_editor li:contains("Home")', {
                 position: {
@@ -223,7 +302,7 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Drag 'Contact Us' item as a child of the 'Home' item",
-        trigger: '.oe_menu_editor li:contains("Contact us") .fa-bars',
+        trigger: '.oe_menu_editor li:contains("Contact us") .oi-draggable',
         run: 'drag_and_drop .oe_menu_editor li:contains("Contact us") .form-control',
     },
     {
@@ -233,10 +312,10 @@ registerWebsitePreviewTour('edit_menus', {
     // Drag the Mega menu to the first position.
     {
         content: "Drag Mega at the top",
-        trigger: '.oe_menu_editor li:contains("Megaaaaa!") .fa-bars',
+        trigger: '.oe_menu_editor li:contains("Megaaaaa!") .oi-draggable',
         run(helpers) {
-            return helpers.drag_and_drop(".oe_menu_editor li:contains('Home') .fa-bars", {
-                position : {
+            return helpers.drag_and_drop('.oe_menu_editor li:contains("Home") .oi-draggable', {
+                position: {
                     top: 20,
                 },
                 relative: true,
@@ -371,7 +450,7 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Confirm the new menu entry",
-        trigger: '.modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(ok)',
+        trigger: '.modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(Continue)',
         run: "click",
     },
     {
@@ -395,7 +474,7 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Confirm the new menu entry",
-        trigger: '.modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(ok)',
+        trigger: '.modal:not(.o_inactive_modal) .modal-footer .btn-primary:contains(Continue)',
         run: "click",
     },
     {
@@ -404,21 +483,21 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Nest 'new_nested_menu' under 'new_menu'",
-        trigger: '.oe_menu_editor li:contains("new_nested_menu") .fa-bars',
+        trigger: '.oe_menu_editor li:contains("new_nested_menu") .oi-draggable',
         run: "drag_and_drop .oe_menu_editor li:contains('new_menu') .form-control",
     },
     {
         content: "Drag 'Modnar !!' below 'new_menu'",
-        trigger: '.oe_menu_editor li:contains("Modnar !!") .fa-bars',
+        trigger: '.oe_menu_editor li:contains("Modnar !!") .oi-draggable',
         async run(helpers) {
-            await helpers.drag_and_drop('.oe_menu_editor li:contains("new_menu") .fa-bars', {
+            await helpers.drag_and_drop('.oe_menu_editor li:contains("new_menu") .oi-draggable', {
                 position: "bottom",
             });
         },
     },
     {
         content: "Nest 'Modnar !!' under 'new_menu'",
-        trigger: '.oe_menu_editor li:contains("Modnar !!") .fa-bars',
+        trigger: '.oe_menu_editor li:contains("Modnar !!") .oi-draggable',
         run: "drag_and_drop .oe_menu_editor li:contains('new_menu') .form-control",
     },
     {
@@ -427,9 +506,9 @@ registerWebsitePreviewTour('edit_menus', {
     },
     {
         content: "Move 'Modnar !!' below 'new_nested_menu' inside the 'new_menu'",
-        trigger: '.oe_menu_editor  li:contains("new_menu") > ul > li:contains("Modnar !!") .fa-bars',
+        trigger: '.oe_menu_editor  li:contains("new_menu") > ul > li:contains("Modnar !!") .oi-draggable',
         async run(helpers) {
-            await helpers.drag_and_drop(".oe_menu_editor  li:contains('new_menu') > ul > li:contains('new_nested_menu') .fa-bars", {
+            await helpers.drag_and_drop(".oe_menu_editor  li:contains('new_menu') > ul > li:contains('new_nested_menu') .oi-draggable", {
                 position: "bottom",
             });
         },

@@ -47,7 +47,9 @@ class SmsComposer(models.TransientModel):
     # options for comment and mass mode
     mass_keep_log = fields.Boolean('Keep a note on document', default=True)
     mass_force_send = fields.Boolean('Send directly', default=False)
-    mass_use_blacklist = fields.Boolean('Use blacklist', default=True)
+    use_exclusion_list = fields.Boolean(
+        'Use Exclusion List', default=True, copy=False,
+        help='Prevent sending messages to blacklisted contacts. Disable only when absolutely necessary.')
     # recipients
     recipient_valid_count = fields.Integer('# Valid recipients', compute='_compute_recipients', compute_sudo=False)
     recipient_invalid_count = fields.Integer('# Invalid recipients', compute='_compute_recipients', compute_sudo=False)
@@ -120,7 +122,8 @@ class SmsComposer(models.TransientModel):
                 composer.recipient_single_number_itf = ''
                 continue
             records.ensure_one()
-            res = records._sms_get_recipients_info(force_field=composer.number_field_name, partner_fallback=True)
+            # If the composer was opened with a specific field use that, otherwise get the partner's
+            res = records._sms_get_recipients_info(force_field=composer.number_field_name, partner_fallback=not composer.number_field_name)
             if not composer.recipient_single_number_itf:
                 composer.recipient_single_number_itf = res[records.id]['sanitized'] or res[records.id]['number'] or ''
             if not composer.number_field_name:
@@ -167,7 +170,8 @@ class SmsComposer(models.TransientModel):
     def _compute_body(self):
         for record in self:
             if record.template_id and record.composition_mode == 'comment' and record.res_id:
-                record.body = record.template_id._render_field('body', [record.res_id], compute_lang=True)[record.res_id]
+                additional_context = record._get_additional_render_context().get('body', {})
+                record.body = record.template_id._render_field('body', [record.res_id], compute_lang=True, add_context=additional_context)[record.res_id]
             elif record.template_id:
                 record.body = record.template_id.body
 
@@ -275,7 +279,7 @@ class SmsComposer(models.TransientModel):
     def _get_blacklist_record_ids(self, records, recipients_info):
         """ Get a list of blacklisted records. Those will be directly canceled
         with the right error code. """
-        if self.mass_use_blacklist:
+        if self.use_exclusion_list:
             bl_numbers = self.env['phone.blacklist'].sudo().search([]).mapped('number')
             return [r.id for r in records if recipients_info[r.id]['sanitized'] in bl_numbers]
         return []
@@ -302,10 +306,11 @@ class SmsComposer(models.TransientModel):
         return recipients_info
 
     def _prepare_body_values(self, records):
+        additional_context = self._get_additional_render_context().get('body', {})
         if self.template_id and self.body == self.template_id.body:
-            all_bodies = self.template_id._render_field('body', records.ids, compute_lang=True)
+            all_bodies = self.template_id._render_field('body', records.ids, compute_lang=True, add_context=additional_context)
         else:
-            all_bodies = self.env['mail.render.mixin']._render_template(self.body, records._name, records.ids)
+            all_bodies = self.env['mail.render.mixin']._render_template(self.body, records._name, records.ids, add_context=additional_context)
         return all_bodies
 
     def _prepare_mass_sms_values(self, records):
@@ -362,6 +367,18 @@ class SmsComposer(models.TransientModel):
         }
 
     # ------------------------------------------------------------
+    # Render
+    # ------------------------------------------------------------
+
+    def _get_additional_render_context(self):
+        """
+        Return a dict associating fields with their relevant render context if any.
+
+        e.g. {'body': {'additional_value': self.env.context.get('additional_value')}}
+        """
+        return {}
+
+    # ------------------------------------------------------------
     # Tools
     # ------------------------------------------------------------
 
@@ -370,7 +387,8 @@ class SmsComposer(models.TransientModel):
         if composition_mode == 'comment':
             if not body and template_id and res_id:
                 template = self.env['sms.template'].browse(template_id)
-                result['body'] = template._render_template(template.body, res_model, [res_id])[res_id]
+                additional_context = self._get_additional_render_context().get('body', {})
+                result['body'] = template._render_template(template.body, res_model, [res_id], add_context=additional_context)[res_id]
             elif template_id:
                 template = self.env['sms.template'].browse(template_id)
                 result['body'] = template.body

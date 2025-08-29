@@ -1,4 +1,4 @@
-import { delay } from "@odoo/hoot-dom";
+import { delay } from "@web/core/utils/concurrency";
 import { registry } from "@web/core/registry";
 
 /**
@@ -195,6 +195,10 @@ registry.category("web_tour.tours").add("course_member", {
         {
             trigger: 'a[id="review-tab"]',
             run: "click",
+        },
+        {
+            trigger:
+                "#chatterRoot:shadow .o-mail-Message:contains('This is a great course. I highly recommend it!')",
         },
     ],
 });

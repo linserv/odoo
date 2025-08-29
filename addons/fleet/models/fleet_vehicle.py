@@ -40,7 +40,7 @@ class FleetVehicle(models.Model):
     active = fields.Boolean('Active', default=True, tracking=True)
     manager_id = fields.Many2one(
         'res.users', 'Fleet Manager',
-        domain=lambda self: [('all_group_ids', 'in', self.env.ref('fleet.fleet_group_manager').id), ('company_id', 'in', self.env.companies.ids)],
+        domain=lambda self: f"[('share', '=', False), ('company_id', '=', company_id), ('all_group_ids', 'in', {self.env.ref('fleet.fleet_group_user').id})]",
     )
     company_id = fields.Many2one(
         'res.company', 'Company',
@@ -387,12 +387,12 @@ class FleetVehicle(models.Model):
             self.search([
                 ('driver_id', 'in', to_update_drivers_cars),
                 ('vehicle_type', '=', 'car'),
-            ]).plan_to_change_car = True
+            ]).plan_to_change_car = False
         if to_update_drivers_bikes:
             self.search([
                 ('driver_id', 'in', to_update_drivers_bikes),
                 ('vehicle_type', '=', 'bike'),
-            ]).plan_to_change_bike = True
+            ]).plan_to_change_bike = False
         return vehicles
 
     def write(self, vals):

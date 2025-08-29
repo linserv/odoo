@@ -51,7 +51,7 @@ describe("pos_store.js", () => {
 
             const noSync = await store.syncAllOrders();
             expect(noSync).toBe(undefined);
-            expect(store.models["pos.order"].length).toBe(2); // One order created during setupPosEnv
+            expect(store.models["pos.order"].length).toBe(1);
         });
 
         test("sync specific order", async () => {
@@ -112,7 +112,7 @@ describe("pos_store.js", () => {
             expect(order.lines).toHaveLength(2);
             expect(order.lines[0].id).toBeOfType("string");
             expect(order.lines[1].id).toBeOfType("string");
-            store.syncingOrders.add(order.id);
+            store.syncingOrders.add(order.uuid);
 
             const data = await store.syncAllOrders();
             expect(store.getPendingOrder().orderToCreate).toHaveLength(1);
@@ -203,11 +203,33 @@ describe("pos_store.js", () => {
         await getFilledOrder(store);
         store.addNewOrder();
         let openOrders = store.getOpenOrders();
-        expect(openOrders.length).toBe(3);
+        expect(openOrders.length).toBe(2);
         const deletedOrders = await store.deleteOrders(openOrders);
         expect(deletedOrders).toBe(true);
         openOrders = store.getOpenOrders();
         expect(openOrders.length).toBe(0);
+    });
+
+    test("getOrderData", async () => {
+        const store = await setupPosEnv();
+        const order = await getFilledOrder(store);
+        const orderData = store.getOrderData(order);
+        expect(orderData).toEqual({
+            reprint: undefined,
+            pos_reference: "",
+            config_name: "Hoot",
+            time: "10:30",
+            tracking_number: "",
+            preset_time: false,
+            preset_name: "In",
+            employee_name: "Administrator",
+            internal_note: "",
+            general_customer_note: "",
+            changes: {
+                title: "",
+                data: [],
+            },
+        });
     });
 
     test("productsToDisplay", async () => {

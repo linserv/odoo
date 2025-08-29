@@ -594,6 +594,13 @@ p {
     margin-top: $paragraph-margin-top;
 }
 
+.o_line_clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: var(--lines-clamp, 2);
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
 font[style*='background']:not(.text-gradient),
 font[class*='bg-'] {
     // Not adding any horizontal padding is important as it ensures that several
@@ -855,6 +862,7 @@ table.table_desc tr td {
     width: var(--o-timeline-dot-size, 24px);
     height: var(--o-timeline-dot-size, 24px);
     left: var(--o-dot-left);
+    color: $primary;
 
     &:before, &:after {
         position: absolute;
@@ -870,6 +878,12 @@ table.table_desc tr td {
 
     &:after {
         inset: 8px;
+    }
+}
+
+@for $index from 1 through 5 {
+    .o_cc#{$index} .o_dot {
+        color: var(--o-cc#{$index}-btn-primary);
     }
 }
 
@@ -1957,7 +1971,7 @@ header {
         }
     }
 }
-.navbar-nav {
+:where(header#top) .navbar-nav:where([role="menu"]) {
     .nav-link:not(.o_nav-link_secondary) {
         @include media-breakpoint-up(lg) {
             @if o-website-value('header-links-style') == 'outline' {
@@ -2348,9 +2362,10 @@ input[value*="data-oe-translation-source-sha"] {
     visibility: visible;
 }
 .o_wanim_overflow_xy_hidden {
-    // "overflow-x: clip" is added to the "body" and not to "html" because if
-    // it's added to "html", when a popup opens, the page scrolls to the top.
-    > body {
+    // "overflow-x: clip" is added to the "#wrapwrap" and not to "html" because
+    // if it's added to "html", when a popup opens, the page scrolls to the top.
+    // It's not added on body because mobile browser ignore overflow-x on it.
+    #wrapwrap {
         // We use clip instead of hidden to prevent scroll animations to an
         // anchor from stopping working.
         overflow-x: clip !important;
@@ -2358,9 +2373,6 @@ input[value*="data-oe-translation-source-sha"] {
         @supports not (overflow-x: clip) {
             overflow-x: hidden !important;
         }
-        // Create a new formatting context. Without this, elements inside <body>
-        // may still overflow (e.g. animated elements in Firefox).
-        display: flow-root;
     }
     &.o_rtl, .o_rtl {
         // Fix for Chrome and Edge bug: resolves slow/stuck scrolling during
@@ -3156,4 +3168,11 @@ input[value*="data-oe-translation-source-sha"] {
 .o_nav_link_btn {
     border-radius: $btn-border-radius;
     padding: $btn-padding-y $btn-padding-x;
+}
+
+// Some snippets need flex column for their columns so this will share the rule
+%flex-column-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }

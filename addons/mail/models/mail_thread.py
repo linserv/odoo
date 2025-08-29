@@ -178,7 +178,7 @@ class MailThread(models.AbstractModel):
     @api.model
     def _search_message_partner_ids(self, operator, operand):
         """Search function for message_follower_ids"""
-        if Domain.is_negative_operator(operator):
+        if operator in Domain.NEGATIVE_OPERATORS:
             return NotImplemented
         if not (self.env.su or self.env.user._is_internal()):
             user_partner = self.env.user.partner_id
@@ -808,10 +808,13 @@ class MailThread(models.AbstractModel):
             if bounced_record and not bounced_record_done and isinstance(bounced_record, self.pool['mail.thread']):
                 bounced_record._message_receive_bounce(bounced_email, bounced_partner)
 
-            if bounced_partner and bounced_message:
-                self.env['mail.notification'].sudo().search([
-                    ('mail_message_id', '=', bounced_message.id),
-                    ('res_partner_id', 'in', bounced_partner.ids)]
+            if bounced_message and (bounced_email or bounced_partner):
+                self.env['mail.notification'].sudo().search(Domain(
+                    'mail_message_id', '=', bounced_message.id
+                ) & Domain.OR([
+                    Domain('res_partner_id', 'in', bounced_partner.ids) if bounced_partner else [],
+                    Domain('mail_email_address', '=', bounced_email) if bounced_email else [],
+                ]),
                 ).write({
                     'failure_reason': html2plaintext(message_dict.get('body') or ''),
                     'failure_type': 'mail_bounce',
@@ -2255,7 +2258,7 @@ class MailThread(models.AbstractModel):
             author_id, email_from = False, False
         else:
             author_guest_id = False
-            author_id, email_from = self._message_compute_author(author_id, email_from, raise_on_email=True)
+            author_id, email_from = self._message_compute_author(author_id, email_from)
 
         if subtype_xmlid:
             subtype_id = self.env['ir.model.data']._xmlid_to_res_id(subtype_xmlid)
@@ -2753,7 +2756,7 @@ class MailThread(models.AbstractModel):
         # consider users mentionning themselves should receive notifications
         notif_kwargs['notify_author_mention'] = notif_kwargs.get('notify_author_mention', True)
 
-        author_id, email_from = self._message_compute_author(author_id, email_from, raise_on_email=True)
+        author_id, email_from = self._message_compute_author(author_id, email_from)
 
         # allow to link a notification to a document that does not inherit from
         # MailThread by supporting model / res_id, but then both value should be set
@@ -2875,7 +2878,7 @@ class MailThread(models.AbstractModel):
         if len(self) > 1 and (attachment_ids or tracking_value_ids):
             raise ValueError(_('Batch log cannot support attachments or tracking values on more than 1 document'))
 
-        author_id, email_from = self._message_compute_author(author_id, email_from, raise_on_email=False)
+        author_id, email_from = self._message_compute_author(author_id, email_from)
 
         base_message_values = {
             # author
@@ -2909,12 +2912,10 @@ class MailThread(models.AbstractModel):
     # MAIL.MESSAGE HELPERS
     # ------------------------------------------------------------
 
-    def _message_compute_author(self, author_id=None, email_from=None, raise_on_email=True):
+    def _message_compute_author(self, author_id=None, email_from=None):
         """ Tool method computing author information for messages. Purpose is
         to ensure maximum coherence between author / current user / email_from
         when sending emails.
-
-        :param raise_on_email: if email_from is not found, raise an UserError
 
         :return: a 2-values tuple with res.partner ID (may be False or None),
             and email_from
@@ -2932,10 +2933,6 @@ class MailThread(models.AbstractModel):
             if author_id:
                 author = self.env['res.partner'].browse(author_id)
                 email_from = author.email_formatted
-
-        # superuser mode without author email -> probably public user; anyway we don't want to crash
-        if not email_from and raise_on_email and not self.env.su:
-            raise exceptions.UserError(_("Unable to send message, please configure the sender's email address."))
 
         return author_id, email_from
 
@@ -4709,7 +4706,7 @@ class MailThread(models.AbstractModel):
         msg_not_comment.sudo().write(msg_vals)
         return True
 
-    def _message_update_content(self, message, body, attachment_ids=None, partner_ids=None,
+    def _message_update_content(self, message, /, *, body, attachment_ids=None, partner_ids=None,
                                 strict=True, **kwargs):
         """ Update message content. Currently does not support attachments
         specific code (see ``_process_attachments_for_post``), to be added
@@ -4873,20 +4870,12 @@ class MailThread(models.AbstractModel):
     # CONTROLLERS SECURITY HELPERS
     # ------------------------------------------------------
 
-    def _get_allowed_message_post_params(self):
-        return {
-            "attachment_ids",
-            "body",
-            "email_add_signature",
-            "message_type",
-            "partner_ids",
-            "role_ids",
-            "subtype_xmlid",
-        }
-
-    @api.model
-    def _get_allowed_message_update_params(self):
-        return {"attachment_ids", "body", "partner_ids"}
+    def _get_allowed_message_params(self):
+        """Set of parameters that are forwarded without control to sudo().message_post() and
+        sudo()._message_update_content(), which means these parameters should be either inoffensive
+        or safely handled by these methods. Parameters requiring special processing need to be
+        manually handled in _prepare_message_data."""
+        return {"email_add_signature", "message_type", "subtype_xmlid"}
 
     @api.model
     def _get_allowed_access_params(self):

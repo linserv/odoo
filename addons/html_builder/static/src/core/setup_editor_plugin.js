@@ -1,4 +1,5 @@
 import { Plugin } from "@html_editor/plugin";
+import { withSequence } from "@html_editor/utils/resource";
 import { _t } from "@web/core/l10n/translation";
 
 export class SetupEditorPlugin extends Plugin {
@@ -6,6 +7,8 @@ export class SetupEditorPlugin extends Plugin {
     static shared = ["getEditableAreas"];
     resources = {
         clean_for_save_handlers: this.cleanForSave.bind(this),
+        closest_savable_providers: withSequence(10, (el) => el.closest(".o_editable")),
+        o_editable_selectors: "[data-oe-model]",
     };
 
     setup() {
@@ -16,7 +19,9 @@ export class SetupEditorPlugin extends Plugin {
         if (this.delegateTo("after_setup_editor_handlers")) {
             return;
         }
-        let editableEls = this.getEditableElements("[data-oe-model]")
+        let editableEls = this.getEditableElements(
+            this.getResource("o_editable_selectors").join(", ")
+        )
             .filter((el) => !el.matches("link, script"))
             .filter((el) => !el.hasAttribute("data-oe-readonly"))
             .filter(

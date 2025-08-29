@@ -339,9 +339,6 @@ export function useMessageScrolling(duration = 2000) {
          * @param {import("models").Thread} thread
          */
         async highlightMessage(message, thread) {
-            if (thread.notEq(message.thread)) {
-                return;
-            }
             state.initiated = true;
             let messageScrollDirection;
             if (message.notIn(thread.messages)) {
@@ -504,7 +501,7 @@ export function useSelection({ refName, model, preserveOnClickAwayPredicate = ()
         },
         moveCursor(position) {
             model.start = model.end = position;
-            if (!ui.isSmall) {
+            if (ref.el && !ui.isSmall) {
                 // In mobile, selection seems to adjust correctly.
                 // Don't programmatically adjust, otherwise it shows soft keyboard!
                 ref.el.selectionStart = ref.el.selectionEnd = position;

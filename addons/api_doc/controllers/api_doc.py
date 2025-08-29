@@ -42,6 +42,10 @@ class DocController(http.Controller):
         res.headers['X-Frame-Options'] = 'deny'
         return res
 
+    @http.route('/doc-bearer/index.json', type='http', auth='bearer')
+    def doc_bearer_index(self):
+        return self.doc_index()
+
     @http.route('/doc/index.json', type='http', auth='user')
     def doc_index(self):
         """
@@ -96,11 +100,11 @@ class DocController(http.Controller):
         # installed.
         # TODO: gzip
         filename = f'odoo-doc-index-{db_registry_sequence}-{unique}.json'
-        index_attach = self.env['ir.attachment'].search([('name', '=', filename)], limit=1)
+        index_attach = self.env['ir.attachment'].sudo().search([('name', '=', filename)], limit=1)
         if not index_attach:
             # No cache, generate the index and save it.
             modules, models = self._doc_index()
-            index_attach = self.env['ir.attachment'].create({
+            index_attach = index_attach.create({
                 'name': filename,
                 'description': (
                     "Generated /doc/index.json document.\n\n"
@@ -145,6 +149,10 @@ class DocController(http.Controller):
             if (Model := self.env[ir_model.model]).has_access('read')
         ]
         return modules, models
+
+    @http.route('/doc-bearer/<model_name>.json', type='http', auth='bearer', readonly=True)
+    def doc_bearer_modec(self, model_name):
+        return self.doc_model(model_name)
 
     @http.route('/doc/<model_name>.json', type='http', auth='user', readonly=True)
     def doc_model(self, model_name):
@@ -292,7 +300,8 @@ def get_sorted_installed_modules(env):
 
 def is_public_method(model, name):
     try:
-        return get_public_method(model, name)
+        method = get_public_method(model, name)
+        return not hasattr(method, '__deprecated__')
     except (AttributeError, AccessError):
         return None
 

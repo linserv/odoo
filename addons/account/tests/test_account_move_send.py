@@ -236,8 +236,9 @@ class TestAccountComposerPerformance(AccountTestInvoicingCommon, MailCommon):
             composer.action_send_and_print(allow_fallback_pdf=True)
             self.env.cr.flush()  # force tracking message
 
-        self.assertEqual(len(self._new_msgs), 1, 'Should produce 1 message (for posting template)')
-        print_msg = self._new_msgs[0]
+        new_account_msgs = self._new_msgs.filtered(lambda msg: (msg.model or '').startswith('account'))
+        self.assertEqual(len(new_account_msgs), 1, 'Should produce 1 message (for posting template)')
+        print_msg = new_account_msgs[0]
         self.assertNotified(
             print_msg,
             [{
@@ -319,8 +320,9 @@ class TestAccountComposerPerformance(AccountTestInvoicingCommon, MailCommon):
             composer.action_send_and_print()
             self.env.cr.flush()  # force tracking message
 
-        self.assertEqual(len(self._new_msgs), 1, 'Should produce 1 message (for posting template)')
-        print_msg = self._new_msgs[0]
+        new_account_msgs = self._new_msgs.filtered(lambda msg: (msg.model or '').startswith('account'))
+        self.assertEqual(len(new_account_msgs), 1, 'Should produce 1 message (for posting template)')
+        print_msg = new_account_msgs[0]
         self.assertNotified(
             print_msg,
             [{
@@ -981,7 +983,7 @@ class TestAccountMoveSend(TestAccountMoveSendCommon):
         # The PDF is generated and linked
         self.assertTrue(invoice.invoice_pdf_report_id)
         # Not a proforma
-        self.assertFalse(self.env['ir.attachment'].search([
+        self.assertFalse(self.env['ir.attachment'].sudo().search([
             ('name', '=', invoice._get_invoice_proforma_pdf_report_filename()),
         ]))
 
@@ -1002,7 +1004,7 @@ class TestAccountMoveSend(TestAccountMoveSendCommon):
 
         # The PDF is not generated but a proforma.
         self.assertFalse(invoice.invoice_pdf_report_id)
-        self.assertTrue(self.env['ir.attachment'].search([
+        self.assertTrue(self.env['ir.attachment'].sudo().search([
             ('name', '=', invoice._get_invoice_proforma_pdf_report_filename()),
         ]))
 
@@ -1188,3 +1190,22 @@ class TestAccountMoveSend(TestAccountMoveSendCommon):
         invoice.partner_id.name = "Test Partner"
         context = invoice._notify_by_email_prepare_rendering_context(message=self.env['mail.message'])
         self.assertEqual(context.get('subtitles')[0], f"{invoice.name} - Test Partner")
+
+    def test_get_invoice_report_filename(self):
+        mock_template = self.env.ref('account.account_invoices_without_payment')
+        mock_template.write({
+            'is_invoice_report': True,
+            'print_report_name': "('CustomName_%s' % (object._get_report_base_filename()))",
+        })
+        # Test: filename when no template is set.
+        move = self.init_invoice("out_invoice", amounts=[1000], partner=self.partner_a, post=True)
+        wizard_1 = self.create_send_and_print(move)
+        wizard_1.action_send_and_print()
+        self.assertEqual(move.message_main_attachment_id.name, f"{move._get_report_base_filename().replace('/', '_')}.pdf")
+
+        # Test: filename when template is set.
+        self.partner_a.invoice_template_pdf_report_id = mock_template.id
+        move2 = self.init_invoice("out_invoice", amounts=[1000], partner=self.partner_a, post=True)
+        wizard_2 = self.create_send_and_print(move2)
+        wizard_2.action_send_and_print()
+        self.assertEqual(move2.message_main_attachment_id.name, f"CustomName_{move2._get_report_base_filename().replace('/', '_')}.pdf")

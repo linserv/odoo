@@ -42,9 +42,9 @@ test("click on invisible elements in the invisible elements tab (check sidebar t
         '<div class="s_test d-lg-none o_snippet_desktop_invisible" data-invisible="1">a</div>'
     );
     await contains(".o_we_invisible_el_panel .o_we_invisible_entry").click();
-    expect("button:contains('Edit')").toHaveClass("active");
+    expect("button:contains('Style')").toHaveClass("active");
     await contains(".o_we_invisible_el_panel .o_we_invisible_entry").click();
-    expect("button:contains('Add')").toHaveClass("active");
+    expect("button:contains('Blocks')").toHaveClass("active");
 });
 
 test("Add an element on the invisible elements tab", async () => {
@@ -151,8 +151,10 @@ test("keep the option container of a visible snippet even if there are hidden sn
 
 test("invisible elements efficiency", async () => {
     patchWithCleanup(InvisibleElementsPanel.prototype, {
-        updateInvisibleElementsPanel() {
-            expect.step("update invisible panel");
+        updateInvisibleElementsPanel(invisibleEls) {
+            if (invisibleEls.length) {
+                expect.step("update invisible panel");
+            }
             return super.updateInvisibleElementsPanel(...arguments);
         },
     });

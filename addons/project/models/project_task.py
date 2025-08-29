@@ -434,7 +434,7 @@ class ProjectTask(models.Model):
 
     @api.model
     def _search_personal_stage_id(self, operator, value):
-        if Domain.is_negative_operator(operator):
+        if operator in Domain.NEGATIVE_OPERATORS:
             return NotImplemented
         field_name = 'display_name' if any(isinstance(v, str) for v in value) or value == '' else 'id'  # noqa: PLC1901
         domain = Domain(field_name, operator, value) & Domain('user_id', '=', self.env.uid)
@@ -612,16 +612,6 @@ class ProjectTask(models.Model):
         super()._compute_access_url()
         for task in self:
             task.access_url = f'/my/tasks/{task.id}'
-
-    def _compute_access_warning(self):
-        super()._compute_access_warning()
-        for task in self.filtered(lambda x: x.project_id.privacy_visibility != 'portal'):
-            visibility_field = self.env['ir.model.fields'].search([('model', '=', 'project.project'), ('name', '=', 'privacy_visibility')], limit=1)
-            visibility_public = self.env['ir.model.fields.selection'].search([('field_id', '=', visibility_field.id), ('value', '=', 'portal')])
-            task.access_warning = _(
-                "The task cannot be shared with the recipient(s) because the privacy of the project is too restricted. Set the privacy of the project to '%(visibility)s' in order to make it accessible by the recipient(s).",
-                visibility=visibility_public.name,
-            )
 
     @api.depends('child_ids.allocated_hours')
     def _compute_subtask_allocated_hours(self):
@@ -851,7 +841,8 @@ class ProjectTask(models.Model):
                 vals['stage_id'] = task.stage_id.id
             if 'active' not in default and not task['active'] and not self.env.context.get('copy_project'):
                 vals['active'] = True
-            vals['name'] = task.name if self.env.context.get('copy_project') or self.env.context.get('copy_from_template') else _("%s (copy)", task.name)
+            if not default.get('name'):
+                vals['name'] = task.name if self.env.context.get('copy_project') or self.env.context.get('copy_from_template') else _("%s (copy)", task.name)
             if task.recurrence_id and not default.get('recurrence_id'):
                 vals['recurrence_id'] = task.recurrence_id.copy().id
             if task.allow_milestones:
@@ -1173,7 +1164,7 @@ class ProjectTask(models.Model):
         if tasks.project_id:
             tasks.sudo()._set_stage_on_project_from_task()
         for task in tasks.sudo():
-            if task.project_id.privacy_visibility == 'portal':
+            if task.project_id.privacy_visibility in ['invited_users', 'portal']:
                 task._portal_ensure_token()
             for follower in task.parent_id.message_follower_ids:
                 task.message_subscribe(follower.partner_id.ids, follower.subtype_ids.ids)
@@ -1631,16 +1622,16 @@ class ProjectTask(models.Model):
         new_group = ('group_project_user', lambda pdata: pdata['type'] == 'user' and project_user_group_id in pdata['groups'], {})
         groups = [new_group] + groups
 
-        if self.project_privacy_visibility == 'portal':
+        if self.project_privacy_visibility in ['invited_users', 'portal']:
             groups.insert(0, (
                 'allowed_portal_users',
-                lambda pdata: pdata['type'] == 'portal',
+                lambda pdata: pdata['type'] in ['invited_users', 'portal'],
                 {
                     'active': True,
                     'has_button_access': True,
                 }
             ))
-        portal_privacy = self.project_id.privacy_visibility == 'portal'
+        portal_privacy = self.project_id.privacy_visibility in ['invited_users', 'portal']
         for group_name, _group_method, group_data in groups:
             if group_name in ('customer', 'user') or group_name == 'portal_customer' and not portal_privacy:
                 group_data['has_button_access'] = False
@@ -1657,15 +1648,6 @@ class ProjectTask(models.Model):
         if leftover:
             res.update(super(ProjectTask, leftover)._notify_get_reply_to(default=default, author_id=author_id))
         return res
-
-    def _ensure_personal_stages(self):
-        user = self.env.user
-        ProjectTaskTypeSudo = self.env['project.task.type'].sudo()
-        # In the case no stages have been found, we create the default stages for the user
-        if not ProjectTaskTypeSudo.search_count([('user_id', '=', user.id)], limit=1):
-            ProjectTaskTypeSudo.with_context(lang=user.lang, default_project_id=False).create(
-                self.with_context(lang=user.lang)._get_default_personal_stage_create_vals(user.id)
-            )
 
     @api.model
     def message_new(self, msg_dict, custom_values=None):
@@ -2006,8 +1988,9 @@ class ProjectTask(models.Model):
             "partner_id",
         ]
 
-    def action_create_from_template(self):
+    def action_create_from_template(self, values=None):
         self.ensure_one()
+        values = values or {}
         default = {
             key[8:]: value
             for key, value in self.env.context.items()
@@ -2015,7 +1998,7 @@ class ProjectTask(models.Model):
         } | {
             field: False
             for field in self._get_template_field_blacklist()
-        }
+        } | values
         return self.with_context(copy_from_template=True).copy(default=default).id
 
     def action_archive(self):
@@ -2081,7 +2064,7 @@ class ProjectTask(models.Model):
         menu_id = self.env.ref('project.menu_project_management_all_tasks').id
         return {
             'type': 'ir.actions.act_url',
-            'url': f"/odoo/1/action-project.act_project_project_2_project_task_all/{self.id}?menu_id={menu_id}",
+            'url': f"/odoo/{self.project_id.id}/action-project.act_project_project_2_project_task_all/{self.id}?menu_id={menu_id}",
             'target': 'new',
         }
 
@@ -2152,11 +2135,7 @@ class ProjectTask(models.Model):
         partners = self.env["res.partner"].sudo()._search_mention_suggestions(domain, limit)
         return (
             Store()
-            .add(
-                self,
-                {"limitedMentions": Store.Many(partners, ["email", "im_status", "name"])},
-                as_thread=True,
-            )
+            .add(partners, ["email", "im_status", "name", *partners._get_store_mention_fields()])
             .get_result()
         )
 

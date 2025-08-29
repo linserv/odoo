@@ -1,18 +1,25 @@
-import { Component, useRef, useState, onMounted } from "@odoo/owl";
+import { Component, onMounted, useEffect, useRef, useState } from "@odoo/owl";
 
+import { DeviceSelect } from "@mail/discuss/call/common/device_select";
 import { browser } from "@web/core/browser/browser";
-import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
+import { useService } from "@web/core/utils/hooks";
 
 export class WelcomePage extends Component {
     static props = ["proceed?"];
     static template = "mail.WelcomePage";
+    static components = { DeviceSelect };
+
+    /** @type {BlurManager} */
+    blurManager;
 
     setup() {
         super.setup();
         this.isClosed = false;
         this.store = useService("mail.store");
         this.ui = useService("ui");
+        this.notification = useService("notification");
+        this.rtc = useService("discuss.rtc");
         this.state = useState({
             userName: this.store.self.name || _t("Guest"),
             audioStream: null,
@@ -21,11 +28,35 @@ export class WelcomePage extends Component {
         this.audioRef = useRef("audio");
         this.videoRef = useRef("video");
         onMounted(() => {
-            if (this.store.discuss_public_thread.default_display_mode === "video_full_screen") {
+            if (this.store.discuss.thread.default_display_mode === "video_full_screen") {
                 this.enableMicrophone();
                 this.enableVideo();
             }
         });
+        useEffect(
+            () => {
+                if (this.state.audioStream) {
+                    this.stopTracksOnMediaStream(this.state.audioStream);
+                    this.enableMicrophone();
+                }
+            },
+            () => [this.store.settings.audioInputDeviceId]
+        );
+        useEffect(
+            () => {
+                if (this.state.videoStream) {
+                    this.stopTracksOnMediaStream(this.state.videoStream);
+                    this.enableVideo();
+                }
+            },
+            () => [this.store.settings.cameraInputDeviceId]
+        );
+        useEffect(
+            (deviceId) => {
+                this.audioRef.el?.setSinkId?.(deviceId).catch(() => {});
+            },
+            () => [this.store.settings.audioOutputDeviceId]
+        );
     }
 
     onKeydownInput(ev) {
@@ -45,6 +76,8 @@ export class WelcomePage extends Component {
         );
         this.stopTracksOnMediaStream(this.state.audioStream);
         this.stopTracksOnMediaStream(this.state.videoStream);
+        this.blurManager?.close();
+        this.blurManager = undefined;
         this.isClosed = true;
         this.props.proceed?.();
     }
@@ -55,12 +88,18 @@ export class WelcomePage extends Component {
         );
     }
 
+    get blurButtonTitle() {
+        return this.store.settings.useBlur ? _t("Remove Blur Background") : _t("Blur Background");
+    }
+
     async enableMicrophone() {
         if (!this.hasRtcSupport) {
             return;
         }
         try {
-            this.state.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.state.audioStream = await navigator.mediaDevices.getUserMedia({
+                audio: this.store.settings.audioConstraints,
+            });
             this.audioRef.el.srcObject = this.state.audioStream;
         } catch {
             // TODO: display popup asking the user to re-enable their mic
@@ -81,8 +120,10 @@ export class WelcomePage extends Component {
             return;
         }
         try {
-            this.state.videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            this.videoRef.el.srcObject = this.state.videoStream;
+            this.state.videoStream = await navigator.mediaDevices.getUserMedia({
+                video: this.store.settings.cameraConstraints,
+            });
+            await this.applyBlurConditionally();
         } catch {
             // TODO: display popup asking the user to re-enable their camera
         }
@@ -91,10 +132,37 @@ export class WelcomePage extends Component {
         }
     }
 
+    async onClickBlur() {
+        this.store.settings.useBlur = !this.store.settings.useBlur;
+        await this.applyBlurConditionally();
+    }
+
+    async applyBlurConditionally() {
+        if (!this.state.videoStream) {
+            return;
+        }
+        if (!this.store.settings.useBlur) {
+            this.videoRef.el.srcObject = this.state.videoStream;
+            return;
+        }
+        this.blurManager?.close();
+        this.blurManager = undefined;
+        try {
+            this.blurManager = await this.rtc.applyBlurEffect(this.state.videoStream);
+            this.videoRef.el.srcObject = this.blurManager.stream;
+        } catch (_e) {
+            this.notification.add(_e.message, { type: "warning" });
+            this.store.settings.useBlur = false;
+            this.videoRef.el.srcObject = this.state.videoStream;
+        }
+    }
+
     disableVideo() {
         this.videoRef.el.srcObject = null;
         this.stopTracksOnMediaStream(this.state.videoStream);
         this.state.videoStream = null;
+        this.blurManager?.close();
+        this.blurManager = undefined;
     }
 
     /**

@@ -127,11 +127,15 @@ test("Adding attachments", async () => {
         mimetype: "text/plain",
     });
     rpc("/mail/message/update_content", {
-        body: "Hello world!",
-        attachment_ids: [attachmentId],
         message_id: messageId,
+        update_data: {
+            body: "Hello world!",
+            attachment_ids: [attachmentId],
+        },
     });
-    await contains(".o-mail-AttachmentContainer", { target: env2, text: "test.txt" });
+    await contains(".o-mail-AttachmentContainer:not(.o-isUploading):contains(test.txt)", {
+        target: env2,
+    });
 });
 
 test("Remove attachment from message", async () => {
@@ -175,7 +179,7 @@ test("Message (hard) delete notification", async () => {
         res_partner_id: serverState.partnerId,
     });
     await start();
-    await openDiscuss();
+    await openDiscuss("mail.box_inbox");
     await click("[title='Mark as Todo']");
     await contains("button", { text: "Inbox", contains: [".badge", { text: "1" }] });
     await contains("button", { text: "Starred messages", contains: [".badge", { text: "1" }] });

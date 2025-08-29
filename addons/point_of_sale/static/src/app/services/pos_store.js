@@ -38,8 +38,12 @@ import { ProductInfoPopup } from "@point_of_sale/app/components/popups/product_i
 import { RetryPrintPopup } from "@point_of_sale/app/components/popups/retry_print_popup/retry_print_popup";
 import { PresetSlotsPopup } from "@point_of_sale/app/components/popups/preset_slots_popup/preset_slots_popup";
 import { DebugWidget } from "../utils/debug/debug_widget";
+import { EpsonPrinter } from "@point_of_sale/app/utils/printer/epson_printer";
+import OrderPaymentValidation from "../utils/order_payment_validation";
+import { logPosMessage } from "../utils/pretty_console_log";
 
 const { DateTime } = luxon;
+export const CONSOLE_COLOR = "#F5B427";
 
 export class PosStore extends WithLazyGetterTrap {
     loadingSkipButtonIsShown = false;
@@ -468,7 +472,13 @@ export class PosStore extends WithLazyGetterTrap {
                     ["product_tmpl_id", "in", [...productTmplIds]],
                 ]);
             } catch (error) {
-                console.warn("Error while fetching product variants", error);
+                logPosMessage(
+                    "Store",
+                    "processProductAttributes",
+                    "Error while fetching product variants",
+                    CONSOLE_COLOR,
+                    [error]
+                );
             }
         }
 
@@ -578,12 +588,13 @@ export class PosStore extends WithLazyGetterTrap {
      * @returns {Promise<Object>}
      */
     async loadNewProducts(domain, offset = 0, limit = 0) {
-        const result = await this.data.callRelated("product.template", "load_product_from_pos", [
-            odoo.pos_config_id,
-            domain,
-            offset,
-            limit,
-        ]);
+        const result = await this.data.callRelated(
+            "product.template",
+            "load_product_from_pos",
+            [odoo.pos_config_id, domain, offset, limit],
+            {},
+            false
+        );
         return result;
     }
 
@@ -628,12 +639,16 @@ export class PosStore extends WithLazyGetterTrap {
             } else {
                 this.selectedOrderUuid = openOrders.length
                     ? openOrders[openOrders.length - 1].uuid
-                    : this.addNewOrder().uuid;
+                    : null;
             }
         }
 
         this.markReady();
         await this.deviceSync.readDataFromServer();
+
+        if (this.config.other_devices && this.config.epson_printer_ip) {
+            this.hardwareProxy.printer = new EpsonPrinter({ ip: this.config.epson_printer_ip });
+        }
     }
 
     get productViewMode() {
@@ -1048,6 +1063,9 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     createPrinter(config) {
+        if (config.printer_type === "epson_epos") {
+            return new EpsonPrinter({ ip: config.epson_printer_ip });
+        }
         const url = deduceUrl(config.proxy_ip || "");
         return new HWPrinter({ url });
     }
@@ -1310,7 +1328,7 @@ export class PosStore extends WithLazyGetterTrap {
 
         // Filter out orders that are already being synced
         orders = orders.filter(
-            (order) => !this.syncingOrders.has(order.id) && (order.isDirty() || options.force)
+            (order) => !this.syncingOrders.has(order.uuid) && (order.isDirty() || options.force)
         );
 
         try {
@@ -1330,7 +1348,7 @@ export class PosStore extends WithLazyGetterTrap {
             }
 
             // Add order IDs to the syncing set
-            orders.forEach((order) => this.syncingOrders.add(order.id));
+            orders.forEach((order) => this.syncingOrders.add(order.uuid));
 
             // Re-compute all taxes, prices and other information needed for the backend
             for (const order of orders) {
@@ -1343,6 +1361,14 @@ export class PosStore extends WithLazyGetterTrap {
             });
             const missingRecords = await this.data.missingRecursive(data);
             const newData = this.models.loadConnectedData(missingRecords);
+
+            logPosMessage(
+                "Store",
+                "syncAllOrders",
+                `Successfully synced orders (${orders.length})`,
+                CONSOLE_COLOR,
+                [newData]
+            );
 
             for (const line of newData["pos.order.line"]) {
                 const refundedOrderLine = line.refunded_orderline_id;
@@ -1379,9 +1405,11 @@ export class PosStore extends WithLazyGetterTrap {
             }
 
             if (error instanceof ConnectionLostError) {
-                console.info(
-                    "%cOffline mode active, order will be synced later",
-                    "color: red; font-weight: bold;"
+                logPosMessage(
+                    "Store",
+                    "syncAllOrders",
+                    "Offline mode active, order will be synced later",
+                    CONSOLE_COLOR
                 );
             } else {
                 this.deviceSync.readDataFromServer();
@@ -1389,7 +1417,7 @@ export class PosStore extends WithLazyGetterTrap {
 
             return error;
         } finally {
-            orders.forEach((order) => this.syncingOrders.delete(order.id));
+            orders.forEach((order) => this.syncingOrders.delete(order.uuid));
         }
     }
 
@@ -1534,7 +1562,13 @@ export class PosStore extends WithLazyGetterTrap {
             await this.syncAllOrders(opts);
             return true;
         } catch (error) {
-            console.warn(error);
+            logPosMessage(
+                "Store",
+                "pushOrdersWithClosingPopup",
+                "Some orders could not be submitted to the server",
+                CONSOLE_COLOR,
+                [error]
+            );
             const reason = this.failed
                 ? _t(
                       "Some orders could not be submitted to " +
@@ -1566,7 +1600,8 @@ export class PosStore extends WithLazyGetterTrap {
             const paymentLine = order.payment_ids.find(
                 (paymentLine) =>
                     paymentLine.payment_method_id.use_payment_terminal === terminalName &&
-                    !paymentLine.isDone()
+                    !paymentLine.isDone() &&
+                    paymentLine.getPaymentStatus() !== "retry"
             );
             if (paymentLine) {
                 return paymentLine;
@@ -1652,9 +1687,9 @@ export class PosStore extends WithLazyGetterTrap {
     changesToOrder(order, skipped = false, orderPreparationCategories, cancelled = false) {
         return changesToOrder(order, skipped, orderPreparationCategories, cancelled);
     }
-    async checkPreparationStateAndSentOrderInPreparation(order, cancelled = false) {
+    async checkPreparationStateAndSentOrderInPreparation(order, opts = {}) {
         if (typeof order.id !== "number") {
-            return this.sendOrderInPreparation(order, cancelled);
+            return this.sendOrderInPreparation(order, opts);
         }
 
         const data = await this.data.call("pos.order", "get_preparation_change", [order.id]);
@@ -1681,7 +1716,7 @@ export class PosStore extends WithLazyGetterTrap {
             return;
         }
 
-        return this.sendOrderInPreparation(order, cancelled);
+        return this.sendOrderInPreparation(order, opts);
     }
     // Now the printer should work in PoS without restaurant
     async sendOrderInPreparation(order, opts = {}) {
@@ -1716,7 +1751,13 @@ export class PosStore extends WithLazyGetterTrap {
                 }
                 isPrinted = await this.printChanges(order, orderChange, reprint);
             } catch (e) {
-                console.info("Failed in printing the changes in the order", e);
+                logPosMessage(
+                    "Store",
+                    "sendOrderInPreparation",
+                    "Failed in printing the changes in the order",
+                    CONSOLE_COLOR,
+                    [e]
+                );
             }
         }
         order.updateLastOrderChange();
@@ -1727,12 +1768,12 @@ export class PosStore extends WithLazyGetterTrap {
             await this.syncAllOrders({ orders: [order] });
         }
     }
-    async sendOrderInPreparationUpdateLastChange(o, cancelled = false) {
+    async sendOrderInPreparationUpdateLastChange(o, opts) {
         if (this.data.network.offline) {
             this.data.network.warningTriggered = false;
             throw new ConnectionLostError();
         }
-        await this.checkPreparationStateAndSentOrderInPreparation(o, { cancelled });
+        await this.checkPreparationStateAndSentOrderInPreparation(o, opts);
     }
 
     getStrNotes(note) {
@@ -1750,6 +1791,7 @@ export class PosStore extends WithLazyGetterTrap {
             config_name: order.config_id?.name || order.config.name,
             time: DateTime.now().toFormat("HH:mm"),
             tracking_number: order.tracking_number,
+            preset_time: order.presetDateTime,
             preset_name: order.preset_id?.name || "",
             employee_name: order.employee_id?.name || order.user_id?.name,
             internal_note: this.getStrNotes(order.internal_note),
@@ -2102,6 +2144,9 @@ export class PosStore extends WithLazyGetterTrap {
                 if (!(partner.street || partner.street2)) {
                     this.notification.add(_t("Customer address is required"), { type: "warning" });
                     await this.editPartner(partner);
+                    if (!(partner.street || partner.street2)) {
+                        return;
+                    }
                 }
             }
             if (preset.identification === "name") {
@@ -2190,7 +2235,9 @@ export class PosStore extends WithLazyGetterTrap {
                 return null;
             }
         } catch (ex) {
-            console.error("Collecting existing lots failed: ", ex);
+            logPosMessage("Store", "editLots", "Collecting existing lots failed", CONSOLE_COLOR, [
+                ex,
+            ]);
             const confirmed = await ask(this.dialog, {
                 title: _t("Server communication problem"),
                 body: _t(
@@ -2305,7 +2352,12 @@ export class PosStore extends WithLazyGetterTrap {
                 if (event.key === "message" && event.newValue) {
                     const msg = JSON.parse(event.newValue);
                     if (msg.message === "close_tabs" && msg.session == this.session.id) {
-                        console.info("POS / Session opened in another window. EXITING POS");
+                        logPosMessage(
+                            "Store",
+                            "editLots",
+                            "POS / Session opened in another window. EXITING POS",
+                            CONSOLE_COLOR
+                        );
                         this.closePos();
                     }
                 }
@@ -2597,6 +2649,15 @@ export class PosStore extends WithLazyGetterTrap {
 
     weighProduct() {
         return makeAwaitable(this.env.services.dialog, ScaleScreen);
+    }
+
+    async validateOrderFast(paymentMethod) {
+        const validation = new OrderPaymentValidation({
+            pos: this,
+            orderUuid: this.getOrder().uuid,
+            fastPaymentMethod: paymentMethod,
+        });
+        await validation.validateOrder(false);
     }
 }
 

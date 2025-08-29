@@ -1,6 +1,6 @@
 import { Store as BaseStore, fields, makeStore, storeInsertFns } from "@mail/core/common/record";
 import { threadCompareRegistry } from "@mail/core/common/thread_compare";
-import { cleanTerm, prettifyMessageContent } from "@mail/utils/common/format";
+import { cleanTerm, generateEmojisOnHtml, prettifyMessageContent } from "@mail/utils/common/format";
 
 import { reactive } from "@odoo/owl";
 
@@ -112,7 +112,6 @@ export class Store extends BaseStore {
         sort: (f1, f2) => f2.lastMessage?.id - f1.lastMessage?.id,
     });
     settings = fields.One("Settings");
-    openInviteThread = fields.One("Thread");
     emojiLoader = loader;
 
     /** @type {[[string, any, import("models").DataResponse]]} */
@@ -350,8 +349,8 @@ export class Store extends BaseStore {
         });
         await this.store.chatHub.initPromise;
         this.ChatWindow.get(thread)?.update({ autofocus: 0 });
-        this.env.services["discuss.rtc"].toggleCall(thread, { camera: true });
-        this.openInviteThread = thread;
+        await this.env.services["discuss.rtc"].toggleCall(thread, { camera: true });
+        this.rtc.enterFullscreen({ initialSidePanel: "invite" });
     }
 
     /**
@@ -472,7 +471,7 @@ export class Store extends BaseStore {
             return;
         }
         let chat = partner.searchChat();
-        if (!chat?.selfMember?.is_pinned) {
+        if (!chat?.self_member_id?.is_pinned) {
             chat = await this.joinChat(partner.id);
         }
         if (!chat) {
@@ -483,6 +482,16 @@ export class Store extends BaseStore {
             return;
         }
         return chat;
+    }
+
+    fillPartnersMentionToken(postData) {
+        postData.partner_ids_mention_token ||= {};
+        for (const pid of postData.partner_ids) {
+            const partner = this["res.partner"].get(pid);
+            if (partner?.mention_token) {
+                postData.partner_ids_mention_token[pid] = partner.mention_token;
+            }
+        }
     }
 
     /** @returns {number} */
@@ -551,7 +560,7 @@ export class Store extends BaseStore {
             partner_ids.push(...recipientIds);
         }
         postData = {
-            body: await prettifyMessageContent(body, { validMentions }),
+            body: await generateEmojisOnHtml(body),
             email_add_signature: emailAddSignature,
             message_type: "comment",
             subtype_xmlid: subtype,
@@ -561,6 +570,7 @@ export class Store extends BaseStore {
         }
         if (partner_ids.length) {
             Object.assign(postData, { partner_ids });
+            this.fillPartnersMentionToken(postData);
         }
         if (role_ids.length) {
             Object.assign(postData, { role_ids });
@@ -568,22 +578,22 @@ export class Store extends BaseStore {
         if (thread.model === "discuss.channel" && validMentions?.specialMentions.length) {
             postData.special_mentions = validMentions.specialMentions;
         }
+        if (attachments.length) {
+            postData.attachment_tokens = attachments.map(
+                (attachment) => attachment.ownership_token
+            );
+        }
+        if (recipientEmails.length) {
+            postData.partner_emails = recipientEmails;
+        }
         const params = {
             // Changed in 18.2+: finally get rid of autofollow, following should be done manually
             post_data: postData,
             thread_id: thread.id,
             thread_model: thread.model,
         };
-        if (attachments.length) {
-            params.attachment_tokens = attachments.map((attachment) => attachment.ownership_token);
-        }
         if (cannedResponseIds?.length) {
             params.canned_response_ids = cannedResponseIds;
-        }
-        if (recipientEmails.length) {
-            Object.assign(params, {
-                partner_emails: recipientEmails,
-            });
         }
         return params;
     }

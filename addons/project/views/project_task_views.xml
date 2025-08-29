@@ -83,8 +83,8 @@
                     <filter string="Deadline" name="date_deadline" date="date_deadline">
                         <filter name="deadline_future" string="Future" domain="[('date_deadline', '&gt;=', 'today +1d')]"/>
                         <filter name="deadline_this_week" string="This Week" domain="[
-                            ('date_deadline', '&gt;=', '=monday'),
-                            ('date_deadline', '&lt;', '=monday +1w'),
+                            ('date_deadline', '&gt;=', '=week_start'),
+                            ('date_deadline', '&lt;', '=week_start +1w'),
                         ]"/>
                         <filter name="deadline_today" string="Today" domain="[
                             ('date_deadline', '&gt;=', 'today'),
@@ -119,12 +119,12 @@
                         domain="[('activity_user_id', '=', uid)]"/>
                     <separator invisible="1"/>
                     <filter invisible="1" string="Late Activities" name="activities_overdue"
-                        domain="[('activity_date_deadline', '&lt;', 'today')]"
+                        domain="[('my_activity_date_deadline', '&lt;', 'today')]"
                         help="Show all records whose next activity date is past"/>
                     <filter invisible="1" string="Today Activities" name="activities_today"
-                        domain="[('activity_date_deadline', '=', 'today')]"/>
+                        domain="[('my_activity_date_deadline', '=', 'today')]"/>
                     <filter invisible="1" string="Future Activities" name="activities_upcoming_all"
-                        domain="[('activity_date_deadline', '&gt;', 'today')]"/>
+                        domain="[('my_activity_date_deadline', '&gt;', 'today')]"/>
                 </filter>
                 <filter name="unassigned" position="after">
                     <filter string="Private Tasks" name="private_tasks" domain="[('project_id', '=', False)]" invisible="context.get('default_project_id')"/>
@@ -582,7 +582,7 @@
 
         <record id="portal_share_action" model="ir.actions.act_window">
             <field name="name">Share Task</field>
-            <field name="res_model">portal.share</field>
+            <field name="res_model">task.share.wizard</field>
             <field name="view_mode">form</field>
             <field name="context">{'dialog_size': 'medium'}</field>
             <field name="target">new</field>
@@ -664,7 +664,7 @@
                     <templates>
                         <t t-name="menu" t-if="!selection_mode" groups="base.group_user">
                             <a t-if="widget.editable" role="menuitem" type="set_cover" class="dropdown-item" data-field="displayed_image_id">Set Cover Image</a>
-                            <a name="%(portal.portal_share_action)d" role="menuitem" type="action" class="dropdown-item" context="{'dialog_size': 'medium'}">Share Task</a>
+                            <a name="%(project.portal_share_action)d" role="menuitem" type="action" class="dropdown-item">Share Task</a>
                             <a class="dropdown-item" role="menuitem" type="object" name="copy">Duplicate</a>
                             <div role="separator" class="dropdown-divider"></div>
                             <field name="color" widget="kanban_color_picker"/>
@@ -1116,16 +1116,6 @@
             <field name="view_id" ref="view_task_all_calendar"/>
         </record>
 
-        <record id="action_server_view_my_task" model="ir.actions.server">
-            <field name="name">menu view My Tasks</field>
-            <field name="model_id" ref="project.model_project_task"/>
-            <field name="state">code</field>
-            <field name="path">my-tasks</field>
-            <field name="code">
-                model._ensure_personal_stages(); action = env["ir.actions.actions"]._for_xml_id("project.action_view_my_task")
-            </field>
-        </record>
-
         <record id="action_server_convert_to_subtask" model="ir.actions.server">
             <field name="name">Convert to Task/Sub-Task</field>
             <field name="model_id" ref="project.model_project_task"/>
@@ -1232,7 +1222,7 @@
             <field name="name">Overpassed Tasks</field>
             <field name="res_model">project.task</field>
             <field name="view_mode">list,form,calendar,graph,kanban</field>
-            <field name="domain">[('is_closed', '=', False), ('date_deadline','&lt;',time.strftime('%Y-%m-%d')), ('project_id', '!=', False), ('has_template_ancestor', '=', False)]</field>
+            <field name="domain">[('is_closed', '=', False), ('date_deadline', '&lt;', 'today'), ('project_id', '!=', False), ('has_template_ancestor', '=', False)]</field>
             <field name="filter" eval="True"/>
             <field name="search_view_id" ref="view_task_search_form"/>
         </record>

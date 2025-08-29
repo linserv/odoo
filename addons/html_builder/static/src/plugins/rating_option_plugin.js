@@ -44,9 +44,7 @@ export class CustomIconAction extends BuilderAction {
                 ? getActiveCustomIcons(editingElement)
                 : getInactiveCustomIcons(editingElement);
             const mediaDialogParams = {
-                noImages: true,
-                noDocuments: true,
-                noVideos: true,
+                visibleTabs: ["ICONS"],
                 media,
                 save: (icon) => {
                     resolve(icon);
@@ -109,7 +107,7 @@ export class TotalIconsNumberAction extends BuilderAction {
     }
 }
 
-registry.category("website-plugins").add(RatingOptionPlugin.id, RatingOptionPlugin);
+registry.category("builder-plugins").add(RatingOptionPlugin.id, RatingOptionPlugin);
 
 function createIcons({ editingElement, nbActiveIcons, nbTotalIcons }) {
     const activeIconEl = editingElement.querySelector(".s_rating_active_icons");

@@ -18,15 +18,21 @@ const threadPatch = {
                 r.remove();
             },
         });
+        this.isDisplayedInDiscussAppDesktop = fields.Attr(undefined, {
+            /** @this {import("models").Thread} */
+            compute() {
+                if (this.store.discuss.isActive && !this.store.env.services.ui.isSmall) {
+                    return this.eq(this.store.discuss.thread);
+                }
+                return false;
+            },
+        });
     },
     get recipientsFullyLoaded() {
         return this.recipientsCount === this.recipients.length;
     },
     computeIsDisplayed() {
-        if (this.store.discuss.isActive && !this.store.env.services.ui.isSmall) {
-            return this.eq(this.store.discuss.thread);
-        }
-        return super.computeIsDisplayed();
+        return this.isDisplayedInDiscussAppDesktop || super.computeIsDisplayed();
     },
     async leave() {
         await this.closeChatWindow();
@@ -54,12 +60,24 @@ const threadPatch = {
         if (res) {
             return res;
         }
-        this.store.env.services.action.doAction({
-            type: "ir.actions.act_window",
-            res_id: this.id,
-            res_model: this.model,
-            views: [[false, "form"]],
-        });
+        if (this.model === "mail.box") {
+            if (this.store.discuss.isActive) {
+                this.setAsDiscussThread();
+            } else {
+                this.store.env.services.action.doAction({
+                    context: { active_id: `mail.box_${this.id}` },
+                    tag: "mail.action_discuss",
+                    type: "ir.actions.client",
+                });
+            }
+        } else {
+            this.store.env.services.action.doAction({
+                type: "ir.actions.act_window",
+                res_id: this.id,
+                res_model: this.model,
+                views: [[false, "form"]],
+            });
+        }
         return true;
     },
     async unpin() {

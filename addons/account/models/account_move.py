@@ -36,6 +36,7 @@ from odoo.tools import (
 )
 from odoo.tools.mail import email_re, email_split, is_html_empty, generate_tracking_message_id
 from odoo.tools.misc import StackMap
+from odoo.tools.safe_eval import safe_eval
 
 
 _logger = logging.getLogger(__name__)
@@ -322,6 +323,7 @@ class AccountMove(models.Model):
     show_name_warning = fields.Boolean(store=False)
     type_name = fields.Char('Type Name', compute='_compute_type_name')
     country_code = fields.Char(related='company_id.account_fiscal_country_id.code', readonly=True)
+    account_fiscal_country_group_codes = fields.Json(related="company_id.account_fiscal_country_group_codes")
     company_price_include = fields.Selection(related='company_id.account_price_include', readonly=True)
     attachment_ids = fields.One2many('ir.attachment', 'res_id', domain=[('res_model', '=', 'account.move')], string='Attachments')
     audit_trail_message_ids = fields.One2many(
@@ -332,6 +334,13 @@ class AccountMove(models.Model):
             ('message_type', '=', 'notification'),
         ],
         string='Audit Trail Messages',
+    )
+    no_followup = fields.Boolean(
+        string="No Follow-Up",
+        compute='_compute_no_followup',
+        inverse='_inverse_no_followup',
+        readonly=False,
+        help="Exclude this journal entry from follow-up reports."
     )
 
     # === Hash Fields === #
@@ -610,7 +619,7 @@ class AccountMove(models.Model):
         store=False,
         check_company=True,
         string='Vendor Bill',
-        help="Auto-complete from a past bill.",
+        help="Auto-complete from a previous bill or refund.",
     )
     invoice_source_email = fields.Char(string='Source Email', tracking=True)
     invoice_partner_display_name = fields.Char(compute='_compute_invoice_partner_display_info', store=True)
@@ -1143,8 +1152,8 @@ class AccountMove(models.Model):
 
         groups = self.grouped(lambda move:
             'legacy' if move.payment_state == 'invoicing_legacy' else
-            'invoices' if _invoice_qualifies(move) else
             'blocked' if move.payment_state == 'blocked' else
+            'invoices' if _invoice_qualifies(move) else
             'unpaid'
         )
         groups.get('unpaid', self.browse()).payment_state = 'not_paid'
@@ -1236,6 +1245,24 @@ class AccountMove(models.Model):
                 move.status_in_payment = move.payment_state
             else:
                 move.status_in_payment = move.state
+
+    def _field_to_sql(self, alias: str, fname: str, query=None) -> SQL:
+        if fname == 'status_in_payment':
+            return SQL(
+                "CASE "
+                f"WHEN {alias}.state = 'draft' THEN 'draft' "
+                f"WHEN {alias}.state = 'cancel' THEN 'cancel' "
+                f"ELSE {alias}.payment_state "
+                "END"
+            )
+        elif fname == 'move_sent_values':
+            return SQL(
+                "CASE "
+                f"WHEN {alias}.is_move_sent THEN 'sent' "
+                f"ELSE 'not_sent' "
+                "END"
+            )
+        return super()._field_to_sql(alias, fname, query=query)
 
     @api.depends('matched_payment_ids')
     def _compute_payment_count(self):
@@ -1944,23 +1971,26 @@ class AccountMove(models.Model):
         self.env["account.move"].flush_model(used_fields)
 
         move_table_and_alias = SQL("account_move AS move")
-        if not moves[0].id:  # check if record is under creation/edition in UI
+        if not all(move.id for move in moves):  # check if record is under creation/edition in UI
             # New record aren't searchable in the DB and record in edition aren't up to date yet
             # Replace the table by safely injecting the values in the query
-            values = {
-                field_name: moves._fields[field_name].convert_to_write(moves[field_name], moves) or None
-                for field_name in used_fields
-            }
-            values["id"] = moves._origin.id or 0
-            # The amount total depends on the field line_ids and is calculated upon saving, we needed a way to get it even when the
-            # invoices has not been saved yet.
-            values['amount_total'] = self.tax_totals.get('total_amount_currency', 0)
-            casted_values = SQL(', ').join(
-                SQL("%s::%s", value, SQL.identifier(moves._fields[field_name].column_type[0]))
-                for field_name, value in values.items()
-            )
-            column_names = SQL(', ').join(SQL.identifier(field_name) for field_name in values)
-            move_table_and_alias = SQL("(VALUES (%s)) AS move(%s)", casted_values, column_names)
+            all_values = []
+            for move in moves:
+                values = {
+                    field_name: move._fields[field_name].convert_to_write(move[field_name], move) or None
+                    for field_name in used_fields
+                }
+                values["id"] = move._origin.id or 0
+                # The amount total depends on the field line_ids and is calculated upon saving,
+                # we needed a way to get it even when the invoices has not been saved yet.
+                values['amount_total'] = move.tax_totals.get('total_amount_currency', 0)
+                casted_values = SQL(', ').join(
+                    SQL("%s::%s", value, SQL.identifier(move._fields[field_name].column_type[0]))
+                    for field_name, value in values.items()
+                )
+                all_values.append(SQL("(%s)", casted_values))
+            column_names = SQL(', ').join(SQL.identifier(field_name) for field_name in used_fields + ("id",))
+            move_table_and_alias = SQL("(VALUES %s) AS move(%s)", SQL(', ').join(all_values), column_names)
 
         to_query = []
         out_moves = moves.filtered(lambda m: m.move_type in ('out_invoice', 'out_refund'))
@@ -2203,6 +2233,23 @@ class AccountMove(models.Model):
     def _compute_checked(self):
         for move in self:
             move.checked = move.state == 'posted' and (move.journal_id.type == 'general' or move._is_user_able_to_review())
+
+    @api.depends('line_ids.no_followup')
+    def _compute_no_followup(self):
+        for move in self:
+            if move.is_invoice():
+                move.no_followup = move.line_ids.filtered(
+                    lambda line: line.account_type in ('asset_receivable', 'liability_payable'),
+                )[0].no_followup
+            else:
+                move.no_followup = True
+
+    def _inverse_no_followup(self):
+        for move in self:
+            if move.is_invoice():
+                move.line_ids.filtered(
+                    lambda line: line.account_type in ('asset_receivable', 'liability_payable'),
+                ).no_followup = move.no_followup
 
     # -------------------------------------------------------------------------
     # ALERTS
@@ -2605,6 +2652,19 @@ class AccountMove(models.Model):
                 if record.fiscal_position_id and impacted_countries != record.fiscal_position_id.country_id:
                     raise ValidationError(_("This entry contains taxes that are not compatible with your fiscal position. Check the country set in fiscal position and in your tax configuration."))
                 raise ValidationError(_("This entry contains one or more taxes that are incompatible with your fiscal country. Check company fiscal country in the settings and tax country in taxes configuration."))
+
+    @api.constrains('invoice_currency_rate')
+    def _check_invoice_currency_rate(self):
+        """Ensure the currency rate is strictly positive when invoice currency differs from company currency."""
+        for move in self:
+            if (
+                move.currency_id
+                and move.company_id
+                and move.currency_id != move.company_id.currency_id
+                and move.is_invoice(include_receipts=True)
+                and move.invoice_currency_rate <= 0
+            ):
+                raise ValidationError(_("The currency rate must be strictly positive."))
 
     # -------------------------------------------------------------------------
     # CATALOG
@@ -3488,6 +3548,7 @@ class AccountMove(models.Model):
     # -------------------------------------------------------------------------
 
     @api.model
+    @api.deprecated("Override of a deprecated method")
     def check_field_access_rights(self, operation, field_names):
         result = super().check_field_access_rights(operation, field_names)
         if not field_names:
@@ -3521,7 +3582,7 @@ class AccountMove(models.Model):
                     if command == Command.CREATE
                 ]
             elif move.move_type == 'entry':
-                if 'partner_id' not in vals:
+                if 'partner_id' not in vals or not self.env.context.get('move_reverse_cancel', False):
                     vals['partner_id'] = False
             user_fiscal_lock_date = move.company_id._get_user_fiscal_lock_date(move.journal_id)
             if (default_date or move.date) <= user_fiscal_lock_date:
@@ -6279,7 +6340,12 @@ class AccountMove(models.Model):
     def _get_invoice_report_filename(self, extension='pdf'):
         """ Get the filename of the generated invoice report with extension file. """
         self.ensure_one()
-        return f"{self.name.replace('/', '_')}.{extension}"
+        report_id = self.partner_id.invoice_template_pdf_report_id or self.env.ref('account.account_invoices')
+        if report_id.print_report_name and isinstance(report_id.print_report_name, str):
+            file_name = safe_eval(report_id.print_report_name, {'object': self})
+        else:
+            file_name = self.name
+        return f"{file_name.replace('/', '_')}.{extension}"
 
     def _get_invoice_proforma_pdf_report_filename(self):
         """ Get the filename of the generated proforma PDF invoice report. """

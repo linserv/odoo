@@ -257,9 +257,9 @@
         -->
         <field name="payment_method_ids"
                eval="[Command.set([
-                         ref('payment.payment_method_card'),
                          ref('payment.payment_method_bank_transfer'),
-                         ref('payment.payment_method_paypal'),
+                         ref('payment.payment_method_card'),
+                         ref('payment.payment_method_mercado_pago_wallet'),
                      ])]"
         />
     </record>
@@ -366,6 +366,18 @@
                          ref('payment.payment_method_paynow'),
                          ref('payment.payment_method_upi'),
                          ref('payment.payment_method_wallets_india'),
+                     ])]"
+        />
+    </record>
+
+    <record id="payment_provider_redsys" model="payment.provider">
+        <field name="name">Redsys</field>
+        <field name="image_128" type="base64" file="payment_redsys/static/description/icon.png"/>
+        <field name="module_id" ref="base.module_payment_redsys"/>
+        <field name="payment_method_ids"
+               eval="[Command.set([
+                         ref('payment.payment_method_bizum'),
+                         ref('payment.payment_method_card'),
                      ])]"
         />
     </record>

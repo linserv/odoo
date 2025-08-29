@@ -633,6 +633,24 @@ describe("colorElement", () => {
             contentAfter: `<div style='background-image: url("https://example.com/image.png"), ${greenToBlueGradient};'>a</div>`,
         });
     });
+    test("should keep the background image when switching o_cc class", async () => {
+        await testEditor({
+            contentBefore: `<div style='background-image: url("https://example.com/image.png");'>a</div>`,
+            stepFunction: (editor) => {
+                editor.shared.color.colorElement(
+                    editor.editable.firstChild,
+                    "o_cc2",
+                    "backgroundColor"
+                );
+                editor.shared.color.colorElement(
+                    editor.editable.firstChild,
+                    "o_cc1",
+                    "backgroundColor"
+                );
+            },
+            contentAfter: `<div style='background-image: url("https://example.com/image.png");' class="o_cc o_cc1">a</div>`,
+        });
+    });
     test("should keep custom gradient when switching o_cc class", async () => {
         await testEditor({
             contentBefore: `<div class="">a</div>`,
@@ -806,5 +824,19 @@ describe("colorElement", () => {
                 });
             });
         });
+    });
+});
+test("should not split unsplittable element when applying color", async () => {
+    await testEditor({
+        contentBefore: '<div style="color: rgb(255, 0, 0);"><p>[test]</p></div>',
+        stepFunction: setColor("rgb(0, 0, 255)", "color"),
+        contentAfter:
+            '<div style="color: rgb(255, 0, 0);"><p><font style="color: rgb(0, 0, 255);">[test]</font></p></div>',
+    });
+    await testEditor({
+        contentBefore: '<div style="color: rgb(255, 0, 0);"><p>t[es]t</p></div>',
+        stepFunction: setColor("rgb(0, 0, 255)", "color"),
+        contentAfter:
+            '<div style="color: rgb(255, 0, 0);"><p>t<font style="color: rgb(0, 0, 255);">[es]</font>t</p></div>',
     });
 });

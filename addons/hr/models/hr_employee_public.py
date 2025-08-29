@@ -33,7 +33,7 @@ class HrEmployeePublic(models.Model):
     email = fields.Char(related='employee_id.email')
     work_contact_id = fields.Many2one('res.partner', readonly=True)
     work_location_id = fields.Many2one('hr.work.location', readonly=True)
-    work_location_name = fields.Char(compute="_compute_work_location_name")
+    work_location_name = fields.Char(related='employee_id.work_location_name')
     work_location_type = fields.Selection(related='employee_id.work_location_type')
     user_id = fields.Many2one('res.users', readonly=True)
     resource_id = fields.Many2one('resource.resource', readonly=True)
@@ -44,12 +44,9 @@ class HrEmployeePublic(models.Model):
         ('absent', 'Absent'),
         ('archive', 'Archived'),
         ('out_of_working_hour', 'Out of Working hours')], compute='_compute_presence_state', default='out_of_working_hour')
-    hr_icon_display = fields.Selection([
-        ('presence_present', 'Present'),
-        ('presence_out_of_working_hour', 'Out of Working hours'),
-        ('presence_absent', 'Absent'),
-        ('presence_archive', 'Archived'),
-        ('presence_undetermined', 'Undetermined')], compute='_compute_presence_icon')
+    hr_icon_display = fields.Selection(
+        selection='_get_selection_hr_icon_display',
+        compute='_compute_presence_icon')
     show_hr_icon_display = fields.Boolean(compute='_compute_presence_icon')
     last_activity = fields.Date(compute="_compute_last_activity")
     last_activity_time = fields.Char(compute="_compute_last_activity")
@@ -60,7 +57,7 @@ class HrEmployeePublic(models.Model):
     is_manager = fields.Boolean(compute='_compute_is_manager')
     is_user = fields.Boolean(compute='_compute_is_user')
 
-    employee_id = fields.Many2one('hr.employee', 'Employee', compute="_compute_employee_id", search="_search_employee_id", compute_sudo=True)
+    employee_id = fields.Many2one('hr.employee', 'Employee', readonly=True)
     # hr.employee.public specific fields
     child_ids = fields.One2many('hr.employee.public', 'parent_id', string='Direct subordinates', readonly=True)
     image_1920 = fields.Image("Image", related='employee_id.image_1920', compute_sudo=True)
@@ -78,8 +75,10 @@ class HrEmployeePublic(models.Model):
     user_partner_id = fields.Many2one(related='user_id.partner_id', related_sudo=False, string="User's partner")
     birthday_public_display_string = fields.Char("Public Date of Birth", related='employee_id.birthday_public_display_string')
 
-    # Crap
     newly_hired = fields.Boolean('Newly Hired', compute='_compute_newly_hired', search='_search_newly_hired')
+
+    def _get_selection_hr_icon_display(self):
+        return self.env['hr.employee']._fields['hr_icon_display']._description_selection(self.env)
 
     def _compute_from_employee(self, field_names):
         if isinstance(field_names, str):
@@ -133,9 +132,6 @@ class HrEmployeePublic(models.Model):
     def _compute_member_of_department(self):
         self._compute_from_employee('member_of_department')
 
-    def _compute_work_location_name(self):
-        self._compute_from_employee('work_location_name')
-
     def _get_manager_only_fields(self):
         return []
 
@@ -173,13 +169,6 @@ class HrEmployeePublic(models.Model):
                 for f in manager_fields:
                     employee[f] = False
 
-    def _search_employee_id(self, operator, value):
-        return [('id', operator, value)]
-
-    def _compute_employee_id(self):
-        for employee in self:
-            employee.employee_id = self.env['hr.employee'].browse(employee.id)
-
     def _compute_newly_hired(self):
         self._compute_from_employee('newly_hired')
 
@@ -194,10 +183,13 @@ class HrEmployeePublic(models.Model):
 
     @api.model
     def _get_fields(self):
-        return 'e.id AS id,e.name AS name,e.active AS active,' + ','.join(
-            ('v.%s' if name in self.env['hr.version']._fields and self.env['hr.version']._fields[name].store else 'e.%s') % name
+        base_fields = ('id', 'employee_id', 'name', 'active')
+        version_fields = self.env['hr.version']._fields
+        return 'e.id AS id,e.id AS employee_id,e.name AS name,e.active AS active,' + ','.join(
+            (f'v.{name}' if name in version_fields and version_fields[name].store else f'e.{name}')
             for name, field in self._fields.items()
-            if field.store and field.type not in ['many2many', 'one2many'] and name not in ['id', 'name', 'active'])
+            if name not in base_fields and field.store and field.column_type
+        )
 
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
@@ -205,11 +197,8 @@ class HrEmployeePublic(models.Model):
             SELECT
                 %s
             FROM hr_employee e
-            LEFT JOIN (
-                SELECT DISTINCT ON (employee_id) *
-                FROM hr_version
-                ORDER BY employee_id, date_version DESC
-            ) v ON v.employee_id = e.id
+            JOIN hr_version v
+              ON v.id = e.current_version_id
         )""" % (self._table, self._get_fields()))
 
     def get_avatar_card_data(self, fields):

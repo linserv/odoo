@@ -16,6 +16,8 @@ import { user } from "@web/core/user";
 import { createDocumentFragmentFromContent, createElementWithContent } from "@web/core/utils/html";
 import { url } from "@web/core/utils/urls";
 
+import { markup } from "@odoo/owl";
+
 const { DateTime } = luxon;
 export class Message extends Record {
     static _name = "mail.message";
@@ -309,12 +311,7 @@ export class Message extends Record {
     isEmpty = fields.Attr(false, {
         /** @this {import("models").Message} */
         compute() {
-            return (
-                this.isBodyEmpty &&
-                this.attachment_ids.length === 0 &&
-                this.trackingValues.length === 0 &&
-                !this.subtype_id?.description
-            );
+            return this.computeIsEmpty();
         },
     });
     isBodyEmpty = fields.Attr(undefined, {
@@ -337,6 +334,15 @@ export class Message extends Record {
             );
         },
     });
+
+    computeIsEmpty() {
+        return (
+            this.isBodyEmpty &&
+            this.attachment_ids.length === 0 &&
+            this.trackingValues.length === 0 &&
+            !this.subtype_id?.description
+        );
+    }
 
     /**
      * Determines if the link preview is actually the main content of the
@@ -376,6 +382,13 @@ export class Message extends Record {
         compute() {
             if (this.notificationType === "call") {
                 return _t("%(caller)s started a call", { caller: this.authorName });
+            }
+            if (this.notificationType === "channel_rename") {
+                const name = htmlToTextContentInline(this.body);
+                const params = { user: this.authorName, name: markup`<b>${name}</b>` };
+                return this.thread?.parent_channel_id
+                    ? _t("%(user)s changed the thread name to %(name)s", params)
+                    : _t("%(user)s changed the channel name to %(name)s", params);
             }
             if (this.isEmpty) {
                 return _t("This message has been removed");
@@ -520,7 +533,11 @@ export class Message extends Record {
         attachments = [],
         { mentionedChannels = [], mentionedPartners = [], mentionedRoles = [] } = {}
     ) {
-        if (convertBrToLineBreak(this.body) === body && attachments.length === 0) {
+        if (
+            createElementWithContent("div", body).textContent ===
+                createElementWithContent("div", this.body).textContent &&
+            attachments.length === 0
+        ) {
             return;
         }
         const validMentions = this.store.getMentionsFromText(body, {
@@ -529,7 +546,7 @@ export class Message extends Record {
             mentionedRoles,
         });
         const hadLink = this.hasLink; // to remove old previews if message no longer contains any link
-        const data = await rpc("/mail/message/update_content", {
+        const updateData = {
             attachment_ids: attachments
                 .concat(this.attachment_ids)
                 .map((attachment) => attachment.id),
@@ -537,15 +554,20 @@ export class Message extends Record {
                 .concat(this.attachment_ids)
                 .map((attachment) => attachment.ownership_token),
             body: await prettifyMessageContent(body, { validMentions }),
-            message_id: this.id,
             partner_ids: validMentions?.partners?.map((partner) => partner.id),
             role_ids: validMentions?.roles?.map((role) => role.id),
+        };
+        this.store.fillPartnersMentionToken(updateData);
+        const data = await rpc("/mail/message/update_content", {
+            message_id: this.id,
+            update_data: updateData,
             ...this.thread.rpcParams,
         });
         this.store.insert(data);
         if ((hadLink || this.hasLink) && this.store.hasLinkPreviewFeature) {
             rpc("/mail/link_preview", { message_id: this.id }, { silent: true });
         }
+        return data;
     }
 
     /** @param {import("models").Thread} thread the thread where the message is being viewed when starting edition */
@@ -556,7 +578,7 @@ export class Message extends Record {
         }
         this.composer = {
             mentionedPartners: this.partner_ids,
-            text,
+            composerHtml: this.body,
             selection: {
                 start: text.length,
                 end: text.length,
@@ -599,18 +621,27 @@ export class Message extends Record {
         );
     }
 
-    async remove() {
-        await rpc("/mail/message/update_content", {
+    async remove({ removeFromThread = false } = {}) {
+        const data = await rpc("/mail/message/update_content", {
+            message_id: this.id,
+            update_data: this.removeParams,
+            ...this.thread.rpcParams,
+        });
+        this.store.insert(data);
+        if (this.thread && removeFromThread) {
+            this.thread.messages = this.thread.messages.filter((message) => message.notEq(this));
+        }
+        this.composer = undefined;
+        return data;
+    }
+
+    get removeParams() {
+        return {
             attachment_ids: [],
             attachment_tokens: [],
             body: "",
-            message_id: this.id,
             partner_ids: [],
-            ...this.thread.rpcParams,
-        });
-        this.body = "";
-        this.attachment_ids = [];
-        this.composer = undefined;
+        };
     }
 
     async setDone() {

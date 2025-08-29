@@ -92,14 +92,18 @@ class PurchaseOrderLine(models.Model):
         compute='_compute_section_line_id',
         store=True,
     )
+    technical_price_unit = fields.Float(help="Technical field for price computation")
 
     @api.depends('product_qty', 'price_unit', 'tax_ids', 'discount')
     def _compute_amount(self):
+        AccountTax = self.env['account.tax']
         for line in self:
+            company = line.company_id or self.env.company
             base_line = line._prepare_base_line_for_taxes_computation()
-            self.env['account.tax']._add_tax_details_in_base_line(base_line, line.company_id)
-            line.price_subtotal = base_line['tax_details']['raw_total_excluded_currency']
-            line.price_total = base_line['tax_details']['raw_total_included_currency']
+            AccountTax._add_tax_details_in_base_line(base_line, company)
+            AccountTax._round_base_lines_tax_details([base_line], company)
+            line.price_subtotal = base_line['tax_details']['total_excluded_currency']
+            line.price_total = base_line['tax_details']['total_included_currency']
             line.price_tax = line.price_total - line.price_subtotal
 
     def _prepare_base_line_for_taxes_computation(self):
@@ -109,12 +113,13 @@ class PurchaseOrderLine(models.Model):
         :return: A python dictionary.
         """
         self.ensure_one()
+        company = self.order_id.company_id or self.env.company
         return self.env['account.tax']._prepare_base_line_for_taxes_computation(
             self,
             tax_ids=self.tax_ids,
             quantity=self.product_qty,
             partner_id=self.order_id.partner_id,
-            currency_id=self.order_id.currency_id or self.order_id.company_id.currency_id,
+            currency_id=self.order_id.currency_id or company.currency_id,
             rate=self.order_id.currency_rate,
         )
 
@@ -197,7 +202,7 @@ class PurchaseOrderLine(models.Model):
                 params = line._get_select_sellers_params()
                 seller = line.product_id._select_seller(
                     partner_id=line.partner_id,
-                    quantity=line.product_qty,
+                    quantity=abs(line.product_qty),
                     date=line.order_id.date_order and line.order_id.date_order.date() or fields.Date.context_today(line),
                     uom_id=line.product_uom_id,
                     params=params)
@@ -212,6 +217,8 @@ class PurchaseOrderLine(models.Model):
                 values.update(product_id=False, price_unit=0, product_uom_qty=0, product_uom_id=False, date_planned=False)
             else:
                 values.update(self._prepare_add_missing_fields(values))
+            if values.get('price_unit') and not values.get('technical_price_unit'):
+                values['technical_price_unit'] = values['price_unit']
 
         lines = super().create(vals_list)
         for line in lines:
@@ -289,7 +296,7 @@ class PurchaseOrderLine(models.Model):
             return
 
         # Reset date, price and quantity since _onchange_quantity will provide default values
-        self.price_unit = self.product_qty = 0.0
+        self.price_unit = self.product_qty = self.technical_price_unit = 0.0
 
         self._product_id_change()
 
@@ -317,7 +324,7 @@ class PurchaseOrderLine(models.Model):
     @api.depends('product_qty', 'product_uom_id', 'company_id', 'order_id.partner_id')
     def _compute_price_unit_and_date_planned_and_name(self):
         for line in self:
-            if not line.product_id or line.invoice_lines or not line.company_id or self.env.context.get('skip_uom_conversion'):
+            if not line.product_id or line.invoice_lines or not line.company_id or self.env.context.get('skip_uom_conversion') or (line.technical_price_unit != line.price_unit):
                 continue
             params = line._get_select_sellers_params()
 
@@ -347,13 +354,13 @@ class PurchaseOrderLine(models.Model):
                     line.date_order or fields.Date.context_today(line),
                     False
                 )
-                line.price_unit = float_round(price_unit, precision_digits=max(line.currency_id.decimal_places, self.env['decimal.precision'].precision_get('Product Price')))
+                line.price_unit = line.technical_price_unit = float_round(price_unit, precision_digits=max(line.currency_id.decimal_places, self.env['decimal.precision'].precision_get('Product Price')))
 
             elif line.selected_seller_id:
                 price_unit = line.env['account.tax']._fix_tax_included_price_company(line.selected_seller_id.price, line.product_id.supplier_taxes_id, line.tax_ids, line.company_id) if line.selected_seller_id else 0.0
                 price_unit = line.selected_seller_id.currency_id._convert(price_unit, line.currency_id, line.company_id, line.date_order or fields.Date.context_today(line), False)
                 price_unit = float_round(price_unit, precision_digits=max(line.currency_id.decimal_places, self.env['decimal.precision'].precision_get('Product Price')))
-                line.price_unit = line.selected_seller_id.product_uom_id._compute_price(price_unit, line.product_uom_id)
+                line.price_unit = line.technical_price_unit = line.selected_seller_id.product_uom_id._compute_price(price_unit, line.product_uom_id)
                 line.discount = line.selected_seller_id.discount or 0.0
 
             # record product names to avoid resetting custom descriptions
@@ -494,7 +501,7 @@ class PurchaseOrderLine(models.Model):
             'name': self.env['account.move.line']._get_journal_items_full_name(self.name, self.product_id.display_name),
             'product_id': self.product_id.id,
             'product_uom_id': self.product_uom_id.id,
-            'quantity': self.qty_to_invoice,
+            'quantity': -self.qty_to_invoice if move and move.move_type == 'in_refund' else self.qty_to_invoice,
             'discount': self.discount,
             'price_unit': self.currency_id._convert(self.price_unit, aml_currency, self.company_id, date, round=False),
             'tax_ids': [(6, 0, self.tax_ids.ids)],

@@ -150,7 +150,6 @@ class TestWorkEntryLeave(TestWorkEntryHolidaysBase):
             'holiday_status_id': leave_type_paid.id,
             'request_date_from': datetime(2024, 9, 10),
             'request_date_to': datetime(2024, 9, 10),
-            'request_unit_hours': True,
             'request_hour_from': '8',
             'request_hour_to': '9',
         },
@@ -160,7 +159,6 @@ class TestWorkEntryLeave(TestWorkEntryHolidaysBase):
             'holiday_status_id': leave_type_unpaid.id,
             'request_date_from': datetime(2024, 9, 10),
             'request_date_to': datetime(2024, 9, 10),
-            'request_unit_hours': True,
             'request_hour_from': '9',
             'request_hour_to': '10',
         }])
@@ -181,7 +179,7 @@ class TestWorkEntryLeave(TestWorkEntryHolidaysBase):
 
         leave_type_paid = self.env['hr.leave.type'].create({
             'name': 'Paid leave type',
-            'requires_allocation': 'no',
+            'requires_allocation': False,
             'request_unit': 'hour',
             'work_entry_type_id': entry_type_paid.id,
         })
@@ -191,6 +189,7 @@ class TestWorkEntryLeave(TestWorkEntryHolidaysBase):
             'hours_per_day': 8.0,
             'full_time_required_hours': 40.0,
             'flexible_hours': True,
+            'tz': self.jules_emp.tz
         })
 
         self.jules_emp.resource_calendar_id = flex_40h_calendar

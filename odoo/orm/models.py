@@ -61,7 +61,7 @@ from odoo.tools.translate import _, LazyTranslate
 
 from . import decorators as api
 from .commands import Command
-from .domains import Domain, NEGATIVE_CONDITION_OPERATORS
+from .domains import Domain
 from .fields import Field, determine
 from .fields_misc import Id
 from .fields_temporal import Date, Datetime
@@ -93,7 +93,7 @@ _unlink = logging.getLogger('odoo.models.unlink')
 regex_order = re.compile(r'''
     ^
     (\s*
-        (?P<term>((?P<field>[a-z0-9_]+|"[a-z0-9_]+")(\.(?P<property>[a-z0-9_]+))?(:(?P<func>[a-z_]+))?))
+        (?P<term>((?P<field>[a-z0-9_]+)(\.(?P<property>[a-z0-9_]+))?(:(?P<func>[a-z_]+))?))
         (\s+(?P<direction>desc|asc))?
         (\s+(?P<nulls>nulls\ first|nulls\ last))?
         \s*
@@ -102,8 +102,15 @@ regex_order = re.compile(r'''
     (?<!,)
     $
 ''', re.IGNORECASE | re.VERBOSE)
+regex_order_part_read_group = re.compile(r"""
+    \s*
+    (?P<term>(?P<field>[a-z0-9_]+)(\.([\w\.]+))?(:(?P<func>[a-z_]+))?)
+    (\s+(?P<direction>desc|asc))?
+    (\s+(?P<nulls>nulls\ first|nulls\ last))?
+    \s*
+""", re.IGNORECASE | re.VERBOSE)
 regex_field_agg = re.compile(r'(\w+)(?::(\w+)(?:\((\w+)\))?)?')  # For read_group
-regex_read_group_spec = re.compile(r'(\w+)(\.(\w+))?(?::(\w+))?$')  # For _read_group
+regex_read_group_spec = re.compile(r'(\w+)(\.([\w\.]+))?(?::(\w+))?$')  # For _read_group
 
 AUTOINIT_RECALCULATE_STORED_FIELDS = 1000
 
@@ -1376,7 +1383,7 @@ class BaseModel(metaclass=MetaModel):
     def search_fetch(
         self,
         domain: DomainType,
-        field_names: Sequence[str],
+        field_names: Sequence[str] | None = None,
         offset: int = 0,
         limit: int | None = None,
         order: str | None = None,
@@ -1389,7 +1396,8 @@ class BaseModel(metaclass=MetaModel):
 
         :param domain: :ref:`A search domain <reference/orm/domains>`. Use an empty
                      list to match all records.
-        :param field_names: a collection of field names to fetch
+        :param field_names: a collection of field names to fetch, or ``None`` for
+            all accessible fields marked with ``prefetch=True``
         :param offset: number of results to ignore (default: none)
         :param limit: maximum number of records to return (default: all)
         :param order: sort string
@@ -1448,8 +1456,8 @@ class BaseModel(metaclass=MetaModel):
         if operator.endswith('like') and not value and '=' not in operator:
             # optimize out the default criterion of ``like ''`` that matches everything
             # return all when operator is positive
-            return Domain.FALSE if operator in NEGATIVE_CONDITION_OPERATORS else Domain.TRUE
-        aggregator = Domain.AND if operator in NEGATIVE_CONDITION_OPERATORS else Domain.OR
+            return Domain.FALSE if operator in Domain.NEGATIVE_OPERATORS else Domain.TRUE
+        aggregator = Domain.AND if operator in Domain.NEGATIVE_OPERATORS else Domain.OR
         domains = []
         for field_name in search_fnames:
             # field_name may be a sequence of field names (partner_id.name)
@@ -1655,16 +1663,24 @@ class BaseModel(metaclass=MetaModel):
         # --- Many2many Special Handling ---
         many2many_groupby_specs = []
         if len(grouping_sets) > 1:  # many2many logic only applies if we have multiple groupings
-            for spec in all_groupby_specs:
+
+            def might_duplicate_rows(model, spec) -> bool:
                 fname, property_name, __ = parse_read_group_spec(spec)
-                field = self._fields[fname]
-                if field.type == 'many2many':
-                    many2many_groupby_specs.append(spec)
-                elif field.type == 'properties':
+                field = model._fields[fname]
+                if field.type == 'properties':
                     definition = self.get_property_definition(f"{fname}.{property_name}")
                     property_type = definition.get('type')
-                    if property_type in ('tags', 'many2many'):
-                        many2many_groupby_specs.append(spec)
+                    return property_type in ('tags', 'many2many')
+
+                if property_name:
+                    assert field.type == 'many2one'
+                    return might_duplicate_rows(self.env[field.comodel_name], property_name)
+
+                return field.type == 'many2many'
+
+            for spec in all_groupby_specs:
+                if might_duplicate_rows(self, spec):
+                    many2many_groupby_specs.append(spec)
 
         if (
             many2many_groupby_specs and
@@ -1738,14 +1754,14 @@ class BaseModel(metaclass=MetaModel):
 
         # --- SQL Query Construction ---
         groupby_terms: dict[str, SQL] = {
-            spec: self._read_group_groupby(spec, query) for spec in all_groupby_specs
+            spec: self._read_group_groupby(self._table, spec, query) for spec in all_groupby_specs
         }
         aggregates_terms: list[SQL] = [
             self._read_group_select(spec, query) for spec in aggregates
         ]
         if groupby_terms:
             # grouping_select_sql: GROUPING(a, b)
-            grouping_select_sql = SQL("GROUPING(%s)", SQL(", ").join(groupby_terms.values()))
+            grouping_select_sql = SQL("GROUPING(%s)", SQL(", ").join(unique(groupby_terms.values())))
         else:
             # GROUPING() is invalid SQL, so we use the 0 as literal
             grouping_select_sql = SQL("0")
@@ -1759,7 +1775,7 @@ class BaseModel(metaclass=MetaModel):
             SQL("(%s)", SQL(", ").join(groupby_terms[groupby_spec] for groupby_spec in grouping_set))
             for grouping_set in grouping_sets
         ]
-        query.groupby = SQL("GROUPING SETS (%s)", SQL(", ").join(grouping_sets_sql))
+        query.groupby = SQL("GROUPING SETS (%s)", SQL(", ").join(unique(grouping_sets_sql)))
 
         # This handles the case where `order` adds columns that must also be in `GROUP BY`.
         # Rebuild the grouping sets to include these extra terms.
@@ -1779,30 +1795,37 @@ class BaseModel(metaclass=MetaModel):
         # Map each possible GROUPING() bitmask to its corresponding result list and value extractor.
         # {GROUPING(...): (append_method, extractor_method)}
         mask_grouping_mapping = {}
-        for result_index, groupby_specs in enumerate(grouping_sets):
-            # PostgreSQL Doc: https://www.postgresql.org/docs/17/functions-aggregate.html#Grouping-Operations
-            # GROUPING ( group_by_expression(s) ) => integer
-            # Returns a bit mask indicating which GROUP BY expressions are not included in the
-            # current grouping set. Bits are assigned with the rightmost argument corresponding to
-            # the least-significant bit; each bit is 0 if the corresponding expression is included
-            # in the grouping criteria of the grouping set generating the current result row, and 1
-            # if it is not included.
 
-            # for GROUPING SET ((a, b), (a), ())
+        # Create a mapping from each unique SQL GROUP BY term to its bitmask value.
+        # The terms are reversed to match the PostgreSQL logic where the bitmask was
+        # calculated from right to left (LSB first).
+        # See PostgreSQL Doc: https://www.postgresql.org/docs/17/functions-aggregate.html#Grouping-Operations
+        mask_sql_mapping = {
+            sql_groupby: 1 << i
+            for i, sql_groupby in enumerate(unique(reversed(groupby_terms.values())))
+        }
+
+        mask_grouping_result_indexes = defaultdict(list)  # To manage "duplicated" groupby
+        for result_index, groupby in enumerate(grouping_sets):
+            # E.g. GROUPING SET ((a, b), (a), ())
             # GROUPING(a, b): a and b included = 0, a included = 1, b included = 2, none included = 3
+            sql_terms = {groupby_terms[groupby_spec] for groupby_spec in groupby}
             groupby_mask = sum(
-                1 << i for i, groupby_spec in enumerate(reversed(all_groupby_specs))
-                if groupby_spec not in groupby_specs  # 0 if included and 1 if not
+                mask for sql_term, mask in mask_sql_mapping.items()
+                # each bit is 0 if the corresponding expression is included in the grouping criteria
+                # of the grouping set generating the current result row, and 1 if it is not included.
+                if sql_term not in sql_terms
             )
-            assert groupby_mask not in mask_grouping_mapping, f"_read_grouping_sets doesn't manage duplicate groupby specs: {grouping_sets!r}"
 
-            mask_grouping_mapping[groupby_mask] = (
-                result[result_index].append,
-                itemgetter_tuple(list(itertools.chain(
-                    (all_groupby_specs.index(groupby_spec) for groupby_spec in groupby_specs),
-                    aggregates_indexes,
-                ))),
-            )
+            mask_grouping_result_indexes[groupby_mask].append(result_index)
+            if groupby_mask not in mask_grouping_mapping:
+                mask_grouping_mapping[groupby_mask] = (
+                    result[result_index].append,
+                    itemgetter_tuple(list(itertools.chain(
+                        (all_groupby_specs.index(groupby_spec) for groupby_spec in groupby),
+                        aggregates_indexes,
+                    ))),
+                )
 
         aggregates_start_index = len(all_groupby_specs) + 1
         # Transpose rows to columns for efficient, column-wise post-processing.
@@ -1822,6 +1845,15 @@ class BaseModel(metaclass=MetaModel):
         # ]
         for (append_method, extractor), *row in zip(dispatch_info, *columns, strict=True):
             append_method(extractor(row))
+
+        # Manage groupbys targetting the same column(s), then having the same results
+        for duplicate_groups_indexes in mask_grouping_result_indexes.values():
+            if len(duplicate_groups_indexes) < 2:
+                continue
+            # The first index's result is the source for all others in this group
+            source_result_group = result[duplicate_groups_indexes[0]]
+            for duplicate_group_index in duplicate_groups_indexes[1:]:
+                result[duplicate_group_index] = source_result_group[:]
 
         return result
 
@@ -1883,7 +1915,7 @@ class BaseModel(metaclass=MetaModel):
         query.offset = offset
 
         groupby_terms: dict[str, SQL] = {
-            spec: self._read_group_groupby(spec, query)
+            spec: self._read_group_groupby(self._table, spec, query)
             for spec in groupby
         }
         aggregates_terms: list[SQL] = [
@@ -1945,28 +1977,46 @@ class BaseModel(metaclass=MetaModel):
         sql_field = self._field_to_sql(self._table, fname, query)
         return READ_GROUP_AGGREGATE[func](self._table, sql_field)
 
-    def _read_group_groupby(self, groupby_spec: str, query: Query) -> SQL:
+    def _read_group_groupby(self, alias: str, groupby_spec: str, query: Query) -> SQL:
         """ Return <SQL expression> corresponding to the given groupby element.
         The method also checks whether the fields used in the groupby are
         accessible for reading.
         """
-        fname, property_name, granularity = parse_read_group_spec(groupby_spec)
+        fname, seq_fnames, granularity = parse_read_group_spec(groupby_spec)
         if fname not in self._fields:
             raise ValueError(f"Invalid field {fname!r} on model {self._name!r}")
 
         field = self._fields[fname]
 
         if field.type == 'properties':
-            sql_expr = self._read_group_groupby_properties(field, property_name, query)
+            sql_expr = self._read_group_groupby_properties(alias, field, seq_fnames, query)
 
-        elif property_name:
-            raise ValueError(f"Property access on non-property field: {groupby_spec!r}")
+        elif seq_fnames:
+            if field.type != 'many2one':
+                raise ValueError(f"Only many2one path is accepted for the {groupby_spec!r} groupby spec")
+
+            comodel = self.env[field.comodel_name]
+            coquery = comodel.with_context(active_test=False)._search([])
+            if self.env.su or not coquery.where_clause:
+                coalias = query.make_alias(alias, fname)
+            else:
+                coalias = query.make_alias(alias, f"{fname}__{self.env.uid}")
+            condition = SQL(
+                "%s = %s",
+                self._field_to_sql(alias, fname, query),
+                SQL.identifier(coalias, 'id'),
+            )
+            if coquery.where_clause:
+                subselect_arg = SQL('%s.*', SQL.identifier(comodel._table))
+                query.add_join('LEFT JOIN', coalias, coquery.subselect(subselect_arg), condition)
+            else:
+                query.add_join('LEFT JOIN', coalias, comodel._table, condition)
+            return comodel._read_group_groupby(coalias, f"{seq_fnames}:{granularity}" if granularity else seq_fnames, query)
 
         elif granularity and field.type not in ('datetime', 'date', 'properties'):
             raise ValueError(f"Granularity set on a no-datetime field or property: {groupby_spec!r}")
 
         elif field.type == 'many2many':
-            alias = self._table
             if field.related and not field.store:
                 _model, field, alias = self._traverse_related_sql(alias, field, query)
 
@@ -1999,7 +2049,7 @@ class BaseModel(metaclass=MetaModel):
             return SQL.identifier(rel_alias, field.column2)
 
         else:
-            sql_expr = self._field_to_sql(self._table, fname, query)
+            sql_expr = self._field_to_sql(alias, fname, query)
 
         if field.type in ('datetime', 'date') or (field.type == 'properties' and granularity):
             if not granularity:
@@ -2008,10 +2058,10 @@ class BaseModel(metaclass=MetaModel):
                 raise ValueError(f"Granularity specification isn't correct: {granularity!r}")
 
             if granularity in READ_GROUP_NUMBER_GRANULARITY:
-                sql_expr = field.property_to_sql(sql_expr, granularity, self, self._table, query)
+                sql_expr = field.property_to_sql(sql_expr, granularity, self, alias, query)
             elif field.type == 'datetime':
                 # set the timezone only
-                sql_expr = field.property_to_sql(sql_expr, 'tz', self, self._table, query)
+                sql_expr = field.property_to_sql(sql_expr, 'tz', self, alias, query)
 
             if granularity == 'week':
                 # first_week_day: 0=Monday, 1=Tuesday, ...
@@ -2087,7 +2137,7 @@ class BaseModel(metaclass=MetaModel):
         orderby_terms = []
 
         for order_part in order.split(','):
-            order_match = regex_order.match(order_part)
+            order_match = regex_order_part_read_group.fullmatch(order_part)
             if not order_match:
                 raise ValueError(f"Invalid order {order!r} for _read_group()")
             term = order_match['term']
@@ -2149,13 +2199,17 @@ class BaseModel(metaclass=MetaModel):
         """ Return the empty value corresponding to the given groupby spec or aggregate spec. """
         if spec == '__count':
             return 0
-        fname, __, func = parse_read_group_spec(spec)  # func is either None, granularity or an aggregate
+        fname, seq_fnames, func = parse_read_group_spec(spec)  # func is either None, granularity or an aggregate
         if func in ('count', 'count_distinct'):
             return 0
         if func in ('array_agg', 'array_agg_distinct'):
             return []
         field = self._fields[fname]
         if (not func or func == 'recordset') and (field.relational or fname == 'id'):
+            if seq_fnames and field.type == 'many2one':
+                groupby_seq = f"{seq_fnames}:{func}" if func else seq_fnames
+                model = self.env[field.comodel_name]
+                return model._read_group_empty_value(groupby_seq)
             return self.env[field.comodel_name] if field.relational else self.env[self._name]
         return False
 
@@ -2169,10 +2223,15 @@ class BaseModel(metaclass=MetaModel):
         """
         empty_value = self._read_group_empty_value(groupby_spec)
 
-        fname, *__ = parse_read_group_spec(groupby_spec)
+        fname, seq_fnames, granularity = parse_read_group_spec(groupby_spec)
         field = self._fields[fname]
 
         if field.relational or fname == 'id':
+            if seq_fnames and field.relational:
+                groupby_seq = f"{seq_fnames}:{granularity}" if granularity else seq_fnames
+                model = self.env[field.comodel_name]
+                return model._read_group_postprocess_groupby(groupby_seq, raw_values)
+
             Model = self.pool[field.comodel_name] if field.relational else self.pool[self._name]
             prefetch_ids = tuple(raw_value for raw_value in raw_values if raw_value)
 
@@ -2654,6 +2713,7 @@ class BaseModel(metaclass=MetaModel):
 
     @api.model
     @api.readonly
+    @api.deprecated("Since 19.0, read_group is deprecated. Please use _read_group in the backend code or formatted_read_group for a complete formatted result")
     def read_group(self, domain, fields, groupby, offset=0, limit=None, orderby=False, lazy=True):
         """Deprecated - Get the list of records in list view grouped by the given ``groupby`` fields.
 
@@ -2693,10 +2753,6 @@ class BaseModel(metaclass=MetaModel):
         :rtype: [{'field_name_1': value, ...}, ...]
         :raise AccessError: if user is not allowed to access requested information
         """
-        warnings.warn(
-            "Since 19.0, read_group is deprecated. Please use _read_group in the backend code or formatted_read_group for a complete formatted result",
-            DeprecationWarning,
-        )
         groupby = [groupby] if isinstance(groupby, str) else groupby
         lazy_groupby = groupby[:1] if lazy else groupby
 
@@ -2844,15 +2900,15 @@ class BaseModel(metaclass=MetaModel):
             sql = field.property_to_sql(sql, property_name, self, alias, query)
         return sql
 
-    def _read_group_groupby_properties(self, field: Field, property_name: str, query: Query) -> SQL:
+    def _read_group_groupby_properties(self, alias: str, field: Field, property_name: str, query: Query) -> SQL:
         fname = field.name
         definition = self.get_property_definition(f"{fname}.{property_name}")
         property_type = definition.get('type')
-        sql_property = self._field_to_sql(self._table, f'{fname}.{property_name}', query)
+        sql_property = self._field_to_sql(alias, f'{fname}.{property_name}', query)
 
         # JOIN on the JSON array
         if property_type in ('tags', 'many2many'):
-            property_alias = query.make_alias(self._table, f'{fname}_{property_name}')
+            property_alias = query.make_alias(alias, f'{fname}_{property_name}')
             sql_property = SQL(
                 """ CASE
                         WHEN jsonb_typeof(%(property)s) = 'array'
@@ -2896,7 +2952,7 @@ class BaseModel(metaclass=MetaModel):
             options = [option[0] for option in definition.get('selection') or ()]
 
             # check the existence of the option
-            property_alias = query.make_alias(self._table, f'{fname}_{property_name}')
+            property_alias = query.make_alias(alias, f'{fname}_{property_name}')
             query.add_join(
                 "LEFT JOIN",
                 property_alias,
@@ -3338,6 +3394,10 @@ class BaseModel(metaclass=MetaModel):
         raise AccessError(error_msg)
 
     @api.model
+    @api.deprecated(
+        "Deprecated since 19.0, use `_check_field_access` on models."
+        " To get the list of allowed fields, use `fields_get`.",
+    )
     def check_field_access_rights(self, operation: str, field_names: list[str] | None) -> list[str]:
         """Check the user access rights on the given fields.
 
@@ -3352,11 +3412,6 @@ class BaseModel(metaclass=MetaModel):
         :raise AccessError: if the user is not allowed to access
           the provided fields.
         """
-        warnings.warn(
-            "Deprecated since 19.0, use `_check_field_access` on models."
-            " To get the list of allowed fields, use `fields_get`.",
-            DeprecationWarning,
-        )
         if self.env.su:
             return field_names or list(self._fields)
 
@@ -3683,19 +3738,20 @@ class BaseModel(metaclass=MetaModel):
         self.fetch(fnames)
 
     @api.private
-    def fetch(self, field_names: Collection[str]) -> None:
+    def fetch(self, field_names: Collection[str] | None = None) -> None:
         """ Make sure the given fields are in memory for the records in ``self``,
         by fetching what is necessary from the database.  Non-stored fields are
         mostly ignored, except for their stored dependencies. This method should
         be called to optimize code.
 
-        :param field_names: a collection of field names to fetch
+        :param field_names: a collection of field names to fetch, or ``None`` for
+            all accessible fields marked with ``prefetch=True``
         :raise AccessError: if user is not allowed to access requested information
 
         This method is implemented thanks to methods :meth:`_search` and
         :meth:`_fetch_query`, and should not be overridden.
         """
-        if not self or not field_names:
+        if not self or not (field_names is None or field_names):
             return
 
         fields_to_fetch = self._determine_fields_to_fetch(field_names, ignore_when_in_cache=True)
@@ -3726,17 +3782,29 @@ class BaseModel(metaclass=MetaModel):
             if forbidden:
                 raise self.env['ir.rule']._make_access_error('read', forbidden)
 
-    def _determine_fields_to_fetch(self, field_names: Collection[str], ignore_when_in_cache: bool = False) -> list[Field]:
+    def _determine_fields_to_fetch(
+            self,
+            field_names: Collection[str] | None = None,
+            ignore_when_in_cache: bool = False,
+        ) -> list[Field]:
         """
         Return the fields to fetch from database among the given field names,
         and following the dependencies of computed fields. The method is used
         by :meth:`fetch` and :meth:`search_fetch`.
 
-        :param field_names: the list of fields requested
+        :param field_names: the collection of requested fields, or ``None`` for
+            all accessible fields marked with ``prefetch=True``
         :param ignore_when_in_cache: whether to ignore fields that are alreay in cache for ``self``
         :return: the list of fields that must be fetched
         :raise AccessError: when trying to fetch fields to which the user does not have access
         """
+        if field_names is None:
+            return [
+                field
+                for field in self._fields.values()
+                if field.prefetch is True and self._has_field_access(field, 'read')
+            ]
+
         if not field_names:
             return []
 
@@ -4054,6 +4122,7 @@ class BaseModel(metaclass=MetaModel):
         return None
 
     @api.model
+    @api.deprecated("check_access_rights() is deprecated since 18.0; use check_access() instead.")
     def check_access_rights(self, operation, raise_exception=True):
         """ Verify that the given operation is allowed for the current user accord to ir.model.access.
 
@@ -4063,14 +4132,11 @@ class BaseModel(metaclass=MetaModel):
         :rtype: bool
         :raise AccessError: if the operation is forbidden and raise_exception is True
         """
-        warnings.warn(
-            "check_access_rights() is deprecated since 18.0; use check_access() instead.",
-            DeprecationWarning, stacklevel=2,
-        )
         if raise_exception:
             return self.browse().check_access(operation)
         return self.browse().has_access(operation)
 
+    @api.deprecated("check_access_rule() is deprecated since 18.0; use check_access() instead.")
     def check_access_rule(self, operation):
         """ Verify that the given operation is allowed for the current user according to ir.rules.
 
@@ -4078,25 +4144,15 @@ class BaseModel(metaclass=MetaModel):
         :return: None if the operation is allowed
         :raise UserError: if current ``ir.rules`` do not permit this operation.
         """
-        warnings.warn(
-            "check_access_rule() is deprecated since 18.0; use check_access() instead.",
-            DeprecationWarning, stacklevel=2,
-        )
         self.check_access(operation)
 
+    @api.deprecated("_filter_access_rules() is deprecated since 18.0; use _filtered_access() instead.")
     def _filter_access_rules(self, operation):
         """ Return the subset of ``self`` for which ``operation`` is allowed. """
-        warnings.warn(
-            "_filter_access_rules() is deprecated since 18.0; use _filtered_access() instead.",
-            DeprecationWarning, stacklevel=2,
-        )
         return self._filtered_access(operation)
 
+    @api.deprecated("_filter_access_rules_python() is deprecated since 18.0; use _filtered_access() instead.")
     def _filter_access_rules_python(self, operation):
-        warnings.warn(
-            "_filter_access_rules_python() is deprecated since 18.0; use _filtered_access() instead.",
-            DeprecationWarning, stacklevel=2,
-        )
         return self._filtered_access(operation)
 
     def unlink(self) -> typing.Literal[True]:
@@ -5597,12 +5653,12 @@ class BaseModel(metaclass=MetaModel):
         ))
         return bool(cr.fetchone())
 
+    @api.deprecated("Deprecated since 18.0, use _has_cycle() instead")
     def _check_recursion(self, parent=None):
-        warnings.warn("Deprecated since 18.0, use _has_cycle() instead", DeprecationWarning, stacklevel=2)
         return not self._has_cycle(parent)
 
+    @api.deprecated("Deprecated since 18.0, use _has_cycle() instead")
     def _check_m2m_recursion(self, field_name):
-        warnings.warn("Deprecated since 18.0, use _has_cycle() instead", DeprecationWarning, stacklevel=2)
         return not self._has_cycle(field_name)
 
     def _get_external_ids(self) -> dict[IdType, list[str]]:
@@ -5699,9 +5755,9 @@ class BaseModel(metaclass=MetaModel):
 
         return records._read_format(fnames=fields, **read_kwargs)
 
+    @api.deprecated("Deprecated since 19.0, use action_archive or action_unarchive")
     def toggle_active(self):
         "Inverses the value of :attr:`active` on the records in ``self``."
-        warnings.warn("Deprecated since 19.0, use action_archive or action_unarchive", DeprecationWarning)
         assert self._active_name, f"No 'active' field on model {self._name}"
         active_recs = self.filtered(self._active_name)
         active_recs.action_archive()
@@ -5822,18 +5878,18 @@ class BaseModel(metaclass=MetaModel):
         return list(OriginIds(self._ids))
 
     @property
+    @api.deprecated("Deprecated since 19.0, use self.env.cr directly")
     def _cr(self):
-        warnings.warn("Deprecated since 19.0, use self.env.cr directly", DeprecationWarning)
         return self.env.cr
 
     @property
+    @api.deprecated("Deprecated since 19.0, use self.env.uid directly")
     def _uid(self):
-        warnings.warn("Deprecated since 19.0, use self.env.uid directly", DeprecationWarning)
         return self.env.uid
 
     @property
+    @api.deprecated("Deprecated since 19.0, use self.env.context directly")
     def _context(self):
-        warnings.warn("Deprecated since 19.0, use self.env.context directly", DeprecationWarning)
         return self.env.context
 
     #

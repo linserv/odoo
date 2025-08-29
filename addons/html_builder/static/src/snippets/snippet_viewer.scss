@@ -41,9 +41,6 @@
             [data-snippet="s_numbers_charts"] .s_chart {
                 display: none;
             }
-            [data-snippet="s_dynamic_snippet_category"] .o_category_container {
-                grid-auto-rows: minmax(150px, auto) !important;
-            }
             .o_full_screen_height, .o_half_screen_height {
                 height: unset !important;
                 min-height: unset !important;
@@ -54,10 +51,8 @@
             .o_half_screen_height {
                 aspect-ratio: 8 / 3;
             }
-            > [data-snippet] {
+            [inert="inert"] > [data-snippet] {
                 isolation: isolate;
-                pointer-events: none;
-                user-select: none;
 
                 &[data-snippet="s_text_block"] {
                     font-size: 1.6rem;
@@ -81,22 +76,6 @@
                     }
                 }
             }
-            > [data-snippet][data-preview-interaction-enabled="true"] {
-                > *:first-child {
-                    // Enable pointer events on the snippet when preview
-                    // interaction is enabled to allow mouseenter/mouseleave
-                    // events.
-                    pointer-events: auto;
-                }
-
-                > *:first-child * {
-                    // Disable pointer events for descendants to prevent
-                    // unwanted hover effects.
-                    // Descendants that require interaction can be excluded
-                    // using the :not() selector.
-                    pointer-events: none;
-                }
-            }
             &[data-label]:not([data-label=""])::before {
                 content: attr(data-label);
                 @include o-position-absolute(0, 0);
@@ -117,7 +96,7 @@
                 pointer-events: none;
                 z-index: 1;
             }
-            &:hover {
+            &:hover, &:focus-visible {
                 box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.2);
                 &::after {
                     outline: 6px solid $o-we-handles-accent-color;
@@ -127,7 +106,7 @@
                 .s_dialog_preview_image {
                     filter: saturate(0) blur(5px);
                 }
-                &:hover {
+                &:hover, &:focus-within {
                     .s_dialog_preview_image {
                         opacity: 1;
                         filter: saturate(0) brightness(0.6) blur(5px);
@@ -136,6 +115,11 @@
                         opacity: 1;
                      }
                 }
+
+                &:focus-within > .o_snippet_preview_install_btn {
+                    outline: 6px solid $o-we-handles-accent-color;
+                }
+
                 > .o_snippet_preview_install_btn {
                     z-index: 1;
                     @include o-position-absolute(auto, 0, 0, 0);

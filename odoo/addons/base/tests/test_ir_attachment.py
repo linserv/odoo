@@ -5,6 +5,7 @@ import hashlib
 import io
 import os
 import contextlib
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -266,6 +267,21 @@ class TestIrAttachment(TransactionCaseWithUserDemo):
         self.assertEqual(a1.raw, unique_blob)
         self.assertEqual(a1.mimetype, 'image/png')
 
+    def test_15_read_bin_size_doesnt_read_datas(self):
+        self.env.invalidate_all()
+        IrAttachment = self.registry['ir.attachment']
+        main_partner = self.env.ref('base.main_partner')
+        with patch.object(
+            IrAttachment,
+            '_file_read',
+            side_effect=IrAttachment._file_read,
+            autospec=True,
+        ) as patch_file_read:
+            self.env['res.partner'].with_context(bin_size=True).search_read(
+                [('id', 'in', main_partner.ids)], ['image_128']
+            )
+            self.assertEqual(patch_file_read.call_count, 0)
+
 
 class TestPermissions(TransactionCaseWithUserDemo):
     def setUp(self):
@@ -343,6 +359,35 @@ class TestPermissions(TransactionCaseWithUserDemo):
             ('res_field', '=', 'image_128')
         ])
         self.assertTrue(attachment.datas)
+        with self.assertQueries([
+            # security SQL contains public check or accessible field with
+            # res_id IN accessible corecords for a given res_model
+            """
+            SELECT "ir_attachment"."id"
+            FROM "ir_attachment"
+            WHERE ("ir_attachment"."res_field" IN %s AND "ir_attachment"."res_id" IN %s AND "ir_attachment"."res_model" IN %s AND (
+                "ir_attachment"."public" IS TRUE
+                OR (
+                    ("ir_attachment"."res_field" IN %s OR "ir_attachment"."res_field" IS NULL)
+                    AND "ir_attachment"."res_id" IN (
+                        SELECT "res_partner"."id"
+                        FROM "res_partner"
+                        WHERE "res_partner"."id" IN %s AND (
+                            ("res_partner"."company_id" IN %s OR "res_partner"."company_id" IS NULL)
+                            OR "res_partner"."partner_share" IS NOT TRUE
+                        )
+                    )
+                    AND "ir_attachment"."res_model" IN %s
+                )
+            ))
+            ORDER BY "ir_attachment"."id" DESC
+            """
+        ]):
+            self.env['ir.attachment'].search([
+                ('res_model', '=', 'res.partner'),
+                ('res_id', '=', main_partner.id),
+                ('res_field', '=', 'image_128')
+            ])
 
         # Patch the field `res.partner.image_128` to make it unreadable by the demo user
         self.patch(self.env.registry['res.partner']._fields['image_128'], 'groups', 'base.group_system')

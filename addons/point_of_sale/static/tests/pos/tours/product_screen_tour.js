@@ -15,10 +15,11 @@ import * as ProductConfiguratorPopup from "@point_of_sale/../tests/pos/tours/uti
 import * as Numpad from "@point_of_sale/../tests/generic_helpers/numpad_util";
 import * as OfflineUtil from "@point_of_sale/../tests/generic_helpers/offline_util";
 import * as TicketScreen from "@point_of_sale/../tests/pos/tours/utils/ticket_screen_util";
+import * as combo from "@point_of_sale/../tests/pos/tours/utils/combo_popup_util";
+import { checkPreparationTicketData } from "@point_of_sale/../tests/pos/tours/utils/preparation_receipt_util";
 import * as Utils from "@point_of_sale/../tests/pos/tours/utils/common";
 import * as BackendUtils from "@point_of_sale/../tests/pos/tours/utils/backend_utils";
-import * as combo from "@point_of_sale/../tests/pos/tours/utils/combo_popup_util";
-import { generatePreparationReceipts } from "@point_of_sale/../tests/pos/tours/utils/preparation_receipt_util";
+import * as FeedbackScreen from "@point_of_sale/../tests/pos/tours/utils/feedback_screen_util";
 
 registry.category("web_tour.tours").add("ProductScreenTour", {
     steps: () =>
@@ -334,19 +335,10 @@ registry.category("web_tour.tours").add("test_restricted_categories_combo_produc
             ProductScreen.clickDisplayedProduct("Office Combo"),
             combo.select("Combo Product 5"),
             Dialog.confirm(),
-            {
-                content: "Check if order preparation has product correctly ordered",
-                trigger: "body",
-                run: async () => {
-                    const rendered = await generatePreparationReceipts();
-                    if (!rendered[0].innerHTML.includes("Office Combo")) {
-                        throw new Error("Office Combo not found in preparation receipt");
-                    }
-                    if (!rendered[0].innerHTML.includes("Combo Product 5")) {
-                        throw new Error("Combo Product 5 not found in preparation receipt");
-                    }
-                },
-            },
+            checkPreparationTicketData([
+                { name: "Office Combo", qty: 1 },
+                { name: "Combo Product 5", qty: 1 },
+            ]),
             Chrome.endTour(),
         ].flat(),
 });
@@ -897,6 +889,49 @@ registry.category("web_tour.tours").add("test_preset_timing_retail", {
         ].flat(),
 });
 
+registry
+    .category("web_tour.tours")
+    .add("test_fast_payment_validation_from_product_screen_without_automatic_receipt_printing", {
+        steps: () =>
+            [
+                Chrome.startPoS(),
+                Dialog.confirm("Open Register"),
+                ProductScreen.clickDisplayedProduct("Desk Organizer"),
+                ProductScreen.clickFastPaymentButton("Bank"),
+                ReceiptScreen.isShown(),
+                ReceiptScreen.clickNextOrder(),
+                ProductScreen.clickDisplayedProduct("Desk Organizer"),
+                ProductScreen.clickPayButton(),
+                PaymentScreen.clickPaymentMethod("Bank"),
+                PaymentScreen.clickValidate(),
+                ReceiptScreen.isShown(),
+            ].flat(),
+    });
+
+registry
+    .category("web_tour.tours")
+    .add("test_fast_payment_validation_from_product_screen_with_automatic_receipt_printing", {
+        steps: () =>
+            [
+                Chrome.startPoS(),
+                Dialog.confirm("Open Register"),
+                ProductScreen.clickDisplayedProduct("Desk Organizer"),
+                ProductScreen.clickFastPaymentButton("Bank"),
+                FeedbackScreen.isShown(),
+                Dialog.confirm(),
+                FeedbackScreen.clickScreen(),
+                ProductScreen.isShown(),
+                ProductScreen.clickDisplayedProduct("Desk Organizer"),
+                ProductScreen.clickPayButton(),
+                PaymentScreen.clickPaymentMethod("Bank"),
+                PaymentScreen.clickValidate(),
+                FeedbackScreen.isShown(),
+                Dialog.confirm(),
+                FeedbackScreen.clickScreen(),
+                ProductScreen.isShown(),
+            ].flat(),
+    });
+
 registry.category("web_tour.tours").add("test_only_existing_lots", {
     steps: () =>
         [
@@ -971,6 +1006,37 @@ registry.category("web_tour.tours").add("test_load_pos_demo_data_by_pos_user", {
                 content: "Click Ok on the Access Denied dialog box",
                 run: "click",
             },
+            Chrome.endTour(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_pos_ui_round_globally", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickDisplayedProduct("Test Product 1"),
+            ProductScreen.clickDisplayedProduct("Test Product 2"),
+            inLeftSide([
+                ...["+/-"].map(Numpad.click),
+                ...ProductScreen.selectedOrderlineHasDirect("Test Product 2", "-1.0"),
+            ]),
+            ProductScreen.totalAmountIs("7,771.01"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.clickPaymentMethod("Bank"),
+            PaymentScreen.clickValidate(),
+            ReceiptScreen.isShown(),
+            Chrome.endTour(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_preset_customer_selection", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            PartnerList.clickPartner("Test Partner"),
+            ProductScreen.customerIsSelected("Test Partner"),
             Chrome.endTour(),
         ].flat(),
 });
