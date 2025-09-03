@@ -29,6 +29,7 @@ import {
     mountWithCleanup,
     onRpc,
     patchWithCleanup,
+    serverState,
     toggleActionMenu,
     toggleMenuItem,
 } from "@web/../tests/web_test_helpers";
@@ -41,23 +42,26 @@ async function closePopover() {
 }
 
 async function changeType(propertyType) {
-    const TYPES_INDEX = {
-        char: 1,
-        html: 3,
-        integer: 5,
-        float: 6,
-        date: 7,
-        datetime: 8,
-        selection: 9,
-        tags: 10,
-        many2one: 11,
-        many2many: 12,
-        separator: 13,
-    };
-    const propertyTypeIndex = TYPES_INDEX[propertyType];
+    const TYPES = [
+        "char",
+        "text",
+        "html",
+        "boolean",
+        "integer",
+        "float",
+        "monetary",
+        "date",
+        "datetime",
+        "selection",
+        "tags",
+        "many2one",
+        "many2many",
+        "separator"
+    ];
+    const propertyTypeIndex = TYPES.indexOf(propertyType);
     await click(".o_field_property_definition_type input");
     await animationFrame();
-    await click(`.o-dropdown--menu .dropdown-item:nth-child(${propertyTypeIndex})`);
+    await click(`.o-dropdown--menu .dropdown-item:eq(${propertyTypeIndex})`);
     await animationFrame();
 }
 
@@ -201,6 +205,7 @@ class ResCompany extends models.Model {
                     name: "property_1",
                     string: "My Char",
                     type: "char",
+                    suffix: "suffix",
                     view_in_cards: true,
                 },
                 {
@@ -256,7 +261,20 @@ class User extends models.Model {
     }
 }
 
-defineModels([Partner, ResCompany, User]);
+class ResCurrency extends models.Model {
+    name = fields.Char();
+    symbol = fields.Char();
+
+    _records = Object.entries(serverState.currencies).map(
+        ([id, { name, symbol }]) => ({
+            id: Number(id) + 1,
+            name,
+            symbol,
+        })
+    );
+}
+
+defineModels([Partner, ResCompany, User, ResCurrency]);
 
 /**
  * If the current user can not write on the parent, he should not
@@ -1440,13 +1458,13 @@ test("properties: kanban view", async () => {
     });
 
     // check second card
-    expect(".o_kanban_record:nth-child(2) .o_card_property_field:nth-child(3) span").toHaveText(
+    expect(".o_kanban_record:nth-child(2) .o_card_property_field:nth-child(3)").toHaveText(
         "char value 4"
     );
-    expect(".o_kanban_record:nth-child(2) .o_card_property_field:nth-child(1) span").toHaveText(
-        "char value"
+    expect(".o_kanban_record:nth-child(2) .o_card_property_field:nth-child(1)").toHaveText(
+        "char value\nsuffix"
     );
-    expect(".o_kanban_record:nth-child(2) .o_card_property_field:nth-child(2) span").toHaveText(
+    expect(".o_kanban_record:nth-child(2) .o_card_property_field:nth-child(2)").toHaveText(
         "C"
     );
 
@@ -1544,8 +1562,8 @@ test("properties: kanban view with multiple sources of properties definitions", 
 
     expect(".o_kanban_record:not(.o_kanban_ghost)").toHaveCount(5);
     expect(queryAllTexts(".o_kanban_record:not(.o_kanban_ghost)")).toEqual([
-        "Company 1\nfirst partner\nchar value\nB",
-        "Company 1\nsecond partner\nchar value\nC\nchar value 4",
+        "Company 1\nfirst partner\nchar value\nsuffix\nB",
+        "Company 1\nsecond partner\nchar value\nsuffix\nC\nchar value 4",
         "Company 1\nthird partner",
         "Company 1\nfourth partner",
         "Company 2\nother partner\nMy Integer\n1",
@@ -1855,6 +1873,43 @@ test("properties: default value date", async () => {
     await animationFrame();
     expect(".o_property_field_popover .o_field_property_definition_value input").toHaveValue(
         "01/03/2022"
+    );
+});
+
+test("properties: suffix", async () => {
+    onRpc("has_access", () => true);
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: /* xml */ `
+            <form>
+                <sheet>
+                    <group>
+                        <field name="company_id"/>
+                        <field name="properties"/>
+                    </group>
+                </sheet>
+            </form>`,
+        actionMenus: {},
+    });
+
+    expect(".o_field_properties").toHaveCount(1);
+
+    await toggleActionMenu();
+    await toggleMenuItem("Edit Properties");
+
+    await click(".o_field_property_add button");
+    await waitFor(".o_property_field_popover");
+
+    await click(".o_field_property_definition_suffix input");
+    await edit("kg", { confirm: "Enter" });
+    await animationFrame();
+    await closePopover();
+
+    expect(".o_field_properties .o_property_field:last .o_property_field_value_suffix").toHaveText(
+        "kg"
     );
 });
 
@@ -2803,4 +2858,128 @@ test("properties: do not write undefined value", async () => {
     expect.verifySteps([]);
     await clickSave();
     expect.verifySteps(["web_save"]);
+});
+
+test("properties: monetary without currency_field", async () => {
+    onRpc("has_access", () => true);
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: /* xml */ `
+            <form>
+                <sheet>
+                    <group>
+                        <field name="company_id"/>
+                        <field name="properties"/>
+                    </group>
+                </sheet>
+            </form>`,
+        actionMenus: {},
+    });
+    expect(".o_field_properties").toHaveCount(1);
+
+    await toggleActionMenu();
+    await toggleMenuItem("Edit Properties");
+
+    await click(".o_property_field:nth-child(2) .o_field_property_open_popover");
+    await animationFrame();
+
+    await click(".o_field_property_definition_type input");
+    await animationFrame();
+    expect(`.o_field_property_definition_type_menu .o-dropdown-item:contains(Monetary) > div.text-muted`).toHaveAttribute("data-tooltip", "Not possible to create monetary field because there is no currency on current model.");
+});
+
+test("properties: monetary with currency_id", async () => {
+    Partner._fields.currency_id = fields.Many2one({ relation: "res.currency", default: 1 });
+
+    onRpc("has_access", () => true);
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: /* xml */ `
+            <form>
+                <sheet>
+                    <group>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="company_id"/>
+                        <field name="properties"/>
+                    </group>
+                </sheet>
+            </form>`,
+        actionMenus: {},
+    });
+    expect(".o_field_properties").toHaveCount(1);
+
+    await toggleActionMenu();
+    await toggleMenuItem("Edit Properties");
+
+    await click(".o_property_field:nth-child(2) .o_field_property_open_popover");
+    await animationFrame();
+
+    await click(".o_field_property_definition_type input");
+    await animationFrame();
+    expect(`.o_field_property_definition_type_menu .o-dropdown-item:contains(Monetary) > div:not(.text-muted)`).toHaveCount(1);
+
+    await contains(`.o_field_property_definition_type_menu .o-dropdown-item:contains(Monetary)`).click();
+    expect(`.o_field_property_definition_currency_field select`).toHaveText("Currency");
+    expect(`.o_field_property_definition_currency_field select`).toHaveValue("currency_id");
+    expect(".o_field_property_definition_value .o_input > span:eq(0)").toHaveText("$");
+    expect(`.o_field_property_definition_value input`).toHaveValue("0.00");
+
+    await closePopover();
+    expect(".o_property_field:nth-child(2) .o_property_field_value .o_input > span:eq(0)").toHaveText("$");
+    expect(`.o_property_field:nth-child(2) .o_property_field_value input`).toHaveValue("0.00");
+});
+
+test("properties: monetary with multiple currency field", async () => {
+    Partner._fields.another_currency_id = fields.Many2one({ relation: "res.currency", default: 2 });
+    Partner._fields.currency_id = fields.Many2one({ relation: "res.currency", default: 1 });
+
+    onRpc("has_access", () => true);
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: /* xml */ `
+            <form>
+                <sheet>
+                    <group>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="another_currency_id" invisible="1"/>
+                        <field name="company_id"/>
+                        <field name="properties"/>
+                    </group>
+                </sheet>
+            </form>`,
+        actionMenus: {},
+    });
+    expect(".o_field_properties").toHaveCount(1);
+
+    await toggleActionMenu();
+    await toggleMenuItem("Edit Properties");
+
+    await click(".o_property_field:nth-child(2) .o_field_property_open_popover");
+    await animationFrame();
+
+    await click(".o_field_property_definition_type input");
+    await animationFrame();
+    expect(`.o_field_property_definition_type_menu .o-dropdown-item:contains(Monetary) > div:not(.text-muted)`).toHaveCount(1);
+
+    await contains(`.o_field_property_definition_type_menu .o-dropdown-item:contains(Monetary)`).click();
+    expect(`.o_field_property_definition_currency_field select`).toHaveText("Currency\nAnother currency");
+    expect(`.o_field_property_definition_currency_field select`).toHaveValue("currency_id");
+
+    await contains(".o_field_property_definition_currency_field select").select("another_currency_id");
+    expect(`.o_field_property_definition_currency_field select`).toHaveValue("another_currency_id");
+    expect(".o_field_property_definition_value .o_input > span:eq(1)").toHaveText("€");
+    expect(`.o_field_property_definition_value input`).toHaveValue("0.00");
+
+    await closePopover();
+    expect(".o_property_field:nth-child(2) .o_property_field_value .o_input > span:eq(1)").toHaveText("€");
+    expect(`.o_property_field:nth-child(2) .o_property_field_value input`).toHaveValue("0.00");
 });

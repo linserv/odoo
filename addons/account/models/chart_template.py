@@ -188,7 +188,7 @@ class AccountChartTemplate(models.AbstractModel):
         if module:
             module.button_immediate_install()
             self.env.transaction.reset()  # clear the transaction with an old registry
-
+            self = self.env()['account.chart.template']  # noqa: PLW0642 create a new env with the new registry
         # To be able to use code translation we load everything in 'en_US'
         # The demo data is still loaded "normally" since code translations cannot be used for them reliably.
         # (Since we rely on the "@template functions" to determine the module to take the code translations from.)
@@ -697,7 +697,7 @@ class AccountChartTemplate(models.AbstractModel):
         company.get_unaffected_earnings_account()
 
         # Set newly created Cash difference and Suspense accounts to the Cash and Bank journals
-        for journal in [self.ref(kind, raise_if_not_found=False) for kind in ('bank', 'cash', 'credit')]:
+        for journal in self.env['account.journal'].search([('type', 'in', ['cash', 'bank', 'credit']), ('company_id', '=', company.id)]):
             if journal:
                 journal.suspense_account_id = journal.suspense_account_id or company.account_journal_suspense_account_id
                 journal.profit_account_id = journal.profit_account_id or company.default_cash_difference_income_account_id

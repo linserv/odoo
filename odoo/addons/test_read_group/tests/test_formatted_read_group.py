@@ -8,7 +8,7 @@ from odoo import Command
 
 
 class TestFormattedReadGroup(common.TransactionCase):
-    ''' Test formatted_read_group, similar tests are done in test_private_read_group 
+    ''' Test formatted_read_group, similar tests are done in test_private_read_group
     for _read_group.'''
 
     maxDiff = None
@@ -1145,8 +1145,8 @@ class TestFormattedReadGroup(common.TransactionCase):
     def test_groupby_day_of_week_ordered_with_user_lang(self):
         Model = self.env['test_read_group.fill_temporal']
         Model.create([
-            {'value': 98, 'date': '2023-02-05'}, # Sunday
-            {'value': 99, 'date': '2023-02-06'}, # Monday
+            {'value': 98, 'date': '2023-02-05'},  # Sunday
+            {'value': 99, 'date': '2023-02-06'},  # Monday
         ])
         self.env['res.lang']._activate_lang('fr_BE')
         result = Model.formatted_read_group([],
@@ -1154,30 +1154,30 @@ class TestFormattedReadGroup(common.TransactionCase):
                     groupby=['date:day_of_week'])
         self.assertEqual(result, [
             {
-                'date:day_of_week': 0, # Sunday
+                'date:day_of_week': 0,  # Sunday
                 '__count': 1,
                 'value:sum': 98,
                 '__extra_domain': [('date.day_of_week', '=', 0)],
             },
             {
-                'date:day_of_week': 1, # Monday
+                'date:day_of_week': 1,  # Monday
                 '__count': 1,
                 'value:sum': 99,
                 '__extra_domain': [('date.day_of_week', '=', 1)],
             }])
-        result = (Model.with_context({'tz': 'fr_BE'}) # first day of week is Monday
-                  .formatted_read_group([],
-                        aggregates=['__count', 'value:sum'],
-                        groupby=['date:day_of_week']))
+        Model = Model.with_context(lang='fr_BE')  # first day of week is Monday
+        result = Model.formatted_read_group([],
+                    aggregates=['__count', 'value:sum'],
+                    groupby=['date:day_of_week'])
         self.assertEqual(result, [
             {
-                'date:day_of_week': 1, # Monday
+                'date:day_of_week': 1,  # Monday
                 '__count': 1,
                 'value:sum': 99,
                 '__extra_domain': [('date.day_of_week', '=', 1)],
             },
             {
-                'date:day_of_week': 0, # Sunday
+                'date:day_of_week': 0,  # Sunday
                 '__count': 1,
                 'value:sum': 98,
                 '__extra_domain': [('date.day_of_week', '=', 0)],
@@ -1186,8 +1186,8 @@ class TestFormattedReadGroup(common.TransactionCase):
     def test_groupby_day_of_week_descending_order_with_user_lang(self):
         Model = self.env['test_read_group.fill_temporal']
         Model.create([
-            {'value': 98, 'date': '2023-02-05'}, # Sunday
-            {'value': 99, 'date': '2023-02-06'}, # Monday
+            {'value': 98, 'date': '2023-02-05'},  # Sunday
+            {'value': 99, 'date': '2023-02-06'},  # Monday
         ])
         self.env['res.lang']._activate_lang('fr_BE')
         result = Model.formatted_read_group([],
@@ -1196,31 +1196,31 @@ class TestFormattedReadGroup(common.TransactionCase):
                     order='date:day_of_week DESC')
         self.assertEqual(result, [
             {
-                'date:day_of_week': 1, # Monday
+                'date:day_of_week': 1,  # Monday
                 '__count': 1,
                 'value:sum': 99,
                 '__extra_domain': [('date.day_of_week', '=', 1)],
             },
             {
-                'date:day_of_week': 0, # Sunday
+                'date:day_of_week': 0,  # Sunday
                 '__count': 1,
                 'value:sum': 98,
                 '__extra_domain': [('date.day_of_week', '=', 0)],
             }])
-        result = (Model.with_context({'tz': 'fr_BE'}) # first day of week is Monday
-                  .formatted_read_group([],
-                        aggregates=['__count', 'value:sum'],
-                        groupby=['date:day_of_week'],
-                        order='date:day_of_week DESC'))
+        Model = Model.with_context(lang='fr_BE')  # first day of week is Monday
+        result = Model.formatted_read_group([],
+                    aggregates=['__count', 'value:sum'],
+                    groupby=['date:day_of_week'],
+                    order='date:day_of_week DESC')
         self.assertEqual(result, [
             {
-                'date:day_of_week': 0, # Sunday
+                'date:day_of_week': 0,  # Sunday
                 '__count': 1,
                 'value:sum': 98,
                 '__extra_domain': [('date.day_of_week', '=', 0)],
             },
             {
-                'date:day_of_week': 1, # Monday
+                'date:day_of_week': 1,  # Monday
                 '__count': 1,
                 'value:sum': 99,
                 '__extra_domain': [('date.day_of_week', '=', 1)],
@@ -1615,7 +1615,7 @@ class TestFormattedReadGroup(common.TransactionCase):
         with self.assertQueries([expected_query + ' DESC']):
             OrderLine.formatted_read_group([], ['order_id'], ['__count'], order='order_id DESC')
 
-    def test_groupby_sequence_fnames_many2one(self):
+    def test_groupby_chain_fnames_many2one(self):
         RelatedBar = self.env['test_read_group.related_bar']
         RelatedFoo = self.env['test_read_group.related_foo']
         RelatedBase = self.env['test_read_group.related_base']
@@ -1761,7 +1761,7 @@ class TestFormattedReadGroup(common.TransactionCase):
         for group in result:
             self.assertEqual(group['__count'], RelatedBase.search_count(group['__extra_domain']))
 
-    def test_groupby_sequence_fnames_char(self):
+    def test_groupby_chain_fnames_char(self):
         RelatedBar = self.env['test_read_group.related_bar']
         RelatedFoo = self.env['test_read_group.related_foo']
         RelatedBase = self.env['test_read_group.related_base']
@@ -1953,7 +1953,7 @@ class TestFormattedReadGroup(common.TransactionCase):
             for group in result:
                 self.assertEqual(group['__count'], RelatedBase.search_count(group['__extra_domain']))
 
-    def test_groupby_sequence_fnames_date(self):
+    def test_groupby_chain_fnames_date(self):
         RelatedFoo = self.env['test_read_group.related_foo']
         RelatedBase = self.env['test_read_group.related_base']
 

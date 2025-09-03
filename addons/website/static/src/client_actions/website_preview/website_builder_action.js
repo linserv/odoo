@@ -54,7 +54,7 @@ export class WebsiteBuilderClientAction extends Component {
             enableEditor: action.params?.enable_editor || false,
             path: action.params?.path,
             websiteId: action.params?.website_id || false,
-        }
+        };
     }
 
     setup() {
@@ -74,6 +74,8 @@ export class WebsiteBuilderClientAction extends Component {
         this.cleanups = [];
 
         this.snippetsTemplate = "website.snippets";
+        // Track iframe navigation state
+        this.isNavigatingToAnotherPage = null;
 
         useSubEnv({
             builderRef: useRef("container"),
@@ -251,9 +253,6 @@ export class WebsiteBuilderClientAction extends Component {
 
     onNewPage(keepUrl = false) {
         const params = {
-            onAddPage: () => {
-                this.websiteService.context.showNewContentModal = false;
-            },
             websiteId: this.websiteService.currentWebsite.id,
         };
         if (keepUrl) {
@@ -265,6 +264,12 @@ export class WebsiteBuilderClientAction extends Component {
     async onEditPage() {
         this.websiteContext.showResourceEditor = false;
         this.blockIframe();
+
+        // Wait for navigation to complete if currently navigating
+        if (this.isNavigatingToAnotherPage) {
+            await this.isNavigatingToAnotherPage;
+        }
+
         await this.loadIframeAndBundles(true);
         window.document.dispatchEvent(
             new CustomEvent("edit_page", {
@@ -390,6 +395,11 @@ export class WebsiteBuilderClientAction extends Component {
         this.addWelcomeMessage();
         this.websiteService.hideLoader();
         this.lastPageURL = iframe.contentWindow.location.href;
+
+        if (this.isNavigatingToAnotherPage) {
+            this.isNavigatingToAnotherPage.resolve();
+            this.isNavigatingToAnotherPage = null;
+        }
     }
 
     blockIframe() {
@@ -437,6 +447,8 @@ export class WebsiteBuilderClientAction extends Component {
                 ) {
                     // This scenario triggers a navigation inside the iframe.
                     this.websiteService.websiteRootInstance = undefined;
+
+                    this.isNavigatingToAnotherPage = new Deferred();
                 }
             }
         });
@@ -477,7 +489,6 @@ export class WebsiteBuilderClientAction extends Component {
         return this.props.websiteId || router.current.website_id || false;
     }
 
-
     waitForIframeReady() {
         return new Promise((resolve) => {
             const doc = this.websiteContent.el.contentDocument;
@@ -494,7 +505,6 @@ export class WebsiteBuilderClientAction extends Component {
             }
         });
     }
-
 
     async reloadEditor(param = {}) {
         this.initialTab = param.initialTab;
@@ -609,7 +619,7 @@ export class WebsiteBuilderClientAction extends Component {
         // exist, so we do not replace the iframefallback content.
         const websiteDoc = this.websiteContent.el?.contentDocument;
         const fallBackDoc = this.iframefallback.el?.contentDocument;
-        if (!this.state.isEditing  && websiteDoc && fallBackDoc) {
+        if (!this.state.isEditing && websiteDoc && fallBackDoc) {
             fallBackDoc.body.replaceWith(websiteDoc.body.cloneNode(true));
             const currentScrollEl = getScrollingElement(websiteDoc);
             const scrollElement = getScrollingElement(fallBackDoc);

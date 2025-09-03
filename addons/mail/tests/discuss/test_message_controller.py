@@ -95,19 +95,21 @@ class TestMessageController(HttpCaseWithUserDemo):
         self.assertEqual(res2.status_code, 200)
         data1 = res2.json()["result"]
         self.assertEqual(
-            data1["ir.attachment"],
+            data1["store_data"]["ir.attachment"],
             [
                 {
                     "checksum": False,
                     "create_date": fields.Datetime.to_string(self.attachments[0].create_date),
                     "file_size": 0,
+                    "has_thumbnail": False,
                     "id": self.attachments[0].id,
+                    "mimetype": "application/octet-stream",
                     "name": "File 1",
                     "ownership_token": self.attachments[0]._get_ownership_token(),
                     "raw_access_token": self.attachments[0]._get_raw_access_token(),
                     "res_name": "Test channel",
-                    "mimetype": "application/octet-stream",
                     "thread": {"id": self.channel.id, "model": "discuss.channel"},
+                    "thumbnail_access_token": self.attachments[0]._get_thumbnail_token(),
                     "voice": False,
                     'type': 'binary',
                     'url': False,
@@ -121,7 +123,7 @@ class TestMessageController(HttpCaseWithUserDemo):
             data=json.dumps(
                 {
                     "params": {
-                        "message_id": data1["mail.message"][0]["id"],
+                        "message_id": data1["message_id"],
                         "update_data": {
                             "body": "test",
                             "attachment_ids": [self.attachments[1].id],
@@ -144,7 +146,7 @@ class TestMessageController(HttpCaseWithUserDemo):
             data=json.dumps(
                 {
                     "params": {
-                        "message_id": data1["mail.message"][0]["id"],
+                        "message_id": data1["message_id"],
                         "update_data": {
                             "body": "test",
                             "attachment_ids": [self.attachments[1].id],
@@ -164,13 +166,15 @@ class TestMessageController(HttpCaseWithUserDemo):
                     "checksum": False,
                     "create_date": fields.Datetime.to_string(self.attachments[0].create_date),
                     "file_size": 0,
+                    "has_thumbnail": False,
                     "id": self.attachments[0].id,
+                    "mimetype": "application/octet-stream",
                     "name": "File 1",
                     "ownership_token": self.attachments[0]._get_ownership_token(),
                     "raw_access_token": self.attachments[0]._get_raw_access_token(),
                     "res_name": "Test channel",
-                    "mimetype": "application/octet-stream",
                     "thread": {"id": self.channel.id, "model": "discuss.channel"},
+                    "thumbnail_access_token": self.attachments[0]._get_thumbnail_token(),
                     "voice": False,
                     'type': 'binary',
                     'url': False,
@@ -179,13 +183,15 @@ class TestMessageController(HttpCaseWithUserDemo):
                     "checksum": False,
                     "create_date": fields.Datetime.to_string(self.attachments[1].create_date),
                     "file_size": 0,
+                    "has_thumbnail": False,
                     "id": self.attachments[1].id,
+                    "mimetype": "application/octet-stream",
                     "name": "File 2",
                     "ownership_token": self.attachments[1]._get_ownership_token(),
                     "raw_access_token": self.attachments[1]._get_raw_access_token(),
                     "res_name": "Test channel",
-                    "mimetype": "application/octet-stream",
                     "thread": {"id": self.channel.id, "model": "discuss.channel"},
+                    "thumbnail_access_token": self.attachments[1]._get_thumbnail_token(),
                     "voice": False,
                     'type': 'binary',
                     'url': False,

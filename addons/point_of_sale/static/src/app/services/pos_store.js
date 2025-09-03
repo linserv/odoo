@@ -897,7 +897,8 @@ export class PosStore extends WithLazyGetterTrap {
                 order.pricelist_id,
                 this.data.models["decimal.precision"].getAll(),
                 this.data.models["product.template.attribute.value"].getAllBy("id"),
-                comboExtraLines
+                comboExtraLines,
+                this.currency
             );
 
             values.combo_line_ids = comboPrices.map((comboItem) => [
@@ -2037,8 +2038,12 @@ export class PosStore extends WithLazyGetterTrap {
         );
     }
     async loadSampleData() {
-        const isPosManager = await user.hasGroup("point_of_sale.group_pos_manager");
-        if (!isPosManager) {
+        const [isPosManager, isAdmin] = await Promise.all([
+            user.hasGroup("point_of_sale.group_pos_manager"),
+            user.hasGroup("base.group_system"),
+        ]);
+
+        if (!(isPosManager && isAdmin)) {
             this.dialog.add(AlertDialog, {
                 title: _t("Access Denied"),
                 body: _t("It seems like you don't have enough rights to load data."),
@@ -2186,9 +2191,7 @@ export class PosStore extends WithLazyGetterTrap {
     }
     // There for override to do something before adding partner to current order from partner list
     setPartnerToCurrentOrder(partner) {
-        const order = this.getOrder();
-        order.setPartner(partner);
-        this.addPendingOrder([order.id]);
+        this.getOrder().setPartner(partner);
     }
     async selectPartner(currentOrder = this.getOrder()) {
         // FIXME, find order to refund when we are in the ticketscreen.
@@ -2592,7 +2595,15 @@ export class PosStore extends WithLazyGetterTrap {
             return this.sortByWordIndex(exactMatches, words);
         }
 
-        const matches = products.filter((p) => normalize(p.searchString).includes(words));
+        const matches = products.filter(
+            (p) =>
+                normalize(p.searchString).includes(words) ||
+                p.product_variant_ids.some((variant) =>
+                    variant.product_template_variant_value_ids.some((vv) =>
+                        normalize(vv.name, false).toLowerCase().includes(words)
+                    )
+                )
+        );
 
         return this.sortByWordIndex(Array.from(new Set([...exactMatches, ...matches])), words);
     }

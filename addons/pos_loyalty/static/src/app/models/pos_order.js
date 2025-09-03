@@ -1,5 +1,6 @@
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { patch } from "@web/core/utils/patch";
+import { floatIsZero } from "@web/core/utils/numbers";
 import { _t } from "@web/core/l10n/translation";
 import { loyaltyIdsGenerator } from "@pos_loyalty/app/services/pos_store";
 import { computePriceForcePriceInclude } from "@point_of_sale/app/models/utils/tax_utils";
@@ -99,6 +100,11 @@ patch(PosOrder.prototype, {
     restoreState(vals) {
         super.restoreState(...arguments);
         this.uiState.disabledRewards = new Set(vals?.disabledRewards || []);
+        for (const [key, pe] of Object.entries(this.uiState.couponPointChanges)) {
+            if (!this.models["loyalty.program"].get(pe.program_id)) {
+                delete this.uiState.couponPointChanges[key];
+            }
+        }
     },
     serializeState() {
         const state = super.serializeState(...arguments);
@@ -1129,7 +1135,7 @@ patch(PosOrder.prototype, {
         }
         let { discountable, discountablePerTax } = getDiscountable(reward);
         discountable = Math.min(this.getTotalWithTax(), discountable);
-        if (!discountable) {
+        if (floatIsZero(discountable)) {
             return [];
         }
         let maxDiscount = reward.discount_max_amount || Infinity;

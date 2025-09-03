@@ -2184,8 +2184,7 @@ class BaseModel(metaclass=MetaModel):
                     sat     6  |  5  |  6  |  0
                     sun     0  |  6  |  0  |  1
                 """
-                timezone = self.env.context.get('tz')
-                first_week_day = int(get_lang(self.env, timezone).week_start)
+                first_week_day = int(get_lang(self.env).week_start)
                 sql_expr = SQL("mod(7 - %s + %s::int, 7)", first_week_day, groupby_terms[term])
                 orderby_terms.append(SQL("%s %s %s", sql_expr, sql_direction, sql_nulls))
             else:
@@ -2199,15 +2198,15 @@ class BaseModel(metaclass=MetaModel):
         """ Return the empty value corresponding to the given groupby spec or aggregate spec. """
         if spec == '__count':
             return 0
-        fname, seq_fnames, func = parse_read_group_spec(spec)  # func is either None, granularity or an aggregate
+        fname, chain_fnames, func = parse_read_group_spec(spec)  # func is either None, granularity or an aggregate
         if func in ('count', 'count_distinct'):
             return 0
         if func in ('array_agg', 'array_agg_distinct'):
             return []
         field = self._fields[fname]
         if (not func or func == 'recordset') and (field.relational or fname == 'id'):
-            if seq_fnames and field.type == 'many2one':
-                groupby_seq = f"{seq_fnames}:{func}" if func else seq_fnames
+            if chain_fnames and field.type == 'many2one':
+                groupby_seq = f"{chain_fnames}:{func}" if func else chain_fnames
                 model = self.env[field.comodel_name]
                 return model._read_group_empty_value(groupby_seq)
             return self.env[field.comodel_name] if field.relational else self.env[self._name]
@@ -2223,12 +2222,12 @@ class BaseModel(metaclass=MetaModel):
         """
         empty_value = self._read_group_empty_value(groupby_spec)
 
-        fname, seq_fnames, granularity = parse_read_group_spec(groupby_spec)
+        fname, chain_fnames, granularity = parse_read_group_spec(groupby_spec)
         field = self._fields[fname]
 
         if field.relational or fname == 'id':
-            if seq_fnames and field.relational:
-                groupby_seq = f"{seq_fnames}:{granularity}" if granularity else seq_fnames
+            if chain_fnames and field.relational:
+                groupby_seq = f"{chain_fnames}:{granularity}" if granularity else chain_fnames
                 model = self.env[field.comodel_name]
                 return model._read_group_postprocess_groupby(groupby_seq, raw_values)
 
@@ -3622,7 +3621,6 @@ class BaseModel(metaclass=MetaModel):
         # the following write is incharge of
         # 1. mark field as modified
         # 2. execute logics in the override `write` method
-        # 3. update write_date of the record if exists to support 't-cache'
         # even if the value in cache is the same as the value written
         self[field_name] = self[field_name]
         return True
@@ -4691,7 +4689,12 @@ class BaseModel(metaclass=MetaModel):
                     })
                     inv_rec_ids.append(record.id)
 
-                next(iter(fields)).determine_inverse(self.browse(inv_rec_ids))
+                inv_records = self.browse(inv_rec_ids)
+                next(iter(fields)).determine_inverse(inv_records)
+                # Values of non-stored fields were cached before running inverse methods. In case of x2many create
+                # commands, the cache may therefore hold NewId records. We must now invalidate those values.
+                inv_relational_fnames = [field.name for field in fields if field.type in ('one2many', 'many2many') and not field.store]
+                inv_records.invalidate_recordset(fnames=inv_relational_fnames)
 
         # check Python constraints for non-stored inversed fields
         for data in data_list:
@@ -5558,6 +5561,7 @@ class BaseModel(metaclass=MetaModel):
         if len(rows) != len(ids):
             raise LockError(self.env._("Cannot grab a lock on records"))
 
+    @api.private
     def try_lock_for_update(self, *, allow_referencing: bool = False, limit: int | None = None) -> Self:
         """ Grab an exclusive write-lock on some rows with the given ids.
 

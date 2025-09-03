@@ -1,3 +1,5 @@
+import { tripleClick } from "@html_editor/../tests/_helpers/user_actions";
+
 import {
     click,
     contains,
@@ -58,6 +60,71 @@ test("Start edition on click edit", async () => {
     await contains(".o-mail-Message .o-mail-Composer-input", { value: "Hello world" });
     await click("button", { text: "cancel" });
     await contains(".o-mail-Message .o-mail-Composer-input", { count: 0 });
+});
+
+test.tags("html composer");
+test("edit a message with styling keeps the styling", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({
+        name: "general",
+        channel_type: "channel",
+    });
+    pyEnv["mail.message"].create({
+        author_id: serverState.partnerId,
+        body: "<strong>Hello world</strong>",
+        model: "discuss.channel",
+        res_id: channelId,
+        message_type: "comment",
+    });
+    await start();
+    await openDiscuss(channelId);
+    const composerService = getService("mail.composer");
+    composerService.setHtmlComposer();
+    await click(".o-mail-Message [title='Edit']");
+    await contains(".o-mail-Composer-html.odoo-editor-editable strong:contains('Hello world')");
+});
+
+test.tags("html composer");
+test("edit a message styling", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({
+        name: "general",
+        channel_type: "channel",
+    });
+    pyEnv["mail.message"].create({
+        author_id: serverState.partnerId,
+        body: "<strong>Hello world</strong>",
+        model: "discuss.channel",
+        res_id: channelId,
+        message_type: "comment",
+    });
+    await start();
+    await openDiscuss(channelId);
+    const composerService = getService("mail.composer");
+    composerService.setHtmlComposer();
+    await contains(".o-mail-Message[data-persistent] strong:contains(Hello world)", { count: 1 });
+    await contains(".o-mail-Message[data-persistent] em:contains(Hello world)", {
+        count: 0,
+    });
+    await click(".o-mail-Message [title='Edit']");
+    await focus(".o-mail-Message .o-mail-Composer-html.odoo-editor-editable");
+    const editor = {
+        document,
+        editable: document.querySelector(
+            ".o-mail-Message .o-mail-Composer-html.odoo-editor-editable"
+        ),
+    };
+    await tripleClick(editor.editable);
+    await press("Control+b");
+    await press("Control+i");
+    await click(".o-mail-Message button", { text: "save" });
+    await contains(".o-mail-Message[data-persistent] strong:contains(Hello world)", { count: 0 });
+    await contains(".o-mail-Message[data-persistent] em:contains(Hello world)", {
+        count: 1,
+    });
+    await contains(".o-mail-Message-content", {
+        text: "Hello world (edited)",
+    });
 });
 
 test("Can only edit one message at a time", async () => {
@@ -1290,9 +1357,8 @@ test("Toggle star should update starred counter on all tabs", async () => {
     const env2 = await start({ asTab: true });
     await openDiscuss(channelId, { target: env1 });
     await openDiscuss(undefined, { target: env2 });
-    await click(".o-mail-Message [title='Mark as Todo']", { target: env1 });
-    await contains("button", {
-        target: env2,
+    await click(`${env1.selector} .o-mail-Message [title='Mark as Todo']`);
+    await contains(`${env2.selector} button`, {
         text: "Starred messages",
         contains: [".badge", { text: "1" }],
     });

@@ -125,7 +125,7 @@ class ProjectProject(models.Model):
             project.sale_order_line_count = len(sale_order_lines)
 
             # Use sudo to avoid AccessErrors when the SOLs belong to different companies.
-            project.sale_order_count = len(sale_order_lines.sudo().order_id)
+            project.sale_order_count = len(sale_order_lines.sudo().order_id or project.reinvoiced_sale_order_id)
 
     def _compute_invoice_count(self):
         data = self.env['account.move.line']._read_group(
@@ -178,11 +178,14 @@ class ProjectProject(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         projects = super().create(vals_list)
-        sol_ids = {
-            vals['sale_line_id']
-            for vals in vals_list
-            if vals.get('sale_line_id')
-        }
+        sol_ids = set()
+        for project, vals in zip(projects, vals_list):
+            if (vals.get('sale_line_id')):
+                sol_ids.add(vals['sale_line_id'])
+            if project.sale_order_id and not project.sale_order_id.project_id:
+                project.sale_order_id.project_id = project.id
+            elif project.sudo().reinvoiced_sale_order_id and not project.sudo().reinvoiced_sale_order_id.project_id:
+                project.sudo().reinvoiced_sale_order_id.project_id = project.id
         if sol_ids:
             projects._ensure_sale_order_linked(list(sol_ids))
         return projects

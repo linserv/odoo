@@ -294,7 +294,7 @@
     <t t-else="" t-set="opt_event_size" t-value="opt_index_sidebar and 'col-12' or 'col-xl-12'"/>
     <!-- No events -->
     <div t-if="not event_ids" class="col-12 text-center">
-        <div t-call="website_event.event_empty_events_svg" class="my-4"/>
+        <div class="my-4"><t t-call="website_event.event_empty_events_svg"/></div>
         <h3>No events scheduled yet</h3>
         <p t-if="searches['search']">We couldn't find any event matching your search for: <strong t-out="searches['search']"/>.</p>
         <p t-elif="searches['tags']">No event matching your search criteria could be found.</p>
@@ -312,7 +312,7 @@
     <!-- View -->
     <div t-foreach="event_ids" t-as="event" t-attf-class=" #{opt_event_size}">
         <t t-set="event_tag_ids" t-value="event.tag_ids.filtered(lambda tag: tag.category_id.website_id == website or not tag.category_id.website_id)"/>
-        <a t-cache="(event, event.is_participating) if not editable and event.website_published else None" t-attf-href="/event/#{ slug(event) }/#{(not event.menu_id) and 'register'}" class="text-decoration-none text-reset " t-att-data-publish="event.website_published and 'on' or 'off'">
+        <a t-attf-href="/event/#{ slug(event) }/#{(not event.menu_id) and 'register'}" class="text-decoration-none text-reset " t-att-data-publish="event.website_published and 'on' or 'off'">
             <article t-attf-class="h-100 #{opt_events_list_cards and 'card'}" itemscope="itemscope" itemtype="http://schema.org/Event">
                 <div t-attf-class="h-100 #{opt_events_list_columns and 'd-flex flex-wrap flex-column' or 'row mx-0'}">
                     <!-- Header -->

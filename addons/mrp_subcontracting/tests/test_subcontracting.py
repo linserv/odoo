@@ -83,7 +83,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 1
         picking_receipt = picking_form.save()
@@ -168,7 +168,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 1
             move.quantity = 1
@@ -239,7 +239,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 1
             move.quantity = 1
@@ -309,7 +309,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 1
             move.quantity = 1
@@ -378,7 +378,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 1
             move.quantity = 1
@@ -389,7 +389,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = subcontractor_partner2
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 1
             move.quantity = 1
@@ -440,7 +440,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = subcontractor_partner2
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 1
         picking_receipt = picking_form.save()
@@ -468,7 +468,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 5
         picking_receipt = picking_form.save()
@@ -508,7 +508,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 5
             move.quantity = 5
@@ -543,7 +543,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = subcontractor_contact
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 1
         picking_receipt = picking_form.save()
@@ -560,7 +560,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 1
         picking_receipt = picking_form.save()
@@ -594,7 +594,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = 2
         picking_receipt = picking_form.save()
@@ -658,7 +658,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         with Form(self.env['stock.picking']) as picking_form:
             picking_form.picking_type_id = self.warehouse.in_type_id
             picking_form.partner_id = self.subcontractor_partner1
-            with picking_form.move_ids_without_package.new() as move:
+            with picking_form.move_ids.new() as move:
                 move.product_id = self.finished
                 move.product_uom_qty = 10
             receipt = picking_form.save()
@@ -757,7 +757,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = finished
             move.product_uom_qty = 5
         picking = picking_form.save()
@@ -819,7 +819,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = in_pck_type
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = finished
             move.product_uom_qty = 6
         picking = picking_form.save()
@@ -868,7 +868,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         with Form(self.env['stock.picking']) as picking_form:
             picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
             picking_form.partner_id = self.subcontractor_partner1
-            with picking_form.move_ids_without_package.new() as move:
+            with picking_form.move_ids.new() as move:
                 move.product_id = self.finished
                 move.product_uom_qty = 3
                 move.quantity = 3
@@ -890,12 +890,12 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         with Form(self.env['stock.picking']) as picking_form:
             picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
             picking_form.partner_id = self.subcontractor_partner1
-            with picking_form.move_ids_without_package.new() as move:
+            with picking_form.move_ids.new() as move:
                 move.product_id = self.finished
                 move.product_uom_qty = quantities[0]
             picking_receipt = picking_form.save()
         picking_receipt.action_confirm()
-        move = picking_receipt.move_ids_without_package
+        move = picking_receipt.move_ids
 
         for qty in quantities[1:]:
             move.quantity = qty
@@ -922,7 +922,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         with Form(self.env['stock.picking']) as picking_form:
             picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
             picking_form.partner_id = self.subcontractor_partner1
-            with picking_form.move_ids_without_package.new() as move:
+            with picking_form.move_ids.new() as move:
                 move.product_id = self.finished
                 move.product_uom_qty = 3
             picking_receipt = picking_form.save()
@@ -938,7 +938,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
                 mo_form.save()
             mo.subcontracting_record_component()
 
-        subcontract_move = picking_receipt.move_ids_without_package.filtered(lambda m: m.is_subcontract)
+        subcontract_move = picking_receipt.move_ids.filtered(lambda m: m.is_subcontract)
         self.assertEqual(len(subcontract_move._get_subcontract_production()), 3)
         self.assertEqual(len(subcontract_move._get_subcontract_production().lot_producing_ids), 3)
         self.assertRecordValues(subcontract_move._get_subcontract_production().lot_producing_ids.sorted('id'), [
@@ -967,12 +967,12 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
         with Form(self.env['stock.picking']) as picking_form:
             picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
             picking_form.partner_id = self.subcontractor_partner1
-            with picking_form.move_ids_without_package.new() as move:
+            with picking_form.move_ids.new() as move:
                 move.product_id = self.finished
                 move.product_uom_qty = 10
             picking_receipt = picking_form.save()
         picking_receipt.action_confirm()
-        move = picking_receipt.move_ids_without_package
+        move = picking_receipt.move_ids
 
         # Register the five first finished products
         action = move.action_show_details()
@@ -1092,7 +1092,7 @@ class TestSubcontractingFlows(TestMrpSubcontractingCommon):
             picking_form = Form(self.env['stock.picking'])
             picking_form.picking_type_id = self.warehouse.subcontracting_resupply_type_id
             picking_form.partner_id = subcontractor
-            with picking_form.move_ids_without_package.new() as move:
+            with picking_form.move_ids.new() as move:
                 move.product_id = self.comp1
                 move.product_uom_qty = 1.0
             picking = picking_form.save()
@@ -1191,7 +1191,7 @@ class TestSubcontractingTracking(TransactionCase):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished_product
             move.product_uom_qty = 1
             move.picked = True
@@ -1200,6 +1200,8 @@ class TestSubcontractingTracking(TransactionCase):
 
         # We should be able to call the 'record_components' button
         self.assertEqual(picking_receipt.display_action_record_components, 'mandatory')
+        # We shouldn't be able to edit the quantity when there are tracked components
+        self.assertFalse(picking_receipt.move_ids.is_quantity_done_editable)
 
         # Check the created manufacturing order
         mo = self.env['mrp.production'].search([('bom_id', '=', self.bom_tracked.id)])
@@ -1268,7 +1270,7 @@ class TestSubcontractingTracking(TransactionCase):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished_product
             move.product_uom_qty = nb_finished_product
         picking_receipt = picking_form.save()
@@ -1277,6 +1279,8 @@ class TestSubcontractingTracking(TransactionCase):
 
         # We shouldn't be able to call the 'record_components' button
         self.assertEqual(picking_receipt.display_action_record_components, 'hide')
+        # We shouldn't be able to edit the quantity of a tracked move
+        self.assertFalse(picking_receipt.move_ids.is_quantity_done_editable)
 
         wh = picking_receipt.picking_type_id.warehouse_id
         lot_names_finished = [f"subtracked_{i}" for i in range(nb_finished_product)]
@@ -1316,7 +1320,7 @@ class TestSubcontractingTracking(TransactionCase):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished_product
             move.product_uom_qty = todo_nb
         picking_receipt = picking_form.save()
@@ -1416,7 +1420,7 @@ class TestSubcontractingTracking(TransactionCase):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = finished_product
             move.product_uom_qty = todo_nb
         picking_receipt = picking_form.save()
@@ -1486,7 +1490,7 @@ class TestSubcontractingTracking(TransactionCase):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = finished_product
             move.product_uom_qty = todo_nb
             move.picked = True
@@ -1545,7 +1549,7 @@ class TestSubcontractingTracking(TransactionCase):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = finished_product
             move.product_uom_qty = todo_nb
             move.picked = True
@@ -1643,7 +1647,7 @@ class TestSubcontractingPortal(TransactionCase):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor_partner1
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished_product
             move.product_uom_qty = 2
         picking_receipt = picking_form.save()
@@ -1754,7 +1758,7 @@ class TestSubcontractingSerialMassReceipt(TransactionCase):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = sum(quantities)
         picking_receipt = picking_form.save()
@@ -1787,7 +1791,7 @@ class TestSubcontractingSerialMassReceipt(TransactionCase):
         picking_form = Form(self.env['stock.picking'])
         picking_form.picking_type_id = self.env.ref('stock.picking_type_in')
         picking_form.partner_id = self.subcontractor
-        with picking_form.move_ids_without_package.new() as move:
+        with picking_form.move_ids.new() as move:
             move.product_id = self.finished
             move.product_uom_qty = quantity
         picking_receipt = picking_form.save()
@@ -1867,24 +1871,28 @@ class TestSubcontractingSerialMassReceipt(TransactionCase):
             })],
         })
         receipt.action_confirm()
+        self.assertFalse(receipt.move_ids.show_subcontracting_details_visible)
         with Form(receipt) as picking_form:
-            with picking_form.move_ids_without_package.edit(0) as move:
+            with picking_form.move_ids.edit(0) as move:
                 move.quantity = 5.0
+        self.assertTrue(receipt.move_ids.show_subcontracting_details_visible)
         self.assertRecordValues(receipt.move_line_ids, [
             {'quantity': 5.0, 'state': 'partially_available', 'picked': True}
         ])
         receipt.button_validate()
         backorder = receipt.backorder_ids
+        self.assertFalse(backorder.move_ids.show_subcontracting_details_visible)
         with Form(backorder) as picking_form:
-            with picking_form.move_ids_without_package.edit(0) as move:
+            with picking_form.move_ids.edit(0) as move:
                 move.quantity = 3.0
+        self.assertTrue(backorder.move_ids.show_subcontracting_details_visible)
         self.assertRecordValues(backorder.move_line_ids, [
             {'quantity': 3.0, 'state': 'partially_available', 'picked': True}
         ])
         backorder.button_validate()
         backorder_backorder = backorder.backorder_ids
         with Form(backorder_backorder) as picking_form:
-            with picking_form.move_ids_without_package.edit(0) as move:
+            with picking_form.move_ids.edit(0) as move:
                 move.quantity = 1.0
         self.assertRecordValues(backorder_backorder.move_line_ids, [
             {'quantity': 1.0, 'state': 'partially_available', 'picked': True}

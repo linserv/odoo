@@ -38,12 +38,12 @@ export class MessagingMenu extends Component {
     }
 
     onClickThread(isMarkAsRead, thread, message) {
-        if (message?.needaction && message.message_type === "user_notification") {
-            this.store.inbox.highlightMessage = message;
-            this.store.inbox.open();
-            return;
-        }
         if (!isMarkAsRead) {
+            if (message?.needaction && message.message_type === "user_notification") {
+                this.store.inbox.highlightMessage = message;
+                this.store.inbox.open();
+                return;
+            }
             thread.open({ focus: true, fromMessagingMenu: true, bypassCompact: true });
             this.dropdown.close();
             return;
@@ -165,7 +165,10 @@ export class MessagingMenu extends Component {
         ) {
             this.store.inbox.setAsDiscussThread();
         }
-        if (this.store.discuss.activeTab !== "inbox") {
+        if (this.store.discuss.activeTab === "starred") {
+            this.store.starred.setAsDiscussThread();
+        }
+        if (!["inbox", "starred"].includes(this.store.discuss.activeTab)) {
             this.store.discuss.thread = undefined;
         }
     }

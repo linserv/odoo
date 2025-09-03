@@ -115,7 +115,7 @@ export class DiscussSidebarChannel extends Component {
 
     get attClassContainer() {
         return {
-            "border border-dark o-rounded-bubble o-bordered": this.bordered,
+            "border border-dark rounded-2 o-bordered": this.bordered,
             "o-compact": this.store.discuss.isSidebarCompact,
         };
     }
@@ -136,7 +136,7 @@ export class DiscussSidebarChannel extends Component {
             "o-unread fw-bolder":
                 this.thread.self_member_id?.message_unread_counter > 0 &&
                 !this.thread.self_member_id?.mute_until_dt,
-            "text-muted":
+            "opacity-75 opacity-100-hover":
                 this.thread.self_member_id?.message_unread_counter === 0 ||
                 this.thread.self_member_id?.mute_until_dt,
         };

@@ -22,6 +22,7 @@ class ResConfigSettings(models.TransientModel):
     auto_check_out = fields.Boolean(related="company_id.auto_check_out", readonly=False)
     auto_check_out_tolerance = fields.Float(related="company_id.auto_check_out_tolerance", readonly=False)
     absence_management = fields.Boolean(related="company_id.absence_management", readonly=False)
+    attendance_device_tracking = fields.Boolean(related="company_id.attendance_device_tracking", readonly=False)
 
     @api.model
     def get_values(self):
@@ -47,5 +48,5 @@ class ResConfigSettings(models.TransientModel):
             company.write({field: self[field] for field in fields_to_check})
 
     def regenerate_kiosk_key(self):
-        if self.env.user.has_group("hr_attendance.group_hr_attendance_manager"):
+        if self.env.user.has_group("hr_attendance.group_hr_attendance_user"):
             self.company_id._regenerate_attendance_kiosk_key()

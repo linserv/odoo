@@ -525,6 +525,12 @@ registry.category("web_tour.tours").add("ProductSearchTour", {
             ProductScreen.searchProduct("TESTPROD2"),
             ProductScreen.productIsDisplayed("Test Product 1").map(negateStep),
             ProductScreen.productIsDisplayed("Test Product 2"),
+            ProductScreen.searchProduct("galaxy"),
+            ProductScreen.productIsDisplayed("galaxy"),
+            ProductScreen.productIsDisplayed("Test Product variant"),
+            ProductScreen.searchProduct("galaxy variant"),
+            ProductScreen.productIsDisplayed("galaxy").map(negateStep),
+            ProductScreen.productIsDisplayed("Test Product variant"),
         ].flat(),
 });
 registry.category("web_tour.tours").add("SortOrderlinesByCategories", {
@@ -724,6 +730,8 @@ registry.category("web_tour.tours").add("test_draft_orders_not_syncing", {
             Dialog.confirm("Open Register"),
             ProductScreen.orderIsEmpty(),
             ProductScreen.clickDisplayedProduct("Desk Pad"),
+            ProductScreen.clickPartnerButton(),
+            ProductScreen.clickCustomer("Deco Addict"),
             Chrome.createFloatingOrder(),
             ProductScreen.clickDisplayedProduct("Desk Pad"),
             ProductScreen.clickPayButton(),
@@ -961,15 +969,8 @@ registry.category("web_tour.tours").add("test_delete_line", {
                 },
             },
             inLeftSide([
+                ...ProductScreen.orderLineHas("Desk Organizer", "1"),
                 ...ProductScreen.selectedOrderlineHasDirect("Desk Organizer", "1"),
-                Numpad.click("⌫"),
-                {
-                    content: "Click 0",
-                    trigger: ".modal " + Numpad.buttonTriger("0"),
-                    run: "click",
-                },
-                ...Chrome.confirmPopup(),
-                ...ProductScreen.selectedOrderlineHasDirect("Desk Organizer", "0"),
                 Numpad.click("⌫"),
                 {
                     content: "Click 0",
@@ -999,6 +1000,21 @@ registry.category("web_tour.tours").add("test_load_pos_demo_data_by_pos_user", {
         [
             Chrome.startPoS(),
             Dialog.confirm("Open Register"),
+            clickLoadSampleButton(),
+            {
+                trigger:
+                    '.modal-content:has(.modal-title:contains("Access Denied")) .modal-footer .btn.btn-primary:contains("Ok")',
+                content: "Click Ok on the Access Denied dialog box",
+                run: "click",
+            },
+            Chrome.endTour(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_load_pos_demo_data_with_member_role", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
             clickLoadSampleButton(),
             {
                 trigger:

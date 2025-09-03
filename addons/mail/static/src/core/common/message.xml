@@ -17,7 +17,7 @@
             >
                 <div class="o-mail-Message-jumpTarget position-absolute top-0 pe-none"/>
                 <div t-if="props.asCard and isMobileOS" class="position-absolute end-0 z-1"><t t-call="mail.Message.actions"/></div>
-                <div class="o-mail-Message-core position-relative d-flex flex-shrink-0 bg-inherit">
+                <div class="o-mail-Message-core position-relative d-flex flex-shrink-0 bg-inherit" t-att-class="{ 'ps-2': env.inDiscussApp and !ui.isSmall }">
                     <div class="o-mail-Message-sidebar d-flex flex-shrink-0 align-items-center flex-column bg-inherit" t-att-class="{ 'align-items-start': !isAlignedRight, 'o-inChatWindow': env.inChatWindow }">
                         <t t-if="!props.squashed">
                             <div class="o-mail-Message-avatarContainer position-relative bg-inherit rounded-3" t-att-class="getAvatarContainerAttClass()">
@@ -36,7 +36,7 @@
                     <div class="w-100 o-min-width-0" t-att-class="{ 'flex-grow-1': isEditing }" t-ref="messageContent">
                         <div t-if="!props.squashed" class="o-mail-Message-header d-flex flex-wrap align-items-baseline lh-1" t-att-class="{ 'mb-1': !message.isNote, 'pe-2': props.asCard and isMobileOS }" name="header">
                             <span t-if="message.authorName and shouldDisplayAuthorName" class="o-mail-Message-author smaller" t-att-class="getAuthorAttClass()">
-                                <strong class="me-1" t-esc="message.authorName"/>
+                                <strong class="me-1 fw-bold" t-esc="message.authorName"/>
                             </span>
                             <t t-if="!isAlignedRight" t-call="mail.Message.notification"/>
                             <t t-if="isAlignedRight and !message.bubbleColor and !(props.asCard and isMobileOS)" t-call="mail.Message.actions"/>
@@ -84,7 +84,6 @@
                                             </div>
                                             <div class="position-relative overflow-x-auto overflow-y-hidden d-inline-block text-body" t-att-class="{
                                                 'w-100': isEditing,
-                                                'shadow-sm': message.bubbleColor,
                                                 'o-rounded-bubble': message.bubbleColor and props.squashed,
                                                 'o-rounded-bottom-bubble': message.bubbleColor and !props.squashed,
                                                 'o-rounded-start-bubble': message.bubbleColor and !props.squashed and isAlignedRight,
@@ -159,7 +158,7 @@
     <div t-if="props.hasActions and message.hasActions and !isEditing and !env.inChatter?.disabled" class="o-mail-Message-actions d-print-none d-flex align-items-start mx-1"
         t-att-class="{
             'start-0': isAlignedRight,
-            'mt-1': message.bubbleColor and !props.asCard and !isMobileOS,
+            'o-mt-0_5': message.bubbleColor and !props.asCard and !isMobileOS,
             'my-n2': !message.bubbleColor and !props.asCard and !isMobileOS,
             'invisible': !isActive and !isMobileOS,
             'o-expanded': optionsDropdown.isOpen

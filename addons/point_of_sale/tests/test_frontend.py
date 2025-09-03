@@ -1040,6 +1040,7 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'ReceiptScreenDiscountWithPricelistTour', login="pos_user")
 
     def test_07_product_combo(self):
+        self.env['decimal.precision'].search([('name', '=', 'Product Price')]).digits = 4
         setup_product_combo_items(self)
         self.office_combo.write({
             'lst_price': 50,
@@ -1053,6 +1054,9 @@ class TestUi(TestPointOfSaleHttpCommon):
         parent_line_id = self.env['pos.order.line'].search([('product_id.name', '=', 'Office Combo'), ('order_id', '=', order.id)])
         combo_line_ids = self.env['pos.order.line'].search([('product_id.name', '!=', 'Office Combo'), ('order_id', '=', order.id)])
         self.assertEqual(parent_line_id.combo_line_ids, combo_line_ids, "The combo parent should have 3 combo lines")
+        self.assertEqual(order.lines[1].price_unit, 10.33)
+        self.assertEqual(order.lines[2].price_unit, 18.67)
+        self.assertEqual(order.lines[3].price_unit, 30.00)
         # In the future we might want to test also if:
         #   - the combo lines are correctly stored in and restored from local storage
         #   - the combo lines are correctly shared between the pos configs ( in cross ordering )
@@ -1791,8 +1795,8 @@ class TestUi(TestPointOfSaleHttpCommon):
 
         self.main_pos_config.current_session_id.action_pos_session_closing_control()
         self.assertEqual(
-            two_last_orders[0].picking_ids.move_line_ids_without_package.owner_id.id,
-            two_last_orders[1].picking_ids.move_line_ids_without_package.owner_id.id,
+            two_last_orders[0].picking_ids.move_line_ids.owner_id.id,
+            two_last_orders[1].picking_ids.move_line_ids.owner_id.id,
             "The owner of the refund is not the same as the owner of the original order")
 
     def test_only_existing_lots(self):
@@ -1866,7 +1870,31 @@ class TestUi(TestPointOfSaleHttpCommon):
                 'taxes_id': False,
                 'available_in_pos': True,
             },
+            {
+                'name': 'galaxy',
+                'list_price': 100,
+                'taxes_id': False,
+                'available_in_pos': True,
+            },
         ])
+
+        att_color = self.env['product.attribute'].create({'name': 'Color', 'sequence': 1})
+
+        att_color_values = self.env['product.attribute.value'].create([
+            {'name': 'galaxy variant', 'attribute_id': att_color.id, 'sequence': 1},
+            {'name': 'blue', 'attribute_id': att_color.id, 'sequence': 2},
+            ])
+
+        self.env['product.template'].create({
+            'name': 'Test Product variant',
+            'attribute_line_ids': [
+                Command.create({
+                    'attribute_id': att_color.id,
+                    'value_ids': [Command.set(att_color_values.mapped('id'))],
+                }),
+            ],
+            'available_in_pos': True,
+        })
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'ProductSearchTour', login="pos_user")
@@ -2776,6 +2804,20 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.start_pos_tour('test_load_pos_demo_data_by_pos_user', login='pos_user')
         products = self.env['product.template'].search_count([('available_in_pos', '=', True)])
         self.assertFalse(products, 'Demo data should not be loaded by user.')
+
+        # Member role with POS Administrator access
+        self.pos_user.write({'group_ids': [
+            Command.set(
+                [
+                    self.env.ref('base.group_user').id,
+                    self.env.ref('point_of_sale.group_pos_manager').id,
+                    self.env.ref('account.group_account_manager').id,
+                ]
+            )
+        ]})
+        self.start_pos_tour('test_load_pos_demo_data_with_member_role', login='pos_user')
+        products = self.env['product.template'].search_count([('available_in_pos', '=', True)])
+        self.assertFalse(products, 'Demo data should not be loaded by user with member role.')
 
     def test_combo_variant_mix(self):
         color_attribute = self.env['product.attribute'].create({

@@ -809,16 +809,20 @@ class AccountMove(models.Model):
             move.payment_reference = move._get_invoice_computed_reference()
         self._inverse_payment_reference()
 
+    def _get_accounting_date_source(self):
+        self.ensure_one()
+        return self.invoice_date or self.date
+
     @api.depends('invoice_date', 'company_id', 'move_type')
     def _compute_date(self):
         for move in self:
-            if not move.invoice_date or not move.is_invoice(include_receipts=True):
+            accounting_date = move._get_accounting_date_source()
+            if not accounting_date or not move.is_invoice(include_receipts=True):
                 if not move.date:
                     move.date = fields.Date.context_today(self)
                 continue
-            accounting_date = move.invoice_date
             if not move.is_sale_document(include_receipts=True):
-                accounting_date = move._get_accounting_date(move.invoice_date, move._affect_tax_report())
+                accounting_date = move._get_accounting_date(accounting_date, move._affect_tax_report())
             if accounting_date and accounting_date != move.date:
                 move.date = accounting_date
                 # _affect_tax_report may trigger premature recompute of line_ids.date
@@ -1760,7 +1764,7 @@ class AccountMove(models.Model):
         - whether or not there is an early pay discount in this invoice that should be displayed
         '''
         for invoice in self:
-            if invoice.move_type in ('out_invoice', 'out_receipt', 'in_invoice', 'in_receipt') and invoice.payment_state in ('not_paid', 'partial'):
+            if invoice.move_type in self._early_payment_discount_move_types() and invoice.payment_state in ('not_paid', 'partial'):
                 payment_term_lines = invoice.line_ids.filtered(lambda l: l.display_type == 'payment_term')
                 invoice.show_discount_details = invoice.invoice_payment_term_id.early_discount
                 invoice.show_payment_term_details = len(payment_term_lines) > 1 or invoice.show_discount_details
@@ -2822,14 +2826,21 @@ class AccountMove(models.Model):
         self.ensure_one()
         payment_terms = self.line_ids.filtered(lambda line: line.display_type == 'payment_term')
         return self.currency_id == currency \
-            and self.move_type in ('out_invoice', 'out_receipt', 'in_invoice', 'in_receipt') \
+            and self.move_type in self._early_payment_discount_move_types() \
             and self.invoice_payment_term_id.early_discount \
             and (
                 not reference_date
                 or not self.invoice_date
-                or reference_date <= self.invoice_payment_term_id._get_last_discount_date(self.invoice_date)
+                or (
+                    (existing_discount_date := next(iter(payment_terms)).discount_date)
+                    and
+                    reference_date <= existing_discount_date
+                )
             ) \
             and not (payment_terms.sudo().matched_debit_ids + payment_terms.sudo().matched_credit_ids)
+
+    def _early_payment_discount_move_types(self):
+        return ('out_invoice', 'out_receipt', 'in_invoice', 'in_receipt')
 
     # -------------------------------------------------------------------------
     # BUSINESS MODELS SYNCHRONIZATION
@@ -5286,7 +5297,7 @@ class AccountMove(models.Model):
             affects_tax_report = move._affect_tax_report()
             lock_dates = move._get_violated_lock_dates(move.date, affects_tax_report)
             if lock_dates:
-                move.date = move._get_accounting_date(move.invoice_date or move.date, affects_tax_report, lock_dates=lock_dates)
+                move.date = move._get_accounting_date(move._get_accounting_date_source(), affects_tax_report, lock_dates=lock_dates)
 
         # Create the analytic lines in batch is faster as it leads to less cache invalidation.
         to_post.line_ids._create_analytic_lines()

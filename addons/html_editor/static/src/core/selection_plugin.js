@@ -95,12 +95,13 @@ export function isNotAllowedContent(node) {
     return isArtificialVoidElement(node) || VOID_ELEMENT_NAMES.includes(node.nodeName);
 }
 
-export const isHtmlContentSupported = weakMemoize((/** @type {EditorSelection} */ selection) => {
-    return !closestElement(
-        selection.focusNode,
-        '[data-oe-model]:not([data-oe-type="html"]):not([data-oe-field="arch"]):not([data-oe-translation-source-sha])'
-    );
-});
+export const isHtmlContentSupported = weakMemoize(
+    (/** @type {EditorSelection} */ selection) =>
+        !closestElement(
+            selection.focusNode,
+            '[data-oe-model]:not([data-oe-type="html"]):not([data-oe-field="arch"]):not([data-oe-translation-source-sha])'
+        )
+);
 
 /**
  * @returns edge text nodes if they do not have content selected
@@ -166,7 +167,6 @@ function scrollToSelection(selection) {
  * @property { SelectionPlugin['getTargetedBlocks'] } getTargetedBlocks
  * @property { SelectionPlugin['getTargetedNodes'] } getTargetedNodes
  * @property { SelectionPlugin['modifySelection'] } modifySelection
- * @property { SelectionPlugin['preserveFocus'] } preserveFocus
  * @property { SelectionPlugin['preserveSelection'] } preserveSelection
  * @property { SelectionPlugin['rectifySelection'] } rectifySelection
  * @property { SelectionPlugin['areNodeContentsFullySelected'] } areNodeContentsFullySelected
@@ -188,7 +188,6 @@ export class SelectionPlugin extends Plugin {
         "setCursorStart",
         "setCursorEnd",
         "extractContent",
-        "preserveFocus",
         "preserveSelection",
         "resetSelection",
         "getTargetedNodes",
@@ -659,25 +658,6 @@ export class SelectionPlugin extends Plugin {
     }
 
     /**
-     * Take the current active element and return a function that restores the
-     * focus in it if its content is editable.
-     *
-     * @returns {() => void}
-     */
-    preserveFocus() {
-        const activeElement = this.document.activeElement;
-        return () => {
-            if (
-                activeElement &&
-                activeElement !== this.document.activeElement &&
-                this.isNodeEditable(activeElement)
-            ) {
-                activeElement.focus();
-            }
-        };
-    }
-
-    /**
      * Set the cursor at the start of the given node.
      * @param { Node } node
      */
@@ -1055,16 +1035,27 @@ export class SelectionPlugin extends Plugin {
     }
 
     focusEditable() {
-        const { editableSelection, documentSelectionIsInEditable } = this.getSelectionData();
-        if (documentSelectionIsInEditable) {
+        if (this.editable.contains(this.document.activeElement)) {
+            // Editor has focus — nothing to do.
             return;
         }
-        // Manualy focusing the editable is necessary to avoid some non-deterministic error in the HOOT unit tests.
-        this.editable.focus({ preventScroll: true });
-        const { anchorNode, anchorOffset, focusNode, focusOffset } = editableSelection;
-        const selection = this.document.getSelection();
-        if (selection) {
-            selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
+
+        const { editableSelection, documentSelectionIsInEditable } = this.getSelectionData();
+
+        const closestNonEditable = (node) => closestElement(node, (el) => !el.isContentEditable);
+        // If selection includes a non-editable element, focusing editor will move cursor to different position.
+        if (!closestNonEditable(editableSelection.anchorNode) && !closestNonEditable(editableSelection.focusNode)) {
+            // Manualy focusing the editable is necessary to avoid some non-deterministic error in the HOOT unit tests.
+            this.editable.focus({ preventScroll: true });
+        }
+
+        if (!documentSelectionIsInEditable) {
+            // Selection is outside the editor — restore it.
+            const { anchorNode, anchorOffset, focusNode, focusOffset } = editableSelection;
+            const selection = this.document.getSelection();
+            if (selection) {
+                selection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset);
+            }
         }
     }
 

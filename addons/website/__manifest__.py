@@ -153,6 +153,7 @@
         'views/snippets/s_badge.xml',
         'views/snippets/s_color_blocks_2.xml',
         'views/snippets/s_attributes_horizontal.xml',
+        'views/snippets/s_attributes_vertical.xml',
         'views/snippets/s_product_list.xml',
         'views/snippets/s_mega_menu_multi_menus.xml',
         'views/snippets/s_mega_menu_menu_image_menu.xml',
@@ -213,6 +214,7 @@
         'wizard/website_robots.xml',
         # Replaces a post_init_hook that should be run on upgrade too.
         'data/update_theme_images.xml',
+        'views/website_templates_svg.xml',
     ],
     'demo': [
         'data/website_demo.xml',
@@ -355,7 +357,7 @@
             ('include', 'website.website_builder_assets'),
             'website/static/tests/mock_server/**/*',
             'website/static/tests/redirect_field.test.js',
-            'website/static/tests/new_content_modal.test.js',
+            'website/static/tests/new_content_systray_item.test.js',
         ],
         'web.assets_unit_tests_setup': [
             'html_builder/static/src/utils/scrolling.js',

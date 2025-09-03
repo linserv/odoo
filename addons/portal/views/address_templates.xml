@@ -71,7 +71,7 @@
                     class="o_address_kanban_add_new d-flex flex-column align-items-center justify-content-center h-100 p-4 mx-auto rounded text-decoration-none"
                     style="border: 1px dashed;"
                 >
-                    <i class="fa fa-plus fa-2x mb-2"/>Add Address
+                    <i class="oi oi-plus fa-2x mb-2"/>Add Address
                 </a>
             </div>
         </div>
@@ -357,7 +357,6 @@
             type="hidden"
             name="csrf_token"
             t-att-value="request.csrf_token()"
-            t-nocache="The csrf token must always be up to date."
         />
         <input type="hidden" name="address_type" t-att-value="address_type"/>
         <input type="hidden" name="use_delivery_as_billing" t-att-value="use_delivery_as_billing"/>

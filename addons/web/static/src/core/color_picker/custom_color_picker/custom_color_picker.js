@@ -15,6 +15,8 @@ import { Component, onMounted, onWillUpdateProps, useExternalListener, useRef } 
 const ARROW_KEYS = ["arrowup", "arrowdown", "arrowleft", "arrowright"];
 const SLIDER_KEYS = [...ARROW_KEYS, "pageup", "pagedown", "home", "end"];
 
+const DEFAULT_COLOR = "#FF0000";
+
 export class CustomColorPicker extends Component {
     static template = "web.CustomColorPicker";
     static props = {
@@ -27,10 +29,12 @@ export class CustomColorPicker extends Component {
         onColorPreview: { type: Function, optional: true },
         onInputEnter: { type: Function, optional: true },
         showRgbaField: { type: Boolean, optional: true },
+        defaultOpacity: { type: Number, optional: true },
     };
     static defaultProps = {
         document: window.document,
-        defaultColor: "#FF0000",
+        defaultColor: DEFAULT_COLOR,
+        defaultOpacity: 100,
         noTransparency: false,
         stopClickPropagation: false,
         onColorSelect: () => {},
@@ -43,6 +47,15 @@ export class CustomColorPicker extends Component {
         this.pickerFlag = false;
         this.sliderFlag = false;
         this.opacitySliderFlag = false;
+        if (this.props.defaultOpacity > 0 && this.props.defaultOpacity <= 1) {
+            this.props.defaultOpacity *= 100;
+        }
+        if (this.props.defaultColor.length <= 7) {
+            const opacityHex = Math.round((this.props.defaultOpacity / 100) * 255)
+                .toString(16)
+                .padStart(2, "0");
+            this.props.defaultColor += opacityHex;
+        }
         this.colorComponents = {};
         this.uniqueId = uniqueId("colorpicker");
         this.selectedHexValue = "";
@@ -86,10 +99,9 @@ export class CustomColorPicker extends Component {
             useExternalListener(doc, "pointerup", this.onPointerUp.bind(this));
         }
         onMounted(async () => {
-            const defaultCssColor = this.props.selectedColor
-                ? this.props.selectedColor
-                : this.props.defaultColor;
-            const rgba = convertCSSColorToRgba(defaultCssColor) || convertCSSColorToRgba("#FF0000");
+            const rgba =
+                convertCSSColorToRgba(this.props.selectedColor) ||
+                convertCSSColorToRgba(this.props.defaultColor);
             if (rgba) {
                 this._updateRgba(rgba.red, rgba.green, rgba.blue, rgba.opacity);
             }
@@ -267,7 +279,7 @@ export class CustomColorPicker extends Component {
         // Remove full transparency in case some lightness is added
         const opacity = a || this.colorComponents.opacity;
         if (opacity < 0.1 && (r > 0.1 || g > 0.1 || b > 0.1)) {
-            a = 100;
+            a = this.props.defaultOpacity;
         }
 
         const hex = convertRgbaToCSSColor(r, g, b, a);
@@ -304,7 +316,7 @@ export class CustomColorPicker extends Component {
         // Remove full transparency in case some lightness is added
         let a = this.colorComponents.opacity;
         if (a < 0.1 && l > 0.1) {
-            a = 100;
+            a = this.props.defaultOpacity;
         }
 
         const rgb = convertHslToRgb(h, s, l);

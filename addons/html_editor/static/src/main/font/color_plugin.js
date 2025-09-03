@@ -33,6 +33,9 @@ const COLOR_COMBINATION_SELECTOR = COLOR_COMBINATION_CLASSES.map((c) => `.${c}`)
  * @typedef { Object } ColorShared
  * @property { ColorPlugin['colorElement'] } colorElement
  * @property { ColorPlugin['getPropsForColorSelector'] } getPropsForColorSelector
+ * @property { ColorPlugin['removeAllColor'] } removeAllColor
+ * @property { ColorPlugin['getElementColors'] } getElementColors
+ * @property { ColorPlugin['getColorCombination'] } getColorCombination
  */
 export class ColorPlugin extends Plugin {
     static id = "color";
@@ -133,6 +136,10 @@ export class ColorPlugin extends Plugin {
             applyColorResetPreview: this.applyColorResetPreview.bind(this),
             colorPrefix: mode === "color" ? "text-" : "bg-",
             onClose: () => this.dependencies.selection.focusEditable(),
+            getTargetedElements: () => {
+                const nodes = this.dependencies.selection.getTargetedNodes().filter(isTextNode);
+                return nodes.map((node) => closestElement(node));
+            },
         };
     }
 
@@ -334,11 +341,22 @@ export class ColorPlugin extends Plugin {
                     closestElement(node, "span");
                 const children = font && descendants(font);
                 const hasInlineGradient = font && isColorGradient(font.style["background-image"]);
+                const isFullySelected =
+                    children && children.every((child) => selectedNodes.includes(child));
+                const isTextGradient =
+                    hasInlineGradient && font.classList.contains("text-gradient");
+                const shouldReplaceExistingGradient =
+                    isFullySelected &&
+                    ((mode === "color" && isTextGradient) ||
+                        (mode === "backgroundColor" && !isTextGradient));
                 if (
                     font &&
                     font.nodeName !== "T" &&
                     (font.nodeName !== "SPAN" || font.style[mode] || font.style.backgroundImage) &&
-                    (isColorGradient(color) || color === "" || !hasInlineGradient) &&
+                    (isColorGradient(color) ||
+                        color === "" ||
+                        !hasInlineGradient ||
+                        shouldReplaceExistingGradient) &&
                     !this.dependencies.split.isUnsplittable(font)
                 ) {
                     // Partially selected <font>: split it.
@@ -392,7 +410,8 @@ export class ColorPlugin extends Plugin {
                             mode === "color" &&
                             (font.style.webkitTextFillColor ||
                                 (closestGradientEl &&
-                                    closestGradientEl.classList.contains("text-gradient")))
+                                    closestGradientEl.classList.contains("text-gradient") &&
+                                    !shouldReplaceExistingGradient))
                         ) {
                             font.style.webkitTextFillColor = color;
                         }
@@ -427,8 +446,6 @@ export class ColorPlugin extends Plugin {
                         font = previous;
                     } else {
                         // No <font> found: insert a new one.
-                        const isTextGradient =
-                            hasInlineGradient && font.classList.contains("text-gradient");
                         font = this.document.createElement("font");
                         node.after(font);
                         if (isTextGradient && mode === "color") {
@@ -521,6 +538,7 @@ export class ColorPlugin extends Plugin {
             return;
         }
 
+        const hasGradientStyle = element.style.backgroundImage.includes("-gradient");
         if (mode === "backgroundColor") {
             if (!color) {
                 element.classList.remove("o_cc", ...COLOR_COMBINATION_CLASSES);
@@ -560,6 +578,10 @@ export class ColorPlugin extends Plugin {
                 backgroundImagePartsToCss(parts)
             );
         } else {
+            delete parts.gradient;
+            if (hasGradientStyle && !backgroundImagePartsToCss(parts)) {
+                element.style["background-image"] = "";
+            }
             // Change camelCase to kebab-case.
             mode = mode.replace("backgroundColor", "background-color");
             this.delegateTo("apply_style", element, mode, color);

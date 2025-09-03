@@ -109,7 +109,7 @@ test("Clicking on the 'Blocks' or 'Theme' tab should deactivate the options", as
     expect(".oe_overlay").toHaveCount(0);
     await contains(".o-snippets-tabs button:contains('Style')").click();
     expect(".o-snippets-tabs button:contains('Style')").toHaveClass("active");
-    expect(".o_customize_tab .options-container").toHaveCount(0);
+    expect(".o_customize_tab .options-container").toHaveCount(1);
 
     await contains(":iframe .s_banner").click();
     await waitFor(".o_customize_tab .options-container");
@@ -121,7 +121,7 @@ test("Clicking on the 'Blocks' or 'Theme' tab should deactivate the options", as
     expect(".oe_overlay").toHaveCount(0);
     await contains(".o-snippets-tabs button:contains('Style')").click();
     expect(".o-snippets-tabs button:contains('Style')").toHaveClass("active");
-    expect(".o_customize_tab .options-container").toHaveCount(0);
+    expect(".o_customize_tab .options-container").toHaveCount(1);
 });
 
 test("Hotkeys on Theme and Blocks tab", async () => {
@@ -130,13 +130,9 @@ test("Hotkeys on Theme and Blocks tab", async () => {
     expect("[data-name=blocks]").toHaveClass("active");
     expect("[data-name=theme]").not.toHaveClass("active");
     await press(["alt", "2"]);
-    await animationFrame();
-    await animationFrame();
-    expect("[data-name=blocks]").not.toHaveClass("active");
+    await waitFor("[data-name=blocks]:not(.active)");
     expect("[data-name=theme]").toHaveClass("active");
     await press(["alt", "1"]);
-    await animationFrame();
-    await animationFrame();
+    await waitFor("[data-name=theme]:not(.active)");
     expect("[data-name=blocks]").toHaveClass("active");
-    expect("[data-name=theme]").not.toHaveClass("active");
 });
