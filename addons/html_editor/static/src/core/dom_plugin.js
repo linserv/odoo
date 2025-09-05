@@ -6,6 +6,7 @@ import {
     fillShrunkPhrasingParent,
     makeContentsInline,
     removeClass,
+    removeStyle,
     splitTextNode,
     unwrapContents,
     wrapInlinesInBlocks,
@@ -62,15 +63,23 @@ function getConnectedParents(nodes) {
  * @typedef {Object} DomShared
  * @property { DomPlugin['insert'] } insert
  * @property { DomPlugin['copyAttributes'] } copyAttributes
- * @property { DomPlugin['canSetTag'] } canSetTag
- * @property { DomPlugin['setTag'] } setTag
+ * @property { DomPlugin['canSetBlock'] } canSetBlock
+ * @property { DomPlugin['setBlock'] } setBlock
  * @property { DomPlugin['setTagName'] } setTagName
+ * @property { DomPlugin['removeSystemProperties'] } removeSystemProperties
  */
 
 export class DomPlugin extends Plugin {
     static id = "dom";
     static dependencies = ["baseContainer", "selection", "history", "split", "delete", "lineBreak"];
-    static shared = ["insert", "copyAttributes", "canSetTag", "setTag", "setTagName"];
+    static shared = [
+        "insert",
+        "copyAttributes",
+        "canSetBlock",
+        "setBlock",
+        "setTagName",
+        "removeSystemProperties",
+    ];
     resources = {
         user_commands: [
             {
@@ -80,7 +89,7 @@ export class DomPlugin extends Plugin {
             },
             {
                 id: "setTag",
-                run: this.setTag.bind(this),
+                run: this.setBlock.bind(this),
                 isAvailable: isHtmlContentSupported,
             },
         ],
@@ -91,7 +100,17 @@ export class DomPlugin extends Plugin {
         clipboard_content_processors: this.removeEmptyClassAndStyleAttributes.bind(this),
         functional_empty_node_predicates: [isSelfClosingElement, isEditorTab],
     };
-    contentEditableToRemove = new Set();
+
+    setup() {
+        this.systemClasses = this.getResource("system_classes");
+        this.systemAttributes = this.getResource("system_attributes");
+        this.systemStyleProperties = this.getResource("system_style_properties");
+        this.systemPropertiesSelector = [
+            ...this.systemClasses.map((className) => `.${className}`),
+            ...this.systemAttributes.map((attr) => `[${attr}]`),
+            ...this.systemStyleProperties.map((prop) => `[style*="${prop}"]`),
+        ].join(",");
+    }
 
     // Shared
 
@@ -495,7 +514,7 @@ export class DomPlugin extends Plugin {
      * Basic method to change an element tagName.
      * It is a technical function which only modifies a tag and its attributes.
      * It does not modify descendants nor handle the cursor.
-     * @see setTag for the more thorough command.
+     * @see setBlock for the more thorough command.
      *
      * @param {HTMLElement} el
      * @param {string} newTagName
@@ -521,6 +540,26 @@ export class DomPlugin extends Plugin {
         return newEl;
     }
 
+    /**
+     * Remove system-specific classes, attributes, and style properties from a
+     * fragment or an element.
+     *
+     * @param {DocumentFragment|HTMLElement} root
+     */
+    removeSystemProperties(root) {
+        const clean = (element) => {
+            removeClass(element, ...this.systemClasses);
+            this.systemAttributes.forEach((attr) => element.removeAttribute(attr));
+            removeStyle(element, ...this.systemStyleProperties);
+        };
+        if (root.matches?.(this.systemPropertiesSelector)) {
+            clean(root);
+        }
+        for (const element of root.querySelectorAll(this.systemPropertiesSelector)) {
+            clean(element);
+        }
+    }
+
     // --------------------------------------------------------------------------
     // commands
     // --------------------------------------------------------------------------
@@ -534,7 +573,7 @@ export class DomPlugin extends Plugin {
         this.dependencies.selection.setSelection({ anchorNode, anchorOffset });
     }
 
-    getBlocksToTag() {
+    getBlocksToSet() {
         const targetedBlocks = [...this.dependencies.selection.getTargetedBlocks()];
         return targetedBlocks.filter(
             (block) =>
@@ -543,8 +582,8 @@ export class DomPlugin extends Plugin {
         );
     }
 
-    canSetTag() {
-        return this.getBlocksToTag().length > 0;
+    canSetBlock() {
+        return this.getBlocksToSet().length > 0;
     }
 
     /**
@@ -552,7 +591,7 @@ export class DomPlugin extends Plugin {
      * @param {string} param0.tagName
      * @param {string} [param0.extraClass]
      */
-    setTag({ tagName, extraClass = "" }) {
+    setBlock({ tagName, extraClass = "" }) {
         let newCandidate = this.document.createElement(tagName.toUpperCase());
         if (extraClass) {
             newCandidate.classList.add(extraClass);
@@ -566,7 +605,7 @@ export class DomPlugin extends Plugin {
         }
         const cursors = this.dependencies.selection.preserveSelection();
         const newEls = [];
-        for (const block of this.getBlocksToTag()) {
+        for (const block of this.getBlocksToSet()) {
             if (
                 isParagraphRelatedElement(block) ||
                 isListItemElement(block) ||

@@ -104,10 +104,6 @@ class AccountTax(models.Model):
     _check_company_domain = models.check_company_domain_parent_of
 
     name = fields.Char(string='Tax Name', required=True, translate=True, tracking=True)
-    name_searchable = fields.Char(store=False, search='_search_name',
-          help="This dummy field lets us use another search method on the field 'name'."
-               "This allows more freedom on how to search the 'name' compared to 'filter_domain'."
-               "See '_search_name' and '_parse_name_search' for why this is not possible with 'filter_domain'.")
     type_tax_use = fields.Selection(TYPE_TAX_USE, string='Tax Type', required=True, default="sale", tracking=True,
         help="Determines where the tax is selectable. Note: 'None' means a tax can't be used by itself, however it can still be used in a group. 'adjustment' is used to perform tax adjustment.")
     tax_scope = fields.Selection([('service', 'Services'), ('consu', 'Goods')], string="Tax Scope", help="Restrict the use of taxes to a type of product.")
@@ -141,6 +137,14 @@ class AccountTax(models.Model):
         ]""",
         ondelete='cascade',
         help="List of taxes to replace when applying any of the stipulated fiscal positions.",
+    )
+    replacing_tax_ids = fields.Many2many(
+        comodel_name='account.tax',
+        relation='account_tax_alternatives',
+        column1='src_tax_id',  # Domestic Tax to replace
+        column2='dest_tax_id',  # This Replacement tax
+        readonly=True,
+        string="Replaced by",
     )
     display_alternative_taxes_field = fields.Boolean(compute='_compute_display_alternative_taxes_field')
     is_domestic = fields.Boolean(compute='_compute_is_domestic', store=True, precompute=True)
@@ -283,6 +287,8 @@ class AccountTax(models.Model):
             domain &= Domain('fiscal_position_ids', '=', False) | Domain('fiscal_position_ids.is_domestic', '=', True)
         if fp_id := self.env.context.get('dynamic_fiscal_position_id'):
             domain &= Domain('fiscal_position_ids', 'in', [False, int(fp_id)])
+        if self.env.context.get('hide_original_tax_ids') and fp_id:
+            domain &= Domain('replacing_tax_ids', 'not any', domain)
         return super().name_search(name, domain, operator, limit)
 
     @api.depends('company_id')
@@ -553,18 +559,15 @@ class AccountTax(models.Model):
         when using `like` or `ilike`.
         """
         def preprocess_name(cond):
-            if cond.field_expr == 'name' and cond.operator in ('like', 'ilike') and isinstance(cond.value, str):
-                return Domain('name', cond.operator, AccountTax._parse_name_search(cond.value))
+            if (
+                cond.field_expr in ('name', 'display_name')
+                and cond.operator in ('like', 'ilike')
+                and isinstance(cond.value, str)
+            ):
+                return Domain(cond.field_expr, cond.operator, AccountTax._parse_name_search(cond.value))
             return cond
         domain = Domain(domain).map_conditions(preprocess_name)
         return super()._search(domain, *args, **kwargs)
-
-    def _search_name(self, operator, value):
-        if isinstance(value, str):
-            value = AccountTax._parse_name_search(value)
-        elif isinstance(value, Iterable):
-            value = [AccountTax._parse_name_search(v) if isinstance(v, str) else v for v in value]
-        return [('name', operator, value)]
 
     def _check_repartition_lines(self, lines):
         self.ensure_one()

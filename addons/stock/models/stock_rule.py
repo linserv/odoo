@@ -244,7 +244,7 @@ class StockRule(models.Model):
             if new_move._should_bypass_reservation():
                 new_move.write({'procure_method': 'make_to_stock'})
             if not new_move.location_id.should_bypass_reservation():
-                move.write({'move_dest_ids': [(4, new_move.id)]})
+                move.sudo().write({'move_dest_ids': [(4, new_move.id)]})
             return new_move
 
     def _push_prepare_move_copy_values(self, move_to_copy, new_date):
@@ -413,21 +413,24 @@ class StockRule(models.Model):
         """
         _ = self.env._
         delays = defaultdict(float)
-        delay = sum(self.filtered(lambda r: r.action in ['pull', 'pull_push']).mapped('delay'))
-        delays['total_delay'] += delay
-        global_visibility_days = self.env.context.get('global_visibility_days', self.env['ir.config_parameter'].sudo().get_param('stock.visibility_days', 0))
-        if global_visibility_days:
-            delays['total_delay'] += int(global_visibility_days)
-        if self.env.context.get('bypass_delay_description'):
-            delay_description = []
-        else:
-            delay_description = [
-                (_('Delay on %s', rule.name), _('+ %d day(s)', rule.delay))
-                for rule in self
-                if rule.action in ['pull', 'pull_push'] and rule.delay
-            ]
-        if global_visibility_days:
-            delay_description.append((_('Time Horizon'), _('+ %d day(s)', int(global_visibility_days))))
+        delay_description = []
+        bypass_delay_description = self.env.context.get('bypass_delay_description')
+        # Check if the rules have lead time
+        delaying_rules = self.filtered(lambda r: r.action in ['pull', 'pull_push'] and r.delay)
+        if delaying_rules:
+            delays['total_delay'] += sum(delaying_rules.mapped('delay'))
+            if not bypass_delay_description:
+                delay_description = [
+                    (_('Delay on %s', rule.name), _('+ %d day(s)', rule.delay))
+                    for rule in delaying_rules
+                ]
+        # Check if there's a horizon set
+        max_company_horizon_days = max(self.company_id.mapped('horizon_days')) if self.company_id else 0
+        global_horizon_days = self.env.context.get('global_horizon_days', max_company_horizon_days or self.env.company.horizon_days)
+        if global_horizon_days:
+            delays['total_delay'] += global_horizon_days
+            if not bypass_delay_description:
+                delay_description.append((_('Time Horizon'), _('+ %d day(s)', global_horizon_days)))
         return delays, delay_description
 
 
@@ -722,6 +725,7 @@ class ProcurementGroup(models.Model):
         domain = self._get_orderpoint_domain(company_id=company_id)
         orderpoints = self.env['stock.warehouse.orderpoint'].search(domain)
         orderpoints.sudo()._compute_qty_to_order_computed()
+        orderpoints.sudo()._compute_deadline_date()
         orderpoints.sudo()._procure_orderpoint_confirm(use_new_cursor=use_new_cursor, company_id=company_id, raise_user_error=False)
 
         if use_new_cursor:

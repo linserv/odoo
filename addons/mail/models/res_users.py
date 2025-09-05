@@ -227,7 +227,7 @@ class ResUsers(models.Model):
         return write_res
 
     def action_archive(self):
-        activities_to_delete = self.env['mail.activity'].search([('user_id', 'in', self.ids)])
+        activities_to_delete = self.env['mail.activity'].sudo().search([('user_id', 'in', self.ids)])
         activities_to_delete.unlink()
         return super().action_archive()
 
@@ -510,10 +510,7 @@ class ResUsers(models.Model):
         return list(user_activities.values())
 
     def _get_store_avatar_card_fields(self, target):
-        fields = ["name", "im_status", "share", "partner_id"]
-        if target.is_internal(self.env):
-            fields.extend(["email", "phone"])
-        return fields
+        return ["share", Store.One("partner_id", self.partner_id._get_store_avatar_card_fields(target))]
 
     # ------------------------------------------------------------
     # Mail Servers
