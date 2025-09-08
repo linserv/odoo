@@ -24,7 +24,9 @@ class PurchaseOrder(models.Model):
         help="This will determine operation type of incoming shipment")
     default_location_dest_id_usage = fields.Selection(related='picking_type_id.default_location_dest_id.usage', string='Destination Location Type',
         help="Technical field used to display the Drop Ship Address", readonly=True)
-    group_id = fields.Many2one('procurement.group', string="Procurement Group", copy=False)
+    reference_ids = fields.Many2many(
+        'stock.reference', 'stock_reference_purchase_rel', 'purchase_id',
+        'reference_id', string='References', copy=False)
     is_shipped = fields.Boolean(compute="_compute_is_shipped")
     effective_date = fields.Datetime("Arrival", compute='_compute_effective_date', store=True, copy=False,
         help="Completion date of the first receipt order.")
@@ -114,6 +116,54 @@ class PurchaseOrder(models.Model):
         action['views'] = [(kanban_view_id, view_type) if view_type == 'kanban' else (view_id, view_type) for (view_id, view_type) in action['views']]
         return action
 
+    def _get_action_add_from_catalog_extra_context(self):
+        return {
+            **super()._get_action_add_from_catalog_extra_context(),
+            'warehouse_id': self.picking_type_id.warehouse_id.id if self.picking_type_id else False,
+            'vendor_name': self.partner_id.display_name,
+            'vendor_suggest_days': self.partner_id.suggest_days,
+            'vendor_suggest_based_on': self.partner_id.suggest_based_on,
+            'vendo_suggest_percent': self.partner_id.suggest_percent,
+            'po_state': self.state,
+        }
+
+    @api.model
+    def action_purchase_order_suggest(self, suggest_ctx):
+        """ Adds suggested products to PO, removing products with no suggested_qty, and
+        collapsing existing po_lines into at most 1 orderline. Saves suggestion params
+        (eg. number_of_days) to partner table. """
+        po = self.browse(suggest_ctx.get("order_id")).ensure_one()
+        domain = [('type', '=', 'consu')]
+        if self.env.context.get('domain'):
+            domain = fields.Domain.AND([domain, self.env.context.get('domain')])
+        products = self.env['product.product'].with_context(suggest_ctx).search(domain)
+
+        po.partner_id.suggest_days = suggest_ctx.get('suggest_days')
+        po.partner_id.suggest_based_on = suggest_ctx.get('suggest_based_on')
+        po.partner_id.suggest_percent = suggest_ctx.get('suggest_percent')
+
+        po_lines_commands = []
+        for product in products:
+            suggest_line = self.env['purchase.order.line']._prepare_purchase_order_line(
+                product,
+                product.suggested_qty,
+                product.uom_id,
+                po.company_id,
+                po.partner_id,
+                po
+            )
+            existing_po_lines = po.order_line.filtered(lambda pol: pol.product_id == product)
+            if existing_po_lines:
+                # Collapse into 1 or 0 po line, discarding previous data in favor of suggested qtys
+                to_unlink = existing_po_lines if product.suggested_qty == 0 else existing_po_lines[:-1]
+                po_lines_commands += [Command.unlink(line.id) for line in to_unlink]
+                if product.suggested_qty > 0:
+                    po_lines_commands.append(Command.update(existing_po_lines[-1].id, suggest_line))
+            elif product.suggested_qty > 0:
+                po_lines_commands.append(Command.create(suggest_line))
+
+        po.order_line = po_lines_commands
+
     def button_approve(self, force=False):
         result = super(PurchaseOrder, self).button_approve(force=force)
         self._create_picking()
@@ -138,13 +188,16 @@ class PurchaseOrder(models.Model):
                 if picking.state == 'done':
                     picking.message_post(body=self.env._("The purchase order %s this receipt is linked to was cancelled.", order._get_html_link()))
 
+            if order.reference_ids:
+                order.reference_ids.purchase_ids = [Command.unlink(order.id)]
+
         order_lines = self.env['purchase.order.line'].browse(order_lines_ids)
         moves_to_cancel_ids = OrderedSet()
         moves_to_recompute_ids = OrderedSet()
         for order_line in order_lines:
             moves_to_cancel_ids.update(order_line.move_ids.filtered(lambda move: move.state != 'done').ids)
             if order_line.move_dest_ids:
-                move_dest_ids = order_line.move_dest_ids.filtered(lambda move: move.state != 'done' and not move.scrapped)
+                move_dest_ids = order_line.move_dest_ids.filtered(lambda move: move.state != 'done' and move.location_dest_usage != 'inventory')
                 moves_to_mts = move_dest_ids.filtered(lambda move: move.rule_id.route_id != move.location_dest_id.warehouse_id.reception_route_id)
                 move_dest_ids -= moves_to_mts
                 moves_to_recompute_ids.update(moves_to_mts.ids)
@@ -156,8 +209,6 @@ class PurchaseOrder(models.Model):
                     moves_to_cancel_ids.update(move_dest_ids.ids)
                 else:
                     moves_to_recompute_ids.update(move_dest_ids.ids)
-            if order_line.group_id:
-                order_line.group_id.purchase_line_ids = [Command.unlink(order_line.id)]
 
         if moves_to_cancel_ids:
             moves_to_cancel = self.env['stock.move'].browse(moves_to_cancel_ids)
@@ -284,16 +335,15 @@ class PurchaseOrder(models.Model):
             picking_type = self.env['stock.picking.type'].with_context(active_test=False).search([('code', '=', 'incoming'), ('warehouse_id', '=', False)])
         return picking_type[:1]
 
-    def _prepare_group_vals(self):
+    def _prepare_reference_vals(self):
         self.ensure_one()
         return {
             'name': self.name,
-            'partner_id': self.partner_id.id,
         }
 
     def _prepare_picking(self):
-        if not self.group_id:
-            self.group_id = self.group_id.create(self._prepare_group_vals())
+        if not self.reference_ids:
+            self.reference_ids = self.reference_ids.create(self._prepare_reference_vals())
         if not self.partner_id.property_stock_supplier.id:
             raise UserError(_("You must set a Vendor Location for this partner %s", self.partner_id.name))
         return {
@@ -305,6 +355,7 @@ class PurchaseOrder(models.Model):
             'location_id': self.partner_id.property_stock_supplier.id,
             'company_id': self.company_id.id,
             'state': 'draft',
+            'reference_ids': [Command.set(self.reference_ids.ids)],
         }
 
     def _create_picking(self):
@@ -369,3 +420,19 @@ class PurchaseOrder(models.Model):
 
     def _is_display_stock_in_catalog(self):
         return True
+
+    def _get_product_catalog_order_line_info(self, product_ids, child_field=False, **kwargs):
+        """ Add suggest_ctx to env in order to trigger product.product suggest compute fields"""
+        if kwargs.get('suggest_based_on'):
+            suggest_keys = ('suggest_days', 'suggest_based_on', 'suggest_percent', 'warehouse_id')
+            suggest_ctx = {k: v for k, v in kwargs.items() if k in suggest_keys}
+            return super(PurchaseOrder, self.with_context(suggest_ctx))._get_product_catalog_order_line_info(
+                product_ids, child_field=child_field, **kwargs
+            )
+        return super()._get_product_catalog_order_line_info(product_ids, child_field=child_field, **kwargs)
+
+    def _get_product_price_and_data(self, product):
+        """ Fetch the product's data used by the purchase's catalog."""
+        res = super()._get_product_price_and_data(product)
+        res["suggested_qty"] = product.suggested_qty
+        return res

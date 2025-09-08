@@ -602,8 +602,14 @@ export class PosStore extends WithLazyGetterTrap {
         const orderPathUuid = this.router.state.params.orderUuid;
         const order = this.models["pos.order"].find((order) => order.uuid === orderPathUuid);
         if (orderPathUuid && !order) {
-            const result = await this.data.call("pos.order", "read_pos_data_uuid", [orderPathUuid]);
-            this.models.loadConnectedData(result);
+            await this.data.callRelated(
+                "pos.order",
+                "read_pos_orders",
+                [[["uuid", "=", orderPathUuid]]],
+                {},
+                false,
+                true
+            );
             const order = this.models["pos.order"].find((order) => order.uuid === orderPathUuid);
             if (order) {
                 this.setOrder(order);
@@ -1234,11 +1240,17 @@ export class PosStore extends WithLazyGetterTrap {
         return this.models["pos.order"].find((o) => o.state === "draft") || this.addNewOrder();
     }
     getEmptyOrder() {
-        const orders = this.models["pos.order"].filter(
-            (order) => !order.finalized && order.isEmpty()
+        const emptyOrders = this.models["pos.order"].filter(
+            (order) =>
+                order.isEmpty() &&
+                !order.finalized &&
+                order.payment_ids.length === 0 &&
+                !order.partner_id &&
+                order.pricelist_id?.id === this.config.pricelist_id?.id &&
+                order.fiscal_position_id?.id === this.config.default_fiscal_position_id?.id
         );
-        if (orders.length > 0) {
-            return orders[0];
+        if (emptyOrders.length > 0) {
+            return emptyOrders[0];
         }
         return this.addNewOrder();
     }
@@ -1466,7 +1478,15 @@ export class PosStore extends WithLazyGetterTrap {
         ]);
     }
     async loadServerOrders(domain) {
-        const orders = await this.data.searchRead("pos.order", domain);
+        const result = await this.data.callRelated(
+            "pos.order",
+            "read_pos_orders",
+            [domain],
+            {},
+            false,
+            true
+        );
+        const orders = result["pos.order"] || [];
         for (const order of orders) {
             order.config_id = this.config;
             order.session_id = this.session;
@@ -2061,10 +2081,13 @@ export class PosStore extends WithLazyGetterTrap {
             resModel: "pos.order",
             resId: order.id,
             onRecordSaved: async (record) => {
-                await this.data.read("pos.order", [record.evalContext.id]);
-                await this.data.read(
-                    "pos.payment",
-                    order.payment_ids.map((p) => p.id)
+                await this.data.callRelated(
+                    "pos.order",
+                    "read_pos_orders",
+                    [[["id", "=", record.evalContext.id]]],
+                    {},
+                    false,
+                    true
                 );
                 this.action.doAction({
                     type: "ir.actions.act_window_close",
@@ -2154,10 +2177,10 @@ export class PosStore extends WithLazyGetterTrap {
                     }
                 }
             }
+            order.setPreset(preset);
             if (preset.identification === "name") {
                 await this.handleSelectNamePreset(order);
             }
-            order.setPreset(preset);
 
             if (preset.use_timing && !order.preset_time) {
                 await this.openPresetTiming(order);
@@ -2635,9 +2658,12 @@ export class PosStore extends WithLazyGetterTrap {
 
     orderDone(order) {
         order.setScreenData({ name: "" });
-        if (this.getOrder() === order) {
-            this.searchProductWord = "";
+        if (!this.config.module_pos_restaurant) {
+            this.selectedOrderUuid = this.getEmptyOrder().uuid;
         }
+        this.searchProductWord = "";
+        const nextPage = this.defaultPage;
+        this.navigate(nextPage.page, nextPage.params);
     }
 
     displayPrinterWarning(printResult, printerName) {

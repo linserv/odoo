@@ -120,15 +120,15 @@ class TestSubcontractingDropshippingFlows(TestMrpSubcontractingCommon):
         self.assertEqual(len(picking_delivery), 1)
         self.assertEqual(len(picking_delivery.move_ids), 1)
         self.assertEqual(picking_delivery.picking_type_id, wh.subcontracting_resupply_type_id)
-        self.assertEqual(picking_delivery.partner_id, self.subcontractor_partner1)
+        self.assertEqual(picking_delivery.partner_id, self.subcontractor_partner1.parent_id)
 
         # Change the purchased quantity to 2
         po.order_line.write({'product_qty': 2})
         # Check that a single delivery with the two components for the subcontractor have been created
-        picking_deliveries = self.env['stock.picking'].search([('origin', '=', origin)])
+        picking_deliveries = mo.picking_ids
         self.assertEqual(len(picking_deliveries), 1)
         self.assertEqual(picking_deliveries.picking_type_id, wh.subcontracting_resupply_type_id)
-        self.assertEqual(picking_deliveries.partner_id, self.subcontractor_partner1)
+        self.assertEqual(picking_deliveries.partner_id, self.subcontractor_partner1.parent_id)
         self.assertTrue(picking_deliveries.state != 'cancel')
         move1 = picking_deliveries.move_ids
         self.assertEqual(move1.product_id, self.comp1)
@@ -146,7 +146,6 @@ class TestSubcontractingDropshippingFlows(TestMrpSubcontractingCommon):
         sub_location = self.env['stock.location'].create({
             'name': 'Super Location',
             'location_id': subcontract_location.id,
-            'is_subcontracting_location': True,
         })
 
         dropship_subcontractor_route = self.env['stock.route'].search([('name', '=', 'Dropship Subcontractor on Order')])
@@ -360,7 +359,6 @@ class TestSubcontractingDropshippingFlows(TestMrpSubcontractingCommon):
         supplier to each subcontractor.
         """
         dropship_subcontractor_route = self.env.ref('mrp_subcontracting_dropshipping.route_subcontracting_dropshipping')
-        dropship_subcontractor_route.rule_ids.filtered(lambda r: r.action == 'buy').group_propagation_option = 'none'
 
         subcontractor01, subcontractor02, component_supplier = self.env['res.partner'].create([{
             'name': 'Super Partner %d' % i
@@ -491,7 +489,7 @@ class TestSubcontractingDropshippingFlows(TestMrpSubcontractingCommon):
             'product_min_qty': 2,
             'product_max_qty': 2,
         })
-        self.env['procurement.group'].run_scheduler()
+        self.env['stock.rule'].run_scheduler()
         delivery = self.env["stock.move"].search([("product_id", "=", self.comp1.id)]).picking_id
         self.assertEqual(delivery.partner_id, p1)
 
@@ -550,20 +548,14 @@ class TestSubcontractingDropshippingPortal(TestSubcontractingPortal):
         # check that the dropship is linked to the subcontracted MO
         self.assertEqual(po_dropship_subcontractor.picking_ids.picking_type_id, self.env.company.dropship_subcontractor_pick_type_id)
         self.assertEqual(po_dropship_subcontractor.picking_ids, subcontracted_mo.picking_ids)
-
         # check that your subcontractor is able to modify the lot of the finished product
         action = subcontracted_mo.incoming_picking.with_user(self.portal_user).with_context(is_subcontracting_portal=True).move_ids.action_show_details()
-        mo = self.env['mrp.production'].with_user(self.portal_user).browse(action['res_id'])
-        mo_form = Form(mo.with_context(action['context']), view=action['view_id'])
+        move = po.picking_ids[0].move_ids.with_user(self.portal_user)
+        move_form = Form(move.with_context(action['context']), view=action['view_id'])
         # Registering components for the first manufactured product
-        mo_form.lot_producing_ids.set(finished_serial)
-        mo = mo_form.save()
-        mo.subcontracting_record_component()
-        self.assertRecordValues(mo, [{
-            'qty_producing': 1.0, 'lot_producing_ids': [finished_serial.id], 'state': 'to_close',
-        }])
-        # Check that the initial MO has been splitted in 2
-        self.assertTrue("-001" in mo.name)
-        self.assertRecordValues(mo.procurement_group_id.mrp_production_ids - mo, [{
-            'qty_producing': 1.0, 'lot_producing_ids': [], 'state': 'to_close',
+        with move_form.move_line_ids.edit(0) as ml:
+            ml.lot_id = finished_serial
+        move_form.save()
+        self.assertRecordValues(move._get_subcontract_production()[0], [{
+            'qty_producing': 0.0, 'lot_producing_ids': finished_serial.ids, 'state': 'confirmed',
         }])

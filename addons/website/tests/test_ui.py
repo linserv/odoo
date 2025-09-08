@@ -10,7 +10,7 @@ import odoo
 import odoo.tests
 from odoo import http
 from odoo.addons.base.tests.common import HttpCaseWithUserDemo
-from odoo.addons.web_editor.controllers.main import Web_Editor
+from odoo.addons.html_editor.controllers.main import HTML_Editor
 from odoo.addons.website.tests.common import HttpCaseWithWebsiteUser
 from odoo.fields import Command
 
@@ -183,7 +183,7 @@ class TestUiHtmlEditor(HttpCaseWithUserDemo):
         # disable undraw, no third party should be called in tests
         # Mocked for the previews in the media dialog
         mock_media_library_search.routing_type = 'json'
-        Web_Editor.media_library_search = http.route(['/web_editor/media_library_search'], type='jsonrpc', auth='user', website=True)(mock_media_library_search)
+        HTML_Editor.media_library_search = http.route(['/html_editor/media_library_search'], type='jsonrpc', auth='user', website=True)(mock_media_library_search)
 
         self.start_tour("/", 'website_media_dialog_undraw', login='admin')
 
@@ -353,19 +353,6 @@ class TestUi(HttpCaseWithWebsiteUser):
         url_params = url_encode({'path': '/@/'})
         self.start_tour(f'/website/force/{website_default.id}?{url_params}', "generic_website_editor", login="website_user")
         self.start_tour(f'/website/force/{new_website.id}?{url_params}', "specific_website_editor", login="website_user")
-
-    def test_06_public_user_editor(self):
-        website_default = self.env['website'].search([], limit=1)
-        self.env['website.page'].search([
-            ('url', '=', '/'), ('website_id', '=', website_default.id)
-        ], limit=1).arch = """
-            <t name="Homepage" t-name="website.homepage">
-                <t t-call="website.layout">
-                    <textarea class="o_public_user_editor_test_textarea o_wysiwyg_loader"/>
-                </t>
-            </t>
-        """
-        self.start_tour("/", "public_user_editor", login=None)
 
     def test_07_snippet_version(self):
         website_snippets = self.env.ref('website.snippets')
@@ -732,6 +719,9 @@ class TestUi(HttpCaseWithWebsiteUser):
 
     def test_systray_items_disappear(self):
         self.start_tour("/", "website_systray_items_disappear", login="admin")
+
+    def test_auto_hide_menu(self):
+        self.start_tour("/", "website_auto_hide_menu", login="admin")
 
     def test_editing_awaits_navigation(self):
         self.start_tour("/", "website_editing_awaits_navigation", login="admin")

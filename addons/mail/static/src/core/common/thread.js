@@ -79,6 +79,7 @@ export class Thread extends Component {
         this.onScroll = this.onScroll.bind(this);
         this.registerMessageRef = this.registerMessageRef.bind(this);
         this.store = useService("mail.store");
+        this.ui = useService("ui");
         this.state = useState({
             isFocused: false,
             isReplyingTo: false,
@@ -696,7 +697,7 @@ export class Thread extends Component {
             }
         }
         if (this.props.thread.channel_type === "channel") {
-            return _t("This is the start of #%(channelName)s channel", {
+            return _t("This is the start of the #%(channelName)s channel", {
                 channelName: this.props.thread.name,
             });
         }
@@ -705,7 +706,7 @@ export class Thread extends Component {
                 conversationName: this.props.thread.displayName,
             });
         }
-        return _t("This is the start of direct chat with %(userName)s", {
+        return _t("This is the start of your direct chat with %(userName)s", {
             userName: this.props.thread.displayName,
         });
     }

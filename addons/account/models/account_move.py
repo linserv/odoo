@@ -156,10 +156,7 @@ class AccountMove(models.Model):
         index=True,
         default="entry",
     )
-    is_storno = fields.Boolean(
-        compute='_compute_is_storno', store=True, readonly=False,
-        copy=False,
-    )
+    is_storno = fields.Boolean(compute='_compute_is_storno')
     journal_id = fields.Many2one(
         'account.journal',
         string='Journal',
@@ -386,6 +383,16 @@ class AccountMove(models.Model):
         readonly=False,
     )
     show_delivery_date = fields.Boolean(compute='_compute_show_delivery_date')
+    taxable_supply_date = fields.Date(
+        string="Taxable Supply Date",
+        copy=False,
+        store=True,
+        compute='_compute_taxable_supply_date',
+        precompute=True,
+        readonly=False,
+    )
+    show_taxable_supply_date = fields.Boolean(compute='_compute_show_taxable_supply_date')
+    taxable_supply_date_placeholder = fields.Char(compute='_compute_taxable_supply_date_placeholder')
     invoice_payment_term_id = fields.Many2one(
         comodel_name='account.payment.term',
         string='Payment Terms',
@@ -624,6 +631,10 @@ class AccountMove(models.Model):
     invoice_source_email = fields.Char(string='Source Email', tracking=True)
     invoice_partner_display_name = fields.Char(compute='_compute_invoice_partner_display_info', store=True)
     is_manually_modified = fields.Boolean()
+    is_self_billing = fields.Boolean(
+        string='Self Billing',
+        help="This bill is a self-billing invoice (that you create on behalf of your vendor).",
+    )
 
     # === Fiduciary mode fields === #
     quick_edit_mode = fields.Boolean(compute='_compute_quick_edit_mode')
@@ -813,7 +824,7 @@ class AccountMove(models.Model):
         self.ensure_one()
         return self.invoice_date or self.date
 
-    @api.depends('invoice_date', 'company_id', 'move_type')
+    @api.depends('invoice_date', 'company_id', 'move_type', 'taxable_supply_date')
     def _compute_date(self):
         for move in self:
             accounting_date = move._get_accounting_date_source()
@@ -895,7 +906,9 @@ class AccountMove(models.Model):
     @api.depends('move_type')
     def _compute_is_storno(self):
         for move in self:
-            move.is_storno = move.is_storno or (move.move_type in ('out_refund', 'in_refund') and move.company_id.account_storno)
+            move.is_storno = move.is_storno or (
+                move.company_id.account_storno and move.move_type in ('out_refund', 'in_refund')
+            )
 
     @api.depends('company_id', 'invoice_filter_type_domain')
     def _compute_suitable_journal_ids(self):
@@ -1013,14 +1026,40 @@ class AccountMove(models.Model):
             move.fiscal_position_id = self.env['account.fiscal.position'].with_company(move.company_id)._get_fiscal_position(
                 move.partner_id, delivery=delivery_partner)
 
-    @api.depends('bank_partner_id')
+    @api.depends('bank_partner_id', 'currency_id', 'preferred_payment_method_line_id')
     def _compute_partner_bank_id(self):
+        def _bank_selection_key(bank):
+            """Sorting priority:
+            0. Same currency as the move
+            1. No currency set
+            2. Different currency
+            Then: prefer banks allowing outgoing payments (trusted ones)
+            """
+            if bank.currency_id == move.currency_id:
+                currency_priority = 0
+            elif not bank.currency_id:
+                currency_priority = 1
+            else:
+                currency_priority = 2
+            return (currency_priority, not bank.allow_out_payment)
+
         for move in self:
-            # This will get the bank account from the partner in an order with the trusted first
-            bank_ids = move.bank_partner_id.bank_ids.filtered(
+            if (
+                payment_method := (
+                    move.preferred_payment_method_line_id
+                    or (
+                        move.bank_partner_id.property_inbound_payment_method_line_id
+                        if move.is_inbound()
+                        else move.bank_partner_id.property_outbound_payment_method_line_id
+                    )
+                )
+            ) and payment_method.journal_id:
+                move.partner_bank_id = payment_method.journal_id.bank_account_id
+                continue
+
+            move.partner_bank_id = move.bank_partner_id.bank_ids.filtered(
                 lambda bank: not bank.company_id or bank.company_id == move.company_id
-            ).sorted(lambda bank: not bank.allow_out_payment)
-            move.partner_bank_id = bank_ids[:1]
+            ).sorted(key=_bank_selection_key)[:1]
 
     @api.depends('partner_id')
     def _compute_invoice_payment_term_id(self):
@@ -1050,6 +1089,17 @@ class AccountMove(models.Model):
         for move in self:
             move.show_delivery_date = move.delivery_date and move.is_sale_document()
 
+    def _compute_taxable_supply_date(self):
+        pass
+
+    def _compute_show_taxable_supply_date(self):
+        for move in self:
+            move.show_taxable_supply_date = False
+
+    def _compute_taxable_supply_date_placeholder(self):
+        for move in self:
+            move.taxable_supply_date_placeholder = ''
+
     @api.depends('journal_id', 'statement_line_id')
     def _compute_currency_id(self):
         for invoice in self:
@@ -1065,7 +1115,7 @@ class AccountMove(models.Model):
         self.ensure_one()
         return self.invoice_date or fields.Date.context_today(self)
 
-    @api.depends('currency_id', 'company_currency_id', 'company_id', 'invoice_date')
+    @api.depends('currency_id', 'company_currency_id', 'company_id', 'invoice_date', 'taxable_supply_date')
     def _compute_expected_currency_rate(self):
         for move in self:
             if move.currency_id:
@@ -1078,7 +1128,7 @@ class AccountMove(models.Model):
             else:
                 move.expected_currency_rate = 1
 
-    @api.depends('currency_id', 'company_currency_id', 'company_id', 'invoice_date')
+    @api.depends('currency_id', 'company_currency_id', 'company_id', 'invoice_date', 'taxable_supply_date')
     def _compute_invoice_currency_rate(self):
         for move in self:
             if move.is_invoice(include_receipts=True):
@@ -2745,9 +2795,10 @@ class AccountMove(models.Model):
 
     def _get_product_catalog_record_lines(self, product_ids, *, selected_section_id=False, **kwargs):
         grouped_lines = defaultdict(lambda: self.env['account.move.line'])
+        selected_section_id = selected_section_id or False
         for line in self.line_ids:
             if (
-                line.section_line_id.id == selected_section_id
+                line.get_parent_section_line().id == selected_section_id
                 and line.display_type == 'product'
                 and line.product_id.id in product_ids
             ):
@@ -2772,10 +2823,11 @@ class AccountMove(models.Model):
                  sale order and the quantity selected.
         :rtype: float
         """
-        move_line = self.line_ids.filtered_domain([
-            ('product_id', '=', product_id),
-            ('section_line_id', '=', selected_section_id),
-        ])
+        selected_section_id = selected_section_id or False
+        move_line = self.line_ids.filtered(
+            lambda line: line.product_id.id == product_id
+            and line.get_parent_section_line().id == selected_section_id,
+        )
         if move_line:
             if quantity != 0:
                 move_line.quantity = quantity
@@ -3615,10 +3667,18 @@ class AccountMove(models.Model):
         for old_move, new_move in zip(self, new_moves):
             message_origin = '' if not new_move.auto_post_origin_id else \
                 (Markup('<br/>') + _('This recurring entry originated from %s', new_move.auto_post_origin_id._get_html_link()))
-            message_content = _('This entry has been reversed from %s', old_move._get_html_link()) if default.get('reversed_entry_id') else _('This entry has been duplicated from %s', old_move._get_html_link())
+            message_content = old_move._get_copy_message_content(default)
             bodies[new_move.id] = message_content + message_origin
         new_moves._message_log_batch(bodies=bodies)
         return new_moves
+
+    def _get_copy_message_content(self, default):
+        """Hook method to customize the message content when copying a move.
+        This method can be overridden by other modules to add custom logic.
+        :param default: The default values dict passed to copy method
+        :return: The message content string
+        """
+        return _('This entry has been reversed from %s', self._get_html_link()) if default.get('reversed_entry_id') else _('This entry has been duplicated from %s', self._get_html_link())
 
     def _sanitize_vals(self, vals):
         if vals.get('invoice_line_ids') and vals.get('journal_line_ids'):
@@ -4942,7 +5002,6 @@ class AccountMove(models.Model):
                         **vals,
                         'amount_currency': 0.0,
                         'balance': 0.0,
-                        'display_type': 'epd',  # Used to compute tax_tag_invert for early payment discount lines
                     })
                     line_vals['amount_currency'] += vals['amount_currency']
                     line_vals['balance'] += vals['balance']
@@ -5190,6 +5249,7 @@ class AccountMove(models.Model):
             Command.update(line.id, {
                 'balance': -line.balance,
                 'amount_currency': -line.amount_currency,
+                **({'is_storno': not line.is_storno} if line.company_id.account_storno else {}),
             })
             for line in reverse_moves.line_ids
             if line.move_id.move_type == 'entry' or line.display_type == 'cogs'
@@ -5631,7 +5691,7 @@ class AccountMove(models.Model):
         return action
 
     def action_send_and_print(self):
-        self.env['account.move.send']._check_move_constrains(self)
+        self.env['account.move.send']._check_move_constraints(self)
         return {
             'name': _("Send"),
             'type': 'ir.actions.act_window',
@@ -5844,11 +5904,14 @@ class AccountMove(models.Model):
         """
         :return: the correct mail template based on the current move type
         """
-        return self.env.ref(
-            'account.email_template_edi_credit_note'
-            if all(move.move_type == 'out_refund' for move in self)
-            else 'account.email_template_edi_invoice'
-        )
+        template_xmlid = 'account.email_template_edi_invoice'
+        if all(move.move_type == 'out_refund' for move in self):
+            template_xmlid = 'account.email_template_edi_credit_note'
+        elif all(move.move_type == 'in_invoice' and move.is_self_billing for move in self):
+            template_xmlid = 'account.email_template_edi_self_billing_invoice'
+        elif all(move.move_type == 'in_refund' and move.is_self_billing for move in self):
+            template_xmlid = 'account.email_template_edi_self_billing_credit_note'
+        return self.env.ref(template_xmlid)
 
     def _notify_get_recipients_groups(self, message, model_description, msg_vals=False):
         groups = super()._notify_get_recipients_groups(message, model_description, msg_vals=msg_vals)
@@ -6381,12 +6444,13 @@ class AccountMove(models.Model):
         elif allow_fallback:
             return [self._get_invoice_pdf_proforma()]
 
-    def _get_invoice_report_filename(self, extension='pdf'):
+    def _get_invoice_report_filename(self, extension='pdf', report=None):
         """ Get the filename of the generated invoice report with extension file. """
         self.ensure_one()
-        report_id = self.partner_id.invoice_template_pdf_report_id or self.env.ref('account.account_invoices')
-        if report_id.print_report_name and isinstance(report_id.print_report_name, str):
-            file_name = safe_eval(report_id.print_report_name, {'object': self})
+        if not report:
+            report = self.partner_id.invoice_template_pdf_report_id or self.env.ref('account.account_invoices')
+        if report.print_report_name and isinstance(report.print_report_name, str):
+            file_name = safe_eval(report.print_report_name, {'object': self})
         else:
             file_name = self.name
         return f"{file_name.replace('/', '_')}.{extension}"
@@ -6838,6 +6902,21 @@ class AccountMove(models.Model):
         """
         # TO OVERRIDE
         return []
+
+    def _get_move_lines_to_report(self):
+        def show_line(line):
+            return (
+                line.display_type == 'line_section'
+                or (not (
+                    line.parent_id.collapse_composition
+                    or line.parent_id.parent_id.collapse_composition
+                ) and not (
+                    line.parent_id.collapse_prices
+                    or line.parent_id.parent_id.collapse_prices
+                ))
+            )
+
+        return self.invoice_line_ids.filtered(show_line).sorted('sequence')
 
     @staticmethod
     def _can_commit():

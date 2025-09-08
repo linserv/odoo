@@ -9,12 +9,30 @@ export class Composer extends Record {
     clear() {
         this.attachments.length = 0;
         this.replyToMessage = undefined;
-        this.composerHtml = markup("<p><br></p>");
+        this.composerHtml = markup("<div class='o-paragraph'><br></div>");
         Object.assign(this.selection, {
             start: 0,
             end: 0,
             direction: "none",
         });
+    }
+
+    /**
+     * @param {string} text - text to insert
+     * @param {number} position - insertion position
+     * @param {Object} [options]
+     * @param {boolean} [options.moveCursorToEnd=false] - If true, place cursor at end of composerText
+     */
+    insertText(text, position, { moveCursorToEnd = false } = {}) {
+        const before = this.composerText.substring(0, position);
+        const after = this.composerText.substring(position);
+        this.composerText = before + text + after;
+        this.selection.start = before.length + text.length;
+        if (moveCursorToEnd) {
+            this.selection.start = this.composerText.length;
+        }
+        this.selection.end = this.selection.start;
+        this.forceCursorMove = true;
     }
 
     attachments = fields.Many("ir.attachment");
@@ -44,10 +62,10 @@ export class Composer extends Record {
             }
         },
     });
-    composerHtml = fields.Html(markup("<p><br></p>"), {
+    composerHtml = fields.Html(markup("<div class='o-paragraph'><br></div>"), {
         compute() {
             if (this.syncHtmlWithMessage) {
-                return this.message.body || markup("<p><br></p>");
+                return this.message.body || markup("<div class='o-paragraph'><br></div>");
             }
             return this.composerHtml;
         },
@@ -93,6 +111,10 @@ export class Composer extends Record {
 
     get syncHtmlWithMessage() {
         return this.message && !this.isDirty;
+    }
+
+    get targetThread() {
+        return this.replyToMessage?.thread ?? this.thread ?? null;
     }
 }
 

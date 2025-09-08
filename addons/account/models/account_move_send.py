@@ -208,13 +208,13 @@ class AccountMoveSend(models.AbstractModel):
 
     @api.model
     def _get_default_mail_attachments_widget(self, move, mail_template, invoice_edi_format=None, extra_edis=None, pdf_report=None):
-        return self._get_placeholder_mail_attachments_data(move, invoice_edi_format=invoice_edi_format, extra_edis=extra_edis) \
+        return self._get_placeholder_mail_attachments_data(move, invoice_edi_format=invoice_edi_format, extra_edis=extra_edis, pdf_report=pdf_report) \
             + self._get_placeholder_mail_template_dynamic_attachments_data(move, mail_template, pdf_report=pdf_report) \
             + self._get_invoice_extra_attachments_data(move) \
             + self._get_mail_template_attachments_data(mail_template)
 
     @api.model
-    def _get_placeholder_mail_attachments_data(self, move, invoice_edi_format=None, extra_edis=None):
+    def _get_placeholder_mail_attachments_data(self, move, invoice_edi_format=None, extra_edis=None, pdf_report=None):
         """ Returns all the placeholder data.
         Should be extended to add placeholder based on the sending method.
         :param: move:       The current move.
@@ -226,8 +226,7 @@ class AccountMoveSend(models.AbstractModel):
         """
         if move.invoice_pdf_report_id:
             return []
-
-        filename = move._get_invoice_report_filename()
+        filename = move._get_invoice_report_filename(report=pdf_report)
         return [{
             'id': f'placeholder_{filename}',
             'name': filename,
@@ -250,9 +249,10 @@ class AccountMoveSend(models.AbstractModel):
         # In case the report selected to do so is also added in dynamic attachments of the mail template, we need to
         # filter them out to avoid duplicated placeholders, since they are already added in the
         # _get_placeholder_mail_attachments_data method.
-        invoice_template = (pdf_report or self._get_default_pdf_report_id(move)) + self.env.ref('account.account_invoices')
+        pdf_report = pdf_report or self._get_default_pdf_report_id(move)
+        invoice_template = pdf_report | self.env.ref('account.account_invoices')
         extra_mail_templates = mail_template.report_template_ids - invoice_template
-        filename = move._get_invoice_report_filename()
+        filename = move._get_invoice_report_filename(report=pdf_report)
         return [
             {
                 'id': f'placeholder_{extra_mail_template.name.lower()}_{filename}',
@@ -306,11 +306,19 @@ class AccountMoveSend(models.AbstractModel):
             raise UserError('\n'.join(danger_alert_messages))
 
     @api.model
-    def _check_move_constrains(self, moves):
-        if any(move.state != 'posted' for move in moves):
-            raise UserError(_("You can't generate invoices that are not posted."))
-        if any(not move.is_sale_document(include_receipts=True) for move in moves):
-            raise UserError(_("You can only generate sales documents."))
+    def _check_move_constraints(self, moves):
+        for move in moves:
+            if move_constraints := self._get_move_constraints(move):
+                raise UserError(next(iter(move_constraints.values()), None))
+
+    @api.model
+    def _get_move_constraints(self, move):
+        constraints = {}
+        if move.state != 'posted':
+            constraints['not_posted'] = _("You can't generate invoices that are not posted.")
+        if not move.is_sale_document(include_receipts=True):
+            constraints['not_sale_document'] = _("You can only generate sales documents.")
+        return constraints
 
     @api.model
     def _check_invoice_report(self, moves, **custom_settings):
@@ -397,7 +405,7 @@ class AccountMoveSend(models.AbstractModel):
 
             for invoice, invoice_data in group_invoices_data.items():
                 invoice_data['pdf_attachment_values'] = {
-                    'name': invoice._get_invoice_report_filename(),
+                    'name': invoice._get_invoice_report_filename(report=pdf_report),
                     'raw': content_by_id[invoice.id],
                     'mimetype': 'application/pdf',
                     'res_model': invoice._name,
@@ -724,7 +732,7 @@ class AccountMoveSend(models.AbstractModel):
         """Assert the data provided to _generate_and_send_invoices are correct.
         This is a security in case the method is called directly without going through the wizards.
         """
-        self._check_move_constrains(moves)
+        self._check_move_constraints(moves)
         self._check_invoice_report(moves, **custom_settings)
         assert all(
             sending_method in dict(self.env['res.partner']._fields['invoice_sending_method'].selection)

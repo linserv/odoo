@@ -25,10 +25,7 @@ class StockMove(models.Model):
 
     @api.model
     def _prepare_merge_negative_moves_excluded_distinct_fields(self):
-        excluded_fields = super()._prepare_merge_negative_moves_excluded_distinct_fields() + ['created_purchase_line_ids']
-        if self.env['ir.config_parameter'].sudo().get_param('purchase_stock.merge_different_procurement'):
-            excluded_fields += ['procure_method']
-        return excluded_fields
+        return super()._prepare_merge_negative_moves_excluded_distinct_fields() + ['created_purchase_line_ids']
 
     @api.depends('purchase_line_id', 'purchase_line_id.product_uom_id')
     def _compute_packaging_uom_id(self):
@@ -47,10 +44,10 @@ class StockMove(models.Model):
         super()._compute_description_picking()
         for move in self:
             if move.purchase_line_id:
-                seller = move.purchase_line_id.selected_seller_id
+                seller = move.sudo().purchase_line_id.selected_seller_id
                 vendor_reference = f'[{seller.product_code}]' if seller.product_code else ''
                 vendor_reference += f' {seller.product_name}' if seller.product_name else ''
-                no_variant_attributes = '\n'.join(f'{attribute.attribute_id.name}: {attribute.name}' for attribute in move.purchase_line_id.product_no_variant_attribute_value_ids)
+                no_variant_attributes = '\n'.join(f'{attribute.attribute_id.name}: {attribute.name}' for attribute in move.purchase_line_id.sudo().product_no_variant_attribute_value_ids)
                 move.description_picking = (no_variant_attributes + '\n' + vendor_reference + '\n' + move.description_picking).strip()
 
     def _get_description(self):
@@ -94,12 +91,17 @@ class StockMove(models.Model):
         self.ensure_one()
         return self.origin_returned_move_id or not self.purchase_line_id or not self.product_id.id
 
+    def _prepare_extra_move_vals(self, qty):
+        vals = super()._prepare_extra_move_vals(qty)
+        vals['purchase_line_id'] = self.purchase_line_id.id
+        return vals
+
     def _prepare_move_split_vals(self, uom_qty):
         vals = super(StockMove, self)._prepare_move_split_vals(uom_qty)
-        vals['purchase_line_id'] = self.purchase_line_id.id
         # when backordering an mto move link the bakcorder to the purchase order
         if self.procure_method == 'make_to_order' and self.created_purchase_line_ids:
             vals['created_purchase_line_ids'] = [Command.set(self.created_purchase_line_ids.ids)]
+        vals['purchase_line_id'] = self.purchase_line_id.id
         return vals
 
     def _clean_merged(self):

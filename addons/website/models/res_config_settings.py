@@ -121,7 +121,6 @@ class ResConfigSettings(models.TransientModel):
         compute='_compute_has_plausible_shared_key',
         inverse='_inverse_has_plausible_shared_key')
     module_website_livechat = fields.Boolean()
-    module_marketing_automation = fields.Boolean()
 
     @api.depends('website_id')
     def _compute_shared_user_account(self):
@@ -210,6 +209,7 @@ class ResConfigSettings(models.TransientModel):
 
     def action_website_create_new(self):
         return {
+            'name': _('Add Website'),
             'view_mode': 'form',
             'view_id': self.env.ref('website.view_website_form_view_themes_modal').id,
             'res_model': 'website',

@@ -296,7 +296,7 @@
                             <field name="company_id" invisible="1"/>
                             <field name="product_description_variants" invisible="product_description_variants in (False, '')" readonly="state != 'draft'"/>
                             <label for="product_qty" string="Quantity"/>
-                            <div class="o_row g-0 d-flex">
+                            <div class="o_row g-0 d-flex" name="qty">
                                 <div invisible="state == 'draft'" class="o_row flex-grow-1">
                                     <field name="qty_producing" class="text-start text-truncate" readonly="state == 'cancel' or (state == 'done' and is_locked) or product_tracking=='serial'" force_save="1"/>
                                     /
@@ -308,7 +308,7 @@
                                 </button>
                                 <label for="product_uom_id" string="" class="oe_inline"/>
                                 <field name="product_uom_id" options="{'no_open': True, 'no_create': True, 'quantity_field': 'product_qty'}" groups="uom.group_uom" widget="many2one_uom" readonly="state != 'draft'" class="flex-grow-0" style="width:auto!important"/>
-                                <span class='fw-bold text-nowrap'>To Produce</span>
+                                <span name="to_produce" class='fw-bold text-nowrap'>To Produce</span>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart" invisible="forecasted_issue"/>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart" invisible="not forecasted_issue" class="text-danger"/>
                             </div>
@@ -340,9 +340,9 @@
                             </div>
                         </group>
                         <group name="group_extra_info">
-                            <label for="date_start" string="Scheduled Date" invisible="state in ['progress', 'to_close', 'done', 'cancel']"/>
-                            <label for="date_start" string="Start Date" invisible="state not in ['progress', 'to_close', 'done', 'cancel']"/>
-                            <div class="o_row">
+                            <label name="scheduled_date" for="date_start" string="Scheduled Date" invisible="state in ['progress', 'to_close', 'done', 'cancel']"/>
+                            <label name="start_date" for="date_start" string="Start Date" invisible="state not in ['progress', 'to_close', 'done', 'cancel']"/>
+                            <div class="o_row" name="date_start">
                                 <field name="date_start"
                                     readonly="state in ['done', 'to_close', 'cancel']"
                                     decoration-warning="state not in ('done', 'cancel') and date_start &lt; now"
@@ -375,7 +375,6 @@
                                     <field name="company_id"/>
                                     <field name="warehouse_id"/>
                                     <field name="origin"/>
-                                    <field name="group_id"/>
                                     <field name="propagate_cancel"/>
                                     <field name="move_dest_ids"/>
                                     <field name="state"/>
@@ -470,7 +469,6 @@
                                         options="{'create': [('parent.use_create_components_lots', '!=', False)]}"
                                         context="{'default_product_id': product_id}"
                                         domain="[('product_id','=',product_id)]"/>
-                                    <field name="group_id" column_invisible="True"/>
                                     <button name="action_show_details" type="object" title="Show Details" string="Details" context="{'default_product_uom_qty': 0}" invisible="not show_details_visible or has_tracking == 'none'"/>
                                     <button class="o_optional_button btn" name="action_show_details" type="object" title="Show Details" string="Details" context="{'default_product_uom_qty': 0}" invisible="has_tracking != 'none' or not show_details_visible"/>
                                 </list>
@@ -688,7 +686,6 @@
                         <filter string="Product" name="product" domain="[]" context="{'group_by': 'product_id'}"/>
                         <filter string="Status" name="status" domain="[]" context="{'group_by': 'state'}"/>
                         <filter string="Material Availability" name="groupby_reservation_state" domain="[]" context="{'group_by': 'reservation_state'}"/>
-                        <filter string="Procurement Group" name="procurement_group_id" domain="[]" context="{'group_by': 'procurement_group_id'}"/>
                         <filter string="Date" name="date" domain="[]" context="{'group_by': 'date_start'}" help="Date by Month"/>
                     </group>
                </search>

@@ -1,6 +1,6 @@
 import { htmlEscape, markup } from "@odoo/owl";
 
-import { stateToUrl } from "@web/core/browser/router";
+import { router } from "@web/core/browser/router";
 import { loadEmoji, loader } from "@web/core/emoji_picker/emoji_picker";
 import { normalize } from "@web/core/l10n/utils";
 import {
@@ -234,7 +234,7 @@ function generateMentionsLinks(
     for (const mention of mentions) {
         const link = document.createElement("a");
         setAttributes(link, {
-            href: stateToUrl({ model: mention.model, resId: mention.id }),
+            href: router.stateToUrl({ model: mention.model, resId: mention.id }),
             class: mention.class,
             "data-oe-id": mention.id,
             "data-oe-model": mention.model,
@@ -371,4 +371,16 @@ export function decorateEmojis(content) {
         node.replaceWith(...span.childNodes);
     }
     return markup(doc.body.innerHTML);
+}
+
+/**
+ * Converts an object of key/value to string, where object represents a attClass with OWL syntax object
+ * and value is evaluation of each key.
+ * Example: "attClassObjectToString({ a: 1, b: 0, c: 1 })" converts to "a c".
+ */
+export function attClassObjectToString(obj) {
+    return Object.entries(obj)
+        .filter(([_, val]) => val)
+        .map(([key, _]) => key)
+        .join(" ");
 }

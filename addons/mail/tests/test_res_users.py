@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+from datetime import datetime, timedelta
+from freezegun import freeze_time
 from psycopg2 import IntegrityError
 from unittest import skip
 from unittest.mock import patch
@@ -51,6 +53,11 @@ class TestNotifySecurityUpdate(MailCommon):
 
 @tagged('-at_install', 'post_install', 'mail_tools', 'res_users')
 class TestUser(MailCommon):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.portal_user = cls._create_portal_user()
 
     @mute_logger('odoo.sql_db')
     def test_notification_type_constraint(self):
@@ -110,6 +117,36 @@ class TestUser(MailCommon):
         self.assertEqual(admin.notification_type, 'email')
         self.assertNotIn(self.env.ref('mail.group_mail_notification_type_inbox'), admin.group_ids)
 
+    @freeze_time("2025-06-18 08:45:12")
+    def test_out_of_office(self):
+        """ Test Out-of-Office computation, defined on user itself. """
+        test_user = self.user_employee.with_user(self.user_employee)
+        portal_user = self.portal_user
+        now = datetime(2025, 6, 8, 8, 45, 12)
+        for ooo_from, ooo_to, exp_ooo in [
+            (False, False, False),
+            (now - timedelta(hours=1), False, True),  # only a from is ok
+            (False, now + timedelta(hours=1), False),  # invalid interval
+            (now - timedelta(hours=1), now + timedelta(hours=1), True),
+            (now, now, True),
+            (now - timedelta(hours=4), now - timedelta(hours=2), False),  # past
+            (now + timedelta(hours=2), now + timedelta(hours=4), False),  # future
+            (now + timedelta(hours=2), False, False),  # future, from only
+        ]:
+            with self.subTest(ooo_from=ooo_from, ooo_to=ooo_to):
+                with self.mock_datetime_and_now(now):  # also mock cr.now()
+                    test_user.write({
+                        'out_of_office_from': ooo_from,
+                        'out_of_office_to': ooo_to,
+                    })
+                    self.assertEqual(test_user.is_out_of_office, exp_ooo)
+
+                    portal_user.write({
+                        'out_of_office_from': ooo_from,
+                        'out_of_office_to': ooo_to,
+                    })
+                    self.assertFalse(portal_user.is_out_of_office, 'Portal users are never OOO')
+
     def test_web_create_users(self):
         src = [
             'POILUCHETTE@test.example.com',
@@ -156,6 +193,7 @@ class TestUserTours(HttpCaseWithUserDemo):
             })
             self.user_demo.group_ids += self.env.ref('hr.group_hr_user')
         self.user_demo.tz = "Europe/Brussels"
+        self.user_demo.notification_type = "email"
 
         # avoid 'reload_context' action in the middle of the tour to ease steps and form save checks
         with patch.object(ResUsersPatchedInTest, 'preference_save', lambda self: True):
@@ -164,7 +202,7 @@ class TestUserTours(HttpCaseWithUserDemo):
                 "mail/static/tests/tours/user_modify_own_profile_tour.js",
                 login="demo",
             )
-        self.assertEqual(self.user_demo.email, "updatedemail@example.com")
+        self.assertEqual(self.user_demo.notification_type, "inbox")
 
 
 @tagged("post_install", "-at_install")

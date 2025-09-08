@@ -16,7 +16,9 @@ from odoo.fields import Domain
 from odoo.exceptions import ValidationError, AccessError, RedirectWarning, UserError
 from odoo.tools import convert, format_time, email_normalize, SQL, Query
 from odoo.tools.intervals import Intervals
+from odoo.addons.hr.models.hr_version import format_date_abbr
 from odoo.addons.mail.tools.discuss import Store
+from odoo.tools.float_utils import float_is_zero
 
 
 class HrEmployee(models.Model):
@@ -124,12 +126,30 @@ class HrEmployee(models.Model):
     birthday = fields.Date('Birthday', groups="hr.group_hr_user", tracking=True)
     birthday_public_display = fields.Boolean('Show to all employees', groups="hr.group_hr_user", default=False)
     birthday_public_display_string = fields.Char("Public Date of Birth", compute="_compute_birthday_public_display_string", default="hidden")
-    bank_account_id = fields.Many2one(
-        'res.partner.bank', 'Bank Account',
+    bank_account_ids = fields.Many2many(
+        'res.partner.bank',
+        relation='employee_bank_account_rel',
+        column1='employee_id',
+        column2='bank_account_id',
         domain="[('partner_id', '=', work_contact_id), '|', ('company_id', '=', False), ('company_id', '=', company_id)]",
         groups="hr.group_hr_user",
         tracking=True,
-        help='Employee bank account to pay salaries')
+        string='Bank Accounts',
+        help='Employee bank accounts to pay salaries')
+    is_trusted_bank_account = fields.Boolean(compute="_compute_is_trusted_bank_account", groups="hr.group_hr_user")
+    primary_bank_account_id = fields.Many2one('res.partner.bank', compute="_compute_primary_bank_account_id", groups="hr.group_hr_user")
+    has_multiple_bank_accounts = fields.Boolean(compute="_compute_has_multiple_bank_accounts", default=False, groups="hr.group_hr_user")
+    salary_distribution = fields.Json(string="Salary Distribution", compute='_sync_salary_distribution', groups='hr.group_hr_user', store=True, readonly=False)
+    """
+    {
+    `bank_account_id`: {
+        'sequence': int,
+        'amount': float,
+        'amount_is_percentage': boolean,
+        }
+    }
+    """
+
     permit_no = fields.Char('Work Permit No', groups="hr.group_hr_user", tracking=True)
     visa_no = fields.Char('Visa No', groups="hr.group_hr_user", tracking=True)
     visa_expire = fields.Date('Visa Expiration Date', groups="hr.group_hr_user", tracking=True)
@@ -240,6 +260,85 @@ class HrEmployee(models.Model):
             })
         return new_vals_list
 
+    @api.depends('bank_account_ids.allow_out_payment')
+    def _compute_is_trusted_bank_account(self):
+        for employee in self:
+            employee.is_trusted_bank_account = employee.primary_bank_account_id.allow_out_payment
+
+    @api.depends('bank_account_ids')
+    def _compute_has_multiple_bank_accounts(self):
+        for employee in self:
+            if employee.bank_account_ids and len(employee.bank_account_ids) > 1:
+                employee.has_multiple_bank_accounts = True
+            else:
+                employee.has_multiple_bank_accounts = False
+
+    @api.depends('bank_account_ids')
+    def _sync_salary_distribution(self):
+        for employee in self:
+            current_salary_distribution = employee.salary_distribution or {}
+            current_ids = set(map(int, current_salary_distribution.keys()))
+            account_ids = set(employee.bank_account_ids.ids)
+
+            added_ids = account_ids - current_ids
+            removed_ids = current_ids - account_ids
+            unchanged_ids = account_ids & current_ids
+
+            # Preserve existing data and order
+            ordered = sorted([
+                (int(i), data) for i, data in current_salary_distribution.items()
+                if int(i) in unchanged_ids
+            ], key=lambda x: (not x[1].get('amount_is_percentage'), x[1].get('sequence', float('inf'))))
+
+            new_salary_distribution = {str(i): data for i, data in ordered}
+
+            # Redistribute removed % to first item
+            removed_percentage = sum(current_salary_distribution[str(i)]['amount']
+                for i in removed_ids if str(i) in current_salary_distribution and current_salary_distribution[str(i)]['amount_is_percentage'])
+            if removed_percentage and ordered:
+                first_id = str(ordered[0][0])
+                if new_salary_distribution[first_id]['amount_is_percentage']:
+                    new_salary_distribution[first_id]['amount'] += removed_percentage
+
+            # Add new entries with remaining %
+            total_allocated = sum(d['amount'] for d in new_salary_distribution.values() if d['amount_is_percentage'])
+            remaining = max(0.0, 100.0 - total_allocated)
+            seq = max((d.get('sequence', 0) for d in new_salary_distribution.values()), default=0)
+            amount = employee.currency_id.round(remaining / len(added_ids)) if added_ids else 0.0
+            for i, new_id in enumerate(added_ids):
+                seq += 1
+                if i == len(added_ids) - 1:
+                    amount = remaining
+                new_salary_distribution[str(new_id)] = {
+                    'amount': amount,
+                    'amount_is_percentage': True,
+                    'sequence': seq,
+                }
+                remaining -= amount
+
+            employee.salary_distribution = new_salary_distribution
+
+    @api.constrains('salary_distribution')
+    def _check_salary_distribution(self):
+        for employee in self:
+            dist = employee.salary_distribution
+            if not dist:
+                continue
+
+            total = 0
+            check_total = False
+            for ba_values in dist.values():
+                amount = ba_values.get('amount')
+                is_percentage = ba_values.get('amount_is_percentage', True)
+                if is_percentage and (not isinstance(amount, (float, int)) or not (0 <= amount <= 100)):
+                    raise ValidationError(self.env._("Each amount percentage must be a number between 0 and 100."))
+                if is_percentage:
+                    check_total = True
+                    total += amount
+
+            if check_total and not float_is_zero(total - 100.0, precision_digits=4):
+                raise ValidationError(self.env._("Total salary distribution on bank accounts must be exactly 100%."))
+
     @api.model
     def _create(self, data_list):
         versions = [vals['stored'].pop('version_id', None) for vals in data_list]
@@ -272,6 +371,14 @@ class HrEmployee(models.Model):
             or self.env.user.has_group("hr.group_hr_user")
             or field.name not in ('activity_calendar_event_id', 'rating_ids', 'website_message_ids', 'message_has_sms_error')
         )
+
+    def check_no_existing_contract(self, date):
+        if isinstance(date, str):
+            date = fields.Date.from_string(date)
+        if self._is_in_contract(date):
+            raise ValidationError(self.env._("The employee is already in contract on %s. "
+                                             "Please select a date outside existing contracts",
+                                             format_date_abbr(self.env, date)))
 
     @api.onchange('contract_template_id')
     def _onchange_contract_template_id(self):
@@ -474,8 +581,32 @@ class HrEmployee(models.Model):
         new_version = version_to_copy.sudo().copy(values)
         return new_version.sudo(False)
 
+    def create_contract(self, date):
+        # Here we can assume that there is no existing contract on the date given
+        self.ensure_one()
+        if date and isinstance(date, str):
+            date = fields.Date.to_date(date)
+
+        contracts = self._get_contract_versions(date)[self.id]
+        future_contract_dates = [d for d in list(contracts.keys()) if d > date]
+        new_contract_date_end = min(future_contract_dates) + relativedelta(days=-1) if future_contract_dates else False
+
+        # There is already a version but with no contract defined on it so we simply write on it the dates
+        if version_same_date := self.version_ids.filtered(lambda v: v.date_version == date):
+            version_same_date.write({
+                'contract_date_start': date,
+                'contract_date_end': new_contract_date_end
+            })
+            return version_same_date
+
+        return self.create_version({
+            'date_version': date,
+            'contract_date_start': date,
+            'contract_date_end': new_contract_date_end
+        })
+
     def _is_in_contract(self, date):
-        return self._get_version(date)._is_in_contract(date)
+        return self._get_contract_dates(date) != (False, False)
 
     def _get_contracts(self, date_start=None, date_end=None, use_latest_version=True, domain=None):
         """
@@ -1187,15 +1318,6 @@ class HrEmployee(models.Model):
 
     def write(self, vals):
         if 'work_contact_id' in vals:
-            account_ids = vals.get('bank_account_id') or self.bank_account_id.ids
-            if account_ids:
-                bank_accounts = self.env['res.partner.bank'].sudo().browse(account_ids)
-                for bank_account in bank_accounts:
-                    if vals['work_contact_id'] != bank_account.partner_id.id:
-                        if bank_account.allow_out_payment:
-                            bank_account.allow_out_payment = False
-                        if vals['work_contact_id']:
-                            bank_account.partner_id = vals['work_contact_id']
             self.message_unsubscribe(self.work_contact_id.ids)
         if 'user_id' in vals:
             # Update the profile pictures with user, except if provided
@@ -1226,6 +1348,16 @@ class HrEmployee(models.Model):
         new_vals = vals.copy()
         version_vals = {val: new_vals.pop(val) for val in vals if val in self._fields and self._fields[val].inherited}
         res = super().write(new_vals)
+        if 'work_contact_id' in vals:
+            account_ids = self.bank_account_ids.ids
+            if account_ids:
+                bank_accounts = self.env['res.partner.bank'].sudo().browse(account_ids)
+                for bank_account in bank_accounts:
+                    if vals['work_contact_id'] != bank_account.partner_id.id:
+                        if bank_account.allow_out_payment:
+                            bank_account.allow_out_payment = False
+                        if vals['work_contact_id']:
+                            bank_account.partner_id = vals['work_contact_id']
         if version_vals:
             version_vals['last_modified_date'] = fields.Datetime.now()
             version_vals['last_modified_uid'] = self.env.uid
@@ -1552,17 +1684,6 @@ class HrEmployee(models.Model):
             'search_view_id': self.env.ref('hr.hr_version_search_view').id
         }
 
-    def action_new_contract(self):
-        self.ensure_one()
-        if not self.contract_date_end:
-            raise UserError(self.env._("Before creating a new contract, close the current one by setting an end date."))
-        if self.current_date_version <= self.contract_date_end:
-            raise UserError(self.env._("Before creating a new contract, create a version that is set after the contract end date"))
-        self.write({
-            'contract_date_start': False,
-            'contract_date_end': False,
-        })
-
     def _get_store_avatar_card_fields(self, target):
         employee_fields = [
             "company_id",
@@ -1582,3 +1703,56 @@ class HrEmployee(models.Model):
                 for field in employee_fields
             ])
         return employee_fields
+
+    @api.depends('bank_account_ids')
+    def _compute_primary_bank_account_id(self):
+        for employee in self:
+            if employee.bank_account_ids:
+                primary_account = min(
+                    employee.bank_account_ids,
+                    key=lambda acc: employee.salary_distribution.get(str(acc.id), {}).get("sequence", float("inf")),
+                )
+                employee.primary_bank_account_id = primary_account
+            else:
+                employee.primary_bank_account_id = False
+
+    def get_accounts_with_fixed_allocations(self):
+        self.ensure_one()
+        return self.bank_account_ids.filtered(
+            lambda a: not self.salary_distribution.get(str(a.id), {}).get('amount_is_percentage', True)
+        )
+
+    def get_bank_account_salary_allocation(self, account_id):
+        ba_info = self.salary_distribution.get(str(account_id), {})
+        return ba_info.get('amount', 0), ba_info.get('amount_is_percentage')
+
+    def get_remaining_percentage(self):
+        self.ensure_one()
+        distribution = self.salary_distribution or {}
+        allocated = 0.0
+
+        for ba_id, vals in distribution.items():
+            if vals.get('amount_is_percentage'):
+                allocated += vals.get('amount', 0.0)
+
+        remaining = 100.0 - allocated
+        return max(0.0, remaining)
+
+    def action_open_allocation_wizard(self):
+        self.ensure_one()
+        wizard = self.env['hr.bank.account.allocation.wizard'].create({
+            'employee_id': self.id,
+        })
+        return {
+            'type': 'ir.actions.act_window',
+            'name': self.env._('Bank Account Allocation'),
+            'res_model': 'hr.bank.account.allocation.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def action_toggle_primary_bank_account_trust(self):
+        self.ensure_one()
+        current_val = self.primary_bank_account_id.allow_out_payment
+        self.primary_bank_account_id.allow_out_payment = not current_val

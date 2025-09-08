@@ -22,7 +22,6 @@
         'views/mrp_production_views.xml',
         'views/subcontracting_portal_views.xml',
         'views/subcontracting_portal_templates.xml',
-        'views/stock_location_views.xml',
     ],
     'demo': [
         'data/mrp_subcontracting_demo.xml',
@@ -133,6 +132,10 @@
 
             'mrp_subcontracting/static/src/subcontracting_portal/*',
             'web/static/src/start.js',
+
+            'stock/static/src/widgets/*',
+            'stock/static/src/fields/*',
+            'mrp_subcontracting/static/src/components/subcontracting_production_form_controller.js',
         ],
     },
     'uninstall_hook': 'uninstall_hook',
