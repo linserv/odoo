@@ -29,7 +29,7 @@
     "assets": {
         # Assets
         'web.assets_unit_tests': [
-            'pos_self_order/static/tests/unit/data/**/*'
+            'pos_self_order/static/tests/unit/**/*',
         ],
         'point_of_sale._assets_pos': [
             'pos_self_order/static/src/overrides/**/*',
@@ -56,8 +56,8 @@
             'web/static/lib/bootstrap/js/dist/base-component.js',
             "web/static/lib/bootstrap/js/dist/carousel.js",
             'web/static/lib/bootstrap/js/dist/scrollspy.js',
-            'web_editor/static/src/js/editor/odoo-editor/src/base_style.scss',
-            'web_editor/static/src/scss/web_editor.common.scss',
+            'html_editor/static/src/scss/base_style.scss',
+            'html_editor/static/src/scss/html_editor.common.scss',
             "point_of_sale/static/src/app/components/numpad/*",
             "point_of_sale/static/src/app/components/product_card/*",
             "point_of_sale/static/src/app/components/order_display/*",
@@ -87,6 +87,7 @@
             "pos_restaurant/static/src/app/models/restaurant_table.js",
             "point_of_sale/static/src/app/utils/numbers.js",
             "point_of_sale/static/src/app/utils/pretty_console_log.js",
+            "point_of_sale/static/src/app/utils/devices_identifier_sequence.js",
             "point_of_sale/static/src/app/hooks/hooks.js",
             "point_of_sale/static/src/app/utils/debug-formatter.js",
         ],

@@ -393,6 +393,11 @@ class HrEmployee(models.Model):
         if not self.contract_date_start:
             self.contract_date_end = False
 
+    @api.onchange("private_state_id")
+    def _onchange_private_state_id(self):
+        if self.private_state_id:
+            self.private_country_id = self.private_state_id.country_id
+
     @api.onchange('work_phone', 'mobile_phone', 'company_country_id', 'company_id')
     def _onchange_phone_validation_employee(self):
         if self.work_phone:
@@ -1448,8 +1453,8 @@ class HrEmployee(models.Model):
 
     def _get_tz(self):
         self.ensure_one()
-        return self.tz or\
-               self.resource_calendar_id.tz or\
+        return self.resource_calendar_id.tz or\
+               self.tz or\
                self.company_id.resource_calendar_id.tz or\
                'UTC'
 
@@ -1599,7 +1604,8 @@ class HrEmployee(models.Model):
                                     min(date_to, version_end),
                                     tz=employee_tz,
                                     resources=self.resource_id,
-                                    compute_leaves=True)[self.resource_id.id]
+                                    compute_leaves=True,
+                                    domain=[('company_id', 'in', [False, self.company_id.id])])[self.resource_id.id]
             duration_data = duration_data | version_intervals
         return duration_data
 

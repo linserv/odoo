@@ -292,8 +292,9 @@ export class Composer extends Component {
             placeholder: this.placeholder,
             Plugins: this.ui.isSmall ? MAIL_SMALL_UI_PLUGINS : MAIL_PLUGINS,
             composerPluginDependencies: {
-                onKeydown: this.onKeydown.bind(this),
+                onBeforePaste: (selection, ev) => this.onPaste(ev),
                 onInput: this.onInput.bind(this),
+                onKeydown: this.onKeydown.bind(this),
             },
             classList: ["o-mail-Composer-html"],
             onChange: () => this.onChangeWysiwygContent(),
@@ -569,6 +570,11 @@ export class Composer extends Component {
         }
     }
 
+    get fullComposerAdditionalContext() {
+        // To be overridden by inheriting classes
+        return {};
+    }
+
     async onClickFullComposer(ev) {
         const allRecipients = [...this.thread.suggestedRecipients];
         if (this.props.type !== "note") {
@@ -630,6 +636,7 @@ export class Composer extends Component {
             default_subtype_xmlid: this.props.type === "note" ? "mail.mt_note" : "mail.mt_comment",
             clicked_on_full_composer: true,
             // Changed in 18.2+: finally get rid of autofollow, following should be done manually
+            ...this.fullComposerAdditionalContext,
         };
         const action = {
             name: this.props.type === "note" ? _t("Log note") : _t("Compose Email"),
@@ -783,11 +790,12 @@ export class Composer extends Component {
         const thread = toRaw(this.props.composer.thread);
         const postThread = toRaw(this.thread);
         const post = postThread.post.bind(postThread, value, postData, extraData);
+        let message;
         if (postThread.model === "discuss.channel") {
             // feature of (optimistic) temp message
             post();
         } else {
-            await post();
+            message = await post();
         }
         if (thread.model === "mail.box") {
             this.notifySendFromMailbox();
@@ -797,6 +805,7 @@ export class Composer extends Component {
         this.props.composer.replyToMessage = undefined;
         this.props.composer.emailAddSignature = true;
         this.props.composer.thread.additionalRecipients = [];
+        return message;
     }
 
     async editMessage() {
@@ -825,12 +834,20 @@ export class Composer extends Component {
     onClickInsertCannedResponse(ev) {
         markEventHandled(ev, "composer.clickInsertCannedResponse");
         const composer = toRaw(this.props.composer);
-        const composerText = composer.composerText;
-        const firstPart = composerText.slice(0, composer.selection.start);
-        const secondPart = composerText.slice(composer.selection.end, composerText.length);
-        const toInsertPart = firstPart.length === 0 || firstPart.at(-1) === " " ? "::" : " ::";
-        composer.composerText = firstPart + toInsertPart + secondPart;
-        this.selection.moveCursor((firstPart + toInsertPart).length);
+        if (this.editor) {
+            if (!isHtmlEmpty(this.props.composer.composerHtml)) {
+                this.editor.shared.dom.insert(" ");
+            }
+            this.editor.shared.dom.insert("::");
+            this.editor.shared.history.addStep();
+        } else {
+            const composerText = composer.composerText;
+            const firstPart = composerText.slice(0, composer.selection.start);
+            const secondPart = composerText.slice(composer.selection.end, composerText.length);
+            const toInsertPart = firstPart.length === 0 || firstPart.at(-1) === " " ? "::" : " ::";
+            composer.composerText = firstPart + toInsertPart + secondPart;
+            this.selection.moveCursor((firstPart + toInsertPart).length);
+        }
         if (!this.ui.isSmall || !this.env.inChatter) {
             composer.autofocus++;
         }

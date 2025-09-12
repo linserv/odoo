@@ -1066,6 +1066,8 @@ class TestOrmModel_Binary(models.Model):
     _description = 'Test Image field'
 
     binary = fields.Binary()
+    binary_x_filename = fields.Char()
+    binary_x_filename2 = fields.Char()
     binary_related_store = fields.Binary("Binary Related Store", related='binary', store=True, readonly=False)
     binary_related_no_store = fields.Binary("Binary Related No Store", related='binary', store=False, readonly=False)
     binary_computed = fields.Binary(compute='_compute_binary')
@@ -2466,3 +2468,15 @@ class BinaryTest(models.Model):
 
     def _compute_bin2(self):
         self.bin2 = {}
+
+
+class CalendarTest(models.Model):
+    _name = _description = "calendar.test"
+
+    date_start = fields.Date(compute="_compute_date")
+    date_end = fields.Date(compute="_compute_date")
+    x_date_start = fields.Date()
+    x_date_end = fields.Date()
+
+    def _compute_date(self):
+        self.date_start = self.date_end = fields.Date.today()

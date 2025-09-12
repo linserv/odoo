@@ -238,6 +238,10 @@ class ThemeUtils(models.AbstractModel):
         'website.template_footer_contact',
         'website.template_footer_call_to_action',
         'website.template_footer_headline',
+        'website.template_footer_mega',
+        'website.template_footer_mega_columns',
+        'website.template_footer_mega_links',
+        'website.template_footer_mega_cards',
         # Default one, keep it last
         'website.footer_custom',
     ]
@@ -254,7 +258,7 @@ class ThemeUtils(models.AbstractModel):
     @api.model
     def _reset_default_config(self):
         # Reinitialize some css customizations
-        self.env['web_editor.assets'].make_scss_customization(
+        self.env['website.assets'].make_scss_customization(
             '/website/static/src/scss/options/user_values.scss',
             {
                 'font': 'null',

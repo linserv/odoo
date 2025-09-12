@@ -35,7 +35,6 @@
         'views/project_task_type_views.xml',
         'views/project_project_views.xml',
         'views/project_task_views.xml',
-        'views/project_task_template_views.xml',
         'views/project_role_views.xml',
         'views/project_tags_views.xml',
         'views/project_milestone_views.xml',
@@ -89,6 +88,7 @@
             ('remove', 'project/static/src/views/project_task_analysis_pivot/**'),
             ('remove', 'project/static/src/views/burndown_chart/**'),
             ('remove', 'project/static/src/**/*.dark.scss'),
+            ('remove', 'project/static/src/views/project_project_activity/**'),
         ],
         "web.assets_web_dark": [
             'project/static/src/**/*.dark.scss',
@@ -102,6 +102,7 @@
             'project/static/src/views/project_task_analysis_graph/**',
             'project/static/src/views/project_task_analysis_pivot/**',
             'project/static/src/views/burndown_chart/**',
+            'project/static/src/views/project_project_activity/**',
         ],
         'web.assets_frontend': [
             'project/static/src/scss/portal_rating.scss',
@@ -232,6 +233,8 @@
             'project/static/src/views/project_task_control_panel/*',
             'project/static/src/views/project_task_model_mixin.js',
             'project/static/src/views/project_task_relational_model.js',
+            'project/static/src/views/project_model_mixin.js',
+            'project/static/src/views/project_relational_model.js',
 
             ('include', 'portal.assets_chatter_helpers'),
             'portal/static/src/chatter/core/**/*',

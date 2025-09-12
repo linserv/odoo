@@ -14,7 +14,6 @@
         'html_builder',
         'utm',
         'link_tracker',
-        'web_editor',
         'social_media',
         'web_tour',
         'digest',
@@ -92,13 +91,20 @@
             ('include', 'mass_mailing.assets_mail_themes'),
             ('include', 'web.assets_frontend'),
             ('after', 'web/static/lib/bootstrap/scss/_maps.scss', 'mass_mailing/static/src/scss/mass_mailing.ui.scss'),
-            ('include', 'web_editor.backend_assets_wysiwyg'),
-            ('include', 'web_editor.assets_snippets_menu'),
-            ('include', 'web_editor.wysiwyg_iframe_editor_assets'),
-            ('include', 'html_builder.inside_builder_style'),
+
+            # TODO DUAU: change when file is back in html_builder
+            'html_editor/static/src/scss/bootstrap_overridden.scss',
+
+            'web/static/src/libs/fontawesome/css/font-awesome.css',
+            'web/static/lib/odoo_ui_icons/*',
+            'web/static/src/scss/animation.scss',
+            'web/static/src/scss/mimetypes.scss',
+            'web/static/src/scss/ui.scss',
+            'web/static/src/scss/fontawesome_overridden.scss',
+
+            ('include', 'html_builder.assets_edit_frontend'),
             'mass_mailing/static/src/scss/mass_mailing_mail.scss',
             'mass_mailing/static/src/iframe_assets/**/*',
-            'mass_mailing/static/src/theme_assets/**/*',
         ],
         'html_builder.iframe_add_dialog': [
             'mass_mailing/static/src/builder/snippet_viewer/*.scss',

@@ -1066,13 +1066,12 @@
                                 <field name="taxable_supply_date_placeholder" invisible="1"/> <!-- Needed for the placeholder widget -->
                                 <field name="taxable_supply_date" invisible="not show_taxable_supply_date" readonly="state != 'draft'" options="{'placeholder_field': 'taxable_supply_date_placeholder'}"/>
                                 <field name="delivery_date" invisible="not show_delivery_date" readonly="state != 'draft'"/>
-                                <label for="journal_id" groups="account.group_account_readonly"/>
-                                <label for="currency_id" groups="!account.group_account_readonly,base.group_multi_currency"/>
+                                <label for="journal_id" invisible="not show_journal"/>
+                                <label for="currency_id" groups="base.group_multi_currency" invisible="show_journal"/>
                                 <div name="journal_div"
-                                     class="d-flex"
-                                     groups="account.group_account_readonly,base.group_multi_currency">
+                                     class="d-flex">
                                     <field name="journal_id"
-                                           groups="account.group_account_readonly"
+                                           invisible="not show_journal"
                                            options="{'no_create': True, 'no_open': True}"
                                            readonly="posted_before and name not in (False, '', '/')"/>
                                     <div name="in_and_refresh_button_div"
@@ -1158,7 +1157,7 @@
                                                     'move_type': parent.move_type,
                                                     'search_default_type_asset_fixed': 'in_' in parent.move_type,
                                                     'search_default_type_expense': 'in_' in parent.move_type,
-                                                    'search_default_incomeacc': 'out_' in parent.move_type,
+                                                    'search_default_account_type': 'out_' in parent.move_type and 'income',
                                                     'preferred_account_type': 'out_' in parent.move_type and 'income' or 'in_' in parent.move_type and 'expense',
                                                }"
                                                groups="account.group_account_readonly"
@@ -1482,7 +1481,8 @@
                                     <group string="Accounting"
                                            name="accounting_info_group">
                                         <field name="company_id" groups="base.group_multi_company"/>
-                                        <field name="invoice_incoterm_id" invisible="move_type in ('out_receipt', 'in_receipt')"/>
+                                        <field name="invoice_incoterm_placeholder" invisible="1"/>    <!-- Needed for placeholder_field -->
+                                        <field name="invoice_incoterm_id" options="{'placeholder_field': 'invoice_incoterm_placeholder'}" invisible="move_type in ('out_receipt', 'in_receipt')"/>
                                         <field name="incoterm_location" invisible="move_type in ('out_receipt', 'in_receipt')"/>
                                         <field name="fiscal_position_id" readonly="state in ['cancel', 'posted']"/>
                                         <field name="secured" groups="account.group_account_secured,base.group_no_one"/>
@@ -1506,8 +1506,6 @@
                                         <field name="auto_post_until"
                                                invisible="auto_post in ('no', 'at_date')"
                                                readonly="state != 'draft'"/>
-                                        <field name="is_self_billing"
-                                               invisible="move_type not in ('in_invoice', 'in_refund')"/>
                                     </group>
                                 </group>
                             </page>

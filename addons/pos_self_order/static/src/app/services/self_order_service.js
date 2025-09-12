@@ -13,6 +13,7 @@ import { OrderReceipt } from "@point_of_sale/app/screens/receipt_screen/receipt/
 import { HWPrinter } from "@point_of_sale/app/utils/printer/hw_printer";
 import { renderToElement } from "@web/core/utils/render";
 import { TimeoutPopup } from "@pos_self_order/app/components/timeout_popup/timeout_popup";
+import { NetworkConnectionLostPopup } from "@pos_self_order/app/components/network_connectionLost_popup/network_connectionLost_popup";
 import { UnavailableProductsDialog } from "@pos_self_order/app/components/unavailable_product_dialog/unavailable_product_dialog";
 import { constructFullProductName, deduceUrl, random5Chars } from "@point_of_sale/utils";
 import { getOrderLineValues } from "./card_utils";
@@ -616,7 +617,8 @@ export class SelfOrder extends Reactive {
                 {
                     order: this.currentOrder.serializeForORM(),
                     access_token: this.access_token,
-                    table_identifier: this.currentOrder?.table_id?.identifier || tableIdentifier,
+                    table_identifier:
+                        this.currentOrder?.self_ordering_table_id?.identifier || tableIdentifier,
                 }
             );
             const result = this.models.connectNewData(data);
@@ -648,6 +650,7 @@ export class SelfOrder extends Reactive {
             .filter((o) => o.state === "draft" && typeof o.id === "number")
             .map((order) => ({
                 access_token: order.access_token,
+                state: order.state,
                 write_date: serializeDateTime(order.write_date.plus({ seconds: 1 })),
             }))
             .filter((order) => order.access_token);
@@ -723,7 +726,11 @@ export class SelfOrder extends Reactive {
                 this.resetTableIdentifier();
             }
         } else if (error instanceof ConnectionLostError) {
-            message = _t("Connection lost, please try again later");
+            this.dialog.add(NetworkConnectionLostPopup, {
+                close: () => this.dialog.closeAll(),
+                access_token: this.access_token,
+            });
+            return;
         }
 
         this.notification.add(message, {

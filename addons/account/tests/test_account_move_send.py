@@ -740,6 +740,21 @@ class TestAccountMoveSend(TestAccountMoveSendCommon):
                 'email': {'count': 1, 'label': 'by Email'},
             })
 
+    def test_invoice_multi_child_contact(self):
+        """ Test bulk invoice sending will retrieve info from the main partner. """
+        self.partner_a.write({'invoice_sending_method': 'manual'})
+        partner = self.env['res.partner'].create({
+            'type': 'invoice',
+            'email': 'child@example.com',
+            'parent_id': self.partner_a.id
+        })
+        invoice1 = self.init_invoice("out_invoice", amounts=[1000], partner=partner, post=True)
+        invoice2 = self.init_invoice("out_invoice", amounts=[1000], partner=partner, post=True)
+        wizard = self.create_send_and_print(invoice1 + invoice2)
+        self.assertEqual(wizard.summary_data, {
+            'manual': {'count': 2, 'label': 'Manually'}
+        })
+
     def test_invoice_mail_attachments_widget(self):
         invoice = self.init_invoice("out_invoice", amounts=[1000], post=True)
 
@@ -1171,12 +1186,12 @@ class TestAccountMoveSend(TestAccountMoveSendCommon):
             'is_invoice_report': True,
         })
         self.company_data['default_journal_sale'].invoice_template_pdf_report_id = third_report
-        invoice2 = self.init_invoice('out_invoice', partner=self.partner_b, post=True, amounts=[1000], journal=self.company_data['default_journal_sale'])
+        invoice2 = self.init_invoice('out_invoice', partner=self.partner_b, post=True, amounts=[1000])
         wizard = self.create_send_and_print(invoice2)
         self.assertEqual(third_report, wizard.pdf_report_id)
 
         # Test with 3 reports, the second one is default for partner and the third one is default for journal
-        invoice3 = self.init_invoice('out_invoice', partner=self.partner_a, post=True, amounts=[300], journal=self.company_data['default_journal_sale'])
+        invoice3 = self.init_invoice('out_invoice', partner=self.partner_a, post=True, amounts=[300])
         wizard = self.create_send_and_print(invoice3)
         self.assertEqual(second_report, wizard.pdf_report_id)
 

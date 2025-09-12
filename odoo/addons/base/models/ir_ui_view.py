@@ -576,6 +576,13 @@ actual arch.
             except (etree.ParseError, ValueError) as e:
                 view.warning_info = str(e)
 
+    def _validate_xml_encoding(self, text):
+        if isinstance(text, str) and re.search(r'<\?xml[^>]*encoding=.*?\?>', text, re.IGNORECASE):
+            raise UserError(_(
+                "Unicode strings with encoding declaration are not supported in XML.\n"
+                "Remove the encoding declaration."
+            ))
+
     @api.model_create_multi
     def create(self, vals_list):
         valid_types = self._fields['type']._selection
@@ -584,6 +591,8 @@ actual arch.
                 # delete empty arch_db to avoid triggering _check_xml before _inverse_arch_base is called
                 del values['arch_db']
 
+            if values.get('arch_base'):
+                self._validate_xml_encoding(values['arch_base'])
             if not values.get('type'):
                 if values.get('inherit_id'):
                     values['type'] = self.browse(values['inherit_id']).type
@@ -643,6 +652,8 @@ actual arch.
         if 'arch_db' in vals and not self.env.context.get('no_save_prev'):
             vals['arch_prev'] = self.arch_db
 
+        if vals.get('arch_base'):
+            self._validate_xml_encoding(vals['arch_base'])
         res = super().write(self._compute_defaults(vals))
 
         # Check the xml of the view if it gets re-activated or changed.
@@ -1512,13 +1523,22 @@ actual arch.
             name_manager.available_fields[name].setdefault('groups', []).append(missing_groups)
             name_manager.available_names.add(name)
 
+            readonly = True
+            if filename_reasons := [r for r in reasons if r[1][0] == "filename"]:
+                node = filename_reasons[-1][2]
+                if node_readonly := node.get("readonly"):
+                    readonly = node_readonly
+                else:
+                    field = name_manager.model._fields[node.get("name")]
+                    if field.type == "binary":
+                        readonly = field.readonly or False
             # If the field is not in the view without any group restriction,
             # add the field node with all mandatory groups (or without group if
             # the mandatory field does not have groups).
             attrs = {
                 'name': name,
                 'invisible' if root.tag != 'list' else 'column_invisible': 'True',
-                'readonly': 'True',
+                'readonly': str(readonly),
                 'data-used-by': '; '.join(
                     f"{attr}={expr!r} ({node.tag},{node.get('name')})"
                     for _groups, (attr, expr), node in reasons
@@ -1653,6 +1673,8 @@ actual arch.
             if context:
                 vnames = get_expression_field_names(context)
                 name_manager.must_have_fields(node, vnames, node_info, ('context', context))
+            if field.type == "binary" and (field_filename := node.get("filename")):
+                name_manager.must_have_fields(node, [field_filename], node_info, ("filename", field_filename))
 
             for child in node:
                 if child.tag in ('form', 'list', 'graph', 'kanban', 'calendar'):
@@ -2838,7 +2860,7 @@ class Base(models.AbstractModel):
             the attribute) or not
             """
             for item in seq:
-                if item in in_:
+                if item in in_ and in_[item]._description_searchable:
                     view.set(to, item)
                     return True
             return False

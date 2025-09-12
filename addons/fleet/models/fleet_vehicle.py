@@ -71,8 +71,7 @@ class FleetVehicle(models.Model):
     next_assignation_date = fields.Date('Assignment Date', help='This is the date at which the car will be available, if not set it means available instantly')
     order_date = fields.Date('Order Date')
     acquisition_date = fields.Date('Registration Date', required=False,
-        default=fields.Date.today, tracking=True,
-        help='Date of vehicle registration')
+        tracking=True, help='Date of vehicle registration')
     write_off_date = fields.Date('Cancellation Date', tracking=True, help="Date when the vehicle's license plate has been cancelled/removed.")
     contract_date_start = fields.Date(string="First Contract Date", default=fields.Date.today, tracking=True)
     color = fields.Char(help='Color of the vehicle', compute='_compute_color', store=True, readonly=False)
@@ -412,8 +411,9 @@ class FleetVehicle(models.Model):
         if 'future_driver_id' in vals and vals['future_driver_id']:
             future_driver = vals['future_driver_id']
             state_waiting_list = self.env.ref('fleet.fleet_vehicle_state_waiting_list', raise_if_not_found=False)
+            state_new_request = self.env.ref('fleet.fleet_vehicle_state_new_request', raise_if_not_found=False)
             vehicle_types = set(self.filtered(lambda vehicle: not state_waiting_list or\
-                                state_waiting_list.id != vals.get('state_id', vehicle.state_id.id)).mapped('vehicle_type'))
+                                vals.get('state_id', vehicle.state_id.id) not in [state_waiting_list.id, state_new_request.id]).mapped('vehicle_type'))
             if vehicle_types:
                 vehicle_read_group = dict(self.env['fleet.vehicle']._read_group(
                     domain=[('driver_id', '=', future_driver), ('vehicle_type', 'in', vehicle_types)],

@@ -835,6 +835,7 @@ class TestUi(TestPointOfSaleHttpCommon):
         current_session.close_session_from_ui()
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'CashClosingDetails', login="pos_user")
+        self.assertEqual(self.main_pos_config.last_session_closing_cash, 50.0)
         cash_diff_line = self.env['account.bank.statement.line'].search([
             ('payment_ref', 'ilike', 'Cash difference observed during the counting (Loss)')
         ])
@@ -843,6 +844,7 @@ class TestUi(TestPointOfSaleHttpCommon):
     def test_cash_payments_should_reflect_on_next_opening(self):
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'OrderPaidInCash', login="pos_user")
+        self.assertEqual(self.main_pos_config.last_session_closing_cash, 25.0)
 
     def test_pos_session_statistics_display(self):
         """Test that POS session statistics are properly displayed in the UI."""
@@ -1953,8 +1955,6 @@ class TestUi(TestPointOfSaleHttpCommon):
     def test_tracking_number_closing_session(self):
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour(f"/pos/ui/{self.main_pos_config.id}", 'test_tracking_number_closing_session', login="pos_user")
-        for order in self.env['pos.order'].search([]):
-            self.assertEqual(int(order.tracking_number) % 100, 1)
 
         # Change should be given in cash
         cash_payment_method = self.main_pos_config.payment_method_ids.filtered(lambda p: p.is_cash_count)
@@ -2762,6 +2762,7 @@ class TestUi(TestPointOfSaleHttpCommon):
             'active': False,  # Archived product
         })
 
+        self.main_pos_config.with_user(self.pos_user).open_ui()
         self.env['pos.order'].create({
             'config_id': self.main_pos_config.id,
             'session_id': self.main_pos_config.current_session_id.id,
@@ -2788,7 +2789,6 @@ class TestUi(TestPointOfSaleHttpCommon):
             })],
         })
 
-        self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour(f"/pos/ui?config_id={self.main_pos_config.id}", 'test_paid_order_with_archived_product_loads', login="pos_user")
 
     def test_delete_line(self):

@@ -265,11 +265,6 @@ class Website(models.Model):
         default=_default_confirmation_email_template,
     )
 
-    _check_gmc_ecommerce_access = models.Constraint(
-        'CHECK (NOT enabled_gmc_src OR ecommerce_access = \'everyone\')',
-        "eCommerce must be accessible to all users for Google Merchant Center to operate properly.",
-    )
-
     #=== COMPUTE METHODS ===#
 
     def _compute_pricelist_ids(self):
@@ -356,7 +351,7 @@ class Website(models.Model):
         views_to_enable = []
         scss_customization_params = {}
         ThemeUtils = self.env['theme.utils'].with_context(website_id=website.id)
-        Assets = self.env['web_editor.assets']
+        Assets = self.env['website.assets']
 
         def parse_style_config(style_config_):
             website_settings.update(style_config_['website_fields'])
@@ -968,15 +963,20 @@ class Website(models.Model):
         return steps
 
     def _get_checkout_step_values(self):
-        href = request.httprequest.path
+        def rewrite(path):
+            return self.env['ir.http'].url_rewrite(path)[0]
+        href = rewrite(request.httprequest.path)
         # /shop/address is associated with the delivery step
-        if href == '/shop/address':
-            href = '/shop/checkout'
+        if href == rewrite('/shop/address'):
+            href = rewrite('/shop/checkout')
 
         allowed_steps_domain = self._get_allowed_steps_domain()
-        current_step = request.env['website.checkout.step'].sudo().search(
-            Domain.AND([allowed_steps_domain, [('step_href', '=', href)]]), limit=1
-        )
+        current_step = request.env['website.checkout.step'].sudo()
+        for step in current_step.search(allowed_steps_domain):
+            if rewrite(step.step_href) == href:
+                current_step = step
+                href = step.step_href
+                break
         next_step = current_step._get_next_checkout_step(allowed_steps_domain)
         previous_step = current_step._get_previous_checkout_step(allowed_steps_domain)
 
@@ -985,7 +985,7 @@ class Website(models.Model):
         if next_step.step_href == '/shop/checkout':
             next_href = '/shop/checkout?try_skip_step=true'
         # redirect handled by '/shop/address/submit' route when all values are properly filled
-        if request.httprequest.path == '/shop/address':
+        if request.httprequest.path == rewrite('/shop/address'):
             next_href = False
 
         return {
@@ -1053,3 +1053,11 @@ class Website(models.Model):
             case '4_5':
                 return '96px'
         return '64px'
+
+    def _populate_product_feeds(self):
+        """Populate product feeds for the website with default values."""
+        for website in self:
+            website.env['product.feed'].create({
+                'name': website.env._("GMC 1"),
+                'website_id': website.id,
+            })

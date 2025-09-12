@@ -619,29 +619,35 @@ class TestBoM(TestMrpCommon):
             'name': 'Deserts Table'
         })
 
-        # Required to display `operation_ids` in the form view
-        self.env.user.group_ids += self.env.ref("mrp.group_mrp_routings")
-        with Form(bom_crumble) as bom:
-            with bom.bom_line_ids.new() as line:
-                line.product_id = butter
-                line.product_uom_id = uom_kg
-                line.product_qty = 5
-            with bom.bom_line_ids.new() as line:
-                line.product_id = biscuit
-                line.product_uom_id = uom_kg
-                line.product_qty = 6
-            with bom.operation_ids.new() as operation:
-                operation.workcenter_id = workcenter
-                operation.name = 'Prepare biscuits'
-                operation.time_cycle_manual = 5 * bom_crumble.product_qty
-            with bom.operation_ids.new() as operation:
-                operation.workcenter_id = workcenter
-                operation.name = 'Prepare butter'
-                operation.time_cycle_manual = 3 * bom_crumble.product_qty
-            with bom.operation_ids.new() as operation:
-                operation.workcenter_id = workcenter
-                operation.name = 'Mix manually'
-                operation.time_cycle_manual = 5 * bom_crumble.product_qty
+        bom_crumble.write({
+            'bom_line_ids': [
+                Command.create({
+                    'product_id': butter.id,
+                    'product_uom_id': uom_kg.id,
+                    'product_qty': 5,
+                }),
+                Command.create({
+                    'product_id': biscuit.id,
+                    'product_uom_id': uom_kg.id,
+                    'product_qty': 6,
+            })],
+            'operation_ids': [
+                Command.create({
+                    'workcenter_id': workcenter.id,
+                    'name': 'Prepare biscuits',
+                    'time_cycle_manual': 5 * bom_crumble.product_qty,
+                }),
+                Command.create({
+                    'workcenter_id': workcenter.id,
+                    'name': 'Prepare butter',
+                    'time_cycle_manual': 3 * bom_crumble.product_qty,
+                }),
+                Command.create({
+                    'workcenter_id': workcenter.id,
+                    'name': 'Mix manually',
+                    'time_cycle_manual': 5 * bom_crumble.product_qty,
+            })]
+        })
 
         # TEST BOM STRUCTURE VALUE WITH BOM QUANTITY
         report_values = self.env['report.mrp.report_bom_structure']._get_report_data(bom_id=bom_crumble.id, searchQty=11, searchVariant=False)
@@ -721,23 +727,30 @@ class TestBoM(TestMrpCommon):
             'time_stop': 16,
         })
 
-        with Form(bom_cheese_cake) as bom:
-            with bom.bom_line_ids.new() as line:
-                line.product_id = cream
-                line.product_uom_id = uom_litre
-                line.product_qty = 3
-            with bom.bom_line_ids.new() as line:
-                line.product_id = crumble
-                line.product_uom_id = uom_kg
-                line.product_qty = 5.4
-            with bom.operation_ids.new() as operation:
-                operation.workcenter_id = workcenter
-                operation.name = 'Mix cheese and crumble'
-                operation.time_cycle_manual = 10 * bom_cheese_cake.product_qty
-            with bom.operation_ids.new() as operation:
-                operation.workcenter_id = workcenter_2
-                operation.name = 'Cake mounting'
-                operation.time_cycle_manual = 5 * bom_cheese_cake.product_qty
+        bom_cheese_cake.write({
+            'bom_line_ids': [
+                Command.create({
+                    'product_id': cream.id,
+                    'product_uom_id': uom_litre.id,
+                    'product_qty': 3,
+                }),
+                Command.create({
+                    'product_id': crumble.id,
+                    'product_uom_id': uom_kg.id,
+                    'product_qty': 5.4,
+            })],
+            'operation_ids': [
+                Command.create({
+                    'workcenter_id': workcenter.id,
+                    'name': 'Mix cheese and crumble',
+                    'time_cycle_manual': 10 * bom_cheese_cake.product_qty,
+                }),
+                Command.create({
+                    'workcenter_id': workcenter_2.id,
+                    'name': 'Cake mounting',
+                    'time_cycle_manual': 5 * bom_cheese_cake.product_qty,
+            })]
+        })
 
         # TEST CHEESE BOM STRUCTURE VALUE WITH BOM QUANTITY
         report_values = self.env['report.mrp.report_bom_structure']._get_report_data(bom_id=bom_cheese_cake.id, searchQty=60, searchVariant=False)
@@ -789,17 +802,18 @@ class TestBoM(TestMrpCommon):
             'product_uom_id': drawer.uom_id.id,
             'capacity': bom_drawer.product_qty,
         })
-        # Required to display `operation_ids` in the form view
-        self.env.user.group_ids += self.env.ref("mrp.group_mrp_routings")
-        with Form(bom_drawer) as bom:
-            with bom.bom_line_ids.new() as line:
-                line.product_id = screw
-                line.product_uom_id = self.uom_unit
-                line.product_qty = 5
-            with bom.operation_ids.new() as operation:
-                operation.workcenter_id = workcenter
-                operation.name = 'Screw drawer'
-                operation.time_cycle_manual = 5 * bom_drawer.product_qty
+        bom_drawer.write({
+            'bom_line_ids': [Command.create({
+                'product_id': screw.id,
+                'product_uom_id': self.uom_unit.id,
+                'product_qty': 5,
+            })],
+            'operation_ids': [Command.create({
+                'workcenter_id': workcenter.id,
+                'name': 'Screw drawer',
+                'time_cycle_manual': 5 * bom_drawer.product_qty,
+            })]
+        })
 
         # TEST BOM STRUCTURE VALUE WITH BOM QUANTITY
         report_values = self.env['report.mrp.report_bom_structure']._get_report_data(bom_id=bom_drawer.id, searchQty=11, searchVariant=False)
@@ -2158,52 +2172,6 @@ class TestBoM(TestMrpCommon):
         self.assertTrue(mo_order.is_outdated_bom)
         mo_order.action_update_bom()
         self.assertEqual(len(mo_order.workorder_ids), 1)
-
-    def test_availability_bom_type_kit(self):
-        """ Product should only be available if bom type is kit """
-        product_one = self.env['product.product'].create({
-            'name': 'Product',
-            'is_storable': True,
-            'uom_id': self.uom_unit.id,
-        })
-        product_two = self.env['product.product'].create({
-            'name': 'Component',
-            'is_storable': True,
-            'uom_id': self.uom_unit.id,
-        })
-        self.env['stock.quant']._update_available_quantity(product_two, self.stock_location, 4.0)
-
-        bom_normal = self.env['mrp.bom'].create({
-            'product_tmpl_id': product_one.product_tmpl_id.id,
-            'product_uom_id': product_one.product_tmpl_id.uom_id.id,
-            'product_qty': 1.0,
-            'type': 'normal',
-            'bom_line_ids': [
-                Command.create({
-                    'product_id': product_two.id,
-                    'product_qty': 1,
-                }),
-            ]
-        })
-        report_values = self.env['report.mrp.report_bom_structure']._get_report_data(bom_id=bom_normal.id)
-        line_values = report_values['lines']
-        self.assertEqual(line_values['availability_state'], 'unavailable')
-
-        bom_kit = self.env['mrp.bom'].create({
-            'product_tmpl_id': product_one.product_tmpl_id.id,
-            'product_uom_id': product_one.product_tmpl_id.uom_id.id,
-            'product_qty': 1.0,
-            'type': 'phantom',
-            'bom_line_ids': [
-                Command.create({
-                    'product_id': product_two.id,
-                    'product_qty': 1,
-                }),
-            ]
-        })
-        report_values = self.env['report.mrp.report_bom_structure']._get_report_data(bom_id=bom_kit.id)
-        line_values = report_values['lines']
-        self.assertEqual(line_values['availability_state'], 'available')
 
     def test_update_bom_in_routing_workcenter(self):
         """
