@@ -1037,27 +1037,6 @@ class MailMessage(models.Model):
     # STORE / NOTIFICATIONS
     # ------------------------------------------------------
 
-    def _field_store_repr(self, field_name):
-        """Return the default Store representation of the given field name, which can be passed as
-        param to the various Store methods."""
-        if field_name == "message_link_preview_ids":
-            return [
-                Store.Many(
-                    "message_link_preview_ids",
-                    value=lambda m: m.sudo()
-                    .message_link_preview_ids.filtered(
-                        lambda message_link_preview: not message_link_preview.is_hidden
-                    )
-                    .sorted(
-                        lambda message_link_preview: (
-                            message_link_preview.sequence,
-                            message_link_preview.id,
-                        )
-                    ),
-                )
-            ]
-        return [field_name]
-
     def _to_store_defaults(self, target: Store.Target):
         field_names = [
             # sudo: mail.message - reading attachments on accessible message is allowed
@@ -1068,11 +1047,15 @@ class MailMessage(models.Model):
                 sudo=True,
             ),
             # sudo: mail.message: access to author_guest_id is allowed
-            Store.One("author_guest_id", ["avatar_128", "name"], sudo=True),
+            Store.One("author_guest_id", [*self.env["mail.guest"]._get_store_avatar_fields(), "name"], sudo=True),
             # sudo: mail.message: access to author_id is allowed
             Store.One(
                 "author_id",
-                ["avatar_128", "is_company", Store.One("main_user_id", "share")],
+                [
+                    "is_company",
+                    Store.One("main_user_id", "share"),
+                    *self.env["res.partner"]._get_store_avatar_fields(),
+                ],
                 dynamic_fields=lambda m: m._get_store_partner_name_fields(),
                 sudo=True,
             ),
@@ -1088,11 +1071,13 @@ class MailMessage(models.Model):
             "incoming_email_to",
             # sudo: mail.message - reading link preview on accessible message is allowed
             "message_format",
-            "message_link_preview_ids",
             "message_type",
             "model",  # keep for iOS app
             # sudo: res.partner: reading limited data of recipients is acceptable
-            Store.Many("partner_ids", ["avatar_128", "name"], sort="id", sudo=True),
+            Store.Many("partner_ids", [
+                *self.env["res.partner"]._get_store_avatar_fields(),
+                "name"
+            ], sort="id", sudo=True),
             "pinned_at",
             # sudo: mail.message - reading reactions on accessible message is allowed
             Store.Attr("reactions", value=lambda m: Store.Many(m.sudo().reaction_ids)),
@@ -1103,6 +1088,7 @@ class MailMessage(models.Model):
             Store.One("subtype_id", ["description"], sudo=True),
             "write_date",
             *self._get_store_linked_messages_fields(),
+            *self._get_store_message_link_previews_fields(),
         ]
         if target.is_internal(self.env):
             # sudo - mail.notification: internal users can access notifications.
@@ -1234,6 +1220,20 @@ class MailMessage(models.Model):
         # needs to be after the current message (client code assuming the first received message is
         # the one just posted for example, and not the message being replied to).
         self._extras_to_store(store, format_reply=format_reply)
+
+    def _get_store_message_link_previews_fields(self):
+        return [
+            Store.Many(
+                "message_link_preview_ids",
+                value=lambda m: m.sudo().message_link_preview_ids.filtered(
+                    lambda message_link_preview: not message_link_preview.is_hidden
+                ),
+                sort=lambda message_link_preview: (
+                    message_link_preview.sequence,
+                    message_link_preview.id,
+                ),
+            )
+        ]
 
     def _get_store_partner_name_fields(self):
         self.ensure_one()

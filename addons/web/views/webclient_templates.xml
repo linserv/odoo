@@ -144,7 +144,7 @@
                     <label for="db" class="col-form-label">Database</label>
                     <div class="input-group">
                         <input type="text" name="db" t-att-value="request.db" id="db" class="form-control" required="required" readonly="readonly"/>
-                        <a role="button" href="/web/database/selector" class="btn btn-secondary">Select <i class="fa fa-database" role="img" aria-label="Database" title="Database"></i></a>
+                        <a role="button" href="/web/database/selector" class="btn border border-start-0">Select <i class="fa fa-database" role="img" aria-label="Database" title="Database"></i></a>
                     </div>
                 </div>
 
@@ -157,7 +157,7 @@
                     <label for="password" class="form-label d-flex justify-content-between">Password</label>
                     <div class="input-group mb-1">
                         <input type="password" placeholder="Enter your password" name="password" id="password" class="form-control" required="required" autocomplete="current-password" t-att-autofocus="'autofocus' if login else None" maxlength="4096"/>
-                        <button type="button" class="btn btn-sm btn-secondary o_show_password">
+                        <button type="button" class="btn btn-sm border border-start-0 o_show_password">
                             <i class="fa fa-eye"/>
                         </button>
                     </div>
@@ -192,7 +192,7 @@
                     You are logged in.
                 </p>
                 <div t-attf-class="clearfix oe_login_buttons text-center mb-1 pt-3">
-                    <a class="btn btn-primary btn-block" href="/web/session/logout">Log out</a>
+                    <a class="btn btn-primary" href="/web/session/logout">Log out</a>
                 </div>
             </div>
         </t>
@@ -293,12 +293,13 @@
                     }
                 </script>
                 <t t-call-assets="web.assets_web_print" media="print" t-js="false"/>
+                <t t-call-assets="web.assets_web" t-css="false"/>
 
                 <t t-if="color_scheme == 'dark'">
-                    <t t-call-assets="web.assets_web_dark" media="screen"/>
+                    <t t-call-assets="web.assets_web_dark" media="screen" t-js="false"/>
                 </t>
                 <t t-else="">
-                    <t t-call-assets="web.assets_web" media="screen"/>
+                    <t t-call-assets="web.assets_web" media="screen" t-js="false"/>
                 </t>
                 <t t-call="web.conditional_assets_tests" media="screen"/>
             </t>

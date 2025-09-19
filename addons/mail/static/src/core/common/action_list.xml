@@ -6,12 +6,12 @@
         <t t-set="groupAttClass" t-value="{
             [props.groupClass]: true,
             'flex-column w-100 bg-transparent': !props.inline,
-            'o-inline': props.inline,
+            'o-inline rounded-3': props.inline,
             'o-rounded-bubble': props.inline and !hasBtnBg,
         }"/>
         <t t-foreach="groups" t-as="group" t-key="group_index">
             <span t-if="group.length" class="o-mail-ActionList-group btn-group" t-att-class="groupAttClass">
-                <Action t-foreach="group" t-as="action" t-key="action.id" t-props="getActionProps(action, group, { isFirstInGroup: action_first, isLastInGroup: action_last })"/>
+                <Action t-foreach="group" t-as="action" t-key="action.id" t-props="getActionProps(action, group, { isFirstInGroup: action_first, index: action_index, isLastInGroup: action_last })"/>
             </span>
             <t t-if="!group_last" t-call="mail.ActionList.groupSeparator"/>
         </t>
@@ -47,6 +47,7 @@
     <t t-set="btnClass" t-value="attClassObjectToString({
         [action.btnClass ?? '']: true,
         [action.tagClassNames]: true,
+        'position-relative': true,
         'active': action.isActive,
         'o-mail-ActionList-button btn btn-secondary btn-group-item': true,
         'o-first': props.isFirstInGroup,
@@ -54,18 +55,19 @@
         'o-odooControlPanelSwitchStyle': props.odooControlPanelSwitchStyle,
         'o-hasBtnBg': hasBtnBg,
         'rounded-circle': isComposerRoundedBtn or isThreadRoundedBtn,
+        'rounded-start-3': !isComposerRoundedBtn and !isThreadRoundedBtn and props.inline and props.isFirstInGroup,
+        'rounded-end-3': !isComposerRoundedBtn and !isThreadRoundedBtn and props.inline and props.isLastInGroup,
         'o-p-1_5': props.inline and hasBtnBg and !action.tags.includes('JOIN_LEAVE_CALL'),
         'o-p-1_5 d-flex align-items-center': props.inline and hasBtnBg and action.tags.includes('JOIN_LEAVE_CALL') and !env.inChatWindow,
         'p-1 d-flex align-items-center': props.inline and hasBtnBg and action.tags.includes('JOIN_LEAVE_CALL') and env.inChatWindow,
         'o-inline': props.inline,
         'p-0': props.inline and !hasBtnBg and !env.inComposer,
-        'p-1': props.inline and !hasBtnBg and !(ui.isSmall and props.inline) and env.inComposer,
-        'border-0': props.inline and !hasBtnBg and (action.iconLage ?? action.icon),
-        'border-2 o-px-0_5 o-mx-0_5': props.inline and !hasBtnBg and !(action.iconLage ?? action.icon),
+        'p-1': props.inline and !hasBtnBg and env.inComposer,
+        'border-0': props.inline and !hasBtnBg and action.icon,
+        'border-2 o-px-0_5 o-mx-0_5': props.inline and !hasBtnBg and !action.icon,
         'px-3 py-2': props.dropdown and ui.isSmall,
         'py-1': props.dropdown and !ui.isSmall,
         'text-start px-2': !props.inline and !ui.isSmall,
-        'active': action.isActive,
         'btn-danger': action.tags.includes('DANGER'),
         'btn-success': action.tags.includes('SUCCESS'),
         'o-text-white border-0 o-simulateDarkTheme': store.shouldSimulateDarkTheme(this),
@@ -74,11 +76,17 @@
     })"/>
     <t t-set="attrs" t-value="{ 'aria-label': action.name, 'disabled': action.disabledCondition, 'name': action.id, 'data-sequence': action.sequence, 'data-sequence-group': action.sequenceGroup, 'data-sequence-quick': action.sequenceQuick }"/>
     <t t-if="action.component and action.componentCondition" t-component="action.component" t-props="action.componentProps"/>
-    <DropdownItem t-elif="props.dropdown" class="btnClass + ' d-flex align-items-center gap-1'" tag="'button'" onSelected="(ev) => this.onSelected(action, ev)" attrs="attrs">
+    <DropdownItem t-elif="props.dropdown" class="btnClass + ' d-flex align-items-center ' + (ui.isSmall ? 'gap-2' : 'gap-1')" tag="'button'" onSelected="(ev) => this.onSelected(action, ev)" attrs="attrs">
         <t t-call="mail.Action.content"/>
     </DropdownItem>
-    <button t-else="" t-att-class="btnClass" t-att="Object.assign(attrs, { 'title': action.name })" t-on-click="(ev) => this.onSelected(action, ev)" t-att-data-hotkey="action.hotkey">
+    <button t-else="" t-att-class="btnClass" t-att="Object.assign(attrs, { 'title': action.name })" t-on-click="(ev) => this.onSelected(action, ev)" t-att-data-hotkey="action.hotkey" t-att-style="props.style">
         <t t-call="mail.Action.content"/>
+        <span
+            t-if="action.tags.includes('WARNING_BADGE')"
+            class="position-absolute me-n1 mt-n1 end-0 fw-bolder badge p-0 rounded-circle bg-warning d-flex justify-content-center align-items-center" style="aspect-ratio: 1; font-size: 0.6rem;"
+        >
+            <i class="fa fa-exclamation"/>
+        </span>
     </button>
 </t>
 

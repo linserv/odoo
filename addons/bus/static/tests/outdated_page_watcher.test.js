@@ -27,7 +27,7 @@ test("disconnect during vacuum should ask for reload", async () => {
     );
     onRpc("/bus/has_missed_notifications", () => true);
     await mountWithCleanup(WebClient);
-    getService("legacy_multi_tab").setSharedValue("last_notification_id", 1);
+    browser.localStorage.setItem("bus.last_notification_id", 1);
     startBusService();
     expect(await getService("multi_tab").isOnMainTab()).toBe(true);
     await runAllTimers();
@@ -38,7 +38,7 @@ test("disconnect during vacuum should ask for reload", async () => {
     await waitForSteps(["BUS:RECONNECT"]);
     await waitFor(".o_notification");
     expect(".o_notification_content:first").toHaveText(
-        "Save your work and refresh to get the latest updates and avoid potential issues."
+        "The page is out of date. Save your work and refresh to get the latest updates and avoid potential issues."
     );
     await contains(".o_notification button:contains(Refresh)").click();
     await waitForSteps(["reload"]);
@@ -51,7 +51,7 @@ test("reconnect after going offline after bus gc should ask for reload", async (
     );
     onRpc("/bus/has_missed_notifications", () => true);
     await mountWithCleanup(WebClient);
-    getService("legacy_multi_tab").setSharedValue("last_notification_id", 1);
+    browser.localStorage.setItem("bus.last_notification_id", 1);
     startBusService();
     expect(await getService("multi_tab").isOnMainTab()).toBe(true);
     await runAllTimers();
@@ -63,6 +63,6 @@ test("reconnect after going offline after bus gc should ask for reload", async (
     await waitForSteps(["BUS:CONNECT"]);
     await waitFor(".o_notification");
     expect(".o_notification_content:first").toHaveText(
-        "Save your work and refresh to get the latest updates and avoid potential issues."
+        "The page is out of date. Save your work and refresh to get the latest updates and avoid potential issues."
     );
 });

@@ -1,7 +1,6 @@
 import { patchWithCleanupImg } from "@html_builder/../tests/helpers";
 import { Builder } from "@html_builder/builder";
 import { SetupEditorPlugin } from "@html_builder/core/setup_editor_plugin";
-import { VersionControlPlugin } from "@html_builder/core/version_control_plugin";
 import { setContent } from "@html_editor/../tests/_helpers/selection";
 import { insertText } from "@html_editor/../tests/_helpers/user_actions";
 import { Plugin } from "@html_editor/plugin";
@@ -92,7 +91,6 @@ export async function setupWebsiteBuilder(
         loadIframeBundles = false,
         loadAssetsFrontendJS = false,
         hasToCreateWebsite = true,
-        versionControl = false,
         styleContent,
         headerContent = "",
         beforeWrapwrapContent = "",
@@ -157,7 +155,7 @@ export async function setupWebsiteBuilder(
             // (location, rpc, ...). So we don't load the js part of the bundle
 
             if (loadIframeBundles) {
-                await loadBundle("website.assets_edit_frontend", {
+                await loadBundle("website.assets_inside_builder_iframe", {
                     targetDoc: queryOne("iframe[data-src^='/website/force/1']").contentDocument,
                     js: false,
                 });
@@ -240,14 +238,6 @@ export async function setupWebsiteBuilder(
     if (snippets) {
         patchWithCleanup(IrUiView.prototype, {
             render_public_asset: () => getSnippetView(snippets),
-        });
-    }
-
-    if (!versionControl) {
-        patchWithCleanup(VersionControlPlugin.prototype, {
-            hasAccessToOutdatedEl() {
-                return true;
-            },
         });
     }
 

@@ -19,10 +19,11 @@ import { session } from "@web/session";
     if (session.test_mode) {
         await loadBundle("im_livechat.assets_livechat_support_tours");
     }
-    const env = Object.assign(makeEnv(), { embedLivechat: true });
+    const env = makeEnv();
     await startServices(env);
     odoo.isReady = true;
     const target = await makeShadow(makeRoot(document.body));
+    env.services["discuss.rtc"].rootEl = target;
     await mount(MainComponentsContainer, target, {
         env,
         getTemplate,

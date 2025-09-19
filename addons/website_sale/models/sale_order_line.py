@@ -23,7 +23,7 @@ class SaleOrderLine(models.Model):
     #=== BUSINESS METHODS ===#
 
     def get_description_following_lines(self):
-        return self.name.splitlines()[1:]
+        return reversed(self.name.splitlines()[1:])
 
     def _get_combination_name(self):
         return self.product_id.product_template_attribute_value_ids._get_combination_name()
@@ -120,3 +120,13 @@ class SaleOrderLine(models.Model):
         :rtype: bool
         """
         return self.discount and self._is_sellable() and self._get_displayed_unit_price()
+
+    def _is_sellable(self):
+        """Check if a line is sellable or not, i.e the link is clickable in the cart or not.
+
+        A line is sellable if the product is published and not a delivery line.
+
+        :return: Whether the line is sellable or not.
+        :rtype: bool
+        """
+        return self.product_id.is_published and not self.is_delivery

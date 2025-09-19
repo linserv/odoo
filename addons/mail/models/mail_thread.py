@@ -4942,7 +4942,7 @@ class MailThread(models.AbstractModel):
         res = [
             Store.Many("attachment_ids", sort="id"),
             "body",
-            Store.Many("partner_ids", ["avatar_128", "name"]),
+            Store.Many("partner_ids", [*self.env["res.partner"]._get_store_avatar_fields(), "name"]),
             "pinned_at",
             "write_date",
             *message._get_store_linked_messages_fields(),
@@ -4955,7 +4955,7 @@ class MailThread(models.AbstractModel):
         Store(bus_channel=message._bus_channel()).add(message, res).bus_send()
 
     def _clean_empty_message(self, message):
-        pass
+        message.message_link_preview_ids._unlink_and_notify()
 
     def _get_store_message_update_extra_fields(self):
         return []

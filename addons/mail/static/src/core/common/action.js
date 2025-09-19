@@ -7,6 +7,7 @@ import { Reactive } from "@web/core/utils/reactive";
 export const ACTION_TAGS = Object.freeze({
     DANGER: "DANGER",
     SUCCESS: "SUCCESS",
+    WARNING_BADGE: "WARNING_BADGE",
     CALL_LAYOUT: "CALL_LAYOUT",
     JOIN_LEAVE_CALL: "JOIN_LEAVE_CALL",
 });
@@ -59,11 +60,12 @@ export class Action {
         this.owner = owner;
         const rawOwner = toRaw(owner);
         this.store =
-            store ?? rawOwner[STORE_SYM]
+            store ??
+            (rawOwner[STORE_SYM]
                 ? owner
                 : isRecord(owner)
                 ? owner.store
-                : useService("mail.store");
+                : useService("mail.store"));
     }
 
     get params() {

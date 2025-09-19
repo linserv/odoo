@@ -16,7 +16,14 @@ const actionListProps = [
 ];
 
 class Action extends Component {
-    static props = ["action", "group", "isFirstInGroup?", "isLastInGroup?", ...actionListProps];
+    static props = [
+        "action",
+        "group?",
+        "isFirstInGroup?",
+        "isLastInGroup?",
+        "style?",
+        ...actionListProps,
+    ];
     static defaultProps = { fw: true };
     static components = { Action, DropdownItem };
     static template = "mail.Action";
@@ -48,10 +55,6 @@ class Action extends Component {
         return this.props.action;
     }
 
-    get groupSize() {
-        return this.props.group.length;
-    }
-
     get hasBtnBg() {
         return this.props.odooControlPanelSwitchStyle || this.props.hasBtnBg;
     }
@@ -67,7 +70,7 @@ export class ActionList extends Component {
     static props = ["actions", "groupClass?", ...actionListProps];
     static template = "mail.ActionList";
 
-    getActionProps(action, group, { isFirstInGroup, isLastInGroup } = {}) {
+    getActionProps(action, group, { index, isFirstInGroup, isLastInGroup } = {}) {
         return {
             action,
             group,
@@ -81,6 +84,7 @@ export class ActionList extends Component {
                     return [actualPropName, this.props[actualPropName]];
                 })
             ),
+            style: `z-index: ${group.length - index}`,
         };
     }
 

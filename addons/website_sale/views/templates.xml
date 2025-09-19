@@ -531,9 +531,9 @@
             <t t-set="opt_wsale_show_shop_title" t-value="is_view_active('website_sale.products_shop_title')"/>
             <t t-set="opt_wsale_shop_title_align" t-value="is_view_active('website_sale.products_shop_title_align')"/>
 
-            <t t-set="opt_wsale_show_category_title" t-value="category and category.show_category_title"/>
-            <t t-set="opt_wsale_show_category_description" t-value="category and category.show_category_description"/>
-            <t t-set="opt_wsale_category_align" t-value="category and category.align_category_content"/>
+            <t t-set="opt_wsale_show_category_title" t-value="bool(category) and category.show_category_title"/>
+            <t t-set="opt_wsale_show_category_description" t-value="bool(category) and category.show_category_description"/>
+            <t t-set="opt_wsale_category_align" t-value="bool(category) and category.align_category_content"/>
 
             <t t-set="website_sale_pricelists" t-value="website.get_pricelist_available(show_visible=True)" />
             <t t-set="website_sale_sortable" t-value="website._get_product_sort_mapping()"/>
@@ -713,51 +713,58 @@
                                 />
                                 <div
                                     t-if="not opt_wsale_floating_bar"
-                                    class="products_header btn-toolbar flex-nowrap align-items-center justify-content-between gap-1 gap-lg-2 gap-xl-3"
+                                    class="products_header d-flex gap-1 gap-lg-2 gap-xl-3"
                                 >
-                                    <t t-if="is_view_active('website_sale.search')">
-                                        <t t-set="_has_all_sibligns" t-value="hasPricelistDropdown and is_view_active('website_sale.sort') and wsale_has_filters_btn"></t>
-                                        <!-- Desktop Search button -->
-                                        <div t-attf-class="o_wsale_products_header_search_form_container {{ _has_all_sibligns and 'd-none d-sm-inline-block'}} col-xl-5 me-auto {{not hasLeftColumn and 'col-xl-6'}}">
-                                            <t t-if="category" t-set="placeholder">Search in <t t-out="category.name"/></t>
-                                            <t t-call="website_sale.search" placeholder="placeholder" search="original_search or search"/>
+                                    <div class="o_wsale_products_header_inner d-contents">
+                                        <t t-if="is_view_active('website_sale.search')">
+                                            <!-- Desktop Search button -->
+                                            <div
+                                                class="o_wsale_products_header_search_form_container d-none d-sm-inline-block flex-grow-1 mw-xxl-25 me-auto"
+                                            >
+                                                <t t-if="category" t-set="placeholder">Search in <t t-out="category.name"/></t>
+                                                <t t-call="website_sale.search" placeholder="placeholder" search="original_search or search"/>
+                                            </div>
+                                            <!-- Mobile Search button -->
+                                            <a
+                                                t-attf-class="btn o_not_editable d-inline-block d-sm-none me-auto btn-{{navClass}}"
+                                                data-bs-target="#o_wsale_search_modal"
+                                                data-bs-toggle="modal"
+                                                role="button"
+                                                title="Search Products"
+                                                href="#"
+                                            >
+                                                <i class="oi oi-search" role="img"/>
+                                            </a>
+                                        </t>
+                                        <div t-attf-class="{{'d-lg-none' if not hasPricelistDropdown and not is_view_active('website_sale.sort') else ''}} o_wsale_products_header_dropdown_wrap d-flex gap-3">
+                                            <t
+                                                t-if="hasPricelistDropdown"
+                                                t-call="website_sale.pricelist_list"
+                                            >
+                                                <t t-set="_classes" t-value="'ms-auto'"/>
+                                            </t>
+                                            <t
+                                                t-if="is_view_active('website_sale.sort')"
+                                                t-call="website_sale.sort"
+                                            />
+                                            <button
+                                                t-if="wsale_has_filters_btn"
+                                                t-attf-class="btn btn-{{navClass}} position-relative {{not wsale_has_filters_btn_lg and 'd-lg-none'}} {{not is_view_active('website_sale.search') and 'ms-auto'}} text-nowrap"
+                                                title="Filters"
+                                                data-bs-toggle="offcanvas"
+                                                data-bs-target="#o_wsale_offcanvas"
+                                            >
+                                                <i class="oi oi-settings-adjust" role="img"/>
+                                                <small t-attf-class="ms-1 {{(hasPricelistDropdown and is_view_active('website_sale.search') and is_view_active('website_sale.sort')) and 'd-none d-md-inline-block'}}">Filters</small>
+                                                <span
+                                                    t-if="isFilteringByPrice or attrib_set or tags"
+                                                    t-attf-class="position-absolute top-0 start-100 translate-middle border border-{{navClass}} rounded-circle bg-danger p-1"
+                                                >
+                                                    <span class="visually-hidden">filters active</span>
+                                                </span>
+                                            </button>
                                         </div>
-                                        <!-- Mobile Search button -->
-                                        <a
-                                            t-attf-class="btn o_not_editable {{_has_all_sibligns and 'd-inline-block d-sm-none' or 'd-none'}} me-auto btn-{{navClass}}"
-                                            data-bs-target="#o_wsale_search_modal"
-                                            data-bs-toggle="modal"
-                                            role="button"
-                                            title="Search Products"
-                                            href="#"
-                                        >
-                                            <i class="oi oi-search" role="img"/>
-                                        </a>
-                                    </t>
-                                    <t
-                                        t-if="hasPricelistDropdown"
-                                        t-call="website_sale.pricelist_list"
-                                    />
-                                    <t
-                                        t-if="is_view_active('website_sale.sort')"
-                                        t-call="website_sale.sort"
-                                    />
-                                    <button
-                                        t-if="wsale_has_filters_btn"
-                                        t-attf-class="btn btn-{{navClass}} position-relative {{not wsale_has_filters_btn_lg and 'd-lg-none'}} {{not is_view_active('website_sale.search') and 'ms-auto'}} text-nowrap"
-                                        title="Filters"
-                                        data-bs-toggle="offcanvas"
-                                        data-bs-target="#o_wsale_offcanvas"
-                                    >
-                                        <i class="oi oi-settings-adjust" role="img"/>
-                                        <small t-attf-class="ms-1 {{(hasPricelistDropdown and is_view_active('website_sale.search') and is_view_active('website_sale.sort')) and 'd-none d-md-inline-block'}}">Filters</small>
-                                        <span
-                                            t-if="isFilteringByPrice or attrib_set or tags"
-                                            t-attf-class="position-absolute top-0 start-100 translate-middle border border-{{navClass}} rounded-circle bg-danger p-1"
-                                        >
-                                            <span class="visually-hidden">filters active</span>
-                                        </span>
-                                    </button>
+                                    </div>
                                 </div>
                                 <div t-if="original_search and products" class="alert alert-warning mt8">
                                     No results found for '<span t-out="original_search"/>'. Showing results for '<span t-out="search"/>'.
@@ -818,7 +825,7 @@
                                                             />
                                                             <t
                                                                 t-set="product_href"
-                                                                t-value="product._get_product_url(category, product_query_params)"
+                                                                t-value="product._get_product_url(category, product_query_params, grouped_attributes_values)"
                                                             />
                                                         </t>
                                                     </div>
@@ -2130,13 +2137,11 @@
                                             </t>
                                         </div>
                                     </t>
-                                    <div class="o_wsale_product_details_content_section o_wsale_product_details_content_section_cta mb-4">
-                                        <t
-                                            t-call="website_sale.cta_wrapper"
-                                        />
-                                        <t
-                                            t-call="website_sale.product_terms_and_conditions"
-                                        />
+                                    <div
+                                        id="o_wsale_product_cta_section"
+                                        class="o_wsale_product_details_content_section o_wsale_product_details_content_section_cta mb-4"
+                                    >
+                                        <t t-call="website_sale.cta_wrapper"/>
                                     </div>
 
                                     <div
@@ -2505,7 +2510,7 @@
                 <section data-snippet="s_dynamic_snippet_products"
                     class="oe_unmovable oe_unremovable s_dynamic_snippet_products o_wsale_alternative_products s_dynamic pt32 pb32 o_colored_level s_product_product_borderless_1"
                     data-name="Alternative Products" style="background-image: none;" t-att-data-filter-id="product._get_alternative_product_filter()"
-                    data-template-key="website_sale.dynamic_filter_template_product_product_borderless_1" data-product-category-id="all" data-number-of-elements="4"
+                    data-template-key="website_sale.dynamic_filter_template_product_product_products_item" data-product-category-id="all" data-number-of-elements="4"
                     data-number-of-elements-small-devices="1" data-number-of-records="16" data-carousel-interval="5000" data-bs-original-title="" title="">
                     <div class="container">
                         <div class="row s_nb_column_fixed">
@@ -2528,13 +2533,19 @@
     <template
         name="Terms and Conditions"
         id="website_sale.product_terms_and_conditions"
+        inherit_id="website_sale.product"
         active="True"
-        priority="21">
-        <small class="text-muted mb-0">
-            <a href="/terms" class="o_translate_inline text-muted"><u>Terms and Conditions</u></a><br/>
-            30-day money-back guarantee<br/>
-            Shipping: 2-3 Business Days
-        </small>
+        priority="21"
+    >
+        <div id="o_wsale_product_cta_section" position="inside">
+            <small class="text-muted mb-0">
+                <a href="/terms" class="o_translate_inline text-muted">
+                    <u>Terms and Conditions</u>
+                </a><br/>
+                30-day money-back guarantee<br/>
+                Shipping: 2-3 Business Days
+            </small>
+        </div>
     </template>
 
     <!-- Product options: Zoom -->
@@ -2809,11 +2820,11 @@
          description_sale. Called in `website_sale.cart_lines`. -->
     <template id="cart_line_description_following_lines" name="Shopping Cart Line Description Following Lines">
         <t t-set="description_lines" t-value="line.get_description_following_lines()"/>
-        <div t-if="description_lines" t-attf-class="text-muted small">
+        <div t-if="description_lines" class="text-muted small">
             <t t-foreach="description_lines" t-as="name_line">
                 <span
                     t-if="name_line"
-                    t-attf-class="o_description_line o_line_clamp #{not name_line_last and 'mb-1'}"
+                    t-attf-class="d-block #{not name_line_last and 'mb-1'}"
                     t-out="name_line"
                 />
             </t>
@@ -3063,7 +3074,7 @@
                 <t t-foreach="description_lines" t-as="description_line">
                     <span
                         t-if="description_line"
-                        class="o_description_line o_line_clamp"
+                        class="d-block"
                         t-out="description_line"
                     />
                 </t>
@@ -3124,13 +3135,10 @@
     </template>
 
     <template id="quick_reorder_button">
-        <!-- TODO SHRM: Make title translatable -->
-        <t
-            t-set="quick_reorder_button_title"
-            t-value="'Login to reorder' if request.website.is_public_user()
-                     else 'No previous products available for reorder.' if not order_history
-                     else ''"
-        />
+        <t t-set="quick_reorder_button_title">
+            <t t-if="request.website.is_public_user()">Login to reorder</t>
+            <t t-elif="not order_history">No previous products available for reorder.</t>
+        </t>
         <span t-att-title="quick_reorder_button_title">
             <button
                 id="quick_reorder_button"
@@ -3297,7 +3305,7 @@
                                     />
                                 </a>
                                 <div
-                                    class="o_description_line o_line_clamp mb-2 small text-muted"
+                                    class="mb-2 small text-muted"
                                     t-field="product.description_sale"
                                 />
                             </div>
@@ -3407,7 +3415,7 @@
                     </a>
                 </t>
             </t>
-            <div t-if="not hide_payment_button" t-attf-class="position-relative d-flex w-100 justify-content-center align-items-center my-2 opacity-75">
+            <div t-if="not hide_payment_button" class="position-relative d-none d-lg-flex w-100 justify-content-center align-items-center my-2 opacity-75">
                 <hr class="w-100"/>
                 <span class="px-3">or</span>
                 <hr class="w-100"/>
@@ -3415,14 +3423,14 @@
             <t t-if="previous_website_checkout_step">
                 <a
                     t-att-href="previous_website_checkout_step.step_href"
-                    class="pt-2 pt-lg-0 text-center"
+                    class="mt-2 mt-lg-0 text-center"
                 >
                     <i class="fa fa-angle-left me-2 fw-light"/>
                     <span t-field="previous_website_checkout_step.back_button_label"/>
                 </a>
             </t>
             <t t-else="">
-                <a t-att-href="'/shop'" class="pt-2 pt-lg-0 text-center">
+                <a t-att-href="'/shop'" class="mt-2 mt-lg-0 text-center">
                     <i class="fa fa-angle-left me-2 fw-light"/>
                     Continue shopping
                 </a>
@@ -3619,12 +3627,12 @@
 
     <template id="address_edit_button" name="Address edit button">
         <t t-if="xmlid != 'website_sale.confirmation'">
-            <a t-if="order.partner_invoice_id.country_id" class="float-end no-decoration pe-1" href="/shop/checkout">
+            <a t-if="order.partner_invoice_id.country_id" class="float-end no-decoration" href="/shop/checkout">
                 <i class="fa fa-pencil me-1"/>Edit
             </a>
             <a
                 t-else=""
-                class="float-end no-decoration pe-1"
+                class="float-end no-decoration"
                 t-attf-href="/shop/address?partner_id={{order.partner_invoice_id.id}}&amp;address_type=billing"
             >
                 <i class="fa fa-pencil me-1"/>Want an invoice?
@@ -3642,10 +3650,10 @@
                     t-set="use_delivery_as_billing"
                     t-value="order.partner_invoice_id == order.partner_shipping_id and not order.pickup_location_data"
                 />
-                <div class="row">
+                <div class="d-flex flex-column flex-md-row gap-4">
                     <div
                         t-if="not use_delivery_as_billing and order._has_deliverable_products()"
-                        t-attf-class="{{not use_delivery_as_billing and not only_services and 'col-md-6'}}"
+                        t-attf-class="{{not use_delivery_as_billing and not only_services and 'col'}}"
                     >
                         <t t-if="order.pickup_location_data">
                             <p t-att-class="delivery_title_classes">Deliver to pickup point</p>
@@ -3669,7 +3677,7 @@
                             />
                         </t>
                     </div>
-                    <div t-attf-class="{{not use_delivery_as_billing and not only_services and 'col-md-6'}}">
+                    <div t-attf-class="{{not use_delivery_as_billing and not only_services and 'col'}}">
                         <p t-if="use_delivery_as_billing and not only_services" t-att-class="delivery_title_classes">Delivery &amp; Billing</p>
                         <p t-else="" t-att-class="delivery_title_classes">Billing</p>
                         <t
@@ -4013,7 +4021,7 @@
                 <a
                     title="Print"
                     role="button"
-                    class="d-none d-md-inline-block btn btn-secondary ms-auto"
+                    class="d-none d-md-inline-block btn btn-light ms-auto"
                     href="/shop/print"
                     target="_blank"
                     aria-label="Print"
@@ -4354,10 +4362,7 @@
             t-attf-class="o_carousel_product_indicators {{indicators_div_class}}"
         >
             <ol
-                t-att-class="'carousel-indicators '
-                    + (indicators_list_class or '')
-                    + ('justify-content-center ' if website.product_page_image_width == '100_pc' else '')
-                    + ' position-static pt-2 pt-lg-0 mx-auto my-0'"
+                t-attf-class="carousel-indicators position-static pt-2 pt-lg-0 mx-auto my-0 {{indicators_list_class}} {{website.product_page_image_width == '100_pc' and 'justify-content-center'}}"
             >
                 <li
                     t-foreach="product_images" t-as="product_image"
@@ -4449,13 +4454,13 @@
 
     <template id="ecom_show_extra_fields" inherit_id="website_sale.product" active="True" name="Show Extra Fields">
         <xpath expr="//div[@id='product_details']" position="inside">
-            <t t-if="any([product[field.name] for field in website.shop_extra_field_ids])">
+            <t t-if="any([product.sudo()[field.name] for field in website.shop_extra_field_ids])">
                 <hr/>
                 <p class="text-muted">
-                    <t t-foreach='website.shop_extra_field_ids' t-as='field' t-if='product[field.name]'>
-                        <b><t t-out='field.label'/>: </b>
-                        <t t-if='field.field_id.ttype != "binary"'>
-                            <span t-out='product[field.name]' t-options="{'widget': field.field_id.ttype}"/>
+                    <t t-foreach="website.shop_extra_field_ids" t-as="field" t-if="product.sudo()[field.name]">
+                        <b><t t-out="field.label"/>: </b>
+                        <t t-if="field.field_id.ttype != 'binary'">
+                            <span t-out="product.sudo()[field.name]" t-options="{'widget': field.field_id.ttype}"/>
                         </t>
                         <t t-else=''>
                             <a target='_blank' t-attf-href='/web/content/product.template/#{product.id}/#{field.name}?download=1'>

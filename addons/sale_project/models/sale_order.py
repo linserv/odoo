@@ -189,6 +189,7 @@ class SaleOrder(models.Model):
                 'default_company_id': self.company_id.id,
                 'generate_milestone': default_sale_line.product_id.service_policy == 'delivered_milestones',
                 'default_name': self.name,
+                'default_allow_milestones': 'delivered_milestones' in self.order_line.product_id.mapped('service_policy'),
             },
         }
 
@@ -204,7 +205,9 @@ class SaleOrder(models.Model):
         project_ids = self.with_context(active_test=False).project_ids
         partner = self.partner_shipping_id or self.partner_id
         if len(project_ids) == 1:
-            action = (self.env['ir.actions.actions']._for_xml_id('project.action_view_task'))
+            action = self.env['ir.actions.actions'].with_context(
+                active_id=self.project_ids.id,
+            )._for_xml_id('project.act_project_project_2_project_task_all')
             action['context'] = {
                 'active_id': project_ids.id,
                 'default_partner_id': partner.id,

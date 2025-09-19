@@ -2481,17 +2481,17 @@ class BaseModel(metaclass=MetaModel):
         check_property_field_value_name(property_name)
 
         target_model = self.env[self._fields[field.definition_record].comodel_name]
-        self.env.cr.execute(SQL(
+        field_definition = target_model._fields[field.definition_record_field]
+        result = self.env.execute_query_dict(SQL(
             """ SELECT definition
                   FROM %(table)s, jsonb_array_elements(%(field)s) definition
                  WHERE %(field)s IS NOT NULL AND definition->>'name' = %(name)s
                  LIMIT 1 """,
             table=SQL.identifier(target_model._table),
-            field=SQL.identifier(field.definition_record_field),
+            field=SQL.identifier(field.definition_record_field, to_flush=field_definition),
             name=property_name,
         ))
-        result = self.env.cr.dictfetchone()
-        return result["definition"] if result else {}
+        return result[0]["definition"] if result else {}
 
     def _parent_store_compute(self) -> None:
         """ Compute parent_path field from scratch. """
@@ -4334,7 +4334,7 @@ class BaseModel(metaclass=MetaModel):
 
             for fname, value in vals.items():
                 field = self._fields[fname]
-                if field.type not in ('one2many', 'many2many'):
+                if field.type not in ('one2many', 'many2many', 'html'):
                     cache_value = field.convert_to_cache(value, record)
                     field._update_cache(record, cache_value)
                     if field.type in ('many2one', 'many2one_reference') and self.pool.field_inverses[field]:
@@ -5101,14 +5101,6 @@ class BaseModel(metaclass=MetaModel):
         ))
         return bool(cr.fetchone())
 
-    @api.deprecated("Deprecated since 18.0, use _has_cycle() instead")
-    def _check_recursion(self, parent=None):
-        return not self._has_cycle(parent)
-
-    @api.deprecated("Deprecated since 18.0, use _has_cycle() instead")
-    def _check_m2m_recursion(self, field_name):
-        return not self._has_cycle(field_name)
-
     def _get_external_ids(self) -> dict[IdType, list[str]]:
         """Retrieve the External ID(s) of any database record.
 
@@ -5202,14 +5194,6 @@ class BaseModel(metaclass=MetaModel):
             records = records.with_context(context)
 
         return records._read_format(fnames=fields, **read_kwargs)
-
-    @api.deprecated("Deprecated since 19.0, use action_archive or action_unarchive")
-    def toggle_active(self):
-        "Inverses the value of :attr:`active` on the records in ``self``."
-        assert self._active_name, f"No 'active' field on model {self._name}"
-        active_recs = self.filtered(self._active_name)
-        active_recs.action_archive()
-        (self - active_recs).action_unarchive()
 
     def action_archive(self):
         """Set :attr:`active` to ``False`` on a recordset for active records.

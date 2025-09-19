@@ -280,8 +280,8 @@
             ('remove', 'website/static/src/js/content/redirect.js'),
             ('remove', 'website/static/src/js/content/adapt_content.js'),
         ],
-        'website.assets_edit_frontend': [
-            ('include', 'html_builder.assets_edit_frontend'),
+        'website.assets_inside_builder_iframe': [
+            ('include', 'html_builder.assets_inside_builder_iframe'),
             'website/static/src/**/*.edit.*',
             'website/static/src/core/website_edit_service.js',
         ],
@@ -447,9 +447,7 @@
             ('remove', 'website/static/src/builder/**/*.edit.*'),
         ],
         'html_builder.iframe_add_dialog': [
-            'website/static/src/snippets/s_color_blocks_2/s_color_blocks_2.scss',
-            'website/static/src/snippets/s_ecomm_categories_showcase/categories_showcase.scss',
-            'website/static/src/snippets/s_floating_blocks/floating_blocks.scss',
+            'website/static/src/snippets/**/*.iframe_add_dialog.scss',
         ],
     },
     'configurator_snippets': {

@@ -316,7 +316,7 @@ class TestUi(HttpCaseWithWebsiteUser):
         self.start_tour("/", 'website_navbar_menu')
 
     def test_05_specific_website_editor(self):
-        asset_bundle_xmlid = "website.assets_edit_frontend"
+        asset_bundle_xmlid = "website.assets_inside_builder_iframe"
         website_default = self.env['website'].search([], limit=1)
 
         new_website = self.env['website'].create({'name': 'New Website'})
@@ -332,7 +332,7 @@ class TestUi(HttpCaseWithWebsiteUser):
 
         self.env['ir.asset'].create({
             'name': 'EditorExtension',
-            'bundle': "website.assets_edit_frontend",
+            'bundle': "website.assets_inside_builder_iframe",
             'path': custom_url,
             'website_id': new_website.id,
         })
@@ -342,7 +342,7 @@ class TestUi(HttpCaseWithWebsiteUser):
         base_website_css_version = base_website_bundle.get_version('css')
         base_website_js_version = base_website_bundle.get_version('js')
 
-        new_website_bundle_modified = self.env['ir.qweb']._get_asset_bundle("website.assets_edit_frontend", assets_params={'website_id': new_website.id})
+        new_website_bundle_modified = self.env['ir.qweb']._get_asset_bundle("website.assets_inside_builder_iframe", assets_params={'website_id': new_website.id})
         self.assertIn(custom_url, [f['url'] for f in new_website_bundle_modified.files])
         self.assertEqual(new_website_bundle_modified.get_version('css'), base_website_css_version)
         self.assertNotEqual(new_website_bundle_modified.get_version('js'), base_website_js_version, "js version for new website should now have been changed")
@@ -353,7 +353,7 @@ class TestUi(HttpCaseWithWebsiteUser):
 
     def test_07_snippet_version(self):
         website_snippets = self.env.ref('website.snippets')
-        view_ids = self.env['ir.ui.view'].create([{
+        self.env['ir.ui.view'].create([{
             'name': 'Test snip',
             'type': 'qweb',
             'key': 'website.s_test_snip',
@@ -372,41 +372,6 @@ class TestUi(HttpCaseWithWebsiteUser):
             """,
         }])
         self.start_tour(self.env['website'].get_client_action_url('/'), 'snippet_version_1', login='admin')
-
-        self.env['ir.ui.view'].create([
-            {
-                'name': 'Test snippet version 999',
-                'mode': 'extension',
-                'inherit_id': view_ids[0].id,
-                'arch': """
-                    <xpath expr="//section[hasclass('s_test_snip')]" position="attributes">
-                        <attribute name="data-vjs">999</attribute>
-                    </xpath>
-                """
-            },
-            {
-                'name': 'Share snippet version 999',
-                'mode': 'extension',
-                'inherit_id': self.env.ref("website.s_share").id,
-                'arch': """
-                    <xpath expr="//div" position="attributes">
-                        <attribute name="data-vcss">999</attribute>
-                    </xpath>
-                """
-            },
-            {
-                'name': 's_text_image version 999',
-                'mode': 'extension',
-                'inherit_id': self.env.ref("website.s_text_image").id,
-                'arch': """
-                    <xpath expr="//section[hasclass('s_text_image')]" position="attributes">
-                        <attribute name="data-vxml">999</attribute>
-                    </xpath>
-                """
-            }
-        ])
-
-        self.start_tour(self.env['website'].get_client_action_url('/'), 'snippet_version_2', login='admin')
 
     def test_08_website_style_custo(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'website_style_edition', login='admin')
@@ -438,9 +403,6 @@ class TestUi(HttpCaseWithWebsiteUser):
 
     def test_14_carousel_snippet_content_removal(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'carousel_content_removal', login='admin')
-
-    def test_15_website_link_tools(self):
-        self.start_tour(self.env['website'].get_client_action_url('/'), 'link_tools', login="admin")
 
     def test_16_website_edit_megamenu(self):
         self.start_tour(self.env['website'].get_client_action_url('/'), 'edit_megamenu', login='admin')

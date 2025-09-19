@@ -328,8 +328,7 @@
                     <separator/>
                     <filter string="Archived" name="inactive" domain="[('active', '=', False)]"/>
                     <field name="properties"/>
-                    <separator/>
-                    <group name="group_by">
+                    <group>
                         <filter name="salesperson" string="Salesperson" domain="[]" context="{'group_by' : 'user_id'}" />
                         <filter name="group_company" string="Company" context="{'group_by': 'parent_id'}"/>
                         <filter name="group_country" string="Country" context="{'group_by': 'country_id'}"/>
@@ -343,6 +342,7 @@
         <record model="ir.ui.view" id="res_partner_kanban_view">
             <field name="name">res.partner.kanban</field>
             <field name="model">res.partner</field>
+            <field name="priority">1</field>
             <field name="arch" type="xml">
                 <kanban sample="1">
                     <field name="avatar_128"/>
