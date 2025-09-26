@@ -38,7 +38,10 @@ import { ProductInfoPopup } from "@point_of_sale/app/components/popups/product_i
 import { RetryPrintPopup } from "@point_of_sale/app/components/popups/retry_print_popup/retry_print_popup";
 import { PresetSlotsPopup } from "@point_of_sale/app/components/popups/preset_slots_popup/preset_slots_popup";
 import { DebugWidget } from "../utils/debug/debug_widget";
-import { EpsonPrinter } from "@point_of_sale/app/utils/printer/epson_printer";
+import {
+    EpsonPrinter,
+    EpsonServerDirectPrinter,
+} from "@point_of_sale/app/utils/printer/epson_printer";
 import OrderPaymentValidation from "../utils/order_payment_validation";
 import { logPosMessage } from "../utils/pretty_console_log";
 
@@ -181,6 +184,11 @@ export class PosStore extends WithLazyGetterTrap {
         }
 
         this.router.navigate(routeName, routeParams);
+    }
+
+    navigateToFirstPage() {
+        const page = this.firstPage;
+        this.navigate(page.page, page.params);
     }
 
     navigateToOrderScreen(order) {
@@ -438,6 +446,7 @@ export class PosStore extends WithLazyGetterTrap {
         });
 
         await this.processProductAttributes();
+        await this.config.cacheReceiptLogo();
     }
     cashMove() {
         this.hardwareProxy.openCashbox(_t("Cash in / out"));
@@ -656,8 +665,16 @@ export class PosStore extends WithLazyGetterTrap {
         this.markReady();
         await this.deviceSync.readDataFromServer();
 
+        // Epson ePoS printer
         if (this.config.other_devices && this.config.epson_printer_ip) {
             this.hardwareProxy.printer = new EpsonPrinter({ ip: this.config.epson_printer_ip });
+        } else if (this.config.use_epson_server_direct_print) {
+            // Epson Server Direct Print printer
+            this.hardwareProxy.printer = new EpsonServerDirectPrinter({
+                posConfigId: this.config.id,
+                posData: this.data,
+                busService: this.env.services.bus_service,
+            });
         }
     }
 
@@ -1073,13 +1090,21 @@ export class PosStore extends WithLazyGetterTrap {
         return order.getSelectedOrderline();
     }
 
-    createPrinter(config) {
-        if (config.printer_type === "epson_epos") {
-            return new EpsonPrinter({ ip: config.epson_printer_ip });
+    createPrinter(printerConfig) {
+        const printerType = printerConfig.printer_type;
+        if (printerType === "epson_epos") {
+            return new EpsonPrinter({ ip: printerConfig.epson_printer_ip });
+        } else if (printerType === "epson_server_direct_print") {
+            return new EpsonServerDirectPrinter({
+                posConfigId: this.config.id,
+                posData: this.data,
+                busService: this.env.services.bus_service,
+            });
         }
-        const url = deduceUrl(config.proxy_ip || "");
+        const url = deduceUrl(printerConfig.proxy_ip || "");
         return new HWPrinter({ url });
     }
+
     async _loadFonts() {
         return new Promise(function (resolve, reject) {
             // Waiting for fonts to be loaded to prevent receipt printing
@@ -1723,7 +1748,7 @@ export class PosStore extends WithLazyGetterTrap {
                 let reprint = false;
                 let orderChange = changesToOrder(
                     order,
-                    this.config.preparationCategories,
+                    this.config.printerCategories,
                     opts.cancelled
                 );
 
@@ -1761,7 +1786,7 @@ export class PosStore extends WithLazyGetterTrap {
         // Otherwise several devices can print the same changes
         // We need to check if a preparation display is configured to avoid unnecessary sync
         if (isPrinted && !this.models["pos.prep.display"]?.length) {
-            await this.syncAllOrders({ orders: [order] });
+            await this.syncAllOrders({ orders: [order], force: true });
         }
     }
     async sendOrderInPreparationUpdateLastChange(o, opts) {
@@ -2031,6 +2056,10 @@ export class PosStore extends WithLazyGetterTrap {
                 },
             }
         );
+    }
+    orderContainsProduct(product) {
+        const lines = this.getOpenOrders().flatMap((o) => o.lines);
+        return lines.some((l) => l.product_id.product_tmpl_id.id === product.id);
     }
     async loadSampleData() {
         const [isPosManager, isAdmin] = await Promise.all([

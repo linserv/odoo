@@ -286,7 +286,6 @@ class TestFrontend(TestFrontendCommon):
         self.start_pos_tour('SplitBillScreenTour4ProductCombo')
 
     def test_10_save_last_preparation_changes(self):
-        self.pos_config.write({'printer_ids': False})
         self.pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('SaveLastPreparationChangesTour')
         self.assertTrue(self.pos_config.current_session_id.order_ids.last_order_preparation_change, "There should be a last order preparation change")
@@ -318,7 +317,6 @@ class TestFrontend(TestFrontendCommon):
         self.assertEqual(order.crm_team_id.id, sale_team.id)
 
     def test_14_pos_payment_sync(self):
-        self.pos_config.write({'printer_ids': False})
         self.pos_config.with_user(self.pos_user).open_ui()
         def assert_payment(lines_count, amount):
             self.assertEqual(len(order.payment_ids), lines_count)
@@ -334,10 +332,10 @@ class TestFrontend(TestFrontendCommon):
 
     def test_15_split_bill_screen_actions(self):
         self.pos_config.with_user(self.pos_user).open_ui()
+        self.pos_config.write({'printer_ids': False})
         self.start_pos_tour('SplitBillScreenTour5Actions')
 
     def test_pos_restaurant_course(self):
-        self.pos_config.write({'printer_ids': False})
         self.pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('test_pos_restaurant_course')
 
@@ -638,6 +636,18 @@ class TestFrontend(TestFrontendCommon):
         Tests that when a customer is set, it will be saved and not be reset even if this is the only thing that changed in the order
         """
         self.start_tour(f"/pos/ui?config_id={self.main_pos_config.id}", 'test_customer_alone_saved', login="pos_user")
+
+    def test_no_kitchen_confirmation_for_deposit_money(self):
+        if not self.env["ir.module.module"].search([("name", "=", "pos_settle_due"), ("state", "=", "installed")]):
+            self.skipTest("pos_settle_due module is required for this test")
+
+        self.customer_account_payment_method = self.env['pos.payment.method'].create({
+            'name': 'Customer Account',
+            'split_transactions': True,
+        })
+        self.pos_config.write({'payment_method_ids': [(4, self.customer_account_payment_method.id)]})
+        self.pos_config.with_user(self.pos_admin).open_ui()
+        self.start_pos_tour('test_no_kitchen_confirmation_for_deposit_money', login="pos_admin")
 
     def test_open_default_register_screen_config(self):
         """

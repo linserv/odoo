@@ -1546,16 +1546,14 @@ class BaseModel(metaclass=MetaModel):
     def _add_missing_default_values(self, values: ValuesType) -> ValuesType:
         # avoid overriding inherited values when parent is set
         avoid_models = set()
-
-        def collect_models_to_avoid(model):
-            for parent_mname, parent_fname in model._inherits.items():
+        avoid_models_stack = [self]
+        while avoid_models_stack:
+            for parent_mname, parent_fname in avoid_models_stack.pop()._inherits.items():
                 if parent_fname in values:
                     avoid_models.add(parent_mname)
                 else:
                     # manage the case where an ancestor parent field is set
-                    collect_models_to_avoid(self.env[parent_mname])
-
-        collect_models_to_avoid(self)
+                    avoid_models_stack.append(self.env[parent_mname])
 
         def avoid(field):
             # check whether the field is inherited from one of avoid_models
@@ -2851,43 +2849,6 @@ class BaseModel(metaclass=MetaModel):
 
         raise AccessError(error_msg)
 
-    @api.model
-    @api.deprecated(
-        "Deprecated since 19.0, use `_check_field_access` on models."
-        " To get the list of allowed fields, use `fields_get`.",
-    )
-    def check_field_access_rights(self, operation: str, field_names: list[str] | None) -> list[str]:
-        """Check the user access rights on the given fields.
-
-        If `field_names` is not provided, we list accessible fields to the user.
-        Otherwise, an error is raised if we try to access a forbidden field.
-        Note that this function ignores unknown (virtual) fields.
-
-        :param operation: one of ``create``, ``read``, ``write``, ``unlink``
-        :param field_names: names of the fields
-        :return: provided fields if fields is truthy (or the fields
-          readable by the current user).
-        :raise AccessError: if the user is not allowed to access
-          the provided fields.
-        """
-        if self.env.su:
-            return field_names or list(self._fields)
-
-        if not field_names:
-            return [
-                field_name
-                for field_name, field in self._fields.items()
-                if self._has_field_access(field, operation)
-            ]
-
-        for field_name in field_names:
-            # Unknown (or virtual) fields are considered accessible because they will not be read and nothing will be written to them.
-            field = self._fields.get(field_name)
-            if field is None:
-                continue
-            self._check_field_access(field, operation)
-        return field_names
-
     @api.readonly
     def read(self, fields: Sequence[str] | None = None, load: str = '_classic_read') -> list[ValuesType]:
         """Read the requested fields for the records in ``self``, and return their
@@ -3208,6 +3169,7 @@ class BaseModel(metaclass=MetaModel):
         This method is implemented thanks to methods :meth:`_search` and
         :meth:`_fetch_query`, and should not be overridden.
         """
+        self = self._origin  # noqa: PLW0642 filtered out new records
         if not self or not (field_names is None or field_names):
             return
 
@@ -3579,40 +3541,6 @@ class BaseModel(metaclass=MetaModel):
 
         return None
 
-    @api.model
-    @api.deprecated("check_access_rights() is deprecated since 18.0; use check_access() instead.")
-    def check_access_rights(self, operation, raise_exception=True):
-        """ Verify that the given operation is allowed for the current user accord to ir.model.access.
-
-        :param str operation: one of ``create``, ``read``, ``write``, ``unlink``
-        :param bool raise_exception: whether an exception should be raise if operation is forbidden
-        :return: whether the operation is allowed
-        :rtype: bool
-        :raise AccessError: if the operation is forbidden and raise_exception is True
-        """
-        if raise_exception:
-            return self.browse().check_access(operation)
-        return self.browse().has_access(operation)
-
-    @api.deprecated("check_access_rule() is deprecated since 18.0; use check_access() instead.")
-    def check_access_rule(self, operation):
-        """ Verify that the given operation is allowed for the current user according to ir.rules.
-
-        :param str operation: one of ``create``, ``read``, ``write``, ``unlink``
-        :return: None if the operation is allowed
-        :raise UserError: if current ``ir.rules`` do not permit this operation.
-        """
-        self.check_access(operation)
-
-    @api.deprecated("_filter_access_rules() is deprecated since 18.0; use _filtered_access() instead.")
-    def _filter_access_rules(self, operation):
-        """ Return the subset of ``self`` for which ``operation`` is allowed. """
-        return self._filtered_access(operation)
-
-    @api.deprecated("_filter_access_rules_python() is deprecated since 18.0; use _filtered_access() instead.")
-    def _filter_access_rules_python(self, operation):
-        return self._filtered_access(operation)
-
     def unlink(self) -> typing.Literal[True]:
         """ Delete the records in ``self``.
 
@@ -3754,7 +3682,7 @@ class BaseModel(metaclass=MetaModel):
         return True
 
     def write(self, vals: ValuesType) -> typing.Literal[True]:
-        """ Uppdate all records in ``self`` with the provided values.
+        """ Update all records in ``self`` with the provided values.
 
         :param vals: fields to update and the value to set on them
         :raise AccessError: if user is not allowed to modify the specified records/fields
@@ -4447,7 +4375,13 @@ class BaseModel(metaclass=MetaModel):
             if prefix:
                 parent_ids = {int(label) for label in prefix.split('/')[:-1]}
                 if not parent_ids.isdisjoint(records._ids):
-                    raise UserError(_("Recursion Detected."))
+                    ir_model = self.env['ir.model']._get(self._name)
+                    raise UserError(_(
+                        "You are creating a loop in your '%s' records. "
+                        "A record cannot be a child of itself or one of its own sub-items. "
+                        "Please select a different parent.",
+                        ir_model.name,
+                    ))
 
             # update parent_path of all records and their descendants
             updated = dict(self.env.execute_query(SQL(
@@ -4834,21 +4768,19 @@ class BaseModel(metaclass=MetaModel):
             self = self.with_context(__copy_data_seen=defaultdict(set))
 
         # build a black list of fields that should not be copied
-        blacklist = set(MAGIC_COLUMNS + ['parent_path'])
-        whitelist = set(name for name, field in self._fields.items() if not field.inherited)
+        blacklist = {*MAGIC_COLUMNS, 'parent_path'}
+        whitelist = {name for name, field in self._fields.items() if not field.inherited}
 
-        def blacklist_given_fields(model):
-            # blacklist the fields that are given by inheritance
-            for parent_model, parent_field in model._inherits.items():
+        blacklist_stack = [self]
+        while blacklist_stack:
+            for parent_model, parent_field in blacklist_stack.pop()._inherits.items():
                 blacklist.add(parent_field)
                 if parent_field in default:
                     # all the fields of 'parent_model' are given by the record:
                     # default[parent_field], except the ones redefined in self
                     blacklist.update(set(self.env[parent_model]._fields) - whitelist)
                 else:
-                    blacklist_given_fields(self.env[parent_model])
-
-        blacklist_given_fields(self)
+                    blacklist_stack.append(self.env[parent_model])
 
         fields_to_copy = {name: field
                           for name, field in self._fields.items()

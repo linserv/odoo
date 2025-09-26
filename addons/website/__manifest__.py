@@ -369,14 +369,8 @@
             'website/static/src/snippets/**/*.js',
             'website/static/src/snippets/**/*.xml',
             'website/static/src/xml/**/*.xml',
-            ## TODO: remove the following line when cleaning up residuals files
-            ## from the old editor
-            ('remove', 'website/static/src/snippets/s_floating_blocks/options.xml'),
             'website/static/src/snippets/s_table_of_content/000.scss',
             'google_recaptcha/static/src/js/recaptcha.js',
-        ],
-        'web.tests_assets': [
-            'website/static/tests/website_service_mock.js',
         ],
         'web._assets_frontend_helpers': [
             ('prepend', 'website/static/src/scss/bootstrap_overridden.scss'),
@@ -398,7 +392,6 @@
             'website/static/src/scss/website.edit_mode.scss',
             'website/static/src/snippets/s_image_gallery/000.xml',
             'website/static/src/snippets/s_image_gallery/001.xml',
-            'website/static/src/snippets/s_floating_blocks/options.xml',
             'website/static/src/js/send_mail_form.js',
             'website/static/src/xml/website_form.xml',
             'website/static/src/xml/website_form_editor.xml',
