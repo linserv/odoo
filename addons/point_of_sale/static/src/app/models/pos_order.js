@@ -368,6 +368,7 @@ export class PosOrder extends Base {
         this.last_order_preparation_change.metadata = {
             serverDate: serializeDateTime(DateTime.now()),
         };
+        this.setDirty();
     }
 
     hasSkippedChanges() {
@@ -1034,6 +1035,10 @@ export class PosOrder extends Base {
         } else {
             return true;
         }
+    }
+
+    canBeValidated() {
+        return this.is_paid() && this._isValidEmptyOrder();
     }
 
     _generateTicketCode() {
