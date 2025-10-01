@@ -240,7 +240,7 @@ class AccountJournal(models.Model):
         index='btree_not_null',
         check_company=True,
         domain="[('partner_id','=', company_partner_id)]")
-    bank_statements_source = fields.Selection(selection=_get_bank_statements_available_sources, string='Bank Feeds', default='undefined', help="Defines how the bank statements will be registered")
+    bank_statements_source = fields.Selection(selection='_get_bank_statements_available_sources', string='Bank Feeds', default='undefined', help="Defines how the bank statements will be registered")
     bank_acc_number = fields.Char(related='bank_account_id.acc_number', readonly=False)
     bank_id = fields.Many2one('res.bank', related='bank_account_id.bank_id', readonly=False)
 
@@ -1124,20 +1124,14 @@ class AccountJournal(models.Model):
         :return: A recordset with all the account.account used by this journal for inbound transactions.
         """
         self.ensure_one()
-        account_ids = set()
-        for line in self.inbound_payment_method_line_ids:
-            account_ids.add(line.payment_account_id.id)
-        return self.env['account.account'].browse(account_ids)
+        return self.inbound_payment_method_line_ids.payment_account_id
 
     def _get_journal_outbound_outstanding_payment_accounts(self):
         """
         :return: A recordset with all the account.account used by this journal for outbound transactions.
         """
         self.ensure_one()
-        account_ids = set()
-        for line in self.outbound_payment_method_line_ids:
-            account_ids.add(line.payment_account_id.id)
-        return self.env['account.account'].browse(account_ids)
+        return self.outbound_payment_method_line_ids.payment_account_id
 
     def _get_available_payment_method_lines(self, payment_type):
         """

@@ -780,6 +780,7 @@ export function makeActionManager(env, router = _router) {
                 actionName: action.name,
                 cache: action.cache,
                 actionType: "ir.actions.act_window",
+                actionXmlId: action.xml_id,
                 embeddedActions,
                 parentActionId,
                 currentEmbeddedActionId,
@@ -1448,7 +1449,7 @@ export function makeActionManager(env, router = _router) {
                         pick(options, "forceLeave")
                     );
                     if (!canProceed) {
-                        return new Promise(() => {});
+                        return;
                     }
                 }
                 return _executeActWindowAction(action, options);

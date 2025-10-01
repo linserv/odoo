@@ -127,6 +127,35 @@ test("static statusbar widget on many2one field", async () => {
     expect('.o_statusbar_status button[data-value="4"]').toHaveClass("o_arrow_button_current");
 });
 
+test.tags("desktop");
+test("[Offline] static statusbar widget on many2one field", async () => {
+    Partner._fields.trululu = fields.Many2one({
+        relation: "partner",
+        domain: "[('bar', '=', True)]",
+    });
+    Partner._records[1].bar = false;
+    onRpc("/web/dataset/call_kw/partner/search_read", () => new Response("", { status: 502 }), {
+        pure: true,
+    });
+
+    await mountView({
+        type: "form",
+        resModel: "partner",
+        resId: 1,
+        arch: /* xml */ `
+            <form>
+                <header>
+                    <field name="trululu" widget="statusbar" />
+                </header>
+            </form>
+        `,
+    });
+    expect(queryAllTexts(".o_form_statusbar")).toEqual(["aaa"]);
+    expect(".o_statusbar_status button:not(.dropdown-toggle)").toHaveCount(1);
+    expect(".o_statusbar_status button:disabled:not(.d-none)").toHaveCount(1);
+    expect('.o_statusbar_status button[data-value="4"]').toHaveClass("o_arrow_button_current");
+});
+
 test("folded statusbar widget on selection field has selected value in the toggler", async () => {
     mockService("ui", (env) => {
         Object.defineProperty(env, "isSmall", {
@@ -160,7 +189,7 @@ test("static statusbar widget on many2one field with domain", async () => {
     serverState.userId = 17;
 
     onRpc("search_read", ({ kwargs }) => {
-        expect(kwargs.domain).toEqual(["|", ["id", "=", 4], ["user_id", "=", 17]], {
+        expect(kwargs.domain).toEqual([["user_id", "=", 17]], {
             message: "search_read should sent the correct domain",
         });
     });
@@ -362,7 +391,7 @@ test("clickable statusbar should change m2o fetching domain in edit mode", async
     });
 
     expect(".o_statusbar_status button:not(.dropdown-toggle)").toHaveCount(3);
-    await click(".o_statusbar_status button:not(.dropdown-toggle):eq(-1)");
+    await click(".o_statusbar_status button:not(.dropdown-toggle):eq(1)");
     await animationFrame();
     expect(".o_statusbar_status button:not(.dropdown-toggle)").toHaveCount(2);
 });
@@ -914,14 +943,14 @@ test("correctly load statusbar when dynamic domain changes", async () => {
         `,
     });
     expect(queryAllTexts(".o_statusbar_status button:not(.d-none)")).toEqual(["Stage Project 1"]);
-    expect.verifySteps([["|", ["id", "=", 1], ["project_ids", "in", 1]]]);
+    expect.verifySteps([[["project_ids", "in", 1]]]);
     await click(`[name="project_id"] .dropdown input`);
     await animationFrame();
     await click(`[name="project_id"] .dropdown .dropdown-menu .ui-menu-item:contains("Project 2")`);
     await animationFrame();
 
     expect(queryAllTexts(".o_statusbar_status button:not(.d-none)")).toEqual(["Stage Project 2"]);
-    expect.verifySteps([["|", ["id", "=", 2], ["project_ids", "in", 2]]]);
+    expect.verifySteps([[["project_ids", "in", 2]]]);
     await clickSave();
     expect(queryAllTexts(".o_statusbar_status button:not(.d-none)")).toEqual(["Stage Project 2"]);
     expect.verifySteps([]);

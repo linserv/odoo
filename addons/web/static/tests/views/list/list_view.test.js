@@ -10324,8 +10324,13 @@ test(`editable list with handle widget`, async () => {
         message: "default fourth record should have amount 0",
     });
 
+    await contains(`tbody tr:eq(1) div[name='amount']`).click();
+    await contains(`tbody tr:eq(1) div[name='amount'] input`).edit(600, { confirm: false });
     // Drag and drop the fourth line in second position
-    await contains(`tbody tr:eq(3) .o_handle_cell`).dragAndDrop(queryFirst(`tbody tr:eq(1)`));
+    // TODO JUM: PRHOOT the events
+    const { drop, moveTo } = await contains(`tbody tr:eq(3) .o_handle_cell`).drag();
+    await moveTo(`tbody tr:eq(1)`);
+    await drop(document.body);
     expect.verifySteps([["web_resequence", [4, 2, 3], "int_field", 1]]);
     expect(`tbody tr:eq(0) td:last`).toHaveText("1,200", {
         message: "new first record should have amount 1,200",
@@ -10333,7 +10338,7 @@ test(`editable list with handle widget`, async () => {
     expect(`tbody tr:eq(1) td:last`).toHaveText("0", {
         message: "new second record should have amount 0",
     });
-    expect(`tbody tr:eq(2) td:last`).toHaveText("500", {
+    expect(`tbody tr:eq(2) td:last`).toHaveText("600", {
         message: "new third record should have amount 500",
     });
     expect(`tbody tr:eq(3) td:last`).toHaveText("300", {
@@ -19139,6 +19144,20 @@ test(`multi_edit: edit field with operator with localization`, async () => {
     expect(`table tr:eq(2) td[name=${field}]`).toHaveText("18");
     expect(`table tr:eq(3) td[name=${field}]`).toHaveText("34");
     expect(`table tr:eq(4) td[name=${field}]`).toHaveText("-8");
+});
+
+test.tags("desktop");
+test(`list_view: leave edition when click on searchbar dropdown`, async () => {
+    await mountView({
+        resModel: "foo",
+        type: "list",
+        arch: `<list editable="top"><field name="foo"/></list>`,
+    });
+    await contains(".o_data_cell").click();
+    await contains(".o_data_cell input").edit("blabla", { confirm: false });
+    await contains(".o_searchview_dropdown_toggler").click();
+    expect(`.o_data_cell:eq(0)`).toHaveText("blabla");
+    expect(`.o_control_panel_breadcrumbs .o_list_button_add`).toHaveCount(1);
 });
 
 test.tags("desktop");
