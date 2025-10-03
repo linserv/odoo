@@ -22,6 +22,10 @@ export function addToCart({
         trigger: "#add_to_cart",
         run: "click",
     });
+    steps.push({
+        content: "Check if the button is disabled",
+        trigger: "#add_to_cart.pe-none",
+    });
     if (productHasVariants) {
         steps.push(clickOnElement('Continue Shopping', 'button:contains("Continue Shopping")'));
     }
@@ -271,4 +275,14 @@ export function selectPriceList(pricelist) {
             expectUnloadPage: true,
         },
     ];
+}
+
+/**
+ * Used for resolving indeterministic behavior of tours
+ */
+export function waitForInteractionToLoad() {
+    return {
+        content: "Wait for interaction to be ready",
+        trigger: `body[is-ready=true]`,
+    };
 }
