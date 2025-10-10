@@ -17,6 +17,7 @@ import { Deferred } from "@web/core/utils/concurrency";
 
 export class Thread extends Record {
     static id = AND("model", "id");
+    static _name = "mail.thread";
     /**
      * @param {string} localId
      * @returns {string}
@@ -58,14 +59,6 @@ export class Thread extends Record {
     allMessages = fields.Many("mail.message", {
         inverse: "thread",
     });
-    storeAsAllChannels = fields.One("Store", {
-        compute() {
-            if (this.model === "discuss.channel") {
-                return this.store;
-            }
-        },
-        eager: true,
-    });
     /** @type {boolean} */
     areAttachmentsLoaded = false;
     group_public_id = fields.One("res.groups");
@@ -92,7 +85,7 @@ export class Thread extends Record {
     composer = fields.One("Composer", {
         compute: () => ({}),
         inverse: "thread",
-        onDelete: (r) => r.delete(),
+        onDelete: (r) => r?.delete(),
     });
     counter = 0;
     counter_bus_id = 0;
@@ -104,7 +97,7 @@ export class Thread extends Record {
         compute() {
             return (
                 this.self_member_id?.is_pinned ||
-                (["channel", "group"].includes(this.channel_type) &&
+                (["channel", "group"].includes(this.channel?.channel_type) &&
                     this.hasSelfAsMember &&
                     !this.parent_channel_id)
             );
@@ -118,14 +111,14 @@ export class Thread extends Record {
         onAdd(r) {
             r.thread = this;
         },
-        onDelete: (r) => r.delete(),
+        onDelete: (r) => r?.delete(),
     });
     selfFollower = fields.One("mail.followers", {
         /** @this {import("models").Thread} */
         onAdd(r) {
             r.thread = this;
         },
-        onDelete: (r) => r.delete(),
+        onDelete: (r) => r?.delete(),
     });
     /** @type {integer|undefined} */
     followersCount;
@@ -306,7 +299,7 @@ export class Thread extends Record {
     }
 
     get supportsCustomChannelName() {
-        return this.isChatChannel && this.channel_type !== "group";
+        return this.isChatChannel && this.channel?.channel_type !== "group";
     }
 
     get displayName() {
@@ -319,6 +312,13 @@ export class Thread extends Record {
 
     get avatarUrl() {
         return this.module_icon ?? this.store.DEFAULT_AVATAR;
+    }
+
+    get fullNameWithParent() {
+        const text = this.parent_channel_id
+            ? `${this.parent_channel_id.displayName} > ${this.displayName}`
+            : this.displayName;
+        return text;
     }
 
     get isTransient() {
@@ -397,7 +397,7 @@ export class Thread extends Record {
     }
 
     async checkReadAccess() {
-        await this.store.Thread.getOrFetch(this, ["hasReadAccess"]);
+        await this.store["mail.thread"].getOrFetch(this, ["hasReadAccess"]);
         return this.hasReadAccess;
     }
 
@@ -663,7 +663,7 @@ export class Thread extends Record {
     }
 
     async openChatWindow({ focus = false, fromMessagingMenu, bypassCompact, swapOpened } = {}) {
-        const thread = await this.store.Thread.getOrFetch(this);
+        const thread = await this.store["mail.thread"].getOrFetch(this);
         if (!thread) {
             return;
         }
@@ -777,10 +777,6 @@ export class Thread extends Record {
                 this.messages.splice(afterIndex - 1, 0, message);
             }
         }
-    }
-
-    _getActualModelName() {
-        return this.model === "discuss.channel" ? "discuss.channel" : "mail.thread";
     }
 }
 

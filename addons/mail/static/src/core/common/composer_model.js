@@ -1,5 +1,9 @@
 import { fields, OR, Record } from "@mail/core/common/record";
-import { convertBrToLineBreak, prettifyMessageText } from "@mail/utils/common/format";
+import {
+    convertBrToLineBreak,
+    getNonEditableMentions,
+    prettifyMessageText,
+} from "@mail/utils/common/format";
 import { markup } from "@odoo/owl";
 import { isHtmlEmpty } from "@web/core/utils/html";
 
@@ -41,7 +45,7 @@ export class Composer extends Record {
     message = fields.One("mail.message");
     mentionedPartners = fields.Many("res.partner");
     mentionedRoles = fields.Many("res.role");
-    mentionedChannels = fields.Many("Thread");
+    mentionedChannels = fields.Many("mail.thread");
     cannedResponses = fields.Many("mail.canned.response");
     isDirty = false;
     composerText = fields.Attr("", {
@@ -65,7 +69,10 @@ export class Composer extends Record {
     composerHtml = fields.Html(markup("<div class='o-paragraph'><br></div>"), {
         compute() {
             if (this.syncHtmlWithMessage) {
-                return this.message.body || markup("<div class='o-paragraph'><br></div>");
+                return (
+                    getNonEditableMentions(this.message.body) ||
+                    markup("<div class='o-paragraph'><br></div>")
+                );
             }
             return this.composerHtml;
         },
@@ -83,7 +90,7 @@ export class Composer extends Record {
             }
         },
     });
-    thread = fields.One("Thread");
+    thread = fields.One("mail.thread");
     /** @type {{ start: number, end: number, direction: "forward" | "backward" | "none"}}*/
     selection = {
         start: 0,

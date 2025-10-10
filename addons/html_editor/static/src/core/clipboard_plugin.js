@@ -69,6 +69,8 @@ export const CLIPBOARD_WHITELISTS = {
         "img-thumbnail",
         "rounded",
         "rounded-circle",
+        // Odoo tables
+        "o_table",
         "table",
         "table-bordered",
         /^padding-/,
@@ -160,7 +162,10 @@ export class ClipboardPlugin extends Plugin {
      */
     onPaste(ev) {
         let selection = this.dependencies.selection.getEditableSelection();
-        if (!selection.anchorNode.isConnected) {
+        if (
+            !selection.anchorNode.isConnected ||
+            !closestElement(selection.anchorNode).isContentEditable
+        ) {
             return;
         }
         ev.preventDefault();
@@ -449,7 +454,19 @@ export class ClipboardPlugin extends Plugin {
                 }
             }
         } else if (node.nodeType !== Node.TEXT_NODE) {
-            if (node.nodeName === "TD") {
+            if (node.nodeName === "THEAD") {
+                const tbody = node.nextElementSibling;
+                if (tbody) {
+                    // If a <tbody> already exists, move all rows from
+                    // <thead> into the start of <tbody>.
+                    tbody.prepend(...node.children);
+                    node.remove();
+                    node = tbody;
+                } else {
+                    // Otherwise, replace the <thead> with <tbody>
+                    node = this.dependencies.dom.setTagName(node, "TBODY");
+                }
+            } else if (["TD", "TH"].includes(node.nodeName)) {
                 // Insert base container into empty TD.
                 if (isEmptyBlock(node)) {
                     const baseContainer = this.dependencies.baseContainer.createBaseContainer();

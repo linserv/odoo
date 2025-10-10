@@ -287,6 +287,29 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
         })
         chair_color_line.product_template_value_ids[1].is_custom = True
 
+        cls.chair_addons_attribute = env['product.attribute'].create({
+            'name': 'Add-ons',
+            'display_type': 'multi',
+            'create_variant': 'no_variant',
+        })
+        cls.chair_addon_cushion = env['product.attribute.value'].create({
+            'name': 'Cushion',
+            'attribute_id': cls.chair_addons_attribute.id,
+        })
+        cls.chair_addon_cupholder = env['product.attribute.value'].create({
+            'name': 'Cup Holder',
+            'attribute_id': cls.chair_addons_attribute.id,
+        })
+        cls.chair_addon_headrest = env['product.attribute.value'].create({
+            'name': 'Headrest',
+            'attribute_id': cls.chair_addons_attribute.id,
+        })
+        env['product.template.attribute.line'].create({
+            'product_tmpl_id': cls.configurable_chair.id,
+            'attribute_id': cls.chair_addons_attribute.id,
+            'value_ids': [(6, 0, [cls.chair_addon_cushion.id, cls.chair_addon_cupholder.id, cls.chair_addon_headrest.id])]
+        })
+
         fixed_pricelist = env['product.pricelist'].create({
             'name': 'Fixed',
             'item_ids': [(0, 0, {
@@ -1085,6 +1108,18 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('ProductComboMaxFreeQtyTour')
 
+    def test_line_configurators(self):
+        setup_product_combo_items(self)
+        self.env['product.combo.item'].create({
+            'combo_id': self.desks_combo.id,
+            'product_id': self.configurable_chair.product_variant_id.id,
+            'extra_price': 0,
+        })
+
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_line_configurators_product')
+        self.start_pos_tour('test_line_configurators_combo')
+
     def test_07_pos_barcodes_scan(self):
         barcode_rule = self.env.ref("point_of_sale.barcode_rule_client")
         barcode_rule.pattern = barcode_rule.pattern + "|234"
@@ -1258,6 +1293,9 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'ReceiptTrackingMethodTour', login="pos_user")
 
     def test_printed_receipt_tour(self):
+        self.main_pos_config.write({
+            'basic_receipt': True,
+        })
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour("point_of_sale.test_printed_receipt_tour")
 
@@ -2358,6 +2396,9 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.assertAlmostEqual(lines[3].balance, 352.59)
         self.assertAlmostEqual(lines[4].balance, 7771.01)
 
+    def test_ctrl_number_ignored(self):
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_ctrl_number_ignored', login="pos_user")
+
     def test_click_all_orders_keep_customer(self):
         """Verify that clicking on 'All Orders' keeps the customer selected."""
         self.main_pos_config.with_user(self.pos_user).open_ui()
@@ -2607,11 +2648,7 @@ class TestUi(TestPointOfSaleHttpCommon):
         color_attribute = cherry.attribute_line_ids.filtered(lambda l: l.attribute_id.name == 'Color')
         first_color_value = color_attribute.product_template_value_ids.filtered(lambda v: v.attribute_id.name == 'Color' and v.name == 'RED')
         first_size_value = cherry.product_variant_ids.product_template_attribute_value_ids.filtered(lambda v: v.attribute_id.name == 'Size' and v.name == 'BIG')
-        first_color_value.exclude_for = [(0, 0, {
-            'product_tmpl_id': cherry.id,
-            'value_ids': first_size_value.ids,
-            'product_template_attribute_value_id': first_size_value.id
-        })]
+        first_color_value.excluded_value_ids = [Command.link(value) for value in first_size_value.ids]
         for index, variant in enumerate(cherry.product_variant_ids):
             variant.write({'barcode': f'cherry_{index}'})
 
@@ -2959,17 +2996,10 @@ class TestUi(TestPointOfSaleHttpCommon):
         ptav_1_2 = self.test_product_1.attribute_line_ids.filtered(lambda l: l.attribute_id.id == self.attribute_1.id).product_template_value_ids.filtered(lambda v: v.product_attribute_value_id.id == self.attribute_1_value_2.id)
         ptav_2_2 = self.test_product_1.attribute_line_ids.filtered(lambda l: l.attribute_id.id == self.attribute_2.id).product_template_value_ids.filtered(lambda v: v.product_attribute_value_id.id == self.attribute_2_value_2.id)
         ptav_2_1 = self.test_product_1.attribute_line_ids.filtered(lambda l: l.attribute_id.id == self.attribute_2.id).product_template_value_ids.filtered(lambda v: v.product_attribute_value_id.id == self.attribute_2_value_1.id)
-        self.env['product.template.attribute.exclusion'].create({
-            'product_tmpl_id': self.test_product_1.id,
-            'product_template_attribute_value_id': ptav_1_1.id,
-            'value_ids': [Command.set([ptav_2_1.id])],
-        })
 
-        self.env['product.template.attribute.exclusion'].create({
-            'product_tmpl_id': self.test_product_1.id,
-            'product_template_attribute_value_id': ptav_1_2.id,
-            'value_ids': [Command.set([ptav_2_2.id])],
-        })
+        ptav_1_1.excluded_value_ids = [Command.link(ptav_2_1.id)]
+        ptav_1_2.excluded_value_ids = [Command.link(ptav_2_2.id)]
+
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('test_cross_exclusion_attribute_values')
 

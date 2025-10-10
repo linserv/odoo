@@ -136,7 +136,6 @@ class MailThread(models.AbstractModel):
         compute='_compute_message_partner_ids',
         inverse='_inverse_message_partner_ids',
         search='_search_message_partner_ids',
-        groups='base.group_user',
     )
     message_ids = fields.One2many(
         'mail.message', 'res_id', string='Messages',
@@ -160,10 +159,23 @@ class MailThread(models.AbstractModel):
 
     @api.depends('message_follower_ids')
     def _compute_message_partner_ids(self):
-        for thread in self:
-            thread.message_partner_ids = thread.message_follower_ids.mapped('partner_id')
+        is_internal = self.env.su or self.env.user.has_group('base.group_user')
+        if is_internal:
+            for thread in self:
+                thread.message_partner_ids = thread.message_follower_ids.partner_id
+        else:
+            # see only partners that can be searched
+            user_partner = self.env.user.partner_id
+            allow_partner_ids = set((user_partner | user_partner.commercial_partner_id).ids)
+            for thread in self:
+                partners = thread.sudo().message_follower_ids.partner_id.filtered(lambda p: p.id in allow_partner_ids)
+                thread.message_partner_ids = partners
 
     def _inverse_message_partner_ids(self):
+        is_internal = self.env.su or self.env.user.has_group('base.group_user')
+        if not is_internal:
+            raise AccessError(self.env._("Cannot write on message partners"))
+
         # The unsubscription is postponed until the end of the method because the
         # message_unsubscribe() unlinks records that invalidates all the cache including
         # `message_partner_ids` in `self`.
@@ -187,7 +199,8 @@ class MailThread(models.AbstractModel):
         """Search function for message_follower_ids"""
         if operator in Domain.NEGATIVE_OPERATORS:
             return NotImplemented
-        if not (self.env.su or self.env.user._is_internal()):
+        is_internal = self.env.su or self.env.user.has_group('base.group_user')
+        if not is_internal:
             user_partner = self.env.user.partner_id
             allow_partner_ids = set((user_partner | user_partner.commercial_partner_id).ids)
             operand_values = operand if isinstance(operand, Iterable) and not isinstance(operand, str) else [operand]
@@ -941,14 +954,14 @@ class MailThread(models.AbstractModel):
         If the email is related to a partner, we consider that the number of message_bounce
         is not relevant anymore as the email is valid - as we received an email from this
         address. The model is here hardcoded because we cannot know with which model the
-        incomming mail match. We consider that if a mail arrives, we have to clear bounce for
+        incoming mail match. We consider that if a mail arrives, we have to clear bounce for
         each model having bounce count.
         """
-        valid_email = message_dict['email_from']
-        if valid_email:
+        normalized_from = email_normalize(message_dict['email_from'])
+        if normalized_from:
             bl_models = self.env['ir.model'].sudo().search(['&', ('is_mail_blacklist', '=', True), ('model', '!=', 'mail.thread.blacklist')])
             for model in [bl_model for bl_model in bl_models if bl_model.model in self.env]:  # transient test mode
-                self.env[model.model].sudo().search([('message_bounce', '>', 0), ('email_normalized', '=', valid_email)])._message_reset_bounce(valid_email)
+                self.env[model.model].sudo().search([('message_bounce', '>', 0), ('email_normalized', '=', normalized_from)])._message_reset_bounce(normalized_from)
 
     @api.model
     def _detect_is_bounce(self, message, message_dict):

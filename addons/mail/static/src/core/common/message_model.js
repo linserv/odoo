@@ -5,8 +5,9 @@ import {
     EMOJI_REGEX,
     convertBrToLineBreak,
     decorateEmojis,
+    generateEmojisOnHtml,
+    getNonEditableMentions,
     htmlToTextContentInline,
-    prettifyMessageContent,
 } from "@mail/utils/common/format";
 
 import { browser } from "@web/core/browser/browser";
@@ -58,7 +59,7 @@ export class Message extends Record {
             return decorateEmojis(this.translationValue) ?? "";
         },
     });
-    composer = fields.One("Composer", { inverse: "message", onDelete: (r) => r.delete() });
+    composer = fields.One("Composer", { inverse: "message", onDelete: (r) => r?.delete() });
     date = fields.Datetime();
     /** @type {string} */
     default_subject;
@@ -79,6 +80,15 @@ export class Message extends Record {
             }
             const div = createElementWithContent("div", this.body);
             return Boolean(div.querySelector("a:not([data-oe-model])"));
+        },
+    });
+    hasMailNotificationSummary = fields.Attr(false, {
+        compute() {
+            return Boolean(
+                createDocumentFragmentFromContent(this.body).querySelector(
+                    '[summary="o_mail_notification"]'
+                )
+            );
         },
     });
     /** @type {number|string} */
@@ -116,16 +126,16 @@ export class Message extends Record {
     notification_ids = fields.Many("mail.notification", { inverse: "mail_message_id" });
     partner_ids = fields.Many("res.partner");
     subtype_id = fields.One("mail.message.subtype");
-    thread = fields.One("Thread");
-    threadAsNeedaction = fields.One("Thread", {
+    thread = fields.One("mail.thread");
+    threadAsNeedaction = fields.One("mail.thread", {
         compute() {
             if (this.needaction) {
                 return this.thread;
             }
         },
     });
-    threadAsNewest = fields.One("Thread");
-    threadAsInEdition = fields.One("Thread", {
+    threadAsNewest = fields.One("mail.thread");
+    threadAsInEdition = fields.One("mail.thread", {
         compute() {
             if (this.composer) {
                 return this.thread;
@@ -302,6 +312,8 @@ export class Message extends Record {
     isTranslatable(thread) {
         return (
             !this.isEmpty &&
+            !this.isBodyEmpty &&
+            !this.hasMailNotificationSummary &&
             this.store.hasMessageTranslationFeature &&
             !["discuss.channel", "mail.box"].includes(thread?.model)
         );
@@ -424,8 +436,12 @@ export class Message extends Record {
         );
     }
 
+    get hasAttachments() {
+        return this.attachment_ids?.length > 0;
+    }
+
     get hasOnlyAttachments() {
-        return this.isBodyEmpty && this.attachment_ids.length > 0;
+        return this.isBodyEmpty && this.hasAttachments;
     }
 
     previewText = fields.Html("", {
@@ -458,7 +474,7 @@ export class Message extends Record {
 
     get previewIcon() {
         const { attachment_ids: attachments } = this;
-        if (!attachments || attachments.length === 0) {
+        if (!this.hasAttachments) {
             return "";
         }
         const firstAttachment = attachments[0];
@@ -548,7 +564,7 @@ export class Message extends Record {
             attachment_tokens: attachments
                 .concat(this.attachment_ids)
                 .map((attachment) => attachment.ownership_token),
-            body: await prettifyMessageContent(body, { validMentions }),
+            body: await generateEmojisOnHtml(body),
             partner_ids: validMentions?.partners?.map((partner) => partner.id),
             role_ids: validMentions?.roles?.map((role) => role.id),
         };
@@ -566,14 +582,28 @@ export class Message extends Record {
     }
 
     /** @param {import("models").Thread} thread the thread where the message is being viewed when starting edition */
-    enterEditMode(thread) {
+    async enterEditMode(thread) {
+        const doc = createDocumentFragmentFromContent(this.body);
+        const validChannels = (
+            await Promise.all(
+                Array.from(
+                    doc.querySelectorAll(".o_channel_redirect[data-oe-model='discuss.channel']")
+                ).map(async (el) =>
+                    this.store["mail.thread"].getOrFetch({
+                        id: el.dataset.oeId,
+                        model: "discuss.channel",
+                    })
+                )
+            )
+        ).filter((channel) => channel?.exists());
         const text = convertBrToLineBreak(this.body);
         if (thread?.messageInEdition) {
             thread.messageInEdition.composer = undefined;
         }
         this.composer = {
+            composerHtml: getNonEditableMentions(this.body),
+            mentionedChannels: validChannels,
             mentionedPartners: this.partner_ids,
-            composerHtml: this.body,
             selection: {
                 start: text.length,
                 end: text.length,

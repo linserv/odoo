@@ -2026,18 +2026,18 @@ class TestSaleStock(TestSaleStockCommon, ValuationReconciliationTestCommon):
         })
         # Since you dont have any warehouse for your company  you should raise a RedirectWarning
         error_message = "Please create a warehouse for company Company 2."
-        with self.assertRaisesRegex(RedirectWarning, error_message), self.env.cr.savepoint():
+        with self.assertRaisesRegex(RedirectWarning, error_message):
             so.with_company(new_company).action_confirm()
         warehouse.active = True
         # Since you have a warehouse which is not linked to the SO you should raise a UserError
         error_message = "You must set a warehouse on your sale order to proceed."
-        with self.assertRaisesRegex(UserError, error_message), self.env.cr.savepoint():
+        with self.assertRaisesRegex(UserError, error_message):
             so.with_company(new_company).action_confirm()
         # check the flow with 2 available warehouses for that company
         self.env['stock.warehouse'].create({'name': 'Warehouse 2', 'code': 'WH2', 'company_id': new_company.id})
         # Since you have a warehouse which is not linked to the SO you should raise a UserError
         error_message = "You must set a warehouse on your sale order to proceed."
-        with self.assertRaisesRegex(UserError, error_message), self.env.cr.savepoint():
+        with self.assertRaisesRegex(UserError, error_message):
             so.with_company(new_company).action_confirm()
 
     def test_custom_delivery_route_new_sale_line(self):
@@ -2232,3 +2232,54 @@ class TestSaleStock(TestSaleStockCommon, ValuationReconciliationTestCommon):
         backorder_wizard_form = Form.from_action(self.env, backorder_wizard_dict)
         backorder_wizard_form.save().process_cancel_backorder()
         self.assertFalse(sale_order.order_line.display_qty_widget)
+
+    def test_create_route_update_so_quantity(self):
+        """
+        Check that moves created from user-created push rules does not interfere with updating the
+        quantity of pickings when the quanityt of the SO is updated
+        """
+        warehouse = self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)], limit=1)
+        warehouse.delivery_steps = 'pick_pack_ship'
+        stock_location = warehouse.lot_stock_id
+        pack_location, out_location, _ = warehouse.delivery_route_id.rule_ids.picking_type_id.default_location_dest_id
+
+        self.product_a.is_storable = True
+        self.env['stock.quant']._update_available_quantity(self.product_a, stock_location, 5)
+        loc_perso = self.env['stock.location'].create({
+                'name': 'Locperso',
+                'location_id': stock_location.id,
+        })
+        warehouse.delivery_route_id.rule_ids = [
+            Command.create({
+                'name': 'Push stock->Locperso',
+                'action': 'push',
+                'location_src_id': loc_perso.id,
+                'location_dest_id': out_location.id,
+                'picking_type_id': warehouse.int_type_id.id,
+                'propagate_cancel': False,
+                'procure_method': 'make_to_stock',
+            }),
+        ]
+        so = self.env['sale.order'].create({
+            'partner_id': self.partner_a.id,
+            'order_line': [Command.create({
+                'name': self.product_a.name,
+                'product_id': self.product_a.id,
+                'product_uom_qty': 1,
+                'price_unit': self.product_a.list_price,
+            })],
+        })
+        so.action_confirm()
+        picking_1 = so.picking_ids
+        self.assertRecordValues(picking_1, [
+            {'location_id': stock_location.id, 'location_dest_id': pack_location.id},
+        ])
+        picking_1.location_dest_id = loc_perso
+        picking_1.button_validate()
+        so.order_line.product_uom_qty = 2
+
+        self.assertRecordValues(so.picking_ids.move_ids.sorted("id"), [
+            {'location_id': stock_location.id, 'location_dest_id': loc_perso.id, 'quantity': 1},
+            {'location_id': loc_perso.id, 'location_dest_id': out_location.id, 'quantity': 1},
+            {'location_id': stock_location.id, 'location_dest_id': pack_location.id, 'quantity': 1},
+        ])

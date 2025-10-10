@@ -31,10 +31,7 @@ const ThreadPatch = {
         /** @type {number|undefined} */
         this.cancelRtcInvitationTimeout;
         this.rtc_session_ids = fields.Many("discuss.channel.rtc.session", {
-            /** @this {import("models").Thread} */
-            onDelete(r) {
-                this.store.env.services["discuss.rtc"].deleteSession(r);
-            },
+            onDelete: (r) => r?.delete(),
             /** @this {import("models").Thread} */
             async onUpdate() {
                 const hadSelfSession = this.hadSelfSession;
@@ -138,7 +135,10 @@ const ThreadPatch = {
         this.useCameraByDefault = fields.Attr(null, {
             /** @this {import("models").Thread} */
             compute() {
-                if (this.channel_type === "chat" && this.store.rtc.selfSession?.channel?.eq(this)) {
+                if (
+                    this.channel?.channel_type === "chat" &&
+                    this.store.rtc.selfSession?.channel?.eq(this)
+                ) {
                     return this.store.rtc.selfSession.is_camera_on;
                 }
                 return JSON.parse(

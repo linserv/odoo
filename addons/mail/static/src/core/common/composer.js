@@ -274,7 +274,7 @@ export class Composer extends Component {
             return this.props.placeholder;
         }
         if (this.thread) {
-            if (this.thread.channel_type === "channel") {
+            if (this.thread.channel?.channel_type === "channel") {
                 const threadName = this.thread.displayName;
                 if (this.thread.parent_channel_id) {
                     return _t('Message "%(subChannelName)s"', {
@@ -435,9 +435,7 @@ export class Composer extends Component {
                     ...props,
                     optionTemplate: "mail.Composer.suggestionThread",
                     options: suggestions.map((suggestion) => ({
-                        label: suggestion.parent_channel_id
-                            ? `${suggestion.parent_channel_id.displayName} > ${suggestion.displayName}`
-                            : suggestion.displayName,
+                        label: suggestion.fullNameWithParent,
                         thread: suggestion,
                         classList: "o-mail-Composer-suggestion",
                     })),

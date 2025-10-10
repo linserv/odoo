@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 import logging
 import threading
 import time
@@ -53,7 +54,7 @@ _intervalTypes = {
 }
 
 
-class CompletionStatus:  # inherit from enum.StrEnum in 3.11
+class CompletionStatus(enum.StrEnum):
     FULLY_DONE = 'fully done'
     PARTIALLY_DONE = 'partially done'
     FAILED = 'failed'
@@ -187,7 +188,7 @@ class IrCron(models.Model):
                 continue
             _logger.debug("job %s acquired", job_id)
             # take into account overridings of _process_job() on that database
-            registry = Registry(db_name)
+            registry = Registry(db_name).check_signaling()
             registry[IrCron._name]._process_job(cron_cr, job)
             cron_cr.commit()
             _logger.debug("job %s updated and released", job_id)

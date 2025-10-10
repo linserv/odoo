@@ -10,7 +10,7 @@ const messagePatch = {
         this.chatbotStep = fields.One("ChatbotStep", { inverse: "message" });
     },
     canReplyTo(thread) {
-        if (thread?.channel_type === "livechat") {
+        if (thread?.channel?.channel_type === "livechat") {
             return !thread.composerDisabled && !thread.composerHidden;
         }
         return super.canReplyTo(thread);
@@ -19,8 +19,8 @@ const messagePatch = {
         return (
             super.isTranslatable(thread) ||
             (this.store.hasMessageTranslationFeature &&
-                thread?.channel_type === "livechat" &&
-                thread?.self_member_id?.partner_id?.main_user_id?.share === false)
+                thread?.channel?.channel_type === "livechat" &&
+                this.store.self?.main_user_id?.share === false)
         );
     },
 };

@@ -9,8 +9,8 @@ patch(MessagingMenu.prototype, {
      */
     get _tabs() {
         const items = super._tabs;
-        const hasLivechats = Object.values(this.store.Thread.records).some(
-            ({ channel_type }) => channel_type === "livechat"
+        const hasLivechats = Object.values(this.store["mail.thread"].records).some(
+            (thread) => thread.channel?.channel_type === "livechat"
         );
         if (hasLivechats) {
             items.push({

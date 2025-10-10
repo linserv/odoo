@@ -1456,7 +1456,7 @@ test("can quickly add emoji with ':' keyword", async () => {
     await click(".o-mail-NavigableList-item", { text: "😅:sweat_smile:" });
     await contains(".o-mail-Composer-html.odoo-editor-editable", { text: "😅" });
     await contains(".o-mail-Composer-suggestionList .o-open", { count: 0 });
-    await htmlInsertText(editor, ":sw");
+    await htmlInsertText(editor, " :sw");
     await contains(".o-mail-Composer-suggestionList .o-open");
     await contains(".o-mail-NavigableList-item", { text: "😅:sweat_smile:" });
     await htmlInsertText(editor, ":s", { replace: true });
@@ -1496,7 +1496,7 @@ test("composer reply-to message is restored on thread change", async () => {
     const store = getService("mail.store");
     expect(
         browser.localStorage.getItem(
-            store.Thread.get({ model: "discuss.channel", id: channelId }).composer.localId
+            store["mail.thread"].get({ model: "discuss.channel", id: channelId }).composer.localId
         )
     ).toBe(
         '{"emailAddSignature":true,"replyToMessageId":1,"composerHtml":["markup","<div class=\'o-paragraph\'><br></div>"]}'
@@ -1535,7 +1535,7 @@ test("composer reply-to message is restored page reload", async () => {
     // simulate composer was replying to 1st message before page reload
     // not taking last message as to not fetch last message data prematurely
     browser.localStorage.setItem(
-        `Composer,(Thread,discuss.channel AND ${channelId}) OR (undefined)`,
+        `Composer,(mail.thread,discuss.channel AND ${channelId}) OR (undefined)`,
         `{"replyToMessageId":${messageId_1},"text":""}`
     );
     await start();

@@ -10,7 +10,9 @@ const threadPatch = {
         super.setup(...arguments);
         this.appAsUnreadChannels = fields.One("DiscussApp", {
             compute() {
-                return this.channel_type === "channel" && this.isUnread ? this.store.discuss : null;
+                return this.channel?.channel_type === "channel" && this.isUnread
+                    ? this.store.discuss
+                    : null;
             },
         });
         this.categoryAsThreadWithCounter = fields.One("DiscussAppCategory", {
@@ -27,12 +29,12 @@ const threadPatch = {
         });
         this.isBusSubscribed = false;
         this.from_message_id = fields.One("mail.message");
-        this.parent_channel_id = fields.One("Thread", {
+        this.parent_channel_id = fields.One("mail.thread", {
             onDelete() {
                 this.delete();
             },
         });
-        this.sub_channel_ids = fields.Many("Thread", {
+        this.sub_channel_ids = fields.Many("mail.thread", {
             inverse: "parent_channel_id",
             sort: (a, b) => b.id - a.id,
         });
@@ -56,11 +58,11 @@ const threadPatch = {
         if (this.parent_channel_id) {
             return;
         }
-        if (["group", "chat"].includes(this.channel_type)) {
-            return this.store.discuss.chats;
+        if (["group", "chat"].includes(this.channel?.channel_type)) {
+            return this.store.discuss.chatCategory;
         }
-        if (this.channel_type === "channel") {
-            return this.store.discuss.channels;
+        if (this.channel?.channel_type === "channel") {
+            return this.store.discuss.channelCategory;
         }
     },
     get allowCalls() {
@@ -73,7 +75,7 @@ const threadPatch = {
         super.delete(...arguments);
     },
     get hasSubChannelFeature() {
-        return ["channel", "group"].includes(this.channel_type);
+        return ["channel", "group"].includes(this.channel?.channel_type);
     },
     get isEmpty() {
         return !this.from_message_id && super.isEmpty;
@@ -90,7 +92,9 @@ const threadPatch = {
             name,
         });
         this.store.insert(store_data);
-        this.store.Thread.get({ model: "discuss.channel", id: sub_channel }).open({ focus: true });
+        this.store["mail.thread"]
+            .get({ model: "discuss.channel", id: sub_channel })
+            .open({ focus: true });
     },
     /**
      * @param {*} param0
@@ -110,7 +114,7 @@ const threadPatch = {
         });
         this.store.insert(store_data);
         const threads = sub_channel_ids.map((subChannelId) =>
-            this.store.Thread.get({ model: "discuss.channel", id: subChannelId })
+            this.store["mail.thread"].get({ model: "discuss.channel", id: subChannelId })
         );
 
         if (searchTerm) {

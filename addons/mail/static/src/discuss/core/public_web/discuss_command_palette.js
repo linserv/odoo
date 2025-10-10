@@ -175,11 +175,11 @@ export class DiscussCommandPalette {
             // selfPersona filtered here to put at the bottom as lowest priority
             partners = partners.filter((p) => p.notEq(selfPartner));
         }
-        const channels = Object.values(this.store.Thread.records)
+        const channels = Object.values(this.store["mail.thread"].records)
             .filter(
                 (thread) =>
-                    thread.channel_type &&
-                    thread.channel_type !== "chat" &&
+                    thread.channel?.channel_type &&
+                    thread.channel?.channel_type !== "chat" &&
                     cleanTerm(thread.displayName).includes(this.cleanedTerm) &&
                     (!filtered || !filtered.has(thread))
             )
@@ -230,16 +230,18 @@ export class DiscussCommandPalette {
             return {
                 Component: DiscussCommand,
                 action: async () => {
-                    const channel = await this.store.Thread.getOrFetch(thread);
+                    const channel = await this.store["mail.thread"].getOrFetch(thread);
                     channel.open({ focus: true, bypassCompact: true });
                 },
                 name: thread.displayName,
                 category,
                 props: {
                     imgUrl: thread.parent_channel_id?.avatarUrl ?? thread.avatarUrl,
-                    channel: thread.channel_type !== "chat" ? thread : undefined,
+                    channel: thread.channel?.channel_type !== "chat" ? thread : undefined,
                     persona:
-                        thread.channel_type === "chat" ? thread.correspondent.persona : undefined,
+                        thread.channel?.channel_type === "chat"
+                            ? thread.correspondent.persona
+                            : undefined,
                     counter: thread.importantCounter,
                 },
             };

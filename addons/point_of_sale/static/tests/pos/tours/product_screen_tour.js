@@ -196,6 +196,33 @@ registry.category("web_tour.tours").add("FloatingOrderTour", {
             ProductScreen.isShown(),
             ProductScreen.selectFloatingOrder(1),
             ProductScreen.productCardQtyIs("Letter Tray", "2.0"),
+            inLeftSide([
+                ...ProductScreen.clickControlButtonMore(),
+                {
+                    trigger: "body",
+                    run: () => {
+                        window.dispatchEvent(new KeyboardEvent("keyup", { key: "9" }));
+                    },
+                },
+                Dialog.cancel(),
+            ]),
+            ProductScreen.isShown(),
+            ProductScreen.productCardQtyIs("Letter Tray", "2.0"),
+            inLeftSide([
+                ...Order.hasLine({
+                    productName: "Letter Tray",
+                    quantity: "2.0",
+                }),
+            ]),
+            {
+                trigger: "body",
+                run: () => {
+                    const bufferValue = posmodel.numberBuffer.get();
+                    if (bufferValue != "") {
+                        throw new Error(`Number buffer should be empty, but got ${bufferValue}`);
+                    }
+                },
+            },
         ].flat(),
 });
 
@@ -919,8 +946,7 @@ registry.category("web_tour.tours").add("test_preset_timing_retail", {
             ProductScreen.clickDisplayedProduct("Desk Organizer"),
             ProductScreen.selectPreset("Dine in", "Delivery"),
             PartnerList.clickPartner("A simple PoS man!"),
-            Chrome.selectPresetTimingSlotHour("15:00"),
-            Chrome.presetTimingSlotIs("15:00"),
+            Chrome.selectPresetTimingSlotHour(),
             Chrome.createFloatingOrder(),
             ProductScreen.clickDisplayedProduct("Desk Organizer"),
             Chrome.clickOrders(),

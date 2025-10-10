@@ -301,7 +301,7 @@ class ProductTemplate(models.Model):
         """
         return any(v.is_custom for v in self.valid_product_template_attribute_line_ids.product_template_value_ids._only_active())
 
-    def _get_possible_variants_sorted(self, parent_combination=None):
+    def _get_possible_variants_sorted(self):
         """Return the sorted recordset of variants that are possible.
 
         The order is based on the order of the attributes and their values.
@@ -309,10 +309,6 @@ class ProductTemplate(models.Model):
         See `_get_possible_variants` for the limitations of this method with
         dynamic or no_variant attributes, and also for a warning about
         performances.
-
-        :param parent_combination: combination from which `self` is an
-            optional or accessory product
-        :type parent_combination: recordset `product.template.attribute.value`
 
         :return: the sorted variants that are possible
         :rtype: recordset of `product.product`
@@ -336,7 +332,7 @@ class ProductTemplate(models.Model):
                 keys.append(attribute.id)
             return keys
 
-        return self._get_possible_variants(parent_combination).sorted(_sort_key_variant)
+        return self._get_possible_variants().sorted(_sort_key_variant)
 
     def _get_previewed_attribute_values(self, category=None, product_query_params=None):
         """Compute previewed product attribute values for each product in the recordset.
@@ -347,18 +343,21 @@ class ProductTemplate(models.Model):
         res = defaultdict(dict)
         show_count = 20
         for template in self:
-            available_attribute_lines = template.attribute_line_ids.filtered(
-                lambda ptal: ptal.attribute_id.preview_variants != 'hidden'
-            )
-            if available_attribute_lines:
-                previewed_ptal = available_attribute_lines[0]
-                previewed_ptavs = previewed_ptal.product_template_value_ids.filtered(
-                    lambda ptav: ptav.ptav_active and ptav.ptav_product_variant_ids
-                )
+            previewed_ptal = next((
+                p for p in template.attribute_line_ids
+                if p.attribute_id.preview_variants != 'hidden'
+            ), None)
+            if previewed_ptal:
+                previewed_ptavs = [
+                    ptav
+                    for ptav in previewed_ptal.product_template_value_ids
+                    if ptav.ptav_active and ptav.ptav_product_variant_ids
+                ]
+
                 if len(previewed_ptavs) > 1:
                     previewed_ptavs_data = []
                     for ptav in previewed_ptavs[:show_count]:
-                        matching_variant = ptav.ptav_product_variant_ids.sorted('id')[0]
+                        matching_variant = min(ptav.ptav_product_variant_ids, key=lambda p: p.id)
                         variant_query_params = {
                             **(product_query_params or {}),
                             'attribute_values': str(ptav.product_attribute_value_id.id)
@@ -368,6 +367,7 @@ class ProductTemplate(models.Model):
                             'variant_image_url': self.env['website'].image_url(matching_variant, 'image_512'),
                             'variant_url': template._get_product_url(category, variant_query_params),
                         })
+
                     res[template.id] = {
                         'ptavs_data': previewed_ptavs_data,
                         'hidden_ptavs_count': max(0, len(previewed_ptavs) - show_count)
@@ -436,14 +436,10 @@ class ProductTemplate(models.Model):
         self.ensure_one()
         return bool(self.filtered_domain(self.env['website']._product_domain()))
 
-    def _is_add_to_cart_possible(self, parent_combination=None):
+    def _is_add_to_cart_possible(self):
         """
         It's possible to add to cart (potentially after configuration) if
         there is at least one possible combination.
-
-        :param parent_combination: the combination from which `self` is an
-            optional or accessory product.
-        :type parent_combination: recordset `product.template.attribute.value`
 
         :return: True if it's possible to add to cart, else False
         :rtype: bool
@@ -452,7 +448,7 @@ class ProductTemplate(models.Model):
         if not self.active or not self._can_be_added_to_cart():
             # for performance: avoid calling `_get_possible_combinations`
             return False
-        return next(self._get_possible_combinations(parent_combination), False) is not False
+        return next(self._get_possible_combinations(), False) is not False
 
     def _get_combination_info(
         self, combination=False, product_id=False, add_qty=1.0, uom_id=False, only_template=False,
@@ -863,8 +859,11 @@ class ProductTemplate(models.Model):
         if tags:
             if isinstance(tags, str):
                 tags = tags.split(',')
-            tags = list(map(int, tags)) # Convert list of strings to list of integers
-            domains.append([('product_variant_ids.all_product_tag_ids', 'in', tags)])
+            tags = list(map(int, tags))  # Convert list of strings to list of integers
+            domains.append(Domain.OR([
+                Domain('product_tag_ids', 'in', tags),
+                Domain('product_variant_ids.additional_product_tag_ids', 'in', tags),
+            ]))
         if min_price:
             domains.append([('list_price', '>=', min_price)])
         if max_price:
@@ -1056,7 +1055,7 @@ class ProductTemplate(models.Model):
             # previously found.
             if auto_assign_ribbons is None:
                 # On product page, the auto_assign_ribbons are not provided.
-                auto_assign_ribbons = self.env['product.ribbon'].search([
+                auto_assign_ribbons = self.env['product.ribbon'].search_fetch([
                     ('assign', '!=', 'manual'),
                 ])
             for rb in auto_assign_ribbons:

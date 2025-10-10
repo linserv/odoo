@@ -53,14 +53,30 @@ class AccountChartTemplate(models.AbstractModel):
                 "code": "TA",
                 "type": "general",
                 "show_on_dashboard": True,
-                "sequence": 1,
+                "sequence": 10,
             },
             "ifrs16": {
                 "name": "IFRS 16",
                 "code": "IFRS",
                 "type": "general",
                 "show_on_dashboard": True,
-                "sequence": 10,
+                "sequence": 11,
             }
         }
 
+    @template('ae', 'account.fiscal.position')
+    def _get_ae_account_fiscal_position(self):
+        fiscal_position_xmlid = {
+            'AZ': 'account_fiscal_position_abu_dhabi',
+            'AJ': 'account_fiscal_position_ajman',
+            'DU': 'account_fiscal_position_dubai',
+            'FU': 'account_fiscal_position_fujairah',
+            'RK': 'account_fiscal_position_ras_al_khaima',
+            'SH': 'account_fiscal_position_sharjah',
+            'UQ': 'account_fiscal_position_umm_al_quwain',
+        }.get(self.env.company.state_id.code, 'account_fiscal_position_dubai')
+        return {
+            fiscal_position_xmlid: {
+                'sequence': 1,
+            }
+        }
