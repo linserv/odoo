@@ -373,7 +373,7 @@ class ProductProduct(models.Model):
         if self.env.context.get('strict'):
             loc_domain = Domain('location_id', 'in', locations.ids)
             dest_loc_domain = Domain('location_dest_id', 'in', locations.ids)
-            dest_loc_domain_out = Domain('location_dest_id', 'in', locations.ids)
+            dest_loc_domain_out = Domain('location_dest_id', 'not in', locations.ids)
         elif locations:
             paths_domain = Domain.OR(Domain('parent_path', '=like', loc.parent_path + '%') for loc in locations)
             loc_domain = Domain('location_id', 'any', paths_domain)
@@ -1176,6 +1176,8 @@ class ProductTemplate(models.Model):
 
     def action_product_tmpl_forecast_report(self):
         self.ensure_one()
+        if not self.env.user._get_default_warehouse_id():
+            self.env['stock.warehouse']._warehouse_redirect_warning()
         action = self.env["ir.actions.actions"]._for_xml_id('stock.stock_forecasted_product_template_action')
         return action
 
@@ -1289,8 +1291,8 @@ class UomUom(models.Model):
         """
         procurement_uom = self
         computed_qty = qty
-        get_param = self.env['ir.config_parameter'].sudo().get_param
-        if get_param('stock.propagate_uom') != '1':
+        get_bool = self.env['ir.config_parameter'].sudo().get_bool
+        if not get_bool('stock.propagate_uom'):
             computed_qty = self._compute_quantity(qty, quant_uom, rounding_method='HALF-UP')
             procurement_uom = quant_uom
         else:

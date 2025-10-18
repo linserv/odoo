@@ -257,17 +257,18 @@ class DiscussChannelMember(models.Model):
                 if new_value != old_value:
                     diff.append(field_description)
             if diff:
+                store = Store(bus_channel=member._bus_channel())
                 diff.extend(
                     [
                         Store.One("channel_id", [], as_thread=True),
-                        *self.env["discuss.channel.member"]._to_store_persona([]),
+                        *self.env["discuss.channel.member"]._to_store_persona(store.target, []),
                     ]
                 )
                 if "message_unread_counter" in diff:
                     # sudo: bus.bus: reading non-sensitive last id
                     bus_last_id = self.env["bus.bus"].sudo()._bus_last_id()
                     diff.append({"message_unread_counter_bus_id": bus_last_id})
-                Store(bus_channel=member._bus_channel()).add(member, diff).bus_send()
+                store.add(member, diff).bus_send()
         return result
 
     @api.model
@@ -346,7 +347,7 @@ class DiscussChannelMember(models.Model):
         members.write({"mute_until_dt": False})
         members._notify_mute()
 
-    def _to_store_persona(self, fields=None):
+    def _to_store_persona(self, target: Store.Target, fields=None):
         if fields == "avatar_card":
             fields = [
                 *self.env["res.partner"]._get_store_avatar_fields(),
@@ -359,7 +360,7 @@ class DiscussChannelMember(models.Model):
                 "partner_id",
                 lambda m: Store.One(
                     m.partner_id.sudo(),
-                    (p_fields := m._get_store_partner_fields(fields)),
+                    (p_fields := m._get_store_partner_fields(target, fields)),
                     extra_fields=self.env["res.partner"]._get_store_mention_fields()
                     if p_fields or p_fields is None
                     else None,
@@ -381,10 +382,10 @@ class DiscussChannelMember(models.Model):
             "fetched_message_id",
             "last_seen_dt",
             "seen_message_id",
-            *self.env["discuss.channel.member"]._to_store_persona(),
+            *self.env["discuss.channel.member"]._to_store_persona(target),
         ]
 
-    def _get_store_partner_fields(self, fields):
+    def _get_store_partner_fields(self, target: Store.Target, fields):
         self.ensure_one()
         return fields
 
@@ -441,10 +442,10 @@ class DiscussChannelMember(models.Model):
         sfu_server_url = discuss.get_sfu_url(self.env)
         if not sfu_server_url:
             return
-        sfu_local_key = self.env["ir.config_parameter"].sudo().get_param("mail.sfu_local_key")
+        sfu_local_key = self.env["ir.config_parameter"].sudo().get_str("mail.sfu_local_key")
         if not sfu_local_key:
             sfu_local_key = str(uuid.uuid4())
-            self.env["ir.config_parameter"].sudo().set_param("mail.sfu_local_key", sfu_local_key)
+            self.env["ir.config_parameter"].sudo().set_str("mail.sfu_local_key", sfu_local_key)
         json_web_token = jwt.sign(
             {"iss": f"{self.get_base_url()}:channel:{self.channel_id.id}", "key": sfu_local_key},
             key=discuss.get_sfu_key(self.env),
@@ -476,7 +477,7 @@ class DiscussChannelMember(models.Model):
         if not sfu_channel_uuid or not sfu_server_url:
             return None
         if not key:
-            key = self.env["ir.config_parameter"].sudo().get_param("mail.sfu_local_key")
+            key = self.env["ir.config_parameter"].sudo().get_str("mail.sfu_local_key")
         claims = {
             "session_id": rtc_session.id,
             "ice_servers": ice_servers,
@@ -542,14 +543,15 @@ class DiscussChannelMember(models.Model):
         )
         if members:
             members.rtc_inviting_session_id = self.rtc_session_ids.id
-            Store(bus_channel=self.channel_id).add(
+            store = Store(bus_channel=self.channel_id)
+            store.add(
                 self.channel_id,
                 {
                     "invited_member_ids": Store.Many(
                         members,
                         [
                             Store.One("channel_id", [], as_thread=True),
-                            *self.env["discuss.channel.member"]._to_store_persona("avatar_card"),
+                            *self.env["discuss.channel.member"]._to_store_persona(store.target, "avatar_card"),
                         ],
                         mode="ADD",
                     ),
@@ -637,11 +639,12 @@ class DiscussChannelMember(models.Model):
                 bus_channel = self.channel_id
         if not notify:
             return
-        Store(bus_channel=bus_channel).add(
+        store = Store(bus_channel=bus_channel)
+        store.add(
             self,
             [
                 Store.One("channel_id", [], as_thread=True),
-                *self.env["discuss.channel.member"]._to_store_persona("avatar_card"),
+                *self.env["discuss.channel.member"]._to_store_persona(store.target, "avatar_card"),
                 "seen_message_id",
             ],
         ).bus_send()
@@ -654,14 +657,15 @@ class DiscussChannelMember(models.Model):
         self.ensure_one()
         if message_id == self.new_message_separator:
             bus_last_id = self.env["bus.bus"].sudo()._bus_last_id()
-            Store(bus_channel=self._bus_channel()).add(
+            store = Store(bus_channel=self._bus_channel())
+            store.add(
                 self,
                 [
                     Store.One("channel_id", [], as_thread=True),
                     "message_unread_counter",
                     {"message_unread_counter_bus_id": bus_last_id},
                     "new_message_separator",
-                    *self.env["discuss.channel.member"]._to_store_persona([]),
+                    *self.env["discuss.channel.member"]._to_store_persona(store.target, []),
                 ],
             ).bus_send()
             return

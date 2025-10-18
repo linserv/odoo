@@ -3,6 +3,7 @@
 from base64 import b64decode
 from cups import IPPError, IPP_JOB_COMPLETED, IPP_JOB_PROCESSING, IPP_JOB_PENDING, CUPS_FORMAT_AUTO
 from escpos import printer
+from escpos.escpos import EscposIO
 import escpos.exceptions
 import logging
 import netifaces as ni
@@ -14,7 +15,8 @@ from odoo.addons.iot_drivers.controllers.proxy import proxy_drivers
 from odoo.addons.iot_drivers.iot_handlers.drivers.printer_driver_base import PrinterDriverBase
 from odoo.addons.iot_drivers.iot_handlers.interfaces.printer_interface_L import conn, cups_lock
 from odoo.addons.iot_drivers.main import iot_devices
-from odoo.addons.iot_drivers.tools import helpers, wifi, route
+from odoo.addons.iot_drivers.tools import helpers, route, system, wifi
+from odoo.addons.iot_drivers.tools.system import IOT_IDENTIFIER
 
 _logger = logging.getLogger(__name__)
 
@@ -109,8 +111,8 @@ class PrinterDriver(PrinterDriverBase):
 
     @classmethod
     def _get_iot_status(cls):
-        identifier = helpers.get_identifier()
-        mac_address = helpers.get_mac_address()
+        identifier = IOT_IDENTIFIER
+        mac_address = system.get_mac_address()
         pairing_code = connection_manager.pairing_code
         ssid = wifi.get_access_point_ssid() if wifi.is_access_point() else wifi.get_current()
 
@@ -145,18 +147,20 @@ class PrinterDriver(PrinterDriverBase):
         title, body = self._printer_status_content()
 
         commands = self.RECEIPT_PRINTER_COMMANDS[self.receipt_protocol]
-        dev = self.escpos_device
-        if dev:
-            dev.set(align='center', double_height=True, double_width=True)
-            dev.textln(title.decode())
-            dev.set_with_default(align='center', double_height=False, double_width=False)
-            for elem in body.decode().split('\n'):
-                dev.textln(elem)
-            dev.qr(f"http://{helpers.get_ip()}", size=6)
-            dev.cut()
-        else:
-            title = commands['title'] % title
-            self.print_raw(commands['center'] + title + b'\n' + body + commands['cut'])
+        if self.escpos_device:
+            try:
+                with EscposIO(self.escpos_device) as dev:
+                    dev.printer.set(align='center', double_height=True, double_width=True)
+                    dev.printer.textln(title.decode())
+                    dev.printer.set_with_default(align='center', double_height=False, double_width=False)
+                    dev.writelines(body.decode())
+                    dev.printer.qr(f"http://{system.get_ip()}", size=6)
+                return
+            except (escpos.exceptions.Error, OSError, AssertionError):
+                _logger.warning("Failed to print QR status receipt, falling back to simple receipt")
+
+        title = commands['title'] % title
+        self.print_raw(commands['center'] + title + b'\n' + body + commands['cut'])
 
     def print_status_zpl(self):
         iot_status = self._get_iot_status()

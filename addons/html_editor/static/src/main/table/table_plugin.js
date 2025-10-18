@@ -63,6 +63,7 @@ function isUnremovableTableComponent(node, root) {
  * @property { TablePlugin['resetTableSize'] } resetTableSize
  * @property { TablePlugin['clearColumnContent'] } clearColumnContent
  * @property { TablePlugin['clearRowContent'] } clearRowContent
+ * @property { TablePlugin['toggleAlternatingRows'] } toggleAlternatingRows
  */
 
 /**
@@ -95,6 +96,7 @@ export class TablePlugin extends Plugin {
         "resetTableSize",
         "clearColumnContent",
         "clearRowContent",
+        "toggleAlternatingRows",
     ];
     resources = {
         user_commands: [
@@ -624,6 +626,16 @@ export class TablePlugin extends Plugin {
             td.replaceChildren(baseContainer);
         });
     }
+
+    /**
+     * Toggles the CSS class that enables alternating row styles on a table.
+     *
+     * @param {HTMLTableElement} table
+     */
+    toggleAlternatingRows(table) {
+        table.classList.toggle("o_alternating_rows");
+    }
+
     deleteTable(table) {
         table =
             table || findInSelection(this.dependencies.selection.getEditableSelection(), "table");
@@ -769,7 +781,7 @@ export class TablePlugin extends Plugin {
         return true;
     }
 
-    hanldeFirefoxSelection(ev = null) {
+    handleFirefoxSelection(ev = null) {
         const selection = this.document.getSelection();
         if (isBrowserFirefox()) {
             if (!this.dependencies.selection.isSelectionInEditable(selection)) {
@@ -934,7 +946,7 @@ export class TablePlugin extends Plugin {
 
     updateSelectionTable(selectionData) {
         if (
-            this.hanldeFirefoxSelection() ||
+            this.handleFirefoxSelection() ||
             this._isFirefoxDoubleMousedown ||
             this._isTripleClickInTable
         ) {
@@ -1029,7 +1041,7 @@ export class TablePlugin extends Plugin {
             !isProtecting(td) &&
             ((isEmptyBlock(td) && ev.detail === 2) || ev.detail === 3)
         ) {
-            this.hanldeFirefoxSelection();
+            this.handleFirefoxSelection();
             this.selectTableCells(this.dependencies.selection.getEditableSelection());
             if (isBrowserFirefox()) {
                 // In firefox, selection changes when hitting mouseclick
@@ -1085,7 +1097,7 @@ export class TablePlugin extends Plugin {
         if (this._currentMouseState !== "mousedown") {
             return;
         }
-        if (this.hanldeFirefoxSelection(ev)) {
+        if (this.handleFirefoxSelection(ev)) {
             return;
         }
         const selection = this.dependencies.selection.getEditableSelection();

@@ -20,7 +20,7 @@ from email import message_from_string
 from email.message import EmailMessage
 from xmlrpc import client as xmlrpclib
 
-from lxml import etree
+from lxml import etree, html
 from markupsafe import Markup, escape
 from requests import Session
 from werkzeug import urls
@@ -35,7 +35,7 @@ from odoo.exceptions import MissingError, AccessError
 from odoo.fields import Domain
 from odoo.tools import (
     is_html_empty, html_escape, html2plaintext,
-    clean_context, split_every, Query, SQL,
+    clean_context, split_every, SQL,
     ormcache, is_list_of,
 )
 from odoo.tools.mail import (
@@ -1027,10 +1027,10 @@ class MailThread(models.AbstractModel):
             return False
 
         # Detect the email address sent to many emails
-        get_param = self.env['ir.config_parameter'].sudo().get_param
+        get_int = self.env['ir.config_parameter'].sudo().get_int
         # Period in minutes in which we will look for <mail.mail>
-        LOOP_MINUTES = int(get_param('mail.gateway.loop.minutes', 120))
-        LOOP_THRESHOLD = int(get_param('mail.gateway.loop.threshold', 20))
+        LOOP_MINUTES = get_int('mail.gateway.loop.minutes') or 120
+        LOOP_THRESHOLD = get_int('mail.gateway.loop.threshold') or 20
 
         create_date_limit = self.env.cr.now() - datetime.timedelta(minutes=LOOP_MINUTES)
         author_id = message_dict.get('author_id')
@@ -1164,8 +1164,8 @@ class MailThread(models.AbstractModel):
         """
         if not isinstance(message, EmailMessage):
             raise TypeError('message must be an email.message.EmailMessage at this point')
-        catchall_domains_allowed = list(filter(None, (self.env["ir.config_parameter"].sudo().get_param(
-            "mail.catchall.domain.allowed") or '').split(',')))
+        catchall_domains_allowed = list(filter(None, self.env["ir.config_parameter"].sudo().get_str(
+            "mail.catchall.domain.allowed").split(',')))
         if catchall_domains_allowed:
             catchall_domains_allowed += self.env['mail.alias.domain'].search([]).mapped('name')
 
@@ -3428,9 +3428,7 @@ class MailThread(models.AbstractModel):
         emails = self.env['mail.mail'].sudo()
 
         # loop on groups (customer, portal, user,  ... + model specific like group_sale_salesman)
-        gen_batch_size = int(
-            self.env['ir.config_parameter'].sudo().get_param('mail.batch_size')
-        ) or 50  # be sure to not have 0, as otherwise no iteration is done
+        gen_batch_size = self.env['ir.config_parameter'].sudo().get_int('mail.batch_size') or 50  # be sure to not have 0, as otherwise no iteration is done
         notif_create_values = []
         for _lang, render_values, recipients_group in self._notify_get_classified_recipients_iterator(
             message,
@@ -3492,7 +3490,7 @@ class MailThread(models.AbstractModel):
         #      to prevent sending email during a simple update of the database
         #      using the command-line.
         if force_send := self.env.context.get('mail_notify_force_send', force_send):
-            force_send_limit = int(self.env['ir.config_parameter'].sudo().get_param('mail.mail.force.send.limit', 100))
+            force_send_limit = self.env['ir.config_parameter'].sudo().get_int('mail.mail.force.send.limit', 100)
             force_send = len(emails) < force_send_limit
         if force_send:
             # unless asked specifically, send emails after the transaction to
@@ -3906,8 +3904,8 @@ class MailThread(models.AbstractModel):
         devices_su = self.env["mail.push.device"].sudo()
         if not partner_ids:
             return devices_su, None, None
-        vapid_private_key = self.env["ir.config_parameter"].sudo().get_param("mail.web_push_vapid_private_key")
-        vapid_public_key = self.env["ir.config_parameter"].sudo().get_param("mail.web_push_vapid_public_key")
+        vapid_private_key = self.env["ir.config_parameter"].sudo().get_str("mail.web_push_vapid_private_key")
+        vapid_public_key = self.env["ir.config_parameter"].sudo().get_str("mail.web_push_vapid_public_key")
         if not vapid_private_key or not vapid_public_key:
             return devices_su, None, None
         return devices_su.search([("partner_id", "in", partner_ids)]), vapid_private_key, vapid_public_key
@@ -4474,7 +4472,7 @@ class MailThread(models.AbstractModel):
 
     @api.model
     def _encode_link(self, base_link, params):
-        secret = self.env['ir.config_parameter'].sudo().get_param('database.secret')
+        secret = self.env['ir.config_parameter'].sudo().get_str('database.secret')
         token = '%s?%s' % (base_link, ' '.join('%s=%s' % (key, params[key]) for key in sorted(params)))
         hm = hmac.new(secret.encode('utf-8'), token.encode('utf-8'), hashlib.sha1).hexdigest()
         return hm
@@ -4926,12 +4924,26 @@ class MailThread(models.AbstractModel):
 
         msg_values = {}
         if body is not None:
-            msg_values["body"] = (
-                # keep html if already Markup, otherwise escape
-                escape(body) + Markup("<span class='o-mail-Message-edited'/>")
-                if body or not message._filter_empty()
-                else ""
-            )
+            if body or not message._filter_empty():
+                tree = html.fragment_fromstring(escape(body), create_parent="div")
+                children = tree.getchildren()
+                if len(children) > 0:  # body is a valid html
+                    # If the last element is a div or p, add the edited span inside it to avoid the edit markup
+                    # to be on its own line. Otherwise, append it to the end of the last element.
+                    last_div_element = (
+                        children[-1] if children[-1].tag in ["div", "p"] else tree
+                    )
+                    last_div_element.text = (last_div_element.text or '') + (' ' if last_div_element.text else '')
+                    etree.SubElement(last_div_element, "span", attrib={"class": "o-mail-Message-edited"})
+                    msg_values["body"] = (
+                        # markup: it is considered safe, as coming from html.fragment_fromstring
+                        Markup("".join(etree.tostring(child, encoding="unicode") for child in tree))
+                    )
+                else:  # body is plain text
+                    # keep html if already Markup, otherwise escape
+                    msg_values["body"] = escape(body) + Markup("<span class='o-mail-Message-edited'/>")
+            else:
+                msg_values["body"] = ""
         if attachment_ids:
             msg_values.update(
                 self._process_attachments_for_post([], attachment_ids, {

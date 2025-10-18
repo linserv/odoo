@@ -157,7 +157,6 @@ export class LinkPopover extends Component {
             selectedColor: computedStyle.color || DEFAULT_CUSTOM_TEXT_COLOR,
             defaultTab: "solid",
             getTargetedElements,
-            mode: "color",
         });
         this.customTextResetPreviewColor = this.customTextColorState.selectedColor;
         this.customFillColorState = useState({
@@ -169,14 +168,12 @@ export class LinkPopover extends Component {
                 DEFAULT_CUSTOM_FILL_COLOR,
             defaultTab: "solid",
             getTargetedElements,
-            mode: "background-color",
         });
         this.customFillResetPreviewColor = this.customFillColorState.selectedColor;
         this.customBorderColorState = useState({
             selectedColor: computedStyle.borderColor || DEFAULT_CUSTOM_TEXT_COLOR,
             defaultTab: "solid",
             getTargetedElements,
-            mode: "border-color",
         });
         this.customBorderResetPreviewColor = this.customBorderColorState.selectedColor;
 
@@ -352,6 +349,16 @@ export class LinkPopover extends Component {
             ev.preventDefault();
             ev.stopImmediatePropagation();
             this.onClickApply();
+        } else if (ev.key == "Tab") {
+            ev.preventDefault();
+            const focusableElements = [
+                ...this.editingWrapper.el.querySelectorAll("input, select, button:not([disabled])"),
+            ];
+            const currentIndex = focusableElements.indexOf(document.activeElement);
+            const nextIndex =
+                (currentIndex + (ev.shiftKey ? -1 : 1) + focusableElements.length) %
+                focusableElements.length;
+            focusableElements[nextIndex].focus();
         }
     }
 

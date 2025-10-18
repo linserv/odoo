@@ -109,7 +109,9 @@ export default class OrderPaymentValidation {
         if ((await this.askBeforeValidation()) === false) {
             return false;
         }
-        await this._askForCustomerIfRequired();
+        if ((await this._askForCustomerIfRequired()) === false) {
+            return false;
+        }
         this.pos.numberBuffer.capture();
         if (!this.checkCashRoundingHasBeenWellApplied()) {
             return false;
@@ -132,6 +134,7 @@ export default class OrderPaymentValidation {
             }
 
             await this.shouldHideValidationBehindFeedbackScreen();
+            return true;
         }
 
         return false;
@@ -170,7 +173,7 @@ export default class OrderPaymentValidation {
                     this.pos.dialog.add(AlertDialog, {
                         title: _t("Backend Invoice"),
                         body: _t(
-                            "An error occurred while generating an invoice. You can try again from the order list."
+                            "An error occurred while trying to generate an invoice. Try again from the order tab or generate the invoice from the backend."
                         ),
                     });
                 }
@@ -349,7 +352,7 @@ export default class OrderPaymentValidation {
                 this.pos.dialog.add(AlertDialog, {
                     title: _t("Cannot return change without a cash payment method"),
                     body: _t(
-                        "There is no cash payment method available in this point of sale to handle the change.\n\n Please pay the exact amount or add a cash payment method in the point of sale configuration"
+                        "There is no cash payment method available in this point of sale to handle the change.\n\n Please pay the exact amount or add a cash payment method in the point of sale settings."
                     ),
                 });
                 return false;
@@ -367,11 +370,11 @@ export default class OrderPaymentValidation {
                 body:
                     _t("Are you sure that the customer wants to  pay") +
                     " " +
-                    this.env.utils.formatCurrency(this.order.getTotalPaid()) +
+                    this.pos.env.utils.formatCurrency(this.order.getTotalPaid()) +
                     " " +
                     _t("for an order of") +
                     " " +
-                    this.env.utils.formatCurrency(this.order.getTotalWithTax()) +
+                    this.pos.env.utils.formatCurrency(this.order.getTotalWithTax()) +
                     " " +
                     _t('? Clicking "Confirm" will validate the payment.'),
                 confirm: () => this.validateOrder(true),

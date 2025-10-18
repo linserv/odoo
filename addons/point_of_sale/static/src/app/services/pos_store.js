@@ -28,7 +28,11 @@ import {
 import { PartnerList } from "../screens/partner_list/partner_list";
 import { ScaleScreen } from "../screens/scale_screen/scale_screen";
 import { computeComboItems } from "../models/utils/compute_combo_items";
-import { changesToOrder, getOrderChanges } from "../models/utils/order_change";
+import {
+    changesToOrder,
+    getOrderChanges,
+    filterChangeByCategories,
+} from "../models/utils/order_change";
 import { QRPopup } from "@point_of_sale/app/components/popups/qr_code_popup/qr_code_popup";
 import { FormViewDialog } from "@web/views/view_dialogs/form_view_dialog";
 import { CashMovePopup } from "@point_of_sale/app/components/popups/cash_move_popup/cash_move_popup";
@@ -365,9 +369,9 @@ export class PosStore extends WithLazyGetterTrap {
             });
         } catch {
             this.dialog.add(AlertDialog, {
-                title: _t("Error"),
+                title: _t("Oh snap !"),
                 body: _t(
-                    "An error occurred while closing the session. Unsynced orders will be available in the next session. The page will be reloaded."
+                    "An error occurred while closing the session. But don't worry, unsynced orders will be available in the next session.\nThe page will now, be reloaded."
                 ),
             });
         } finally {
@@ -585,7 +589,7 @@ export class PosStore extends WithLazyGetterTrap {
         }
 
         if (ids.size > 0) {
-            await this.data.callRelated("pos.order", "action_pos_order_cancel", [Array.from(ids)]);
+            await this.data.callRelated("pos.order", "cancel_order_from_pos", [Array.from(ids)]);
             return true;
         }
 
@@ -1849,56 +1853,11 @@ export class PosStore extends WithLazyGetterTrap {
         await this.checkPreparationStateAndSentOrderInPreparation(o, opts);
     }
 
-    getStrNotes(note) {
-        if (!note) {
-            return "";
-        }
-        if (Array.isArray(note)) {
-            return note.map((n) => (typeof n === "string" ? n : n.text)).join(", ");
-        }
-        if (typeof note === "string") {
-            try {
-                const parsed = JSON.parse(note);
-                if (Array.isArray(parsed)) {
-                    return parsed.map((n) => (typeof n === "string" ? n : n.text)).join(", ");
-                }
-                return note;
-            } catch (error) {
-                logPosMessage(
-                    "Store",
-                    "getStrNotes",
-                    "Error while parsing note, not valid JSON",
-                    CONSOLE_COLOR,
-                    [error]
-                );
-                return note;
-            }
-        }
-        return "";
-    }
-
-    getOrderData(order, reprint) {
-        return {
-            reprint: reprint,
-            pos_reference: order.getName(),
-            config_name: order.config_id?.name || order.config.name,
-            time: DateTime.now().toFormat("HH:mm"),
-            tracking_number: order.tracking_number,
-            preset_time: order.presetDateTime,
-            preset_name: order.preset_id?.name || "",
-            employee_name: order.employee_id?.name || order.user_id?.name,
-            internal_note: this.getStrNotes(order.internal_note),
-            general_customer_note: order.general_customer_note,
-            changes: {
-                title: "",
-                data: [],
-            },
-        };
-    }
-
     generateOrderChange(order, orderChange, categories, reprint = false) {
         const isPartOfCombo = (line) =>
-            line.isCombo || this.models["product.product"].get(line.product_id).type == "combo";
+            line.isCombo ||
+            line.combo_parent_uuid ||
+            this.models["product.product"].get(line.product_id).type == "combo";
         const comboChanges = orderChange.new.filter(isPartOfCombo);
         const normalChanges = orderChange.new.filter((line) => !isPartOfCombo(line));
         normalChanges.sort((a, b) => {
@@ -1912,12 +1871,9 @@ export class PosStore extends WithLazyGetterTrap {
         });
         orderChange.new = [...comboChanges, ...normalChanges];
 
-        const orderData = this.getOrderData(order, reprint);
+        const orderData = order.getOrderData(reprint);
 
-        const changes = this.filterChangeByCategories(categories, orderChange);
-        for (const changeItem of [...changes.new, ...changes.cancelled, ...changes.noteUpdate]) {
-            changeItem.note = this.getStrNotes(changeItem.note || "[]");
-        }
+        const changes = filterChangeByCategories(categories, orderChange, this.models);
         return { orderData, changes };
     }
 
@@ -2031,28 +1987,6 @@ export class PosStore extends WithLazyGetterTrap {
             data: data,
         });
         return await printer.printReceipt(receipt);
-    }
-
-    filterChangeByCategories(categories, currentOrderChange) {
-        const filterFn = (change) => {
-            const product = this.models["product.product"].get(change["product_id"]);
-            const categoryIds = product.parentPosCategIds;
-
-            if (change.isCombo) {
-                return true;
-            }
-            for (const categoryId of categoryIds) {
-                if (categories.includes(categoryId)) {
-                    return true;
-                }
-            }
-        };
-
-        return {
-            new: currentOrderChange["new"].filter(filterFn),
-            cancelled: currentOrderChange["cancelled"].filter(filterFn),
-            noteUpdate: currentOrderChange["noteUpdate"].filter(filterFn),
-        };
     }
 
     connectToProxy() {
@@ -2613,7 +2547,11 @@ export class PosStore extends WithLazyGetterTrap {
                 continue;
             }
 
-            if (availableCateg.size && !p.pos_categ_ids.some((c) => availableCateg.has(c.id))) {
+            if (
+                availableCateg.size &&
+                !this.config._pos_special_display_products_ids?.includes(p.id) &&
+                !p.pos_categ_ids.some((c) => availableCateg.has(c.id))
+            ) {
                 continue;
             }
 

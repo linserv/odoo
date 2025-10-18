@@ -206,8 +206,6 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
             channel_data_join = (
                 Store(bus_channel=member_emp._bus_channel()).add(discuss_channel).get_result()
             )
-            channel_data_join["discuss.channel"][0]["invited_member_ids"] = [["ADD", []]]
-            channel_data_join["discuss.channel"][0]["rtc_session_ids"] = [["ADD", []]]
             channel_data_join["discuss.channel"][0]["livechat_outcome"] = "no_agent"
             channel_data_join["discuss.channel"][0]["chatbot"]["currentStep"]["message"] = messages[1].id
             channel_data_join["discuss.channel"][0]["chatbot"]["steps"][0]["message"] = messages[1].id
@@ -312,8 +310,6 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
                                     "avatar_128_access_token": self.partner_employee._get_avatar_128_access_token(),
                                     "country_id": self.env.ref("base.be").id,
                                     "id": self.partner_employee.id,
-                                    "im_status": "offline",
-                                    "im_status_access_token": self.partner_employee._get_im_status_access_token(),
                                     "is_public": False,
                                     "mention_token": self.partner_employee._get_mention_token(),
                                     "name": "Ernest Employee",

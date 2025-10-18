@@ -562,6 +562,12 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
             'available_pricelist_ids': [(4, pricelist.id) for pricelist in all_pricelists],
         })
 
+        cls.printer = cls.env['pos.printer'].create({
+            'name': 'Printer',
+            'printer_type': 'epson_epos',
+            'epson_printer_ip': '0.0.0.0',
+        })
+
         # Set customers
         partners = cls.env['res.partner'].create([
             {'name': 'Partner Test 1'},
@@ -1300,7 +1306,7 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.start_pos_tour("point_of_sale.test_printed_receipt_tour")
 
     def test_limited_product_pricelist_loading(self):
-        self.env['ir.config_parameter'].sudo().set_param('point_of_sale.limited_product_count', '1')
+        self.env['ir.config_parameter'].sudo().set_int('point_of_sale.limited_product_count', 1)
 
         limited_category = self.env['pos.category'].create({
             'name': 'Limited Category',
@@ -1417,6 +1423,36 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.desks_combo.combo_item_ids[1].product_id.pos_categ_ids = [(6, 0, [pos_other_categ.id])]
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_restricted_categories_combo_product', login="pos_user")
+
+    def test_printer_restricts_to_allowed_categories_for_combo(self):
+        setup_product_combo_items(self)
+        self.printer.write({
+            'product_categories_ids': [Command.set(self.env['pos.category'].search([('name', '=', 'Category 2')]).ids)],
+        })
+        self.main_pos_config.write({
+            'use_order_printer': True,
+            'printer_ids': [Command.set(self.printer.ids)],
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_printer_restricts_to_allowed_categories_for_combo', login="pos_user")
+
+    def test_printer_not_linked_to_any_combo_category(self):
+        setup_product_combo_items(self)
+        new_category = self.env['pos.category'].create({
+            'name': 'New Category',
+        })
+        self.wall_shelf.write({
+            'pos_categ_ids': [Command.set(new_category.ids)],
+        })
+        self.printer.write({
+            'product_categories_ids': [Command.set(new_category.ids)],
+        })
+        self.main_pos_config.write({
+            'use_order_printer': True,
+            'printer_ids': [Command.set(self.printer.ids)],
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_printer_not_linked_to_any_combo_category', login="pos_user")
 
     def test_multi_product_options(self):
         self.pos_user.write({
@@ -1693,7 +1729,7 @@ class TestUi(TestPointOfSaleHttpCommon):
             'rounding_method': rounding_method.id,
         })
 
-        self.env['ir.config_parameter'].sudo().set_param('barcode.max_time_between_keys_in_ms', 1)
+        self.env['ir.config_parameter'].sudo().set_int('barcode.max_time_between_keys_in_ms', 1)
         self.main_pos_config.open_ui()
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'CashRoundingPayment', login="accountman")
 
@@ -3061,6 +3097,17 @@ class TestUi(TestPointOfSaleHttpCommon):
         })
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('test_preset_customer_selection')
+
+    def test_pos_large_amount_confirmation_dialog(self):
+        """Test that the Large amount confirmation dialog appears
+        and closes properly after clicking 'OK'."""
+        self.env['product.product'].create({
+            'name': 'Overpay Test Product',
+            'list_price': 1.0,
+            'available_in_pos': True,
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_pos_large_amount_confirmation_dialog')
 
 
 # This class just runs the same tests as above but with mobile emulation

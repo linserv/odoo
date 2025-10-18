@@ -6,20 +6,6 @@ import { generateEmojisOnHtml } from "@mail/utils/common/format";
 import { patch } from "@web/core/utils/patch";
 import { Deferred } from "@web/core/utils/concurrency";
 
-/** @type {typeof Thread} */
-const threadStaticPatch = {
-    async getOrFetch(data, fieldNames = []) {
-        const thread = await super.getOrFetch(...arguments);
-        if (thread) {
-            return thread;
-        }
-        // wait for restore of livechatService.savedState as channel might be inserted from there
-        await this.store.isReady;
-        return super.getOrFetch(...arguments);
-    },
-};
-patch(Thread, threadStaticPatch);
-
 patch(Thread.prototype, {
     setup() {
         super.setup();
@@ -71,13 +57,6 @@ patch(Thread.prototype, {
                 });
             },
             eager: true,
-        });
-        this.storeAsActiveLivechats = fields.One("Store", {
-            compute() {
-                return this.channel?.channel_type === "livechat" && !this.livechat_end_dt
-                    ? this.store
-                    : null;
-            },
         });
         this.requested_by_operator = false;
         this._prevComposerDisabled = false;

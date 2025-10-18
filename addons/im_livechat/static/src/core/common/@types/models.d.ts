@@ -26,12 +26,10 @@ declare module "models" {
         chatbot_step: ChatbotStep;
     }
     export interface DiscussChannel {
-        composerHidden: Readonly<boolean>;
-        livechat_conversation_tag_ids: LivechatConversationTag[];
-        livechat_end_dt: import("luxon").DateTime;
-        livechat_operator_id: ResPartner;
-        livechatVisitorMember: ChannelMember;
-        open_chat_window: true|undefined;
+        livechat_channel_id: LivechatChannel;
+    }
+    export interface LivechatChannel {
+        channel_ids: DiscussChannel[];
     }
     export interface Message {
         chatbotStep: ChatbotStep;

@@ -4,6 +4,10 @@ import { definePosModels } from "../data/generate_model_definitions";
 import { ConnectionLostError } from "@web/core/network/rpc";
 import { onRpc } from "@web/../tests/web_test_helpers";
 import { imageUrl } from "@web/core/utils/urls";
+import {
+    getStrNotes,
+    filterChangeByCategories,
+} from "@point_of_sale/app/models/utils/order_change";
 
 definePosModels();
 
@@ -35,11 +39,10 @@ describe("pos_store.js", () => {
     });
 
     test("orderNoteFormat", async () => {
-        const store = await setupPosEnv();
-        const str = store.getStrNotes("string");
+        const str = getStrNotes("string");
         expect(str).toBeOfType("string");
         expect(str).toBe("string");
-        const json2str = store.getStrNotes([{ text: "json", colorIndex: 0 }]);
+        const json2str = getStrNotes([{ text: "json", colorIndex: 0 }]);
         expect(json2str).toBeOfType("string");
         expect(json2str).toBe("json");
     });
@@ -209,6 +212,7 @@ describe("pos_store.js", () => {
             uuid: order.lines[0].uuid,
             name: "TEST",
             basic_name: "TEST",
+            combo_parent_uuid: undefined,
             customer_note: "Test Orderline Customer Note",
             product_id: 5,
             attribute_value_names: [],
@@ -218,12 +222,13 @@ describe("pos_store.js", () => {
             pos_categ_sequence: 1,
             display_name: "TEST",
             group: undefined,
-            isCombo: undefined,
+            isCombo: false,
         });
         expect(receiptsData[0].changes.data[1]).toEqual({
             uuid: order.lines[1].uuid,
             name: "TEST 2",
             basic_name: "TEST 2",
+            combo_parent_uuid: undefined,
             customer_note: "",
             product_id: 6,
             attribute_value_names: [],
@@ -233,8 +238,51 @@ describe("pos_store.js", () => {
             pos_categ_sequence: 2,
             display_name: "TEST 2",
             group: undefined,
-            isCombo: undefined,
+            isCombo: false,
         });
+    });
+
+    test("filterChangeByCategories", async () => {
+        const store = await setupPosEnv();
+        const allowedCategories = [1];
+
+        const productA = store.models["product.product"].get(5);
+        const productB = store.models["product.product"].get(6);
+        productA.parentPosCategIds = [1];
+        productB.parentPosCategIds = [2];
+
+        const currentOrderChange = {
+            new: [
+                { uuid: "combo-parent-uuid", isCombo: true },
+                {
+                    uuid: "combo-child-a-uuid",
+                    combo_parent_uuid: "combo-parent-uuid",
+                    product_id: productA.id,
+                    isCombo: false,
+                },
+                {
+                    uuid: "combo-child-b-uuid",
+                    combo_parent_uuid: "combo-parent-uuid",
+                    product_id: productB.id,
+                    isCombo: false,
+                },
+                { uuid: "line1", product_id: productA.id, isCombo: false },
+                { uuid: "line2", product_id: productB.id, isCombo: false },
+            ],
+            cancelled: [],
+            noteUpdate: [],
+        };
+
+        const filtered = filterChangeByCategories(
+            allowedCategories,
+            currentOrderChange,
+            store.models
+        );
+
+        const expectedUuids = ["combo-parent-uuid", "combo-child-a-uuid", "line1"];
+        const actualUuids = filtered.new.map((c) => c.uuid);
+
+        expect(actualUuids.sort()).toEqual(expectedUuids.sort());
     });
 
     test("deleteOrders", async () => {
@@ -260,9 +308,9 @@ describe("pos_store.js", () => {
     test("getOrderData", async () => {
         const store = await setupPosEnv();
         const order = await getFilledOrder(store);
-        const orderData = store.getOrderData(order);
+        const orderData = order.getOrderData();
         expect(orderData).toEqual({
-            reprint: undefined,
+            reprint: false,
             pos_reference: "1001",
             config_name: "Hoot",
             time: "10:30",

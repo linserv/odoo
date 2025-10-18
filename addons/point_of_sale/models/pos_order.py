@@ -111,6 +111,9 @@ class PosOrder(models.Model):
 
             del order['uuid']
             del order['access_token']
+            if order.get('state') == 'paid':
+                # The "paid" state will be assigned later by `_process_saved_order`
+                order['state'] = pos_order.state
             pos_order.write(order)
 
         for model_name, mapping in record_uuid_mapping.items():
@@ -1121,7 +1124,7 @@ class PosOrder(models.Model):
         invoice_receivable_lines = invoice.line_ids.filtered(lambda line: line.account_id == receivable_account and not line.reconciled)
         (payment_receivable_lines | invoice_receivable_lines).sudo().with_company(invoice.company_id).reconcile()
 
-    def action_pos_order_cancel(self):
+    def cancel_order_from_pos(self):
         if self.env.context.get('active_ids'):
             orders = self.browse(self.env.context.get('active_ids'))
             order_is_in_futur = any(order.preset_time and order.preset_time.date() > fields.Date.today() for order in orders)
@@ -1135,6 +1138,10 @@ class PosOrder(models.Model):
         return {
             'pos.order': self._load_pos_data_read(today_orders, self.config_id)
         }
+
+    def action_pos_order_cancel(self):
+        orders = self.browse(self.env.context.get('active_ids'))
+        orders.write({'state': 'cancel'})
 
     def _get_open_order(self, order):
         return self.env["pos.order"].search([('uuid', '=', order.get('uuid'))], limit=1, order='id desc')
@@ -1655,7 +1662,7 @@ class PosOrderLine(models.Model):
                 self.price_subtotal = taxes['total_excluded']
                 self.price_subtotal_incl = taxes['total_included']
 
-    @api.depends('order_id', 'order_id.fiscal_position_id')
+    @api.depends('order_id', 'order_id.fiscal_position_id', 'tax_ids')
     def _get_tax_ids_after_fiscal_position(self):
         for line in self:
             line.tax_ids_after_fiscal_position = line.order_id.fiscal_position_id.map_tax(line.tax_ids)
@@ -1748,14 +1755,15 @@ class PosOrderLine(models.Model):
         """
         for line in self.filtered(lambda l: not l.is_total_cost_computed):
             product = line.product_id
+            cost_currency = product.sudo().cost_currency_id
             if line._is_product_storable_fifo_avco() and stock_moves:
                 moves = line._get_stock_moves_to_consider(stock_moves, product)
                 product_cost = moves._get_price_unit()
-                if (product.cost_currency_id.is_zero(product_cost) and line.order_id.shipping_date and line.refunded_orderline_id):
+                if (cost_currency.is_zero(product_cost) and line.order_id.shipping_date and line.refunded_orderline_id):
                     product_cost = line.refunded_orderline_id.total_cost / line.refunded_orderline_id.qty
             else:
                 product_cost = product.standard_price
-            line.total_cost = line.qty * product.cost_currency_id._convert(
+            line.total_cost = line.qty * cost_currency._convert(
                 from_amount=product_cost,
                 to_currency=line.currency_id,
                 company=line.company_id or self.env.company,

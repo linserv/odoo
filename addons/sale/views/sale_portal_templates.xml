@@ -122,12 +122,14 @@
 
     <!-- Complete page of the sale_order -->
     <template id="sale_order_portal_template" name="Sales Order" inherit_id="portal.portal_sidebar" primary="True">
-        <xpath expr="//div[hasclass('o_portal_sidebar')]" position="inside">
+        <t t-call="portal.portal_layout" position="inside">
             <t t-set="o_portal_fullwidth_alert" groups="sales_team.group_sale_salesman">
                 <!-- Uses backend_url provided in rendering values -->
                 <t t-call="portal.portal_back_in_edit_mode"/>
             </t>
+        </t>
 
+        <xpath expr="//div[hasclass('o_portal_sidebar')]" position="inside">
             <div
                 class="row o_portal_sale_sidebar"
                 t-att-data-order-amount-total="sale_order.amount_total"
@@ -264,7 +266,7 @@
                                 <div>
                                     <h5>Not using Odoo?</h5>
                                     <div class="input-group mb-3 w-50">
-                                        <t t-set="base_address" t-value="sale_order.env['ir.config_parameter'].sudo().get_param('web.base.url')"/>
+                                        <t t-set="base_address" t-value="sale_order.env['ir.config_parameter'].sudo().get_str('web.base.url')"/>
                                         <t t-set="doc_url" t-value="base_address + '/my/orders/' + str(sale_order.id) + '/download_edi?' + str(keep_query())"/>
                                         <input type="text" class="form-control" aria-describedby="copy-button" readonly="readonly" t-att-value="doc_url"/>
                                         <button class="btn btn-outline-secondary" type="button" id="copy-button"
