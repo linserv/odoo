@@ -1,6 +1,6 @@
 # Translation of Odoo Server.
 # This file contains the translation of the following modules:
-# 	* point_of_sale
+# * point_of_sale
 #
 # Translators:
 # ILMIR <karamov@it-projects.info>, 2024
@@ -10,22 +10,24 @@
 # Wil Odoo, 2025
 # Ilya Rozhkov, 2025
 # Anastasiia Koroleva, 2025
-#
+# "Anastasiia Koroleva (koan)" <koan@odoo.com>, 2025.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-08-29 18:37+0000\n"
-"PO-Revision-Date: 2024-09-25 09:41+0000\n"
-"Last-Translator: Anastasiia Koroleva, 2025\n"
-"Language-Team: Russian (https://app.transifex.com/odoo/teams/41243/ru/)\n"
+"PO-Revision-Date: 2025-10-16 10:48+0000\n"
+"Last-Translator: \"Anastasiia Koroleva (koan)\" <koan@odoo.com>\n"
+"Language-Team: Russian <https://translate.odoo.com/projects/odoo-18/"
+"point_of_sale/ru/>\n"
 "Language: ru\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
-"n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || "
-"(n%100>=11 && n%100<=14)? 2 : 3);\n"
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || ("
+"n%100>=11 && n%100<=14)? 2 : 3);\n"
+"X-Generator: Weblate 5.12.2\n"
 
 #. module: point_of_sale
 #. odoo-python
@@ -504,7 +506,7 @@ msgstr "Комментарий с таким названием уже суще�
 #. module: point_of_sale
 #: model:ir.model.constraint,message:point_of_sale.constraint_pos_payment_uuid_unique
 msgid "A payment with this uuid already exists"
-msgstr ""
+msgstr "Платеж с таким UUID уже существует"
 
 #. module: point_of_sale
 #: model:ir.model.fields,help:point_of_sale.field_pos_session__login_number
@@ -708,7 +710,7 @@ msgstr "Активность"
 #. module: point_of_sale
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_session__activity_exception_decoration
 msgid "Activity Exception Decoration"
-msgstr "Оформление исключения активности"
+msgstr "Оформление задачи-исключения"
 
 #. module: point_of_sale
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_session__activity_state
@@ -1013,12 +1015,12 @@ msgstr "Внутренняя идентификация принтера"
 #. module: point_of_sale
 #: model:ir.model.constraint,message:point_of_sale.constraint_pos_order_line_uuid_unique
 msgid "An order line with this uuid already exists"
-msgstr ""
+msgstr "Строка заказа с таким UUID уже существует"
 
 #. module: point_of_sale
 #: model:ir.model.constraint,message:point_of_sale.constraint_pos_order_uuid_unique
 msgid "An order with this uuid already exists"
-msgstr ""
+msgstr "Заказ с таким UUID уже существует"
 
 #. module: point_of_sale
 #. odoo-python
@@ -1845,7 +1847,7 @@ msgstr "Выберите, как будет напечатана ссылка н
 #. odoo-javascript
 #: code:addons/point_of_sale/static/src/app/screens/product_screen/control_buttons/control_buttons.js:0
 msgid "Choose the tax you want to apply"
-msgstr ""
+msgstr "Выберите налог, который хотите применить"
 
 #. module: point_of_sale
 #. odoo-javascript
@@ -3519,7 +3521,7 @@ msgstr "Иконка"
 #. module: point_of_sale
 #: model:ir.model.fields,help:point_of_sale.field_pos_session__activity_exception_icon
 msgid "Icon to indicate an exception activity."
-msgstr "Значок, обозначающий исключение Дела."
+msgstr "Иконка, указывающая на задачу-исключение."
 
 #. module: point_of_sale
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_payment_method__split_transactions
@@ -4888,7 +4890,7 @@ msgstr "Номер заказа"
 #. odoo-javascript
 #: code:addons/point_of_sale/static/src/app/store/pos_store.js:0
 msgid "Order Outdated"
-msgstr ""
+msgstr "Заказ устарел"
 
 #. module: point_of_sale
 #: model:ir.model.fields,field_description:point_of_sale.field_pos_config__is_order_printer
@@ -7816,6 +7818,12 @@ msgid ""
 "The order will be sent to the server with the last changes made on this "
 "device."
 msgstr ""
+"Этот заказ был изменен на другом устройстве. Если вы редактировали "
+"существующие строки заказа, проверьте, чтобы ваши изменения не были "
+"перезаписаны.\n"
+"\n"
+"Заказ будет отправлен на сервер с последними изменениями, внесенными на этом "
+"устройстве."
 
 #. module: point_of_sale
 #. odoo-javascript
@@ -8568,7 +8576,7 @@ msgstr "Тип используемой карты"
 #. module: point_of_sale
 #: model:ir.model.fields,help:point_of_sale.field_pos_session__activity_exception_decoration
 msgid "Type of the exception activity on record."
-msgstr "Тип Дела для исключения в записи."
+msgstr "Тип задачи-исключения в записи."
 
 #. module: point_of_sale
 #. odoo-javascript

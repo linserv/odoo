@@ -14,8 +14,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-03 18:38+0000\n"
-"PO-Revision-Date: 2025-10-09 07:23+0000\n"
+"POT-Creation-Date: 2025-10-11 02:15+0000\n"
+"PO-Revision-Date: 2025-10-10 22:20+0000\n"
 "Last-Translator: \"Junko Augias (juau)\" <juau@odoo.com>\n"
 "Language-Team: Japanese <https://translate.odoo.com/projects/odoo-18/website/"
 "ja/>\n"
@@ -9427,7 +9427,7 @@ msgstr "ライン"
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.snippet_options
 msgid "Line Height"
-msgstr "ラインの高さ"
+msgstr "行の高さ"
 
 #. module: website
 #. odoo-javascript
@@ -12813,7 +12813,7 @@ msgstr "全て見る <i class=\"fa fa-long-arrow-right ms-2\"/>"
 #: model_terms:ir.ui.view,arch_db:website.s_discovery
 #: model_terms:ir.ui.view,arch_db:website.s_empowerment
 msgid "See more <i class=\"fa fa-long-arrow-right\" role=\"img\"/>"
-msgstr "ｓらに見る<i class=\"fa fa-long-arrow-right\" role=\"img\"/>"
+msgstr "さらに見る<i class=\"fa fa-long-arrow-right\" role=\"img\"/>"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_references_grid
@@ -13256,7 +13256,7 @@ msgstr "右にスライド"
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_carousel
 msgid "Slide Title"
-msgstr "スライド件名"
+msgstr "スライドタイトル"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_tabs_options
@@ -13359,7 +13359,8 @@ msgid ""
 "Some quick example text to build on the card title and make up the bulk of "
 "the card's content."
 msgstr ""
-"カード件名をベースに、カード内容の大部分を構成する簡単ないくつかの例文。"
+"カードタイトルに続く簡単なサンプル本文テキストです。本文の大部分を構成しま"
+"す。"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.bs_debug_view
@@ -13400,7 +13401,7 @@ msgstr "間隔"
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.grid_layout_options
 msgid "Spacing (Y, X)"
-msgstr "スペーシング (Y, X)"
+msgstr "余白 (縦・横)"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_pricelist_boxed
@@ -13675,7 +13676,7 @@ msgstr "送信"
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_product_list
 msgid "Subtle"
-msgstr "繊細"
+msgstr "控えめ"
 
 #. module: website
 #. odoo-javascript
@@ -14121,6 +14122,12 @@ msgstr "この名前はURLの生成に使われ、ブラウザの件名バーに
 #: model:ir.model.fields,help:website.field_website_controller_page__name_slugified
 msgid "The name of the page usable in a URL"
 msgstr "URLで使用可能なページ名"
+
+#. module: website
+#. odoo-python
+#: code:addons/website/models/website.py:0
+msgid "The provided website domain is not a valid URL."
+msgstr ""
 
 #. module: website
 #. odoo-javascript
@@ -14600,7 +14607,7 @@ msgstr "件名"
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.snippets
 msgid "Title - Form"
-msgstr "件名 - フォーム"
+msgstr "タイトル - フォーム"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.snippets
@@ -16537,7 +16544,7 @@ msgstr "YouTube"
 #. odoo-javascript
 #: code:addons/website/static/src/js/send_mail_form.js:0
 msgid "Your Company"
-msgstr "貴社"
+msgstr "会社名"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_dynamic_snippet_template
