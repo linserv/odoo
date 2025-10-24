@@ -172,12 +172,9 @@ export class SelfOrder extends Reactive {
     getAvailableCategories() {
         let now = luxon.DateTime.now();
         now = now.hour + now.minute / 60;
-        const isKiosk = this.config.self_ordering_mode === "kiosk";
         const availableCategories = this.productCategories
             .filter(
-                (c) =>
-                    this.productByCategIds[c.id]?.length > 0 ||
-                    (isKiosk && c.child_ids.some((child) => child.id in this.productByCategIds))
+                (c) => this.productByCategIds[c.id]?.length > 0 || c.associatedProducts?.length > 0
             )
             .sort((a, b) => a.sequence - b.sequence);
         return availableCategories.filter((c) => {
@@ -289,7 +286,10 @@ export class SelfOrder extends Reactive {
         this.printKioskChanges(access_token);
     }
     hasPaymentMethod() {
-        return this.models["pos.payment.method"].getAll().length > 0;
+        return (
+            this.config.self_ordering_mode === "kiosk" &&
+            this.models["pos.payment.method"].getAll().length > 0
+        );
     }
 
     async confirmOrder() {
@@ -656,7 +656,6 @@ export class SelfOrder extends Reactive {
                 order_access_tokens: accessTokens,
                 table_identifier: tableIdentifier,
             });
-            this.selectedOrderUuid = null;
             const result = this.models.connectNewData(data);
             const openOrder = result["pos.order"]?.find((o) => o.state === "draft");
             if (openOrder && this.router.activeSlot !== "confirmation") {

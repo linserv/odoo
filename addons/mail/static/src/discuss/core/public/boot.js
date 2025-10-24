@@ -1,4 +1,4 @@
-import { DiscussClientAction } from "@mail/core/public_web/discuss_client_action";
+import { DiscussClientAction } from "@mail/core/public_web/discuss_app/client_action";
 
 import { mount, whenReady } from "@odoo/owl";
 
@@ -22,6 +22,7 @@ import { makeEnv, startServices } from "@web/env";
         env,
         getTemplate,
         dev: env.debug,
+        translatableAttributes: ["data-tooltip"],
         translateFn: appTranslateFn,
     });
     odoo.__WOWL_DEBUG__ = { root };

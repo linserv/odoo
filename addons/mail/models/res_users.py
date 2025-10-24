@@ -407,22 +407,23 @@ class ResUsers(models.Model):
         if not self.env.user._is_public():
             settings = self.env["res.users.settings"]._find_or_create_for_user(self.env.user)
             store.add_global_values(
-                self_partner=Store.One(
-                    self.env.user.partner_id,
+                self_user=Store.One(
+                    self.env.user,
                     [
-                        "active",
                         Store.One(
-                            "main_user_id",
+                            "partner_id",
                             [
-                                Store.Attr("is_admin", lambda u: u._is_admin()),
-                                "notification_type",
-                                "share",
-                                "signature",
+                                "active",
+                                Store.One("main_user_id", []),
+                                "name",
+                                *self.env["res.partner"]._get_store_avatar_fields(),
+                                *self.env["res.partner"]._get_store_im_status_fields(),
                             ],
                         ),
-                        "name",
-                        *self.env["res.partner"]._get_store_avatar_fields(),
-                        *self.env["res.partner"]._get_store_im_status_fields(),
+                        Store.Attr("is_admin", lambda u: u._is_admin()),
+                        "notification_type",
+                        "share",
+                        "signature",
                     ],
                 ),
                 settings=settings._res_users_settings_format(),
@@ -662,3 +663,9 @@ class ResUsers(models.Model):
     @api.model
     def _get_mail_server_setup_end_action(self, smtp_server):
         raise NotImplementedError()
+
+    @api.model
+    def _get_current_persona(self):
+        if not self.env.user or self.env.user._is_public():
+            return (self.env["res.users"], self.env["mail.guest"]._get_guest_from_context())
+        return (self.env.user, self.env["mail.guest"])

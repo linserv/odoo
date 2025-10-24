@@ -83,6 +83,7 @@
             'point_of_sale/static/src/backend/pos_payment_provider_cards/*',
             'point_of_sale/static/src/app/hooks/hooks.js',
             'point_of_sale/static/src/backend/many2many_placeholder_list_view/*',
+            'point_of_sale/static/src/backend/test_epos/*',
         ],
         "web.assets_web_dark": [
             'point_of_sale/static/src/scss/pos_dashboard.dark.scss',
@@ -122,9 +123,8 @@
             ('include', 'web._assets_core'),
             ("remove", "web/static/src/core/browser/router.js"),
             ("remove", "web/static/src/core/debug/**/*"),
-            "web/static/src/libs/fontawesome/css/font-awesome.css",
+            ('include', 'web.icons_fonts'),
             "web/static/src/views/fields/formatters.js",
-            "web/static/lib/odoo_ui_icons/*",
             "point_of_sale/static/src/utils.js",
             'bus/static/src/services/bus_service.js',
             'bus/static/src/services/worker_service.js',
@@ -162,7 +162,6 @@
             # scss variables and utilities
             'point_of_sale/static/src/scss/pos_variables_extra.scss',
             'web/static/src/scss/bootstrap_overridden.scss',
-            'web/static/src/scss/fontawesome_overridden.scss',
             'web/static/fonts/fonts.scss',
             "web/static/src/scss/ui.scss",
 
@@ -232,6 +231,7 @@
             "point_of_sale/static/tests/pos/tours/utils/common.js",
             "point_of_sale/static/tests/generic_helpers/order_widget_util.js",
             "point_of_sale/static/tests/generic_helpers/utils.js",
+            "point_of_sale/static/tests/customer_display/customer_display_utils.js",
             "point_of_sale/static/tests/customer_display/customer_display_tour.js",
         ],
         'point_of_sale.assets_debug': [

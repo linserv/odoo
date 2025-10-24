@@ -10,6 +10,7 @@ from zeep import Client, Transport
 from zeep.wsdl import Document
 
 
+@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestStructure(TransactionCase):
     @classmethod
     def setUpClass(cls):
@@ -224,6 +225,20 @@ class TestStructure(TransactionCase):
             test_partner.write({"vat": "83914571673"})
         test_partner.write({"vat": "BE0477.47.27.01"})
         self.assertEqual(test_partner.vat, 'BE0477472701')
+
+    def test_vat_do(self):
+        test_partner = self.env["res.partner"].create({"name": "DO Company", "country_id": self.env.ref("base.do").id})
+        # Valid do vat
+        test_partner.write({"vat": "152-0000706-8"})
+        test_partner.write({"vat": "4-01-00707-1"})
+        # Test invalid VAT (should raise a ValidationError)
+        msg = "The VAT number.*does not seem to be valid"
+        with self.assertRaisesRegex(ValidationError, msg):
+            test_partner.write({'vat': '152-0000706-7'})
+        with self.assertRaisesRegex(ValidationError, msg):
+            test_partner.write({'vat': '10123457890'})
+        with self.assertRaisesRegex(ValidationError, msg):
+            test_partner.write({'vat': '152-0000706-99'})
 
 
 @tagged('-standard', 'external')

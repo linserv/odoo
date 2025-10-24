@@ -14,22 +14,6 @@ export class DiscussCorePublicWeb {
         this.store = services["mail.store"];
         this.busService = services.bus_service;
         this.notificationService = services.notification;
-        try {
-            this.sidebarCategoriesBroadcast = new browser.BroadcastChannel(
-                "discuss_core_public_web.sidebar_categories"
-            );
-            this.sidebarCategoriesBroadcast.addEventListener(
-                "message",
-                ({ data: { id, open } }) => {
-                    const category = this.store.DiscussAppCategory.get(id);
-                    if (category) {
-                        category.open = open;
-                    }
-                }
-            );
-        } catch {
-            // BroadcastChannel API is not supported (e.g. Safari < 15.4), so disabling it.
-        }
         this.busService.subscribe("discuss.channel/joined", async (payload) => {
             const { data, channel_id, invited_by_user_id: invitedByUserId } = payload;
             this.store.insert(data);
@@ -38,7 +22,7 @@ export class DiscussCorePublicWeb {
                 id: channel_id,
                 model: "discuss.channel",
             });
-            if (thread && invitedByUserId && invitedByUserId !== this.store.self.main_user_id?.id) {
+            if (thread && invitedByUserId && invitedByUserId !== this.store.self_user?.id) {
                 this.notificationService.add(
                     _t("You have been invited to #%s", thread.displayName),
                     { type: "info" }
@@ -73,15 +57,6 @@ export class DiscussCorePublicWeb {
                 }
             }
         );
-    }
-
-    /**
-     * Send the state of a category to the other tabs.
-     *
-     * @param {import("models").DiscussAppCategory} category
-     */
-    broadcastCategoryState(category) {
-        this.sidebarCategoriesBroadcast?.postMessage({ id: category.id, open: category.open });
     }
 }
 

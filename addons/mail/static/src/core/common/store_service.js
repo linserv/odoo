@@ -32,11 +32,11 @@ export class Store extends BaseStore {
     FETCH_LIMIT = 30;
     DEFAULT_AVATAR = "/mail/static/src/img/smiley/avatar.jpg";
     isReady = new Deferred();
-    /** This is the current logged partner / guest */
-    self_partner = fields.One("res.partner");
     self_guest = fields.One("mail.guest");
+    self_user = fields.One("res.users");
+    /** This is the current logged partner / guest */
     get self() {
-        return this.self_partner || this.self_guest;
+        return this.self_user?.partner_id || this.self_guest;
     }
     /**
      * Indicates whether the current user is using the application through the
@@ -383,7 +383,7 @@ export class Store extends BaseStore {
                             window.open(link.href);
                         }
                     } else {
-                        if (this.self_partner) {
+                        if (this.self_user) {
                             showAccessError();
                         } else {
                             window.open(link.href);
@@ -423,7 +423,11 @@ export class Store extends BaseStore {
                 } catch {
                     // assumes tab not focused: parent.document from iframe triggers CORS error
                 }
-                if (isTabFocused && thread?.isDisplayed) {
+                // Prevent duplicate inbox push notifications since they're already handled by
+                // `mail.message/inbox` bus notifications, and the `modelsHandleByPush` heuristic
+                // in `out_of_focus_service.js` isn't reliable enough to detect these cases.
+                const isInbox = this.store.self.notification_preference === "inbox" && model !== "discuss.channel";
+                if ((isTabFocused && thread?.isDisplayed) || isInbox) {
                     navigator.serviceWorker.controller?.postMessage({
                         type: "notification-display-response",
                         payload: { correlationId },
