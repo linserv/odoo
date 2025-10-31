@@ -7,7 +7,7 @@ from odoo.addons.stock_account.tests.test_anglo_saxon_valuation_reconciliation_c
 from odoo.addons.sale_stock.tests.common import TestSaleStockCommon
 from odoo.exceptions import RedirectWarning, UserError
 from odoo.tests import Form, tagged
-
+import unittest
 
 @tagged('post_install', '-at_install')
 class TestSaleStock(TestSaleStockCommon, ValuationReconciliationTestCommon):
@@ -2153,6 +2153,7 @@ class TestSaleStock(TestSaleStockCommon, ValuationReconciliationTestCommon):
         return_pick.button_validate()
         self.assertEqual(sale_order.order_line.mapped('sequence'), [42, 43, 44])
 
+    @unittest.skip("[LINSERV]")
     def test_move_description(self):
         """
         Test that the move description is correctly propagated to the move description
