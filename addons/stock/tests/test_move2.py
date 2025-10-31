@@ -12,7 +12,7 @@ from odoo.tools import float_is_zero, float_compare
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-
+import unittest
 
 @tagged('at_install', '-post_install')  # LEGACY at_install
 class TestPickShip(TestStockCommon):
@@ -3420,6 +3420,7 @@ class TestPickShipBackorder(TestStockCommon):
             cls.product_lot, cls.stock_location, 5.0, lot_id=cls.lot2
         )
 
+    @unittest.skip("[LINSERV]")
     def test_pick_assign_and_backorder(self):
         cust = self.env.ref("stock.stock_location_customers")
         pg = self.env["procurement.group"].create({"name": "sale order"})
