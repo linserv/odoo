@@ -174,6 +174,13 @@ export class Message extends Record {
     needaction;
     starred = false;
     showTranslation = false;
+    ended_poll_ids = fields.Many("mail.poll", { inverse: "end_message_id" });
+    started_poll_ids = fields.Many("mail.poll", { inverse: "start_message_id" });
+    poll = fields.One("mail.poll", {
+        compute() {
+            return this.started_poll_ids[0] || this.ended_poll_ids[0];
+        },
+    });
 
     /**
      * True if the backend would technically allow edition
@@ -200,10 +207,17 @@ export class Message extends Record {
     }
 
     get editable() {
-        if (this.isEmpty || !this.allowsEdition) {
+        if (this.isEmpty || !this.allowsEdition || this.message_type === "mail_poll") {
             return false;
         }
         return this.message_type === "comment";
+    }
+
+    get deletable() {
+        if (this.isEmpty || !this.allowsEdition) {
+            return false;
+        }
+        return ["comment", "mail_poll"].includes(this.message_type);
     }
 
     get dateDay() {
@@ -340,7 +354,8 @@ export class Message extends Record {
             this.isBodyEmpty &&
             this.attachment_ids.length === 0 &&
             this.trackingValues.length === 0 &&
-            !this.subtype_id?.description
+            !this.subtype_id?.description &&
+            !this.poll
         );
     }
 
@@ -447,28 +462,43 @@ export class Message extends Record {
     previewText = fields.Html("", {
         /** @this {import("models").Message} */
         compute() {
+            let messageBody = "";
             if (!this.hasOnlyAttachments) {
-                return this.inlineBody || this.subtype_id?.description;
+                messageBody = this.inlineBody || this.subtype_id?.description;
+            } else {
+                const attachments = this.attachment_ids;
+                switch (attachments.length) {
+                    case 1:
+                        messageBody = attachments[0].previewName;
+                        break;
+                    case 2:
+                        messageBody = _t("%(file1)s and %(file2)s", {
+                            file1: attachments[0].previewName,
+                            file2: attachments[1].previewName,
+                            count: attachments.length - 1,
+                        });
+                        break;
+                    default:
+                        messageBody = _t("%(file1)s and %(count)s other attachments", {
+                            file1: attachments[0].previewName,
+                            count: attachments.length - 1,
+                        });
+                }
+                messageBody = markup`<i class="fa me-1 ${this.previewIcon}"></i>${messageBody}`;
             }
-            const { attachment_ids: attachments } = this;
-            if (!attachments || attachments.length === 0) {
-                return "";
+            if (this.isSelfAuthored) {
+                return markup`<i class="fa fa-mail-reply me-1 opacity-75"></i>${_t(
+                    "You: %(message_content)s",
+                    { message_content: messageBody }
+                )}`;
             }
-            switch (attachments.length) {
-                case 1:
-                    return attachments[0].previewName;
-                case 2:
-                    return _t("%(file1)s and %(file2)s", {
-                        file1: attachments[0].previewName,
-                        file2: attachments[1].previewName,
-                        count: attachments.length - 1,
-                    });
-                default:
-                    return _t("%(file1)s and %(count)s other attachments", {
-                        file1: attachments[0].previewName,
-                        count: attachments.length - 1,
-                    });
+            if (!this.author || this.author.notEq(this.thread?.channel?.correspondent?.persona)) {
+                return _t("%(authorName)s: %(message_content)s", {
+                    authorName: this.authorName,
+                    message_content: messageBody,
+                });
             }
+            return messageBody;
         },
     });
 
@@ -628,7 +658,7 @@ export class Message extends Record {
      * @returns {string}
      */
     getPersonaName(persona) {
-        return this.thread?.getPersonaName(persona) || persona.displayName || persona.name;
+        return this.thread?.getPersonaName(persona) || persona?.displayName || persona?.name;
     }
 
     async onClickToggleTranslation() {
@@ -659,12 +689,17 @@ export class Message extends Record {
     }
 
     async remove({ removeFromThread = false } = {}) {
-        const data = await rpc("/mail/message/update_content", {
-            message_id: this.id,
-            update_data: this.removeParams,
-            ...this.thread.rpcParams,
-        });
-        this.store.insert(data);
+        let data;
+        if (this.poll) {
+            await rpc("/mail/poll/delete", { poll_id: this.poll.id });
+        } else {
+            data = await rpc("/mail/message/update_content", {
+                message_id: this.id,
+                update_data: this.removeParams,
+                ...this.thread.rpcParams,
+            });
+            this.store.insert(data);
+        }
         if (this.thread && removeFromThread) {
             this.thread.messages = this.thread.messages.filter((message) => message.notEq(this));
         }

@@ -3,14 +3,13 @@
 import datetime
 from freezegun import freeze_time
 
-from odoo import fields, tests, _
+from odoo import fields, _
 from odoo.addons.base.tests.common import HttpCaseWithUserDemo
 from odoo.addons.mail.tools.discuss import Store
 from odoo.addons.website_livechat.tests.common import TestLivechatCommon
 from odoo.tests.common import new_test_user
 
 
-@tests.tagged('post_install', '-at_install')
 class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
     def test_channel_created_on_user_interaction(self):
         self.start_tour('/', 'im_livechat_request_chat', login=None)
@@ -212,12 +211,12 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                         "create_uid": self.user_public.id,
                         "default_display_mode": False,
                         "description": False,
+                        "discuss_category_id": False,
                         "fetchChannelInfoState": "fetched",
                         "id": channel.id,
                         "is_editable": True,
                         "last_interest_dt": fields.Datetime.to_string(channel.last_interest_dt),
                         "livechat_channel_id": self.livechat_channel.id,
-                        "livechat_conversation_tag_ids": [],
                         "livechat_end_dt": False,
                         "livechat_note": False,
                         "livechat_status": "in_progress",
@@ -330,6 +329,7 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
                     "country_id": False,
                     "create_uid": self.user_public.id,
                     "default_display_mode": False,
+                    "discuss_category_id": False,
                     "fetchChannelInfoState": "fetched",
                     "id": channel.id,
                     "is_editable": False,
@@ -412,7 +412,6 @@ class TestLivechatBasicFlowHttpCase(HttpCaseWithUserDemo, TestLivechatCommon):
         self.assertEqual(channel_info["livechat_visitor_id"], False)
 
 
-@tests.tagged('post_install', '-at_install')
 class TestLivechatBasicFlowHttpCaseMobile(HttpCaseWithUserDemo, TestLivechatCommon):
     browser_size = '375x667'
     touch_enabled = True

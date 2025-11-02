@@ -4,13 +4,12 @@ from freezegun import freeze_time
 
 from odoo import Command, fields
 from odoo.addons.im_livechat.tests import chatbot_common
-from odoo.tests.common import JsonRpcException, new_test_user, tagged
+from odoo.tests.common import JsonRpcException, new_test_user
 from odoo.tools.misc import mute_logger
 from odoo.addons.mail.tests.common import freeze_all_time, MailCommon
 from odoo.addons.mail.tools.discuss import Store
 
 
-@tagged("post_install", "-at_install")
 class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
 
     def test_chatbot_duplicate(self):
@@ -131,6 +130,7 @@ class ChatbotCase(MailCommon, chatbot_common.ChatbotCase):
                 lambda m: m.partner_id == self.chatbot_script.operator_partner_id
             )
             guest_member = discuss_channel.channel_member_ids.filtered(lambda m: bool(m.guest_id))
+            self.env["mail.presence"]._update_presence(guest_member.guest_id)
             self_member._rtc_join_call()
             self.assertTrue(guest_member.rtc_inviting_session_id)
             self.assertFalse(bot_member.rtc_inviting_session_id)

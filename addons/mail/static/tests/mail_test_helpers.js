@@ -4,7 +4,6 @@ import { hover as hootHover, queryFirst, resize } from "@odoo/hoot-dom";
 import { Deferred, microTick } from "@odoo/hoot-mock";
 import {
     MockServer,
-    asyncStep,
     authenticate,
     defineModels,
     defineParams,
@@ -18,7 +17,6 @@ import {
     patchWithCleanup,
     restoreRegistry,
     serverState,
-    waitForSteps,
     webModels,
 } from "@web/../tests/web_test_helpers";
 
@@ -42,6 +40,7 @@ import {
     mailDataHelpers,
 } from "./mock_server/mail_mock_server";
 import { Base } from "./mock_server/mock_models/base";
+import { DiscussCategory } from "./mock_server/mock_models/discuss_category";
 import { DiscussChannel } from "./mock_server/mock_models/discuss_channel";
 import { DiscussChannelMember } from "./mock_server/mock_models/discuss_channel_member";
 import { DiscussChannelRtcSession } from "./mock_server/mock_models/discuss_channel_rtc_session";
@@ -113,6 +112,7 @@ export const mailModels = {
     ...busModels,
     Base,
     DiscussChannel,
+    DiscussCategory,
     DiscussChannelMember,
     DiscussChannelRtcSession,
     DiscussGifFavorite,
@@ -763,7 +763,7 @@ function toChatHubData(opened, folded) {
 }
 
 function convertChatHubParam(param) {
-    return typeof param === "number" ? { id: param, model: "discuss.channel" } : param;
+    return typeof param === "number" ? { id: param } : param;
 }
 
 export function setupChatHub({ opened = [], folded = [] } = {}) {
@@ -798,15 +798,15 @@ export const STORE_FETCH_ROUTES = ["/mail/action", "/mail/data"];
  * @param {Object} [options={}]
  * @param {function} [options.onRpc] entry point to override the onRpc of the intercepted calls.
  * @param {string[]} [options.logParams=[]] names of the store fetch params for which both the name
- *  and the specific params should be logged in asyncStep. By default only the name is logged.
+ *  and the specific params should be logged in expect.step. By default only the name is logged.
  */
 export function listenStoreFetch(nameOrNames = [], { logParams = [], onRpc: onRpcOverride } = {}) {
     async function registerStep(request, name, params) {
         const res = await onRpcOverride?.(request);
         if (logParams.includes(name)) {
-            asyncStep(`store fetch: ${name} - ${JSON.stringify(params)}`);
+            expect.step(`store fetch: ${name} - ${JSON.stringify(params)}`);
         } else {
-            asyncStep(`store fetch: ${name}`);
+            expect.step(`store fetch: ${name}`);
         }
         return res;
     }
@@ -843,7 +843,7 @@ export function listenStoreFetch(nameOrNames = [], { logParams = [], onRpc: onRp
 /**
  * Waits for the given name or names of store fetch parameters to have been fetched from the server,
  * in the given order. Expected names have to be registered with listenStoreFetch beforehand.
- * If other asyncStep are resolving in the same flow, they must be provided to stepsAfter (if they
+ * If other expect.step are resolving in the same flow, they must be provided to stepsAfter (if they
  * are resolved after the fetch) or stepsBefore (if they are resolved before the fetch). The order
  * can be ignored with ignoreOrder option.
  *
@@ -857,7 +857,7 @@ export async function waitStoreFetch(
     nameOrNames = [],
     { ignoreOrder = false, stepsAfter = [], stepsBefore = [] } = {}
 ) {
-    await waitForSteps(
+    await expect.waitForSteps(
         [
             ...stepsBefore,
             ...(typeof nameOrNames === "string" ? [nameOrNames] : nameOrNames).map(
@@ -876,7 +876,7 @@ export async function waitStoreFetch(
     );
     /**
      * Extra tick necessary to ensure the RPC is fully processed before resolving.
-     * This is necessary because the asyncStep in onRpc is not synchronous with the moment
+     * This is necessary because the expect.step in onRpc is not synchronous with the moment
      * the RPC result is resolved and processed in the business code. Removing this tick
      * won't make everything fail, but it might create subtle race conditions.
      */

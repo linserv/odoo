@@ -154,6 +154,7 @@ class StockMove(models.Model):
         account_move = self.env['account.move'].create({
             'journal_id': self.company_id.account_stock_journal_id.id,
             'line_ids': [Command.create(aml_vals) for aml_vals in aml_vals_list],
+            'date': self.env.context.get('force_period_date') or fields.Date.context_today(self),
         })
         self.env['stock.move'].browse(move_to_link).account_move_id = account_move.id
         account_move._post()
@@ -196,17 +197,6 @@ class StockMove(models.Model):
         total_value = sum(self.mapped('value'))
         total_qty = sum(m._get_valued_qty() for m in self)
         return total_value / total_qty if total_qty else self.product_id.standard_price
-
-    @api.model
-    def _get_valued_types(self):
-        """Returns a list of `valued_type` as strings. During `action_done`, we'll call
-        `_is_[valued_type]'. If the result of this method is truthy, we'll consider the move to be
-        valued.
-
-        :returns: a list of `valued_type`
-        :rtype: list
-        """
-        return ['in', 'out', 'dropshipped', 'dropshipped_returned']
 
     def _set_value(self, correction_quantity=None):
         """Set the value of the move.
@@ -332,13 +322,13 @@ class StockMove(models.Model):
     def _get_valued_qty(self, lot=None):
         self.ensure_one()
         if self._is_in():
-            return sum(self._get_in_move_lines(lot).mapped('quantity'))
+            return sum(self._get_in_move_lines(lot).mapped('quantity_product_uom'))
         if self._is_out():
-            return sum(self._get_out_move_lines(lot).mapped('quantity'))
+            return sum(self._get_out_move_lines(lot).mapped('quantity_product_uom'))
         if self.is_dropship:
             if lot:
-                return sum(self.move_line_ids.filtered(lambda ml: ml.lot_id == lot).mapped('quantity'))
-            return self.quantity
+                return sum(self.move_line_ids.filtered(lambda ml: ml.lot_id == lot).mapped('quantity_product_uom'))
+            return self.product_qty
         return 0
 
     def _get_manual_value(self, quantity, at_date=None):

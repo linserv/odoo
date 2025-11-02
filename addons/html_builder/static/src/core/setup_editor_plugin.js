@@ -9,6 +9,7 @@ export class SetupEditorPlugin extends Plugin {
         clean_for_save_handlers: this.cleanForSave.bind(this),
         closest_savable_providers: withSequence(10, (el) => el.closest(".o_editable")),
         o_editable_selectors: "[data-oe-model]",
+        unremovable_node_predicates: (node) => node.classList?.contains("o_editable"),
     };
 
     setup() {
@@ -16,6 +17,7 @@ export class SetupEditorPlugin extends Plugin {
             "#wrap .o_homepage_editor_welcome_message"
         );
         welcomeMessageEl?.remove();
+        this.dispatchTo("before_setup_editor_handlers");
         let editableEls = this.getEditableElements(
             this.getResource("o_editable_selectors").join(", ")
         )

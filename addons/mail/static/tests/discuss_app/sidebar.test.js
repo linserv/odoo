@@ -18,14 +18,7 @@ import { DISCUSS_SIDEBAR_COMPACT_LS } from "@mail/core/public_web/discuss_app/di
 import { describe, expect, test } from "@odoo/hoot";
 import { animationFrame, drag, press, queryFirst } from "@odoo/hoot-dom";
 import { Deferred, mockDate } from "@odoo/hoot-mock";
-import {
-    asyncStep,
-    Command,
-    getService,
-    onRpc,
-    serverState,
-    waitForSteps,
-} from "@web/../tests/web_test_helpers";
+import { Command, getService, onRpc, serverState } from "@web/../tests/web_test_helpers";
 import { browser } from "@web/core/browser/browser";
 
 import { deserializeDateTime } from "@web/core/l10n/dates";
@@ -35,6 +28,49 @@ import { getOrigin } from "@web/core/utils/urls";
 describe.current.tags("desktop");
 defineMailModels();
 
+test("Display discuss categories", async () => {
+    const pyEnv = await startServer();
+    const [categoryId1, categoryId2] = pyEnv["discuss.category"].create([
+        { name: "rd" },
+        { name: "services" },
+    ]);
+    pyEnv["discuss.channel"].create([
+        {
+            name: "general",
+            channel_type: "channel",
+        },
+        {
+            name: "rd-Discuss",
+            channel_type: "channel",
+            discuss_category_id: categoryId1,
+        },
+        {
+            name: "office",
+            channel_type: "channel",
+            discuss_category_id: categoryId2,
+        },
+    ]);
+    await start();
+    await openDiscuss();
+    await contains(".o-mail-DiscussSidebarCategory", { text: "Channels" });
+    await contains(".o-mail-DiscussSidebarCategory", { text: "rd" });
+    await contains(".o-mail-DiscussSidebarCategory", { text: "services" });
+    await contains(".o-mail-DiscussSidebarChannel", {
+        text: "general",
+        after: [".o-mail-DiscussSidebarCategory", { text: "Channels" }],
+        before: [".o-mail-DiscussSidebarCategory", { text: "rd" }],
+    });
+    await contains(".o-mail-DiscussSidebarChannel", {
+        text: "rd-Discuss",
+        after: [".o-mail-DiscussSidebarCategory", { text: "rd" }],
+        before: [".o-mail-DiscussSidebarCategory", { text: "services" }],
+    });
+    await contains(".o-mail-DiscussSidebarChannel", {
+        text: "office",
+        after: [".o-mail-DiscussSidebarCategory", { text: "services" }],
+    });
+});
+
 test("toggling category button hide category items", async () => {
     const pyEnv = await startServer();
     pyEnv["res.users"].write(serverState.userId, { notification_type: "inbox" });
@@ -42,8 +78,7 @@ test("toggling category button hide category items", async () => {
         name: "general",
         channel_type: "channel",
     });
-    const env = await start();
-    window.aku = env;
+    await start();
     await openDiscuss("mail.box_inbox");
     await contains("button.o-active", { text: "Inbox" });
     await contains(".o-mail-DiscussSidebarChannel");
@@ -248,7 +283,7 @@ test("sidebar: open channel and leave it", async () => {
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({ name: "General" });
     onRpc("discuss.channel", "action_unfollow", ({ args }) => {
-        asyncStep("action_unfollow");
+        expect.step("action_unfollow");
         expect(args[0]).toBe(channelId);
     });
     setupChatHub({ opened: [channelId] });
@@ -256,13 +291,13 @@ test("sidebar: open channel and leave it", async () => {
     await openDiscuss();
     await click(".o-mail-DiscussSidebarChannel", { text: "General" });
     await contains(".o-mail-DiscussContent-threadName", { value: "General" });
-    await waitForSteps([]);
+    await expect.waitForSteps([]);
     await click("[title='Channel Actions']");
     await click(".o-dropdown-item:contains('Leave Channel')");
     await click("button", { text: "Leave Conversation" });
     await contains(".o-mail-DiscussSidebarChannel", { count: 0, text: "General" });
     await contains(".o-mail-DiscussContent-threadName", { value: "Inbox" });
-    await waitForSteps(["action_unfollow"]);
+    await expect.waitForSteps(["action_unfollow"]);
 });
 
 test("sidebar: unpin chat from bus", async () => {
@@ -553,6 +588,76 @@ test("chat - counter: should have correct value of unread threads if category is
             ["span", { text: "Direct messages" }],
             [".badge", { text: "2" }],
         ],
+    });
+});
+
+test("favorite channels should be ordered case insensitive alphabetically", async () => {
+    const pyEnv = await startServer();
+    pyEnv["discuss.channel"].create([
+        {
+            name: "Xyz",
+            channel_member_ids: [
+                Command.create({ is_favorite: true, partner_id: serverState.partnerId }),
+            ],
+        },
+        {
+            name: "abc",
+            channel_member_ids: [
+                Command.create({ is_favorite: true, partner_id: serverState.partnerId }),
+            ],
+        },
+        {
+            name: "Abc",
+            channel_member_ids: [
+                Command.create({ is_favorite: true, partner_id: serverState.partnerId }),
+            ],
+        },
+        {
+            name: "Est",
+            channel_member_ids: [
+                Command.create({ is_favorite: true, partner_id: serverState.partnerId }),
+            ],
+        },
+        {
+            name: "Xyz",
+            channel_member_ids: [
+                Command.create({ is_favorite: true, partner_id: serverState.partnerId }),
+            ],
+        },
+        {
+            name: "Équipe",
+            channel_member_ids: [
+                Command.create({ is_favorite: true, partner_id: serverState.partnerId }),
+            ],
+        },
+        {
+            name: "époque",
+            channel_member_ids: [
+                Command.create({ is_favorite: true, partner_id: serverState.partnerId }),
+            ],
+        },
+    ]);
+    await start();
+    await openDiscuss();
+    await contains(".o-mail-DiscussSidebarChannel", {
+        text: "abc",
+        before: [".o-mail-DiscussSidebarChannel", { text: "Abc" }],
+    });
+    await contains(".o-mail-DiscussSidebarChannel", {
+        text: "Abc",
+        before: [".o-mail-DiscussSidebarChannel", { text: "époque" }],
+    });
+    await contains(".o-mail-DiscussSidebarChannel", {
+        text: "époque",
+        before: [".o-mail-DiscussSidebarChannel", { text: "Équipe" }],
+    });
+    await contains(".o-mail-DiscussSidebarChannel", {
+        text: "Équipe",
+        before: [".o-mail-DiscussSidebarChannel", { text: "Est" }],
+    });
+    await contains(".o-mail-DiscussSidebarChannel", {
+        text: "Est",
+        before: [".o-mail-DiscussSidebarChannel", { text: "Xyz", count: 2 }],
     });
 });
 
@@ -870,7 +975,7 @@ test("sidebar: show loading on initial opening", async () => {
     const def = new Deferred();
     listenStoreFetch("channels_as_member", {
         async onRpc() {
-            asyncStep("before channels_as_member");
+            expect.step("before channels_as_member");
             await def;
         },
     });
@@ -882,7 +987,7 @@ test("sidebar: show loading on initial opening", async () => {
         ".o-mail-DiscussSidebarCategory:contains('Channels') .fa.fa-circle-o-notch.fa-spin"
     );
     await contains(".o-mail-DiscussSidebarChannel", { text: "General", count: 0 });
-    await waitForSteps(["before channels_as_member"]);
+    await expect.waitForSteps(["before channels_as_member"]);
     def.resolve();
     await waitStoreFetch("channels_as_member");
     await contains(
@@ -1046,4 +1151,24 @@ test("Sidebar channels show correct notification counter based on settings", asy
     rpc("/discuss/settings/custom_notifications", { custom_notifications: "no_notif" });
     await contains(".o-mail-DiscussSidebarChannel:contains(Mentions) .badge", { count: 0 });
     await contains(".o-mail-DiscussSidebarChannel:contains(Regular) .badge", { count: 0 });
+});
+
+test("add and remove channel from favorites updates sidebar", async () => {
+    const pyEnv = await startServer();
+    pyEnv["discuss.channel"].create({
+        name: "General",
+        channel_type: "channel",
+    });
+    const channelContainerSelector =
+        ".o-mail-DiscussSidebarCategory-channel + .o-mail-DiscussSidebarChannel-container";
+    const favoriteContainerSelector =
+        ".o-mail-DiscussSidebarCategory-favorite + .o-mail-DiscussSidebarChannel-container";
+    const generalChannelSelector = ".o-mail-DiscussSidebarChannel:has(:contains(/^General$/))";
+    await start();
+    await openDiscuss();
+    await click(`${channelContainerSelector} ${generalChannelSelector} button .oi-ellipsis-h`);
+    await click(".o-dropdown-item:contains('Set favorite')");
+    await click(`${favoriteContainerSelector} ${generalChannelSelector} button .oi-ellipsis-h`);
+    await click(".o-dropdown-item:contains('Unset favorite')");
+    await contains(`${channelContainerSelector} ${generalChannelSelector}`);
 });

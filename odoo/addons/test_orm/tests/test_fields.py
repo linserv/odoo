@@ -1111,6 +1111,12 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
         self.assertFalse(record.filtered_domain([('name', 'like', 'F')]))
         self.assertFalse(record.filtered_domain([('name', 'ilike', 'f')]))
 
+    def test_20_like_multiline(self):
+        """ test filtered_domain() on multiline fields. """
+        record = self.env['test_orm.mixed'].create({'comment1': 'Foo\nBar'})
+        self.assertTrue(record.filtered_domain([('comment1', 'like', 'Bar')]))
+        self.assertTrue(record.filtered_domain([('comment1', 'ilike', 'bar')]))
+
     def test_21_date(self):
         """ test date fields """
         record = self.env['test_orm.mixed'].create({})
@@ -1931,21 +1937,23 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
         existing.categories
 
         # invalidate 'categories' for the assertQueryCount
+        self.env.transaction.clear_access_cache()
         records.invalidate_model(['categories'])
-        with self.assertQueryCount(4):
+        with self.assertQueryCount(5):
             # <categories>.__get__(existing)
+            #  -> records.check_access('read')
+            #      -> records._check_access('read')
+            #          -> records.sudo().filtered_domain(...)
+            #              -> <name>.__get__(existing)
+            #                  -> records._fetch_field(<name>)
+            #                      -> records.fetch(['name', ...])
+            #                          -> ONE QUERY to read ['name', ...] of records
+            #                          -> ONE QUERY for deleted.exists() / code: forbidden = missing.exists()
+            #      -> ONE QUERY for records.exists() / MissingError during _check_access
+            #  -> ONE QUERY for records.exists()
             #  -> records._fetch_field(<categories>)
             #      -> records.fetch(['categories'])
-            #          -> records.check_access('read')
-            #              -> records._check_access('read')
-            #                  -> records.sudo().filtered_domain(...)
-            #                      -> <name>.__get__(existing)
-            #                          -> records._fetch_field(<name>)
-            #                              -> records.fetch(['name', ...])
-            #                                  -> ONE QUERY to read ['name', ...] of records
-            #                                  -> ONE QUERY for deleted.exists() / code: forbidden = missing.exists()
-            #          -> ONE QUERY for records.exists() / code: self = self.exists()
-            #          -> ONE QUERY to read the many2many of existing
+            #              -> ONE QUERY to read the many2many of existing
             existing.categories
 
         # this one must trigger a MissingError
@@ -2355,7 +2363,7 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
 
         # read the related field discussion_name
         self.assertNotEqual(message.sudo().env, message.env)
-        self.assertEqual(message.discussion_name, discussion.name)
+        self.assertEqual(message.discussion_name, discussion.sudo().name)
 
     def test_43_new_related(self):
         """ test the behavior of one2many related fields """

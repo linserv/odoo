@@ -131,13 +131,6 @@ class DiscussChannel(models.Model):
         compute="_compute_livechat_outcome",
         store=True,
     )
-    livechat_conversation_tag_ids = fields.Many2many(
-        "im_livechat.conversation.tag",
-        "livechat_conversation_tag_rel",
-        groups="im_livechat.im_livechat_group_user",
-        string="Live Chat Conversation Tags",
-        help="Tags to qualify the conversation.",
-    )
     livechat_start_hour = fields.Float(
         "Session Start Hour", compute="_compute_livechat_start_hour", store=True
     )
@@ -412,13 +405,6 @@ class DiscussChannel(models.Model):
                 Store.Attr("livechat_note", predicate=is_livechat_channel),
                 Store.Attr("livechat_status", predicate=is_livechat_channel),
                 Store.Many("livechat_expertise_ids", ["name"], predicate=is_livechat_channel),
-                # sudo: internal users having access to the channel can read its tags
-                Store.Many(
-                    "livechat_conversation_tag_ids",
-                    ["name", "color"],
-                    predicate=is_livechat_channel,
-                    sudo=True,
-                ),
             ],
         )
         return field_names
@@ -456,13 +442,6 @@ class DiscussChannel(models.Model):
                     Store.Attr("livechat_outcome", predicate=is_livechat_channel),
                     Store.Attr("livechat_status", predicate=is_livechat_channel),
                     Store.Many("livechat_expertise_ids", ["name"], predicate=is_livechat_channel),
-                    # sudo: internal users having access to the channel can read its tags
-                    Store.Many(
-                        "livechat_conversation_tag_ids",
-                        ["name", "color"],
-                        predicate=is_livechat_channel,
-                        sudo=True,
-                    ),
                 ],
             )
         return super()._to_store_defaults(target) + fields
@@ -776,13 +755,13 @@ class DiscussChannel(models.Model):
         It's created only if the mail channel is linked to a chatbot step. We also need to save the
         user answer if the current step is a question selection.
         """
-        if self.chatbot_current_step_id:
+        if self.chatbot_current_step_id and not self.livechat_agent_history_ids:
             selected_answer = (
                 self.env["chatbot.script.answer"]
                 .browse(self.env.context.get("selected_answer_id"))
                 .exists()
             )
-            if selected_answer in self.chatbot_current_step_id.answer_ids:
+            if selected_answer and selected_answer in self.chatbot_current_step_id.answer_ids:
                 # sudo - chatbot.message: finding the question message to update the user answer is allowed.
                 question_msg = (
                     self.env["chatbot.message"]
