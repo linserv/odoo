@@ -11,7 +11,7 @@ from PIL import Image
 from odoo import Command, fields, models
 from odoo.exceptions import AccessError, MissingError, UserError, ValidationError
 from odoo.fields import Domain
-from odoo.tests import Form, TransactionCase, tagged, users
+from odoo.tests import TransactionCase, tagged, users
 from odoo.tools import float_repr, mute_logger
 from odoo.tools.image import image_data_uri
 
@@ -1052,33 +1052,6 @@ class TestFields(TransactionCaseWithUserDemo, TransactionExpressionCase):
             records.write({'amount': amount})
             for record in records:
                 self.check_monetary(record, amount, currency, 'multi write(amount)')
-
-    def test_20_monetary_opw_2223134(self):
-        """ test monetary fields with cache override """
-        model = self.env['test_orm.monetary_order']
-        currency = self.env.ref('base.USD')
-
-        def check(value):
-            self.assertEqual(record.total, value)
-            self.env.flush_all()
-            self.cr.execute('SELECT total FROM test_orm_monetary_order WHERE id=%s', [record.id])
-            [total] = self.cr.fetchone()
-            self.assertEqual(total, value)
-
-        # create, and compute amount
-        record = model.create({
-            'currency_id': currency.id,
-            'line_ids': [Command.create({'subtotal': 1.0})],
-        })
-        check(1.0)
-
-        # delete and add a line: the deletion of the line clears the cache, then
-        # the recomputation of 'total' must prefetch record.currency_id without
-        # screwing up the new value in cache
-        record.write({
-            'line_ids': [Command.delete(record.line_ids.id), Command.create({'subtotal': 1.0})],
-        })
-        check(1.0)
 
     def test_20_monetary_related(self):
         """ test value rounding with related currency """
@@ -4834,44 +4807,6 @@ class TestComputeSudo(TransactionCaseWithUserDemo):
         self.assertEqual(record.with_user(self.user_demo).name_for_uid, self.user_demo.name)
 
 
-@tagged('at_install', '-post_install')  # LEGACY at_install
-class test_shared_cache(TransactionCaseWithUserDemo):
-    def test_shared_cache_computed_field(self):
-        # Test case: Check that the shared cache is not used if a compute_sudo stored field
-        # is computed IF there is an ir.rule defined on this specific model.
-
-        # Real life example:
-        # A user can only see its own timesheets on a task, but the field "Planned Hours",
-        # which is stored-compute_sudo, should take all the timesheet lines into account
-        # However, when adding a new line and then recomputing the value, no existing line
-        # from another user is binded on self, then the value is erased and saved on the
-        # database.
-
-        task = self.env['test_orm.model_shared_cache_compute_parent'].create({
-            'name': 'Shared Task'})
-        self.env['test_orm.model_shared_cache_compute_line'].create({
-            'user_id': self.env.ref('base.user_admin').id,
-            'parent_id': task.id,
-            'amount': 1,
-        })
-        self.assertEqual(task.total_amount, 1)
-
-        self.env.flush_all()
-        self.env.invalidate_all()  # Start fresh, as it would be the case on 2 different sessions.
-
-        task = task.with_user(self.user_demo)
-        with Form(task) as task_form:
-            # Use demo has no access to the already existing line
-            self.assertEqual(len(task_form.line_ids), 0)
-            # But see the real total_amount
-            self.assertEqual(task_form.total_amount, 1)
-            # Now let's add a new line (and retrigger the compute method)
-            with task_form.line_ids.new() as line:
-                line.amount = 2
-            # The new value for total_amount, should be 3, not 2.
-            self.assertEqual(task_form.total_amount, 2)
-
-
 @tagged('unlink_constraints')
 @tagged('at_install', '-post_install')  # LEGACY at_install
 class TestUnlinkConstraints(TransactionCase):
@@ -5258,16 +5193,7 @@ class TestModifiedPerformance(TransactionCase):
                    "test_orm_modified_line"."create_date"
             FROM "test_orm_modified_line"
             WHERE "test_orm_modified_line"."id" IN %s
-        """, """
-            SELECT "test_orm_modified_line"."id",
-                   "test_orm_modified_line"."parent_id"
-            FROM "test_orm_modified_line"
-            WHERE "test_orm_modified_line"."id" IN %s
         """], flush=False):
-            # Two requests:
-            # - one for fetch modified_line_a_child_child data (invalidate just before)
-            # - one because modified_line_a_child.parent_id (invalidate just before because we invalidate inverse in `_invalidate_cache`,
-            # see TODO) -> We should change that
             self.modified_line_a_child_child.price = 4
         self.assertEqual(self.modified_line_a_child_child.total_price_quantity, 20)
         self.assertEqual(self.modified_line_a_child.total_price_quantity, 30)

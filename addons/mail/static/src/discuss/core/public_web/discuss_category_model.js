@@ -1,4 +1,4 @@
-import { fields, Record } from "@mail/core/common/record";
+import { fields, Record } from "@mail/model/export";
 
 export class DiscussCategory extends Record {
     static _name = "discuss.category";
@@ -21,6 +21,8 @@ export class DiscussCategory extends Record {
     id;
     /** @type {string} */
     name;
+    /** @type {number} */
+    sequence;
 
     delete() {
         this.appCategory?.delete();

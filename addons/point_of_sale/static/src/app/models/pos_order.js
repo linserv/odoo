@@ -14,7 +14,7 @@ export class PosOrder extends PosOrderAccounting {
     setup(vals) {
         super.setup(vals);
 
-        if (!this.session_id?.id && (!this.finalized || typeof this.id !== "number")) {
+        if (!this.session_id?.id && (!this.finalized || !this.isSynced)) {
             this.session_id = this.session;
 
             if (this.state === "draft" && this.lines.length == 0 && this.payment_ids.length == 0) {
@@ -108,7 +108,7 @@ export class PosOrder extends PosOrderAccounting {
     }
 
     get isUnsyncedPaid() {
-        return this.finalized && typeof this.id === "string";
+        return this.finalized && !this.isSynced;
     }
 
     get originalSplittedOrder() {
@@ -200,7 +200,7 @@ export class PosOrder extends PosOrderAccounting {
     }
 
     get isBooked() {
-        return Boolean(this.uiState.booked || !this.isEmpty() || typeof this.id === "number");
+        return Boolean(this.uiState.booked || !this.isEmpty() || this.isSynced);
     }
 
     get hasChange() {
@@ -382,8 +382,14 @@ export class PosOrder extends PosOrderAccounting {
      * @param {Orderline} line
      * @returns {boolean} true if the line was removed, false otherwise
      */
-    removeOrderline(line) {
-        const linesToRemove = line.getAllLinesInCombo();
+    removeOrderline(line, deep = true) {
+        let linesToRemove = [];
+        if (deep) {
+            linesToRemove = line.getAllLinesInCombo();
+        } else {
+            linesToRemove = [line];
+        }
+
         for (const lineToRemove of linesToRemove) {
             if (lineToRemove.refunded_orderline_id?.uuid in this.uiState.lineToRefund) {
                 delete this.uiState.lineToRefund[lineToRemove.refunded_orderline_id.uuid];

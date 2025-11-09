@@ -2,10 +2,10 @@ import { Action, ACTION_TAGS, useAction, UseActions } from "@mail/core/common/ac
 import { isMobileOS } from "@web/core/browser/feature_detection";
 import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
-import { QuickVoiceSettings } from "./quick_voice_settings";
-import { QuickVideoSettings } from "./quick_video_settings";
+import { QuickVoiceSettings } from "@mail/discuss/call/common/quick_voice_settings";
+import { QuickVideoSettings } from "@mail/discuss/call/common/quick_video_settings";
 import { attClassObjectToString } from "@mail/utils/common/format";
-import { CALL_PROMOTE_FULLSCREEN } from "./thread_model_patch";
+import { CALL_PROMOTE_FULLSCREEN } from "@mail/discuss/call/common/thread_model_patch";
 
 export const callActionsRegistry = registry.category("discuss.call/actions");
 
@@ -173,18 +173,18 @@ registerCallAction("auto-focus", {
     sequenceGroup: 200,
 });
 registerCallAction("fullscreen", {
-    btnClass: ({ owner, thread }) =>
+    btnClass: ({ owner, channel }) =>
         attClassObjectToString({
             "o-discuss-CallActionList-pulse": Boolean(
-                !owner.env.pipWindow && thread.promoteFullscreen === CALL_PROMOTE_FULLSCREEN.ACTIVE
+                !owner.env.pipWindow && channel.promoteFullscreen === CALL_PROMOTE_FULLSCREEN.ACTIVE
             ),
         }),
     condition: ({ channel, store }) => channel?.eq(store.rtc?.channel),
-    name: ({ store }) => (store.rtc.state.isFullscreen ? _t("Exit Fullscreen") : _t("Fullscreen")),
-    isActive: ({ store }) => store.rtc.state.isFullscreen,
+    name: ({ store }) => (store.rtc.isFullscreen ? _t("Exit Fullscreen") : _t("Fullscreen")),
+    isActive: ({ store }) => store.rtc.isFullscreen,
     icon: ({ action }) => (action.isActive ? "fa fa-compress" : "fa fa-expand"),
     onSelected: ({ store }) => {
-        if (store.rtc.state.isFullscreen) {
+        if (store.rtc.isFullscreen) {
             store.rtc.exitFullscreen();
         } else {
             store.rtc.closePip();
@@ -201,11 +201,11 @@ registerCallAction("picture-in-picture", {
         !store.env?.isSmall,
     disabledCondition: ({ store }) => store.rtc?.isRemote,
     name: ({ store }) =>
-        store.rtc?.state.isPipMode ? _t("Exit Picture in Picture") : _t("Picture in Picture"),
-    isActive: ({ store }) => store.rtc?.state.isPipMode,
+        store.rtc?.isPipMode ? _t("Exit Picture in Picture") : _t("Picture in Picture"),
+    isActive: ({ store }) => store.rtc?.isPipMode,
     icon: "oi oi-launch",
     onSelected: ({ owner, store }) => {
-        const isPipMode = store.rtc?.state.isPipMode;
+        const isPipMode = store.rtc?.isPipMode;
         if (isPipMode) {
             store.rtc.closePip();
         } else {
@@ -216,10 +216,10 @@ registerCallAction("picture-in-picture", {
     tags: ACTION_TAGS.CALL_LAYOUT,
 });
 export const acceptWithCamera = {
-    condition: ({ thread }) =>
-        thread?.self_member_id?.rtc_inviting_session_id?.is_camera_on &&
-        typeof thread?.useCameraByDefault !== "boolean",
-    disabledCondition: ({ store }) => store.rtc?.state.hasPendingRequest,
+    condition: ({ channel }) =>
+        channel?.self_member_id?.rtc_inviting_session_id?.is_camera_on &&
+        typeof channel?.useCameraByDefault !== "boolean",
+    disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     name: _t("Accept with camera"),
     icon: "fa fa-video-camera",
     onSelected: ({ channel, store }) => store.rtc.toggleCall(channel, { camera: true }),
@@ -236,10 +236,10 @@ registerCallAction("join-back", {
         }),
     condition: ({ channel, store }) =>
         !channel?.eq(store.rtc?.channel) && typeof channel?.useCameraByDefault === "boolean",
-    disabledCondition: ({ store }) => store.rtc?.state.hasPendingRequest,
-    icon: ({ thread }) => (thread.useCameraByDefault ? "fa fa-video-camera" : "fa fa-phone"),
+    disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
+    icon: ({ channel }) => (channel.useCameraByDefault ? "fa fa-video-camera" : "fa fa-phone"),
     inlineName: ({ owner }) => (owner.env.inCallInvitation ? undefined : _t("Join")),
-    name: ({ thread }) => (thread.useCameraByDefault ? _t("Join Video Call") : _t("Join Call")),
+    name: ({ channel }) => (channel.useCameraByDefault ? _t("Join Video Call") : _t("Join Call")),
     onSelected: ({ channel, store }) =>
         store.rtc.toggleCall(channel, { camera: channel.useCameraByDefault }),
     sequence: 110,
@@ -252,7 +252,7 @@ registerCallAction("join-with-camera", {
         !channel?.eq(store.rtc?.channel) &&
         !channel?.self_member_id?.rtc_inviting_session_id &&
         typeof channel?.useCameraByDefault !== "boolean",
-    disabledCondition: ({ store }) => store.rtc?.state.hasPendingRequest,
+    disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     name: _t("Join Video Call"),
     icon: "fa fa-video-camera",
     onSelected: ({ channel, store }) => store.rtc.toggleCall(channel, { camera: true }),
@@ -263,7 +263,7 @@ registerCallAction("join-with-camera", {
 export const joinAction = {
     condition: ({ channel, store }) =>
         !channel?.eq(store.rtc?.channel) && typeof channel?.useCameraByDefault !== "boolean",
-    disabledCondition: ({ store }) => store.rtc?.state.hasPendingRequest,
+    disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     name: _t("Join Call"),
     icon: "fa fa-phone",
     onSelected: ({ channel, store }) => store.rtc.toggleCall(channel),
@@ -273,21 +273,21 @@ export const joinAction = {
 };
 registerCallAction("join", joinAction);
 export const rejectAction = {
-    btnClass: ({ owner, thread }) =>
+    btnClass: ({ owner, channel }) =>
         attClassObjectToString({
-            "pe-2 rounded-pill": typeof thread?.useCameraByDefault === "boolean",
-            "mx-1": !owner.env.inCallInvitation && typeof thread?.useCameraByDefault === "boolean",
+            "pe-2 rounded-pill": typeof channel?.useCameraByDefault === "boolean",
+            "mx-1": !owner.env.inCallInvitation && typeof channel?.useCameraByDefault === "boolean",
         }),
-    condition: ({ thread }) => thread?.self_member_id?.rtc_inviting_session_id,
-    disabledCondition: ({ store }) => store.rtc?.state.hasPendingRequest,
+    condition: ({ channel }) => channel?.self_member_id?.rtc_inviting_session_id,
+    disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     icon: "oi oi-close",
-    inlineName: ({ owner, thread }) =>
-        !owner.env.inCallInvitation && typeof thread?.useCameraByDefault === "boolean"
+    inlineName: ({ owner, channel }) =>
+        !owner.env.inCallInvitation && typeof channel?.useCameraByDefault === "boolean"
             ? _t("Reject")
             : undefined,
     name: _t("Reject"),
     onSelected: ({ channel, store }) => {
-        if (store.rtc.state.hasPendingRequest) {
+        if (store.rtc.hasPendingRequest) {
             return;
         }
         store.rtc.leaveCall(channel);
@@ -300,7 +300,7 @@ registerCallAction("reject", rejectAction);
 registerCallAction("disconnect", {
     condition: ({ channel, store }) =>
         channel?.eq(store.rtc?.channel) && !channel?.self_member_id?.rtc_inviting_session_id,
-    disabledCondition: ({ store }) => store.rtc?.state.hasPendingRequest,
+    disabledCondition: ({ store }) => store.rtc?.hasPendingRequest,
     name: _t("Disconnect"),
     icon: "fa fa-phone",
     onSelected: ({ channel, store }) => store.rtc.toggleCall(channel),
@@ -310,21 +310,21 @@ registerCallAction("disconnect", {
 });
 
 export class CallAction extends Action {
-    /** @type {() => Thread} */
-    threadFn;
+    /** @type {() => import("models").DiscussChannel} */
+    channelFn;
 
     /**
      * @param {Object} param0
-     * @param {Thread|() => Thread} thread
+     * @param {import("models").DiscussChannel|() => import("models").DiscussChannel} channel
      */
-    constructor({ thread }) {
+    constructor({ channel }) {
         super(...arguments);
-        this.threadFn = typeof thread === "function" ? thread : () => thread;
+        this.channelFn = typeof channel === "function" ? channel : () => channel;
     }
 
     get params() {
-        const thread = this.threadFn();
-        return Object.assign(super.params, { channel: thread?.channel, thread });
+        const channel = this.channelFn();
+        return Object.assign(super.params, { channel });
     }
 
     get isTracked() {
@@ -338,8 +338,8 @@ class UseCallActions extends UseActions {
 
 /**
  * @param {Object} [params0={}]
- * @param {Thread|() => Thread} thread
+ * @param {DiscussChannel|() => DiscussChannel} channel
  */
-export function useCallActions({ thread } = {}) {
-    return useAction(callActionsRegistry, UseCallActions, CallAction, { thread });
+export function useCallActions({ channel } = {}) {
+    return useAction(callActionsRegistry, UseCallActions, CallAction, { channel });
 }

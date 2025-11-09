@@ -8,6 +8,7 @@ from markupsafe import Markup
 
 from odoo import api, fields, models, _
 from odoo.addons.mail.tools.discuss import Store
+from odoo.addons.web.models.models import lazymapping
 from odoo.addons.mail.tools.web_push import PUSH_NOTIFICATION_ACTION, PUSH_NOTIFICATION_TYPE
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.fields import Domain
@@ -21,7 +22,7 @@ SFU_MODE_THRESHOLD = 3
 
 class DiscussChannelMember(models.Model):
     _name = 'discuss.channel.member'
-    _inherit = ["bus.listener.mixin"]
+    _inherit = ["bus.listener.mixin", "bus.sync.mixin"]
     _description = "Channel Member"
     _rec_names_search = ["channel_id", "partner_id", "guest_id"]
     _bypass_create_check = {}
@@ -32,6 +33,13 @@ class DiscussChannelMember(models.Model):
     is_self = fields.Boolean(compute="_compute_is_self", search="_search_is_self")
     # channel
     channel_id = fields.Many2one("discuss.channel", "Channel", ondelete="cascade", required=True, bypass_search_access=True)
+    channel_role = fields.Selection(
+        [("owner", "Owner"), ("admin", "Admin")],
+        default=None,
+        string="Channel Role",
+        help="The role of the member in the channel. The owner can add and remove admins. The owner and admins can edit the channel and its members.",
+        groups="base.group_system",
+    )
     # state
     custom_channel_name = fields.Char('Custom channel name')
     fetched_message_id = fields.Many2one('mail.message', string='Last Fetched', index="btree_not_null")
@@ -89,6 +97,18 @@ class DiscussChannelMember(models.Model):
         for member in self:
             if any(user._is_public() for user in member.partner_id.user_ids):
                 raise ValidationError(_("Channel members cannot include public users."))
+
+    @api.constrains("channel_role", "channel_id")
+    def _check_channel_role_supported(self):
+        for member in self:
+            if member.channel_role and member.channel_id.channel_type not in ["group", "channel"]:
+                raise ValidationError(
+                    _(
+                        "The role '%(role_name)s' is not supported for the channel type '%(channel_type)s'.",
+                        role_name=member.channel_role,
+                        channel_type=member.channel_id.channel_type,
+                    )
+                )
 
     @api.depends_context("uid", "guest")
     def _compute_is_self(self):
@@ -233,48 +253,15 @@ class DiscussChannelMember(models.Model):
             for field_name in ['channel_id', 'partner_id', 'guest_id']:
                 if field_name in vals and vals[field_name] != channel_member[field_name].id:
                     raise AccessError(_('You can not write on %(field_name)s.', field_name=field_name))
+        return super().write(vals)
 
-        def get_field_name(field_description):
-            if isinstance(field_description, Store.Attr):
-                return field_description.field_name
-            return field_description
-
-        def get_vals(member):
-            return {
-                get_field_name(field_description): (
-                    member[get_field_name(field_description)],
-                    field_description,
-                )
-                for field_description in self._sync_field_names()
-            }
-
-        old_vals_by_member = {member: get_vals(member) for member in self}
-        result = super().write(vals)
-        for member in self:
-            new_values = get_vals(member)
-            diff = []
-            for field_name, (new_value, field_description) in new_values.items():
-                old_value = old_vals_by_member[member][field_name][0]
-                if new_value != old_value:
-                    diff.append(field_description)
-            if diff:
-                store = Store(bus_channel=member._bus_channel())
-                diff.extend(
-                    [
-                        Store.One("channel_id", [], as_thread=True),
-                        *self.env["discuss.channel.member"]._to_store_persona(store.target, []),
-                    ]
-                )
-                if "message_unread_counter" in diff:
-                    # sudo: bus.bus: reading non-sensitive last id
-                    bus_last_id = self.env["bus.bus"].sudo()._bus_last_id()
-                    diff.append({"message_unread_counter_bus_id": bus_last_id})
-                store.add(member, diff).bus_send()
-        return result
-
-    @api.model
     def _sync_field_names(self):
-        return [
+        res = super()._sync_field_names()
+        res["channel_id", None] = [
+            # sudo: discuss.channel.member - reading channel ownership related to a member is considered acceptable
+            Store.Attr("channel_role", sudo=True),
+        ]
+        res[None] += [
             "custom_channel_name",
             "custom_notifications",
             "is_favorite",
@@ -290,6 +277,22 @@ class DiscussChannelMember(models.Model):
             ),
             "unpin_dt",
         ]
+        return res
+
+    def _sync_extra_field_names(self, target: Store.Target, fields):
+        res = super()._sync_extra_field_names(target, fields)
+        res += [
+            Store.One("channel_id", [], as_thread=True),
+            *self.env["discuss.channel.member"]._to_store_persona(target, []),
+        ]
+        if "message_unread_counter" in fields:
+            res += [
+                Store.Attr(
+                    "message_unread_counter_bus_id",
+                    value=lambda m: self.env["bus.bus"].sudo()._bus_last_id(),
+                )
+            ]
+        return res
 
     def unlink(self):
         # sudo: discuss.channel.rtc.session - cascade unlink of sessions for self member
@@ -310,16 +313,24 @@ class DiscussChannelMember(models.Model):
         name_members_by_channel = {
             channel: channel.channel_name_member_ids for channel in self.channel_id
         }
+        members_by_channel = {
+            channel: self.filtered(lambda m: m.channel_id == channel) for channel in self.channel_id
+        }
         res = super().unlink()
+        stores = lazymapping(lambda channel: Store(bus_channel=channel))
         for channel, members in name_members_by_channel.items():
             # sudo - discuss.channel: updating channel names according to members is allowed,
             # even after the member left the channel.
             channel_sudo = channel.sudo()
             if channel_sudo.channel_name_member_ids != members:
-                Store(bus_channel=channel).add(
+                stores[channel].add(
                     channel_sudo,
                     Store.Many("channel_name_member_ids", sort="id"),
-                ).bus_send()
+                )
+        for channel, members in members_by_channel.items():
+            stores[channel].delete(members).add(channel, ["member_count"])
+        for store in stores.values():
+            store.bus_send()
         return res
 
     def _bus_channel(self):
@@ -372,6 +383,8 @@ class DiscussChannelMember(models.Model):
 
     def _to_store_defaults(self, target):
         return [
+            # sudo: discuss.channel.member - reading channel ownership related to a member is considered acceptable
+            Store.Attr("channel_role", sudo=True),
             Store.One("channel_id", [], as_thread=True),
             "create_date",
             "fetched_message_id",

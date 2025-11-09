@@ -9,6 +9,7 @@ declare module "models" {
         channelMembers: ChannelMember[];
     }
     export interface Message {
+        channel_id: DiscussChannel;
         channelMemberHaveSeen: Readonly<ChannelMember[]>;
         hasEveryoneSeen: boolean|undefined;
         hasNewMessageSeparator: boolean;
@@ -36,6 +37,7 @@ declare module "models" {
     }
     export interface Thread {
         _computeOfflineMembers: () => ChannelMember[];
+        allow_invite_by_email: Readonly<boolean>;
         allowCalls: Readonly<boolean>;
         allowDescription: Readonly<boolean>;
         allowedToLeaveChannelTypes: Readonly<string[]>;
@@ -45,7 +47,6 @@ declare module "models" {
         canLeave: Readonly<boolean>;
         canUnpin: Readonly<boolean>;
         channel: DiscussChannel;
-        channel_member_ids: ChannelMember[];
         channel_name_member_ids: ChannelMember[];
         channel_type: string;
         computeCorrespondent: () => ChannelMember;
@@ -61,7 +62,6 @@ declare module "models" {
         firstUnreadMessage: Message;
         group_ids: ResGroups[];
         hasMemberList: Readonly<boolean>;
-        hasOtherMembersTyping: boolean;
         hasSeenFeature: boolean;
         hasSelfAsMember: Readonly<boolean>;
         invitationLink: Readonly<unknown|string>;
@@ -71,7 +71,8 @@ declare module "models" {
         lastInterestDt: import("luxon").DateTime;
         lastMessageSeenByAllId: undefined|number;
         lastSelfMessageSeenByEveryone: Message;
-        leaveChannel: (param0: { force: boolean }) => Promise<void>;
+        leaveChannel: () => Promise<void>;
+        leaveChannelRpc: () => void;
         markAsFetched: () => Promise<void>;
         markedAsUnread: boolean;
         markingAsRead: boolean;
@@ -83,7 +84,6 @@ declare module "models" {
         notifyDescriptionToServer: (description: unknown) => Promise<unknown>;
         offlineMembers: ChannelMember[];
         onlineMembers: ChannelMember[];
-        otherTypingMembers: ChannelMember[];
         rename: (name: string) => Promise<void>;
         scrollUnread: boolean;
         self_member_id: ChannelMember;
@@ -91,7 +91,6 @@ declare module "models" {
         showUnreadBanner: Readonly<boolean>;
         toggleBusSubscription: boolean;
         typesAllowingCalls: Readonly<string[]>;
-        typingMembers: ChannelMember[];
         unknownMembersCount: Readonly<number>;
     }
 

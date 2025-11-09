@@ -400,7 +400,7 @@ class BaseModel(metaclass=MetaModel):
         * If :attr:`._name` is set, name(s) of parent models to inherit from
         * If :attr:`._name` is unset, name of a single model to extend in-place
     """
-    _inherits: frozendict[str, str] = frozendict()
+    _inherits: Mapping[str, str] = frozendict()
     """dictionary {'parent_model': 'm2o_field'} mapping the _name of the parent business
     objects to the names of the corresponding foreign key fields to use::
 
@@ -457,7 +457,7 @@ class BaseModel(metaclass=MetaModel):
     through an environment using `sudo` or a more privileged user.
     """
 
-    _depends: frozendict[str, Iterable[str]] = frozendict()
+    _depends: Mapping[str, Iterable[str]] = frozendict()
     """dependencies of models backed up by SQL views
     ``{model_name: field_names}``, where ``field_names`` is an iterable.
     This is only used to determine the changes to flush to database before
@@ -6111,7 +6111,10 @@ class BaseModel(metaclass=MetaModel):
         env = self.env
         for field in fields:
             field._invalidate_cache(env, ids)
-            # TODO VSC: used to remove the inverse of many_to_one from the cache, though we might not need it anymore
+            if field.type == 'one2many':
+                # skip invalidation of inverse for o2m fields
+                # (o2m is "computed" from m2o)
+                continue
             for invf in self.pool.field_inverses[field]:
                 self.env[invf.model_name].flush_model([invf.name])
                 invf._invalidate_cache(env)

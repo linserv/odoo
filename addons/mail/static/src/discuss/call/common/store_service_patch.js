@@ -1,4 +1,4 @@
-import { fields } from "@mail/core/common/record";
+import { fields } from "@mail/model/export";
 import { Store } from "@mail/core/common/store_service";
 import { router } from "@web/core/browser/router";
 
@@ -13,10 +13,10 @@ const StorePatch = {
                 return {};
             },
         });
-        this.ringingThreads = fields.Many("mail.thread", {
+        this.ringingChannels = fields.Many("discuss.channel", {
             /** @this {import("models").Store} */
             onUpdate() {
-                if (this.ringingThreads.length > 0) {
+                if (this.ringingChannels.length > 0) {
                     this.env.services["mail.sound_effects"].play("call-invitation", {
                         loop: true,
                     });

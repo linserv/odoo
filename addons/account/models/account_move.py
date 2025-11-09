@@ -3,6 +3,7 @@
 import ast
 import calendar
 from collections import Counter, defaultdict
+from collections.abc import Mapping
 from contextlib import ExitStack, contextmanager
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
@@ -52,6 +53,12 @@ PAYMENT_STATE_SELECTION = [
         ('reversed', 'Reversed'),
         ('blocked', 'Blocked'),
         ('invoicing_legacy', 'Invoicing App Legacy'),
+]
+REVIEW_STATE_SELECTION = [
+    ('todo', "To Review"),
+    ('reviewed', "Reviewed"),
+    ('supervised', "Supervised"),
+    ('anomaly', "Anomaly"),
 ]
 
 TYPE_REVERSE_MAP = {
@@ -310,10 +317,10 @@ class AccountMove(models.Model):
         index='btree_not_null',
     )
     hide_post_button = fields.Boolean(compute='_compute_hide_post_button', readonly=True)
-    checked = fields.Boolean(
-        string='Reviewed',
-        compute='_compute_checked',
-        store=True, readonly=False, tracking=True, copy=False,
+    review_state = fields.Selection(
+        string="Review",
+        selection=REVIEW_STATE_SELECTION,
+        tracking=True, copy=False,
     )
     posted_before = fields.Boolean(copy=False)
     suitable_journal_ids = fields.Many2many(
@@ -772,7 +779,7 @@ class AccountMove(models.Model):
     display_send_button = fields.Boolean(compute='_compute_display_send_button')
     highlight_send_button = fields.Boolean(compute='_compute_highlight_send_button')
 
-    _checked_idx = models.Index("(journal_id) WHERE (checked IS NOT TRUE)")
+    _checked_idx = models.Index("(journal_id) WHERE (review_state IN ('todo', 'anomaly'))")
     _payment_idx = models.Index("(journal_id, state, payment_state, move_type, date)")
     _unique_name = models.UniqueIndex(
         "(name, journal_id) WHERE (state = 'posted'AND name != '/')",
@@ -1925,7 +1932,7 @@ class AccountMove(models.Model):
         for move in self.filtered(lambda move: move.is_invoice()):
             move.access_url = '/my/invoices/%s' % (move.id)
 
-    @api.depends('move_type', 'partner_id', 'company_id')
+    @api.depends('move_type', 'partner_id', 'partner_id.lang', 'company_id')
     def _compute_narration(self):
         use_invoice_terms = self.env['ir.config_parameter'].sudo().get_bool('account.use_invoice_terms')
         invoice_to_update_terms = self.filtered(lambda m: use_invoice_terms and m.is_sale_document(include_receipts=True))
@@ -2343,11 +2350,6 @@ class AccountMove(models.Model):
         if operator not in ('in', '<', '<='):
             return NotImplemented
         return [('line_ids', 'any', [('reconciled', '=', False), ('payment_date', operator, value)])]
-
-    @api.depends('state', 'journal_id.type')
-    def _compute_checked(self):
-        for move in self:
-            move.checked = move.state == 'posted' and (move.journal_id.type == 'general' or move._is_user_able_to_review())
 
     @api.depends('line_ids.no_followup')
     def _compute_no_followup(self):
@@ -3726,6 +3728,16 @@ class AccountMove(models.Model):
         """
         return _('This entry has been reversed from %s', self._get_html_link()) if default.get('reversed_entry_id') else _('This entry has been duplicated from %s', self._get_html_link())
 
+    def _check_user_access(self, vals_list):
+        is_user_able_to_review = self.env.user.has_group('account.group_account_user')
+        is_user_able_to_supervise = self.env.user.has_group('account.group_account_manager')
+        for vals in vals_list:
+            if (
+                ((vals.get('review_state') == 'reviewed' or not vals.get('review_state', True)) and not is_user_able_to_review)
+                or (vals.get('review_state') == 'supervised' and not is_user_able_to_supervise)
+            ):
+                raise AccessError(_("You don't have the access rights to perform this action."))
+
     def _sanitize_vals(self, vals):
         if vals.get('invoice_line_ids') and vals.get('journal_line_ids'):
             # values can sometimes be in only one of the two fields, sometimes in
@@ -3767,6 +3779,7 @@ class AccountMove(models.Model):
     def create(self, vals_list):
         if any('state' in vals and vals.get('state') == 'posted' for vals in vals_list):
             raise UserError(_('You cannot create a move already in the posted state. Please create a draft move and post it after.'))
+        self._check_user_access(vals_list)
         container = {'records': self}
         with self._check_balanced(container):
             with ExitStack() as exit_stack, self._sync_dynamic_lines(container):
@@ -3786,12 +3799,26 @@ class AccountMove(models.Model):
         if not vals:
             return True
         self._sanitize_vals(vals)
+        self._check_user_access([vals])
 
+        is_user_able_to_supervise = self.env.user.has_group('account.group_account_manager')
+        is_user_able_to_review = self.env.user.has_group('account.group_account_user') or is_user_able_to_supervise
+        move_ids_review_done = []
+        move_ids_review_todo = []
         for move in self:
-            if vals.get('checked') and not move._is_user_able_to_review():
-                raise AccessError(_("You don't have the access rights to perform this action."))
-            if vals.get('state') == 'draft' and move.checked and not move._is_user_able_to_review():
-                raise ValidationError(_("Validated entries can only be changed by your accountant."))
+            if vals.get('state') == 'draft' and (
+                ((move.review_state == 'reviewed' or not move.review_state) and not is_user_able_to_review)
+                or (move.review_state == 'supervised' and not is_user_able_to_supervise)
+            ):
+                raise ValidationError(_("This entry has already been reviewed. You need the bookkeeper role to change it."))
+            if (vals.get('state') == 'posted' and move.auto_post == 'no') or vals.get('auto_post', 'no') != 'no':
+                if is_user_able_to_review:
+                    if move.review_state:
+                        move_ids_review_done.append(move.id)
+                else:
+                    move_ids_review_todo.append(move.id)
+            if not is_user_able_to_review and move.review_state in ('reviewed', 'supervised'):
+                move_ids_review_todo.append(move.id)
 
             violated_fields = set(vals).intersection(move._get_integrity_hash_fields() + ['inalterable_hash'])
             if move.inalterable_hash and violated_fields:
@@ -3873,6 +3900,8 @@ class AccountMove(models.Model):
                 if vals.get('state') == 'posted':
                     self.flush_recordset()  # Ensure that the name is correctly computed
                     self._hash_moves()
+                super(AccountMove, self.browse(move_ids_review_done)).write({'review_state': 'reviewed'})
+                super(AccountMove, self.browse(move_ids_review_todo)).write({'review_state': 'todo'})
 
             self._synchronize_business_models(set(vals.keys()))
 
@@ -4692,6 +4721,7 @@ class AccountMove(models.Model):
             'auto_post_until': self.auto_post_until,  # same as above
             'auto_post_origin_id': self.auto_post_origin_id.id,  # same as above
             'invoice_user_id': self.invoice_user_id.id,  # otherwise user would be OdooBot
+            'review_state': self.review_state,
         })
         if self.invoice_date:
             values.update({'invoice_date': self._apply_delta_recurring_entries(self.invoice_date, self.auto_post_origin_id.invoice_date, self.auto_post)})
@@ -4848,7 +4878,7 @@ class AccountMove(models.Model):
             for grouping_key, values in aggregated_values.items():
                 if not grouping_key:
                     continue
-                if isinstance(grouping_key, dict):
+                if isinstance(grouping_key, Mapping):
                     values.update(grouping_key)
                 tax_details[grouping_key] = values
 
@@ -4857,7 +4887,7 @@ class AccountMove(models.Model):
         for grouping_key, values in values_per_grouping_key.items():
             if not grouping_key:
                 continue
-            if isinstance(grouping_key, dict):
+            if isinstance(grouping_key, Mapping):
                 values.update(grouping_key)
             tax_details[grouping_key] = values
 
@@ -5910,15 +5940,12 @@ class AccountMove(models.Model):
         partial = self.env['account.partial.reconcile'].browse(partial_id)
         return partial.unlink()
 
-    def button_set_checked(self):
-        self.set_moves_checked()
-
     def check_selected_moves(self):
         self.env['account.move'].browse(self.env.context.get('active_ids', [])).set_moves_checked()
 
     def set_moves_checked(self, is_checked=True):
         for move in self.filtered(lambda m: m.state == 'posted'):
-            move.checked = is_checked
+            move.review_state = 'reviewed' if is_checked else 'todo'
 
     def button_draft(self):
         if any(move.state not in ('cancel', 'posted') for move in self):
@@ -6608,10 +6635,6 @@ class AccountMove(models.Model):
             raise UserError(_("There is no template that applies to invoices."))
 
         return available_reports
-
-    def _is_user_able_to_review(self):
-        # If only account is installed, we don't check user access rights.
-        return True
 
     # -------------------------------------------------------------------------
     # TOOLING

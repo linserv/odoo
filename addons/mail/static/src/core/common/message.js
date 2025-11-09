@@ -24,7 +24,7 @@ import {
 } from "@odoo/owl";
 
 import { ActionSwiper } from "@web/core/action_swiper/action_swiper";
-import { hasTouch, isMobileOS } from "@web/core/browser/feature_detection";
+import { isMobileOS } from "@web/core/browser/feature_detection";
 import { Dropdown } from "@web/core/dropdown/dropdown";
 import { useDropdownState } from "@web/core/dropdown/dropdown_hooks";
 import { _t } from "@web/core/l10n/translation";
@@ -112,7 +112,6 @@ export class Message extends Component {
             });
         }
         useForwardRefsToParent("messageRefs", (props) => props.message.id, this.root);
-        this.hasTouch = hasTouch;
         this.messageBody = useRef("body");
         this.messageActions = useMessageActions({
             message: () => this.message,
@@ -434,15 +433,8 @@ export class Message extends Component {
         }
         const editedEl = bodyEl.querySelector(".o-mail-Message-edited");
         editedEl?.replaceChildren(renderToElement("mail.Message.edited"));
-        for (const linkEl of bodyEl.querySelectorAll(".o_channel_redirect")) {
-            const text = linkEl.textContent.substring(1); // remove '#' prefix
-            const icon = linkEl.classList.contains("o_channel_redirect_asThread")
-                ? "fa fa-comments-o"
-                : "fa fa-hashtag";
-            const iconEl = renderToElement("mail.Message.mentionedChannelIcon", { icon });
-            linkEl.replaceChildren(iconEl);
-            linkEl.insertAdjacentText("beforeend", ` ${text}`);
-        }
+        const channelLinks = bodyEl.querySelectorAll("a.o_channel_redirect");
+        this.store.handleValidChannelMention(Array.from(channelLinks));
         for (const el of bodyEl.querySelectorAll(".o_message_redirect")) {
             // only transform links targetting the same database
             if (el.getAttribute("href")?.startsWith(getOrigin())) {
@@ -494,10 +486,6 @@ export class Message extends Component {
             { message, initialReaction: reaction },
             { context: this }
         );
-    }
-
-    get shouldHideFromMessageListOnDelete() {
-        return false;
     }
 }
 

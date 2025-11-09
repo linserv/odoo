@@ -52,7 +52,7 @@ class DiscussChannel(models.Model):
     _description = 'Discussion Channel'
     _mail_flat_thread = False
     _mail_post_access = 'read'
-    _inherit = ["mail.thread"]
+    _inherit = ["mail.thread", "bus.sync.mixin"]
 
     MAX_BOUNCE_LIMIT = 10
 
@@ -95,7 +95,7 @@ class DiscussChannel(models.Model):
     call_history_ids = fields.One2many("discuss.call.history", "channel_id")
     is_member = fields.Boolean("Is Member", compute="_compute_is_member", search="_search_is_member", compute_sudo=True)
     # sudo: discuss.channel - sudo for performance, self member can be accessed on accessible channel
-    self_member_id = fields.Many2one("discuss.channel.member", compute="_compute_self_member_id", compute_sudo=True)
+    self_member_id = fields.Many2one("discuss.channel.member", compute="_compute_self_member_id", search="_search_self_member_id", compute_sudo=True)
     # sudo: discuss.channel - sudo for performance, invited members can be accessed on accessible channel
     invited_member_ids = fields.One2many("discuss.channel.member", compute="_compute_invited_member_ids", compute_sudo=True)
     member_count = fields.Integer(string="Member Count", compute='_compute_member_count', compute_sudo=True)
@@ -318,6 +318,13 @@ class DiscussChannel(models.Model):
         for channel in self:
             channel.self_member_id = member_by_channel.get(channel)
 
+    def _search_self_member_id(self, operator, operand):
+        if operator == "in":
+            return [("channel_member_ids", "any", [("is_self", "=", True), ("id", "in", operand)])]
+        if operator in ('any', 'any!'):
+            return Domain('channel_member_ids', operator, Domain('is_self', '=', True) & operand)
+        return NotImplemented
+
     @api.depends("channel_member_ids.rtc_inviting_session_id")
     def _compute_invited_member_ids(self):
         members_by_channel = {
@@ -372,7 +379,7 @@ class DiscussChannel(models.Model):
 
     @api.model
     def _get_allowed_channel_member_create_params(self):
-        return ["partner_id", "guest_id", "unpin_dt", "last_interest_dt"]
+        return ["channel_role", "partner_id", "guest_id", "unpin_dt", "last_interest_dt"]
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -408,8 +415,19 @@ class DiscussChannel(models.Model):
             # is_pinned + ensure they have rights to see channel
             if not self.env.context.get('install_mode') and not self.env.user._is_public():
                 partner_ids_to_add = list(set(partner_ids + [self.env.user.partner_id.id]))
-            vals['channel_member_ids'] = membership_ids_cmd + [
-                (0, 0, {'partner_id': pid})
+            vals["channel_member_ids"] = membership_ids_cmd + [
+                Command.create(
+                    {
+                        "partner_id": pid,
+                        "channel_role": (
+                            "owner"
+                            if vals.get("channel_type") in ["channel", "group"]
+                            and pid == self.env.user.partner_id.id
+                            and not self.env.user._is_public()
+                            else None
+                        ),
+                    }
+                )
                 for pid in partner_ids_to_add if pid not in membership_pids
             ]
 
@@ -457,58 +475,32 @@ class DiscussChannel(models.Model):
                         channels=failing_channels.mapped("name"),
                     )
                 )
-
-        def get_field_name(field_description):
-            if isinstance(field_description, Store.Attr):
-                return field_description.field_name
-            return field_description
-
-        def get_field_value(channel, field_description):
-            if isinstance(field_description, Store.Attr):
-                if field_description.predicate and not field_description.predicate(channel):
-                    return None
-            if isinstance(field_description, Store.Relation):
-                return field_description._get_value(channel).records
-            if isinstance(field_description, Store.Attr):
-                return field_description._get_value(channel)
-            return channel[field_description]
-
-        def get_vals(channel):
-            return {
-                subchannel: {
-                    get_field_name(field_description): (
-                        get_field_value(channel, field_description),
-                        field_description,
+        if "active" in vals:
+            if channels_to_check := self.filtered(lambda channel: channel.active != vals["active"]):
+                if failing_channels := channels_to_check.filtered(
+                    lambda channel: channel.channel_type in ["channel", "group"]
+                    and channel.self_member_id.channel_role != "owner"
+                    and not self.env.user.has_group("base.group_system")
+                ):
+                    raise UserError(
+                        self.env._(
+                            "Cannot change the active state of the following channels: %(channels)s. "
+                            "You must be the owner or a system administrator to change it.",
+                            channels=", ".join(failing_channels.mapped("name")),
+                        )
                     )
-                    for field_description in field_descriptions
-                }
-                for subchannel, field_descriptions in self._sync_field_names().items()
-            }
-
-        old_vals = {channel: get_vals(channel) for channel in self}
         result = super().write(vals)
-        for channel in self:
-            new_subchannel_vals = get_vals(channel)
-            for subchannel, values in new_subchannel_vals.items():
-                diff = []
-                for field_name, (value, field_description) in values.items():
-                    if value != old_vals[channel][subchannel][field_name][0]:
-                        diff.append(field_description)
-                if diff:
-                    Store(
-                        bus_channel=channel,
-                        bus_subchannel=subchannel,
-                    ).add(channel, diff).bus_send()
         if vals.get('group_ids'):
             self._subscribe_users_automatically()
         return result
 
     def _sync_field_names(self):
         # keys are bus subchannel names, values are lists of field names to sync
-        res = defaultdict(list)
+        res = super()._sync_field_names()
         res[None] += [
             Store.Attr("avatar_cache_key", predicate=is_channel_or_group),
-            Store.One("discuss_category_id", ["name"], sudo=True),  # sudo: discuss.category - reading name is acceptable
+            # sudo: discuss.category - guests can read categories of accessible channels
+            Store.One("discuss_category_id", ["name", "sequence"], sudo=True),
             "channel_type",
             "create_uid",
             "default_display_mode",
@@ -589,13 +581,6 @@ class DiscussChannel(models.Model):
                 body=notification, subtype_xmlid="mail.mt_comment", author_id=partner.id
             )
         member.unlink()
-        Store(bus_channel=self).add(
-            self,
-            [
-                Store.Many("channel_member_ids", [], mode="DELETE", value=member),
-                "member_count",
-            ],
-        ).bus_send()
 
     def add_members(
         self, partner_ids=None, guest_ids=None, invite_to_rtc_call=False, post_joined_message=True
@@ -1225,14 +1210,17 @@ class DiscussChannel(models.Model):
         # (through inverse of channels_with_all_members.channel_member_ids), so the ORM will only
         # prefetch all fields for members with unknown channel_id. The following line force a
         # single fetch for all fields of all members.
-        all_members.mapped("create_date")  # any field in table will do except channel_id
+        # sudo : discuss.channel.member - prefetching member fields as sudo is acceptable,
+        # and its necessary to get channel_role in the same query as the other fields
+        all_members.sudo().mapped("create_date")  # any field in table will do except channel_id
         # prefetch in batch, including nested relations (member, guest, ...)
         Store(bus_channel=target.channel, bus_subchannel=target.subchannel).add(all_members)
         # sudo: bus.bus: reading non-sensitive last id
         bus_last_id = self.env["bus.bus"].sudo()._bus_last_id()
         res = [
             Store.Attr("avatar_cache_key", predicate=is_channel_or_group),
-            Store.One("discuss_category_id", ["name"], sudo=True),  # sudo: discuss.category - reading name is acceptable
+            # sudo: discuss.category - guests can read categories of accessible channels
+            Store.One("discuss_category_id", ["name", "sequence"], sudo=True),
             "channel_type",
             "create_uid",
             Store.Many(
@@ -1505,12 +1493,24 @@ class DiscussChannel(models.Model):
             :rtype: dict
         """
         partners_to = OrderedSet(partners_to)
-        channel = self.create({
-            'channel_member_ids': [Command.create({'partner_id': partner_id}) for partner_id in partners_to],
-            'channel_type': 'group',
-            'default_display_mode': default_display_mode,
-            'name': name,
-        })
+        channel = self.create(
+            {
+                "channel_member_ids": [
+                    Command.create(
+                        {
+                            "partner_id": partner_id,
+                            "channel_role": "owner"
+                            if partner_id == self.env.user.partner_id.id and not self.env.user._is_public()
+                            else None,
+                        }
+                    )
+                    for partner_id in partners_to
+                ],
+                "channel_type": "group",
+                "default_display_mode": default_display_mode,
+                "name": name,
+            }
+        )
         channel._broadcast(channel.channel_member_ids.partner_id.ids)
         return channel
 
