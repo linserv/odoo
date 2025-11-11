@@ -102,7 +102,7 @@ For more specific needs, you may also assign custom-defined actions
         'data/mail_activity_type_data.xml',
         'data/security_notifications_templates.xml',
         'data/ir_cron_data.xml',
-        'data/ir_actions_client.xml',
+        'data/ir_actions_data.xml',
         'security/mail_security.xml',
         'security/ir.model.access.csv',
         'views/discuss_public_templates.xml',
@@ -146,6 +146,7 @@ For more specific needs, you may also assign custom-defined actions
             # depends on BS variables, can't be loaded in assets_primary or assets_secondary
             'mail/static/src/scss/variables/derived_variables.scss',
             'mail/static/src/scss/*.scss',
+            'mail/static/lib/idb-keyval/idb-keyval.js',
             'mail/static/lib/selfie_segmentation/selfie_segmentation.js',
             'mail/static/src/js/**/*',
             'mail/static/src/model/**/*',
