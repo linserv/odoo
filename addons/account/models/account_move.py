@@ -3863,7 +3863,7 @@ class AccountMove(models.Model):
                 to_unlink += move
         to_unlink.filtered(lambda m: m.state in ('posted', 'cancel')).button_draft()
         to_unlink.filtered(lambda m: m.state == 'draft').unlink()
-        to_cancel.button_cancel()
+        to_cancel.filtered(lambda m: m.state != 'cancel').button_cancel()
         return to_reverse._reverse_moves(cancel=True)
 
     def _post(self, soft=True):
@@ -3942,15 +3942,6 @@ class AccountMove(models.Model):
 
             if move.line_ids.account_id.filtered(lambda account: account.deprecated) and not self._context.get('skip_account_deprecation_check'):
                 raise UserError(_("A line of this move is using a deprecated account, you cannot post it."))
-
-            account_companies = move.line_ids.account_id.company_id
-
-            if not ((move.journal_id.company_id.sudo().child_ids | move.journal_id.company_id) & account_companies == account_companies):
-                raise UserError(_(
-                    "The entry %s (id %s) is using accounts from a different company.",
-                    move.name,
-                    move.id
-                ))
 
         if soft:
             future_moves = self.filtered(lambda move: move.date > fields.Date.context_today(self))
