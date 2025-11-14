@@ -633,7 +633,7 @@ class ResUsers(models.Model):
                 if env.user in self:
                     reset_cached_properties(env)
 
-        if 'group_ids' in vals and self.ids:
+        if 'group_ids' in vals and any(self._ids):
             # clear caches linked to the users
             self.env['ir.model.access'].call_cache_clearing_methods()
 
@@ -641,7 +641,7 @@ class ResUsers(models.Model):
         # clear_cache/clear_caches methods pretty much just end up calling
         # Registry.clear_cache
         invalidation_fields = self._get_invalidation_fields()
-        if invalidation_fields & vals.keys():
+        if not invalidation_fields.isdisjoint(vals):
             self.env.registry.clear_cache()
 
         return res
@@ -649,6 +649,7 @@ class ResUsers(models.Model):
     @api.ondelete(at_uninstall=True)
     def _unlink_except_master_data(self):
         portal_user_template = self.env.ref('base.template_portal_user_id', False)
+        public_user = self.env.ref('base.public_user', False)
         if SUPERUSER_ID in self.ids:
             raise UserError(_('You can not remove the admin user as it is used internally for resources created by Odoo (updates, module installation, ...)'))
         user_admin = self.env.ref('base.user_admin', raise_if_not_found=False)
@@ -657,6 +658,8 @@ class ResUsers(models.Model):
         self.env.registry.clear_cache()
         if portal_user_template and portal_user_template in self:
             raise UserError(_('Deleting the template users is not allowed. Deleting this profile will compromise critical functionalities.'))
+        if public_user and public_user in self:
+            raise UserError(_("Deleting the public user is not allowed. Deleting this profile will compromise critical functionalities."))
 
     @api.model
     def name_search(self, name='', domain=None, operator='ilike', limit=100):

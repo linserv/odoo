@@ -22,7 +22,7 @@ class ChannelActionDialog extends Component {
     `;
 }
 
-registerThreadAction("set-favorite", {
+registerThreadAction("add-to-favorites", {
     /**
      * @param {Object} param0
      * @param {import("models").DiscussChannel} param0.channel
@@ -33,7 +33,7 @@ registerThreadAction("set-favorite", {
         !channel.self_member_id.is_favorite &&
         !owner.isDiscussContent,
     icon: "fa fa-fw fa-star",
-    name: _t("Set favorite"),
+    name: _t("Add to Favorites"),
     /**
      * @param {Object} param0
      * @param {import("models").DiscussChannel} param0.channel
@@ -49,7 +49,7 @@ registerThreadAction("set-favorite", {
     sequence: 5, // before notification-settings
     sequenceGroup: 30,
 });
-registerThreadAction("unset-favorite", {
+registerThreadAction("remove-from-favorites", {
     /**
      * @param {Object} param0
      * @param {import("models").DiscussChannel} param0.channel
@@ -57,7 +57,7 @@ registerThreadAction("unset-favorite", {
     condition: ({ channel, owner }) =>
         channel?.self_member_id?.is_favorite && !owner.isDiscussContent,
     icon: "fa fa-fw fa-star-o",
-    name: _t("Unset favorite"),
+    name: _t("Remove from Favorites"),
     /**
      * @param {Object} param0
      * @param {import("models").DiscussChannel} param0.channel
@@ -127,25 +127,25 @@ registerThreadAction("attachments", {
 registerThreadAction("invite-people", {
     actionPanelClose: ({ action }) => action.popover?.close(),
     actionPanelComponent: ChannelInvitation,
-    actionPanelComponentProps: ({ action, thread }) => ({
+    actionPanelComponentProps: ({ action, channel }) => ({
         close: () => action.actionPanelClose(),
-        thread,
+        channel,
     }),
-    actionPanelOpen({ owner, store, thread }) {
+    actionPanelOpen({ owner, store, channel }) {
         if (owner.isDiscussSidebarChannelActions) {
             store.env.services.dialog?.add(ChannelActionDialog, {
-                title: thread.name,
+                title: channel.name,
                 contentComponent: ChannelInvitation,
                 contentProps: {
                     autofocus: true,
-                    thread,
+                    channel,
                     close: () => store.env.services.dialog.closeAll(),
                 },
             });
         } else if (!owner.env.inMeetingView) {
             this.popover?.open(owner.root.el.querySelector(`[name="${this.id}"]`), {
                 hasSizeConstraints: true,
-                thread,
+                channel,
             });
         }
     },
@@ -175,13 +175,13 @@ registerThreadAction("member-list", {
         }
     },
     actionPanelComponent: ChannelMemberList,
-    actionPanelComponentProps: ({ actions, thread }) => ({
+    actionPanelComponentProps: ({ actions, channel }) => ({
         openChannelInvitePanel({ keepPrevious } = {}) {
             actions.actions
                 .find(({ id }) => id === "invite-people")
                 ?.actionPanelOpen({ keepPrevious });
         },
-        thread,
+        channel,
     }),
     actionPanelOpen: ({ owner, store }) => {
         if (owner.env.inDiscussApp) {
@@ -189,8 +189,8 @@ registerThreadAction("member-list", {
         }
     },
     actionPanelOuterClass: "o-discuss-ChannelMemberList bg-inherit",
-    condition: ({ owner, thread }) =>
-        thread?.hasMemberList &&
+    condition: ({ owner, channel }) =>
+        channel?.hasMemberList &&
         (!owner.props.chatWindow || owner.props.chatWindow.isOpen) &&
         !owner.isDiscussSidebarChannelActions,
     icon: "oi oi-fw oi-users",

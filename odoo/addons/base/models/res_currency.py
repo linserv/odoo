@@ -23,6 +23,9 @@ class ResCurrency(models.Model):
     _description = "Currency"
     _rec_names_search = ['name', 'full_name']
     _order = 'active desc, name'
+    # invalidate cache for get_all_currencies
+    _clear_cache_name = 'stable'
+    _clear_cache_on_fields = {'active', 'digits', 'name', 'position', 'symbol'}
 
     # Note: 'code' column was removed as of v6.0, the 'name' should now hold the ISO code.
     name = fields.Char(string='Currency', size=3, required=True, help="Currency Code (ISO 4217)")
@@ -60,25 +63,17 @@ class ResCurrency(models.Model):
     def create(self, vals_list):
         res = super().create(vals_list)
         self._toggle_group_multi_currency()
-        # invalidate cache for get_all_currencies
-        self.env.registry.clear_cache('stable')
         return res
 
     def unlink(self):
         res = super().unlink()
         self._toggle_group_multi_currency()
-        # invalidate cache for get_all_currencies
-        self.env.registry.clear_cache('stable')
         return res
 
     def write(self, vals):
         res = super().write(vals)
-        if vals.keys() & {'active', 'digits', 'name', 'position', 'symbol'}:
-            # invalidate cache for get_all_currencies
-            self.env.registry.clear_cache('stable')
-        if 'active' not in vals:
-            return res
-        self._toggle_group_multi_currency()
+        if 'active' in vals:
+            self._toggle_group_multi_currency()
         return res
 
     @api.model
@@ -132,7 +127,7 @@ class ResCurrency(models.Model):
         currency_id_field = self.env['res.currency']._field_to_sql(currency_query.table, 'id')
 
         rate_query = Rate._search(
-            [('name', '<=', date), ('company_id', 'in', (False, company.root_id.id))],
+            [('name', '<', date), ('company_id', 'in', (False, company.root_id.id))],
             order='company_id.id, name DESC', limit=1)
         rate_query.add_where(
             SQL("%s = %s", Rate._field_to_sql(rate_query.table, 'currency_id'), currency_id_field))
@@ -141,7 +136,6 @@ class ResCurrency(models.Model):
             Rate._field_to_sql(Rate._table, 'name', rate_query),
         )
         currency_query.add_join('LEFT JOIN LATERAL', 'before_rate', rate_query, SQL('TRUE'))
-
         rate_query_fallback = Rate._search(
             [('company_id', 'in', (False, company.root_id.id))],
             order='company_id.id, name ASC', limit=1)
