@@ -74,7 +74,7 @@
                         }"/>
                         <Wysiwyg t-if="composerService.htmlEnabled" class="'w-100 text-break overflow-auto'" config="this.wysiwygConfig" onLoad.bind="onLoadWysiwyg"/>
                         <t t-else="">
-                                <textarea class="o-mail-Composer-input o-mail-Composer-bg shadow-none overflow-auto o-scrollbar-thin text-body user-select-auto"
+                                <textarea class="o-mail-Composer-input o-mail-Composer-bg shadow-none overflow-auto o-scrollbar-thin o-discuss-text-body user-select-auto"
                                 t-att-class="inputClasses"
                                 t-ref="textarea"
                                 t-on-keydown="onKeydown"
@@ -206,7 +206,7 @@
     <t t-name="mail.Composer.suggestionRole">
         <strong class="px-2 py-1 align-self-center flex-shrink-0 text-truncate" t-esc="option.label"/>
         <em class="text-600 text-truncate align-self-center">
-            <t t-if="option.thread?.channel_type === 'channel'">Notify users with this role who have permission to view this channel</t>
+            <t t-if="option.thread?.channel?.channel_type === 'channel'">Notify users with this role who have permission to view this channel</t>
             <t t-else="">Notify users with this role</t>
         </em>
     </t>

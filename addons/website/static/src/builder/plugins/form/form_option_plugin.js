@@ -45,6 +45,23 @@ import { localization } from "@web/core/l10n/localization";
 import { formatDate } from "@web/core/l10n/dates";
 import { BaseOptionComponent } from "@html_builder/core/utils";
 
+/**
+ * @typedef { Object } FormOptionShared
+ * @property { FormOptionPlugin['prepareFormModel'] } prepareFormModel
+ * @property { FormOptionPlugin['getModelsCache'] } getModelsCache
+ * @property { FormOptionPlugin['applyFormModel'] } applyFormModel
+ * @property { FormOptionPlugin['addHiddenField'] } addHiddenField
+ * @property { FormOptionPlugin['fetchAuthorizedFields'] } fetchAuthorizedFields
+ * @property { FormOptionPlugin['loadFieldOptionData'] } loadFieldOptionData
+ * @property { FormOptionPlugin['prepareFields'] } prepareFields
+ * @property { FormOptionPlugin['replaceField'] } replaceField
+ * @property { FormOptionPlugin['prepareConditionInputs'] } prepareConditionInputs
+ * @property { FormOptionPlugin['setLabelsMark'] } setLabelsMark
+ * @property { FormOptionPlugin['clearValidationDataset'] } clearValidationDataset
+ * @property { FormOptionPlugin['defaultMessage'] } defaultMessage
+ * @property { FormOptionPlugin['fetchModels'] } fetchModels
+ */
+
 const { DateTime } = luxon;
 
 export class WebsiteFormSubmitOption extends BaseOptionComponent {
@@ -72,6 +89,7 @@ export class FormOptionPlugin extends Plugin {
         "defaultMessage",
         "fetchModels",
     ];
+    /** @type {import("plugins").WebsiteResources} */
     resources = {
         builder_header_middle_buttons: [
             {
@@ -106,10 +124,19 @@ export class FormOptionPlugin extends Plugin {
         },
         remove_disabled_reason_providers: ({ el, reasons }) => {
             if (el.classList.contains("s_website_form_model_required")) {
+                const models = this.modelsCache.get();
+                const modelName = el.closest("form")?.dataset.model_name;
+                const model = models?.find((model) => model.model === modelName);
+                const fieldName = getFieldName(el);
                 reasons.push(
-                    _t(
-                        "This field is mandatory for this action. You cannot remove it. Try hiding it with the 'Visibility' option instead and add it a default value."
-                    )
+                    model
+                        ? _t(
+                              'The field "%(fieldName)s" is mandatory for the action "%(actionName)s".',
+                              { fieldName, actionName: model.website_form_label }
+                          )
+                        : _t("The field “%(fieldName)s” is mandatory for the selected action.", {
+                              fieldName,
+                          })
                 );
             }
             if (el.classList.contains("s_website_form_submit")) {

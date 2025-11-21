@@ -16,7 +16,7 @@ class SaleOrderLine(models.Model):
     timesheet_ids = fields.One2many('account.analytic.line', 'so_line', domain=[('project_id', '!=', False)], string='Timesheets', export_string_translation=False)
 
     @api.depends('remaining_hours_available', 'remaining_hours')
-    @api.depends_context('with_remaining_hours', 'company')
+    @api.depends_context('with_remaining_hours', 'company', 'formatted_display_name')
     def _compute_display_name(self):
         super()._compute_display_name()
         with_remaining_hours = self.env.context.get('with_remaining_hours')
@@ -39,7 +39,10 @@ class SaleOrderLine(models.Model):
                     elif is_day:
                         remaining_days = company.project_time_mode_id._compute_quantity(line.remaining_hours, encoding_uom, round=False)
                         remaining_time = f' ({remaining_days:.02f} {unit_label})'
-                    name = f'{line.display_name}{remaining_time}'
+                    if self.env.context.get('formatted_display_name'):
+                        name = f'{line.display_name} --{remaining_time}--'
+                    else:
+                        name = f'{line.display_name}{remaining_time}'
                     line.display_name = name
 
     @api.depends('product_id.service_policy')
@@ -70,11 +73,15 @@ class SaleOrderLine(models.Model):
     @api.depends('analytic_line_ids.project_id', 'project_id.pricing_type')
     def _compute_qty_delivered(self):
         super()._compute_qty_delivered()
+
+    def _prepare_qty_delivered(self):
+        delivered_qties = super()._prepare_qty_delivered()
         lines_by_timesheet = self.filtered(lambda sol: sol.qty_delivered_method == 'timesheet')
         domain = lines_by_timesheet._timesheet_compute_delivered_quantity_domain()
         mapping = lines_by_timesheet.sudo()._get_delivered_quantity_by_analytic(domain)
         for line in lines_by_timesheet:
-            line.qty_delivered = mapping.get(line.id or line._origin.id, 0.0)
+            delivered_qties[line] = mapping.get(line.id or line._origin.id, 0.0)
+        return delivered_qties
 
     def _timesheet_compute_delivered_quantity_domain(self):
         """ Hook for validated timesheet in addionnal module """

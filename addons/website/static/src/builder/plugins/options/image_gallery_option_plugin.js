@@ -10,6 +10,16 @@ import { SNIPPET_SPECIFIC, SNIPPET_SPECIFIC_END } from "@html_builder/utils/opti
 import { uniqueId } from "@web/core/utils/functions";
 import { BaseOptionComponent } from "@html_builder/core/utils";
 import { forwardToThumbnail } from "@html_builder/utils/utils_css";
+import { ClassAction } from "@html_builder/core/core_builder_action_plugin";
+
+/**
+ * @typedef { Object } ImageGalleryOptionShared
+ * @property { ImageGalleryOption['getColumns'] } getColumns
+ * @property { ImageGalleryOption['getMode'] } getMode
+ * @property { ImageGalleryOption['processImage'] } processImage
+ * @property { ImageGalleryOption['restoreSelection'] } restoreSelection
+ * @property { ImageGalleryOption['setImages'] } setImages
+ */
 
 export class ImageGalleryImagesOption extends BaseOptionComponent {
     static template = "website.ImageGalleryImagesOption";
@@ -28,6 +38,7 @@ class ImageGalleryOption extends Plugin {
         "imagePostProcess",
     ];
     static shared = ["processImages", "getMode", "setImages", "restoreSelection", "getColumns"];
+    /** @type {import("plugins").WebsiteResources} */
     resources = {
         builder_options: [
             withSequence(SNIPPET_SPECIFIC, ImageGalleryImagesOption),
@@ -39,6 +50,7 @@ class ImageGalleryOption extends Plugin {
             SetImageGalleryLayoutAction,
             SetImageGalleryColumnsAction,
             SetCarouselSpeedAction,
+            IndicatorsStyleClassAction,
         },
         system_classes: ["o_empty_gallery_alert"],
         get_gallery_items_handlers: this.getGalleryItems.bind(this),
@@ -521,6 +533,25 @@ export class SetCarouselSpeedAction extends BuilderAction {
     }
     getValue({ editingElement }) {
         return editingElement.dataset.bsInterval / 1000;
+    }
+}
+
+export class IndicatorsStyleClassAction extends ClassAction {
+    static id = "indicatorsStyle";
+    apply({ editingElement, params: { mainParam: className } }) {
+        super.apply(...arguments);
+        if (editingElement.matches(".s_image_gallery_indicators_outline")) {
+            // Remove the outline helper when the chosen indicator style no
+            // longer offers that option.
+            if (
+                ![
+                    "s_image_gallery_indicators_squared",
+                    "s_image_gallery_indicators_rounded",
+                ].includes(className)
+            ) {
+                editingElement.classList.remove("s_image_gallery_indicators_outline");
+            }
+        }
     }
 }
 

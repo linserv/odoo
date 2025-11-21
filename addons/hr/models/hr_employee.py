@@ -1172,6 +1172,13 @@ class HrEmployee(models.Model):
         self.flush_recordset(field_names)
         public = self.env['hr.employee.public'].browse(self._ids)
         public.fetch(field_names)
+        # make sure all related fields from employee are in cache
+        for field_name in field_names:
+            public_field = self.env['hr.employee.public']._fields[field_name]
+            private_field = self.env['hr.employee']._fields[field_name]
+            if (public_field.related and public_field.related_field.model_name == 'hr.employee'
+                    or private_field.inherited and private_field.inherited_field.model_name == 'hr.version'):
+                public.mapped(field_name)
         self._copy_cache_from(public, field_names)
 
     def _check_access(self, operation):
@@ -1304,10 +1311,16 @@ We can redirect you to the public employee list."""
         """
         if self.browse().has_access('read') or bypass_access:
             return super()._search(domain, offset, limit, order, bypass_access=bypass_access, **kwargs)
+        domain = Domain(domain)
+        # HACK Some fields are inherited from the `current_version_id` and may have been already
+        # optimized, showing current_version_id in the domain, but public employee does not have
+        # that field and may have fields directly on the model, just change the condition to `id` in
+        # that case.
+        domain = domain.map_conditions(lambda cond: Domain('id', cond.operator, cond.value) if cond.field_expr == 'current_version_id' else cond)
         try:
             ids = self.env['hr.employee.public']._search(domain, offset, limit, order, **kwargs)
-        except ValueError:
-            raise AccessError(_('You do not have access to this document.'))
+        except ValueError as e:
+            raise AccessError(self.env._('You do not have access to this document.')) from e
         # the result is expected from this table, so we should link tables
         return super(HrEmployee, self.sudo())._search([('id', 'in', ids)], order=order)
 

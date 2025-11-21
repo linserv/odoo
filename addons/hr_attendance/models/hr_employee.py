@@ -13,38 +13,38 @@ class HrEmployee(models.Model):
         'res.users', store=True, readonly=False,
         string="Attendance Approver",
         domain="[('share', '=', False), ('company_ids', 'in', company_id)]",
-        groups="hr_attendance.group_hr_attendance_officer",
+        groups="hr_attendance.group_hr_attendance_own",
         help="The user set in Attendance will access the attendance of the employee through the dedicated app and will be able to edit them.")
     attendance_ids = fields.One2many(
-        'hr.attendance', 'employee_id', groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
+        'hr.attendance', 'employee_id', groups="hr_attendance.group_hr_attendance_own,hr.group_hr_user")
     last_attendance_id = fields.Many2one(
         'hr.attendance', compute='_compute_last_attendance_id', store=True,
-        groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
+        groups="hr_attendance.group_hr_attendance_own,hr.group_hr_user")
     last_check_in = fields.Datetime(
         related='last_attendance_id.check_in', store=True,
-        groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user", tracking=False)
+        groups="hr_attendance.group_hr_attendance_own,hr.group_hr_user", tracking=False)
     last_check_out = fields.Datetime(
         related='last_attendance_id.check_out', store=True,
-        groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user", tracking=False)
+        groups="hr_attendance.group_hr_attendance_own,hr.group_hr_user", tracking=False)
     attendance_state = fields.Selection(
         string="Attendance Status", compute='_compute_attendance_state',
         selection=[('checked_out', "Checked out"), ('checked_in', "Checked in")],
-        groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
+        groups="hr_attendance.group_hr_attendance_own,hr.group_hr_user")
     hours_last_month = fields.Float(compute='_compute_hours_last_month')
     hours_last_month_overtime = fields.Float(compute='_compute_hours_last_month')
     hours_today = fields.Float(
         compute='_compute_hours_today',
-        groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
+        groups="hr_attendance.group_hr_attendance_own,hr.group_hr_user")
     hours_previously_today = fields.Float(
         compute='_compute_hours_today',
-        groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
+        groups="hr_attendance.group_hr_attendance_own,hr.group_hr_user")
     last_attendance_worked_hours = fields.Float(
         compute='_compute_hours_today',
-        groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
+        groups="hr_attendance.group_hr_attendance_own,hr.group_hr_user")
     hours_last_month_display = fields.Char(
         compute='_compute_hours_last_month', groups="hr.group_hr_user")
     overtime_ids = fields.One2many(
-        'hr.attendance.overtime.line', 'employee_id', groups="hr_attendance.group_hr_attendance_officer,hr.group_hr_user")
+        'hr.attendance.overtime.line', 'employee_id', groups="hr_attendance.group_hr_attendance_own,hr.group_hr_user")
     total_overtime = fields.Float(compute='_compute_total_overtime', compute_sudo=True)
     display_extra_hours = fields.Boolean(related='company_id.hr_attendance_display_overtime')
 
@@ -225,19 +225,19 @@ class HrEmployee(models.Model):
         """
         super()._compute_presence_state()
         employees = self.filtered(lambda e: e.hr_presence_state != "present")
-        employee_to_check_working = self.filtered(lambda e: e.attendance_state == "checked_out"
+        employee_to_check_working = self.filtered(lambda e: e.sudo().attendance_state == "checked_out"
                                                             and e.hr_presence_state == "out_of_working_hour")
         working_now_list = employee_to_check_working._get_employee_working_now()
         for employee in employees:
-            if employee.attendance_state == "checked_in" or not employee.user_id:
-                if not employee.user_id and not employee.is_in_contract:
+            if employee.sudo().attendance_state == "checked_in" or not employee.user_id:
+                if not employee.user_id and not employee.sudo().is_in_contract:
                     employee.hr_presence_state = "out_of_working_hour"
                 else:
                     employee.hr_presence_state = "present"
-            elif employee.attendance_state == "checked_out" and \
+            elif employee.sudo().attendance_state == "checked_out" and \
                  employee.hr_presence_state == "out_of_working_hour" and \
                  employee.id in working_now_list and \
-                 employee.is_in_contract:
+                 employee.sudo().is_in_contract:
                 employee.hr_presence_state = "absent"
 
     def _compute_presence_icon(self):

@@ -33,7 +33,7 @@ class AccountAccount(models.Model):
 
     @api.constrains('account_type')
     def _check_account_type_unique_current_year_earning(self):
-        result = self._read_group(
+        result = self.with_context(active_test=False)._read_group(
             domain=[('account_type', '=', 'equity_unaffected')],
             groupby=['company_ids'],
             aggregates=['id:recordset'],
@@ -428,7 +428,7 @@ class AccountAccount(models.Model):
             for root in roots
         )
 
-    def _search_panel_domain_image(self, field_name, domain, set_count=False, limit=False):
+    def _search_panel_domain_image(self, field_name, domain, set_count=False, limit=None):
         if field_name != 'root_id' or set_count:
             return super()._search_panel_domain_image(field_name, domain, set_count, limit)
 

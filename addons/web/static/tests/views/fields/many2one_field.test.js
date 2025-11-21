@@ -2633,6 +2633,7 @@ test("failing quick create on a many2one because ValidationError", async () => {
 
 test("failing quick create on a many2one", async () => {
     expect.assertions(3);
+    expect.errors(1);
     Product._views = {
         form: '<form><field name="name" /></form>',
     };
@@ -2648,7 +2649,6 @@ test("failing quick create on a many2one", async () => {
 
     await contains(".o_field_widget[name='product_id'] input").edit("abcd", { confirm: false });
     await runAllTimers();
-    expect.errors(1);
     await contains(".o_field_widget[name='product_id'] .o_m2o_dropdown_option_create").click();
     await animationFrame(); // wait for the error service
     expect.verifyErrors(["RPC_ERROR"]);
@@ -4017,7 +4017,7 @@ test("many2one search with formatted name", async () => {
     expect(
         ".o_field_many2one[name='trululu'] .dropdown-menu a.dropdown-item:eq(0)"
     ).toHaveInnerHTML(
-        `Test: <b>Paul</b> <span class="text-muted">Eric</span> <span class="o_tag position-relative d-inline-flex align-items-center mw-100 o_badge badge rounded-pill lh-1 o_tag_color_0">good guy</span><br/><span style="margin-left: 2em"></span>More text`
+        `Test: <b>Paul</b> <span class="text-muted">Eric</span> <span class="o_tag position-relative d-inline-flex align-items-center align-baseline mw-100 o_badge badge rounded-pill lh-1 o_tag_color_0">good guy</span><br/><span style="margin-left: 2em"></span>More text`
     );
     await contains(
         ".o_field_many2one[name='trululu'] .dropdown-menu a.dropdown-item:eq(0)"

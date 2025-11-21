@@ -632,13 +632,13 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'FloatingOrderTour', login="pos_user")
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'ProductScreenTour', login="pos_user")
         self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'PaymentScreenTour', login="pos_user")
-        self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'ReceiptScreenTour', login="pos_user")
+        self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'FeedbackScreenTour', login="pos_user")
 
         for order in self.env['pos.order'].search([]):
             self.assertEqual(order.state, 'paid', "Validated order has payment of " + str(order.amount_paid) + " and total of " + str(order.amount_total))
 
-        # check if email from ReceiptScreenTour is properly sent
-        email_count = self.env['mail.mail'].search_count([('email_to', '=', 'test@receiptscreen.com')])
+        # check if email from FeedbackScreenTour is properly sent
+        email_count = self.env['mail.mail'].search_count([('email_to', '=', 'test@feedbackscreen.com')])
         self.assertEqual(email_count, 1)
 
     @skip('Temporary to fast merge new valuation')
@@ -1055,7 +1055,7 @@ class TestUi(TestPointOfSaleHttpCommon):
         })
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
-        self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'ReceiptScreenDiscountWithPricelistTour', login="pos_user")
+        self.start_tour("/pos/ui/%d" % self.main_pos_config.id, 'FeedbackScreenDiscountWithPricelistTour', login="pos_user")
 
     def test_07_product_combo(self):
         self.env['decimal.precision'].search([('name', '=', 'Product Price')]).digits = 4
@@ -2690,7 +2690,7 @@ class TestUi(TestPointOfSaleHttpCommon):
             variant.write({'barcode': f'cherry_{index}'})
 
         @api.model
-        def load_product_from_pos_patch(self, config_id, domain, offset=0, limit=0):
+        def load_product_from_pos_patch(self, config_id, domain, offset=0, limit=None):
             load_product_from_pos_stats['count'] += 1
             result = super(product_template, self).load_product_from_pos(config_id, domain, offset, limit)
             lowered_name = result['product.template'][0]['display_name'].lower()
@@ -3313,6 +3313,24 @@ class TestUi(TestPointOfSaleHttpCommon):
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('test_convert_orderlines_to_combo', login="pos_user")
+
+    def test_sync_from_ui_one_by_one(self):
+        """
+        Sync from UI is now syncing orders one by one.
+        sync_from_ui should be called 6 times in this tour (6 orders created).
+        """
+
+        pos_order = self.env.registry.models['pos.order']
+        sync_counter = {'count': 0}
+
+        @api.model
+        def sync_from_ui_patch(self, orders):
+            sync_counter['count'] += 1
+            return super(pos_order, self).sync_from_ui(orders)
+
+        with patch.object(pos_order, "sync_from_ui", sync_from_ui_patch):
+            self.start_pos_tour("test_sync_from_ui_one_by_one", login="pos_user")
+            self.assertEqual(sync_counter['count'], 6)
 
 
 # This class just runs the same tests as above but with mobile emulation

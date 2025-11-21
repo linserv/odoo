@@ -330,15 +330,18 @@ class SaleOrder(models.Model):
     #=== COMPUTE METHODS ===#
 
     @api.depends('partner_id')
-    @api.depends_context('sale_show_partner_name')
+    @api.depends_context('sale_show_partner_name', 'formatted_display_name')
     def _compute_display_name(self):
         if not self.env.context.get('sale_show_partner_name'):
             return super()._compute_display_name()
         for order in self:
-            name = order.name
             if order.partner_id.name:
-                name = f'{name} - {order.partner_id.name}'
-            order.display_name = name
+                if self.env.context.get('formatted_display_name'):
+                    order.display_name = f"{order.name} \t --{order.partner_id.name}--"
+                else:
+                    order.display_name = f'{order.name} - {order.partner_id.name}'
+            else:
+                order.display_name = order.name
 
     @api.depends('order_line.product_id')
     def _compute_has_archived_products(self):
@@ -1256,7 +1259,7 @@ class SaleOrder(models.Model):
             # Send the email synchronously.
             self.with_context(force_send=True).message_post_with_source(
                 mail_template,
-                email_layout_xmlid='mail.mail_notification_layout_with_responsible_signature',
+                email_layout_xmlid='mail.mail_notification_light',
                 subtype_xmlid='mail.mt_comment',
             )
 
@@ -2190,6 +2193,15 @@ class SaleOrder(models.Model):
                 'product_uom_qty': quantity,
                 'sequence': self._get_new_line_sequence(child_field, section_id),
             })
+        else:  # quantity of 0, no line to update, return defaut pricelist price
+            return self.pricelist_id._get_product_price(
+                product=self.env['product.product'].browse(product_id),
+                quantity=1.0,
+                currency=self.currency_id,
+                date=self.date_order,
+                **kwargs,
+            )
+
         return sol._get_discounted_price()
 
     # === Product Documents === #

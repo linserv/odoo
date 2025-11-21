@@ -26,6 +26,12 @@ import { withSequence } from "@html_editor/utils/resource";
 import { getHtmlStyle } from "@html_editor/utils/formatting";
 import { isVisible } from "@html_builder/utils/utils";
 
+/**
+ * @typedef {(() => void)[]} on_mobile_preview_clicked
+ * @typedef {(() => void)[]} trigger_dom_updated
+ * @typedef {{ Component: Component; props: object; }[]} lower_panel_entries
+ */
+
 export class Builder extends Component {
     static template = "html_builder.Builder";
     static components = { BlockTab, CustomizeTab };
@@ -84,6 +90,7 @@ export class Builder extends Component {
 
         // TODO: maybe do a different config for the translate mode and the
         // "regular" mode.
+        /** @type {Editor} */
         this.editor = new Editor(
             {
                 Plugins: this.props.Plugins,
@@ -117,6 +124,7 @@ export class Builder extends Component {
                     await this.props.closeEditor?.();
                 },
                 installSnippetModule: (snippet) => this.props.installSnippetModule?.(snippet),
+                /** @type {import("plugins").BuilderResources} */
                 resources: {
                     trigger_dom_updated: () => {
                         this.triggerDomUpdated();
