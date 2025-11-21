@@ -23,6 +23,7 @@ _logger = logging.getLogger(__name__)
 
 _ref_company_registry = {
     'jp': '7000012050002',
+    'fi': '8763054-9',
 }
 
 
@@ -358,7 +359,7 @@ class ResPartner(models.Model):
             country_codes = allowed_companies.mapped('account_fiscal_country_id.code')
             if record.country_code:
                 country_codes.append(record.country_code)
-            record.fiscal_country_codes = ",".join(country_codes)
+            record.fiscal_country_codes = ",".join(set(country_codes))
 
     @property
     def _order(self):
