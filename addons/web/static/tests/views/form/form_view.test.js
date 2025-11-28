@@ -509,6 +509,16 @@ test(`button box rendering on big screen`, async () => {
     }
 });
 
+test(`button box rendering invisible`, async () => {
+    await mountView({
+        resModel: "partner",
+        type: "form",
+        arch: `<form><div name="button_box" invisible="1"><button id="btn1">MyButton</button></div></form>`,
+        resId: 2,
+    });
+    expect(`.o_control_panel .o_control_panel_actions`).toHaveInnerHTML("");
+});
+
 test(`form view gets size class on small and big screens`, async () => {
     let uiSize = SIZES.MD;
     const bus = new EventBus();
@@ -724,7 +734,7 @@ test(`form with o2m having a many2many fields using the many2many_tags widget al
                     <field name="partner_ids">
                         <list>
                             <field name="name"/>
-                            <field name="type_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
+                            <field name="type_ids" widget="many2many_tags" options="{'color_field': 'color', 'on_tag_click': 'edit_color'}"/>
                         </list>
                     </field>
                 </form>

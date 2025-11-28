@@ -368,9 +368,6 @@ class PosConfig(models.Model):
     def get_kiosk_url(self):
         return self.self_ordering_url
 
-    def _supported_kiosk_payment_terminal(self):
-        return ['adyen', 'razorpay', 'stripe', 'pine_labs']
-
     def has_valid_self_payment_method(self):
         """ Checks if the POS config has a valid payment method (terminal or online). """
         self.ensure_one()
@@ -401,7 +398,14 @@ class PosConfig(models.Model):
             'iface_splitbill': True,
             'module_pos_restaurant': True,
             'self_ordering_mode': 'kiosk',
+            'self_ordering_pay_after': 'each',
         })
+
+    def _load_restaurant_demo_data(self, with_demo_data=True):
+        self.ensure_one()
+        super()._load_restaurant_demo_data(with_demo_data)
+        if with_demo_data:
+            self.self_ordering_mode = 'mobile'
 
     def _generate_single_qr_code__(self, url):  # noqa: PLW3201
         qr = qrcode.QRCode(

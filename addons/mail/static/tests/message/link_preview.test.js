@@ -179,6 +179,7 @@ test("Remove link preview Gif", async () => {
     await openDiscuss(channelId);
     await click(".o-mail-LinkPreviewImage button[aria-label='Remove']");
     await contains("p", { text: "Do you really want to delete this preview?" });
+    await contains(".modal .o-mail-LinkPreviewImage button[aria-label='Remove']", { count: 0 });
     await click(".modal-footer button", { text: "Delete" });
     await contains(".o-mail-LinkPreviewImage", { count: 0 });
 });
@@ -203,6 +204,7 @@ test("Remove link preview card", async () => {
     await openDiscuss(channelId);
     await click(".o-mail-LinkPreviewCard button[aria-label='Remove']");
     await contains("p", { text: "Do you really want to delete this preview?" });
+    await contains(".modal .o-mail-LinkPreviewCard button[aria-label='Remove']", { count: 0 });
     await click(".modal-footer button", { text: "Delete" });
     await contains(".o-mail-LinkPreviewCard", { count: 0 });
 });
@@ -228,6 +230,7 @@ test("Remove link preview video", async () => {
     await openDiscuss(channelId);
     await click(".o-mail-LinkPreviewVideo button[aria-label='Remove']");
     await contains("p", { text: "Do you really want to delete this preview?" });
+    await contains(".modal .o-mail-LinkPreviewVideo button[aria-label='Remove']", { count: 0 });
     await click(".modal-footer button", { text: "Delete" });
     await contains(".o-mail-LinkPreviewVideo", { count: 0 });
 });
@@ -251,6 +254,7 @@ test("Remove link preview image", async () => {
     await openDiscuss(channelId);
     await click(".o-mail-LinkPreviewImage button[aria-label='Remove']");
     await contains("p", { text: "Do you really want to delete this preview?" });
+    await contains(".modal .o-mail-LinkPreviewImage button[aria-label='Remove']", { count: 0 });
     await click(".modal-footer button", { text: "Delete" });
     await contains(".o-mail-LinkPreviewImage", { count: 0 });
 });
@@ -390,7 +394,7 @@ test("Delete all link previews at once", async () => {
 test("link preview request is only made when message contains URL", async () => {
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({ name: "Sales" });
-    onRpcBefore("/mail/link_preview$", () => expect.step("/mail/link_preview"));
+    onRpcBefore("/mail/link_preview", () => expect.step("/mail/link_preview"));
     await start();
     await openDiscuss(channelId);
     await insertText(".o-mail-Composer-input", "Hello, this message does not contain any link");

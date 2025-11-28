@@ -10,26 +10,28 @@ from odoo.addons.iot_drivers.interface import Interface
 from odoo.addons.iot_drivers.tools import helpers, system
 from odoo.addons.iot_drivers.tools.system import IS_WINDOWS
 from odoo.tools.misc import file_path
-from odoo.addons.iot_drivers.iot_handlers.drivers.ctypes_terminal_driver import import_ctypes_library
+from odoo.addons.iot_drivers.iot_handlers.drivers.ctypes_terminal_driver import CTYPES_BUFFER_SIZE, import_ctypes_library
 
 
 _logger = logging.getLogger(__name__)
 
-LIB_PATH = file_path('iot_drivers/iot_handlers/drivers')
-DOWNLOAD_URL = 'https://nightly.odoo.com/master/posbox/iotbox/six-timapiv23_09_l.zip'
+if IS_WINDOWS:
+    DOWNLOAD_URL = 'https://nightly.odoo.com/master/posbox/iotbox/six-timapiv25_10_w.zip'
+else:
+    DOWNLOAD_URL = 'https://nightly.odoo.com/master/posbox/iotbox/six-timapiv25_10_l.zip'
 
 # Download and unzip timapi library, overwriting the existing one
+LIB_PATH = file_path('iot_drivers/iot_handlers/drivers')
 TIMAPI_ZIP_PATH = Path(LIB_PATH, 'tim.zip')
 helpers.download_from_url(DOWNLOAD_URL, TIMAPI_ZIP_PATH)
 helpers.unzip_file(TIMAPI_ZIP_PATH, Path(LIB_PATH, 'tim'))
 
 # Make TIM SDK dependency libraries visible for the linker
 if IS_WINDOWS:
-    LIB_PATH = file_path('iot_drivers/iot_handlers/drivers')
     os.environ['PATH'] = file_path('iot_drivers/iot_handlers/drivers/tim') + os.pathsep + os.environ['PATH']
 else:
     TIMAPI_DEPENDANCY_LIB = 'libtimapi.so.3'
-    TIMAPI_DEPENDANCY_LIB_V = f'{TIMAPI_DEPENDANCY_LIB}.31.1-2272'
+    TIMAPI_DEPENDANCY_LIB_V = f'{TIMAPI_DEPENDANCY_LIB}.38.0-5308'
     DEP_LIB_PATH = file_path('iot_drivers/iot_handlers/drivers/tim')
     USR_LIB_PATH = '/usr/lib'
     try:
@@ -43,7 +45,8 @@ LIB_NAME = 'libsix_odoo_w.dll' if IS_WINDOWS else 'libsix_odoo_l.so'
 TIMAPI = import_ctypes_library('tim', LIB_NAME)
 
 # --- Setup library prototypes ---
-# void *six_initialize_manager(void);
+# void *six_initialize_manager(int buffer_size) {
+TIMAPI.six_initialize_manager.argtypes = [ctypes.c_int]
 TIMAPI.six_initialize_manager.restype = ctypes.c_void_p
 
 # int six_setup_terminal_settings(t_terminal_manager *terminal_manager, char *terminal_id);
@@ -61,7 +64,8 @@ class TIMInterface(Interface):
         super().__init__()
 
         try:
-            self.manager = TIMAPI.six_initialize_manager()
+            buffer_size = ctypes.c_int(CTYPES_BUFFER_SIZE)
+            self.manager = TIMAPI.six_initialize_manager(buffer_size)
         except OSError:
             _logger.exception("Failed to initalize TIM manager")
         if not self.manager:
@@ -89,7 +93,7 @@ class TIMInterface(Interface):
         # Check if the terminal is online and responsive
         try:
             if self.tid and TIMAPI.six_terminal_connected(self.manager):
-                devices[self.tid] = self.manager
+                devices[self.tid] = ctypes.cast(self.manager, ctypes.c_void_p)
         except OSError:
             _logger.exception("Failed to check if the Six terminal is connected")
 

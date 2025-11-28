@@ -993,7 +993,7 @@ class TestMailAPIPerformance(BaseMailPerformance):
     @warmup
     def test_message_get_suggested_recipients(self):
         record = self.test_records_recipients[0].with_env(self.env).with_prefetch()
-        with self.assertQueryCount(employee=22):  # tm: 16
+        with self.assertQueryCount(employee=23):  # tm: 16
             recipients = record._message_get_suggested_recipients(no_create=False)
         new_partner = self.env['res.partner'].search([('email_normalized', '=', 'only.email.1@test.example.com')])
         self.assertEqual(len(new_partner), 1)
@@ -1008,7 +1008,7 @@ class TestMailAPIPerformance(BaseMailPerformance):
     @warmup
     def test_message_get_suggested_recipients_batch(self):
         records = self.test_records_recipients.with_env(self.env)
-        with self.assertQueryCount(employee=31):  # tm: 25
+        with self.assertQueryCount(employee=32):  # tm: 25
             _recipients = records._message_get_suggested_recipients_batch(no_create=False)
 
     @mute_logger('odoo.tests', 'odoo.addons.mail.models.mail_mail', 'odoo.models.unlink')
@@ -1434,7 +1434,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
         """
         messages_all = self.messages_all.with_env(self.env)
 
-        with self.assertQueryCount(employee=24):  # tm 23
+        with self.assertQueryCount(employee=26):  # tm 25
             res = Store().add(messages_all).get_result()
 
         self.assertEqual(len(res["mail.message"]), 2 * 2)
@@ -1447,7 +1447,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
     def test_message_to_store_single(self):
         message = self.messages_all[0].with_env(self.env)
 
-        with self.assertQueryCount(employee=24):  # tm 23
+        with self.assertQueryCount(employee=26):  # tm 25
             res = Store().add(message).get_result()
 
         self.assertEqual(len(res["mail.message"]), 1)
@@ -1475,7 +1475,7 @@ class TestMessageToStorePerformance(BaseMailPerformance):
         self.env.flush_all()
         self.env.invalidate_all()
 
-        with self.assertQueryCount(employee=13):  # tm: 12
+        with self.assertQueryCount(employee=15):  # tm: 14
             res = Store().add(messages).get_result()
             self.assertEqual(len(res["mail.message"]), 6)
 

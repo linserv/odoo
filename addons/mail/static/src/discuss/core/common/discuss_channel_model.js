@@ -1,7 +1,7 @@
 import { fields, Record } from "@mail/model/export";
 import { Deferred } from "@web/core/utils/concurrency";
 import { rpc } from "@web/core/network/rpc";
-import { effectWithCleanup } from "@mail/utils/common/misc";
+import { compareDatetime, effectWithCleanup } from "@mail/utils/common/misc";
 
 export class DiscussChannel extends Record {
     static _name = "discuss.channel";
@@ -70,9 +70,18 @@ export class DiscussChannel extends Record {
         return def;
     }
 
+    /** Equivalent to DiscussChannel._allow_invite_by_email */
+    get allow_invite_by_email() {
+        return (
+            this.channel_type === "group" ||
+            (this.channel_type === "channel" && !this.group_public_id)
+        );
+    }
     get areAllMembersLoaded() {
         return this.member_count === this.channel_member_ids.length;
     }
+    /** @type {"video_full_screen"|undefined} */
+    default_display_mode;
     channel_member_ids = fields.Many("discuss.channel.member", {
         inverse: "channel_id",
         onDelete: (r) => r?.delete(),
@@ -88,10 +97,41 @@ export class DiscussChannel extends Record {
     }
     /** @type {"not_fetched"|"pending"|"fetched"} */
     fetchMembersState = "not_fetched";
-    hasOtherMembersTyping = fields.Attr(false, {
+    /** @type {"not_fetched"|"fetching"|"fetched"} */
+    fetchChannelInfoState = "not_fetched";
+    get memberListTypes() {
+        return ["channel", "group"];
+    }
+    get hasMemberList() {
+        return this.memberListTypes.includes(this.channel_type);
+    }
+    last_interest_dt = fields.Datetime();
+    lastInterestDt = fields.Datetime({
         /** @this {import("models").Thread} */
         compute() {
+            return compareDatetime(this.self_member_id?.last_interest_dt, this.last_interest_dt) > 0
+                ? this.self_member_id?.last_interest_dt
+                : this.last_interest_dt;
+        },
+    });
+    onlineMembers = fields.Many("discuss.channel.member", {
+        /** @this {import("models").DiscussChannel} */
+        compute() {
+            return this.channel_member_ids
+                .filter((member) => member.isOnline)
+                .sort((m1, m2) => this.store.sortMembers(m1, m2)); // FIXME: sort are prone to infinite loop (see test "Display livechat custom name in typing status")
+        },
+    });
+    hasOtherMembersTyping = fields.Attr(false, {
+        /** @this {import("models").DiscussChannel} */
+        compute() {
             return this.otherTypingMembers.length > 0;
+        },
+    });
+    hasSeenFeature = fields.Attr(false, {
+        /** @this {import("models").DiscussChannel} */
+        compute() {
+            return this.store.channel_types_with_seen_infos.includes(this.channel_type);
         },
     });
     /** @type {number} */
@@ -101,6 +141,45 @@ export class DiscussChannel extends Record {
             if (!busService.isActive && !this.isTransient) {
                 busService.start();
             }
+        },
+    });
+    lastMessageSeenByAllId = fields.Attr(undefined, {
+        /** @this {import("models").DiscussChannel} */
+        compute() {
+            if (!this.hasSeenFeature) {
+                return;
+            }
+            return this.channel_member_ids.reduce((lastMessageSeenByAllId, member) => {
+                if (member.notEq(this.self_member_id) && member.seen_message_id) {
+                    return lastMessageSeenByAllId
+                        ? Math.min(lastMessageSeenByAllId, member.seen_message_id.id)
+                        : member.seen_message_id.id;
+                } else {
+                    return lastMessageSeenByAllId;
+                }
+            }, undefined);
+        },
+    });
+    lastSelfMessageSeenByEveryone = fields.One("mail.message", {
+        /** @this {import("models").DiscussChannel} */
+        compute() {
+            if (!this.lastMessageSeenByAllId) {
+                return false;
+            }
+            let res;
+            // starts from most recent persistent messages to find early
+            for (let i = this.persistentMessages.length - 1; i >= 0; i--) {
+                const message = this.persistentMessages[i];
+                if (!message.isSelfAuthored) {
+                    continue;
+                }
+                if (message.id > this.lastMessageSeenByAllId) {
+                    continue;
+                }
+                res = message;
+                break;
+            }
+            return res;
         },
     });
     /**
@@ -125,9 +204,17 @@ export class DiscussChannel extends Record {
         return this.chatChannelTypes.includes(this.channel?.channel_type);
     }
     otherTypingMembers = fields.Many("discuss.channel.member", {
-        /** @this {import("models").Thread} */
+        /** @this {import("models").DiscussChannel} */
         compute() {
             return this.typingMembers.filter((member) => !member.persona?.eq(this.store.self));
+        },
+    });
+    offlineMembers = fields.Many("discuss.channel.member", {
+        /** @this {import("models").DiscussChannel} */
+        compute() {
+            return this._computeOfflineMembers().sort(
+                (m1, m2) => this.store.sortMembers(m1, m2) // FIXME: sort are prone to infinite loop (see test "Display livechat custom name in typing status")
+            );
         },
     });
     thread = fields.One("mail.thread", {
@@ -136,6 +223,17 @@ export class DiscussChannel extends Record {
         },
         inverse: "channel",
         onDelete: (r) => r?.delete(),
+    });
+    memberBusSubscription = fields.Attr(false, {
+        /** @this {import("models").Thread} */
+        compute() {
+            return (
+                this.self_member_id?.memberSince >= this.store.env.services.bus_service.startedAt
+            );
+        },
+        onUpdate() {
+            this.store.updateBusSubscription();
+        },
     });
     typingMembers = fields.Many("discuss.channel.member", { inverse: "channelAsTyping" });
     get unknownMembersCount() {
@@ -173,6 +271,11 @@ export class DiscussChannel extends Record {
      */
     openChannel() {
         return false;
+    }
+
+    /** @returns {import("models").ChannelMember[]} */
+    _computeOfflineMembers() {
+        return this.channel_member_ids.filter((member) => !member.isOnline);
     }
 }
 

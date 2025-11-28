@@ -1,7 +1,7 @@
 import { Thread } from "@mail/core/common/thread_model";
 import { fields } from "@mail/model/export";
 import { useSequential } from "@mail/utils/common/hooks";
-import { compareDatetime, nearestGreaterThanOrEqual } from "@mail/utils/common/misc";
+import { nearestGreaterThanOrEqual } from "@mail/utils/common/misc";
 import { _t } from "@web/core/l10n/translation";
 
 import { formatList } from "@web/core/l10n/utils";
@@ -38,21 +38,7 @@ const threadPatch = {
                 return this.correspondent?.persona?.country_id ?? this.country_id;
             },
         });
-        /** @type {"video_full_screen"|undefined} */
-        this.default_display_mode = undefined;
-        /** @type {Deferred<Thread|undefined>} */
-        this.fetchChannelInfoDeferred = undefined;
-        /** @type {"not_fetched"|"fetching"|"fetched"} */
-        this.fetchChannelInfoState = "not_fetched";
         this.group_ids = fields.Many("res.groups");
-        this.hasSeenFeature = fields.Attr(false, {
-            /** @this {import("models").Thread} */
-            compute() {
-                return this.store.channel_types_with_seen_infos.includes(
-                    this.channel?.channel_type
-                );
-            },
-        });
         this.firstUnreadMessage = fields.One("mail.message", {
             /** @this {import("models").Thread} */
             compute() {
@@ -77,105 +63,16 @@ const threadPatch = {
             inverse: "threadAsFirstUnread",
         });
         this.invited_member_ids = fields.Many("discuss.channel.member");
-        this.last_interest_dt = fields.Datetime();
-        this.lastInterestDt = fields.Datetime({
-            /** @this {import("models").Thread} */
-            compute() {
-                const selfMemberLastInterestDt = this.self_member_id?.last_interest_dt;
-                const lastInterestDt = this.last_interest_dt;
-                return compareDatetime(selfMemberLastInterestDt, lastInterestDt) > 0
-                    ? selfMemberLastInterestDt
-                    : lastInterestDt;
-            },
-        });
-        this.lastMessageSeenByAllId = fields.Attr(undefined, {
-            /** @this {import("models").Thread} */
-            compute() {
-                if (!this.hasSeenFeature) {
-                    return;
-                }
-                return this.channel?.channel_member_ids.reduce((lastMessageSeenByAllId, member) => {
-                    if (member.notEq(this.self_member_id) && member.seen_message_id) {
-                        return lastMessageSeenByAllId
-                            ? Math.min(lastMessageSeenByAllId, member.seen_message_id.id)
-                            : member.seen_message_id.id;
-                    } else {
-                        return lastMessageSeenByAllId;
-                    }
-                }, undefined);
-            },
-        });
-        this.lastSelfMessageSeenByEveryone = fields.One("mail.message", {
-            compute() {
-                if (!this.lastMessageSeenByAllId) {
-                    return false;
-                }
-                let res;
-                // starts from most recent persistent messages to find early
-                for (let i = this.persistentMessages.length - 1; i >= 0; i--) {
-                    const message = this.persistentMessages[i];
-                    if (!message.isSelfAuthored) {
-                        continue;
-                    }
-                    if (message.id > this.lastMessageSeenByAllId) {
-                        continue;
-                    }
-                    res = message;
-                    break;
-                }
-                return res;
-            },
-        });
         this.markReadSequential = useSequential();
         this.markedAsUnread = false;
         this.markingAsRead = false;
         /** @type {string} name: only for channel. For generic thread, @see display_name */
         this.name = undefined;
         this.channel_name_member_ids = fields.Many("discuss.channel.member");
-        this.onlineMembers = fields.Many("discuss.channel.member", {
-            /** @this {import("models").Thread} */
-            compute() {
-                return this.channel?.channel_member_ids
-                    .filter((member) => member.isOnline)
-                    .sort((m1, m2) => this.store.sortMembers(m1, m2)); // FIXME: sort are prone to infinite loop (see test "Display livechat custom name in typing status")
-            },
-        });
-        this.offlineMembers = fields.Many("discuss.channel.member", {
-            compute() {
-                return this._computeOfflineMembers().sort(
-                    (m1, m2) => this.store.sortMembers(m1, m2) // FIXME: sort are prone to infinite loop (see test "Display livechat custom name in typing status")
-                );
-            },
-        });
         this.self_member_id = fields.One("discuss.channel.member", {
             inverse: "threadAsSelf",
         });
         this.scrollUnread = true;
-        // memberBusSubscription
-        this.toggleBusSubscription = fields.Attr(false, {
-            /** @this {import("models").Thread} */
-            compute() {
-                return (
-                    this.model === "discuss.channel" &&
-                    this.self_member_id?.memberSince >=
-                        this.store.env.services.bus_service.startedAt
-                );
-            },
-            onUpdate() {
-                this.store.updateBusSubscription();
-            },
-        });
-    },
-    /** @returns {import("models").ChannelMember[]} */
-    _computeOfflineMembers() {
-        return this.channel?.channel_member_ids.filter((member) => !member.isOnline);
-    },
-    /** Equivalent to DiscussChannel._allow_invite_by_email */
-    get allow_invite_by_email() {
-        return (
-            this.channel.channel_type === "group" ||
-            (this.channel.channel_type === "channel" && !this.group_public_id)
-        );
     },
     get avatarUrl() {
         if (this.channel?.channel_type === "channel" || this.channel?.channel_type === "group") {
@@ -266,12 +163,6 @@ const threadPatch = {
         } finally {
             this.isLoadingAttachments = false;
         }
-    },
-    get hasMemberList() {
-        return ["channel", "group"].includes(this.channel?.channel_type);
-    },
-    get hasSelfAsMember() {
-        return Boolean(this.self_member_id);
     },
     /** @override */
     get importantCounter() {

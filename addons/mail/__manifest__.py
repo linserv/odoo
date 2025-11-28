@@ -184,7 +184,6 @@ For more specific needs, you may also assign custom-defined actions
             'web_tour/static/src/tour_utils.js',
             'web/static/tests/legacy/helpers/cleanup.js',
             'web/static/tests/legacy/helpers/utils.js',
-            'web/static/tests/legacy/utils.js',
             'mail/static/tests/tours/discuss_channel_public_tour.js',
             'mail/static/tests/tours/discuss_channel_as_guest_tour.js',
             'mail/static/tests/tours/discuss_channel_call_action.js',
@@ -205,6 +204,9 @@ For more specific needs, you may also assign custom-defined actions
         ],
         'mail.assets_lamejs': [
             'mail/static/lib/lame/lame.js',
+        ],
+        "mail.assets_message_email": [
+            "web/static/lib/odoo_ui_icons/style.css",
         ],
         'mail.assets_public': [
             'web/static/lib/jquery/jquery.js',

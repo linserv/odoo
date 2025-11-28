@@ -293,6 +293,9 @@ class PurchaseOrder(models.Model):
 
     @api.depends('partner_id.name', 'partner_id.purchase_warn_msg', 'order_line.purchase_line_warn_msg')
     def _compute_purchase_warning_text(self):
+        if not self.env.user.has_group('purchase.group_warning_purchase'):
+            self.purchase_warning_text = ''
+            return
         for order in self:
             warnings = OrderedSet()
             if partner_msg := order.partner_id.purchase_warn_msg:
@@ -364,11 +367,7 @@ class PurchaseOrder(models.Model):
             return NotImplemented
         purchase_domain = Domain('state', '=', 'purchase') & Domain('date_planned', '<=', fields.Datetime.now())
         line_domain = Domain('order_id', 'any', purchase_domain) & Domain.custom(
-            to_sql=lambda model, alias, query: SQL(
-                "%s < %s",
-                model._field_to_sql(alias, 'qty_received', query),
-                model._field_to_sql(alias, 'product_qty', query),
-            )
+            to_sql=lambda table: SQL("%s < %s", table.qty_received, table.product_qty),
         )
         return Domain('order_line', 'any', line_domain)
 
@@ -482,8 +481,10 @@ class PurchaseOrder(models.Model):
             if self.env.context.get('is_reminder'):
                 access_opt['title'] = _('View')
             else:
-                access_opt['title'] = _('View Quotation') if self.state in ('draft', 'sent') else _('View Order')
-                access_opt['url'] = self.get_confirm_url()
+                access_opt.update(
+                    title=_("View Quotation") if self.state in ('draft', 'sent') else _("View Order"),
+                    url=self.get_base_url() + self.get_confirm_url(),
+                )
 
         return groups
 

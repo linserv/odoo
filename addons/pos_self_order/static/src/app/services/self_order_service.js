@@ -8,14 +8,12 @@ import { registry } from "@web/core/registry";
 import { cookie } from "@web/core/browser/cookie";
 import { formatDateTime, serializeDateTime } from "@web/core/l10n/dates";
 import { OrderReceipt } from "@point_of_sale/app/components/receipt/order_receipt";
-import { HWPrinter } from "@point_of_sale/app/utils/printer/hw_printer";
 import { renderToElement } from "@web/core/utils/render";
 import { TimeoutPopup } from "@pos_self_order/app/components/timeout_popup/timeout_popup";
 import { NetworkConnectionLostPopup } from "@pos_self_order/app/components/network_connectionLost_popup/network_connectionLost_popup";
 import { UnavailableProductsDialog } from "@pos_self_order/app/components/unavailable_product_dialog/unavailable_product_dialog";
 import {
     constructFullProductName,
-    deduceUrl,
     random5Chars,
     orderUsageUTCtoLocalUtil,
 } from "@point_of_sale/utils";
@@ -24,7 +22,10 @@ import {
     changesToOrder,
     filterChangeByCategories,
 } from "@point_of_sale/app/models/utils/order_change";
-import { EpsonPrinter } from "@point_of_sale/app/utils/printer/epson_printer";
+import {
+    EpsonPrinter,
+    EpsonServerDirectPrinter,
+} from "@point_of_sale/app/utils/printer/epson_printer";
 
 export class SelfOrder extends Reactive {
     constructor(...args) {
@@ -338,30 +339,39 @@ export class SelfOrder extends Reactive {
     }
 
     get currentOrder() {
-        const orderAvailable = (o) => {
-            const isDraft = o.state === "draft";
-            const isPaid = o.state === "paid";
-            const isZeroAmount = o.amount_total === 0;
-            const isKiosk = this.config.self_ordering_mode === "kiosk";
-
-            return (
-                isDraft ||
-                (isPaid && isZeroAmount && isKiosk) ||
-                (isPaid && this.router.activeSlot === "confirmation")
-            );
-        };
-
-        const order = this.models["pos.order"].getBy("uuid", this.selectedOrderUuid);
-        if (order && orderAvailable(order)) {
-            return order;
+        const currentOrder = this.getOrder();
+        if (currentOrder) {
+            return currentOrder;
         }
 
-        const existingOrder = this.models["pos.order"].find((o) => orderAvailable(o));
+        const existingOrder = this.models["pos.order"].find((o) => this.isOrderAvailable(o));
         if (existingOrder) {
             this.selectedOrderUuid = existingOrder.uuid;
             return existingOrder;
         }
         return this.createNewOrder();
+    }
+
+    isOrderAvailable(order) {
+        const isDraft = order.state === "draft";
+        const isPaid = order.state === "paid";
+        const isZeroAmount = order.amount_total === 0;
+        const isKiosk = this.config.self_ordering_mode === "kiosk";
+
+        return (
+            isDraft ||
+            (isPaid && isZeroAmount && isKiosk) ||
+            (isPaid && this.router.activeSlot === "confirmation")
+        );
+    }
+
+    getOrder() {
+        const order = this.models["pos.order"].getBy("uuid", this.selectedOrderUuid);
+        if (order && this.isOrderAvailable(order)) {
+            return order;
+        } else {
+            return null;
+        }
     }
 
     createNewOrder() {
@@ -429,10 +439,7 @@ export class SelfOrder extends Reactive {
         }
     }
 
-    initData() {
-        this.initProducts();
-        this._initLanguages();
-
+    initHardware() {
         for (const printerConfig of this.models["pos.printer"].getAll()) {
             const printer = this.createPrinter(printerConfig);
             if (printer) {
@@ -440,6 +447,23 @@ export class SelfOrder extends Reactive {
                 this.kitchenPrinters.push(printer);
             }
         }
+
+        if (this.config.self_ordering_mode === "kiosk") {
+            for (const pm of this.models["pos.payment.method"].getAll()) {
+                const PaymentInterface = registry
+                    .category("electronic_payment_interfaces")
+                    .get(pm.use_payment_terminal, null);
+                if (PaymentInterface) {
+                    pm.payment_terminal = new PaymentInterface(this, pm);
+                }
+            }
+        }
+    }
+
+    initData() {
+        this.initProducts();
+        this._initLanguages();
+        this.initHardware();
     }
 
     _initLanguages() {
@@ -458,9 +482,13 @@ export class SelfOrder extends Reactive {
     createPrinter(printer) {
         if (printer.printer_type === "epson_epos") {
             return new EpsonPrinter({ ip: printer.epson_printer_ip });
+        } else if (printer.printer_type === "epson_server_direct_print") {
+            return new EpsonServerDirectPrinter({
+                posConfigId: this.config.id,
+                posData: this.data,
+                busService: this.env.services.bus_service,
+            });
         }
-        const url = deduceUrl(printer.proxy_ip || "");
-        return new HWPrinter({ url });
     }
 
     async printKioskChanges(access_token = "") {
@@ -806,9 +834,7 @@ export class SelfOrder extends Reactive {
     }
 
     getProductPriceInfo(productTemplate, product) {
-        const pricelist = this.config.use_presets
-            ? this.currentOrder.preset_id?.pricelist_id
-            : this.config.pricelist_id;
+        const pricelist = this.currentOrder.preset_id?.pricelist_id || this.config.pricelist_id;
         const price = productTemplate.getPrice(pricelist, 1, 0, false, product);
 
         if (!product) {
@@ -818,9 +844,10 @@ export class SelfOrder extends Reactive {
         // Taxes computation.
         const order = this.currentOrder;
         const taxesData = product.getTaxDetails({
-            price_unit: price,
-            quantity: 1,
-            fiscalPosition: order?.fiscal_position_id || false,
+            overridedValues: {
+                price,
+                fiscalPosition: order?.fiscal_position_id || false,
+            },
         });
         return { pricelist_price: price, ...taxesData };
     }
@@ -859,6 +886,13 @@ export class SelfOrder extends Reactive {
 
     hasPresets() {
         return this.config.use_presets && this.models["pos.preset"].length > 1;
+    }
+
+    getPendingPaymentLine(terminalName) {
+        const currentPaymentLine = this.getOrder()?.getSelectedPaymentline();
+        return currentPaymentLine?.payment_method_id?.use_payment_terminal === terminalName
+            ? currentPaymentLine
+            : null;
     }
 
     get kioskBackgroundImageUrl() {

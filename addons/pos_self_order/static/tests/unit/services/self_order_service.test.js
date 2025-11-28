@@ -1,6 +1,8 @@
 import { test, describe, expect } from "@odoo/hoot";
 import { setupSelfPosEnv, getFilledSelfOrder, addComboProduct } from "../utils";
 import { mockDate } from "@odoo/hoot-mock";
+import { registry } from "@web/core/registry";
+import { BasePrinter } from "@point_of_sale/app/utils/printer/base_printer";
 import { definePosSelfModels } from "../data/generate_model_definitions";
 
 definePosSelfModels();
@@ -77,6 +79,32 @@ describe("initProducts", () => {
     });
 });
 
+describe("initHardware", () => {
+    test("adds kitchen printers", async () => {
+        const store = await setupSelfPosEnv();
+        store.kitchenPrinters = [];
+
+        store.initHardware();
+
+        expect(store.kitchenPrinters).toHaveLength(1);
+        expect(store.kitchenPrinters[0]).toBeInstanceOf(BasePrinter);
+    });
+
+    test("adds payment terminals", async () => {
+        const store = await setupSelfPosEnv();
+        const models = store.models;
+        const mockTerminalMethod = models["pos.payment.method"].create({
+            use_payment_terminal: "mock_terminal",
+        });
+        class MockTerminal {}
+        registry.category("electronic_payment_interfaces").add("mock_terminal", MockTerminal);
+
+        store.initHardware();
+
+        expect(mockTerminalMethod.payment_terminal).toBeInstanceOf(MockTerminal);
+    });
+});
+
 test("showComboSelectionPage", async () => {
     const store = await setupSelfPosEnv();
     const models = store.models;
@@ -141,6 +169,30 @@ test("verifyCart", async () => {
     }
 });
 
+test("getProductPriceInfo", async () => {
+    const store = await setupSelfPosEnv();
+    const order = await getFilledSelfOrder(store);
+
+    const models = store.models;
+    const product5 = models["product.template"].get(5);
+    const pricelist = models["product.pricelist"].get(3);
+    const inPreset = models["pos.preset"].get(1);
+    const outPreset = store.models["pos.preset"].get(2);
+
+    expect(store.getProductPriceInfo(product5).pricelist_price).toBe(100);
+
+    store.config.pricelist_id = pricelist;
+    expect(store.getProductPriceInfo(product5).pricelist_price).toBe(10);
+
+    order.setPreset(outPreset);
+    expect(store.getProductPriceInfo(product5).pricelist_price).toBe(10);
+
+    pricelist.item_ids[0].percent_price = 80;
+    inPreset.pricelist_id = pricelist;
+    order.setPreset(inPreset);
+    expect(store.getProductPriceInfo(product5).pricelist_price).toBe(20);
+});
+
 describe("addToCart", () => {
     test("simple flow", async () => {
         const store = await setupSelfPosEnv();
@@ -202,6 +254,25 @@ test("sendDraftOrderToServer", async () => {
     expect(store.currentOrder.id).toBe(syncOrder.id);
     // no other order should be created
     expect(store.models["pos.order"].length).toBe(1);
+});
+
+describe("setOrderPrices", () => {
+    test("Combo products order", async () => {
+        const store = await setupSelfPosEnv();
+        await addComboProduct(store);
+
+        store.currentOrder.setOrderPrices();
+        const [parentLine, comboLine1, comboLine2] = store.currentOrder.lines;
+
+        expect(parentLine.price_subtotal).toBe(0);
+        expect(parentLine.price_subtotal_incl).toBe(0);
+
+        expect(comboLine1.price_subtotal).toBe(200);
+        expect(comboLine1.price_subtotal_incl).toBe(250);
+
+        expect(comboLine2.price_subtotal).toBe(200);
+        expect(comboLine2.price_subtotal_incl).toBe(250);
+    });
 });
 
 describe("cancelOrder", () => {

@@ -1355,7 +1355,7 @@ test("clicking a button with dirty settings -- discard", async () => {
         arch: /* xml */ `
             <form js_class="base_settings">
                 <app string="CRM" name="crm">
-                    <field name="product_ids" widget="many2many_tags" options="{ 'color_field': 'color' }"/>
+                    <field name="product_ids" widget="many2many_tags" options="{ 'color_field': 'color', 'on_tag_click': 'edit_color' }"/>
                     <field name="bar" />
                     <field name="foo" />
                     <button type="object" name="mymethod" class="myBtn"/>
@@ -2070,7 +2070,7 @@ test("server actions are called with the correct context", async () => {
 
 test("BinaryField is correctly rendered in Settings form view", async () => {
     onRpc("/web/content", async (request) => {
-        const body = await request.text();
+        const body = await request.formData();
         expect(body).toBeInstanceOf(FormData);
         expect(body.get("field")).toBe("file", {
             message: "we should download the field document",

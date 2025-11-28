@@ -2,7 +2,7 @@
 
 from odoo.service.common import exp_version
 from odoo import http, _
-from odoo.http import request
+from odoo.http import content_disposition, request
 from odoo.fields import Domain
 from odoo.tools import float_round, py_to_js_locale, SQL
 from odoo.tools.image import image_data_uri
@@ -43,8 +43,8 @@ class HrAttendance(http.Controller):
                 'kiosk_delay': employee.company_id.attendance_kiosk_delay * 1000,
                 'attendance': {'check_in': employee.last_attendance_id.check_in,
                                'check_out': employee.last_attendance_id.check_out},
-                'overtime_today': request.env['hr.attendance.overtime.line'].sudo().search([
-                    ('employee_id', '=', employee.id), ('date', '=', datetime.date.today())]).duration or 0,
+                'overtime_today': sum(request.env['hr.attendance.overtime.line'].sudo().search([
+                    ('employee_id', '=', employee.id), ('date', '=', datetime.date.today())]).mapped('duration')) or 0,
                 'use_pin': employee.company_id.attendance_kiosk_use_pin,
                 'display_overtime': employee.company_id.hr_attendance_display_overtime,
                 'device_tracking_enabled': employee.company_id.attendance_device_tracking,
@@ -120,6 +120,34 @@ class HrAttendance(http.Controller):
                 employee.write({'barcode': badge})
                 return {'status': 'success'}
         return {}
+
+    @http.route('/hr_attendance/print_badge', type='http', auth='user')
+    def print_badge(self, employee_id, token, **kwargs):
+        company = self._get_company(token)
+
+        if not company:
+            return request.not_found()
+
+        employee = request.env['hr.employee'].browse(int(employee_id))
+
+        if not employee or not employee.barcode:
+            return request.not_found()
+
+        pdf_content, _ = request.env['ir.actions.report']._render_qweb_pdf(
+            report_ref='hr.hr_employee_print_badge',
+            res_ids=[employee.id],
+        )
+
+        pdfhttpheaders = [
+            ('Content-Type', 'application/pdf'),
+            ('Content-Length', len(pdf_content)),
+            (
+                'Content-Disposition',
+                content_disposition(f"Badge - {employee.name.replace('/', '')}.pdf"),
+            ),
+        ]
+
+        return request.make_response(pdf_content, headers=pdfhttpheaders)
 
     @http.route('/hr_attendance/create_employee', type='jsonrpc', auth='public')
     def create_employee(self, name, token):

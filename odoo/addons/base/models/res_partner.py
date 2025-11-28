@@ -179,6 +179,7 @@ class ResPartner(models.Model):
     _order = "complete_name ASC, id DESC"
     _rec_names_search = ['complete_name', 'email', 'ref', 'vat', 'company_registry']  # TODO vat must be sanitized the same way for storing/searching
     _allow_sudo_commands = False
+    _check_company_auto = True
     _check_company_domain = models.check_company_domain_parent_of
 
     # the partner types that must be added to a partner's complete name, like "Delivery"
@@ -356,13 +357,13 @@ class ResPartner(models.Model):
 
     def _avatar_get_placeholder_path(self):
         if self.is_company:
-            return "base/static/img/company_image.png"
+            return "base/static/img/avatar_placeholder_company.png"
         if self.type == 'delivery':
-            return "base/static/img/truck.png"
+            return "base/static/img/avatar_placeholder_delivery.png"
         if self.type == 'invoice':
-            return "base/static/img/bill.png"
+            return "base/static/img/avatar_placeholder_invoice.png"
         if self.type == 'other':
-            return "base/static/img/puzzle.png"
+            return "base/static/img/avatar_placeholder_other.png"
         return super()._avatar_get_placeholder_path()
 
     def _get_complete_name(self):

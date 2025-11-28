@@ -689,7 +689,7 @@ class AccountMoveLine(models.Model):
         for line in self:
             if not line.company_id.account_storno:
                 continue
-            line.is_storno = line.is_storno or line.move_id.is_storno
+            line.is_storno = (line.is_storno or line.move_id.is_storno) and line.move_type not in ('in_invoice', 'out_invoice')
 
             # For invoice lines, we want to set is_storno based on the sign of the line if the entire move is not storno (not refund)
             # This allows setting is_storno to true or false depending on quantity and price_unit
@@ -762,12 +762,12 @@ class AccountMoveLine(models.Model):
 
         # get the where clause
         query = self._search(self.env.context.get('domain_cumulated_balance') or [], bypass_access=True)
-        sql_order = self._order_to_sql(self.env.context.get('order_cumulated_balance'), query, reverse=True)
+        sql_order = self._order_to_sql(query.table, self.env.context.get('order_cumulated_balance'), reverse=True)
         result = dict(self.env.execute_query(query.select(
-            SQL.identifier(query.table, "id"),
+            query.table.id,
             SQL(
                 "SUM(%s) OVER (ORDER BY %s ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
-                SQL.identifier(query.table, "balance"),
+                query.table.balance,
                 sql_order,
             ),
         )))
@@ -1157,15 +1157,15 @@ class AccountMoveLine(models.Model):
         for line in self:
             line.payment_date = line.discount_date if line.discount_date and date.today() <= line.discount_date else line.date_maturity
 
-    def _compute_sql_payment_date(self, alias, query):
+    def _compute_sql_payment_date(self, table):
         return SQL("""
             CASE
                 WHEN %(discount_date)s IS NOT NULL AND %(today)s <= %(discount_date)s THEN %(discount_date)s
                 ELSE %(date_maturity)s
             END""",
             today=fields.Date.context_today(self),
-            discount_date=self._field_to_sql(alias, "discount_date", query),
-            date_maturity=self._field_to_sql(alias, "date_maturity", query),
+            discount_date=table.discount_date,
+            date_maturity=table.date_maturity,
         )
 
     @api.depends('matched_debit_ids', 'matched_credit_ids')
@@ -1356,7 +1356,7 @@ class AccountMoveLine(models.Model):
             account = line.account_id
             journal = line.move_id.journal_id
 
-            if not account.active and not self.env.context.get('skip_account_deprecation_check'):
+            if not (account.active or line.is_imported or self.env.context.get('skip_account_deprecation_check')):
                 raise UserError(_('The account %(name)s (%(code)s) is archived.', name=account.name, code=account.code))
 
             account_currency = account.currency_id
@@ -1960,24 +1960,12 @@ class AccountMoveLine(models.Model):
             return {}
 
         # Override in order to not read the complete move line table and use the index instead
-        query_account = self.env['account.account']._search([('company_ids', 'in', self.env.companies.ids), ('code', '!=', False)])
-        account_code_alias = self.env['account.account']._field_to_sql('account_account', 'code', query_account)
-
-        query_line = self._search(domain, limit=1)
-        query_line.add_where('account_account.id = account_move_line.account_id')
-
-        account_codes = self.env.execute_query(SQL(
-            """
-            SELECT %(account_code_alias)s AS code
-              FROM %(account_table)s
-             WHERE EXISTS(%(line_select)s)
-               AND %(where_clause)s
-            """,
-            account_code_alias=account_code_alias,
-            account_table=query_account.from_clause,
-            line_select=query_line.select(),
-            where_clause=query_account.where_clause,
-        ))
+        query_account = self.env['account.account']._search([
+            ('company_ids', 'in', self.env.companies.ids),
+            ('code', '!=', False),
+            ('line_ids', 'any', domain),
+        ])
+        account_codes = self.env.execute_query(query_account.select(SQL("DISTINCT %s", query_account.table.code)))
         return {
             (root := self.env['account.root']._from_account_code(code)).id: {'id': root.id, 'display_name': root.display_name}
             for code, in account_codes
@@ -2714,11 +2702,21 @@ class AccountMoveLine(models.Model):
 
         # ==== Create the partial exchange journal entries ====
         exchange_moves = self._create_exchange_difference_moves(exchange_diff_values_list)
+        used_exchange_moves = set()
+        used_partials = set()
+
         for partial in partials:
             for exchange_move in exchange_moves:
                 linked_move_lines = exchange_move.line_ids.reconciled_lines_ids
-                if any(line == partial.debit_move_id or line == partial.credit_move_id for line in linked_move_lines):
+
+                if (
+                    any(line == partial.debit_move_id or line == partial.credit_move_id for line in linked_move_lines)
+                    and exchange_move not in used_exchange_moves
+                    and partial not in used_partials
+                ):
                     partial.exchange_move_id = exchange_move
+                    used_exchange_moves.add(exchange_move)
+                    used_partials.add(partial)
 
         # ==== Create entries for cash basis taxes ====
         def is_cash_basis_needed(amls):

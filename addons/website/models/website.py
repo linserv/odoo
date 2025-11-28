@@ -1357,7 +1357,8 @@ class Website(models.Model):
                     website_domain if hasattr(Model, 'website_id') else [],
                 ]))
 
-            dependency_records = Model.search(Domain.OR(domains))
+            # sudo() to bypass the field level access rights. i.e: robots_txt
+            dependency_records = Model.sudo().search(Domain.OR(domains))
             if model_name == 'ir.ui.view':
                 dependency_records = _handle_views_and_pages(dependency_records)
             if dependency_records:
@@ -2177,7 +2178,7 @@ class Website(models.Model):
                 similarities=SQL(", ").join(
                     SQL("word_similarity(%(search)s, %(field)s)",
                         search=unaccent(SQL("%s", search)),
-                        field=unaccent(model._field_to_sql(model._table, field, subquery)),
+                        field=unaccent(subquery.table[field]),
                     )
                     for field in fields
                 ),
@@ -2186,18 +2187,16 @@ class Website(models.Model):
             for field_name in fields:
                 field = model._fields[field_name]
                 if field.translate:
-                    alias = model._table
-                    if field.related and not field.store:
-                        _model, field, alias = field.traverse_related_sql(model, model._table, subquery)
+                    raw_field = subquery.table._with_model(model.with_context(prefetch_langs=True))[field_name]
                     where_clauses.append(SQL("(%(search)s <%% %(jsonb_path)s AND %(search)s <%% (%(field)s))",
                         search=unaccent(SQL("%s", search)),
-                        jsonb_path=unaccent(SQL("jsonb_path_query_array(%s, '$.*')::text", SQL.identifier(alias, field.name))),
-                        field=unaccent(model._field_to_sql(model._table, field_name, subquery)),
+                        jsonb_path=unaccent(SQL("jsonb_path_query_array(%s, '$.*')::text", raw_field)),
+                        field=unaccent(subquery.table[field_name]),
                     ))
                 else:
                     where_clauses.append(SQL("%(search)s <%% %(field)s",
                         search=unaccent(SQL("%s", search)),
-                        field=unaccent(model._field_to_sql(model._table, field_name, subquery)),
+                        field=unaccent(subquery.table[field_name]),
                     ))
             subquery.add_where(SQL(' OR ').join(where_clauses))
             tbl_alias = model._table
@@ -2205,7 +2204,7 @@ class Website(models.Model):
                 rel_alias = subquery.make_alias(rel_table, rel_joinkey)
                 subquery.add_join("JOIN", rel_alias, rel_table, SQL("%s = %s",
                         SQL.identifier(rel_alias, rel_joinkey),
-                        SQL.identifier(model._table, "id"),
+                        subquery.table.id,
                     ),
                 )
                 tbl_alias = rel_alias

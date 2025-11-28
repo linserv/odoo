@@ -187,16 +187,8 @@ class AccountMove(models.Model):
     line_ids = fields.One2many(
         'account.move.line',
         'move_id',
-        string='Account Move Line Items',
-        copy=True,
-    )
-
-    journal_line_ids = fields.One2many(  # /!\ journal_line_ids is just a subset of line_ids.
-        comodel_name='account.move.line',
-        inverse_name='move_id',
         string='Journal Items',
-        copy=False,
-        domain=[('display_type', 'not in', ('line_section', 'line_subsection', 'line_note'))],
+        copy=True,
     )
 
     # === Link to the partial that created this exchange move === #
@@ -696,6 +688,7 @@ class AccountMove(models.Model):
         string='Origin',
         readonly=True,
         tracking=True,
+        copy=False,
         help="The document(s) that generated the invoice.",
     )
     invoice_incoterm_id = fields.Many2one(
@@ -825,9 +818,8 @@ class AccountMove(models.Model):
         for move in self:
             move.move_sent_values = 'sent' if move.is_move_sent else 'not_sent'
 
-    def _compute_sql_move_sent_values(self, alias, query):
-        is_move_sent = self._field_to_sql(alias, 'is_move_sent', query)
-        return SQL("CASE WHEN %s THEN 'sent' ELSE 'not_sent' END", is_move_sent)
+    def _compute_sql_move_sent_values(self, table):
+        return SQL("CASE WHEN %s THEN 'sent' ELSE 'not_sent' END", table.is_move_sent)
 
     def _compute_payment_reference(self):
         for move in self.filtered(lambda m: (
@@ -924,9 +916,8 @@ class AccountMove(models.Model):
     @api.depends('move_type')
     def _compute_is_storno(self):
         for move in self:
-            move.is_storno = move.is_storno or (
-                move.company_id.account_storno and move.move_type in ('out_refund', 'in_refund')
-            )
+            is_refund = move.move_type in ('out_refund', 'in_refund')
+            move.is_storno = move.is_storno or (is_refund and move.company_id.account_storno)
 
     @api.depends('company_id', 'invoice_filter_type_domain')
     def _compute_suitable_journal_ids(self):
@@ -1335,10 +1326,10 @@ class AccountMove(models.Model):
             if not move.status_in_payment:
                 move.status_in_payment = move.state
 
-    def _compute_sql_status_in_payment(self, alias, query):
+    def _compute_sql_status_in_payment(self, table):
         # TODO not the same logic as the compute?
-        state = self._field_to_sql(alias, 'state', query)
-        payment_state = self._field_to_sql(alias, 'payment_state', query)
+        state = table.state
+        payment_state = table.payment_state
         return SQL("""CASE
             WHEN %s = 'draft' THEN 'draft'
             WHEN %s = 'cancel' THEN 'cancel'
@@ -1912,6 +1903,7 @@ class AccountMove(models.Model):
 
     @api.depends('company_id.account_fiscal_country_id', 'fiscal_position_id', 'fiscal_position_id.country_id', 'fiscal_position_id.foreign_vat')
     def _compute_tax_country_id(self):
+        self.fetch(['fiscal_position_id', 'company_id'])
         foreign_vat_records = self.filtered(lambda r: r.fiscal_position_id.foreign_vat)
         for fiscal_position_id, record_group in groupby(foreign_vat_records, key=lambda r: r.fiscal_position_id):
             self.env['account.move'].concat(*record_group).tax_country_id = fiscal_position_id.country_id
@@ -2320,7 +2312,7 @@ class AccountMove(models.Model):
         for move in self:
             move.highlight_send_button = not move.is_being_sent and not move.invoice_pdf_report_id
 
-    @api.depends('line_ids.matched_debit_ids', 'line_ids.matched_credit_ids', 'matched_payment_ids')
+    @api.depends('line_ids.matched_debit_ids', 'line_ids.matched_credit_ids', 'matched_payment_ids', 'matched_payment_ids.state')
     def _compute_reconciled_payment_ids(self):
         ''' Retrieve the payments reconciled to the invoices through the reconciliation (account.partial.reconcile) '''
         self.env['account.payment'].flush_model(fnames=['move_id'])
@@ -3756,7 +3748,7 @@ class AccountMove(models.Model):
                 raise AccessError(_("You don't have the access rights to perform this action."))
 
     def _sanitize_vals(self, vals):
-        if vals.get('invoice_line_ids') and vals.get('journal_line_ids'):
+        if vals.get('invoice_line_ids') and vals.get('line_ids'):
             # values can sometimes be in only one of the two fields, sometimes in
             # both fields, sometimes one field can be explicitely empty while the other
             # one is not, sometimes not...
@@ -3765,15 +3757,15 @@ class AccountMove(models.Model):
                 for command, line_id, *line_vals in vals['invoice_line_ids']
                 if command == Command.UPDATE
             }
-            for command, line_id, *line_vals in vals['journal_line_ids']:
+            for command, line_id, *line_vals in vals['line_ids']:
                 if command == Command.UPDATE and line_id in update_vals:
                     line_vals[0].update(update_vals.pop(line_id))
             for line_id, line_vals in update_vals.items():
-                vals['journal_line_ids'] += [Command.update(line_id, line_vals)]
+                vals['line_ids'] += [Command.update(line_id, line_vals)]
             for command, line_id, *line_vals in vals['invoice_line_ids']:
                 assert command not in (Command.SET, Command.CLEAR)
-                if [command, line_id, *line_vals] not in vals['journal_line_ids']:
-                    vals['journal_line_ids'] += [(command, line_id, *line_vals)]
+                if [command, line_id, *line_vals] not in vals['line_ids']:
+                    vals['line_ids'] += [(command, line_id, *line_vals)]
             del vals['invoice_line_ids']
         return vals
 
@@ -3819,7 +3811,7 @@ class AccountMove(models.Model):
         self._check_user_access([vals])
 
         unmodifiable_fields = [
-            'line_ids', 'invoice_line_ids', 'journal_line_ids',
+            'line_ids', 'invoice_line_ids',
             'date', 'invoice_date',
             'partner_id', 'fiscal_position_id',
             'invoice_payment_term_id',
@@ -6846,8 +6838,15 @@ class AccountMove(models.Model):
         if self.env.context.get('from_alias'):
             # This is a newly-created invoice from a mail alias.
             # So dispatch the attachments into groups, and create a new invoice for each group beyond the first.
-            file_data_groups = self._group_files_data_into_groups_of_mixed_types(files_data)
+            valid_files_data = []
+            extra_files_data = []
+            for file_data in files_data:
+                if self._should_attach_to_record(file_data['attachment']) or file_data['xml_tree'] is not None:
+                    valid_files_data.append(file_data)
+                else:
+                    extra_files_data.append(file_data)
 
+            file_data_groups = self._group_files_data_into_groups_of_mixed_types(valid_files_data) or [[]]
             invoices = self
             if len(file_data_groups) > 1:
                 create_vals = (len(file_data_groups) - 1) * self.copy_data()
@@ -6855,9 +6854,8 @@ class AccountMove(models.Model):
 
             for invoice, file_data_group in zip(invoices, file_data_groups):
                 attachment_records = self._from_files_data(file_data_group)
-                invoice._fix_attachments_on_record(attachment_records)
-
                 if invoice == self:
+                    attachment_records |= self._from_files_data(extra_files_data)
                     new_message.attachment_ids = [Command.set(attachment_records.ids)]
                     message_values['attachment_ids'] = [Command.link(attachment.id) for attachment in attachment_records]
                     res = super()._message_post_after_hook(new_message, message_values)
@@ -6872,9 +6870,11 @@ class AccountMove(models.Model):
                         'attachment_ids': [Command.link(attachment.id) for attachment in attachment_records],
                     }
                     super(AccountMove, invoice)._message_post_after_hook(sub_new_message, sub_message_values)
+                invoice._fix_attachments_on_record(attachment_records)
 
             for invoice, file_data_group in zip(invoices, file_data_groups):
-                invoice._extend_with_attachments(file_data_group, new=True)
+                if file_data_group:
+                    invoice._extend_with_attachments(file_data_group, new=True)
 
             return res
 
@@ -7059,7 +7059,7 @@ class AccountMove(models.Model):
     def get_extra_print_items(self):
         """ Helper to dynamically add items in the 'Print' menu of list and form of account.move.
         """
-        if posted_moves := self.filtered(lambda m: m.state == 'posted'):
+        if posted_moves := self.filtered(lambda m: m.state == 'posted' and m.is_move_sent):
             return [
                 {
                     'key': 'download_all',

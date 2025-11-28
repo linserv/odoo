@@ -63,13 +63,11 @@ class WebclientController(ThreadController):
                 **params.get("access_params", {}),
             )
             if not thread:
-                store.add(
-                    request.env[params["thread_model"]].browse(params["thread_id"]),
-                    {"hasReadAccess": False, "hasWriteAccess": False},
-                    as_thread=True,
-                )
+                thread = request.env[params["thread_model"]].browse(params["thread_id"])
+                fields = {"hasReadAccess": False, "hasWriteAccess": False}
             else:
-                store.add(thread, request_list=params["request_list"], as_thread=True)
+                fields = thread._get_store_thread_fields(store.target, params["request_list"])
+            store.add(thread, fields, as_thread=True)
 
     @classmethod
     def _process_request_for_logged_in_user(self, store: Store, name, params):
@@ -108,5 +106,9 @@ class WebclientController(ThreadController):
             record_id, model = params.get("id"), params.get("model")
             if not record_id or model not in ("res.users", "res.partner"):
                 return
-            record = request.env[model].with_context(active_test=False).search([("id", "=", record_id)])
+            context = {
+                "active_test": False,
+                "allowed_company_ids": request.env.user._get_company_ids(),
+            }
+            record = request.env[model].with_context(**context).search([("id", "=", record_id)])
             store.add(record, record._get_store_avatar_card_fields(store.target))

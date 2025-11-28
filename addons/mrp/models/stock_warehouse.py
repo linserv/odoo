@@ -212,9 +212,9 @@ class StockWarehouse(models.Model):
     def _get_sequence_values(self, name=False, code=False):
         values = super(StockWarehouse, self)._get_sequence_values(name=name, code=code)
         values.update({
-            'pbm_type_id': {'name': _('%(name)s Sequence picking before manufacturing', name=self.name), 'prefix': self.code + '/' + (self.pbm_type_id.sequence_code or 'PC') + '/', 'padding': 5, 'company_id': self.company_id.id},
-            'sam_type_id': {'name': _('%(name)s Sequence stock after manufacturing', name=self.name), 'prefix': self.code + '/' + (self.sam_type_id.sequence_code or 'SFP') + '/', 'padding': 5, 'company_id': self.company_id.id},
-            'manu_type_id': {'name': _('%(name)s Sequence production', name=self.name), 'prefix': self.code + '/' + (self.manu_type_id.sequence_code or 'MO') + '/', 'padding': 5, 'company_id': self.company_id.id},
+            'pbm_type_id': {'name': _('%(name)s Sequence picking before manufacturing', name=self.name), 'prefix': self.code + '/PC/', 'padding': 5, 'company_id': self.company_id.id},
+            'sam_type_id': {'name': _('%(name)s Sequence stock after manufacturing', name=self.name), 'prefix': self.code + '/SFP/', 'padding': 5, 'company_id': self.company_id.id},
+            'manu_type_id': {'name': _('%(name)s Sequence production', name=self.name), 'prefix': self.code + '/MO/', 'padding': 5, 'company_id': self.company_id.id},
         })
         return values
 
@@ -229,7 +229,6 @@ class StockWarehouse(models.Model):
                 'default_location_src_id': self.lot_stock_id.id,
                 'default_location_dest_id': self.pbm_loc_id.id,
                 'sequence': next_sequence + 1,
-                'sequence_code': 'PC',
                 'company_id': self.company_id.id,
             },
             'sam_type_id': {
@@ -240,7 +239,6 @@ class StockWarehouse(models.Model):
                 'default_location_src_id': self.sam_loc_id.id,
                 'default_location_dest_id': self.lot_stock_id.id,
                 'sequence': next_sequence + 3,
-                'sequence_code': 'SFP',
                 'company_id': self.company_id.id,
             },
             'manu_type_id': {
@@ -249,7 +247,6 @@ class StockWarehouse(models.Model):
                 'use_create_lots': True,
                 'use_existing_lots': True,
                 'sequence': next_sequence + 2,
-                'sequence_code': 'MO',
                 'company_id': self.company_id.id,
             },
         })
@@ -312,10 +309,14 @@ class StockWarehouseOrderpoint(models.Model):
     @api.constrains('product_id')
     def check_product_is_not_kit(self):
         domain = [
-            '|', ('product_id', 'in', self.product_id.ids),
-                 '&', ('product_id', '=', False),
-                      ('product_tmpl_id', 'in', self.product_id.product_tmpl_id.ids),
-            ('type', '=', 'phantom'),
+            '&',
+                '|', ('product_id', 'in', self.product_id.ids),
+                    '&', ('product_id', '=', False),
+                        ('product_tmpl_id', 'in', self.product_id.product_tmpl_id.ids),
+                ('type', '=', 'phantom'),
+                '|',
+                    ('company_id', 'in', self.company_id.ids),
+                    ('company_id', '=', False),
         ]
         if self.env['mrp.bom'].search_count(domain, limit=1):
             raise ValidationError(_("A product with a kit-type bill of materials can not have a reordering rule."))

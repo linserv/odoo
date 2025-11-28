@@ -72,7 +72,7 @@
                         <filter name="group_job" string="Job Position" domain="[]" context="{'group_by': 'job_id'}"/>
                         <filter name="group_employee_type" string="Employee Type" domain="[]" context="{'group_by': 'employee_type'}"/>
                         <separator name="main_groupby_separator"/>
-                        <filter name="group_birthday" domain="[]" context="{'group_by': 'birthday'}"/>
+                        <filter name="group_birthday" domain="[]" context="{'group_by': 'birthday_month'}"/>
                         <filter name="group_start" string="Start Date" domain="[]" context="{'group_by': 'contract_date_start'}" groups="hr.group_hr_manager"/>
                         <separator name="secondary_groupby_separator"/>
                         <separator name="managers_groupby_separator"/>
@@ -232,13 +232,13 @@
                                         <field name="has_multiple_bank_accounts" invisible="1"/>
                                         <field name="is_trusted_bank_account" invisible="1"/>
                                         <field name="bank_account_ids" invisible="1"
-                                            widget="many2many_tags" options="{'color_field': 'color'}"/>
+                                            widget="many2many_tags" options="{'color_field': 'color', 'on_tag_click': 'edit_color'}"/>
                                         <label for="bank_account_ids"/>
                                         <div class="d-flex align-items-start justify-content-between" invisible="not has_multiple_bank_accounts">
                                                 <field name="bank_account_ids"
                                                         widget="many2many_tags_salary_bank"
                                                         context="{'default_partner_id': work_contact_id}"
-                                                        options="{'color_field': 'color', 'no_quick_create': True, 'edit_tags': True}"
+                                                        options="{'color_field': 'color', 'no_quick_create': True, 'on_tag_click': 'open_form'}"
                                                         readonly="not id"/>
                                             <div class="pt-0 ms-2">
                                                 <button name="action_open_allocation_wizard"
@@ -253,7 +253,7 @@
                                             <field name="bank_account_ids"
                                                 widget="many2many_tags_salary_bank"
                                                 context="{'default_partner_id': work_contact_id}"
-                                                options="{'color_field': 'color', 'no_quick_create': True, 'edit_tags': True}"
+                                                options="{'color_field': 'color', 'no_quick_create': True, 'on_tag_click': 'open_form'}"
                                                 readonly="not id"/>
                                             <div class="d-flex align-items-start" invisible="not bank_account_ids">
                                                 <span class="d-flex w-50">
@@ -523,7 +523,7 @@
                     <field name="coach_id" widget="many2one_avatar_employee" optional="hide"/>
                     <field name="user_id" string="Related User" widget="many2one_avatar_user" optional="hide"/>
                     <field name="active" column_invisible="True"/>
-                    <field name="category_ids" widget="many2many_tags" options="{'color_field': 'color'}" optional="hide"/>
+                    <field name="category_ids" widget="many2many_tags" options="{'color_field': 'color', 'on_tag_click': 'edit_color'}" optional="hide"/>
                     <field name="country_id" optional="hide"/>
                 </list>
             </field>
@@ -575,7 +575,7 @@
                     <field name="coach_id" widget="many2one_avatar_employee" optional="hide"/>
                     <field name="user_id" string="Related User" widget="many2one_avatar_user" optional="hide"/>
                     <field name="active" column_invisible="True"/>
-                    <field name="category_ids" widget="many2many_tags" options="{'color_field': 'color'}" optional="hide"/>
+                    <field name="category_ids" widget="many2many_tags" options="{'color_field': 'color', 'on_tag_click': 'edit_color'}" optional="hide"/>
                     <field name="country_id" optional="hide"/>
                 </list>
             </field>
@@ -585,7 +585,10 @@
             <field name="model">hr.employee</field>
             <field name="priority">10</field>
             <field name="arch" type="xml">
-                <kanban class="o_hr_employee_kanban" sample="1" duplicate="false">
+                <kanban class="o_hr_employee_kanban" sample="1" duplicate="false" js_class="hr_employee_kanban">
+                    <header>
+                        <button name="%(plan_wizard_action)d" string="Launch Plan" type="action" groups="hr.group_hr_user"/>
+                    </header>
                     <field name="show_hr_icon_display"/>
                     <field name="image_128" />
                     <field name="company_id"/>
@@ -632,12 +635,12 @@
                                     <span t-if="record.contract_date_end.raw_value"> - </span>
                                     <field t-if="record.contract_date_end.raw_value" name="contract_date_end"/>
                                 </div>
-                                <div invisible="birthday_public_display_string == 'hidden'">
+                                <div invisible="not birthday" groups="hr.group_hr_user">
                                     <i class="fa fa-fw me-2 fa-birthday-cake text-primary" title="Birthday"/>
-                                    <field name="birthday_public_display_string"/>
+                                    <field name="birthday"/>
                                 </div>
                                 <field name="employee_properties" widget="properties"/>
-                                <field class="hr_tags" name="category_ids" widget="many2many_tags" options="{'color_field': 'color'}" optional="hide"/>
+                                <field class="hr_tags" name="category_ids" widget="many2many_tags" options="{'color_field': 'color', 'on_tag_click': 'edit_color'}" optional="hide"/>
                                 <footer class="py-0">
                                     <div class="d-flex ms-auto">
                                         <field name="user_id" widget="many2one_avatar_user" readonly="1" class="mb-1 ms-2"/>

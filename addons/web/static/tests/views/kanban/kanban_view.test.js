@@ -1775,7 +1775,7 @@ test("many2many_tags in kanban views", async () => {
             <kanban>
                 <templates>
                     <t t-name="card">
-                        <field name="category_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
+                        <field name="category_ids" widget="many2many_tags" options="{'color_field': 'color', 'on_tag_click': 'edit_color'}"/>
                         <field name="foo"/>
                         <field name="state" widget="priority"/>
                     </t>
@@ -9651,4 +9651,26 @@ test(`groupby use odoomark`, async () => {
     expect(`.o_kanban_group`).toHaveCount(2);
     expect(`.o_kanban_group b`).toHaveCount(2);
     expect(`.o_kanban_group span.o_badge`).toHaveCount(2);
+});
+
+test.tags("desktop");
+test("kanban: fields with data-tooltip attribute", async () => {
+    await mountView({
+        resModel: "partner",
+        type: "kanban",
+        arch: `
+            <kanban sample="1">
+                <templates>
+                    <t t-name="card">
+                        <field name="foo" data-tooltip="pipu" />
+                    </t>
+                </templates>
+            </kanban>`,
+        groupBy: ["product_id"],
+    });
+
+    expect(".o-tooltip").toHaveCount(0);
+    await hover("article:contains(gnap) span");
+    await advanceTime(500);
+    expect(".o-tooltip").toHaveCount(1);
 });

@@ -91,22 +91,6 @@ else:
     _logger.info("Importing test framework", stack_info=_logger.isEnabledFor(logging.DEBUG))
 
 
-# backward compatibility: Form was defined in this file
-def __getattr__(name):
-    # pylint: disable=import-outside-toplevel
-    if name != 'Form':
-        raise AttributeError(name)
-
-    from .form import Form
-
-    warnings.warn(
-        "Since 18.0: odoo.tests.common.Form is deprecated, use odoo.tests.Form",
-        category=DeprecationWarning,
-        stacklevel=2,
-    )
-    return Form
-
-
 # The odoo library is supposed already configured.
 HOST = '127.0.0.1'
 # Useless constant, tests are aware of the content of demo data
@@ -569,7 +553,10 @@ class BaseCase(case.TestCase):
         Cursor_execute = Cursor.execute
 
         def execute(self, query, params=None, log_exceptions=None):
-            actual_queries.append(query.code if isinstance(query, SQL) else query)
+            if isinstance(query, SQL):
+                assert params is None
+                query, params, _ = query._sql_tuple
+            actual_queries.append(query)
             return Cursor_execute(self, query, params, log_exceptions)
 
         if flush:
@@ -2084,7 +2071,7 @@ class Screencaster:
                 '-y', '-loglevel', 'warning',
                 '-f', 'concat', '-safe', '0', '-i', concat_script_path,
                 '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
-                '-pix_fmt', 'yuv420p', '-g', '0',
+                '-c:v', 'libx265', '-x265-params', 'lossless=1',
                 outfile,
             ], preexec_fn=_preexec, check=True)
         except subprocess.CalledProcessError:

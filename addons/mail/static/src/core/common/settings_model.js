@@ -2,7 +2,6 @@ import { hasHardwareAcceleration } from "@mail/utils/common/misc";
 import { _t } from "@web/core/l10n/translation";
 import { browser } from "@web/core/browser/browser";
 import { fields, Record } from "@mail/model/export";
-import { debounce } from "@web/core/utils/timing";
 import { rpc } from "@web/core/network/rpc";
 
 export class Settings extends Record {
@@ -10,15 +9,8 @@ export class Settings extends Record {
 
     setup() {
         super.setup();
-        this.saveVoiceThresholdDebounce = debounce(() => {
-            browser.localStorage.setItem(
-                "mail_user_setting_voice_threshold",
-                this.voiceActivationThreshold.toString()
-            );
-        }, 2000);
         this.hasCanvasFilterSupport =
             typeof document.createElement("canvas").getContext("2d").filter !== "undefined";
-        this._loadLocalSettings();
     }
 
     // Notification settings
@@ -35,23 +27,28 @@ export class Settings extends Record {
 
     // Voice settings
     // DeviceId of the audio input selected by the user
-    audioInputDeviceId = "";
-    audioOutputDeviceId = "";
-    cameraInputDeviceId = "";
+    audioInputDeviceId = fields.Attr("", { localStorage: true });
+    audioOutputDeviceId = fields.Attr("", { localStorage: true });
+    cameraInputDeviceId = fields.Attr("", {
+        localStorage: true,
+        onUpdate() {
+            this.cameraFacingMode = undefined;
+        },
+    });
     use_push_to_talk = false;
     voice_active_duration = 200;
     volumes = fields.Many("Volume");
     volumeSettingsTimeouts = new Map();
     // Normalized [0, 1] volume at which the voice activation system must consider the user as "talking".
-    voiceActivationThreshold = 0.05;
+    voiceActivationThreshold = fields.Attr(0.05, { localStorage: true });
     // true if listening to keyboard input to register the push to talk key.
     isRegisteringKey = false;
     push_to_talk_key;
 
     // Video settings
-    backgroundBlurAmount = 10;
-    edgeBlurAmount = 10;
-    showOnlyVideo = false;
+    backgroundBlurAmount = fields.Attr(10, { localStorage: true });
+    edgeBlurAmount = fields.Attr(10, { localStorage: true });
+    showOnlyVideo = fields.Attr(false, { localStorage: true });
     useBlur = fields.Attr(false, { localStorage: true });
     blurPerformanceWarning = fields.Attr(false, {
         compute() {
@@ -89,6 +86,18 @@ export class Settings extends Record {
             constraints.deviceId = this.cameraInputDeviceId;
         }
         return constraints;
+    }
+
+    get pushToTalkKeyText() {
+        if (!this.push_to_talk_key) {
+            return "";
+        }
+        const [shiftKey, ctrlKey, altKey, key] = this.push_to_talk_key.split(".");
+        const f = (k, name) => (k ? name : "");
+        const keys = [f(ctrlKey, "Ctrl"), f(altKey, "Alt"), f(shiftKey, "Shift"), key].filter(
+            Boolean
+        );
+        return keys.join(" + ");
     }
 
     get NOTIFICATIONS() {
@@ -176,34 +185,6 @@ export class Settings extends Record {
     }
 
     /**
-     * @param {String} audioInputDeviceId
-     */
-    async setAudioInputDevice(audioInputDeviceId) {
-        this.audioInputDeviceId = audioInputDeviceId;
-        browser.localStorage.setItem("mail_user_setting_audio_input_device_id", audioInputDeviceId);
-    }
-    /**
-     * @param {String} audioOutputDeviceId
-     */
-    async setAudioOutputDevice(audioOutputDeviceId) {
-        this.audioOutputDeviceId = audioOutputDeviceId;
-        browser.localStorage.setItem(
-            "mail_user_setting_audio_output_device_id",
-            audioOutputDeviceId
-        );
-    }
-    /**
-     * @param {String} cameraInputDeviceId
-     */
-    async setCameraInputDevice(cameraInputDeviceId) {
-        this.cameraFacingMode = undefined;
-        this.cameraInputDeviceId = cameraInputDeviceId;
-        browser.localStorage.setItem(
-            "mail_user_setting_camera_input_device_id",
-            cameraInputDeviceId
-        );
-    }
-    /**
      * @param {string} value
      */
     setDelayValue(value) {
@@ -246,13 +227,6 @@ export class Settings extends Record {
             )
         );
     }
-    /**
-     * @param {float} voiceActivationThreshold
-     */
-    setThresholdValue(voiceActivationThreshold) {
-        this.voiceActivationThreshold = voiceActivationThreshold;
-        this.saveVoiceThresholdDebounce();
-    }
 
     // methods
 
@@ -294,49 +268,9 @@ export class Settings extends Record {
         }
         return settingsKeySet.has(ev.key === "Meta" ? "Alt" : ev.key);
     }
-    pushToTalkKeyFormat() {
-        if (!this.push_to_talk_key) {
-            return;
-        }
-        const [shiftKey, ctrlKey, altKey, key] = this.push_to_talk_key.split(".");
-        return {
-            shiftKey: !!shiftKey,
-            ctrlKey: !!ctrlKey,
-            altKey: !!altKey,
-            key: key || false,
-        };
-    }
     setPushToTalk(value) {
         this.use_push_to_talk = value;
         this._saveSettings();
-    }
-    /**
-     * @private
-     */
-    _loadLocalSettings() {
-        const voiceActivationThresholdString = browser.localStorage.getItem(
-            "mail_user_setting_voice_threshold"
-        );
-        this.voiceActivationThreshold = voiceActivationThresholdString
-            ? parseFloat(voiceActivationThresholdString)
-            : this.voiceActivationThreshold;
-        this.audioInputDeviceId = browser.localStorage.getItem(
-            "mail_user_setting_audio_input_device_id"
-        );
-        this.audioOutputDeviceId = browser.localStorage.getItem(
-            "mail_user_setting_audio_output_device_id"
-        );
-        this.cameraInputDeviceId = browser.localStorage.getItem(
-            "mail_user_setting_camera_input_device_id"
-        );
-        this.showOnlyVideo =
-            browser.localStorage.getItem("mail_user_setting_show_only_video") === "true";
-        const backgroundBlurAmount = browser.localStorage.getItem(
-            "mail_user_setting_background_blur_amount"
-        );
-        this.backgroundBlurAmount = backgroundBlurAmount ? parseInt(backgroundBlurAmount) : 10;
-        const edgeBlurAmount = browser.localStorage.getItem("mail_user_setting_edge_blur_amount");
-        this.edgeBlurAmount = edgeBlurAmount ? parseInt(edgeBlurAmount) : 10;
     }
     /**
      * @private

@@ -2805,6 +2805,14 @@ class TestUi(TestPointOfSaleHttpCommon):
         This includes validating the refund order creation, amount, state, and payment processing.
         """
         # Open POS UI with the POS user
+        pricelists = self.env['product.pricelist'].create([
+            {'name': 'Test Pricelist'},
+            {'name': 'Percentage Pricelist'},
+        ])
+        self.main_pos_config.write({
+            'available_pricelist_ids': [Command.set(pricelists.ids)],
+            'pricelist_id': pricelists[0].id,
+        })
         self.main_pos_config.with_user(self.pos_user).open_ui()
 
         # Run the POS tour simulating a partial refund
@@ -2815,6 +2823,12 @@ class TestUi(TestPointOfSaleHttpCommon):
             ('session_id', '=', self.main_pos_config.current_session_id.id)
         ])
         self.assertEqual(len(orders), 2, "Expected two orders: original and refund.")
+        order, refund_order = orders[0], orders[1]
+        self.assertEqual(
+            refund_order.pricelist_id.id,
+            order.pricelist_id.id,
+            "Refund order pricelist should be the original order's pricelist."
+        )
 
         # Perform refund on order and retrieve the resulting draft refund order
         refund_action = orders[1].refund()
@@ -3039,6 +3053,36 @@ class TestUi(TestPointOfSaleHttpCommon):
 
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('test_cross_exclusion_attribute_values')
+
+    def test_custom_attribute_alone_displayed(self):
+        """
+        Tests that if product configurator will be shown if any of the
+        attributes have a free text field, even if there is only one
+        possible selection for every attributes.
+        """
+        attribute_custom = self.env['product.attribute'].create({
+            'name': 'Custom',
+            'display_type': 'radio',
+            'create_variant': 'no_variant',
+        })
+        attribute_value_custom = self.env['product.attribute.value'].create({
+            'name': 'Custom',
+            'attribute_id': attribute_custom.id,
+            'is_custom': True,
+        })
+        self.test_product_1 = self.env['product.template'].create({
+            'name': 'Only Custom',
+            'available_in_pos': True,
+            'list_price': 10.0,
+            'attribute_line_ids': [
+                Command.create({
+                    'attribute_id': attribute_custom.id,
+                    'value_ids': [Command.set([attribute_value_custom.id])],
+                }),
+            ],
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_custom_attribute_alone_displayed')
 
     def test_preset_customer_selection(self):
         self.preset_delivery = self.env['pos.preset'].create({
@@ -3331,6 +3375,25 @@ class TestUi(TestPointOfSaleHttpCommon):
         with patch.object(pos_order, "sync_from_ui", sync_from_ui_patch):
             self.start_pos_tour("test_sync_from_ui_one_by_one", login="pos_user")
             self.assertEqual(sync_counter['count'], 6)
+
+    def test_lot_refund_lower_qty(self):
+        product = self.env['product.product'].create({
+            'name': 'Serial Product',
+            'is_storable': True,
+            'tracking': 'serial',
+            'available_in_pos': True,
+        })
+        for sn in ["SN1", "SN2"]:
+            self.env['stock.quant'].create({
+                'product_id': product.id,
+                'inventory_quantity': 1,
+                'location_id': self.env.user._get_default_warehouse_id().lot_stock_id.id,
+                'lot_id': self.env['stock.lot'].create({'name': sn, 'product_id': product.id}).id,
+            }).sudo().action_apply_inventory()
+        self.env['stock.picking.type'].search([('name', '=', 'PoS Orders')]).use_create_lots = False
+
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour("test_lot_refund_lower_qty")
 
 
 # This class just runs the same tests as above but with mobile emulation

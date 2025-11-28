@@ -1,6 +1,5 @@
 import json
 import logging
-import pprint
 import requests
 import time
 import urllib.parse
@@ -46,7 +45,7 @@ class WebsocketClient(Thread):
             'event_name': 'subscribe',
             'data': {
                 'channels': [],
-                'last': 0,
+                'last': self.last_message_id,
                 'iot_token': helpers.get_token(),
             }
         }))
@@ -54,7 +53,7 @@ class WebsocketClient(Thread):
     def on_message(self, ws, messages):
         """Synchronously handle messages received by the websocket."""
         for message in json.loads(messages):
-            _logger.debug("websocket received a message: %s", pprint.pformat(message))
+            self.last_message_id = message["id"]
             payload = message['message']['payload']
             message_type = message['message']['type']
 
@@ -86,6 +85,7 @@ class WebsocketClient(Thread):
         self.websocket_url = urllib.parse.urlunsplit((scheme, url_parsed.netloc, 'websocket', '', ''))
         self.db_name = system.get_conf('db_name') or ''
         self.session_id = ''
+        self.last_message_id = 0
         super().__init__()
 
     def run(self):

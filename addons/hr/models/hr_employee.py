@@ -14,8 +14,7 @@ from markupsafe import Markup
 from odoo import api, fields, models, _, tools
 from odoo.fields import Domain
 from odoo.exceptions import ValidationError, AccessError, RedirectWarning, UserError
-from odoo.models import Query
-from odoo.tools import convert, format_time, email_normalize, SQL
+from odoo.tools import convert, format_time, format_date, email_normalize
 from odoo.tools.intervals import Intervals
 from odoo.addons.hr.models.hr_version import format_date_abbr
 from odoo.addons.mail.tools.discuss import Store
@@ -140,6 +139,30 @@ class HrEmployee(models.Model):
     birthday = fields.Date('Birthday', groups="hr.group_hr_user", tracking=True)
     birthday_public_display = fields.Boolean('Show to all employees', groups="hr.group_hr_user", default=False)
     birthday_public_display_string = fields.Char("Public Date of Birth", compute="_compute_birthday_public_display_string", default="hidden")
+
+    # For birthday group by month
+    birthday_month = fields.Selection(
+        selection=[
+            ('0', "Not specified"),  # key named '0' to make the "Not specified" column appear first to the left in grouped kanban view
+            ('1', "January"),
+            ('2', "February"),
+            ('3', "March"),
+            ('4', "April"),
+            ('5', "May"),
+            ('6', "June"),
+            ('7', "July"),
+            ('8', "August"),
+            ('9', "September"),
+            ('10', "October"),
+            ('11', "November"),
+            ('12', "December"),
+        ],
+        string="Birthday Month",
+        store=True,
+        compute='_compute_birthday_month',
+        groups="hr.group_hr_user"
+    )
+
     bank_account_ids = fields.Many2many(
         'res.partner.bank',
         relation='employee_bank_account_rel',
@@ -181,6 +204,8 @@ class HrEmployee(models.Model):
         ("home", "Home"),
         ("office", "Office"),
         ("other", "Other")], compute="_compute_work_location_type", tracking=True)
+
+    # All version fields needing a specific group to be accessible should also have `inherited=True` set on its definition to make sure those fields are linked to `_inherits` on `hr.version`
     contract_date_start = fields.Date(readonly=False, related="version_id.contract_date_start", inherited=True, groups="hr.group_hr_manager")
     contract_date_end = fields.Date(readonly=False, related="version_id.contract_date_end", inherited=True, groups="hr.group_hr_manager")
     trial_date_end = fields.Date(readonly=False, related="version_id.trial_date_end", inherited=True, groups="hr.group_hr_manager")
@@ -466,6 +491,11 @@ class HrEmployee(models.Model):
             employee.hr_icon_display = 'presence_' + employee.hr_presence_state
             employee.show_hr_icon_display = bool(employee.user_id)
 
+    @api.depends('birthday')
+    def _compute_birthday_month(self):
+        for employee in self:
+            employee.birthday_month = str(employee.birthday.month) if employee.birthday else '0'
+
     @api.model
     def _get_certificate_selection(self):
         return [
@@ -485,7 +515,7 @@ class HrEmployee(models.Model):
 
     def _get_first_version_date(self, no_gap=True):
         self.ensure_one()
-        if not self.env.user.has_group("hr.group_hr_user"):
+        if not self.env.su and not self.env.user.has_group("hr.group_hr_user"):
             raise AccessError(_("Only HR users can access first version date on an employee."))
 
         def remove_gap(versions):
@@ -628,10 +658,10 @@ class HrEmployee(models.Model):
         domain = Domain('id', operator, value)
         return Domain('id', 'in', self.env['hr.version']._search(domain).select('employee_id'))
 
-    def _compute_sql_version_id(self, alias, query):
+    def _compute_sql_version_id(self, table):
         # HACK required to make inherits work on a computed field
         # (could be a CASE WHEN with the version_id from the content for the current user)
-        return self._field_to_sql(alias, 'current_version_id', query)
+        return table.current_version_id
 
     def _get_version(self, date=fields.Date.today()):
         """
@@ -647,14 +677,14 @@ class HrEmployee(models.Model):
     def create_version(self, values):
         self.ensure_one()
 
-        if 'date_version' not in values:
+        date = values.get('date_version', False)
+        if not date:
             raise ValueError("date_version is required")
-        if isinstance(values['date_version'], str):
-            date = fields.Date.to_date(values['date_version'])
-        elif isinstance(values['date_version'], datetime):
-            date = values['date_version'].date()
-        else:
-            date = values['date_version']
+
+        if isinstance(date, str):
+            date = fields.Date.to_date(date)
+        elif isinstance(date, datetime):
+            date = date.date()
 
         version_to_copy = self._get_version(date)
         if not version_to_copy:
@@ -663,19 +693,18 @@ class HrEmployee(models.Model):
             return version_to_copy
 
         date_from, date_to = self.sudo()._get_contract_dates(date)
-        contract_date_start = values['contract_date_start'] = values.get('contract_date_start', date_from)
-        contract_date_end = values['contract_date_end'] = values.get('contract_date_end', date_to)
+        contract_date_start = values.get('contract_date_start', date_from)
+        contract_date_end = values.get('contract_date_end', date_to)
+        employee_id = values.get('employee_id', self.id)
+
         if isinstance(contract_date_start, str):
             contract_date_start = fields.Date.to_date(contract_date_start)
         if isinstance(contract_date_end, str):
             contract_date_end = fields.Date.to_date(contract_date_end)
 
-        if 'employee_id' not in values:
-            values['employee_id'] = self.id
-
         if contract_date_start == date_from and contract_date_end != date_to:
             versions_sudo_to_sync = self.env['hr.version'].with_context(sync_contract_dates=True).sudo().search([
-                ('employee_id', '=', values['employee_id']),
+                ('employee_id', '=', employee_id),
                 ('contract_date_start', '=', date_from),
             ])
             if versions_sudo_to_sync:
@@ -684,8 +713,33 @@ class HrEmployee(models.Model):
                 })
         self.check_access('write')
         version_to_copy.check_access('write')
-        new_version = version_to_copy.sudo().copy(values)
-        return new_version.sudo(False)
+        # to be sure even if the user has no access to certain fields, we can still copy the verison without any issues.
+        copy_vals = {
+            'date_version': date,
+            'employee_id': employee_id,
+            'contract_date_start': contract_date_start,
+            'contract_date_end': contract_date_end,
+        }
+        if 'active' in values:
+            copy_vals['active'] = values['active']
+        if calendar_id := values.get('resource_calendar_id'):
+            copy_vals['resource_calendar_id'] = calendar_id
+        # apply the changes on the new versions.
+        new_version_vals = {
+            field_name: field_value
+            for field_name, field_value in values.items()
+            if field_name not in copy_vals
+        }
+        version_fields = self.env['hr.version']._fields
+        copy_vals = {
+            k: v
+            for k, v in version_to_copy.sudo().copy_data()[0].items()
+            if not (k in new_version_vals and version_fields[k].type in ['one2many', 'many2many'])
+        } | copy_vals
+        new_version = self.env['hr.version'].sudo().create(copy_vals).sudo(False)
+        with self.env.protecting([f for f_name, f in version_fields.items() if f_name not in new_version_vals and f.copy], new_version):
+            new_version.write(new_version_vals)
+        return new_version
 
     def create_contract(self, date):
         # Here we can assume that there is no existing contract on the date given
@@ -982,11 +1036,11 @@ class HrEmployee(models.Model):
             employee[avatar_field] = avatar
         super(HrEmployee, employee_wo_user_and_image)._compute_avatar(avatar_field, image_field)
 
-    @api.depends('birthday_public_display')
+    @api.depends('birthday', 'birthday_public_display')
     def _compute_birthday_public_display_string(self):
         for employee in self:
             if employee.birthday and employee.birthday_public_display:
-                employee.birthday_public_display_string = datetime.strftime(employee.birthday, "%d %B")
+                employee.birthday_public_display_string = format_date(self.env, employee.birthday, date_format="MMMM dd")
             else:
                 employee.birthday_public_display_string = "hidden"
 
@@ -1293,7 +1347,7 @@ class HrEmployee(models.Model):
         raise RedirectWarning(
             message=_(
             """You are not allowed to access "Employee" (hr.employee) records.
-We can redirect you to the public employee list."""
+    We can redirect you to the public employee list."""
             ),
             action=self.env.ref('hr.hr_employee_public_action').id,
             button_text=_("Employees profile"),

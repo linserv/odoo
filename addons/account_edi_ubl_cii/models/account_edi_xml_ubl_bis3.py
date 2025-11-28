@@ -2,11 +2,13 @@
 from markupsafe import Markup
 from typing import Literal
 
-from odoo import models, _
+from odoo import _, api, models
 from odoo.addons.account.tools import dict_to_xml
 from odoo.addons.account_edi_ubl_cii.models.account_edi_xml_ubl_20 import FloatFmt, UBL_NAMESPACES
 
 from stdnum.no import mva
+
+CHORUS_PRO_PEPPOL_ID = "0009:11000201100044"
 
 
 class AccountEdiXmlUbl_Bis3(models.AbstractModel):
@@ -21,15 +23,19 @@ class AccountEdiXmlUbl_Bis3(models.AbstractModel):
     * Official doc for EHF Billing 3.0 is the OpenPeppol BIS 3 doc +
       https://anskaffelser.dev/postaward/g3/spec/current/billing-3.0/norway/
 
-        "Based on work done in PEPPOL BIS Billing 3.0, Difi has included Norwegian rules in PEPPOL BIS Billing 3.0 and
+        "Based on work done in Peppol BIS Billing 3.0, Difi has included Norwegian rules in Peppol BIS Billing 3.0 and
         does not see a need to implement a different CIUS targeting the Norwegian market. Implementation of EHF Billing
-        3.0 is therefore done by implementing PEPPOL BIS Billing 3.0 without extensions or extra rules."
+        3.0 is therefore done by implementing Peppol BIS Billing 3.0 without extensions or extra rules."
 
     Thus, EHF 3 and Bis 3 are actually the same format. The specific rules for NO defined in Bis 3 are added in Bis 3.
 
     To avoid multi-parental inheritance in case of UBL 4.0, we're adding the sale/purchase logic here.
     * Documentation for Peppol Order transaction 3.5: https://docs.peppol.eu/poacc/upgrade-3/syntax/Order/tree/
     """
+
+    @api.model
+    def _is_customer_behind_chorus_pro(self, customer):
+        return customer.peppol_eas and customer.peppol_endpoint and f"{customer.peppol_eas}:{customer.peppol_endpoint}" == CHORUS_PRO_PEPPOL_ID
 
     # -------------------------------------------------------------------------
     # EXPORT

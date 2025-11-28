@@ -77,10 +77,10 @@ class ProjectProject(models.Model):
         for project in self:
             project.is_favorite = project in favorite_project_ids
 
-    def _compute_sql_is_favorite(self, alias, query):
+    def _compute_sql_is_favorite(self, table):
         return SQL(
             "%s IN (SELECT project_id FROM project_favorite_user_rel WHERE user_id = %s)",
-            SQL.identifier(alias, 'id'), self.env.uid,
+            table.id, self.env.uid,
         )
 
     def _set_favorite_user_ids(self, is_favorite):
@@ -1269,14 +1269,11 @@ class ProjectProject(models.Model):
         for partner, tasks in dict_tasks_per_partner.items():
             tasks.message_subscribe(dict_partner_ids_to_subscribe_per_partner[partner])
 
-    def _thread_to_store(self, store: Store, fields, *, request_list=None):
-        super()._thread_to_store(store, fields, request_list=request_list)
-        if request_list and "followers" in request_list:
-            store.add(
-                self,
-                {"collaborator_ids": Store.Many(self.collaborator_ids.partner_id, [])},
-                as_thread=True,
-            )
+    def _get_store_thread_fields(self, target: Store.Target, request_list):
+        res = super()._get_store_thread_fields(target, request_list)
+        if "followers" in request_list:
+            res.append(Store.Many("collaborator_ids", [], value=lambda p: p.collaborator_ids.partner_id))
+        return res
 
     @api.depends('task_count', 'open_task_count')
     def _compute_task_completion_percentage(self):
