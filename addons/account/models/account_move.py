@@ -643,6 +643,7 @@ class AccountMove(models.Model):
         string='Origin',
         readonly=True,
         tracking=True,
+        copy=False,
         help="The document(s) that generated the invoice.",
     )
     invoice_incoterm_id = fields.Many2one(
@@ -1756,6 +1757,7 @@ class AccountMove(models.Model):
 
     @api.depends('company_id.account_fiscal_country_id', 'fiscal_position_id', 'fiscal_position_id.country_id', 'fiscal_position_id.foreign_vat')
     def _compute_tax_country_id(self):
+        self.fetch(['fiscal_position_id', 'company_id'])
         foreign_vat_records = self.filtered(lambda r: r.fiscal_position_id.foreign_vat)
         for fiscal_position_id, record_group in groupby(foreign_vat_records, key=lambda r: r.fiscal_position_id):
             self.env['account.move'].concat(*record_group).tax_country_id = fiscal_position_id.country_id
@@ -2130,7 +2132,7 @@ class AccountMove(models.Model):
         for move in self:
             move.next_payment_date = min([line.payment_date for line in move.line_ids.filtered(lambda l: l.payment_date and not l.reconciled)], default=False)
 
-    @api.depends('line_ids.matched_debit_ids', 'line_ids.matched_credit_ids', 'matched_payment_ids')
+    @api.depends('line_ids.matched_debit_ids', 'line_ids.matched_credit_ids', 'matched_payment_ids', 'matched_payment_ids.state')
     def _compute_reconciled_payment_ids(self):
         ''' Retrieve the payments reconciled to the invoices through the reconciliation (account.partial.reconcile) '''
         self.env['account.payment'].flush_model(fnames=['move_id'])
@@ -3001,6 +3003,9 @@ class AccountMove(models.Model):
             ):
                 # Changing the type of an invoice using 'switch to refund' feature or just changing the currency.
                 round_from_tax_lines = False
+            elif any(line not in base_lines for line, values in move_base_lines_values_before.items() if values['tax_ids']):
+                # Removed a base line affecting the taxes.
+                round_from_tax_lines = any_field_has_changed(move_tax_lines_values_before, tax_lines)
             elif field_has_changed(moves_values_before, move, 'invoice_currency_rate') and not field_has_changed(moves_values_before, move, 'invoice_date'):
                 # Changing the rate should preserve the tax amounts in foreign currency but reapply the currency rate.
                 round_from_tax_lines = 'reapply_currency_rate'
@@ -3030,9 +3035,6 @@ class AccountMove(models.Model):
                     and any(line[field] for line in changed_lines for field in ('amount_currency', 'balance'))
                 ):
                     continue
-            elif any(line not in base_lines for line, values in move_base_lines_values_before.items() if values['tax_ids']):
-                # Removed a base line affecting the taxes.
-                round_from_tax_lines = any_field_has_changed(move_tax_lines_values_before, tax_lines)
             else:
                 continue
 
