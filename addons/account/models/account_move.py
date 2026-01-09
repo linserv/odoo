@@ -5115,6 +5115,15 @@ class AccountMove(models.Model):
             if move.line_ids.account_id.filtered(lambda account: account.deprecated) and not self._context.get('skip_account_deprecation_check'):
                 validation_msgs.add(_("A line of this move is using a deprecated account, you cannot post it."))
 
+            account_companies = move.line_ids.account_id.company_ids
+            move_journal_company = move.journal_id.company_id.sudo()
+
+            if not ((move_journal_company.child_ids | move_journal_company.parent_ids) & account_companies == account_companies):
+                raise UserError(self.env._(
+                    "The entry '%(move_name)s (id %(move_id)s) is using accounts from a different company.",
+                    move_name=move.name, move_id=move.id
+                ))
+
             # If the field autocheck_on_post is set, we want the checked field on the move to be checked
             if move.journal_id.autocheck_on_post:
                 move.checked = move.journal_id.autocheck_on_post
@@ -6549,9 +6558,6 @@ class AccountMove(models.Model):
         This is necessary to avoid the re-generation of the PDF through the action_report.
         Indeed, once a legal PDF is generated, it should be used and not re-generated.
         """
-        report = self.env['ir.actions.report'].search([('report_name', '=', 'account.report_invoice_with_payments'), ('binding_model_id', '!=', False)], limit=1)
-        if report:
-            return []
         return [{
             'key': 'download_pdf',
             'description': _('PDF'),
