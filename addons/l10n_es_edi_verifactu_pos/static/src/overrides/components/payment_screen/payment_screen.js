@@ -9,11 +9,12 @@ patch(PaymentScreen.prototype, {
         if (this.pos.config.l10n_es_edi_verifactu_required) {
             const order = this.currentOrder;
             order.l10n_es_edi_verifactu_required = true;
-            const canBeSimplified = this.env.utils.roundCurrency(order.get_total_with_tax()) <= 400;
+            const simplifiedInvoiceLimit = this.pos.config.l10n_es_edi_verifactu_simplified_invoice_limit ?? 400;
+            const canBeSimplified = this.env.utils.roundCurrency(order.get_total_with_tax()) <= simplifiedInvoiceLimit;
             if (!canBeSimplified && !order.to_invoice) {
                 this.popup.add(ErrorPopup, {
                     title: _t("Error"),
-                    body: _t("The order needs to be invoiced since its total amount is above 400€."),
+                    body: _t("Order amount is too large for a simplified invoice, use an invoice instead."),
                 });
                 return false;
             }
@@ -23,12 +24,8 @@ patch(PaymentScreen.prototype, {
 
     async _postPushOrderResolve(order, order_server_ids) {
         if (this.pos.config.l10n_es_edi_verifactu_required) {
-            const [orderRead] = await this.orm.read(
-                'pos.order',
-                order_server_ids,
-                ['l10n_es_edi_verifactu_qr_code'],
-            );
-            order.l10n_es_edi_verifactu_qr_code = orderRead.l10n_es_edi_verifactu_qr_code;
+            const [res] = await this.pos.selectedOrder.fetch_l10n_es_edi_verifactu_qr_code(order_server_ids);
+            order.l10n_es_edi_verifactu_qr_code = res.l10n_es_edi_verifactu_qr_code;
         }
         return super._postPushOrderResolve(...arguments);
     },
