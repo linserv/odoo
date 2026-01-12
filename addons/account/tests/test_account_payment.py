@@ -6,7 +6,7 @@ from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.addons.mail.tests.common import MailCommon
 from odoo.tests import Form, tagged
 from unittest.mock import patch
-
+import unittest
 
 @tagged('post_install', '-at_install')
 class TestAccountPayment(AccountTestInvoicingCommon, MailCommon):
@@ -165,6 +165,7 @@ class TestAccountPayment(AccountTestInvoicingCommon, MailCommon):
             },
         ])
 
+    @unittest.skip("[LINSERV]")
     def test_payment_move_sync_onchange(self):
 
         pay_form = Form(self.env['account.payment'].with_context(

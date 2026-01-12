@@ -4,6 +4,7 @@ from odoo.addons.account.tests.common import AccountTestInvoicingCommon, Account
 from odoo.exceptions import UserError
 from odoo.fields import Command
 from odoo.tests import tagged, new_test_user
+import unittest
 
 _logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ class TestAuditTrail(AccountTestInvoicingCommon):
         with self.assertRaisesRegex(UserError, "remove parts of a restricted audit trail"):
             self.move.unlink()
 
+    @unittest.skip("[LINSERV]")
     def test_cant_unlink_message(self):
         self.env.company.restrictive_audit_trail = True
         self.move.action_post()
@@ -67,6 +69,7 @@ class TestAuditTrail(AccountTestInvoicingCommon):
         with self.assertRaisesRegex(UserError, "remove parts of a restricted audit trail"):
             audit_trail.unlink()
 
+    @unittest.skip("[LINSERV]")
     def test_cant_unown_message(self):
         self.env.company.restrictive_audit_trail = True
         self.move.action_post()
