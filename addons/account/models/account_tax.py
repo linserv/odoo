@@ -213,7 +213,7 @@ class AccountTax(models.Model):
                         ('country_id', '=', tax.country_id.id),
                         ('id', '!=', tax.id),
                     ])
-            if duplicates := self.search(expression.OR(domains)):
+            if duplicates := self.sudo().search(expression.OR(domains)):
                 raise ValidationError(
                     _("Tax names must be unique!")
                     + "\n" + "\n".join(_(
@@ -1576,6 +1576,9 @@ class AccountTax(models.Model):
     def _normalize_target_factors(self, target_factors):
         """ Normalize the factors passed as parameter to have a distribution having a sum of 1.
 
+        [!] Mirror of the same method in account_tax.js.
+        PLZ KEEP BOTH METHODS CONSISTENT WITH EACH OTHERS.
+
         :param target_factors:      A list of dictionary containing at least 'factor' being the weight
                                     defining how much delta will be allocated to this factor.
         :return:                    A list of tuple <index, normalized_factor> for each 'target_factors' passed as parameter.
@@ -1583,7 +1586,7 @@ class AccountTax(models.Model):
         factors = [(i, abs(target_factor['factor'])) for i, target_factor in enumerate(target_factors)]
         factors.sort(key=lambda x: x[1], reverse=True)
         sum_of_factors = sum(x[1] for x in factors)
-        return [(i, factor / sum_of_factors if sum_of_factors else 0.0) for i, factor in factors]
+        return [(i, factor / sum_of_factors if sum_of_factors else 1 / len(factors)) for i, factor in factors]
 
     @api.model
     def _distribute_delta_amount_smoothly(self, precision_digits, delta_amount, target_factors):
