@@ -861,7 +861,7 @@ export const accountTaxHelpers = {
                 const total_tax_amount = values[`tax_amount${delta_currency_indicator}`];
                 const delta_total_tax_amount = rounded_raw_total_tax_amount - total_tax_amount;
 
-                if (raw_total_tax_amount) {
+                if (!floatIsZero(delta_total_tax_amount, delta_currency.decimal_places)) {
                     const target_factors = values.base_line_x_taxes_data.flatMap(
                         ([_, taxes_data]) =>
                             taxes_data.map((tax_data) => ({
@@ -908,7 +908,7 @@ export const accountTaxHelpers = {
                     delta_total_base_amount = rounded_raw_total_base_amount - total_base_amount;
                 }
 
-                if (raw_total_base_amount) {
+                if (!floatIsZero(delta_total_base_amount, delta_currency.decimal_places)) {
                     const target_factors = values.base_line_x_taxes_data.flatMap(
                         ([_, taxes_data]) =>
                             taxes_data.map((tax_data) => ({
@@ -2406,11 +2406,13 @@ export const accountTaxHelpers = {
             ["", expected_base_amount - current_base_amount, company.currency_id],
         ]) {
             const target_factors = sorted_base_lines.map((base_line) => ({
-                factor: Math.abs(
-                    (base_line.tax_details.total_excluded_currency +
-                        base_line.tax_details.delta_total_excluded_currency) /
-                        current_base_amount_currency
-                ),
+                factor: current_base_amount_currency
+                    ? Math.abs(
+                          (base_line.tax_details.total_excluded_currency +
+                              base_line.tax_details.delta_total_excluded_currency) /
+                              current_base_amount_currency
+                      )
+                    : 0.0,
                 base_line: base_line,
             }));
             const amounts_to_distribute = this.distribute_delta_amount_smoothly(
