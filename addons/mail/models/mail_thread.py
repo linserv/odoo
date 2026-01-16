@@ -1572,6 +1572,9 @@ class MailThread(models.AbstractModel):
                 if part.get_content_type() == 'binary/octet-stream':
                     _logger.warning("Message containing an unexpected Content-Type 'binary/octet-stream', assuming 'application/octet-stream'")
                     part.replace_header('Content-Type', 'application/octet-stream')
+                if part.get_content_type() == '*/*':
+                    _logger.warning("Message containing an unexpected Content-Type '*/*', assuming 'application/octet-stream'")
+                    part.replace_header('Content-Type', 'application/octet-stream')
                 if part.get_content_type() == 'multipart/alternative':
                     alternative = True
                 if part.get_content_type() == 'multipart/mixed':
@@ -4382,16 +4385,18 @@ class MailThread(models.AbstractModel):
         res = {'hasWriteAccess': False, 'hasReadAccess': True}
         if not self:
             res['hasReadAccess'] = False
+            res['canPostOnReadonly'] = False
             return res
-        res['canPostOnReadonly'] = self._mail_post_access == 'read'
 
         self.ensure_one()
+        res['canPostOnReadonly'] = self._get_mail_message_access(self.ids, 'create') == "read"
         try:
             self.check_access_rights("write")
             self.check_access_rule("write")
             res['hasWriteAccess'] = True
         except AccessError:
             pass
+
         if 'activities' in request_list:
             res['activities'] = self.with_context(active_test=True).activity_ids.activity_format()
         if 'attachments' in request_list:
