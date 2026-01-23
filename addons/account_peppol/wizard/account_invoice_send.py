@@ -216,20 +216,28 @@ class AccountInvoiceSend(models.TransientModel):
                             )
 
                         if attachments_linked:
-                            invoice.with_context(no_new_invoice=True).message_post(
+                            new_message = invoice.with_context(no_new_invoice=True).message_post(
                                 body=attachments_linked_message,
                                 attachments=[(attachment.name, attachment.raw) for attachment in attachments_linked],
                             )
+
+                            if new_message.attachment_ids.ids:
+                                self.env.cr.execute("UPDATE ir_attachment SET res_id = NULL WHERE id IN %s", [tuple(new_message.attachment_ids.ids)])
+                            new_message.attachment_ids.write({
+                                'res_model': new_message._name,
+                                'res_id': new_message.id,
+                            })
 
         if not tools.config['test_enable'] and not modules.module.current_test:
             self._cr.commit()
 
     def _embed_extra_attachments(self, invoice, xml_attachment, extra_attachments):
-        pdf_name = f'{invoice.name.replace("/", "_")}.pdf'
+        pdf_names = (f'{invoice._get_report_mail_attachment_filename()}.pdf', invoice._get_report_attachment_filename())
         attachments_to_embed, _not_supported_attachments = self._get_peppol_available_attachments(
             invoice,
             extra_attachments.filtered(
-                lambda attachment: attachment.name not in (xml_attachment.name, pdf_name, f'Invoice_{pdf_name}')
+                # We make sure not to embed the xml or the pdf that was already embed in the xml
+                lambda attachment: attachment.name not in (xml_attachment.name, *pdf_names)
             ),
         )
         self.env['ir.actions.report']._add_attachments_into_invoice_xml(
@@ -237,7 +245,7 @@ class AccountInvoiceSend(models.TransientModel):
             xml_attachment,
             [{
                 'name': attachment.name,
-                'raw_b64': attachment.datas,
+                'raw_b64': attachment.datas.decode(),
                 'mimetype': attachment.mimetype,
             } for attachment in attachments_to_embed],
         )
