@@ -2,7 +2,6 @@
 
 from cups import Connection as CupsConnection, IPPError
 from itertools import groupby
-from threading import Lock
 from urllib.parse import urlsplit, parse_qs, unquote
 from zeroconf import (
     IPVersion,
@@ -20,10 +19,6 @@ from odoo.addons.iot_drivers.main import iot_devices
 
 _logger = logging.getLogger(__name__)
 
-conn = CupsConnection()
-PPDs = conn.getPPDs()
-cups_lock = Lock()  # We can only make one call to Cups at a time
-
 
 class PrinterInterface(Interface):
     connection_type = 'printer'
@@ -33,12 +28,13 @@ class PrinterInterface(Interface):
         super().__init__()
         self.start_time = time.time()
         self.printer_devices = {}
+        self.conn = CupsConnection()
+        self.PPDs = self.conn.getPPDs()
 
     def get_devices(self):
         discovered_devices = {}
-        with cups_lock:
-            printers = conn.getPrinters()
-            devices = conn.getDevices()
+        printers = self.conn.getPrinters()
+        devices = self.conn.getDevices()
 
         # get and adjust configuration of printers already added in cups
         for printer_name, printer in printers.items():
@@ -107,10 +103,12 @@ class PrinterInterface(Interface):
     def get_identifier(self, path):
         """
         Necessary because the path is not always a valid Cups identifier,
-        as it may contain characters typically found in URLs or paths.
+        as it may contain characters typically found in URLs or paths,
+        or it may exceed the length limit.
 
           - Removes characters: ':', '/', '.', '\', and space.
           - Removes the exact strings: "uuid=" and "serial=".
+          - Truncates the string to 127 characters.
 
         Example 1:
             Input: "ipp://printers/printer1:1234/abcd"
@@ -120,7 +118,7 @@ class PrinterInterface(Interface):
             Input: "uuid=1234-5678-90ab-cdef"
             Output: "1234-5678-90ab-cdef
         """
-        return re.sub(r'[:\/\.\\ ]|(uuid=)|(serial=)', '', path)
+        return re.sub(r'[:\/\.\\ ]|(uuid=)|(serial=)', '', path)[:127]
 
     def get_ip(self, device_path):
         hostname = urlsplit(device_path).hostname
@@ -160,7 +158,7 @@ class PrinterInterface(Interface):
                 if device.device_type == 'printer' and ip and ip == device.ip
             ), None)
             if already_registered_identifier:
-                result.append({'identifier': already_registered_identifier})
+                result.append({'identifier': already_registered_identifier, 'disconnect_counter': 0})
                 continue
 
             printers_with_same_ip = sorted(printers_with_same_ip, key=lambda printer: printer['identifier'])
@@ -228,8 +226,7 @@ class PrinterInterface(Interface):
         zeroconf = Zeroconf(ip_version=IPVersion.V4Only)
         self.zeroconf_browser = ServiceBrowser(zeroconf, service_types, handlers=[on_service_change])
 
-    @staticmethod
-    def set_up_printer_in_cups(device):
+    def set_up_printer_in_cups(self, device):
         """Configure detected printer in cups: ppd files, name, info, groups, ...
 
         :param dict device: printer device to configure in cups (detected but not added)
@@ -241,17 +238,16 @@ class PrinterInterface(Interface):
         ), fallback_model)
         model = re.sub(r"[\(].*?[\)]", "", model).strip()
 
-        ppdname_argument = next(({"ppdname": ppd} for ppd in PPDs if model and model in PPDs[ppd]['ppd-product']), {})
+        ppdname_argument = next(({"ppdname": ppd} for ppd in self.PPDs if model and model in self.PPDs[ppd]['ppd-product']), {})
 
         try:
-            with cups_lock:
-                conn.addPrinter(name=device['identifier'], device=device['url'], **ppdname_argument)
-                conn.setPrinterInfo(device['identifier'], device['device-make-and-model'])
-                conn.enablePrinter(device['identifier'])
-                conn.acceptJobs(device['identifier'])
-                conn.setPrinterUsersAllowed(device['identifier'], ['all'])
-                conn.addPrinterOptionDefault(device['identifier'], "usb-no-reattach", "true")
-                conn.addPrinterOptionDefault(device['identifier'], "usb-unidir", "true")
+            self.conn.addPrinter(name=device['identifier'], device=device['url'], **ppdname_argument)
+            self.conn.setPrinterInfo(device['identifier'], device['device-make-and-model'])
+            self.conn.enablePrinter(device['identifier'])
+            self.conn.acceptJobs(device['identifier'])
+            self.conn.setPrinterUsersAllowed(device['identifier'], ['all'])
+            self.conn.addPrinterOptionDefault(device['identifier'], "usb-no-reattach", "true")
+            self.conn.addPrinterOptionDefault(device['identifier'], "usb-unidir", "true")
         except IPPError:
             _logger.exception("Failed to add printer '%s'", device['identifier'])
 

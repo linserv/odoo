@@ -2268,8 +2268,9 @@ class TestStockValuation(TestStockValuationCommon):
         Create two warehouses and check that the total value and the on hand quantity
         displayed in the stock report accurately depends on the contextual warehouse.
         """
+        self._use_multi_warehouses()
         product = self.product_avco_auto
-        warehouse_1, warehouse_2 = self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)], limit=2)
+        warehouse_1, warehouse_2 = self.warehouse, self.other_warehouse
 
         inventory_adjustment_loc = self.env['stock.location'].search([('usage', '=', 'inventory'), ('company_id', '=', self.env.company.id)], limit=1)
         self._make_in_move(product=product, quantity=15.0, location_id=inventory_adjustment_loc.id, location_dest_id=warehouse_1.lot_stock_id.id)
@@ -2290,8 +2291,9 @@ class TestStockValuation(TestStockValuationCommon):
         Create two warehouses and check that the total value and the on hand quantity
         displayed in the stock report accurately depends on the contextual warehouse.
         """
+        self._use_multi_warehouses()
         product = self.product_fifo_auto
-        warehouse_1, warehouse_2 = self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)], limit=2)
+        warehouse_1, warehouse_2 = self.warehouse, self.other_warehouse
 
         inventory_adjustment_loc = self.env['stock.location'].search([('usage', '=', 'inventory'), ('company_id', '=', self.env.company.id)], limit=1)
         self._make_in_move(product=product, quantity=15.0, location_id=inventory_adjustment_loc.id, location_dest_id=warehouse_1.lot_stock_id.id)
@@ -2313,12 +2315,13 @@ class TestStockValuation(TestStockValuationCommon):
         Create two warehouses and check that the total value and the on hand quantity
         displayed in the stock report accurately depends on the contextual warehouse.
         """
+        self._use_multi_warehouses()
         product = self.product_avco_auto
         product.write({
             'tracking': 'lot',
             'lot_valuated': True,
         })
-        warehouse_1, warehouse_2 = self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)], limit=2)
+        warehouse_1, warehouse_2 = self.warehouse, self.other_warehouse
         lots = self.env['stock.lot'].create([{
             'name': f'lot{i}',
             'product_id': product.id,
@@ -2360,12 +2363,13 @@ class TestStockValuation(TestStockValuationCommon):
         Create two warehouses and check that the total value and the on hand quantity
         displayed in the stock report accurately depends on the contextual warehouse.
         """
+        self._use_multi_warehouses()
         product = self.product_fifo_auto
         product.write({
             'tracking': 'lot',
             'lot_valuated': True,
         })
-        warehouse_1, warehouse_2 = self.env['stock.warehouse'].search([('company_id', '=', self.env.company.id)], limit=2)
+        warehouse_1, warehouse_2 = self.warehouse, self.other_warehouse
         lots = self.env['stock.lot'].create([{
             'name': f'lot{i}',
             'product_id': product.id,
@@ -3089,3 +3093,25 @@ class TestStockValuation(TestStockValuationCommon):
         self._make_dropship_move(self.product_avco, 15, unit_cost=15)
         self.assertEqual(self.product_avco.qty_available, -10)
         self.assertEqual(self.product_avco.standard_price, 10)
+
+    def test_avco_adjusted_valuation_updates_unit_cost_correctly(self):
+        """Ensure that for AVCO products, adjusting the total valuation recomputes
+        the unit cost correctly.
+
+        Scenario:
+        - Receive 100 units with an initial total value of 1000$ (unit cost = 10$)
+        - Adjust the move valuation to 2000$
+        - Expected unit cost = 2000 / 100 = 20$
+        """
+        move = self._make_in_move(self.product_avco, 100, 10)
+        self.assertEqual(move.quantity, 100.0)
+        self.assertEqual(self.product_avco.total_value, 1000)
+        self.assertEqual(self.product_avco.standard_price, 10)
+
+        self.env['product.value'].create({
+            'product_id': self.product_avco.id,
+            'move_id': move.id,
+            'value': 2000,
+        })
+        self.assertEqual(self.product_avco.total_value, 2000)
+        self.assertEqual(self.product_avco.standard_price, 20)
