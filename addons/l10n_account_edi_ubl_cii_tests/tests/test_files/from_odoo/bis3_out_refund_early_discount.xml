@@ -106,7 +106,7 @@
 		<cbc:ChargeIndicator>false</cbc:ChargeIndicator>
 		<cbc:AllowanceChargeReasonCode>64</cbc:AllowanceChargeReasonCode>
 		<cbc:AllowanceChargeReason>Conditional cash/payment discount</cbc:AllowanceChargeReason>
-		<cbc:Amount currencyID="USD">-178.20</cbc:Amount>
+		<cbc:Amount currencyID="USD">178.20</cbc:Amount>
 		<cac:TaxCategory>
 			<cbc:ID>S</cbc:ID>
 			<cbc:Percent>21.0</cbc:Percent>
@@ -119,7 +119,7 @@
 		<cbc:ChargeIndicator>false</cbc:ChargeIndicator>
 		<cbc:AllowanceChargeReasonCode>64</cbc:AllowanceChargeReasonCode>
 		<cbc:AllowanceChargeReason>Conditional cash/payment discount</cbc:AllowanceChargeReason>
-		<cbc:Amount currencyID="USD">-90.00</cbc:Amount>
+		<cbc:Amount currencyID="USD">90.00</cbc:Amount>
 		<cac:TaxCategory>
 			<cbc:ID>S</cbc:ID>
 			<cbc:Percent>12.0</cbc:Percent>
@@ -132,7 +132,7 @@
 		<cbc:ChargeIndicator>true</cbc:ChargeIndicator>
 		<cbc:AllowanceChargeReasonCode>ZZZ</cbc:AllowanceChargeReasonCode>
 		<cbc:AllowanceChargeReason>Conditional cash/payment discount</cbc:AllowanceChargeReason>
-		<cbc:Amount currencyID="USD">-268.20</cbc:Amount>
+		<cbc:Amount currencyID="USD">268.20</cbc:Amount>
 		<cac:TaxCategory>
 			<cbc:ID>E</cbc:ID>
 			<cbc:Percent>0.0</cbc:Percent>
@@ -144,7 +144,7 @@
 	<cac:TaxTotal>
 		<cbc:TaxAmount currencyID="USD">434.00</cbc:TaxAmount>
 		<cac:TaxSubtotal>
-			<cbc:TaxableAmount currencyID="USD">1960.20</cbc:TaxableAmount>
+			<cbc:TaxableAmount currencyID="USD">1603.80</cbc:TaxableAmount>
 			<cbc:TaxAmount currencyID="USD">336.80</cbc:TaxAmount>
 			<cac:TaxCategory>
 				<cbc:ID>S</cbc:ID>
@@ -155,7 +155,7 @@
 			</cac:TaxCategory>
 		</cac:TaxSubtotal>
 		<cac:TaxSubtotal>
-			<cbc:TaxableAmount currencyID="USD">990.00</cbc:TaxableAmount>
+			<cbc:TaxableAmount currencyID="USD">810.00</cbc:TaxableAmount>
 			<cbc:TaxAmount currencyID="USD">97.20</cbc:TaxAmount>
 			<cac:TaxCategory>
 				<cbc:ID>S</cbc:ID>
@@ -166,7 +166,7 @@
 			</cac:TaxCategory>
 		</cac:TaxSubtotal>
 		<cac:TaxSubtotal>
-			<cbc:TaxableAmount currencyID="USD">-268.20</cbc:TaxableAmount>
+			<cbc:TaxableAmount currencyID="USD">268.20</cbc:TaxableAmount>
 			<cbc:TaxAmount currencyID="USD">0.00</cbc:TaxAmount>
 			<cac:TaxCategory>
 				<cbc:ID>E</cbc:ID>
@@ -185,8 +185,8 @@
 		<cbc:LineExtensionAmount currencyID="USD">2682.00</cbc:LineExtensionAmount>
 		<cbc:TaxExclusiveAmount currencyID="USD">2682.00</cbc:TaxExclusiveAmount>
 		<cbc:TaxInclusiveAmount currencyID="USD">3116.00</cbc:TaxInclusiveAmount>
-		<cbc:AllowanceTotalAmount currencyID="USD">-268.20</cbc:AllowanceTotalAmount>
-		<cbc:ChargeTotalAmount currencyID="USD">-268.20</cbc:ChargeTotalAmount>
+		<cbc:AllowanceTotalAmount currencyID="USD">268.20</cbc:AllowanceTotalAmount>
+		<cbc:ChargeTotalAmount currencyID="USD">268.20</cbc:ChargeTotalAmount>
 		<cbc:PrepaidAmount currencyID="USD">0.00</cbc:PrepaidAmount>
 		<cbc:PayableAmount currencyID="USD">3116.00</cbc:PayableAmount>
 	</cac:LegalMonetaryTotal>
