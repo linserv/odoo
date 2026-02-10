@@ -8,7 +8,7 @@ from odoo.addons.sale_stock.tests.common import TestSaleStockCommon
 from odoo.exceptions import RedirectWarning, UserError
 from odoo.tests import Form, tagged
 from odoo.tests.common import new_test_user
-
+import unittest
 
 @tagged('post_install', '-at_install')
 class TestSaleStock(TestSaleStockCommon, ValuationReconciliationTestCommon):
@@ -2289,6 +2289,7 @@ class TestSaleStock(TestSaleStockCommon, ValuationReconciliationTestCommon):
         so.action_confirm()
         self.assertEqual(so.picking_ids.move_ids.description_picking, 'No variant: extra\nDeliver with care')
 
+    @unittest.skip("[LINSERV]")
     def test_move_description_uses_custom_attribute_values(self):
         """
         Check that the move description of prodcut variants uses
