@@ -894,8 +894,8 @@ class AccountMove(models.Model):
         for move in self:
             # This will get the bank account from the partner in an order with the trusted first
             bank_ids = move.bank_partner_id.bank_ids.filtered(
-                lambda bank: not bank.company_id or bank.company_id == move.company_id
-            ).sorted(lambda bank: not bank.allow_out_payment)
+                lambda bank: (not bank.company_id or bank.company_id == move.company_id) and bank.allow_out_payment
+            )
             move.partner_bank_id = bank_ids[:1]
 
     @api.depends('partner_id')
@@ -3928,6 +3928,10 @@ class AccountMove(models.Model):
                     "The recipient bank account linked to this invoice is archived.\n"
                     "So you cannot confirm the invoice."
                 ))
+            if invoice.partner_bank_id and invoice.is_inbound() and not invoice.partner_bank_id.allow_out_payment:
+                raise UserError(_(
+                    "The company bank account linked to this invoice is not trusted, please double-check and trust it before confirming, or remove it"
+                ))
             if float_compare(invoice.amount_total, 0.0, precision_rounding=invoice.currency_id.rounding) < 0:
                 raise UserError(_(
                     "You cannot validate an invoice with a negative total amount. "
@@ -4145,8 +4149,8 @@ class AccountMove(models.Model):
         return action
 
     def action_switch_move_type(self):
-        if any(move.posted_before for move in self):
-            raise ValidationError(_("You cannot switch the type of a document which has been posted once."))
+        if any((move.posted_before and move.name) for move in self):
+            raise ValidationError(_("You cannot switch the type of a document with an existing sequence number."))
         if any(move.move_type == "entry" for move in self):
             raise ValidationError(_("This action isn't available for this document."))
 
@@ -4720,10 +4724,11 @@ class AccountMove(models.Model):
         if self.invoice_pdf_report_id:
             attachments = self.env['account.move.send']._get_invoice_extra_attachments(self)
         else:
-            content, _ = self.env['ir.actions.report']._render('account.account_invoices', self.ids, data={'proforma': True})
+            proforma = self.is_sale_document(())
+            content, _ = self.env['ir.actions.report']._render('account.account_invoices', self.ids, data={'proforma': proforma})
             attachments = self.env['ir.attachment'].new({
                 'raw': content,
-                'name': self._get_invoice_proforma_pdf_report_filename(),
+                'name': self._get_invoice_proforma_pdf_report_filename() if proforma else self._get_invoice_report_filename(),
                 'mimetype': 'application/pdf',
                 'res_model': self._name,
                 'res_id': self.id,
