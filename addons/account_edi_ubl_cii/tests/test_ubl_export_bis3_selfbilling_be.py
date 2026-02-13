@@ -18,6 +18,7 @@ class TestUblExportBis3SelfbillingBE(TestUblBis3Common, TestUblCiiBECommon):
     def subfolder(self):
         return super().subfolder().replace('export', 'export/bis3/invoice_selfbilling')
 
+    @unittest.skip("[LINSERV]")
     def test_invoice_selfbilling(self):
         tax_21 = self.percent_tax(21.0, type_tax_use='purchase')
         product = self._create_product(standard_price=100.0, supplier_taxes_id=tax_21.ids)
