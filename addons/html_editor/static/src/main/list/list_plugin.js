@@ -1,13 +1,7 @@
 import { reactive } from "@web/owl2/utils";
 import { Plugin } from "@html_editor/plugin";
 import { closestBlock, isBlock } from "@html_editor/utils/blocks";
-import {
-    removeClass,
-    removeStyle,
-    toggleClass,
-    unwrapContents,
-    wrapInlinesInBlocks,
-} from "@html_editor/utils/dom";
+import { removeClass, removeStyle, toggleClass, unwrapContents } from "@html_editor/utils/dom";
 import {
     getDeepestEditablePosition,
     getDeepestPosition,
@@ -564,7 +558,7 @@ export class ListPlugin extends Plugin {
             )
         ) {
             const cursors = this.dependencies.selection.preserveSelection();
-            wrapInlinesInBlocks(element, {
+            this.dependencies.dom.wrapInlinesInBlocks(element, {
                 baseContainerNodeName: this.dependencies.baseContainer.getDefaultNodeName(),
                 cursors,
             });
