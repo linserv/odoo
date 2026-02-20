@@ -383,6 +383,7 @@ class TestCIIFR(TestUBLCommon):
         self.env['res.partner.bank'].sudo().create({
             'acc_number': 'FR15001559627230',
             'partner_id': self.company_data['company'].partner_id.id,
+            'allow_out_payment': True,
         })
         partner_vals = {
             'name': "Buyer",
@@ -451,6 +452,7 @@ class TestCIIFR(TestUBLCommon):
         self.env['res.partner.bank'].sudo().create({
             'acc_number': 'FR76 1254 2547 2569 8542 5874 698',
             'partner_id': self.company_data['company'].partner_id.id,
+            'allow_out_payment': True,
         })
         # Source: official documentation of the FNFE (subdirectory: "5. FACTUR-X 1.0.06 - Examples")
         subfolder = 'tests/test_files/from_factur-x_doc'
@@ -476,6 +478,7 @@ class TestCIIFR(TestUBLCommon):
         self.env['res.partner.bank'].sudo().create({
             'acc_number': 'FR15001559627230',
             'partner_id': self.company_data['company'].partner_id.id,
+            'allow_out_payment': True,
         })
         subfolder = "tests/test_files/from_odoo"
         self._assert_imported_invoice_from_file(
@@ -509,4 +512,3 @@ class TestCIIFR(TestUBLCommon):
         )
 
         self._assert_invoice_attachment(invoice.ubl_cii_xml_id, None, 'from_odoo/facturx_positive_discount_price_unit.xml')
-

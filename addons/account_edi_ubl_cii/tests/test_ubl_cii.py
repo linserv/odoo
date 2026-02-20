@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
-import logging
-
 from lxml import etree
 from unittest import SkipTest
 from unittest.mock import patch
@@ -9,7 +7,7 @@ from unittest.mock import patch
 from odoo import fields, Command
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
 from odoo.tests import tagged
-from odoo.tools import file_open, mute_logger
+from odoo.tools import file_open
 from odoo.tools.safe_eval import datetime
 
 try:
@@ -444,6 +442,7 @@ class TestAccountEdiUblCii(AccountTestInvoicingCommon):
         self.env['res.partner.bank'].sudo().create({
             'acc_number': 'Test account',
             'partner_id': self.company_data['company'].partner_id.id,
+            'allow_out_payment': True,
         })
         partner = self.env['res.partner'].create({
             'name': "My Belgian Partner",
@@ -490,12 +489,10 @@ comment-->1000.0</TaxExclusiveAmount></xpath>"""
             'raw': etree.tostring(self.with_applied_xpath(my_invoice_root, modifying_xpath)),
             'name': 'test_invoice.xml',
         })
-        logger_name = 'odoo.addons.account_edi.models.account_edi_format'
-        with mute_logger(logger_name), self.assertLogs(logging.getLogger(logger_name), logging.ERROR) as logs:
-            self.env['account.journal']\
-                .with_context(default_journal_id=self.company_data['default_journal_sale'].id)\
-                ._create_document_from_attachment(xml_attachment.id)
-        self.assertIn('add your own bank account manually', logs.output[0])
+        move = self.env['account.journal']\
+            .with_context(default_journal_id=self.company_data['default_journal_sale'].id)\
+            ._create_document_from_attachment(xml_attachment.id)
+        self.assertTrue(any('add your own bank account manually' in message.body for message in move.message_ids))
 
     def test_import_bill_without_tax(self):
         """ Test that no tax is set (even the default one) when importing a bill without tax."""
@@ -944,3 +941,23 @@ comment-->1000.0</TaxExclusiveAmount></xpath>"""
             places=2,
             msg="TaxTotal != sum(TaxSubtotal)",
         )
+
+    def test_bank_details_import(self):
+        acc_number = '1234567890'
+        partner_bank = self.env['res.partner.bank'].create({
+            'active': False,
+            'acc_number': acc_number,
+            'partner_id': self.partner_a.id
+        })
+        invoice = self.env['account.move'].create({
+            'partner_id': self.partner_a.id,
+            'move_type': 'in_invoice',
+            'invoice_line_ids': [Command.create({'product_id': self.product_a.id})],
+        })
+        # will not raise sql constraint because the sql is not commited yet
+        self.env['account.edi.common']._import_retrieve_and_fill_partner_bank_details(invoice, [acc_number])
+        self.assertFalse(invoice.partner_bank_id)
+
+        partner_bank.active = True
+        self.env['account.edi.common']._import_retrieve_and_fill_partner_bank_details(invoice, [acc_number])
+        self.assertEqual(invoice.partner_bank_id, partner_bank)

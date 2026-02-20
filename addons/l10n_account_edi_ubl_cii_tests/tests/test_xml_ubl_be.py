@@ -92,6 +92,7 @@ class TestUBLBE(TestUBLCommon, TestAccountMoveSendCommon):
         cls.env['res.partner.bank'].sudo().create({
             'acc_number': 'BE15001559627230',
             'partner_id': cls.company_data['company'].partner_id.id,
+            'allow_out_payment': True,
         })
 
         cls.pay_term = cls.env['account.payment.term'].create({
@@ -1171,6 +1172,7 @@ class TestUBLBE(TestUBLCommon, TestAccountMoveSendCommon):
         self.env['res.partner.bank'].sudo().create({
             'acc_number': 'IBAN32423940',
             'partner_id': self.company_data['company'].partner_id.id,
+            'allow_out_payment': True,
         })
         # Source: https://github.com/OpenPEPPOL/peppol-bis-invoice-3/tree/master/rules/examples
         subfolder = 'tests/test_files/from_peppol-bis-invoice-3_doc'

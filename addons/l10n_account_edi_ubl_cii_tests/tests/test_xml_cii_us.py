@@ -66,6 +66,7 @@ class TestCIIUS(TestUBLCommon):
         self.env['res.partner.bank'].sudo().create({
             'acc_number': 'FR76 1254 2547 2569 8542 5874 698',
             'partner_id': self.company_data['company'].partner_id.id,
+            'allow_out_payment': True,
         })
         self._assert_imported_invoice_from_file(
             subfolder='tests/test_files/from_factur-x_doc',
