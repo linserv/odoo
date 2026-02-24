@@ -147,3 +147,7 @@ class ResPartnerBank(models.Model):
 
         domain = [sanitize(item) for item in domain]
         return super()._search(domain, offset, limit, order, access_rights_uid)
+
+    def _user_can_trust(self):
+        self.ensure_one()
+        return True
