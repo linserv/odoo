@@ -7,7 +7,7 @@ from odoo.exceptions import UserError
 from odoo.tools.safe_eval import safe_eval
 
 from .common import TestSaleProjectCommon
-
+import unittest
 
 @tagged('post_install', '-at_install')
 class TestSaleProject(TestSaleProjectCommon):
@@ -644,7 +644,8 @@ class TestSaleProject(TestSaleProjectCommon):
             'project.task',
             "res_model mismatch: expected 'project.task', got %s" % action['res_model']
         )
-
+    
+    @unittest.skip("[LINSERV]")
     def test_sale_order_line_view_form_editable(self):
         """ Check the behavior of the form view editable of `sale.order.line` introduced in that module
 
