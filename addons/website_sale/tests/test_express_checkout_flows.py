@@ -11,7 +11,7 @@ from odoo.addons.website_sale.controllers.delivery import (
     Delivery as WebsiteSaleDeliveryController,
 )
 from odoo.addons.website_sale.controllers.main import WebsiteSale
-from odoo.addons.website_sale.tests.common import MockRequest, WebsiteSaleCommon
+from odoo.addons.website_sale.tests.common import WebsiteSaleCommon
 
 
 @tagged('post_install', '-at_install')
@@ -118,7 +118,7 @@ class TestWebsiteSaleExpressCheckoutFlows(WebsiteSaleCommon, HttpCase):
         )
         self.carrier.fixed_price = 20
         self.cart.set_delivery_line(self.carrier, self.carrier.fixed_price)
-        with MockRequest(self.env, sale_order_id=self.cart.id, website=self.website):
+        with self.mock_request(sale_order_id=self.cart.id):
             payment_values = Cart()._get_express_shop_payment_values(self.cart)
 
         self.assertEqual(payment_values['minor_amount'], amount_without_delivery)
@@ -530,3 +530,21 @@ class TestWebsiteSaleExpressCheckoutFlows(WebsiteSaleCommon, HttpCase):
             self.assertFalse(
                 self.sale_order.partner_shipping_id.name.endswith(self.sale_order.name)
             )
+
+    def test_express_checkout_shipping_address_change_returns_amount_without_delivery(self):
+        """
+        Test that the minor amount returned by the /shop/express/shipping_address_change route
+        doens't include delivery costs.
+        """
+        websiteSaleDeliveryController = WebsiteSaleDeliveryController()
+
+        expected_amount = self.sale_order._compute_amount_total_without_delivery()
+
+        with patch(
+            'odoo.addons.delivery.models.delivery_carrier.DeliveryCarrier.rate_shipment',
+            return_value=self.rate_shipment_result
+        ), self.mock_request(user=self.env.user, sale_order_id=self.sale_order.id):
+            result = websiteSaleDeliveryController.express_checkout_process_delivery_address(
+                partial_delivery_address=self.express_checkout_anonymized_shipping_values,
+            )
+            self.assertEqual(result['adjusted_minor_amount'], expected_amount * 100)

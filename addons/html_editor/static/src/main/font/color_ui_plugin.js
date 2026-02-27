@@ -1,8 +1,8 @@
+import { reactive } from "@web/owl2/utils";
 import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 import { Plugin } from "@html_editor/plugin";
 import { _t } from "@web/core/l10n/translation";
 import { ColorSelector } from "./color_selector";
-import { reactive } from "@odoo/owl";
 import { isStylable, isTextNode } from "@html_editor/utils/dom_info";
 import { closestElement } from "@html_editor/utils/dom_traversal";
 import { isCSSColor, RGBA_REGEX, rgbaToHex } from "@web/core/utils/colors";
@@ -42,8 +42,8 @@ export class ColorUIPlugin extends Plugin {
                 isDisabled: (sel, nodes) => nodes.some((node) => !isStylable(node)),
             },
         ],
-        selectionchange_handlers: this.updateSelectedColor.bind(this),
-        get_background_color_processors: this.getBackgroundColorProcessor.bind(this),
+        on_selectionchange_handlers: this.updateSelectedColor.bind(this),
+        background_color_processors: this.getBackgroundColorProcessor.bind(this),
         apply_background_color_processors: this.applyBackgroundColorProcessor.bind(this),
     };
 

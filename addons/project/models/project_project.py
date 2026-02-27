@@ -657,6 +657,9 @@ class ProjectProject(models.Model):
             if vals.pop('is_favorite', False):
                 vals['favorite_user_ids'] = [self.env.uid]
         projects = super().create(vals_list)
+        for project in projects:
+            if project.privacy_visibility == 'portal':
+                project.message_subscribe(partner_ids=[project.partner_id.id])
         return projects
 
     def write(self, vals):
@@ -1012,6 +1015,10 @@ class ProjectProject(models.Model):
     def action_get_list_view(self):
         action = self.env['ir.actions.act_window']._for_xml_id('project.project_milestone_action')
         action['display_name'] = _("%(name)s's Milestones", name=self.name)
+        context = action.get('context', '{}').replace('active_id', str(self.id))
+        context = ast.literal_eval(context)
+        context.update({'is_project_template': self.is_template})
+        action['context'] = context
         return action
 
     def action_open_project_form(self):

@@ -1,3 +1,4 @@
+import { reactive, useChildSubEnv, useLayoutEffect, useRef, useState } from "@web/owl2/utils";
 import { DateSection } from "@mail/core/common/date_section";
 import { Message } from "@mail/core/common/message";
 import { NotificationMessage } from "./notification_message";
@@ -11,12 +12,7 @@ import {
     onWillPatch,
     onWillUnmount,
     onWillUpdateProps,
-    reactive,
     toRaw,
-    useChildSubEnv,
-    useEffect,
-    useRef,
-    useState,
 } from "@odoo/owl";
 import { browser } from "@web/core/browser/browser";
 
@@ -90,7 +86,7 @@ export class Thread extends Component {
             ? useState(this.env.messageHighlight)
             : null;
         this.scrollingToHighlight = false;
-        useEffect(
+        useLayoutEffect(
             () => {
                 this.scrollToHighlighted();
             },
@@ -121,7 +117,9 @@ export class Thread extends Component {
                     this.smoothScrollingDeferred,
                 ]);
                 if (this.loadOlderState.isVisible) {
-                    toRaw(this.props.thread).fetchMoreMessages();
+                    toRaw(this.props.thread).fetchMoreMessages({
+                        routeParams: this.messageFetchRouteParams,
+                    });
                 }
             },
             { ready: false }
@@ -134,7 +132,10 @@ export class Thread extends Component {
                     this.smoothScrollingDeferred,
                 ]);
                 if (this.loadNewerState.isVisible) {
-                    toRaw(this.props.thread).fetchMoreMessages("newer");
+                    toRaw(this.props.thread).fetchMoreMessages({
+                        epoch: "newer",
+                        routeParams: this.messageFetchRouteParams,
+                    });
                 }
             },
             { ready: false }
@@ -144,7 +145,7 @@ export class Thread extends Component {
             this.updateShowJumpPresent()
         );
         this.setupScroll();
-        useEffect(
+        useLayoutEffect(
             (focus) => {
                 if (focus && this.state.mountedAndLoaded) {
                     this.root.el.focus();
@@ -152,17 +153,17 @@ export class Thread extends Component {
             },
             () => [this.props.autofocus + this.props.thread.autofocus, this.state.mountedAndLoaded]
         );
-        useEffect(
+        useLayoutEffect(
             () => {
                 this.computeJumpPresentPosition();
             },
             () => [this.jumpPresentRef.el, this.viewportEl]
         );
-        useEffect(
+        useLayoutEffect(
             () => this.updateShowJumpPresent(),
             () => [this.props.thread.loadNewer]
         );
-        useEffect(
+        useLayoutEffect(
             () => {
                 if (this.props.jumpPresent !== this.lastJumpPresent) {
                     this.jumpToPresent({ immediate: true });
@@ -170,19 +171,16 @@ export class Thread extends Component {
             },
             () => [this.props.jumpPresent]
         );
-        useEffect(
+        useLayoutEffect(
             () => {
                 if (this.props.thread.highlightMessage && this.state.mountedAndLoaded) {
-                    this.messageHighlight?.highlightMessage(
-                        this.props.thread.highlightMessage,
-                        this.props.thread
-                    );
+                    this.messageHighlight?.highlightMessage(this.props.thread.highlightMessage);
                     this.props.thread.highlightMessage = null;
                 }
             },
             () => [this.props.thread.highlightMessage, this.state.mountedAndLoaded]
         );
-        useEffect(
+        useLayoutEffect(
             () => {
                 if (!this.state.mountedAndLoaded) {
                     return;
@@ -204,18 +202,18 @@ export class Thread extends Component {
                 this.props.thread.isFocusedCounter--;
             }
         });
-        useEffect(
+        useLayoutEffect(
             (isLoaded) => {
                 this.state.mountedAndLoaded = isLoaded;
             },
             /**
              * Observe `mountedAndLoaded` as well because it might change from
-             * other parts of the code without `useEffect` detecting any change
+             * other parts of the code without `useLayoutEffect` detecting any change
              * for `isLoaded`, and it should still be reset when patching.
              */
             () => [this.props.thread.isLoaded, this.state.mountedAndLoaded]
         );
-        useEffect(
+        useLayoutEffect(
             () => {
                 if (!this.props.jumpToNewMessage) {
                     return;
@@ -367,7 +365,7 @@ export class Thread extends Component {
                 scrollTop: this.scrollableRef.el.scrollTop,
             };
         });
-        useEffect(this.applyScroll);
+        useLayoutEffect(this.applyScroll);
         useChildSubEnv({
             getCurrentThread: () => this.props.thread,
             onImageLoaded: this.applyScroll,
@@ -376,7 +374,7 @@ export class Thread extends Component {
             this.computeJumpPresentPosition();
             this.applyScroll();
         });
-        useEffect(
+        useLayoutEffect(
             (el, mountedAndLoaded) => {
                 if (el && mountedAndLoaded) {
                     el.addEventListener("scroll", this.onScroll);
@@ -440,6 +438,11 @@ export class Thread extends Component {
         ) {
             let value;
             if (typeof thread.scrollTop === "string" && thread.scrollTop?.includes("bottom")) {
+                if (newerMessages && this.channel) {
+                    if (this.applyScrollContextuallyNewerChannelMessages(thread)) {
+                        return;
+                    }
+                }
                 value =
                     this.props.order === "asc"
                         ? this.scrollableRef.el.scrollHeight - this.scrollableRef.el.clientHeight
@@ -465,8 +468,35 @@ export class Thread extends Component {
         }
     }
 
+    /**
+     * @param {import("models").Thread} thread
+     * @returns {Boolean} true when fully handled, false otherwise.
+     */
+    applyScrollContextuallyNewerChannelMessages(thread) {
+        const firstNewerMessage = this.channel.getFirstNewerMessage({
+            from_message_id: this.newestPersistentMessage.id + 1,
+        });
+        if (!firstNewerMessage) {
+            return false;
+        }
+        const firstNewestMessageRef = this.messageRefs.get(firstNewerMessage.id);
+        if (!firstNewestMessageRef) {
+            return false;
+        }
+        firstNewestMessageRef.el.querySelector(".o-mail-Message-jumpTarget").scrollIntoView({
+            behavior: "instant",
+            block: this.props.order === "asc" ? "start" : "end",
+        });
+        thread.scrollTop = this.isAtBottom ? "bottom" : this.scrollableRef.el.scrollTop;
+        return true;
+    }
+
+    get messageFetchRouteParams() {
+        return this.env.messageFetchRouteParams;
+    }
+
     fetchInitialMessages() {
-        toRaw(this.props.thread).fetchNewMessages();
+        toRaw(this.props.thread).fetchNewMessages({ routeParams: this.messageFetchRouteParams });
     }
 
     get viewportEl() {
@@ -491,7 +521,7 @@ export class Thread extends Component {
     }
 
     onClickLoadOlder() {
-        this.props.thread.fetchMoreMessages();
+        this.props.thread.fetchMoreMessages({ routeParams: this.messageFetchRouteParams });
     }
 
     async onClickPreferences() {
@@ -523,7 +553,7 @@ export class Thread extends Component {
     async jumpToPresent({ immediate = false } = {}) {
         this.messageHighlight?.clear();
         if (!immediate || this.props.thread.loadNewer) {
-            await this.props.thread.loadAround();
+            await this.props.thread.loadAround({ routeParams: this.messageFetchRouteParams });
             this.props.thread.loadNewer = false;
             this.state.showJumpPresent = false;
         }

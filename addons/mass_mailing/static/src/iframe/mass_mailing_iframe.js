@@ -1,3 +1,4 @@
+import { useComponent, useLayoutEffect, useRef, useState, useSubEnv } from "@web/owl2/utils";
 import {
     Component,
     onMounted,
@@ -5,11 +6,6 @@ import {
     onWillUnmount,
     onWillUpdateProps,
     status,
-    useComponent,
-    useEffect,
-    useRef,
-    useState,
-    useSubEnv,
 } from "@odoo/owl";
 import { LazyComponent, loadBundle } from "@web/core/assets";
 import { Deferred } from "@web/core/utils/concurrency";
@@ -194,7 +190,7 @@ export class MassMailingIframe extends Component {
             iframeResize();
             sidebarResize();
         });
-        useEffect(
+        useLayoutEffect(
             () => {
                 this.iframeLoaded.then(() => {
                     if (status(this) === "destroyed") {
@@ -209,7 +205,7 @@ export class MassMailingIframe extends Component {
             },
             () => [this.state.showFullscreen]
         );
-        useEffect(
+        useLayoutEffect(
             () => {
                 this.iframeLoaded.then(() => {
                     if (status(this) === "destroyed") {
@@ -263,6 +259,7 @@ export class MassMailingIframe extends Component {
         this.iframeRef.el.contentWindow.addEventListener("beforeUnload", () => {
             this.iframeRef.el.removeAttribute("is-ready");
         });
+        this.iframeRef.el.contentWindow.addEventListener("blur", this.onBlur.bind(this));
         this.iframeLoaded.resolve({
             iframe: this.iframeRef.el,
             bundleControls: this.bundleControls,

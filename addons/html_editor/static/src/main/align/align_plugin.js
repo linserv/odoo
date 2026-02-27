@@ -1,9 +1,9 @@
+import { reactive } from "@web/owl2/utils";
 import { Plugin } from "@html_editor/plugin";
 import { closestBlock } from "@html_editor/utils/blocks";
 import { isVisibleTextNode } from "@html_editor/utils/dom_info";
 import { _t } from "@web/core/l10n/translation";
 import { AlignSelector } from "./align_selector";
-import { reactive } from "@odoo/owl";
 import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 import { weakMemoize } from "@html_editor/utils/functions";
 
@@ -60,13 +60,17 @@ export class AlignPlugin extends Plugin {
         ],
 
         /** Handlers */
-        selectionchange_handlers: this.updateAlignmentParams.bind(this),
-        post_undo_handlers: this.updateAlignmentParams.bind(this),
-        post_redo_handlers: this.updateAlignmentParams.bind(this),
-        remove_all_formats_handlers: this.setAlignment.bind(this),
+        on_selectionchange_handlers: this.updateAlignmentParams.bind(this),
+        on_undone_handlers: this.updateAlignmentParams.bind(this),
+        on_redone_handlers: this.updateAlignmentParams.bind(this),
+        on_all_formats_removed_handlers: this.setAlignment.bind(this),
 
         /** Predicates */
-        has_format_predicates: (node) => closestBlock(node)?.style.textAlign,
+        has_format_predicates: (node) => {
+            if (closestBlock(node)?.style.textAlign) {
+                return true;
+            }
+        },
     };
 
     setup() {

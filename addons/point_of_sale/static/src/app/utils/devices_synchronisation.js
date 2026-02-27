@@ -62,7 +62,7 @@ export default class DevicesSynchronisation {
      * @param {Object} data.static_records - Records data that need to be synchronized.
      */
     async collect(data) {
-        const { static_records, session_id, device_identifier } = data;
+        const { static_records, deleted_record_ids, session_id, device_identifier } = data;
         const isSameDevice = isSamePosDevice(session_id, device_identifier, this.pos);
 
         logPosMessage(
@@ -78,6 +78,9 @@ export default class DevicesSynchronisation {
 
         if (Object.keys(static_records).length) {
             this.processStaticRecords(static_records);
+        }
+        if (deleted_record_ids && Object.keys(deleted_record_ids).length) {
+            this.processDeletedRecords(deleted_record_ids);
         }
 
         return await this.readDataFromServer();
@@ -123,7 +126,16 @@ export default class DevicesSynchronisation {
             );
 
             this.processStaticRecords(staticR);
-            await this.processDynamicRecords(dynamicR);
+            const res = await this.processDynamicRecords(dynamicR);
+            if (res && res["pos.order"].length > 0) {
+                const config = this.pos.config;
+                const session = this.pos.session;
+
+                for (const order of res["pos.order"]) {
+                    order.config_id = config;
+                    order.session_id = session;
+                }
+            }
         }
 
         if (Object.keys(response.deleted_record_ids).length) {
@@ -218,7 +230,7 @@ export default class DevicesSynchronisation {
                     new Domain([
                         ["id", "not in", ids],
                         ["state", "=", "draft"],
-                        ["config_id", "in", [config.id, ...config.trusted_config_ids]],
+                        ["config_id", "in", [config.id, ...config.raw.trusted_config_ids]],
                     ]),
                 ]);
 

@@ -6,7 +6,7 @@ import { tick } from "@odoo/hoot-mock";
 import { getContent, setSelection } from "../_helpers/selection";
 import { cleanLinkArtifacts } from "../_helpers/format";
 import { animationFrame, pointerDown, pointerUp, queryOne } from "@odoo/hoot-dom";
-import { dispatchNormalize } from "../_helpers/dispatch";
+import { processThroughNormalize } from "../_helpers/dispatch";
 import { nodeSize } from "@html_editor/utils/position";
 import { expectElementCount } from "../_helpers/ui_expectations";
 
@@ -237,7 +237,7 @@ describe("should zwnbsp-pad simple text link", () => {
                 // set the selection via the parent
                 setSelection({ anchorNode: p, anchorOffset: 1 });
                 // insert the zwnbsp again
-                dispatchNormalize(editor);
+                processThroughNormalize(editor);
             },
             contentAfterEdit: '<p>a\ufeff[]<a href="#/">\ufeffbc\ufeff</a>\ufeffd</p>',
         });
@@ -254,7 +254,7 @@ describe("should zwnbsp-pad simple text link", () => {
                 setSelection({ anchorNode: a, anchorOffset: 0 });
                 await tick();
                 // insert the zwnbsp again
-                dispatchNormalize(editor);
+                processThroughNormalize(editor);
             },
             contentAfterEdit:
                 '<p>a\ufeff<a href="http://test.test/" class="o_link_in_selection">\ufeff[]bc\ufeff</a>\ufeffd</p>',
@@ -276,7 +276,7 @@ describe("should zwnbsp-pad simple text link", () => {
                 setSelection({ anchorNode: a, anchorOffset: 1 });
                 await tick();
                 // insert the zwnbsp again
-                dispatchNormalize(editor);
+                processThroughNormalize(editor);
             },
             contentAfterEdit:
                 '<p>a\ufeff<a href="http://test.test/" class="o_link_in_selection">\ufeffb[]c\ufeff</a>\ufeffd</p>',
@@ -294,7 +294,7 @@ describe("should zwnbsp-pad simple text link", () => {
                 setSelection({ anchorNode: a, anchorOffset: 1 });
                 await tick();
                 // insert the zwnbsp again
-                dispatchNormalize(editor);
+                processThroughNormalize(editor);
             },
             contentAfterEdit:
                 '<p>a\ufeff<a href="http://test.test/" class="o_link_in_selection">\ufeffbc[]\ufeff</a>\ufeffd</p>',
@@ -311,7 +311,7 @@ describe("should zwnbsp-pad simple text link", () => {
                 setSelection({ anchorNode: p, anchorOffset: 2 });
                 await tick();
                 // insert the zwnbsp again
-                dispatchNormalize(editor);
+                processThroughNormalize(editor);
             },
             contentAfterEdit: '<p>a\ufeff<a href="#/">\ufeffbc\ufeff</a>\ufeff[]d</p>',
         });
@@ -390,18 +390,41 @@ test("should remove zwnbsp from middle of the link (2)", async () => {
     });
 });
 
-test("should zwnbps-pad links with .btn class", async () => {
-    await testEditor({
-        contentBefore: '<p><a href="#" class="btn">content</a></p>',
-        contentBeforeEdit: '<p>\ufeff<a href="#" class="btn">\ufeffcontent\ufeff</a>\ufeff</p>',
+describe("button", () => {
+    test("should zwnbps-pad links with .btn class", async () => {
+        await testEditor({
+            contentBefore: '<p><a href="#" class="btn">content</a></p>',
+            contentBeforeEdit: '<p>\ufeff<a href="#" class="btn">\ufeffcontent\ufeff</a>\ufeff</p>',
+        });
     });
-});
 
-test("should not add visual indication to a button", async () => {
-    await testEditor({
-        contentBefore: '<p><a href="http://test.test/" class="btn">[]content</a></p>',
-        contentBeforeEdit:
-            '<p>\ufeff<a href="http://test.test/" class="btn">\ufeff[]content\ufeff</a>\ufeff</p>',
+    test("should not add visual indication to a button", async () => {
+        await testEditor({
+            contentBefore: '<p><a href="http://test.test/" class="btn">[]content</a></p>',
+            contentBeforeEdit:
+                '<p>\ufeff<a href="http://test.test/" class="btn">\ufeff[]content\ufeff</a>\ufeff</p>',
+        });
+    });
+
+    test("should type inside button after backspacing into it", async () => {
+        const { editor, el } = await setupEditor(
+            '<p>before<a class="btn" href="#/">in</a>x[]after</p>'
+        );
+        expect(getContent(el)).toBe(
+            '<p>before\ufeff<a class="btn" href="#/">\ufeffin\ufeff</a>\ufeffx[]after</p>'
+        );
+        deleteBackward(editor);
+        expect(getContent(el)).toBe(
+            '<p>before\ufeff<a class="btn" href="#/">\ufeffin\ufeff</a>\ufeff[]after</p>'
+        );
+        deleteBackward(editor);
+        expect(getContent(el)).toBe(
+            '<p>before\ufeff<a class="btn" href="#/">\ufeffin[]\ufeff</a>\ufeffafter</p>'
+        );
+        await insertText(editor, "side");
+        expect(getContent(el)).toBe(
+            '<p>before\ufeff<a class="btn" href="#/">\ufeffinside[]\ufeff</a>\ufeffafter</p>'
+        );
     });
 });
 

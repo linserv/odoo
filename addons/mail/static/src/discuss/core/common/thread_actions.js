@@ -1,3 +1,4 @@
+import { useChildSubEnv } from "@web/owl2/utils";
 import { ACTION_TAGS } from "@mail/core/common/action";
 import { registerThreadAction } from "@mail/core/common/thread_actions";
 import { AttachmentPanel } from "@mail/discuss/core/common/attachment_panel";
@@ -7,8 +8,6 @@ import { ChannelMemberList } from "@mail/discuss/core/common/channel_member_list
 import { DeleteThreadDialog } from "@mail/discuss/core/common/delete_thread_dialog";
 import { NotificationSettings } from "@mail/discuss/core/common/notification_settings";
 import { PinnedMessagesPanel } from "@mail/discuss/core/common/pinned_messages_panel";
-
-import { useChildSubEnv } from "@odoo/owl";
 
 import { _t } from "@web/core/l10n/translation";
 import { usePopover } from "@web/core/popover/popover_hook";
@@ -56,11 +55,18 @@ registerThreadAction("add-to-favorites", {
      * @param {import("models").DiscussChannel} param0.channel
      * @param {import("models").Store} param0.store
      */
-    onSelected: async ({ channel, store }) => {
+    onSelected: async ({ channel, store, owner }) => {
         store.fetchStoreData(
             "/discuss/channel/favorite",
             { channel_id: channel.id, is_favorite: true },
             { readonly: false, silent: false }
+        );
+        if (owner.env.inDiscussApp && !owner.env.isSmall) {
+            return;
+        }
+        store.env.services.notification.add(
+            _t("Added %(name)s to Favorites", { name: channel.displayName }),
+            { type: "success" }
         );
     },
     sequence: 40,
@@ -80,11 +86,18 @@ registerThreadAction("remove-from-favorites", {
      * @param {import("models").DiscussChannel} param0.channel
      * @param {import("models").Store} param0.store
      */
-    onSelected: async ({ channel, store }) => {
+    onSelected: async ({ channel, store, owner }) => {
         store.fetchStoreData(
             "/discuss/channel/favorite",
             { channel_id: channel.id, is_favorite: false },
             { readonly: false, silent: false }
+        );
+        if (owner.env.inDiscussApp && !owner.env.isSmall) {
+            return;
+        }
+        store.env.services.notification.add(
+            _t("Removed %(name)s from Favorites", { name: channel.displayName }),
+            { type: "warning" }
         );
     },
     sequence: 40,

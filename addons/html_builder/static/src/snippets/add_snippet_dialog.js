@@ -1,4 +1,5 @@
-import { Component, onMounted, onWillUnmount, onWillRender, useRef, useState } from "@odoo/owl";
+import { onWillRender, useRef, useState } from "@web/owl2/utils";
+import { Component, onMounted, onWillUnmount } from "@odoo/owl";
 import { loadBundle, loadCSS } from "@web/core/assets";
 import { isBrowserFirefox } from "@web/core/browser/feature_detection";
 import { Dialog } from "@web/core/dialog/dialog";
@@ -10,7 +11,7 @@ import { useChildRef } from "@web/core/utils/hooks";
 import { SnippetViewer } from "./snippet_viewer";
 
 /**
- * @typedef {((arg: { iframe: HTMLIFrameElement }) => void)[]} snippet_preview_dialog_stylesheets_handlers
+ * @typedef {((arg: { iframe: HTMLIFrameElement }) => void)[]} snippet_preview_dialog_stylesheets_processors
  * @typedef {string[]} snippet_preview_dialog_bundles
  */
 
@@ -114,7 +115,7 @@ export class AddSnippetDialog extends Component {
             }
             return loadBundle(bundleName, loadOptions);
         };
-        this.props.editor.dispatchTo("snippet_preview_dialog_stylesheets_handlers", {
+        this.props.editor.processThrough("snippet_preview_dialog_stylesheets_processors", {
             iframe: this.iframeRef.el,
         });
         const editorPreviewAssetsBundles = this.props.editor.getResource(

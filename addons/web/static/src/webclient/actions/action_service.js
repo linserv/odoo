@@ -1,3 +1,4 @@
+import { reactive, useChildSubEnv } from "@web/owl2/utils";
 import { _t } from "@web/core/l10n/translation";
 import { browser } from "@web/core/browser/browser";
 import { makeContext } from "@web/core/context";
@@ -22,9 +23,7 @@ import {
     onMounted,
     onWillUnmount,
     onError,
-    useChildSubEnv,
     xml,
-    reactive,
     status,
 } from "@odoo/owl";
 import { downloadReport, getReportUrl } from "./reports/utils";
@@ -923,7 +922,7 @@ export function makeActionManager(env, router = _router) {
                         if (controller.isMounted) {
                             return;
                         }
-                        pushState(nextStack);
+                        pushState(nextStack, { sync: true });
                     },
                 });
                 if (action.target !== "new") {

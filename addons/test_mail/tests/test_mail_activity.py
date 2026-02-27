@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from datetime import date, datetime, timedelta, UTC
@@ -30,7 +29,6 @@ class TestActivityCommon(ActivityScheduleCase):
 
 
 @tests.tagged('mail_activity')
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestActivityRights(TestActivityCommon):
 
     def test_activity_action_open_document_no_access(self):
@@ -124,11 +122,11 @@ class TestActivityRights(TestActivityCommon):
         with self.assertRaises(exceptions.AccessError):
             (access_ro + access_locked).with_user(self.user_employee).check_access('write')
 
-        # '_get_mail_message_access' allows to post, hence posting activities
-        access_open.with_user(self.user_employee).activity_schedule(
+        # '_mail_get_operation_for_mail_message_operation' allows to post, hence posting activities
+        emp_new_1 = access_open.with_user(self.user_employee).activity_schedule(
             'test_mail.mail_act_test_todo_generic',
         )
-        access_ro.with_user(self.user_employee).activity_schedule(
+        emp_new_2 = access_ro.with_user(self.user_employee).activity_schedule(
             'test_mail.mail_act_test_todo_generic',
         )
 
@@ -142,6 +140,12 @@ class TestActivityRights(TestActivityCommon):
         # check read access correctly uses '_mail_get_operation_for_mail_message_operation'
         admin_activities[0].with_user(self.user_employee).read(['summary'])
         admin_activities[1].with_user(self.user_employee).read(['summary'])
+
+        self.env.invalidate_all()
+        self.env.transaction.clear_access_cache()
+        # check search correctly uses '_mail_get_operation_for_mail_message_operation'
+        found = self.env['mail.activity'].with_user(self.user_employee).search([('res_model', '=', 'mail.test.access.custo')])
+        self.assertEqual(found, admin_activities[:2] + emp_new_1 + emp_new_2, 'Should respect _ge_mail_get_operation_for_mail_message_operationt_mail_message_access, reading non locked records')
 
     @mute_logger('odoo.addons.mail.models.mail_mail')
     def test_activity_security_user_noaccess_automated(self):
@@ -255,7 +259,6 @@ class TestActivityRights(TestActivityCommon):
 
 
 @tests.tagged('mail_activity')
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestActivityFlow(TestActivityCommon):
 
     def test_activity_flow_employee(self):
@@ -639,7 +642,6 @@ class TestActivitySystray(TestActivityCommon, HttpCase):
 
 @tests.tagged('mail_activity')
 @freeze_time("2024-01-01 09:00:00")
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestActivitySystrayBusNotify(TestActivityCommon):
 
     @classmethod
@@ -666,7 +668,7 @@ class TestActivitySystrayBusNotify(TestActivityCommon):
         users = self.env.user + self.user_employee_2
 
         expected_create_notifs = [
-            ([(self.env.cr.dbname, user.partner_id._name, user.partner_id.id)], [{
+            ([user], [{
                 "type": "mail.activity/updated",
                 "payload": {
                     "activity_created": True,
@@ -676,7 +678,7 @@ class TestActivitySystrayBusNotify(TestActivityCommon):
             for user in users
         ]
         expected_unlink_notifs = [
-            ([(self.env.cr.dbname, user.partner_id._name, user.partner_id.id)], [{
+            ([user], [{
                 "type": "mail.activity/updated",
                 "payload": {
                     "activity_deleted": True,
@@ -714,7 +716,7 @@ class TestActivitySystrayBusNotify(TestActivityCommon):
         expected_notifs = [
             # transfer 4 activities to the second employee, 2 todos taken and 2 given
             [
-                ([(self.env.cr.dbname, user.partner_id._name, user.partner_id.id)], [{
+                ([user], [{
                     "type": "mail.activity/updated",
                     "payload": {
                         "count_diff": count_diff,
@@ -725,7 +727,7 @@ class TestActivitySystrayBusNotify(TestActivityCommon):
             ],
             # transfer 4 activities to the second employee, 2 todos are taken and 4 are given
             [
-                ([(self.env.cr.dbname, user.partner_id._name, user.partner_id.id)], [{
+                ([user], [{
                     "type": "mail.activity/updated",
                     "payload": {
                         "count_diff": count_diff,
@@ -735,7 +737,7 @@ class TestActivitySystrayBusNotify(TestActivityCommon):
                 in zip(self.user_employee + self.user_employee_2, [-2, 4])
             ],
         ] + [[
-                ([(self.env.cr.dbname, self.user_employee.partner_id._name, self.user_employee.partner_id.id)], [{
+                ([self.user_employee], [{
                     "type": "mail.activity/updated",
                     "payload": {
                         "count_diff": count_diff,
@@ -761,7 +763,6 @@ class TestActivitySystrayBusNotify(TestActivityCommon):
 
 
 @tests.tagged('mail_activity')
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestActivityViewHelpers(TestActivityCommon):
 
     @classmethod

@@ -1,6 +1,7 @@
+import { reactive, useRef, useState } from "@web/owl2/utils";
 import { Plugin } from "@html_editor/plugin";
 import { withSequence } from "@html_editor/utils/resource";
-import { Component, xml, useRef, reactive, useState } from "@odoo/owl";
+import { Component, xml } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
 import { usePopover } from "@web/core/popover/popover_hook";
 import { registry } from "@web/core/registry";
@@ -53,22 +54,26 @@ export class HighlightPlugin extends Plugin {
                     closestElement(editableSelection.anchorNode, ".o_text_highlight") && "compact"
             ),
         ],
-        normalize_handlers: (root) => {
+        normalize_processors: (root) => {
             for (const node of root.querySelectorAll(".o_text_highlight")) {
                 // Signal to the interaction that there is (maybe) a new element
                 node.dispatchEvent(new Event("text_highlight_added", { bubbles: true }));
             }
         },
-        format_class_predicates: (className) => className.startsWith("o_text_highlight"),
-        selectionchange_handlers: this.updateSelectedHighlight.bind(this),
-        remove_all_formats_handlers: () => {
+        is_format_class_predicates: (className) => {
+            if (className.startsWith("o_text_highlight")) {
+                return true;
+            }
+        },
+        on_selectionchange_handlers: this.updateSelectedHighlight.bind(this),
+        on_all_formats_removed_handlers: () => {
             // we rely on the normalize handler to start it again
             this.dependencies.edit_interaction.stopInteraction("website.text_highlight");
         },
-        format_selection_handlers: () => {
+        on_will_format_selection_handlers: () => {
             this.dependencies.edit_interaction.stopInteraction("website.text_highlight");
         },
-        before_save_handlers: () => {
+        on_will_save_handlers: () => {
             this.dependencies.edit_interaction.stopInteraction("website.text_highlight");
         },
     };

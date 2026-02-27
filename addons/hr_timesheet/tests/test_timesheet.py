@@ -128,7 +128,6 @@ class TestCommonTimesheet(TransactionCase):
         )
 
 
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestTimesheet(TestCommonTimesheet):
 
     def setUp(self):
@@ -953,7 +952,7 @@ class TestTimesheet(TestCommonTimesheet):
                 } for day in days for employee in (self.empl_employee, self.empl_employee2)])
 
             def assert_notification(mock_send, notification_type, message):
-                mock_send.assert_called_with(self.env.user.partner_id, 'simple_notification', {
+                mock_send.assert_called_with(self.env.user, 'simple_notification', {
                     'type': notification_type,
                     'message': message,
                 })

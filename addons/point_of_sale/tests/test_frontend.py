@@ -162,7 +162,6 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
             'list_price': 1.20,
             'taxes_id': False,
             'weight': 0.01,
-            'to_weight': True,
             'pos_categ_ids': [(4, cls.pos_desk_misc_test.id)],
         })
         cls.wall_shelf = env['product.template'].create({
@@ -219,6 +218,13 @@ class TestPointOfSaleHttpCommon(AccountTestInvoicingHttpCommon):
             'available_in_pos': True,
             'list_price': 10,
             'taxes_id': False,
+        })
+        cls.vanela_gathiya = env['product.template'].create({
+            'name': 'Vanela Gathiya',
+            'available_in_pos': True,
+            'list_price': 10,
+            'taxes_id': False,
+            'to_weight': True,
         })
 
         attribute = env['product.attribute'].create({
@@ -1717,6 +1723,15 @@ class TestUi(TestPointOfSaleHttpCommon):
     def test_customer_display_with_qr(self):
         self.start_tour(f"/pos_customer_display/{self.main_pos_config.id}/{self.main_pos_config.access_token}", 'CustomerDisplayTourWithQr', login="pos_user")
 
+    def test_combo_refund_different_qty(self):
+        setup_product_combo_items(self)
+        self.desks_combo.write({
+            'qty_free': 2,
+            'qty_max': 2,
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_combo_refund_different_qty')
+
     def test_order_refund_flow(self):
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('test_order_refund_flow')
@@ -2522,6 +2537,7 @@ class TestUi(TestPointOfSaleHttpCommon):
     def test_product_long_press(self):
         """ Test the long press on product to open the product info """
         archive_products(self.env)
+        self.main_pos_config.company_id.country_id.vat_label = 'Should stay Tax even after editing vat_label'
         group_tax = self.env['account.tax'].create({
             'name': 'Parent Tax',
             'amount_type': 'group',
@@ -3356,6 +3372,16 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.main_pos_config.with_user(self.pos_user).open_ui()
         self.start_pos_tour('test_custom_attribute_alone_displayed')
 
+    def test_weight_product(self):
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_weight_product')
+        order = self.env['pos.order'].search([], limit=1)
+        self.assertEqual(len(order.lines), 2, "There should be two order lines")
+        self.assertEqual(order.lines[0].price_subtotal_incl, 40, "The price unit should be 40")
+        self.assertEqual(order.lines[0].qty, 4, "The quantity should be 4")
+        self.assertEqual(order.lines[1].price_subtotal_incl, 40, "The price unit should be 40")
+        self.assertEqual(order.lines[1].qty, 1, "The quantity should be 1")
+
     def test_preset_customer_selection(self):
         self.preset_delivery = self.env['pos.preset'].create({
             'name': 'Delivery',
@@ -3753,6 +3779,12 @@ class TestUi(TestPointOfSaleHttpCommon):
             'value_ids': [(6, 0, [attribute_value_1.id, attribute_value_2.id])],
         })
         self.start_pos_tour("test_refund_line_keep_attributes")
+
+    def test_pos_snooze(self):
+        """Test that the available switch is on for available products
+        and off for snoozed products. """
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_pos_snooze')
 
     def test_orderline_merge_with_higher_price_precision(self):
         """ Test that orderline merging works correctly when product price has a higher precision than the currency. """

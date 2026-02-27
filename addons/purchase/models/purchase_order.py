@@ -200,7 +200,7 @@ class PurchaseOrder(models.Model):
                     lambda p: p.company_id and p.company_id in invalid_companies
                 )
                 raise ValidationError(_(
-                    "Your quotation contains products from company %(product_company)s whereas your quotation belongs to company %(quote_company)s. \n Please change the company of your quotation or remove the products from other companies (%(bad_products)s).",
+                    "Your RFQ contains products from company %(product_company)s whereas your RFQ belongs to company %(quote_company)s. \n Please change the company of your RFQ or remove the products from other companies (%(bad_products)s).",
                     product_company=', '.join(invalid_companies.sudo().mapped('display_name')),
                     quote_company=order.company_id.display_name,
                     bad_products=', '.join(bad_products.mapped('display_name')),
@@ -1423,7 +1423,7 @@ class PurchaseOrder(models.Model):
     @api.model
     def get_import_templates(self):
         return [{
-            'label': _('Import Template for Requests for Quotation'),
+            'label': _('Template for Requests for Quotation'),
             'template': '/purchase/static/xls/requests_for_quotation_import_template.xlsx',
         }]
 

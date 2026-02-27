@@ -60,7 +60,7 @@ class ImageToolOptionPlugin extends Plugin {
             SetNewWindowAction,
             AltAction,
         },
-        on_media_dialog_saved_handlers: async (elements, { node }) => {
+        on_will_save_media_dialog_handlers: async (elements, { node }) => {
             for (const image of elements) {
                 if (image && image.tagName === "IMG") {
                     const updateImageAttributes =
@@ -106,14 +106,17 @@ class ImageToolOptionPlugin extends Plugin {
                 }
             }
         },
-        hover_effect_allowed_predicates: (el) => this.canHaveHoverEffect(el),
-        normalize_handlers: this.migrateImages.bind(this),
+        can_have_hover_effect_predicates: (el, dataset) => this.canHaveHoverEffect(el, dataset),
+        normalize_processors: this.migrateImages.bind(this),
+        hover_effect_image_dataset_providers: async (imgEl) => ({
+            isCorsProtected: await isImageCorsProtected(imgEl),
+        }),
     };
     setup() {
         this.htmlStyle = getHtmlStyle(this.document);
     }
-    async canHaveHoverEffect(imgEl) {
-        return imgEl.tagName === "IMG" && !(await isImageCorsProtected(imgEl));
+    canHaveHoverEffect(imgEl, dataset) {
+        return imgEl.tagName === "IMG" && !dataset.isCorsProtected;
     }
     migrateImages(rootEl) {
         for (const el of selectElements(

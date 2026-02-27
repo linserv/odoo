@@ -755,14 +755,16 @@ class AccountTestInvoicingCommon(ProductCommon):
         )
 
     @classmethod
-    def _create_account_move_send_wizard_single(cls, move, **kwargs):
+    def _create_account_move_send_wizard_single(cls, move, *, as_user=None, **kwargs):
         return cls.env['account.move.send.wizard']\
+            .with_user(as_user)\
             .with_context(active_model='account.move', active_ids=move.ids)\
             .create(kwargs)
 
     @classmethod
-    def _create_account_move_send_wizard_multi(cls, moves, **kwargs):
+    def _create_account_move_send_wizard_multi(cls, moves, *, as_user=None, **kwargs):
         return cls.env['account.move.send.batch.wizard']\
+            .with_user(as_user)\
             .with_context(active_model='account.move', active_ids=moves.ids)\
             .create(kwargs)
 
@@ -1530,10 +1532,12 @@ class AccountTestInvoicingWithBanksCommon(AccountTestInvoicingCommon):
         cls.comp_bank_account1 = cls.env['res.partner.bank'].create({
             'account_number': "985632147",
             'partner_id': cls.env.company.partner_id.id,
+            'allow_out_payment': True,
         })
         cls.comp_bank_account2 = cls.env['res.partner.bank'].create({
             'account_number': "741258963",
             'partner_id': cls.env.company.partner_id.id,
+            'allow_out_payment': True,
         })
 
 

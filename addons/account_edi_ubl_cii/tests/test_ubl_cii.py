@@ -4,6 +4,7 @@ from io import BytesIO
 from zipfile import ZipFile
 
 from lxml import etree
+from unittest.mock import patch
 from odoo import fields, Command
 from odoo.tests import HttpCase, tagged
 from odoo.tools import file_open
@@ -504,6 +505,11 @@ class TestAccountEdiUblCii(TestUblCiiCommon, HttpCase):
         }])
 
     def test_import_bill(self):
+        self.env['res.partner.bank'].sudo().create({
+            'account_number': 'Test account',
+            'partner_id': self.company_data['company'].partner_id.id,
+            'allow_out_payment': True,
+        })
         partner = self.env['res.partner'].create({
             'name': "My Belgian Partner",
             'vat': "BE0477472701",
@@ -528,6 +534,31 @@ comment-->1000.0</TaxExclusiveAmount></xpath>"""
         self.assertRecordValues(imported_invoice.invoice_line_ids, [{
             'amount_currency': 1000.00,
             'quantity': 1.0}])
+
+    def test_importing_bill_shouldnt_set_current_company_bank_account(self):
+        partner = self.env['res.partner'].create({
+            'name': "My Belgian Partner",
+        })
+        invoice = self.env['account.move'].create({
+            'partner_id': partner.id,
+            'move_type': 'out_invoice',
+            'invoice_line_ids': [Command.create({'product_id': self.product_a.id})]
+        })
+        invoice.action_post()
+        my_invoice_raw = self.env['account.edi.xml.ubl_bis3']._export_invoice(invoice)[0]
+        my_invoice_root = etree.fromstring(my_invoice_raw)
+        modifying_xpath = """
+            <xpath expr="(//*[local-name()='PaymentMeans']/*[local-name()='PaymentID'])" position="after">
+                <PayeeFinancialAccount><ID>Test account</ID></PayeeFinancialAccount>
+            </xpath>"""
+        xml_attachment = self.env['ir.attachment'].create({
+            'raw': etree.tostring(self.with_applied_xpath(my_invoice_root, modifying_xpath)),
+            'name': 'test_invoice.xml',
+        })
+        move = self.env['account.journal']\
+            .with_context(default_journal_id=self.company_data['default_journal_sale'].id)\
+            ._create_document_from_attachment(xml_attachment.id)
+        self.assertTrue(any('add your own bank account manually' in message.body for message in move.message_ids))
 
     def test_import_discount(self):
         invoice = self.env['account.move'].create({
@@ -694,6 +725,52 @@ comment-->1000.0</TaxExclusiveAmount></xpath>"""
             self.assertEqual(node.findtext('.//{*}TaxExemptionReason') or False, tax.ubl_cii_tax_exemption_reason)
             self.assertEqual(node.findtext('.//{*}TaxExemptionReasonCode') or False, tax.ubl_cii_tax_exemption_reason_code)
 
+    def test_import_discount_3(self):
+        """
+        This test ensures that the subtotal and the sum of prices and charges are compared
+        correctly and there's no regression on floating point issues when the price is 0.0
+        """
+        invoice = self.env['account.move'].create({
+            'partner_id': self.partner_a.id,
+            'move_type': 'out_invoice',
+            'invoice_line_ids': [
+                Command.create({
+                    'product_id': self.product_a.id,
+                    'quantity': 1,
+                    'price_unit': 0,
+                }),
+            ],
+        })
+        my_invoice_raw = self.env['account.edi.xml.ubl_bis3']._export_invoice(invoice)[0]
+        my_invoice_root = etree.fromstring(my_invoice_raw)
+        modifying_xpath = """
+            <xpath expr="(//*[local-name()='InvoiceLine']/*[local-name()='LineExtensionAmount'])" position="replace">
+                <LineExtensionAmount currencyID="EUR">0.30</LineExtensionAmount>
+            </xpath>
+            <xpath expr="(//*[local-name()='InvoiceLine']/*[local-name()='LineExtensionAmount'])" position="after">
+                <AllowanceCharge>
+                    <ChargeIndicator>true</ChargeIndicator>
+                    <AllowanceChargeReason>FREIGHT</AllowanceChargeReason>
+                    <Amount currencyID="EUR">0.20</Amount>
+                </AllowanceCharge>
+                <AllowanceCharge>
+                    <ChargeIndicator>true</ChargeIndicator>
+                    <AllowanceChargeReason>FUEL SURCHARGE</AllowanceChargeReason>
+                    <Amount currencyID="EUR">0.10</Amount>
+                </AllowanceCharge>
+            </xpath>"""
+        xml_attachment = self.env['ir.attachment'].create({
+            'raw': etree.tostring(self.with_applied_xpath(my_invoice_root, modifying_xpath)),
+            'name': 'test_invoice.xml',
+        })
+
+        imported_invoice = self._import_as_attachment_on(attachment=xml_attachment, journal=self.company_data["default_journal_sale"])
+        self.assertRecordValues(imported_invoice.invoice_line_ids, [
+            {'name': self.product_a.name, 'price_subtotal': 0.00},
+            {'name': ' FREIGHT', 'price_subtotal': 0.20},
+            {'name': ' FUEL SURCHARGE', 'price_subtotal': 0.10},
+        ])
+
     def test_oin_code(self):
         partner = self.partner_a
         partner.peppol_endpoint = '00000000001020304050'
@@ -839,25 +916,47 @@ comment-->1000.0</TaxExclusiveAmount></xpath>"""
             {'vehicle_id': False},
         ])
 
-    def test_partner_name_in_xml(self):
-        """
-        Test that invoice contacts without specific names use their parent partner's
-        name in the XML output, avoiding the 'Invoice address' suffix from display_name.
-        """
-        partner = self.env['res.partner'].create({
-            'parent_id': self.partner_a.id,
-            'type': 'invoice'
+    def test_generate_pdf_when_xml_does_not_provide_one(self):
+        def _run_wkhtmltopdf(*args, **kwargs):
+            return file_open(f'{self.test_module}/tests/test_files/invoice_example.pdf', 'rb').read()
+
+        file_path = f"{self.test_module}/tests/test_files/bis3_bill_example_without_embedded_attachment.xml"
+        with file_open(file_path, 'rb') as file:
+            xml_attachment = self.env['ir.attachment'].create({
+                'mimetype': 'application/xml',
+                'name': 'test_invoice.xml',
+                'raw': file.read(),
+            })
+
+        # Import the document that doesn't contain an embedded PDF
+        with patch.object(self.env.registry['ir.actions.report'], '_run_wkhtmltopdf', _run_wkhtmltopdf):
+            bill = self._import_as_attachment_on(
+                journal=self.company_data["default_journal_purchase"].with_context(force_report_rendering=True),
+                attachment=xml_attachment,
+            )
+
+        self.assertTrue(bill)
+
+        # Ensure the created move has 2 attachments: the original XML and a generated PDF
+        self.assertEqual(len(bill.attachment_ids), 2)
+        self.assertTrue(any('pdf' in attachment.mimetype for attachment in bill.attachment_ids))
+
+    def test_bank_details_import(self):
+        acc_number = '1234567890'
+        partner_bank = self.env['res.partner.bank'].create({
+            'active': False,
+            'account_number': acc_number,
+            'partner_id': self.partner_a.id
         })
         invoice = self.env['account.move'].create({
-            'partner_id': partner.id,
-            'move_type': 'out_invoice',
-            'invoice_date': "2025-12-23",
-            'invoice_date_due': "2025-12-31",
+            'partner_id': self.partner_a.id,
+            'move_type': 'in_invoice',
             'invoice_line_ids': [Command.create({'product_id': self.product_a.id})],
         })
-        invoice.action_post()
+        # will not raise sql constraint because the sql is not commited yet
+        self.env['account.edi.common']._import_partner_bank(invoice, [acc_number])
+        self.assertFalse(invoice.partner_bank_id)
 
-        xml_content = self.env['account.edi.xml.ubl_20']._export_invoice(invoice)[0]
-        xml_tree = etree.fromstring(xml_content)
-        partner_name = xml_tree.find('.//cac:AccountingCustomerParty/cac:Party/cac:PartyName/cbc:Name', self.ubl_namespaces)
-        self.assertEqual(partner_name.text, 'partner_a')
+        partner_bank.active = True
+        self.env['account.edi.common']._import_partner_bank(invoice, [acc_number])
+        self.assertEqual(invoice.partner_bank_id, partner_bank)

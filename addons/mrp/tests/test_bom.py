@@ -11,7 +11,7 @@ from odoo.addons.mrp.tests.common import TestMrpCommon
 
 
 @freeze_time(fields.Date.today())
-@tagged('at_install', '-post_install')  # LEGACY at_install
+@tagged('at_install', '-post_install')  # LEGACY at_install Access error in post install
 class TestBoM(TestMrpCommon):
 
     @classmethod
@@ -2867,6 +2867,18 @@ class TestBoM(TestMrpCommon):
         self.assertEqual(bom_overview['operations_time'], 16)
         bom_overview = self.env['report.mrp.report_bom_structure']._get_report_data(bom.id, 1.6)['lines']
         self.assertEqual(bom_overview['operations_time'], 32)
+
+    def test_copy_existing_operations_button_visible_even_for_first_operation(self):
+        """
+        Test that the 'Copy Existing Operations' button is visible
+        once at least one operation exists even on an empty BoM.
+        """
+        self.assertFalse(self.bom_1.operation_ids)
+        self.assertTrue(self.bom_1.show_copy_operations_button, "The copy operations button should be visible even if the current BoM is empty.")
+
+        # Delete all existing operations, the copy operations buttons shouldn't be visible if there is none.
+        self.env['mrp.routing.workcenter'].search([]).unlink()
+        self.assertFalse(self.bom_1.show_copy_operations_button, "The copy operations button should be visible even if the current BoM is empty.")
 
 
 @tagged('-at_install', 'post_install')

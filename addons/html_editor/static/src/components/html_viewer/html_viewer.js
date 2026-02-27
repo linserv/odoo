@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "@web/owl2/utils";
 import {
     Component,
     markup,
@@ -5,9 +6,6 @@ import {
     onWillStart,
     onWillUnmount,
     onWillUpdateProps,
-    useEffect,
-    useRef,
-    useState,
 } from "@odoo/owl";
 import { getBundle } from "@web/core/assets";
 import { memoize } from "@web/core/utils/functions";
@@ -15,7 +13,6 @@ import { fillHtmlTransferData } from "@html_editor/utils/clipboard";
 import { fixInvalidHTML, instanceofMarkup } from "@html_editor/utils/sanitize";
 import { HtmlUpgradeManager } from "@html_editor/html_migrations/html_upgrade_manager";
 import { TableOfContentManager } from "@html_editor/others/embedded_components/core/table_of_content/table_of_content_manager";
-import { getDeepestPosition } from "@html_editor/utils/dom_info";
 
 export class HtmlViewer extends Component {
     static template = "html_editor.HtmlViewer";
@@ -65,7 +62,7 @@ export class HtmlViewer extends Component {
             });
         } else {
             this.readonlyElementRef = useRef("readonlyContent");
-            useEffect(
+            useLayoutEffect(
                 () => {
                     this.processReadonlyContent(this.readonlyElementRef.el);
                 },
@@ -88,7 +85,7 @@ export class HtmlViewer extends Component {
                 }
                 return result;
             });
-            useEffect(
+            useLayoutEffect(
                 () => {
                     if (this.readonlyElementRef?.el) {
                         this.mountComponents();
@@ -147,19 +144,7 @@ export class HtmlViewer extends Component {
     onCopy(ev) {
         ev.preventDefault();
         const selection = ev.target.ownerDocument.defaultView.getSelection();
-        const [deepAnchorNode, deepAnchorOffset] = getDeepestPosition(
-            selection.anchorNode,
-            selection.anchorOffset
-        );
-        const [deepFocusNode, deepFocusOffset] = getDeepestPosition(
-            selection.focusNode,
-            selection.focusOffset
-        );
-
-        const range = new Range();
-        range.setStart(deepAnchorNode, deepAnchorOffset);
-        range.setEnd(deepFocusNode, deepFocusOffset);
-        const clonedContents = range.cloneContents();
+        const clonedContents = selection.getRangeAt(0).cloneContents();
         fillHtmlTransferData(ev, "clipboardData", clonedContents, {
             textContent: selection.toString(),
         });

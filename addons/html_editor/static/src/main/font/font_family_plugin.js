@@ -1,7 +1,7 @@
+import { reactive } from "@web/owl2/utils";
 import { Plugin } from "@html_editor/plugin";
 import { _t } from "@web/core/l10n/translation";
 import { FontFamilySelector } from "@html_editor/main/font/font_family_selector";
-import { reactive } from "@odoo/owl";
 import { closestElement } from "../../utils/dom_traversal";
 import { withSequence } from "@html_editor/utils/resource";
 import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
@@ -58,9 +58,9 @@ export class FontFamilyPlugin extends Plugin {
             }),
         ],
         /** Handlers */
-        selectionchange_handlers: this.updateCurrentFontFamily.bind(this),
-        post_undo_handlers: this.updateCurrentFontFamily.bind(this),
-        post_redo_handlers: this.updateCurrentFontFamily.bind(this),
+        on_selectionchange_handlers: this.updateCurrentFontFamily.bind(this),
+        on_undone_handlers: this.updateCurrentFontFamily.bind(this),
+        on_redone_handlers: this.updateCurrentFontFamily.bind(this),
     };
 
     updateCurrentFontFamily(ev) {

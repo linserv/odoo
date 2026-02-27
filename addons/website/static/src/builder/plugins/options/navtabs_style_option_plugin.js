@@ -44,7 +44,15 @@ class NavTabsStyleOptionPlugin extends Plugin {
             getButtons: this.getActiveOverlayButtons.bind(this),
         }),
         is_unremovable_selector: ".nav-item",
-        unsplittable_node_predicates: this.isUnsplittable,
+        is_node_splittable_predicates: (node) => {
+            if (this.isUnsplittable(node)) {
+                return false;
+            }
+        },
+        dropzone_selector: {
+            selector: ".s_tabs, .s_tabs_images",
+            excludeAncestor: ".s_table_of_content, .s_tabs, .s_tabs_images",
+        },
     };
 
     setup() {

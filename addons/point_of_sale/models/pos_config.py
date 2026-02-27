@@ -145,6 +145,9 @@ class PosConfig(models.Model):
     iface_tipproduct = fields.Boolean(string="Product tips")
     tip_product_id = fields.Many2one('product.product', string='Tip Product', default=_get_default_tip_product, help="This product is used as reference on customer receipts.")
     set_tip_after_payment = fields.Boolean('Set Tip After Payment', help="Adjust the amount authorized by payment terminals to add a tip after the customers left or at the end of the day.")
+    tip_percentage_1 = fields.Integer(string='Tip Percentage 1', default=15)
+    tip_percentage_2 = fields.Integer(string='Tip Percentage 2', default=20)
+    tip_percentage_3 = fields.Integer(string='Tip Percentage 3', default=25)
     fiscal_position_ids = fields.Many2many('account.fiscal.position', string='Fiscal Positions', help='This is useful for restaurants with onsite and take-away services that imply specific tax rates.')
     default_fiscal_position_id = fields.Many2one('account.fiscal.position', string='Default Fiscal Position')
     default_bill_ids = fields.Many2many('pos.bill', string="Coins/Bills")
@@ -232,6 +235,9 @@ class PosConfig(models.Model):
         return f"{year_2_digits}{device_identifier}-{self.id}-{next_number}", tracking_number
 
     def notify_synchronisation(self, session_id, device_identifier, records={}):
+        self._notify_synchronisation(session_id, device_identifier, records)
+
+    def _notify_synchronisation(self, session_id, device_identifier, records={}, deleted_record_ids=None):
         self.ensure_one()
         static_records = {}
 
@@ -241,10 +247,19 @@ class PosConfig(models.Model):
 
         self._notify('SYNCHRONISATION', {
             'static_records': static_records,
+            'deleted_record_ids': deleted_record_ids,
             'session_id': session_id,
             'device_identifier': device_identifier,
             'records': records
         })
+
+        for config in self.trusted_config_ids:
+            config._notify('SYNCHRONISATION', {
+                'static_records': static_records,
+                'session_id': config.current_session_id.id,
+                'login_number': 0,
+                'records': records
+            })
 
     def read_config_open_orders(self, domain, record_ids=[]):
         delete_record_ids = {}
@@ -1241,7 +1256,7 @@ class PosConfig(models.Model):
 
     def _get_available_pricelists(self):
         self.ensure_one()
-        return self.available_pricelist_ids if self.use_pricelist else self.pricelist_id
+        return self.available_pricelist_ids + self.pricelist_id if self.use_pricelist else self.pricelist_id
 
     def _env_with_clean_context(self):
         safe_context = {}

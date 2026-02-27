@@ -37,7 +37,7 @@ import { deepCopy, deepMerge } from "@web/core/utils/objects";
  *   }>,
  * }>} ImageShapeGroups
  * @typedef {((shapeGroups: ImageShapeGroups) => ImageShapeGroups | void)[]} image_shape_groups_providers
- * @typedef {((dataset: DOMStringMap) => string)[]} default_shape_handlers
+ * @typedef {((dataset: DOMStringMap) => string)[]} default_shape_providers
  * @typedef {((
  *     svg: SVGElement,
  *     params: {
@@ -47,7 +47,7 @@ import { deepCopy, deepMerge } from "@web/core/utils/objects";
  *         shapeAnimationSpeed: number,
  *         shapeColors: string,
  *     }
- * ) => Promise<void>)[]} post_compute_shape_listeners
+ * ) => Promise<void>)[]} on_shape_computed_handlers
  */
 
 // Regex definitions to apply speed modification in SVG files
@@ -87,9 +87,11 @@ export class ImageShapeOptionPlugin extends Plugin {
             SetImageShapeSpeedAction,
             ToggleImageShapeRatioAction,
         },
-        process_image_warmup_handlers: this.processImageWarmup.bind(this),
-        process_image_post_handlers: this.processImagePost.bind(this),
-        hover_effect_allowed_predicates: (el) => this.canHaveHoverEffect(el),
+        on_will_process_image_handlers: this.processImageWarmup.bind(this),
+        on_image_processed_handlers: this.processImagePost.bind(this),
+        can_have_hover_effect_predicates: (el, dataset) => this.canHaveHoverEffect(el, dataset),
+        hover_effect_image_dataset_providers: async (imgEl) =>
+            Object.assign({}, imgEl.dataset, await loadImageInfo(imgEl)),
         image_shape_groups_providers: withSequence(0, () => deepCopy(imageShapeDefinitions)),
     };
     setup() {
@@ -101,8 +103,7 @@ export class ImageShapeOptionPlugin extends Plugin {
             this.imageShapes[oldShapeId] = this.imageShapes[shapeId];
         }
     }
-    async canHaveHoverEffect(imgEl) {
-        const dataset = Object.assign({}, imgEl.dataset, await loadImageInfo(imgEl));
+    canHaveHoverEffect(imgEl, dataset) {
         return (
             imgEl.tagName === "IMG" &&
             !this.isDeviceShape(imgEl) &&
@@ -304,9 +305,7 @@ export class ImageShapeOptionPlugin extends Plugin {
             );
         }
 
-        for (const cb of this.getResource("post_compute_shape_listeners")) {
-            await cb(svg, params);
-        }
+        await this.triggerAsync("on_shape_computed_handlers", svg, params);
 
         svg.removeChild(svg.querySelector("#preview"));
         return svg;
@@ -447,7 +446,7 @@ export class ImageShapeOptionPlugin extends Plugin {
         return Object.fromEntries(entries);
     }
     getDefaultShapeId(dataset) {
-        for (const fn of this.getResource("default_shape_handlers")) {
+        for (const fn of this.getResource("default_shape_providers")) {
             const shapeId = fn(dataset);
             if (shapeId) {
                 return shapeId;

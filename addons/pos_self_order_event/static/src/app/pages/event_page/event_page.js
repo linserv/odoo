@@ -1,4 +1,5 @@
-import { Component, useState, useRef } from "@odoo/owl";
+import { useRef, useState } from "@web/owl2/utils";
+import { Component } from "@odoo/owl";
 import { Stepper } from "@pos_self_order/app/components/combo_stepper/combo_stepper";
 import { useSelfOrder } from "@pos_self_order/app/services/self_order_service";
 import { useScrollShadow } from "@pos_self_order/app/utils/scroll_shadow_hook";
@@ -406,8 +407,10 @@ export class EventPage extends Component {
                 event_slot_id: this.event.is_multi_slots ? this.state.selectedSlot : null,
                 pos_order_line_id: line,
                 partner_id: this.selfOrder.currentOrder.partner_id,
-                registration_answer_ids: this.formatTextAnswers(textAnswer),
-                registration_answer_choice_ids: this.formatChoiceAnswers(simpleChoice),
+                registration_answer_ids: [
+                    ...this.formatTextAnswers(textAnswer),
+                    ...this.formatChoiceAnswers(simpleChoice),
+                ],
             });
         }
     }
@@ -427,8 +430,7 @@ export class EventPage extends Component {
             }
             if (question.question_type === "simple_choice") {
                 simpleChoice[questionId] = value;
-            }
-            if (value) {
+            } else if (value) {
                 textAnswer[questionId] = value;
             }
         }

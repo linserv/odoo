@@ -14,6 +14,7 @@ class HrEmployee(models.Model):
     attendance_manager_id = fields.Many2one(
         'res.users', store=True, readonly=False,
         string="Attendance Approver",
+        compute='_compute_attendance_manager',
         domain="[('share', '=', False), ('company_ids', 'in', company_id)]",
         groups="hr_attendance.group_hr_attendance_own,hr_attendance.group_hr_attendance_officer",
         help="The user set in Attendance will access the attendance of the employee through the dedicated app and will be able to edit them.")
@@ -81,6 +82,16 @@ class HrEmployee(models.Model):
         old_officers.sudo()._clean_attendance_officers()
 
         return res
+
+    @api.depends('parent_id')
+    def _compute_attendance_manager(self):
+        for employee in self:
+            previous_manager = employee._origin.parent_id.user_id
+            new_manager = employee.parent_id.user_id
+            if new_manager and employee.attendance_manager_id and employee.attendance_manager_id == previous_manager:
+                employee.attendance_manager_id = new_manager
+            elif not employee.attendance_manager_id:
+                employee.attendance_manager_id = False
 
     @api.depends('overtime_ids.manual_duration', 'overtime_ids', 'overtime_ids.status')
     def _compute_total_overtime(self):
@@ -225,11 +236,8 @@ class HrEmployee(models.Model):
             "type": "ir.actions.act_window",
             "name": _("Attendances This Month"),
             "res_model": "hr.attendance",
-            "views": [[self.env.ref('hr_attendance.hr_attendance_employee_simple_tree_view').id, "list"]],
+            "views": [[self.env.ref('hr_attendance.hr_attendance_employee_calendar_view').id, "calendar"]],
             "context": {
-                "create": 0,
-                "search_default_check_in_filter": 1,
-                "employee_id": self.id,
                 "display_extra_hours": self.display_extra_hours,
             },
             "domain": [('employee_id', '=', self.id)]
@@ -330,3 +338,26 @@ class HrEmployee(models.Model):
                 full_schedule_by_employee['schedule'][employee] |= employee_attendances & interval
 
         return full_schedule_by_employee
+
+    def get_attendace_data_by_employee(self, date_start, date_stop):
+        attendance_data = {
+            employee_id: {
+                'worked_hours': 0,
+                'overtime_hours': 0,
+            }
+            for employee_id in self.ids
+        }
+        all_attendances = self.env['hr.attendance']._read_group(
+            domain=[
+                ('employee_id', 'in', self.ids),
+                ('check_in', '<', date_stop),
+                ('check_out', '>', date_start),
+            ],
+            groupby=['employee_id'],
+            aggregates=['worked_hours:sum', 'overtime_hours:sum'],
+        )
+        for employee, worked_hours, overtime_hours in all_attendances:
+            attendance_data[employee.id]['worked_hours'] += worked_hours
+            attendance_data[employee.id]['overtime_hours'] += overtime_hours
+
+        return attendance_data

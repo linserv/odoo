@@ -143,16 +143,16 @@ async function fetchAttachmentMetaData(url, ormService) {
  */
 
 /**
- * @typedef {((link: HTMLLinkElement) => boolean)[]} is_link_editable_predicates
- * @typedef {((link: HTMLLinkElement) => boolean)[]} legit_empty_link_predicates
- * @typedef {(() => boolean)[]} link_compatible_selection_predicates
+ * @typedef {((link: HTMLLinkElement) => boolean | undefined)[]} is_link_editable_predicates
+ * @typedef {((link: HTMLLinkElement) => boolean | undefined)[]} is_empty_link_legit_predicates
+ * @typedef {(() => boolean | undefined)[]} is_link_allowed_on_selection_predicates
  * @typedef {CSSSelector[]} immutable_link_selectors
  * @typedef {{
  *      PopoverClass: Component;
  *      isAvailable: (linkEl: HTMLLinkElement) => boolean;
  *      getProps: (props) => props;
  *  }[]} link_popovers
- * @typedef {((linkEl: HTMLAnchorElement) => void)[]} create_link_handlers
+ * @typedef {((linkEl: HTMLAnchorElement) => void)[]} on_link_created_handlers
  */
 
 export class LinkPlugin extends Plugin {
@@ -291,29 +291,49 @@ export class LinkPlugin extends Plugin {
             ":has(>[data-oe-model])",
             ".o_prevent_link_editor a",
         ],
-        legit_empty_link_predicates: (linkEl) => linkEl.hasAttribute("data-mimetype"),
+        is_empty_link_legit_predicates: (linkEl) => {
+            if (linkEl.hasAttribute("data-mimetype")) {
+                return true;
+            }
+        },
+        is_node_splittable_predicates: (node) => {
+            if (node.nodeName === "A") {
+                return false;
+            }
+        },
+        // When the selection fully covers a link, we consider that the link is selected.
+        is_node_fully_selected_predicates: (node, selection) => {
+            if (
+                node.nodeName === "A" &&
+                !node.classList.contains("btn") &&
+                cleanZWChars(selection.textContent()) === cleanZWChars(node.innerText)
+            ) {
+                return true;
+            }
+        },
 
         /** Handlers */
-        beforeinput_handlers: withSequence(5, this.onBeforeInput.bind(this)),
-        input_handlers: this.onInputDeleteNormalizeLink.bind(this),
-        before_delete_handlers: this.updateCurrentLinkSyncState.bind(this),
-        delete_handlers: this.onInputDeleteNormalizeLink.bind(this),
-        before_paste_handlers: this.updateCurrentLinkSyncState.bind(this),
-        after_paste_handlers: this.onPasteNormalizeLink.bind(this),
-        selectionchange_handlers: this.handleSelectionChange.bind(this),
-        clean_for_save_handlers: ({ root }) => this.removeEmptyLinks(root),
-        normalize_handlers: this.normalizeLink.bind(this),
-        after_insert_handlers: this.handleAfterInsert.bind(this),
+        on_beforeinput_handlers: withSequence(5, this.onBeforeInput.bind(this)),
+        on_input_handlers: this.onInputDeleteNormalizeLink.bind(this),
+        on_will_delete_handlers: this.updateCurrentLinkSyncState.bind(this),
+        on_deleted_handlers: this.onInputDeleteNormalizeLink.bind(this),
+        on_will_paste_handlers: this.updateCurrentLinkSyncState.bind(this),
+        on_pasted_handlers: this.onPasteNormalizeLink.bind(this),
+        on_selectionchange_handlers: this.handleSelectionChange.bind(this),
+        on_inserted_handlers: this.handleAfterInsert.bind(this),
         on_will_remove_handlers: () => this.closeLinkTools(),
 
         /** Overrides */
         split_element_block_overrides: this.handleSplitBlock.bind(this),
         insert_line_break_element_overrides: this.handleInsertLineBreak.bind(this),
         delete_image_overrides: this.deleteImageLink.bind(this),
+        delete_backward_overrides: withSequence(15, this.handleDeleteBackward.bind(this)),
         double_click_overrides: this.doubleClickLinkOverrides.bind(this),
         triple_click_overrides: this.tripleClickButtonOverrides.bind(this),
 
         /** Processors */
+        clean_for_save_processors: (root) => this.removeEmptyLinks(root),
+        normalize_processors: this.normalizeLink.bind(this),
         to_inline_code_processors: (node) => {
             this.removeEmptyLinks(node);
             for (const btn of selectElements(node, "a.btn")) {
@@ -410,7 +430,7 @@ export class LinkPlugin extends Plugin {
             link.setAttribute(param, `${value}`);
         }
         link.innerText = label;
-        this.dispatchTo("create_link_handlers", link);
+        this.trigger("on_link_created_handlers", link);
         return link;
     }
 
@@ -447,8 +467,8 @@ export class LinkPlugin extends Plugin {
             description: _t("Create an URL."),
             icon: "fa-link",
             run: () => {
-                this.dispatchTo(
-                    "before_paste_handlers",
+                this.trigger(
+                    "on_will_paste_handlers",
                     this.dependencies.selection.getEditableSelection()
                 );
                 this.dependencies.dom.insert(this.createLink(url, text));
@@ -459,7 +479,7 @@ export class LinkPlugin extends Plugin {
     }
 
     isLinkAllowedOnSelection() {
-        if (this.getResource("link_compatible_selection_predicates").some((p) => p())) {
+        if (this.checkPredicates("is_link_allowed_on_selection_predicates") ?? false) {
             return true;
         }
         const targetedNodes = this.dependencies.selection.getTargetedNodes();
@@ -830,9 +850,8 @@ export class LinkPlugin extends Plugin {
             }
         } else {
             const closestLinkElement = closestElement(selection.anchorNode, "A");
-            const isLinkEditable = this.getResource("is_link_editable_predicates").some((p) =>
-                p(closestLinkElement)
-            );
+            const isLinkEditable =
+                this.checkPredicates("is_link_editable_predicates", closestLinkElement) ?? false;
             if (closestLinkElement && closestLinkElement.isContentEditable) {
                 if (closestLinkElement !== this.linkInDocument || !this.currentOverlay.isOpen) {
                     this.openLinkTools(closestLinkElement);
@@ -1046,7 +1065,7 @@ export class LinkPlugin extends Plugin {
                 [...link.childNodes].some(isVisible) ||
                 !link.parentElement.isContentEditable ||
                 this.dependencies.delete.isUnremovable(link) ||
-                this.getResource("legit_empty_link_predicates").some((p) => p(link))
+                (this.checkPredicates("is_empty_link_legit_predicates", link) ?? false)
             ) {
                 continue;
             }
@@ -1245,6 +1264,25 @@ export class LinkPlugin extends Plugin {
         [targetNode, targetOffset] = edge === "start" ? leftPos(targetNode) : rightPos(targetNode);
         blockToSplit = targetNode;
         splitOrLineBreakCallback({ ...params, targetNode, targetOffset, blockToSplit });
+        return true;
+    }
+
+    handleDeleteBackward({ startContainer, startOffset, endContainer, endOffset }) {
+        // Detect if selection is around FEFF after the end edge of a button.
+        if (startContainer !== endContainer || startOffset !== 0 || endOffset !== 1) {
+            return;
+        }
+        if (startContainer.nodeType !== Node.TEXT_NODE || startContainer.textContent != "\uFEFF") {
+            return;
+        }
+        if (!startContainer.previousSibling?.matches("a.btn")) {
+            return;
+        }
+        // Move before inner FEFF of the button.
+        this.dependencies.selection.setSelection({
+            anchorNode: startContainer.previousSibling,
+            anchorOffset: startContainer.previousSibling.childNodes.length - 1,
+        });
         return true;
     }
 

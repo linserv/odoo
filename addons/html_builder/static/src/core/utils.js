@@ -1,3 +1,4 @@
+import { reactive, useComponent, useEnv, useLayoutEffect, useRef, useState, useSubEnv } from "@web/owl2/utils";
 import { isElement, isTextNode } from "@html_editor/utils/dom_info";
 import {
     Component,
@@ -5,14 +6,7 @@ import {
     onWillDestroy,
     onWillStart,
     onWillUpdateProps,
-    reactive,
     toRaw,
-    useComponent,
-    useEffect,
-    useEnv,
-    useRef,
-    useState,
-    useSubEnv,
 } from "@odoo/owl";
 import { convertNumericToUnit, getHtmlStyle } from "@html_editor/utils/formatting";
 import { useBus } from "@web/core/utils/hooks";
@@ -655,12 +649,14 @@ function useOperationWithReload(callApply, reload) {
     const env = useEnv();
     return async (...args) => {
         const { editingElement } = args[0][0];
+        env.services.ui.block();
         await callApply(...args);
         env.editor.shared.history.addStep();
         await env.editor.shared.savePlugin.save();
         const target = env.editor.shared.builderOptions.getReloadSelector(editingElement);
         const url = reload.getReloadUrl?.();
         await env.editor.config.reloadEditor({ target, url });
+        env.services.ui.unblock();
     };
 }
 
@@ -914,7 +910,7 @@ export function useVisibilityObserver(contentName, callback) {
     };
 
     const observer = new MutationObserver(applyVisibility);
-    useEffect(
+    useLayoutEffect(
         (contentEl) => {
             if (!contentEl) {
                 return;
@@ -1176,10 +1172,16 @@ export class BaseOptionComponent extends Component {
         this.dependencies = context.dependencies;
         /** @type { EditorContext['getResource'] } **/
         this.getResource = context.getResource;
-        /** @type { EditorContext['dispatchTo'] } **/
-        this.dispatchTo = context.dispatchTo;
+        /** @type { EditorContext['trigger'] } **/
+        this.trigger = context.trigger;
+        /** @type { EditorContext['triggerAsync'] } **/
+        this.triggerAsync = context.triggerAsync;
         /** @type { EditorContext['delegateTo'] } **/
         this.delegateTo = context.delegateTo;
+        /** @type { EditorContext['processThrough'] } **/
+        this.processThrough = context.processThrough;
+        /** @type { EditorContext['checkPredicates'] } **/
+        this.checkPredicates = context.checkPredicates;
 
         this.isActiveItem = useIsActiveItem();
         const comp = useComponent();

@@ -1,4 +1,5 @@
-import { useRef, useState, onPatched } from "@odoo/owl";
+import { useRef, useState } from "@web/owl2/utils";
+import { onPatched } from "@odoo/owl";
 import { useAutofocus } from "@web/core/utils/hooks";
 import { debounce } from "@web/core/utils/timing";
 import { TModelInput } from "@point_of_sale/app/components/inputs/t_model_input";
@@ -29,6 +30,8 @@ export class Input extends TModelInput {
         callback: { type: Function, optional: true },
         isOpenCallback: { type: Function, optional: true },
         readonly: { type: Boolean, optional: true },
+        onBlur: { type: Function, optional: true },
+        onClick: { type: Function, optional: true },
     };
     static defaultProps = {
         class: "",

@@ -1,10 +1,11 @@
+import { useState } from "@web/owl2/utils";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { parseFloatTime } from "@web/views/fields/parsers";
 import { useInputField } from "@web/views/fields/input_field_hook";
 import { useRecordObserver } from "@web/model/relational_model/utils";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
-import { Component, useState, onWillUpdateProps, onWillStart, onWillDestroy } from "@odoo/owl";
+import { Component, onWillUpdateProps, onWillStart, onWillDestroy } from "@odoo/owl";
 
 function formatMinutes(value) {
     if (value === false) {
@@ -14,11 +15,16 @@ function formatMinutes(value) {
     if (isNegative) {
         value = Math.abs(value);
     }
-    let min = Math.floor(value);
+    let hour = Math.floor(value / 60);
+    let min = Math.floor(value % 60);
     let sec = Math.round((value % 1) * 60);
-    sec = `${sec}`.padStart(2, "0");
-    min = `${min}`.padStart(2, "0");
-    return `${isNegative ? "-" : ""}${min}:${sec}`;
+    sec = `${sec}`.padStart(1, "0");
+    min = `${min}`.padStart(1, "0");
+    if (hour > 0) {
+        hour = `${hour}`.padStart(1, "0");
+        return `${isNegative ? "-" : ""}${hour}h ${min}m ${sec}s`;
+    }
+    return `${isNegative ? "-" : ""}${min}m ${sec}s`;
 }
 
 export class MrpTimer extends Component {

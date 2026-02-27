@@ -1022,7 +1022,7 @@ class PosOrder(models.Model):
                 ('product_id.valuation', '=', 'real_time'),
             ])
             for stock_move in stock_moves:
-                product_accounts = stock_move.product_id._get_product_accounts()
+                product_accounts = stock_move.with_company(stock_move.company_id).product_id._get_product_accounts()
                 expense_account = product_accounts['expense']
                 stock_account = product_accounts['stock_valuation']
                 balance = -sum(stock_move.mapped('value'))
@@ -1138,8 +1138,9 @@ class PosOrder(models.Model):
     def action_pos_order_invoice(self):
         self.ensure_one()
         if not (move := self.account_move):
+            is_picking_created = self._should_create_picking_real_time()
             self.write({'to_invoice': True})
-            if self.company_id.anglo_saxon_accounting and self.session_id.update_stock_at_closing and self.session_id.state != 'closed':
+            if not is_picking_created and self._should_create_picking_real_time() and self.session_id.state != 'closed':
                 self._create_order_picking()
             move = self._generate_pos_order_invoice()
         return {
@@ -1207,14 +1208,14 @@ class PosOrder(models.Model):
             if order_is_in_futur:
                 raise UserError(_('The order delivery / pickup date is in the future. You cannot cancel it.'))
 
-        today_orders = self.filtered(lambda order: order.state == 'draft' and (not order.preset_time or order.preset_time.date() <= fields.Date.today()))
-        next_days_orders = self.filtered(lambda order: order.preset_time and order.preset_time.date() > fields.Date.today() and order.state == 'draft')
-        next_days_orders.session_id = False
-        today_orders.write({'state': 'cancel'})
-        for config in today_orders.config_id:
-            config.notify_synchronisation(config.current_session_id.id, self.env.context.get('device_identifier', 0))
+        draft_orders = self.filtered(lambda o: o.state == 'draft')
+        if draft_orders:
+            draft_orders.write({'state': 'cancel'})
+            for config in draft_orders.mapped('config_id'):
+                config.notify_synchronisation(config.current_session_id.id, self.env.context.get('device_identifier', 0))
+
         return {
-            'pos.order': self._load_pos_data_read(today_orders, self.config_id)
+            'pos.order': self._load_pos_data_read(draft_orders, self.config_id)
         }
 
     def action_pos_order_cancel(self):
@@ -1314,7 +1315,10 @@ class PosOrder(models.Model):
         return self.env['pos.order.line'].browse(refunded_orderline_ids).mapped('order_id')
 
     def _should_create_picking_real_time(self):
-        return not self.session_id.update_stock_at_closing or (self.company_id.anglo_saxon_accounting and self.to_invoice)
+        return not self.session_id.update_stock_at_closing or self._force_create_picking_real_time()
+
+    def _force_create_picking_real_time(self):
+        return self.company_id.anglo_saxon_accounting and self.to_invoice
 
     def _create_order_picking(self):
         self.ensure_one()

@@ -3,8 +3,6 @@ from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from collections import defaultdict
 from odoo.tools import SQL, is_html_empty
-from itertools import groupby
-from operator import itemgetter
 from datetime import date
 from odoo.fields import Domain
 
@@ -22,7 +20,12 @@ class ProductTemplate(models.Model):
         return max_sequence + 1
 
     available_in_pos = fields.Boolean(string='Available in POS', help='Check if you want this product to appear in the Point of Sale.', default=False)
-    to_weight = fields.Boolean(string='To Weigh With Scale', help="Check if the product should be weighted using the hardware scale integration.")
+    to_weight = fields.Boolean(
+        string='To Weigh',
+        help="Enable this option if the product should be sold by weight. "
+            "When enabled and scale is not avalable, the 'Price' button will update the quantity instead of the unit price. "
+            "This applies to both normal POS usage and when integrated with a hardware scale."
+    )
     pos_categ_ids = fields.Many2many(
         'pos.category', string='Point of Sale Category',
         help="Category used in the Point of Sale.")
@@ -294,6 +297,10 @@ class ProductTemplate(models.Model):
                     "Deleting a product available in a session would be like attempting to snatch a hamburger from a customer’s hand mid-bite; chaos will ensue as ketchup and mayo go flying everywhere!",
                 ))
 
+    @api.ondelete(at_uninstall=False)
+    def _unlink_except_special_product(self):
+        self._check_is_special_product()
+
     def _ensure_unused_in_pos(self):
         open_pos_sessions = self.env['pos.session'].sudo().search([('state', '!=', 'closed')])
         used_products = open_pos_sessions.order_ids.filtered(lambda o: o.state == "draft").lines.product_id.product_tmpl_id
@@ -303,8 +310,15 @@ class ProductTemplate(models.Model):
                 "Make sure to close all sessions first to avoid any issues.",
             ))
 
+    def _check_is_special_product(self):
+        special_products = self.env['pos.config'].sudo()._get_special_products().product_tmpl_id
+        for product in self:
+            if product in special_products:
+                raise UserError(_("You cannot archive a product that is set as a special product in a Point of Sale configuration. Please change the configuration first."))
+
     def action_archive(self):
         self._ensure_unused_in_pos()
+        self._check_is_special_product()
         return super().action_archive()
 
     @api.onchange('sale_ok')
@@ -385,9 +399,8 @@ class ProductTemplate(models.Model):
             )
 
         # Suppliers
-        key = itemgetter('partner_id')
         supplier_list = []
-        for _key, group in groupby(sorted(self.seller_ids, key=key), key=key):
+        for group in self.seller_ids.grouped('partner_id').values():
             for s in group:
                 if not ((s.date_start and s.date_start > date.today()) or (s.date_end and s.date_end < date.today()) or (s.min_qty > quantity)):
                     supplier_list.append({

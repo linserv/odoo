@@ -4,7 +4,7 @@ from markupsafe import Markup
 from odoo import _, api, models
 from odoo.addons.base.models.res_partner_bank import sanitize_account_number
 from odoo.exceptions import UserError, ValidationError
-from odoo.tools import float_is_zero, float_repr
+from odoo.tools import float_compare, float_is_zero, float_repr
 from odoo.tools.float_utils import float_round
 from odoo.tools.misc import clean_context, formatLang, html_escape
 from odoo.tools.xml_utils import find_xml_value
@@ -208,6 +208,24 @@ TAX_EXEMPTION_MAPPING = {
 }
 
 # -------------------------------------------------------------------------
+# AREA of countries
+# -------------------------------------------------------------------------
+
+GST_COUNTRY_CODES = {
+    'AU', 'NZ', 'IN', 'SG', 'MY', 'PK', 'BD', 'LK', 'NP', 'BT', 'PG', 'SA',
+    'AG', 'BS', 'BB', 'DM', 'GD', 'JM', 'KN', 'LC', 'VC', 'TT',
+}
+
+EUROPEAN_ECONOMIC_AREA_COUNTRY_CODES = {
+    # EU Member States
+    'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE',
+    'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'CH',
+
+    # EFTA Countries in the EEA
+    'IS', 'LI', 'NO',
+}
+
+# -------------------------------------------------------------------------
 # SUPPORTED FILE TYPES FOR IMPORT
 # -------------------------------------------------------------------------
 SUPPORTED_FILE_TYPES = {
@@ -328,8 +346,6 @@ class AccountEdiCommon(models.AbstractModel):
         https://docs.peppol.eu/poacc/billing/3.0/codelist/UNCL5305/
         """
         # add Norway, Iceland, Liechtenstein
-        european_economic_area = self.env.ref('base.europe').country_ids.mapped('code') + ['NO', 'IS', 'LI']
-
         if not tax:
             return 'E'
 
@@ -360,15 +376,15 @@ class AccountEdiCommon(models.AbstractModel):
             else:
                 return 'S'  # standard VAT
 
-        if supplier.country_id.code in european_economic_area and supplier.vat:
+        if supplier.country_id.code in EUROPEAN_ECONOMIC_AREA_COUNTRY_CODES and supplier.vat:
             if tax.amount != 0 and not tax.has_negative_factor:
                 # Special case: Purchase reverse-charge taxes for self-billed invoices.
                 # See explanation above.
                 # In the XML we put the zero-percent tax with code 'G' or 'K' that the buyer would have used.
                 return 'S'
-            if customer.country_id.code not in european_economic_area:
+            if customer.country_id.code not in EUROPEAN_ECONOMIC_AREA_COUNTRY_CODES:
                 return 'G'
-            if customer.country_id.code in european_economic_area:
+            if customer.country_id.code in EUROPEAN_ECONOMIC_AREA_COUNTRY_CODES:
                 return 'K'
 
         if tax.amount != 0:
@@ -741,9 +757,26 @@ class AccountEdiCommon(models.AbstractModel):
         return partner, logs
 
     def _import_partner_bank(self, invoice, bank_details):
-        bank_details = list(set(map(sanitize_account_number, bank_details)))
-        body = _("The following bank account numbers got retrieved during the import : %s", ", ".join(bank_details))
-        invoice.with_context(no_new_invoice=True).message_post(body=body)
+        partner = None
+        if invoice.move_type in ('out_refund', 'in_invoice'):
+            partner = invoice.partner_id
+        elif invoice.move_type in ('out_invoice', 'in_refund'):
+            partner = invoice.company_id.partner_id
+        if not partner:
+            return
+
+        banks = self.env['res.partner.bank']
+        for account_number in bank_details:
+            try:
+                banks += self.env['res.partner.bank']._find_or_create_bank_account(
+                    account_number=account_number,
+                    partner=partner,
+                    company=invoice.company_id,
+                )
+            except UserError as e:
+                invoice._message_log(body=_("The bank account couldn't be fetched: %s", str(e)))
+        if banks:
+            invoice.partner_bank_id = banks[0]
 
     def _import_document_allowance_charges(self, tree, record, tax_type, qty_factor=1):
         logs = []
@@ -1052,7 +1085,7 @@ class AccountEdiCommon(models.AbstractModel):
         #   * unit price = 1, qty = 0, but price_subtotal = -200
         # for instance, when filling a down payment as an document line. The equation in the docstring is not
         # respected, and the result will not be correct, so we just follow the simple rule below:
-        if net_price_unit is not None and price_subtotal != net_price_unit * (delivered_qty / basis_qty) - allow_charge_amount:
+        if net_price_unit is not None and float_compare(price_subtotal, net_price_unit * (delivered_qty / basis_qty) - allow_charge_amount, currency.decimal_places):
             if net_price_unit == 0 and delivered_qty == 0:
                 quantity = 1
                 price_unit = price_subtotal

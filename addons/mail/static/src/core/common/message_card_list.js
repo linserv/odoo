@@ -1,7 +1,8 @@
+import { useSubEnv } from "@web/owl2/utils";
 import { Message } from "@mail/core/common/message";
 import { useVisible } from "@mail/utils/common/hooks";
 
-import { Component, useSubEnv } from "@odoo/owl";
+import { Component } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 
@@ -60,7 +61,7 @@ export class MessageCardList extends Component {
         }
         // Give the time for menus to close before scrolling to the message.
         await new Promise((resolve) => setTimeout(() => requestAnimationFrame(resolve)));
-        await this.env.messageHighlight?.highlightMessage(message, this.props.thread);
+        await this.env.messageHighlight?.highlightMessage(message);
     }
 
     onClickUnpin(message) {

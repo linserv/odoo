@@ -13,7 +13,7 @@ export class MonetaryFieldPlugin extends Plugin {
         content_not_editable_selectors: monetarySel,
 
         /** Handlers */
-        beforeinput_handlers: this.onBeforeInput.bind(this),
+        on_beforeinput_handlers: this.onBeforeInput.bind(this),
 
         /** Processors */
         clipboard_paste_text_processors: this.processUnsupportedHtmlForPaste.bind(this),
@@ -72,7 +72,7 @@ export class MonetaryFieldPlugin extends Plugin {
         }
     }
 
-    processUnsupportedHtmlForPaste(selection, text) {
+    processUnsupportedHtmlForPaste(text, selection) {
         const monetaryField = closestElement(
             selection.anchorNode,
             `${monetarySel} .oe_currency_value`

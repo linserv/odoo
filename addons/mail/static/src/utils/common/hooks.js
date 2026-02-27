@@ -1,15 +1,10 @@
+import { reactive, useComponent, useLayoutEffect, useRef, useState, useSubEnv } from "@web/owl2/utils";
 import {
     Component,
     onMounted,
     onPatched,
     onWillUnmount,
-    reactive,
     toRaw,
-    useComponent,
-    useEffect,
-    useRef,
-    useState,
-    useSubEnv,
     xml,
 } from "@odoo/owl";
 
@@ -226,7 +221,7 @@ export function useHover(refNames, { onHover, onAway, stateObserver, onHovering 
     }
 
     if (stateObserver) {
-        useEffect((open) => {
+        useLayoutEffect((open) => {
             // Note: stateObserver is essentially used with useDropdownState()?.isOpen.
             // While isOpen can become false, the ref.el can still be there for a short period of time.
             // Relying on isOpen becoming false forces good syncing of isHover state on dropdown close.
@@ -302,7 +297,7 @@ export function useScrollState(refName) {
             state.canScrollAfter = false;
         }
     }
-    useEffect(
+    useLayoutEffect(
         (el) => {
             if (!el) {
                 return;
@@ -361,7 +356,7 @@ export function useVisible(refName, cb, { ready = true } = {}) {
     const observer = new IntersectionObserver((entries) => {
         setValue(entries.at(-1).isIntersecting);
     });
-    useEffect(
+    useLayoutEffect(
         (el, ready) => {
             if (el && ready) {
                 observer.observe(el);
@@ -381,9 +376,20 @@ export function useVisible(refName, cb, { ready = true } = {}) {
  * @property {function} clear
  * @property {function} highlightMessage
  * @property {number|null} highlightedMessageId
+ */
+
+/**
+ * @param {Object} params
+ * @param {function(): import("models").Thread|null} params.thread
+ * @param {function(): Object} [params.messageFetchRouteParams]
+ * @param {number} [params.duration=1500]
  * @returns {MessageScrolling}
  */
-export function useMessageScrolling(duration = 1500) {
+export function useMessageScrolling({
+    thread: threadFn,
+    messageFetchRouteParams = () => ({}),
+    duration = 1500,
+}) {
     let timeout;
     const state = useState({
         clear() {
@@ -395,14 +401,20 @@ export function useMessageScrolling(duration = 1500) {
         },
         /**
          * @param {import("models").Message} message
-         * @param {import("models").Thread} thread
          */
-        async highlightMessage(message, thread) {
+        async highlightMessage(message) {
+            const thread = threadFn();
+            if (!thread) {
+                return;
+            }
             state.initiated = true;
             let messageScrollDirection;
             if (message.notIn(thread.messages)) {
                 messageScrollDirection = message.id < thread.messages[0]?.id ? "top" : "bottom";
-                await thread.loadAround(message.id);
+                await thread.loadAround({
+                    messageId: message.id,
+                    routeParams: messageFetchRouteParams(),
+                });
             }
             const lastHighlightedMessageId = state.highlightedMessageId;
             this.clear();
@@ -752,9 +764,9 @@ export class UseForwardRefsToParent {
     constructor(propName, getRefIdFn, ref) {
         const component = useComponent();
         this.ref = ref;
-        // Note: The `useChildRefs()` Map is shared with all children, using useEffect/willUnmount to ensure proper on/off life cycle hook calls for given child.
+        // Note: The `useChildRefs()` Map is shared with all children, using useLayoutEffect/willUnmount to ensure proper on/off life cycle hook calls for given child.
         // If we use setup/willDestroy we can have 2 fiber nodes of same child component with one finalizing with willDestroy from cancelling duplicated fiber node.
-        useEffect(
+        useLayoutEffect(
             (map, key) => {
                 this.registerRef(map, key);
                 return () => this.removeRef(map, key);

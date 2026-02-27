@@ -1,5 +1,5 @@
+import { reactive } from "@web/owl2/utils";
 import { Plugin } from "@html_editor/plugin";
-import { reactive } from "@odoo/owl";
 import { EmojiPicker, loadEmoji, loader } from "@web/core/emoji_picker/emoji_picker";
 import { _t } from "@web/core/l10n/translation";
 import { debounce } from "@web/core/utils/timing";
@@ -19,10 +19,10 @@ export class EmojiPlugin extends Plugin {
     /** @type {import("plugins").EditorResources} */
     resources = {
         delete_backward_overrides: this.handleDeleteBackward.bind(this),
-        input_handlers: this.onInput.bind(this),
-        delete_handlers: () => this.updateEmojiList(),
-        post_undo_handlers: () => this.updateEmojiList(),
-        post_redo_handlers: () => this.updateEmojiList(),
+        on_input_handlers: this.onInput.bind(this),
+        on_deleted_handlers: () => this.updateEmojiList(),
+        on_undone_handlers: () => this.updateEmojiList(),
+        on_redone_handlers: () => this.updateEmojiList(),
         user_commands: [
             {
                 id: "addEmoji",

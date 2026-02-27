@@ -1,4 +1,5 @@
-import { Component, useEffect } from "@odoo/owl";
+import { useLayoutEffect } from "@web/owl2/utils";
+import { Component } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
 import { x2ManyCommands } from "@web/core/orm_service";
 import { registry } from "@web/core/registry";
@@ -95,7 +96,7 @@ export class SectionAndNoteListRenderer extends ListRenderer {
         this.priceColumns = [...this.props.aggregatedFields, "price_unit"];
         // invisible fields to force copy when duplicating a section
         this.copyFields = ["display_type", "collapse_composition", "collapse_prices"];
-        useEffect(
+        useLayoutEffect(
             (editedRecord) => this.focusToName(editedRecord),
             () => [this.editedRecord]
         );
@@ -109,20 +110,22 @@ export class SectionAndNoteListRenderer extends ListRenderer {
         return SHOW_ALL_ITEMS_TOOLTIP;
     }
 
-    get hidePrices() {
-        return this.record.data.collapse_prices;
+    hidePrices(record) {
+        return record.data.collapse_prices;
     }
 
-    get hideComposition() {
-        return this.record.data.collapse_composition;
+    hideComposition(record) {
+        return record.data.collapse_composition;
     }
 
-    get disablePricesButton() {
-        return this.shouldCollapse(this.record, 'collapse_prices') || this.disableCompositionButton;
+    disablePricesButton(record) {
+        return (
+            this.shouldCollapse(record, 'collapse_prices') || this.disableCompositionButton(record)
+        );
     }
 
-    get disableCompositionButton() {
-        return this.shouldCollapse(this.record, 'collapse_composition');
+    disableCompositionButton(record) {
+        return this.shouldCollapse(record, 'collapse_composition');
     }
 
     get sectionColumns() {
@@ -290,14 +293,12 @@ export class SectionAndNoteListRenderer extends ListRenderer {
     }
 
     isSectionOrNote(record = null) {
-        record = record || this.record;
         return [DISPLAY_TYPES.SECTION, DISPLAY_TYPES.SUBSECTION, DISPLAY_TYPES.NOTE].includes(
             record.data.display_type
         );
     }
 
     isSection(record = null) {
-        record = record || this.record;
         return [DISPLAY_TYPES.SECTION, DISPLAY_TYPES.SUBSECTION].includes(record.data.display_type);
     }
 

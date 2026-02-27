@@ -28,6 +28,15 @@ registry.category("web_tour.tours").add("ProductScreenTour", {
             Chrome.startPoS(),
             Dialog.confirm("Open Register"),
             OfflineUtil.setOfflineMode(),
+            inLeftSide([
+                ...ProductScreen.clickControlButtonMore(),
+                // check that cancel order button is disabled if there is no orderline in the order
+                {
+                    content: "Check that cancel order button is disabled",
+                    trigger: ".control-buttons button:contains('Cancel Order'):disabled",
+                },
+                Dialog.cancel(),
+            ]),
             ProductScreen.firstProductIsFavorite("Whiteboard Pen"),
             // Make sure we don't have any scroll bar on the product list
             {
@@ -945,7 +954,7 @@ registry.category("web_tour.tours").add("test_product_long_press", {
             },
             {
                 content: "Check that VAT label is present in the product details popup",
-                trigger: ".section-financials .vat-label:contains('TIN')",
+                trigger: ".section-financials .vat-label:contains('Tax')",
             },
             {
                 content: "Check that VAT value is correct in the product details popup",
@@ -1058,6 +1067,7 @@ registry.category("web_tour.tours").add("test_preset_timing_retail", {
             PartnerList.clickPartner("A simple PoS man!"),
             Chrome.presetTimingSlotHourNotExists("9:00am"),
             Chrome.selectPresetTimingSlotHour({ title: "delivery", hour: "3:00pm" }),
+            Chrome.presetTimingSlotIs("3:00pm"),
             Chrome.createFloatingOrder(),
             ProductScreen.clickDisplayedProduct("Desk Organizer"),
             Chrome.clickOrders(),
@@ -1216,6 +1226,45 @@ registry.category("web_tour.tours").add("test_pos_ui_round_globally", {
                 ...ProductScreen.selectedOrderlineHasDirect("Test Product 2", "-1.0"),
             ]),
             ProductScreen.totalAmountIs("7,771.01"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.clickPaymentMethod("Bank"),
+            PaymentScreen.clickValidate(),
+            FeedbackScreen.isShown(),
+            Chrome.endTour(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("test_weight_product", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.clickDisplayedProduct("Vanela Gathiya"),
+            inLeftSide([
+                Numpad.click("Price"),
+                Numpad.click("4"),
+                Numpad.click("0"),
+                ...Order.hasLine({
+                    productName: "Vanela Gathiya",
+                    quantity: "4",
+                    price: "40",
+                    withClass: ".selected",
+                }),
+            ]),
+            ProductScreen.clickDisplayedProduct("Configurable Chair"),
+            ProductConfiguratorPopup.pickRadio("Leather"),
+            Chrome.clickBtn("Add"),
+            inLeftSide([
+                Numpad.click("Price"),
+                Numpad.click("4"),
+                Numpad.click("0"),
+                ...Order.hasLine({
+                    productName: "Configurable Chair",
+                    quantity: "1",
+                    price: "40",
+                    withClass: ".selected",
+                }),
+            ]),
             ProductScreen.clickPayButton(),
             PaymentScreen.clickPaymentMethod("Bank"),
             PaymentScreen.clickValidate(),

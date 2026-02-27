@@ -7,30 +7,32 @@ import * as EventTourUtils from "@pos_event/../tests/tours/utils/event_tour_util
 import * as Dialog from "@point_of_sale/../tests/generic_helpers/dialog_util";
 import { registry } from "@web/core/registry";
 
-registry.category("web_tour.tours").add("SellingEventInPos", {
-    undeterministicTour_doNotCopy: true, // Remove this key to make the tour failed. ( It removes delay between steps )
+registry.category("web_tour.tours").add("SellingEventInPosWithChoiceAnswers", {
     steps: () =>
         [
             Chrome.startPoS(),
-            Dialog.confirm("Open Register"),
             // Confirm popup - There isn't enough tickets available
             ProductScreen.clickDisplayedProduct("My Awesome Event"),
             EventTourUtils.increaseQuantityOfTicket("Ticket VIP"),
             EventTourUtils.increaseQuantityOfTicket("Ticket VIP"),
-            Dialog.confirm(),
-            Dialog.confirm(),
+            Dialog.is({ title: "Tickets" }),
+            Dialog.confirm("Confirm"),
+            Dialog.is({ title: "Oh snap !" }),
+            Dialog.confirm("Ok"),
 
             // Buy a VIP Ticket
             ProductScreen.clickDisplayedProduct("My Awesome Event"),
             EventTourUtils.increaseQuantityOfTicket("Ticket VIP"),
-            Dialog.confirm(),
+            Dialog.is({ title: "Tickets" }),
+            Dialog.confirm("Confirm"),
             EventTourUtils.answerTicketSelectQuestion("1", "Question1", "Q1-Answer1"),
             EventTourUtils.answerGlobalSelectQuestion("Question2", "Q2-Answer1"),
-            Dialog.confirm(),
+            Dialog.confirm("Confirm"),
             Dialog.is({ title: "Oh snap !" }),
             Dialog.confirm("Ok"),
             EventTourUtils.answerGlobalSelectQuestion("Question3", "Q3-Answer1"),
-            Dialog.confirm(),
+            Dialog.is({ title: "Tickets" }),
+            Dialog.confirm("Confirm"),
             ProductScreen.totalAmountIs("200.00"),
             ProductScreen.clickPayButton(),
             PaymentScreen.clickPaymentMethod("Bank", true, { remaining: "0.00" }),
@@ -39,6 +41,28 @@ registry.category("web_tour.tours").add("SellingEventInPos", {
             FeedbackScreen.printTicket("Full Page"),
             FeedbackScreen.printTicket("Badge"),
             FeedbackScreen.clickNextOrder(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("SellingEventInPosWithTextAnswers", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            // Buy a VIP Ticket
+            ProductScreen.clickDisplayedProduct("My Awesome Event"),
+            EventTourUtils.increaseQuantityOfTicket("Ticket VIP"),
+            EventTourUtils.increaseQuantityOfTicket("Ticket VIP"),
+            Dialog.confirm(),
+            EventTourUtils.answerGlobalTextQuestion("Text Box 1", "TB1-Answer"),
+            EventTourUtils.answerTicketQuestion("1", "Text Box 2", "T1-TB2-Answer"),
+            EventTourUtils.answerTicketQuestion("2", "Text Box 2", "T2-TB2-Answer"),
+            Dialog.confirm(),
+            ProductScreen.totalAmountIs("400.00"),
+            ProductScreen.clickPayButton(),
+            PaymentScreen.clickPaymentMethod("Bank", true, { remaining: "0.00" }),
+            PaymentScreen.clickValidate(),
+            FeedbackScreen.isShown(),
         ].flat(),
 });
 

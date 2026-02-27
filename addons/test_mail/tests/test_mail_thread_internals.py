@@ -79,7 +79,6 @@ class ThreadRecipients(MailCommon, TestRecipients):
 
 
 @tagged('mail_thread', 'mail_thread_api', 'mail_tools')
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestAPI(ThreadRecipients):
 
     @classmethod
@@ -994,7 +993,6 @@ class TestAPI(ThreadRecipients):
 
 
 @tagged('mail_thread')
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestChatterTweaks(ThreadRecipients):
 
     @classmethod
@@ -1148,7 +1146,6 @@ class TestChatterTweaks(ThreadRecipients):
 
 
 @tagged('mail_thread')
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestDiscuss(MailCommon, TestRecipients):
 
     @classmethod
@@ -1176,7 +1173,7 @@ class TestDiscuss(MailCommon, TestRecipients):
             # mark all as read clear needactions
             msg1 = self.test_record.message_post(body='Test', message_type='comment', subtype_xmlid='mail.mt_comment', partner_ids=[employee_partner.id])
             with self.assertBus(
-                    [(self.cr.dbname, 'res.partner', employee_partner.id)],
+                    [self.user_employee],
                     message_items=[{
                         'type': 'mail.message/mark_as_read',
                         'payload': {
@@ -1202,7 +1199,7 @@ class TestDiscuss(MailCommon, TestRecipients):
             self.assertEqual(na_count, 1, "message not accessible is currently still counted")
 
             with self.assertBus(
-                    [(self.cr.dbname, 'res.partner', employee_partner.id)],
+                    [self.user_employee],
                     message_items=[{
                         'type': 'mail.message/mark_as_read',
                         'payload': {
@@ -1256,7 +1253,6 @@ class TestDiscuss(MailCommon, TestRecipients):
 
 
 @tagged('mail_thread')
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestNotification(MailCommon):
 
     @classmethod
@@ -1297,7 +1293,6 @@ class TestNotification(MailCommon):
 
 
 @tagged('mail_thread', 'mail_nothread')
-@tagged('at_install', '-post_install')  # LEGACY at_install
 class TestNoThread(MailCommon, TestRecipients):
     """ Specific tests for cross models thread features """
 

@@ -139,6 +139,7 @@ class HrEmployee(models.Model):
 
         remaining = self.browse(min_dts)
         remaining.version_ids.fetch()  # prefetch data
+        remaining.resource_id.employee_id  # prefetch data
         lookahead_days = [7, 30, 90, 180, 365, 730]
 
         # get periods from calendar
@@ -182,7 +183,10 @@ class HrEmployee(models.Model):
                 resources_per_tz = employees._get_resources_per_tz(min_dt)
                 work_intervals = calendar._work_intervals_batch(
                     min_dt, min_dt + timedelta(days=lookahead_day), resources_per_tz=resources_per_tz)
-                collect_employees(work_intervals)
+                collect_employees({
+                    self.env['resource.resource'].browse(resource_id).employee_id.id: interval
+                    for resource_id, interval in work_intervals.items()
+                })
             remaining = self.filtered(lambda e: e.id not in result)
             if not remaining:
                 return result
@@ -223,7 +227,7 @@ class HrEmployee(models.Model):
         for employee in self:
             previous_manager = employee._origin.parent_id.user_id
             manager = employee.parent_id.user_id
-            if manager and employee.leave_manager_id == previous_manager or not employee.leave_manager_id:
+            if manager and employee.leave_manager_id and employee.leave_manager_id == previous_manager:
                 employee.leave_manager_id = manager
             elif not employee.leave_manager_id:
                 employee.leave_manager_id = False
@@ -285,7 +289,7 @@ class HrEmployee(models.Model):
         if 'parent_id' in values:
             manager = self.env['hr.employee'].browse(values['parent_id']).user_id
             if manager:
-                to_change = self.filtered(lambda e: e.leave_manager_id == e.parent_id.user_id or not e.leave_manager_id)
+                to_change = self.filtered(lambda e: e.leave_manager_id and e.leave_manager_id == e.parent_id.user_id)
                 to_change.write({'leave_manager_id': values.get('leave_manager_id', manager.id)})
 
         old_managers = self.env['res.users']

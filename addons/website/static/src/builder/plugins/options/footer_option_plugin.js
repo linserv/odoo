@@ -1,3 +1,4 @@
+import { reactive } from "@web/owl2/utils";
 import { registry } from "@web/core/registry";
 import { Plugin } from "@html_editor/plugin";
 import { withSequence } from "@html_editor/utils/resource";
@@ -9,7 +10,6 @@ import {
 } from "@html_builder/utils/option_sequence";
 import { BuilderAction } from "@html_builder/core/builder_action";
 import { FooterTemplateChoice, FooterTemplateOption } from "./footer_template_option";
-import { reactive } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
 import { BaseOptionComponent } from "@html_builder/core/utils";
 import { BorderConfigurator } from "@html_builder/plugins/border_configurator_option";
@@ -129,7 +129,11 @@ class FooterOptionPlugin extends Plugin {
             WebsiteConfigFooterAction,
         },
         on_prepare_drag_handlers: this.prepareDrag.bind(this),
-        unremovable_node_predicates: (node) => node.id === "o_footer_scrolltop",
+        is_node_removable_predicates: (node) => {
+            if (node.id === "o_footer_scrolltop") {
+                return false;
+            }
+        },
         footer_templates_providers: [
             () =>
                 [

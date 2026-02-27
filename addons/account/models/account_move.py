@@ -16,7 +16,7 @@ import os
 from lxml import etree, html
 from textwrap import shorten
 
-from odoo import api, fields, models, _, modules
+from odoo import api, fields, models, _, SUPERUSER_ID, modules
 from odoo.tools.sql import column_exists, create_column
 from odoo.addons.account.tools import format_structured_reference_iso
 from odoo.exceptions import UserError, ValidationError, AccessError, RedirectWarning
@@ -1042,22 +1042,22 @@ class AccountMove(models.Model):
                     move.preferred_payment_method_line_id
                     or move.bank_partner_id.property_inbound_payment_method_line_id
                 )
-            ) and payment_method.journal_id and payment_method.journal_id.bank_account_id.allow_out_payment:
+            ) and payment_method.journal_id:
                 move.partner_bank_id = payment_method.journal_id.bank_account_id
                 continue
 
             move.partner_bank_id = move.bank_partner_id.bank_ids.filtered(
-                lambda bank: (not bank.company_id or bank.company_id == move.company_id) and bank.allow_out_payment
-            )[:1]
+                lambda bank: not bank.company_id or bank.company_id == move.company_id
+            ).sorted(lambda b: not b.allow_out_payment)[:1]
 
     @api.depends('partner_id')
     def _compute_invoice_payment_term_id(self):
         for move in self:
             move = move.with_company(move.company_id)
-            if move.is_sale_document(include_receipts=True) and move.partner_id.property_payment_term_id:
-                move.invoice_payment_term_id = move.partner_id.property_payment_term_id
-            elif move.is_purchase_document(include_receipts=True) and move.partner_id.property_supplier_payment_term_id:
-                move.invoice_payment_term_id = move.partner_id.property_supplier_payment_term_id
+            if move.is_sale_document(include_receipts=True):
+                move.invoice_payment_term_id = move.partner_id.property_payment_term_id or move.invoice_payment_term_id
+            elif move.is_purchase_document(include_receipts=True):
+                move.invoice_payment_term_id = move.partner_id.property_supplier_payment_term_id or move.invoice_payment_term_id
             else:
                 move.invoice_payment_term_id = False
 
@@ -5714,9 +5714,21 @@ class AccountMove(models.Model):
                     "So you cannot confirm the invoice."
                 ))
             if invoice.partner_bank_id and invoice.is_inbound() and not invoice.partner_bank_id.allow_out_payment:
-                raise UserError(_(
-                    "The company bank account linked to this invoice is not trusted, please double-check and trust it before confirming, or remove it"
-                ))
+                if self.env.user.id == SUPERUSER_ID or self.env.user.has_group('base.group_public') or self.env.user.has_group('base.group_portal'):
+                    # Do not block in case of automated flows, simply remove the information
+                    invoice.partner_bank_id = False
+                elif invoice.partner_bank_id._user_can_trust():
+                    raise RedirectWarning(
+                        _(
+                            "The company bank account (%(account_number)s) linked to this invoice is not trusted. "
+                            "Go to the Bank Settings, double-check that it is yours or correct the number, and click on Send Money to trust it.",
+                            account_number=invoice.partner_bank_id.display_name,
+                        ),
+                        invoice.partner_bank_id._get_records_action(),
+                        _("Bank settings")
+                    )
+                else:
+                    raise UserError(_("The bank account of your company is not trusted. Please ask an admin or someone with approval rights to check it."))
             if float_compare(invoice.amount_total, 0.0, precision_rounding=invoice.currency_id.rounding) < 0:
                 validation_msgs.add(_(
                     "You cannot validate an invoice with a negative total amount. "
@@ -7108,7 +7120,7 @@ class AccountMove(models.Model):
             # Search for partners in the mail's body.
             body_mail_addresses = set(email_re.findall(msg_dict.get('body')))
             partners = self._partner_find_from_emails_single(
-                body_mail_addresses, filter_found=lambda p: is_right_company(p) or p.partner_share, no_create=True,
+                body_mail_addresses, filter_found=lambda p: is_right_company(p) and p.partner_share, no_create=True,
             ) if body_mail_addresses else self.env['res.partner']
 
         # Little hack: Inject the mail's subject in the body.
@@ -7131,6 +7143,9 @@ class AccountMove(models.Model):
         move._compute_name()  # because the name is given, we need to recompute in case it is the first invoice of the journal
 
         return move
+
+    def _attachment_fields_to_clear(self):
+        return super()._attachment_fields_to_clear() + ['message_main_attachment_id']
 
     def _message_post_after_hook(self, new_message, message_values):
         """ This method processes the attachments of a new mail.message. It handles the 3 following situations:
@@ -7434,27 +7449,27 @@ class AccountMove(models.Model):
         match move_type:
             case 'entry':
                 return [{
-                    'label': _('Import Template for Misc. Operations'),
+                    'label': _('Template for Misc. Operations'),
                     'template': '/account/static/xls/misc_operations_import_template.xlsx',
                 }]
             case 'out_invoice':
                 return [{
-                    'label': _('Import Template for Invoices'),
+                    'label': _('Template for Invoices'),
                     'template': '/account/static/xls/customer_invoices_credit_notes_import_template.xlsx',
                 }]
             case 'out_refund':
                 return [{
-                    'label': _('Import Template for Credit Notes'),
+                    'label': _('Template for Credit Notes'),
                     'template': '/account/static/xls/customer_invoices_credit_notes_import_template.xlsx',
                 }]
             case 'in_invoice':
                 return [{
-                    'label': _('Import Template for Bills'),
+                    'label': _('Template for Bills'),
                     'template': '/account/static/xls/vendor_bills_refunds_import_template.xlsx',
                 }]
             case 'in_refund':
                 return [{
-                    'label': _('Import Template for Refunds'),
+                    'label': _('Template for Refunds'),
                     'template': '/account/static/xls/vendor_bills_refunds_import_template.xlsx',
                 }]
             case _:

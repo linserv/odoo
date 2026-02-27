@@ -1,7 +1,7 @@
+import { reactive } from "@web/owl2/utils";
 import { BuilderAction } from "@html_builder/core/builder_action";
 import { Plugin } from "@html_editor/plugin";
 import { withSequence } from "@html_editor/utils/resource";
-import { reactive } from "@odoo/owl";
 import { _t } from "@web/core/l10n/translation";
 import { rpc } from "@web/core/network/rpc";
 import { registry } from "@web/core/registry";
@@ -19,6 +19,10 @@ import { TranslateWebpageOption } from "./translate_webpage_option";
 class TranslateToAction extends BuilderAction {
     static id = "translateWebpageAI";
     static dependencies = ["translateWebpageOption"];
+
+    setup() {
+        this.canTimeout = false;
+    }
 
     async apply() {
         const translationState = this.dependencies.translateWebpageOption.getTranslationState();

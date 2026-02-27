@@ -543,7 +543,7 @@ class MailThread(models.AbstractModel):
             return
         self.env.cr.precommit.add(self._track_finalize)
         initial_values = self.env.cr.precommit.data.setdefault(f'mail.tracking.{self._name}', {})
-        for record in self:
+        for record in self.sudo():  # be sure to compute initial values whatever current user ACLs
             if not record.id:
                 continue
             values = initial_values.setdefault(record.id, {})
@@ -581,7 +581,7 @@ class MailThread(models.AbstractModel):
         ids = [id_ for id_, vals in initial_values.items() if vals]
         if not ids:
             return
-        records = self.browse(ids).sudo()
+        records = self.browse(ids).sudo()  # be sure to compute end values whatever current user ACLs
         fnames = self._track_get_fields()
         context = clean_context(self.env.context)
         tracking = records.with_context(context)._message_track(fnames, initial_values)
@@ -2974,7 +2974,7 @@ class MailThread(models.AbstractModel):
             "UPDATE mail_message SET pinned_at=%(pinned_at)s WHERE id=%(id)s",
             {"pinned_at": fields.Datetime.now() if pinned else None, "id": message.id},
         )
-        Store(bus_channel=message._bus_channel()).add(message, ["pinned_at"]).bus_send()
+        Store(bus_channel=message).add(message, ["pinned_at"]).bus_send()
         return True
 
     # ------------------------------------------------------------
@@ -5061,7 +5061,7 @@ class MailThread(models.AbstractModel):
             self.env["mail.message.translation"].sudo().search(
                 [("message_id", "=", message.id)],
             ).unlink()
-        Store(bus_channel=message._bus_channel()).add(
+        Store(bus_channel=message).add(
             message,
             lambda res: (
                 res.many("attachment_ids", "_store_attachment_fields", sort="id"),

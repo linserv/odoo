@@ -2054,6 +2054,12 @@ class ProjectTask(models.Model):
         self.ensure_one()
         user = self.env['res.users'].sudo().browse(access_uid) if access_uid else self.env.user
         if user and not user.share and self.with_user(user).has_access('read') and not force_website:
+            if self.project_id:
+                return {
+                    'type': 'ir.actions.act_url',
+                    'url': f'/odoo/project/{self.project_id.id}/tasks/{self.id}',
+                    'target': 'self',
+                }
             return {
                 "type": "ir.actions.act_url",
                 "url": f'/odoo/all-tasks/{self.id}',
@@ -2198,6 +2204,6 @@ class ProjectTask(models.Model):
     @api.model
     def get_import_templates(self):
         return [{
-            'label': _('Import Template for Tasks'),
+            'label': _('Template for Tasks'),
             'template': '/project/static/xls/tasks_import_template.xlsx',
         }]

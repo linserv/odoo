@@ -1,7 +1,7 @@
 import io
-from odoo import models
+from odoo import models, _
 from odoo.tools import pdf
-from odoo.tools.pdf import OdooPdfFileReader, OdooPdfFileWriter
+from odoo.tools.pdf import OdooPdfFileReader, OdooPdfFileWriter, PdfReadError, DependencyError
 
 
 class IrActionsReport(models.Model):
@@ -22,7 +22,7 @@ class IrActionsReport(models.Model):
                 attachments = self.env['ir.attachment'].search([('res_id', 'in', expense.ids), ('res_model', '=', 'hr.expense')])
                 expense_report = OdooPdfFileReader(stream, strict=False)
                 output_pdf = OdooPdfFileWriter()
-                output_pdf.appendPagesFromReader(expense_report)
+                output_pdf.append_pages_from_reader(expense_report)
                 for attachment in self._prepare_local_attachments(attachments):
                     if attachment.mimetype == 'application/pdf':
                         attachment_stream = pdf.to_pdf_stream(attachment)
@@ -34,7 +34,15 @@ class IrActionsReport(models.Model):
                         attachment_prep_stream = self._render_qweb_pdf_prepare_streams('hr_expense.report_expense_img', data, res_ids=res_ids)
                         attachment_stream = attachment_prep_stream[expense.id]['stream']
                     attachment_reader = OdooPdfFileReader(attachment_stream, strict=False)
-                    output_pdf.appendPagesFromReader(attachment_reader)
+                    try:
+                        output_pdf.append_pages_from_reader(attachment_reader)
+                    except (PdfReadError, DependencyError) as e:
+                        expense._message_log(body=_(
+                            "The attachment (%(attachment_name)s) has not been added to the report due to the following error: '%(error)s'",
+                            attachment_name=attachment.name,
+                            error=e
+                        ))
+                        continue
                     stream_list.append(attachment_stream)
 
                 new_pdf_stream = io.BytesIO()

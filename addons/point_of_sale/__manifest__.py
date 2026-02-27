@@ -61,6 +61,7 @@
         'receipt/pos_tip_receipt.xml',  # needed in the backend and frontend
         'receipt/pos_cash_move_receipt.xml',  # needed in the backend and frontend
         'receipt/pos_sale_details_receipt.xml',  # needed in the backend and frontend
+        'data/ir_cron_data.xml',
     ],
     'demo': [
         'data/demo_data.xml',
@@ -165,6 +166,7 @@
             'web/static/lib/luxon/luxon.js',
             'web/static/src/libs/luxon.js',
             'web/static/lib/owl/owl.js',
+            'web/static/src/owl2/utils.js',
             'web/static/lib/owl/odoo_module.js',
             'web/static/lib/zxing-library/zxing-library.js',
 

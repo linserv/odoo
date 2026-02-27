@@ -167,6 +167,11 @@ export class DiscussChannel extends Record {
             this._onDeleteChatWindow();
         },
     });
+    get channelNotifications() {
+        return (
+            this.self_member_id?.custom_notifications || this.store.settings.channel_notifications
+        );
+    }
     get chatChannelTypes() {
         return ["chat", "group"];
     }
@@ -285,26 +290,31 @@ export class DiscussChannel extends Record {
     get hasAttachmentPanel() {
         return true;
     }
+    getFirstNewerMessage({ from_message_id = this.self_member_id?.new_message_separator_ui } = {}) {
+        if (!this.self_member_id) {
+            return null;
+        }
+        const messages = this.messages.filter((m) => !m.isNotification);
+        const separator = from_message_id;
+        if (separator === 0 && !this.loadOlder) {
+            return messages[0];
+        }
+        if (!separator || messages.length === 0 || messages.at(-1).id < separator) {
+            return null;
+        }
+        // try to find a perfect match according to the member's separator
+        let message = this.store["mail.message"].get({ id: separator });
+        if (!message || this.notEq(message.channel_id)) {
+            message = nearestGreaterThanOrEqual(messages, separator, (msg) => msg.id);
+        }
+        return message;
+    }
     firstUnreadMessage = fields.One("mail.message", {
         /** @this {import("models").DiscussChannel} */
         compute() {
-            if (!this.self_member_id) {
-                return null;
-            }
-            const messages = this.messages.filter((m) => !m.isNotification);
-            const separator = this.self_member_id.new_message_separator_ui;
-            if (separator === 0 && !this.loadOlder) {
-                return messages[0];
-            }
-            if (!separator || messages.length === 0 || messages.at(-1).id < separator) {
-                return null;
-            }
-            // try to find a perfect match according to the member's separator
-            let message = this.store["mail.message"].get({ id: separator });
-            if (!message || this.notEq(message.channel_id)) {
-                message = nearestGreaterThanOrEqual(messages, separator, (msg) => msg.id);
-            }
-            return message;
+            return this.getFirstNewerMessage({
+                from_message_id: this.self_member_id?.new_message_separator_ui,
+            });
         },
     });
     hasOtherMembersTyping = fields.Attr(false, {
@@ -329,18 +339,19 @@ export class DiscussChannel extends Record {
         },
     });
     get importantCounter() {
-        if (this.isChatChannel && this.self_member_id?.message_unread_counter_ui) {
+        if (
+            this.isChatChannel &&
+            this.self_member_id?.message_unread_counter_ui &&
+            (this.channel_type !== "group" || !this.self_member_id?.mute_until_dt)
+        ) {
             return this.self_member_id.message_unread_counter_ui;
         }
-        if (this.discussAppCategory?.id === "channels") {
-            if (this.store.settings.channel_notifications === "no_notif") {
+        if (this.channel_type === "channel") {
+            if (this.channelNotifications === "no_notif") {
                 return 0;
             }
-            if (
-                this.store.settings.channel_notifications === "all" &&
-                !this.self_member_id?.mute_until_dt
-            ) {
-                return this.self_member_id?.message_unread_counter_ui;
+            if (this.channelNotifications === "all" && !this.self_member_id?.mute_until_dt) {
+                return this.self_member_id.message_unread_counter_ui;
             }
         }
         return this.message_needaction_counter;

@@ -1,7 +1,7 @@
+import { reactive } from "@web/owl2/utils";
 import { registry } from "@web/core/registry";
 import { Cache } from "@web/core/utils/cache";
 import { Plugin } from "@html_editor/plugin";
-import { reactive } from "@odoo/owl";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { redirect } from "@web/core/utils/urls";
 import { FormFieldOptionRedraw } from "./form_field_option_redraw";
@@ -114,30 +114,28 @@ export class FormOptionPlugin extends Plugin {
                 },
             },
         ],
-        clone_disabled_reason_providers: ({ el, reasons }) => {
+        clone_disabled_reason_providers: (el) => {
             if (
                 el.classList.contains("s_website_form_field") &&
                 !el.classList.contains("s_website_form_custom")
             ) {
-                reasons.push(_t("You cannot duplicate this field."));
+                return _t("You cannot duplicate this field.");
             }
         },
-        remove_disabled_reason_providers: ({ el, reasons }) => {
+        remove_disabled_reason_providers: (el) => {
             if (el.classList.contains("s_website_form_model_required")) {
                 const models = this.modelsCache.get();
                 const modelName = el.closest("form")?.dataset.model_name;
                 const model = models?.find((model) => model.model === modelName);
                 const fieldName = getFieldName(el);
-                reasons.push(
-                    model
+                return model
                         ? _t(
                               'The field "%(fieldName)s" is mandatory for the action "%(actionName)s".',
                               { fieldName, actionName: model.website_form_label }
                           )
                         : _t("The field “%(fieldName)s” is mandatory for the selected action.", {
                               fieldName,
-                          })
-                );
+                          });
             }
         },
         builder_options: [FormOption, FormFieldOptionRedraw, WebsiteFormSubmitOption],
@@ -183,7 +181,7 @@ export class FormOptionPlugin extends Plugin {
             ".s_website_form_recaptcha",
             ".row > div:not(.s_website_form_field, .s_website_form_submit, .s_website_form_field *, .s_website_form_submit *)",
         ].map((selector) => `.s_website_form form ${selector}`),
-        clean_for_save_handlers: ({ root: rootEl }) => {
+        clean_for_save_processors: (rootEl) => {
             this.removeSuccessMessagePreviews(rootEl);
         },
         dropzone_selector: [

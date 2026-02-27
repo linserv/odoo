@@ -1,6 +1,6 @@
+import { useSubEnv } from "@web/owl2/utils";
 import { Chatter } from "@mail/chatter/web_portal_project/chatter";
 
-import { useSubEnv } from "@odoo/owl";
 import { patch } from "@web/core/utils/patch";
 import { useService } from "@web/core/utils/hooks";
 
@@ -16,6 +16,10 @@ patch(Chatter.prototype, {
             // and should not be set to 'true' in the project sharing chatter environment.
             projectSharingId: this.props.projectSharingId,
         });
+    },
+
+    get extraMessageFetchRouteParams() {
+        return super.extraMessageFetchRouteParams;
     },
 
     async toggleIsFollower() {

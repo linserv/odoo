@@ -1,3 +1,4 @@
+import { useState } from "@web/owl2/utils";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 import { _t } from "@web/core/l10n/translation";
 import { memoize, uniqueId } from "@web/core/utils/functions";
@@ -5,7 +6,7 @@ import { Reactive } from "@web/core/utils/reactive";
 import { AddSnippetDialog } from "./add_snippet_dialog";
 import { registry } from "@web/core/registry";
 import { user } from "@web/core/user";
-import { markup, useState } from "@odoo/owl";
+import { markup } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { patch } from "@web/core/utils/patch";
 
@@ -202,7 +203,7 @@ export class SnippetModel extends Reactive {
                     imagePreviewSrc: snippetEl.dataset.oImagePreview,
                     dragImagePreviewSrc: snippetEl.dataset.oDragImagePreview || null,
                     isCustom: false,
-                    label: this.getSnippetLabel(snippetEl),
+                    label: "",
                     isDisabled: false,
                     forbidSanitize: false,
                     gridColumnSpan: 0,
@@ -234,6 +235,7 @@ export class SnippetModel extends Reactive {
                         snippet.isCustom = true;
                         break;
                 }
+                snippet.label = !snippet.isCustom ? this.getSnippetLabel(snippetEl) : "";
                 snippets.push(snippet);
             }
             this.snippetsByCategory[snippetCategory.id] = snippets;
@@ -244,6 +246,11 @@ export class SnippetModel extends Reactive {
             for (const snippet of this.snippetsByCategory[category]) {
                 this.originalSnippets[snippet.name] ??= snippet;
             }
+        }
+        // Compute custom labels after `this.originalSnippets` is populated.
+        // Website overrides use it to find the original snippet label.
+        for (const snippet of this.snippetsByCategory["snippet_custom"]) {
+            snippet.label = this.getSnippetLabel(snippet.content.parentElement, true);
         }
 
         // Extract the custom inner content from the custom snippets and remove
@@ -330,8 +337,12 @@ export class SnippetModel extends Reactive {
         return { ...this.context };
     }
 
-    cleanSnippetForSave(snippetCopyEl, cleanForSaveHandlers) {
-        cleanForSaveHandlers.forEach((handler) => handler({ root: snippetCopyEl }));
+    cleanSnippetForSave(snippetCopyEl, cleanForSaveProcessors) {
+        let item = snippetCopyEl;
+        cleanForSaveProcessors.forEach((processor) => {
+            item = processor(item) || item;
+        });
+        return item;
     }
 
     /**
@@ -339,8 +350,8 @@ export class SnippetModel extends Reactive {
      * to have access to it directly.
      *
      * @param {HTMLElement} snippetEl the snippet we want to save
-     * @param {Array<Function>} cleanForSaveHandlers all the handlers of the
-     *     `clean_for_save_handlers` resources
+     * @param {Array<Function>} cleanForSaveProcessors all the processors of the
+     *     `clean_for_save_processors` resources
      * @param {Function} wrapWithSaveSnippetHandlers a function that processes the snippet
      * before and/or after the cloning. E.g. stopping the interactions before
      * cloning and restarting them after cloning.
@@ -348,7 +359,7 @@ export class SnippetModel extends Reactive {
      */
     async saveSnippet(
         snippetEl,
-        cleanForSaveHandlers,
+        cleanForSaveProcessors,
         wrapWithSaveSnippetHandlers = (_, callback) => callback()
     ) {
         const isButton = snippetEl.matches("a.btn");
@@ -359,7 +370,7 @@ export class SnippetModel extends Reactive {
             snippetEl.cloneNode(true)
         );
         // "CleanForSave" the snippet copy
-        this.cleanSnippetForSave(snippetCopyEl, cleanForSaveHandlers);
+        this.cleanSnippetForSave(snippetCopyEl, cleanForSaveProcessors);
 
         const defaultSnippetName = isButton
             ? _t("Custom Button")
@@ -437,9 +448,10 @@ export class SnippetModel extends Reactive {
      * Gets the label of the snippet.
      *
      * @param {HTMLElement} snippetEl
+     * @param {boolean} [isCustom = false]
      * @returns {String}
      */
-    getSnippetLabel(snippetEl) {
+    getSnippetLabel(snippetEl, isCustom = false) {
         return snippetEl.dataset.oLabel;
     }
 }

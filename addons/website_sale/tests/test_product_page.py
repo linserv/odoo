@@ -71,7 +71,7 @@ class TestWebsiteSaleProductPage(HttpCase, ProductVariantsCommon, WebsiteSaleCom
 
     def test_product_pricelist_qty_change(self):
         """Check that pricelist discounts based on product quantity display when applicable."""
-        self.env['res.config.settings'].create({'group_product_pricelist': True}).execute()
+        self.pricelist = self._enable_pricelists()
         self.pricelist.item_ids = [
             Command.clear(),
             Command.create({
@@ -85,7 +85,7 @@ class TestWebsiteSaleProductPage(HttpCase, ProductVariantsCommon, WebsiteSaleCom
 
     def test_product_unpublished_without_category(self):
         """Test that products created from frontend are unpublished without category"""
-        self.start_tour("/", 'product_unpublished_without_category', login="admin")
+        self.start_tour(self.env["website"].get_client_action_url("/"), 'product_unpublished_without_category', login="admin")
         product = self.env['product.product'].search(
             [('name', '=', 'Product Without Category')],
             limit=1,
@@ -96,7 +96,7 @@ class TestWebsiteSaleProductPage(HttpCase, ProductVariantsCommon, WebsiteSaleCom
     def test_product_published_with_category(self):
         """Test that products with category are published"""
         self.env['product.public.category'].create({'name': 'Test Category'})
-        self.start_tour("/", 'product_published_with_category', login="admin")
+        self.start_tour(self.env["website"].get_client_action_url("/"), 'product_published_with_category', login="admin")
         product = self.env['product.product'].search(
             [('name', '=', 'Product With Category')],
             limit=1,
