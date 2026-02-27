@@ -11,6 +11,7 @@ import math
 import psycopg2
 import re
 from textwrap import shorten
+from urllib.parse import urlencode
 
 from odoo import api, fields, models, _, Command, SUPERUSER_ID, modules, tools
 from odoo.addons.account.tools import format_structured_reference_iso
@@ -894,8 +895,8 @@ class AccountMove(models.Model):
         for move in self:
             # This will get the bank account from the partner in an order with the trusted first
             bank_ids = move.bank_partner_id.bank_ids.filtered(
-                lambda bank: (not bank.company_id or bank.company_id == move.company_id) and bank.allow_out_payment
-            )
+                lambda bank: (not bank.company_id or bank.company_id == move.company_id)
+            ).sorted(lambda bank: not bank.allow_out_payment)
             move.partner_bank_id = bank_ids[:1]
 
     @api.depends('partner_id')
@@ -3929,9 +3930,21 @@ class AccountMove(models.Model):
                     "So you cannot confirm the invoice."
                 ))
             if invoice.partner_bank_id and invoice.is_inbound() and not invoice.partner_bank_id.allow_out_payment:
-                raise UserError(_(
-                    "The company bank account linked to this invoice is not trusted, please double-check and trust it before confirming, or remove it"
-                ))
+                if self.env.user.id == SUPERUSER_ID or self.user_has_groups('base.group_public') or self.user_has_groups('base.group_portal'):
+                    # Do not block in case of automated flows, simply remove the information
+                    invoice.partner_bank_id = False
+                elif invoice.partner_bank_id._user_can_trust():
+                    raise RedirectWarning(
+                        _(
+                            "The company bank account (%(account_number)s) linked to this invoice is not trusted. "
+                            "Go to the Bank Settings, double-check that it is yours or correct the number, and click on Send Money to trust it.",
+                            account_number=invoice.partner_bank_id.display_name,
+                        ),
+                        invoice.partner_bank_id._get_records_action(),
+                        _("Bank settings")
+                    )
+                else:
+                    raise UserError(_("The bank account of your company is not trusted. Please ask an admin or someone with approval rights to check it."))
             if float_compare(invoice.amount_total, 0.0, precision_rounding=invoice.currency_id.rounding) < 0:
                 raise UserError(_(
                     "You cannot validate an invoice with a negative total amount. "
@@ -5063,6 +5076,29 @@ class AccountMove(models.Model):
     # -------------------------------------------------------------------------
     # HOOKS
     # -------------------------------------------------------------------------
+
+    def _get_moves_zip_export_docs(self):
+        docs = set()
+        for move in self.filtered(lambda m: m.state == 'posted' and m.is_sale_document()):
+            try:
+                legal_docs = move._get_invoice_legal_documents()
+                docs.update(legal_docs.ids)
+            except Exception:  # noqa: BLE001
+                pass  # no legal docs for this move
+
+        filename = _('documents')
+        return docs, filename
+
+    def action_export_zip(self):
+        attachment_ids, filename = self._get_moves_zip_export_docs()
+        if not attachment_ids:
+            raise UserError(_('Nothing to export.'))
+
+        return {
+            'type': 'ir.actions.act_url',
+            'url': f"/account/export_zip_documents?{urlencode({'ids': list(attachment_ids), 'filename': f'{filename}.zip'}, doseq=True)}",
+            'close': True,
+        }
 
     def _action_invoice_ready_to_be_sent(self):
         """ Hook allowing custom code when an invoice becomes ready to be sent by mail to the customer.
