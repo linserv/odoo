@@ -9,6 +9,18 @@ const { DateTime } = luxon;
 
 export class PosOrder extends PosOrderAccounting {
     static pythonModel = "pos.order";
+    static excludedLazyGetters = [
+        "user",
+        "company",
+        "currency",
+        "pickingType",
+        "session",
+        "finalized",
+        "isUnsyncedPaid",
+        "originalSplittedOrder",
+        "isRefund",
+        "floatingOrderName",
+    ];
 
     setup(vals) {
         super.setup(vals);
@@ -96,6 +108,10 @@ export class PosOrder extends PosOrderAccounting {
 
     get finalized() {
         return this.state !== "draft";
+    }
+
+    get canBeRemovedFromIndexedDB() {
+        return (this.finalized && this.isSynced) || this.state === "cancel";
     }
 
     get totalQuantity() {

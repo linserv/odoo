@@ -587,19 +587,19 @@ registry.category("web_tour.tours").add("PosCategoriesOrder", {
             Dialog.confirm("Open Register"),
             ProductScreen.verifyCategorySequence(["AAA", "AAB", "AAC"]),
             {
-                trigger: '.category-button:eq(1) > span:contains("AAB")',
+                trigger: '.category-button:eq(1) > div span:contains("AAB")',
                 run: "click",
             },
             ProductScreen.productIsDisplayed("Product in AAB and AAX", 0),
             {
-                trigger: '.category-button:eq(-1) > span:contains("AAX")',
+                trigger: '.category-button:eq(-1) > div span:contains("AAX")',
             },
             {
-                trigger: '.category-button:eq(-1) > span:contains("AAX")',
+                trigger: '.category-button:eq(-1) > div span:contains("AAX")',
                 run: "click",
             },
             {
-                trigger: '.category-button:eq(-1) > span:contains("AAY")',
+                trigger: '.category-button:eq(-1) > div span:contains("AAY")',
             },
         ].flat(),
 });
@@ -1051,10 +1051,10 @@ registry.category("web_tour.tours").add("test_preset_timing_retail", {
             Chrome.createFloatingOrder(),
             ProductScreen.clickDisplayedProduct("Desk Organizer"),
             Chrome.clickOrders(),
-            TicketScreen.nthRowContains(1, "A simple PoS man!"),
-            TicketScreen.nthRowContains(1, "Delivery", false),
-            TicketScreen.nthRowContains(2, "002"),
-            TicketScreen.nthRowContains(2, "Dine in", false),
+            TicketScreen.nthRowContains(2, "A simple PoS man!"),
+            TicketScreen.nthRowContains(2, "Delivery", false),
+            TicketScreen.nthRowContains(1, "002"),
+            TicketScreen.nthRowContains(1, "Dine in", false),
         ].flat(),
 });
 
