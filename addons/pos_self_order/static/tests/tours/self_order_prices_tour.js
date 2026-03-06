@@ -11,7 +11,11 @@ const comparePricesWithBackend = {
         const order = posmodel.currentOrder;
         const orderTotal = order.get_total_with_tax();
         const allUnitPrices = order.lines.map((l) => l.price_unit);
-        await posmodel.sendDraftOrderToServer();
+        const result = await posmodel.sendDraftOrderToServer();
+        if (!result) {
+            throw new Error("Failed to sync order with server");
+        }
+
         const orderTotalAfterSync = order.get_total_with_tax();
         const allUnitPricesAfterSync = order.lines.map((l) => l.price_unit);
 
@@ -183,7 +187,10 @@ registry.category("web_tour.tours").add("test_prices_are_immutable_from_frontend
 
                 // 257.58 Order total
                 // 106.44 Line price unit
-                await posmodel.sendDraftOrderToServer();
+                const result = await posmodel.sendDraftOrderToServer();
+                if (!result) {
+                    throw new Error("Failed to sync order with server");
+                }
                 const orderTotalAfterSync = order.get_total_with_tax();
                 const allUnitPricesAfterSync = order.lines.map((l) => l.price_unit);
                 if (orderTotalAfterSync !== 257.58) {
@@ -246,7 +253,10 @@ registry.category("web_tour.tours").add("test_pricelist_should_not_be_changed_fr
                     );
                 }
 
-                await posmodel.sendDraftOrderToServer();
+                const result = await posmodel.sendDraftOrderToServer();
+                if (!result) {
+                    throw new Error("Failed to sync order with server");
+                }
                 const amountTotalAfterSync = order.get_total_with_tax();
                 if (amountTotalAfterSync === 0) {
                     throw new Error(
@@ -255,5 +265,25 @@ registry.category("web_tour.tours").add("test_pricelist_should_not_be_changed_fr
                 }
             },
         },
+    ],
+});
+
+registry.category("web_tour.tours").add("test_fiscal_position_between_frontend_and_backend", {
+    steps: () => [
+        Utils.clickBtn("Order Now"),
+        ...commonStepWithSpecificPrice,
+        {
+            content: "Check that the fiscal position is applied",
+            trigger: "body",
+            run: async () => {
+                const order = posmodel.currentOrder;
+                if (order.fiscal_position_id?.name !== "Take out") {
+                    throw new Error(
+                        `The fiscal position should not be "Take out", but it is ${order.fiscal_position_id?.name}`
+                    );
+                }
+            },
+        },
+        comparePricesWithBackend,
     ],
 });

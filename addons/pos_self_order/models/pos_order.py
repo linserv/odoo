@@ -69,7 +69,7 @@ class PosOrder(models.Model):
 
     @api.model
     def _check_pos_order_lines(self, pos_config, order, line, fiscal_position_id):
-        existing_order = pos_config.env['pos.order'].browse(order.get('id'))
+        existing_order = pos_config.env['pos.order'].search([('uuid', '=', order.get('uuid'))], limit=1)
         existing_lines = existing_order.lines if existing_order.exists() else pos_config.env['pos.order.line']
 
         if line[0] == Command.DELETE and line[1] in existing_lines.ids:
@@ -82,7 +82,10 @@ class PosOrder(models.Model):
             product = pos_config.env['product.product'].browse(line_data.get('product_id'))
             tax_ids = fiscal_position_id.map_tax(product.taxes_id)
 
-            return [Command.CREATE, 0, {
+            command = Command.CREATE if line[0] == Command.CREATE else Command.UPDATE
+            id_to_use = line[1] if line[0] == Command.UPDATE else 0
+
+            return [command, id_to_use, {
                 'combo_id': line_data.get('combo_id'),
                 'product_id': line_data.get('product_id'),
                 'tax_ids': tax_ids.ids,
@@ -112,6 +115,7 @@ class PosOrder(models.Model):
         fiscal_position = pos_config.takeaway_fp_id if is_takeaway else pos_config.default_fiscal_position_id
         pricelist_id = pos_config.pricelist_id
         lines = [self._check_pos_order_lines(pos_config, order, line, fiscal_position) for line in order.get('lines', [])]
+        lines = [line for line in lines if len(line)]
         partner_id = order.get('partner_id')
         partner = pos_config.env['res.partner'].browse(partner_id) if partner_id else None
 
@@ -178,24 +182,16 @@ class PosOrder(models.Model):
         self.amount_total = tax_totals['total_amount_currency']
 
     def _compute_line_price(self, line):
-        company = self.company_id
         pricelist = self.pricelist_id
         selected_attributes = line.attribute_value_ids
         product = line.product_id.with_context(line.product_id._get_product_price_context(selected_attributes))
-        tax_domain = self.env['account.tax']._check_company_domain(company)
-
-        price = pricelist._get_product_price(product, line.qty or 1.0, currency=self.currency_id)
-        line.tax_ids = product.taxes_id.filtered_domain(tax_domain)
+        price = pricelist._get_product_price(product, 1.0, currency=self.currency_id)
+        line.price_unit = price
+        line.tax_ids = line.product_id.taxes_id._filter_taxes_by_company(self.company_id)
         tax_ids_after_fiscal_position = self.fiscal_position_id.map_tax(line.tax_ids)
-        new_price = self.env['account.tax']._fix_tax_included_price_company(
-            price, line.tax_ids, tax_ids_after_fiscal_position, self.company_id)
-
-        line.price_unit = new_price
-        base_line = line._prepare_base_line_for_taxes_computation()
-        self.env['account.tax']._add_tax_details_in_base_line(base_line, company)
-        self.env['account.tax']._round_base_lines_tax_details([base_line], company)
-        line.price_subtotal = base_line['tax_details']['total_excluded_currency']
-        line.price_subtotal_incl = base_line['tax_details']['total_included_currency']
+        taxes = tax_ids_after_fiscal_position.compute_all(price, self.currency_id, line.qty, product=product, partner=self.partner_id)
+        line.price_subtotal = taxes['total_excluded']
+        line.price_subtotal_incl = taxes['total_included']
 
     def _compute_combo_price(self, parent_line):
         """

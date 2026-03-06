@@ -5,6 +5,7 @@ try:
 except ImportError:
     contents = None
 
+from odoo.exceptions import UserError
 from odoo.tests import tagged
 
 
@@ -139,7 +140,7 @@ class TestUblExportBis3BE(TestUblBis3Common, TestUblCiiBECommon):
         self._generate_invoice_ubl_file(invoice)
         self._assert_invoice_ubl_file(invoice, 'test_invoice_tax_exempt')
 
-    def test_invoice_tax_reverse_charge(self):
+    def test_invoice_tax_withholding(self):
         tax_21 = self.percent_tax(21.0)
         tax_minus_10_67 = self.percent_tax(-10.67)
         product = self._create_product(lst_price=1000.0, taxes_id=tax_21 + tax_minus_10_67)
@@ -150,7 +151,7 @@ class TestUblExportBis3BE(TestUblBis3Common, TestUblCiiBECommon):
         )
 
         self._generate_invoice_ubl_file(invoice)
-        self._assert_invoice_ubl_file(invoice, 'test_invoice_tax_reverse_charge')
+        self._assert_invoice_ubl_file(invoice, 'test_invoice_tax_withholding')
 
     def test_invoice_BR_S_08_tax_subtotal_taxable_amount(self):
         """ [BR-S-08] For each different value of VAT category rate (BT-119) where the VAT category code (BT-118) is "Standard rated",
@@ -688,6 +689,21 @@ class TestUblExportBis3BE(TestUblBis3Common, TestUblCiiBECommon):
             partner=partner_be_invoice_address,
             test_file='test_invoice_customer_party_identifiers_partner_be_invoice_address',
         )
+
+        # VAT in company_registry should render the CBE Numer only
+        self.partner_be.company_registry = 'BE0477472701'
+        self._assert_invoice_partner_party_identifiers(
+            partner=self.partner_be,
+            test_file='test_invoice_customer_party_identifiers_partner_be_vat_and_company_registry',
+        )
+
+        # Malformed company_registry should raise
+        self.partner_be.company_registry = 'BEWrongOne'
+        with self.assertRaises(UserError):
+            self._assert_invoice_partner_party_identifiers(
+                partner=self.partner_be,
+                test_file='test_invoice_customer_party_identifiers_partner_be_vat_and_company_registry',
+            )
 
     def test_invoice_customer_party_identifiers_partner_lu(self):
         # Both VAT and company registry are not set.
