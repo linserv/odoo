@@ -18,7 +18,8 @@ class AccountMoveSend(models.AbstractModel):
     def _get_default_sending_method(self, move) -> str:
         # EXTENDS 'account'
         preferred_method = move.commercial_partner_id.with_company(move.company_id).invoice_sending_method
-        if not preferred_method and self._is_applicable_to_move('peppol', move):
+        company_registered_on_peppol = move.company_id.account_peppol_proxy_state not in ('not_registered', 'in_verification')
+        if company_registered_on_peppol and not preferred_method and self._is_applicable_to_move('peppol', move):
             return 'peppol'
         return super()._get_default_sending_method(move)
 
@@ -268,7 +269,7 @@ class AccountMoveSend(models.AbstractModel):
                         for attachment in attachments_linked
                     ] + base_attachments
 
-                    new_message = invoice.with_context(no_new_invoice=True).message_post(
+                    new_message = invoice.with_context(no_new_invoice=True, no_document=True).message_post(
                         body=attachments_linked_message,
                         attachments=attachments_embedded
                     )
