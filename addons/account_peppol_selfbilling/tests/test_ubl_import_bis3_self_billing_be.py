@@ -6,6 +6,7 @@ from odoo.tests import tagged
 
 @tagged('post_install_l10n', 'post_install', '-at_install', *TestUblBis3Common.extra_tags)
 class TestUblBis3SelfBilling(TestUblBis3Common, TestUblCiiBECommon):
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -22,6 +23,17 @@ class TestUblBis3SelfBilling(TestUblBis3Common, TestUblCiiBECommon):
         return subfolder_format, 'self_invoice', subfolder_country
 
     def test_export_selfbilling(self):
+        self.env['res.partner'].create({
+            'name': 'custom delivery address',
+            'parent_id': self.company.partner_id.id,
+            'type': 'delivery',
+            'street': 'Chaussée de Namur 40',
+            'city': 'Ramillies',
+            'zip': '1367',
+            'global_location_number': '0123456789',
+            'country_id': self.ref('base.be'),
+        })
+
         tax_21 = self.percent_tax(21.0)
         product = self._create_product(lst_price=100.0, taxes_id=tax_21)
         invoice = self._create_invoice_one_line(
