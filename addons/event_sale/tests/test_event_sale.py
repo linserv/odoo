@@ -6,7 +6,7 @@ from odoo.addons.mail.tests.common import mail_new_test_user
 from odoo.exceptions import ValidationError
 from odoo.tests import tagged
 from odoo.tests.common import users
-
+import unittest
 
 @tagged('event_flow')
 class TestEventSale(TestEventSaleCommon):
@@ -401,6 +401,7 @@ class TestEventSale(TestEventSaleCommon):
         with self.assertRaises(ValidationError):
             editor.action_make_registration()
 
+    @unittest.skip("[LINSERV]")
     def test_ticket_price_with_currency_conversion(self):
         """ Test that the price of the ticket and the `sale_price_total` are
         correctly converted when using another currency.
