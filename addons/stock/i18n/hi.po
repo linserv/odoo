@@ -16,8 +16,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-20 18:36+0000\n"
-"PO-Revision-Date: 2026-03-21 18:01+0000\n"
+"POT-Creation-Date: 2026-04-10 18:37+0000\n"
+"PO-Revision-Date: 2026-04-14 08:25+0000\n"
 "Last-Translator: Weblate <noreply-mt-weblate@weblate.org>\n"
 "Language-Team: Hindi <https://translate.odoo.com/projects/odoo-18/stock/hi/>"
 "\n"
@@ -397,46 +397,9 @@ msgid "1 Week"
 msgstr ""
 
 #. module: stock
-#: model_terms:ir.ui.view,arch_db:stock.report_package_barcode
-msgid "12.0"
-msgstr ""
-
-#. module: stock
-#: model_terms:ir.ui.view,arch_db:stock.report_generic_barcode
-msgid "1234567890"
-msgstr ""
-
-#. module: stock
-#: model_terms:ir.ui.view,arch_db:stock.report_lot_label
-msgid "12345678901"
-msgstr ""
-
-#. module: stock
 #: model:ir.model.fields.selection,name:stock.selection__stock_picking_type__product_label_format__2x7xprice
 msgid "2 x 7 with price"
 msgstr "2 x 7 कीमत के साथ"
-
-#. module: stock
-#: model_terms:ir.ui.view,arch_db:stock.report_package_barcode
-msgid "2021-9-01"
-msgstr ""
-
-#. module: stock
-#: model_terms:ir.ui.view,arch_db:stock.report_package_barcode_small
-msgid "2023-01-01"
-msgstr "01-01-2023`"
-
-#. module: stock
-#: model_terms:ir.ui.view,arch_db:stock.report_picking
-msgid "2023-09-24"
-msgstr ""
-
-#. module: stock
-#: model_terms:ir.ui.view,arch_db:stock.report_delivery_document
-#: model_terms:ir.ui.view,arch_db:stock.report_package_barcode
-#: model_terms:ir.ui.view,arch_db:stock.report_picking
-msgid "3.00"
-msgstr "3.00"
 
 #. module: stock
 #: model:ir.model.fields.selection,name:stock.selection__lot_label_layout__print_format__4x12
@@ -463,11 +426,6 @@ msgstr "4 x 12 कीमत के साथ"
 #: model:ir.model.fields.selection,name:stock.selection__stock_picking_type__product_label_format__4x7xprice
 msgid "4 x 7 with price"
 msgstr "4 x 7 कीमत के साथ"
-
-#. module: stock
-#: model_terms:ir.ui.view,arch_db:stock.report_package_barcode
-msgid "54326786758"
-msgstr ""
 
 #. module: stock
 #: model_terms:ir.ui.view,arch_db:stock.stock_warn_insufficient_qty_form_view
@@ -3218,7 +3176,7 @@ msgstr ""
 #. odoo-python
 #: code:addons/stock/models/stock_orderpoint.py:0
 msgid "Edit Product"
-msgstr ""
+msgstr "प्रॉडक्ट में बदलाव करें"
 
 #. module: stock
 #. odoo-python
@@ -3237,7 +3195,7 @@ msgstr "लागू होने की तारीख"
 #. module: stock
 #: model_terms:ir.ui.view,arch_db:stock.res_config_settings_view_form
 msgid "Email Confirmation"
-msgstr ""
+msgstr "ईमेल की पुष्टि"
 
 #. module: stock
 #: model:ir.model.fields,field_description:stock.field_res_company__stock_move_email_validation
@@ -3915,6 +3873,9 @@ msgid ""
 "services of a debt recovery company. All legal expenses will be payable by "
 "the client."
 msgstr ""
+"अगर पेमेंट की आखिरी तारीख से 60 दिन बीत जाने पर भी अगर पैसा नहीं मिलता, तो My "
+"Company (Chicago) के पास ऋण वसूली कंपनी की सेवाएं लेने का अधिकार सुरक्षित है. सभी "
+"कानूनी खर्चों का भुगतान ग्राहक द्वारा किया जाएगा।"
 
 #. module: stock
 #: model_terms:ir.ui.view,arch_db:stock.res_config_settings_view_form
@@ -7561,7 +7522,7 @@ msgstr "रिप्लिनिशमेंट (अपने-आप स्ट�
 #. module: stock
 #: model:ir.model.fields,field_description:stock.field_stock_replenishment_option__replenishment_info_id
 msgid "Replenishment Info"
-msgstr ""
+msgstr "रिप्लिनिशमेंट से जुड़ी जानकारी"
 
 #. module: stock
 #: model:ir.actions.act_window,name:stock.action_stock_replenishment_info
@@ -8301,7 +8262,7 @@ msgstr "शिपिंग कनेक्टर"
 #: model:ir.model.fields,field_description:stock.field_stock_picking__move_type
 #: model:ir.model.fields,field_description:stock.field_stock_picking_type__move_type
 msgid "Shipping Policy"
-msgstr ""
+msgstr "शिपिंग से जुड़ी नीति"
 
 #. module: stock
 #: model:ir.model.fields,field_description:stock.field_stock_quant_package__shipping_weight
@@ -9408,6 +9369,9 @@ msgid ""
 "advised to change the Product Type since it can lead to inconsistencies. A "
 "better solution could be to archive the product and create a new one instead."
 msgstr ""
+"इस प्रॉडक्ट का उपयोग कम से कम एक इन्वेंटरी मूवमेंट में किया गया है. प्रॉडक्ट का टाइप बदलने "
+"की सलाह नहीं दी जाती है, क्योंकि इससे असंगतताएं आ सकती हैं. एक बेहतर समाधान यह हो सकता "
+"है कि प्रॉडक्ट को आर्काइव कर दिया जाए और इसके बजाय एक नया प्रॉडक्ट बनाया जाए।"
 
 #. module: stock
 #. odoo-python
@@ -10477,7 +10441,7 @@ msgstr "वज़न की माप यूनिट का लेबल"
 #. module: stock
 #: model:ir.model.fields.selection,name:stock.selection__barcode_rule__type__weight
 msgid "Weighted Product"
-msgstr ""
+msgstr "वजन वाला प्रॉडक्ट"
 
 #. module: stock
 #: model:ir.model.fields,field_description:stock.field_stock_replenishment_info__wh_replenishment_option_ids
@@ -10495,7 +10459,7 @@ msgstr ""
 #: model:ir.model.fields.selection,name:stock.selection__stock_picking__move_type__one
 #: model:ir.model.fields.selection,name:stock.selection__stock_picking_type__move_type__one
 msgid "When all products are ready"
-msgstr ""
+msgstr "जब सभी प्रॉडक्ट तैयार हो जाएं"
 
 #. module: stock
 #: model:ir.model.fields,help:stock.field_stock_route__product_selectable
@@ -11370,3 +11334,9 @@ msgstr "यूनिट"
 msgid ""
 "{{ object.company_id.name }} Delivery Order (Ref {{ object.name or 'n/a' }})"
 msgstr ""
+
+#~ msgid "2023-01-01"
+#~ msgstr "01-01-2023`"
+
+#~ msgid "3.00"
+#~ msgstr "3.00"

@@ -1384,6 +1384,7 @@ class AccountMove(models.Model):
             domain = [
                 ('account_id', 'in', pay_term_lines.account_id.ids),
                 ('parent_state', '=', 'posted'),
+                *move._check_company_domain(move.company_id),
                 ('partner_id', '=', move.commercial_partner_id.id),
                 ('reconciled', '=', False),
                 '|', ('amount_residual', '!=', 0.0), ('amount_residual_currency', '!=', 0.0),
@@ -6166,7 +6167,13 @@ class AccountMove(models.Model):
     def _get_invoice_report_filename(self, extension='pdf'):
         """ Get the filename of the generated invoice report with extension file. """
         self.ensure_one()
-        report_id = self.partner_id.invoice_template_pdf_report_id or self.env.ref('account.account_invoices')
+        report_id = (
+            self.env.context.get('invoice_report')
+            or self.partner_id.invoice_template_pdf_report_id
+            or self.env.ref('account.account_invoices')
+        )
+        if not report_id.print_report_name:
+            return False
         file_name = safe_eval(report_id.print_report_name, {'object': self})
         return f"{file_name.replace('/', '_')}.{extension}"
 
