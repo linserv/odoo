@@ -2958,15 +2958,17 @@ class AccountEdiUBL(models.AbstractModel):
         if not self.module_installed('account_accountant'):
             # _predict_specific_account is defined in account_accountant
             return
+
+        accounts_map = {}
         lines_collected_values = collected_values['lines_collected_values']
         for line_collected_values in lines_collected_values:
             account_values = line_collected_values['account_values']
             if predictive := account_values.get('invoice_predictive'):
-                account_id = self.env['account.move.line']._predict_specific_account(
-                    move=predictive['invoice'],
-                    name=predictive['name'],
-                    partner=predictive['partner'],
-                )
+                account_params = {'move': predictive['invoice'], 'name': predictive['name'], 'partner': predictive['partner']}
+                account_key = tuple(account_params.values())
+                if account_key not in accounts_map:
+                    accounts_map[account_key] = self.env['account.move.line']._predict_specific_account(**account_params)
+                account_id = accounts_map.get(account_key)
                 if account_id:
                     account_values['account'] = self.env['account.account'].browse(account_id)
 
@@ -3218,12 +3220,11 @@ class AccountEdiUBL(models.AbstractModel):
         attachments = self._import_attachments(invoice, collected_values['tree']) or self.env['ir.attachment']
 
         # Chatter.
-        body = None
+        body = Markup("<strong>%s</strong>") % _(
+            "Format used to import the invoice: %s",
+            self.env['ir.model']._get(self._name).name,
+        )
         if logs := collected_values['logs']:
-            body = Markup("<strong>%s</strong>") % _(
-                "Format used to import the invoice: %s",
-                self.env['ir.model']._get(self._name).name,
-            )
             body += Markup("<ul>%s</ul>") % Markup().join(Markup("<li>%s</li>") % l for l in logs)
         invoice.with_context(no_new_invoice=True).message_post(body=body, attachment_ids=attachments.ids)
 
