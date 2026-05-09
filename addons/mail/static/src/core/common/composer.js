@@ -62,6 +62,7 @@ export class Composer extends Component {
         NavigableList,
     };
     static defaultProps = {
+        autofocus: 0,
         mode: "normal",
         className: "",
         sidebar: true,
@@ -765,9 +766,10 @@ export class Composer extends Component {
                 MessageConfirmDialog,
                 {
                     message: composer.message,
-                    onConfirm: this.message.remove({
-                        removeFromThread: this.shouldHideFromMessageListOnDelete,
-                    }),
+                    onConfirm: () =>
+                        this.message.remove({
+                            removeFromThread: this.shouldHideFromMessageListOnDelete,
+                        }),
                     prompt: _t("Are you sure you want to delete this message?"),
                 },
                 { context: this }
