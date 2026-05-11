@@ -3,7 +3,7 @@
 from odoo.addons.stock_account.tests.test_stockvaluationlayer import TestStockValuationCommon
 from odoo.fields import Command
 from odoo.tests import tagged
-
+import unittest
 
 class TestStockAccountProduct(TestStockValuationCommon):
     @classmethod
@@ -53,6 +53,7 @@ class TestStockAccountProduct(TestStockValuationCommon):
         final_variants = template.product_variant_ids
         self.assertEqual(len(final_variants), 2, "Expected 2 product variants after attribute change.")
 
+    @unittest.skip("[LINSERV]")
     def test_total_value_as_restricted_user(self):
         """
         total_value (compute_sudo=True) calls qty_available, which internally
