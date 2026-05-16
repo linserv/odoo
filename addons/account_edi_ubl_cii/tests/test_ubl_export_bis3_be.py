@@ -504,6 +504,18 @@ class TestUblExportBis3BE(TestUblBis3Common, TestUblCiiBECommon):
         self._generate_invoice_ubl_file(invoice)
         self._assert_invoice_ubl_file(invoice, 'test_invoice_early_pay_discount_with_discount_on_lines')
 
+    def test_invoice_early_pay_discount_with_0_tax(self):
+        invoice = self._create_invoice_one_line(
+            partner_id=self.partner_be,
+            product_id=self.product_a,
+            tax_ids=self.percent_tax(0.0),
+            invoice_payment_term_id=self._create_mixed_early_payment_term(),
+            invoice_date="2026-05-12",
+            post=True,
+        )
+        self._generate_invoice_ubl_file(invoice)
+        self._assert_invoice_ubl_file(invoice, 'test_invoice_early_pay_discount_with_0_tax')
+
     def test_invoice_cash_rounding_add_invoice_line(self):
         tax_21 = self.percent_tax(21.0)
         product = self._create_product(lst_price=1039.99, taxes_id=tax_21)
@@ -877,6 +889,25 @@ class TestUblExportBis3BE(TestUblBis3Common, TestUblCiiBECommon):
             )
             self._generate_invoice_ubl_file(invoice)
             self._assert_invoice_ubl_file(invoice, f'test_invoice_tax_subtotal_exempt_amount_{rounding_method}')
+
+    def test_invoice_tax_out_of_scope(self):
+        """ [BR-O-06] A Document level allowance (BG-20) where VAT category code (BT-95)
+            is "Not subject to VAT" shall not contain a Document level allowance VAT rate (BT-96)
+            [BR-O-02] An Invoice that contains an Invoice line (BG-25) where the Invoiced item
+            VAT category code (BT-151) is "Not subject to VAT" shall not contain the Seller VAT
+            identifier (BT-31), the Seller tax representative VAT identifier (BT-63) or the
+            Buyer VAT identifier (BT-48).
+        """
+        self.ensure_installed('account_edi_ubl_cii_tax_extension')
+        out_of_scope_tax = self.percent_tax(0.0, ubl_cii_tax_category_code='O', ubl_cii_tax_exemption_reason_code='VATEX_EU_O')
+        invoice = self._create_invoice_one_line(
+            product_id=self.product_a,
+            tax_ids=out_of_scope_tax,
+            partner_id=self.partner_be,
+            post=True,
+        )
+        self._generate_invoice_ubl_file(invoice)
+        self._assert_invoice_ubl_file(invoice, 'test_invoice_tax_out_of_scope')
 
 
 @tagged('post_install_l10n', 'post_install', '-at_install')
