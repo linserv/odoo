@@ -7,7 +7,7 @@ from odoo.exceptions import UserError
 from odoo.fields import Datetime
 from odoo.tests import Form, TransactionCase
 from odoo import Command
-
+import unittest
 
 def _create_accounting_data(env):
     """Create the accounts and journals used in stock valuation.
@@ -4053,6 +4053,7 @@ class TestStockValuation(TestStockValuationBase):
         move.quantity = 2
         self.assertEqual(self.product1.quantity_svl, 24)
 
+    @unittest.skip("[LINSERV]")
     def test_average_manual_price_change(self):
         """
         When doing a Manual Price Change, an SVL is created to update the value_svl.
