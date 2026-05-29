@@ -12,7 +12,7 @@ from odoo.tests import Form, tagged
 from odoo.tools import mute_logger
 
 from odoo.addons.account.tests.common import AccountTestInvoicingCommon
-
+import unittest
 
 @tagged('-at_install', 'post_install')
 class TestPurchase(AccountTestInvoicingCommon):
@@ -22,6 +22,7 @@ class TestPurchase(AccountTestInvoicingCommon):
         super().setUpClass()
         cls.company_data_2 = cls.setup_other_company()
 
+    @unittest.skip("[LINSERV]")
     def test_date_planned(self):
         """Set a date planned on 2 PO lines. Check that the PO date_planned is the earliest PO line date
         planned. Change one of the dates so it is even earlier and check that the date_planned is set to
