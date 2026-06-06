@@ -7,6 +7,7 @@ from odoo import _, fields, models, Command
 from odoo.exceptions import UserError
 from odoo.tools import formatLang, frozendict, html2plaintext, html_escape, pdf, str2bool
 from odoo.addons.account_edi_ubl_cii.models.account_edi_common import (
+    EAS_MAPPING,
     FloatFmt,
     GST_COUNTRY_CODES,
     UOM_TO_UNECE_CODE,
@@ -1054,12 +1055,23 @@ class AccountEdiUBL(models.AbstractModel):
     def _ubl_add_line_price_node(self, vals, in_foreign_currency=True):
         line_node = vals['line_node']
         base_line = vals['line_vals']['base_line']
-        suffix = '_currency' if in_foreign_currency else ''
         currency = base_line['currency_id'] if in_foreign_currency else vals['company_currency']
+
+        raw_gross_total_excluded = self.env['account.tax']._get_gross_total_without_tax(
+            base_line=base_line,
+            company=vals['company'],
+            in_foreign_currency=in_foreign_currency,
+        )
+        raw_gross_price_unit = self.env['account.tax']._get_price_unit_without_tax(
+            base_line=base_line,
+            company=vals['company'],
+            raw_gross_total_excluded=raw_gross_total_excluded,
+            in_foreign_currency=in_foreign_currency,
+        )
 
         line_node['cac:Price'] = {
             'cbc:PriceAmount': {
-                '_text': FloatFmt(base_line['tax_details'][f'raw_gross_price_unit{suffix}'], min_dp=1, max_dp=6),
+                '_text': FloatFmt(raw_gross_price_unit, min_dp=1, max_dp=10),
                 'currencyID': currency.name,
             },
         }
@@ -2188,11 +2200,18 @@ class AccountEdiUBL(models.AbstractModel):
             if peppol_eas := node.attrib.get('schemeID'):
                 customer_values['peppol_eas'] = peppol_eas
 
+        if not customer_values['vat'] and (country_code := customer_values.get('country_code')):
+            for scheme_id, field in EAS_MAPPING.get(country_code, {}).items():
+                if field == 'vat' and (vat := party_node.findtext(f".//{{*}}PartyIdentification/{{*}}ID[@schemeID='{scheme_id}']")):
+                    customer_values['vat'] = vat
+                    break
+
     def _import_ubl_retrieve_customer_search_plan(self, collected_values):
         ResPartner = self.env['res.partner']
         return [
             ResPartner._import_retrieve_customer_from_vat,
             ResPartner._import_retrieve_customer_from_eas_endpoint,
+            ResPartner._import_retrieve_customer_from_bank_account_number,
             ResPartner._import_retrieve_customer_from_email,
             ResPartner._import_retrieve_customer_from_phone,
             ResPartner._import_retrieve_customer_from_name,
@@ -2201,6 +2220,7 @@ class AccountEdiUBL(models.AbstractModel):
     def _import_ubl_retrieve_customer(self, collected_values):
         company = collected_values['company']
         customer_values = collected_values['customer_values']
+        customer_values['account_numbers'] = collected_values.get('partner_bank_values', {}).get('account_numbers')
         self.env['res.partner']._import_retrieve_customer(
             search_plan=self._import_ubl_retrieve_customer_search_plan(collected_values),
             company=company,
@@ -2208,6 +2228,17 @@ class AccountEdiUBL(models.AbstractModel):
         )
         if partner := customer_values.get('customer'):
             collected_values['to_write']['partner_id'] = partner.id
+
+    def _import_ubl_get_country(self, collected_values):
+        customer_values = collected_values['customer_values']
+        country_code = customer_values.get('country_code')
+        if not country_code:
+            return None
+
+        if country_code == 'GB':
+            # While the code is gb, the xml_id is uk
+            country_code = 'UK'
+        return self.env.ref(f'base.{country_code.lower()}', raise_if_not_found=False)
 
     def _import_ubl_prepare_missing_customer_create_values(self, collected_values):
         customer_values = collected_values['customer_values']
@@ -2222,14 +2253,9 @@ class AccountEdiUBL(models.AbstractModel):
             partner_create_values['peppol_eas'] = peppol_eas
             partner_create_values['peppol_endpoint'] = peppol_endpoint
 
-        country = None
-        if country_code := customer_values.get('country_code'):
-            if country_code == 'GB':
-                # While the code is gb, the xml_id is uk
-                country_code = 'UK'
-            country = self.env.ref(f'base.{country_code.lower()}', raise_if_not_found=False)
-            if country:
-                partner_create_values['country_id'] = country.id
+        country = self._import_ubl_get_country(collected_values)
+        if country:
+            partner_create_values['country_id'] = country.id
         if customer_values.get('vat') and self.env['res.partner']._run_vat_test(customer_values['vat'], country, True):
             partner_create_values['vat'] = customer_values['vat']
         return partner_create_values
@@ -2238,17 +2264,29 @@ class AccountEdiUBL(models.AbstractModel):
         customer_values = collected_values['customer_values']
         logs = collected_values['logs']
         customer = customer_values.get('customer')
-        if customer:
-            return
 
         name = customer_values.get('name')
         vat = customer_values.get('vat')
         if not name or not vat:
             return
 
+        vat_mismatch = False
+        if customer:
+            if not customer.vat:
+                country = self._import_ubl_get_country(collected_values)
+                if self.env['res.partner']._run_vat_test(vat, country, True):
+                    customer.vat = vat
+                return
+            if customer.vat.replace(' ', '') == vat.replace(' ', '').replace('.', ''):
+                return
+            vat_mismatch = True
+
         partner_create_values = self._import_ubl_prepare_missing_customer_create_values(collected_values)
         customer = self.env['res.partner'].create(partner_create_values)
-        logs.append(_("Could not retrieve a partner corresponding to '%s'. A new partner was created.", name))
+        if vat_mismatch:
+            logs.append(_("Could not retrieve a partner corresponding to '%s' with the same VAT. A new partner was created.", name))
+        else:
+            logs.append(_("Could not retrieve a partner corresponding to '%s'. A new partner was created.", name))
         customer_values['customer'] = customer
         collected_values['to_write']['partner_id'] = customer.id
 
@@ -2312,7 +2350,7 @@ class AccountEdiUBL(models.AbstractModel):
         company = collected_values['company']
         move_type = collected_values['invoice'].move_type
         if move_type in ('out_refund', 'in_invoice'):
-            partner = collected_values.get('customer')
+            partner = collected_values.get('customer_values', {}).get('customer')
         elif move_type in ('out_invoice', 'in_refund'):
             partner = company.partner_id
         else:
@@ -2429,7 +2467,7 @@ class AccountEdiUBL(models.AbstractModel):
 
             percentage = subtotal_elem.findtext('.//{*}TaxCategory/{*}Percent')
             if percentage is None:
-                percentage = subtotal_elem.find('.//{*}Percent')
+                percentage = subtotal_elem.findtext('.//{*}Percent')
             if percentage is None:
                 continue
 
@@ -3423,6 +3461,9 @@ class AccountEdiUBL(models.AbstractModel):
         self._import_ubl_invoice_document_sign(collected_values)
         self._import_ubl_invoice_update_move_type(collected_values)
 
+        # Bank values are required for retrieving the partner via their bank account number
+        self._import_ubl_invoice_add_partner_bank_values(collected_values)
+
         # partner_id.
         self._import_ubl_invoice_add_customer_values(collected_values)
         self._import_ubl_retrieve_customer(collected_values)
@@ -3437,7 +3478,6 @@ class AccountEdiUBL(models.AbstractModel):
         self._import_ubl_invoice_add_currency(collected_values)
 
         # partner_bank_id
-        self._import_ubl_invoice_add_partner_bank_values(collected_values)
         self._import_ubl_retrieve_partner_bank(collected_values)
 
         # ref / invoice_origin / narration / payment_reference / delivery_date
