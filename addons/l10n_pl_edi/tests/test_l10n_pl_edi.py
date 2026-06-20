@@ -193,6 +193,33 @@ class TestL10nPlEdi(AccountTestInvoicingCommon, CronMixinCase):
         self._assert_export_invoice(credit_note, 'standerd_fa3_credit_note.xml')
 
     @freeze_time('2026-01-23')
+    def test_ksef_fa3_reverse_charge(self):
+        invoice = self._create_invoice(
+                invoice_date=fields.Date.today(),
+                partner_id=self.partner_pl,
+                invoice_line_ids=[
+                    Command.create({
+                        'product_id': self.product.id,
+                        'price_unit': 1000.0,
+                        'tax_ids': [Command.set(self.env['account.chart.template'].ref('vs_dostu').ids)],
+                    }),
+                    Command.create({
+                        'product_id': self.product.id,
+                        'price_unit': 1000.0,
+                        'tax_ids': [Command.set(self.env['account.chart.template'].ref('vs_kraj_8').ids)],
+                    }),
+                ],
+                post=True,
+        )
+
+        self._assert_export_invoice(invoice, 'standard_fa3_format_invoice_reverse_charge.xml')
+
+        credit_note = invoice._reverse_moves()
+        credit_note.action_post()
+
+        self._assert_export_invoice(credit_note, 'standard_fa3_format_credit_note_reverse_charge.xml')
+
+    @freeze_time('2026-01-23')
     def test_payment_logic_partial_mixed_methods(self):
         """
         Test the <Platnosc> block for a Partially Paid invoice with mixed methods.
@@ -732,6 +759,22 @@ class TestL10nPlEdi(AccountTestInvoicingCommon, CronMixinCase):
                 'price_unit': 5.0,
                 'price_total': 21.0,
                 'tax_ids': self.env['account.chart.template'].ref('vz_kraj_5').ids,
+            },
+        ])
+
+    def test_import_invoice_with_zero_value_line_missing_unit_prices(self):
+        self._assert_import_invoice('invoice_with_zero_value_line_missing_unit_prices.xml', [
+            {
+                'name': '[FURN_0006] Podstawka pod monitor',
+                'price_unit': 3.19,
+                'price_total': 3.92,
+                'tax_ids': self.env['account.chart.template'].ref('vz_kraj_23').ids,
+            },
+            {
+                'name': '[ZERO] Transport',
+                'price_unit': 0.0,
+                'price_total': 0.0,
+                'tax_ids': self.env['account.chart.template'].ref('vz_kraj_zw').ids,
             },
         ])
 
