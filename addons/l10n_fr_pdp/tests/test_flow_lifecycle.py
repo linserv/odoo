@@ -219,20 +219,10 @@ class TestPdpReportsFlowLifecycle(TestL10nFrPdpCommon):
 
     def _refresh_pdp_fields(self, move):
         self.env.flush_all()
-        move.company_id.invalidate_recordset([
-            'account_peppol_edi_user',
-            'l10n_fr_f10_enable_reporting',
-        ])
         move.company_id._compute_account_peppol_edi_user()
         move.company_id._compute_l10n_fr_f10_enable_reporting()
-        move.invalidate_recordset([
-            'l10n_fr_pdp_has_error',
-            'l10n_fr_pdp_flow_10_report_type',
-            'l10n_fr_pdp_flow_10_operation_type',
-            'l10n_fr_pdp_last_flow_id',
-            'l10n_fr_pdp_status',
-            'l10n_fr_pdp_error_message',
-        ])
+        move._compute_l10n_fr_pdp_has_error()
+        move._compute_l10n_fr_pdp_status()
 
     def _correct_partner(self, invoice):
         invoice.partner_id.street = 'Mainstreet'
@@ -1143,11 +1133,7 @@ class TestPdpReportsFlowLifecycle(TestL10nFrPdpCommon):
 
         self._correct_partner(invalid_invoice)
         self._refresh_pdp_fields(invalid_invoice)
-        invalid_invoice.invalidate_recordset([
-            'l10n_fr_pdp_has_error',
-            'l10n_fr_pdp_status',
-            'l10n_fr_pdp_last_flow_id',
-        ])
+        invalid_invoice._compute_l10n_fr_pdp_status()
         self.assertEqual(invalid_invoice.l10n_fr_pdp_status, 'pending')
         self.assertEqual(rectificative_flow.error_moves_count, 0)
 
@@ -1949,6 +1935,46 @@ class TestPdpReportsFlowLifecycle(TestL10nFrPdpCommon):
             set(flow.sent_move_ids.ids),
             set((b2bi_invoice | first_b2c_goods_invoice | second_b2c_goods_invoice | b2c_service_invoice).ids),
         )
+
+    def test_service_payment_flow_is_sent_by_cron_with_form(self):
+        service_product = self.env['product.product'].create({
+            'name': 'Full Form Service',
+            'type': 'service',
+        })
+        invoice = self._create_form_invoice(
+            partner=self.b2bi_customer,
+            invoice_date='2025-09-03',
+            lines=[{
+                'product_id': service_product,
+                'price_unit': 100.0,
+                'tax_ids': self._get_tax_on_payment_20(),
+            }],
+        )
+        transaction_flow = invoice.l10n_fr_pdp_last_flow_id
+
+        self._run_send_cron('2025-09-20', identifier='FULL-FORM-PAYMENT-TRANSACTION')
+        payment = self._register_form_payment(invoice, '2025-09-21')
+        payment_move = payment.move_id
+        payment_flow = payment_move.l10n_fr_pdp_last_flow_id
+
+        self._run_send_cron('2025-10-10', identifier='FULL-FORM-PAYMENT')
+
+        self.assertRecordValues(transaction_flow | payment_flow, [
+            {'state': 'sent'},
+            {'state': 'sent'},
+        ])
+        self.assertTrue(payment_flow.payload_id)
+        xml = etree.fromstring(payment_flow.payload_id.raw)
+        payment_invoice = xml.find('./PaymentsReport/Invoice')
+
+        self.assertIsNotNone(payment_invoice)
+        self.assertEqual(payment_invoice.findtext('InvoiceID'), invoice.name)
+        self.assertAlmostEqual(
+            float(payment_invoice.findtext('Payment/SubTotals/Amount')),
+            payment.amount,
+            places=2,
+        )
+        self.assertIn(payment_move, payment_flow.sent_move_ids)
 
     def test_error_move_creates_and_sends_rectificative_flow_with_form(self):
         valid_invoice = self._create_form_invoice(
