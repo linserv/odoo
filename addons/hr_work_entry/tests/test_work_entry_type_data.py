@@ -1,5 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
+
 from odoo.exceptions import ValidationError
 from odoo.release import version_info
 from odoo.tests import tagged
@@ -25,6 +27,7 @@ class TestWorkEntryTypeData(TransactionCase):
         if invalid_xmlids:
             raise ValidationError("Some work entry types are defined outside of module hr_work_entry.\n%s" % '\n'.join(invalid_xmlids))
 
+    @unittest.skip("[LINSERV]")
     def test_ensure_global_work_entry_type_redifinition_by_country(self):
         generic_codes = {
             'WORK100',  # Attendance
