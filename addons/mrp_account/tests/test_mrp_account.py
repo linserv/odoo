@@ -106,8 +106,7 @@ class TestMrpAccount(TestBomPriceCommon):
             [
                 {'remaining_qty': 0.0, 'value': 718.75, 'quantity': 1.0},
                 {'remaining_qty': 1.0, 'value': 918.75, 'quantity': 1.0},
-                # Unbuild move value is derived from MO_2, as precised on the unbuild form
-                {'remaining_qty': 0.0, 'value': 718.75, 'quantity': 1.0},
+                {'remaining_qty': 0.0, 'value': -718.75, 'quantity': 1.0},
             ],
         )
         self._make_out_move(self.dining_table, 1)
@@ -116,9 +115,8 @@ class TestMrpAccount(TestBomPriceCommon):
             [
                 {'remaining_qty': 0.0, 'value': 718.75, 'quantity': 1.0},
                 {'remaining_qty': 0.0, 'value': 918.75, 'quantity': 1.0},
-                {'remaining_qty': 0.0, 'value': 718.75, 'quantity': 1.0},
-                # Out move value is derived from MO_1, the only candidate origin with some `remaining_qty`
-                {'remaining_qty': 0.0, 'value': 918.75, 'quantity': 1.0},
+                {'remaining_qty': 0.0, 'value': -718.75, 'quantity': 1.0},
+                {'remaining_qty': 0.0, 'value': -918.75, 'quantity': 1.0},
             ],
         )
 
@@ -226,6 +224,41 @@ class TestMrpAccount(TestBomPriceCommon):
         mo.button_mark_done()
         overview_values = self.env['report.mrp.report_mo_overview'].get_report_values(mo.id)
         self.assertEqual(round(overview_values['data']['summary']['mo_cost'], 2), 677.08)
+
+    def test_mo_overview_unit_cost_extra_component_after_unlock(self):
+        """When a component is added to an unlocked done MO, its move must be correctly
+        valued and its unit_cost in the overview must reflect the product's standard_price.
+        """
+        extra_product = self.product
+        mo = self._create_mo(self.bom_1, 1)
+        mo.button_mark_done()
+        self.assertEqual(mo.state, 'done')
+
+        mo.action_toggle_is_locked()
+
+        overview_before = self.env['report.mrp.report_mo_overview'].get_report_values(mo.id)
+        mo_cost_before = overview_before['data']['summary']['mo_cost']
+
+        extra_move = self.env['stock.move'].create({
+            'product_id': extra_product.id,
+            'uom_id': extra_product.uom_id.id,
+            'quantity': 1.0,
+            'location_id': self.stock_location.id,
+            'location_dest_id': self.prod_location.id,
+            'raw_material_production_id': mo.id,
+            'additional': True,
+            'state': 'done',
+        })
+        self.assertEqual(extra_move.value, -extra_product.standard_price, "extra move must be valued at standard_price * qty")
+
+        overview_after = self.env['report.mrp.report_mo_overview'].get_report_values(mo.id)
+        mo_cost_after = overview_after['data']['summary']['mo_cost']
+        self.assertAlmostEqual(mo_cost_after, mo_cost_before + extra_product.standard_price, places=2,
+            msg="mo_cost must increase by the extra component's standard_price")
+        components = overview_after['data']['components']
+        extra_comp = next((c for c in components if c['summary']['product_id'] == extra_product.id), None)
+        self.assertIsNotNone(extra_comp, "Extra component should appear in the overview")
+        self.assertEqual(extra_comp['summary']['unit_cost'], extra_product.standard_price)
 
     def test_stock_valuation_report_cost_of_production_past_date(self):
         date_before = fields.Datetime.now() - timedelta(days=1)

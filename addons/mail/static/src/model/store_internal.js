@@ -7,7 +7,7 @@ import { RecordInternal } from "@mail/model/record_internal";
 import { parseRawValue } from "@mail/utils/common/local_storage";
 import { incrementFn } from "@mail/utils/common/signal";
 
-import { computed, htmlEscape, markup, signal, toRaw } from "@odoo/owl";
+import { computed, htmlEscape, markup, signal } from "@odoo/owl";
 
 import { browser } from "@web/core/browser/browser";
 import { deserializeDate, deserializeDateTime } from "@web/core/l10n/dates";
@@ -28,8 +28,6 @@ export class StoreInternal extends RecordInternal {
     FU_QUEUE = new Map(); // field-onupdates
     /** @type {Map<Record, true>} */
     RD_QUEUE = new Map(); // record-deletes
-    /** @type {Map<Record, true>} */
-    RHD_QUEUE = new Map(); // record-hard-deletes
     ERRORS = [];
     UPDATE = 0;
     /**
@@ -109,7 +107,7 @@ export class StoreInternal extends RecordInternal {
     }
 
     /**
-     * @param {"compute"|"onAdd"|"onDelete"|"onUpdate"|"hard_delete"} type
+     * @param {"compute"|"onAdd"|"onDelete"|"onUpdate"} type
      * @param {...any} params
      */
     ADD_QUEUE(type, ...params) {
@@ -184,29 +182,16 @@ export class StoreInternal extends RecordInternal {
                 recMap.set(fieldName, true);
                 break;
             }
-            case "hard_delete": {
-                /** @type {import("./record").Record} */
-                const [record] = params;
-                delete record.Model.records[record.localId];
-                if (!this.RHD_QUEUE.has(record)) {
-                    this.RHD_QUEUE.set(record, true);
-                }
-                break;
-            }
         }
     }
-    /** @param {RecordList<Record>} recordListFullProxy */
-    sortRecordList(recordListFullProxy, func) {
-        const recordList = toRaw(recordListFullProxy)._raw;
-        // sort on copy of list so that reactive observers not triggered while sorting
-        const recordProxies = recordListFullProxy.data.map((localId) =>
-            recordListFullProxy._store.recordByLocalId.get(localId)
-        );
+    /** @param {RecordList<Record>} recordList */
+    sortRecordList(recordList, func) {
+        const recordProxies = recordList._.data.map((record) => record._proxy);
         recordProxies.sort(func);
-        const data = recordProxies.map((recordProxy) => recordProxy._raw.localId);
-        const hasChanged = recordList.data.some((localId, i) => localId !== data[i]);
+        const records = recordProxies.map((recordProxy) => recordProxy._raw);
+        const hasChanged = recordList._.data.some((record, i) => record !== records[i]);
         if (hasChanged) {
-            recordListFullProxy.data = data;
+            recordList._.data = records;
         }
     }
     /**
@@ -330,7 +315,7 @@ export class StoreInternal extends RecordInternal {
     updateRelationMany(recordList, value) {
         for (const [cmd, cmdData] of value) {
             if (cmd === "REPLACE") {
-                recordList._.assign(recordList, cmdData);
+                recordList._.assign(cmdData);
                 continue;
             }
             for (const item of cmdData) {
@@ -339,13 +324,13 @@ export class StoreInternal extends RecordInternal {
                         recordList.add(item);
                         break;
                     case "ADD.noinv":
-                        recordList._.addNoinv(recordList, item);
+                        recordList._.addNoinv(item);
                         break;
                     case "DELETE":
                         recordList.delete(item);
                         break;
                     case "DELETE.noinv":
-                        recordList._.deleteNoinv(recordList, item);
+                        recordList._.deleteNoinv(item);
                         break;
                 }
             }
@@ -362,9 +347,9 @@ export class StoreInternal extends RecordInternal {
             if (["ADD", "REPLACE"].includes(cmd)) {
                 recordList.add(cmdData);
             } else if (cmd === "ADD.noinv") {
-                recordList._.addNoinv(recordList, cmdData);
+                recordList._.addNoinv(cmdData);
             } else if (cmd === "DELETE.noinv") {
-                recordList._.deleteNoinv(recordList, cmdData);
+                recordList._.deleteNoinv(cmdData);
             } else {
                 recordList.delete(cmdData);
             }

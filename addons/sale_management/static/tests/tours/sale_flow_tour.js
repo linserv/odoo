@@ -7,7 +7,7 @@ registry.category("web_tour.tours").add("test_basic_sale_flow_with_minimal_acces
         ...stepUtils.goToAppSteps("sale.sale_menu_root", "Open the sales app"),
         {
             content: "Check that at least one quotation is present in the view",
-            trigger: ".o_sale_onboarding_list_view .o_data_row",
+            trigger: ".o_data_row",
         },
         ...tourUtils.createNewSalesOrder(),
         ...tourUtils.selectCustomer("partner_a"),
@@ -18,7 +18,7 @@ registry.category("web_tour.tours").add("test_basic_sale_flow_with_minimal_acces
         },
         {
             content: "Wait for the UoM to be set by the onchange",
-            trigger: ".o_many2one_uom_cell input:value('Dozens')",
+            trigger: "td[name=sol_uom] input:value('Dozens')",
         },
         {
             trigger: "button[name=action_confirm]",

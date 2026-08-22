@@ -75,7 +75,8 @@
                     colors='{"planned": "success", "today": "warning", "overdue": "danger"}'/>
                 <templates>
                     <t t-name="card">
-                        <div class="d-flex align-items-baseline mb-2">
+                        <div class="d-flex align-items-center mb-2">
+                            <field name="partner_id" widget="many2one_avatar" class="me-2"/>
                             <field name="partner_id" class="fw-bolder fs-5 me-2"/>
                             <field name="amount_total" widget="monetary" class="fw-bolder ms-auto flex-shrink-0"/>
                         </div>
@@ -95,6 +96,7 @@
         </field>
     </record>
 
+    <!-- TODO Remove me and merge upload list & dashboard ? -->
     <record id="sale_order_kanban_upload" model="ir.ui.view">
         <field name="name">sale.order.kanban.upload (orders)</field>
         <field name="model">sale.order</field>
@@ -135,15 +137,14 @@
                 <field name="delivery_date" string="Delivery Date" optional="hide"
                     decoration-muted="not commitment_date"
                     decoration-danger="(commitment_date and (expected_date &lt; commitment_date or commitment_date &lt; context_today().strftime('%Y-%m-%d'))) and state in ['draft', 'sent']"/>
-                <field name="commitment_date" readonly="1" optional="hide"/>
-                <field name="partner_id" readonly="1"/>
-                <field name="user_id" widget="many2one_avatar_user" optional="show"/>
-                <field name="activity_ids" widget="list_activity" optional="show"/>
+                <field name="commitment_date" readonly="1" optional="show"/>
+                <field name="partner_id" widget="many2one_avatar" readonly="1"/>
+                <field name="user_id" widget="many2one_avatar_user" optional="hide"/>
                 <field name="team_id" optional="hide"/>
                 <field name="company_id" groups="!base.group_multi_company" column_invisible="True"/>
                 <field name="company_id"
                        groups="base.group_multi_company"
-                       optional="show"
+                       optional="hide"
                        readonly="1"/>
                 <field name="amount_untaxed"
                        sum="Total Tax Excluded"
@@ -168,7 +169,7 @@
                     decoration-info="state == 'draft'"
                     decoration-primary="state == 'sent'"
                     widget="badge"
-                    optional="hide"/>
+                    optional="show"/>
                 <field
                     name="invoice_status"
                     decoration-success="invoice_status == 'invoiced' and not invoicing_closed"
@@ -179,6 +180,7 @@
                     widget="badge"
                     optional="show"
                 />
+                <field name="activity_ids" widget="list_activity" optional="show"/>
                 <field name="client_order_ref" optional="hide"/>
                 <field name="validity_date" optional="hide"/>
             </list>
@@ -204,6 +206,7 @@
         </field>
     </record>
 
+    <!-- TODO Remove me and merge upload list & dashboard ? -->
     <record id="sale_order_list_upload" model="ir.ui.view">
         <field name="name">sale.order.tree.upload (orders)</field>
         <field name="model">sale.order</field>
@@ -227,15 +230,6 @@
             <list position="attributes">
                 <attribute name="string">Quotations</attribute>
             </list>
-            <field name="date_order" position="replace">
-                <field name="create_date" string="Creation Date" optional="show"/>
-            </field>
-            <field name="state" position="attributes">
-                <attribute name="optional">show</attribute>
-            </field>
-            <field name="invoice_status" position="attributes">
-                <attribute name="optional">hide</attribute>
-            </field>
         </field>
     </record>
 
@@ -450,7 +444,7 @@
                         <field name="transaction_count" widget="statinfo" string="Payments"/>
                     </button>
                 </div>
-                <div 
+                <div
                     class="badge rounded-pill text-bg-secondary float-end fs-6 border-0"
                     invisible="not locked"
                 >
@@ -753,29 +747,63 @@
                                     }"
                                     optional="hide"
                                     groups="analytic.group_analytic_accounting"/>
-                                <field
-                                    name="product_uom_qty"
-                                    decoration-info="(not display_type and invoice_status == 'to invoice')"
-                                    decoration-bf="(not display_type and invoice_status == 'to invoice')"
-                                    readonly="is_downpayment"/>
+                                <column name="sol_qty">
+                                    <field
+                                        name="product_uom_qty"
+                                        invisible="display_type"
+                                        decoration-info="(not display_type and invoice_status == 'to invoice')"
+                                        decoration-bf="(not display_type and invoice_status == 'to invoice')"
+                                        readonly="is_downpayment"
+                                    />
+                                    <field
+                                        name="section_qty"
+                                        invisible="display_type not in ('line_section', 'line_subsection')"
+                                        widget="section_qty"
+                                        class="fw-normal text-muted"
+                                    />
+                                </column>
                                 <widget name="simple_qty_at_date_widget" width="20px"/>
-                                <field
-                                    name="qty_delivered_percent"
-                                    decoration-info="(not display_type and invoice_status == 'to invoice')"
-                                    decoration-bf="(not display_type and invoice_status == 'to invoice')"
-                                    readonly="qty_delivered_method != 'manual' or is_downpayment or product_uom_qty == 0"
+                                <column name="sol_uom" width="60px" groups="uom.group_uom">
+                                    <field
+                                        name="product_uom_id"
+                                        invisible="display_type"
+                                        force_save="1"
+                                        readonly="product_uom_readonly"
+                                        required="not display_type and not is_downpayment"
+                                        widget="many2one_uom"
+                                        optional="show"
+                                        options="{'no_open': True, 'no_create': True}"
+                                    />
+                                    <field
+                                        name="section_uom_id"
+                                        invisible="display_type not in ('line_section', 'line_subsection')"
+                                        widget="section_uom"
+                                        options="{'no_open': True, 'no_create': True}"
+                                        class="fw-normal text-muted"
+                                    />
+                                </column>
+                                <column
+                                    width="[130px]"
                                     column_invisible="parent.state != 'sale'"
-                                    optional="hide"
-                                />
-                                <field
-                                    name="qty_delivered"
-                                    string="Delivered"
-                                    decoration-info="(not display_type and invoice_status == 'to invoice')"
-                                    decoration-bf="(not display_type and invoice_status == 'to invoice')"
-                                    decoration-danger="qty_overage and qty_delivered &gt; qty_invoiced"
-                                    column_invisible="parent.state != 'sale'"
-                                    readonly="qty_delivered_method != 'manual' or is_downpayment"
-                                    optional="show"/>
+                                >
+                                    <field
+                                        name="qty_delivered"
+                                        string="Delivered"
+                                        decoration-info="(not display_type and invoice_status == 'to invoice')"
+                                        decoration-bf="(not display_type and invoice_status == 'to invoice')"
+                                        decoration-danger="qty_overage and qty_delivered &gt; qty_invoiced"
+                                        readonly="qty_delivered_method != 'manual' or is_downpayment"
+                                        optional="show"
+                                    />
+                                    <field
+                                        name="qty_delivered_percent"
+                                        widget="labeled_percentage_field"
+                                        decoration-info="(not display_type and invoice_status == 'to invoice')"
+                                        decoration-bf="(not display_type and invoice_status == 'to invoice')"
+                                        readonly="qty_delivered_method != 'manual' or is_downpayment or product_uom_qty == 0"
+                                        optional="hide"
+                                    />
+                                </column>
                                 <field
                                     name="qty_invoiced"
                                     string="Invoiced"
@@ -784,21 +812,20 @@
                                     column_invisible="parent.state != 'sale'"
                                     optional="show"/>
                                 <field
-                                    name="product_uom_id"
-                                    force_save="1"
-                                    readonly="product_uom_readonly"
-                                    required="not display_type and not is_downpayment"
-                                    widget="many2one_uom"
-                                    groups="uom.group_uom"
-                                    options='{"no_open": True, "no_create": True}'
-                                    width="60px"
-                                    optional="show"/>
-                                <field
                                     name="customer_lead"
                                     optional="hide"
                                     width="80px"
                                     readonly="parent.state not in ['draft', 'sent', 'sale'] or is_downpayment or product_type != 'consu'"/>
-                                <field name="price_unit" readonly="qty_invoiced &gt; 0"/>
+                                <!--
+                                    price_unit is wrapped in a column so inheriting modules (e.g.
+                                    sale_margin) can add fields to it via position="inside" instead
+                                    of replacing the price_unit field node. A replace would silently
+                                    discard changes made by lower-priority inherited views and
+                                    require duplicating this definition.
+                                -->
+                                <column name="price_unit">
+                                    <field name="price_unit" readonly="qty_invoiced &gt; 0"/>
+                                </column>
                                 <field
                                     name="tax_ids"
                                     widget="many2many_tax_tags"
@@ -812,31 +839,54 @@
                                     groups="sale.group_discount_per_so_line"
                                     width="50px"
                                     optional="show"/>
-                                <field
-                                    name="price_subtotal"
-                                    string="Amount"
+                                <column
+                                    width="[170px]"
                                     column_invisible="parent.document_tax_mode == 'tax_included'"
-                                    invisible="is_downpayment"/>
-                                <field
-                                    name="price_total"
-                                    string="Amount"
+                                >
+                                    <field
+                                        name="price_subtotal"
+                                        string="Amount"
+                                        invisible="is_downpayment"
+                                    />
+                                    <field
+                                        name="price_subtotal"
+                                        string="Tax Excl."
+                                        invisible="is_downpayment"
+                                        widget="labeled_monetary_field"
+                                        optional="hide"
+                                    />
+                                    <field
+                                        name="price_total"
+                                        string="Tax Incl."
+                                        invisible="is_downpayment"
+                                        widget="labeled_monetary_field"
+                                        optional="hide"
+                                    />
+                                </column>
+                                <column
+                                    width="[170px]"
                                     column_invisible="parent.document_tax_mode == 'tax_excluded'"
-                                    invisible="is_downpayment"/>
-                                <!-- Optional amounts columns -->
-                                <field
-                                    name="price_total"
-                                    string="Tax Incl."
-                                    column_invisible="parent.company_price_include == 'tax_included'"
-                                    invisible="is_downpayment"
-                                    optional="hide"
-                                />
-                                <field
-                                    name="price_subtotal"
-                                    string="Tax Excl."
-                                    column_invisible="parent.company_price_include == 'tax_excluded'"
-                                    invisible="is_downpayment"
-                                    optional="hide"
-                                />
+                                >
+                                    <field
+                                        name="price_total"
+                                        string="Amount"
+                                        invisible="is_downpayment"
+                                    />
+                                    <field
+                                        name="price_subtotal"
+                                        string="Tax Excl."
+                                        invisible="is_downpayment"
+                                        widget="labeled_monetary_field"
+                                        optional="hide"
+                                    />
+                                    <field
+                                        name="price_total"
+                                        string="Tax Incl."
+                                        invisible="is_downpayment"
+                                        widget="labeled_monetary_field"
+                                        optional="hide"
+                                    />
+                                </column>
                                 <widget name="section_state"/>
                             </list>
                             <kanban class="o_kanban_mobile">
@@ -1074,6 +1124,11 @@
                 <filter string="Quotations" name="draft" domain="[('state', 'in', ('draft', 'sent'))]"/>
                 <filter string="Sales Orders" name="sales" domain="[('state', '=', 'sale')]"/>
                 <separator/>
+                <filter string="To Confirm" name="to_confirm" domain="[('state', '=', 'sent')]"/>
+                <filter string="To Deliver" name="to_fulfill" domain="[('is_unfulfilled', '=', True)]"/>
+                <filter string="To Invoice" name="to_invoice" domain="[('invoice_status', '=', 'to invoice')]"/>
+                <filter string="To Upsell" name="to_upsell" domain="[('invoice_status', '=', 'upselling')]"/>
+                <separator/>
                 <filter string="Create Date" name="filter_create_date" date="create_date"/>
                 <separator/>
                 <filter string="Expired" name="expired" domain="[('is_expired', '=', True)]"/>
@@ -1090,11 +1145,36 @@
             <filter name="my_sale_orders_filter" position="after">
                 <filter invisible="1" string="Sales Orders" name="sales" domain="[('state', '=', 'sale')]"/>
                 <separator/>
+                <filter string="To Deliver" name="to_fulfill" domain="[('is_unfulfilled', '=', True)]"/>
                 <filter string="To Invoice" name="to_invoice" domain="[('invoice_status','=','to invoice')]" />
-                <filter string="To Upsell" name="upselling" domain="[('invoice_status','=','upselling')]" />
+                <filter string="To Upsell" name="to_upsell" domain="[('invoice_status','=','upselling')]" />
                 <separator/>
                 <filter string="Order Date" name="order_date" date="date_order"/>
             </filter>
+        </field>
+    </record>
+
+    <record id="sale_order_list_with_dashboard" model="ir.ui.view">
+        <field name="name">sale.order.list.quotation.dashboard</field>
+        <field name="model">sale.order</field>
+        <field name="mode">primary</field>
+        <field name="inherit_id" ref="sale.view_quotation_tree"/>
+        <field name="arch" type="xml">
+            <list position="attributes">
+                <attribute name="js_class">sale_dashboard_list</attribute>
+            </list>
+        </field>
+    </record>
+
+    <record id="sale_order_kanban_with_dashboard" model="ir.ui.view">
+        <field name="name">sale.order.kanban.dashboard</field>
+        <field name="model">sale.order</field>
+        <field name="mode">primary</field>
+        <field name="inherit_id" ref="sale.view_sale_order_kanban"/>
+        <field name="arch" type="xml">
+            <kanban position="attributes">
+                <attribute name="js_class">sale_dashboard_kanban</attribute>
+            </kanban>
         </field>
     </record>
 
@@ -1119,14 +1199,14 @@
     <record id="sale_order_action_view_order_tree" model="ir.actions.act_window.view">
         <field name="sequence" eval="1"/>
         <field name="view_mode">list</field>
-        <field name="view_id" ref="sale.sale_order_list_upload"/>
+        <field name="view_id" ref="sale.sale_order_list_with_dashboard"/>
         <field name="act_window_id" ref="action_orders"/>
     </record>
 
     <record id="sale_order_action_view_order_kanban" model="ir.actions.act_window.view">
         <field name="sequence" eval="2"/>
         <field name="view_mode">kanban</field>
-        <field name="view_id" ref="sale.sale_order_kanban_upload"/>
+        <field name="view_id" ref="sale.sale_order_kanban_with_dashboard"/>
         <field name="act_window_id" ref="action_orders"/>
     </record>
 
@@ -1179,14 +1259,14 @@
     <record id="sale_order_action_view_quotation_tree" model="ir.actions.act_window.view">
         <field name="sequence" eval="1"/>
         <field name="view_mode">list</field>
-        <field name="view_id" ref="sale.view_quotation_tree_with_onboarding"/>
+        <field name="view_id" ref="sale.sale_order_list_with_dashboard"/>
         <field name="act_window_id" ref="action_quotations_with_onboarding"/>
     </record>
 
     <record id="sale_order_action_view_quotation_kanban" model="ir.actions.act_window.view">
         <field name="sequence" eval="2"/>
         <field name="view_mode">kanban</field>
-        <field name="view_id" ref="sale.view_quotation_kanban_with_onboarding"/>
+        <field name="view_id" ref="sale.sale_order_kanban_with_dashboard"/>
         <field name="act_window_id" ref="action_quotations_with_onboarding"/>
     </record>
 
@@ -1245,43 +1325,6 @@
         <field name="view_mode">graph</field>
         <field name="view_id" ref="sale.view_sale_order_graph"/>
         <field name="act_window_id" ref="action_quotations"/>
-    </record>
-
-    <record id="action_orders_to_invoice" model="ir.actions.act_window">
-        <field name="name">Orders to Invoice</field>
-        <field name="res_model">sale.order</field>
-        <field name="view_mode">list,form,calendar,graph,pivot,kanban,activity</field>
-        <field name="context">{'create': False}</field>
-        <field name="domain">[('invoice_status','=','to invoice')]</field>
-        <field name="search_view_id" ref="view_sales_order_filter"/>
-        <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-            No orders to invoice found
-            </p><p>
-            You can select all orders and invoice them in batch,<br/>
-            or check every order and invoice them one by one.
-            </p>
-        </field>
-    </record>
-
-    <record id="action_orders_upselling" model="ir.actions.act_window">
-        <field name="name">Orders to Upsell</field>
-        <field name="res_model">sale.order</field>
-        <field name="view_mode">list,form,calendar,graph,pivot,kanban,activity</field>
-        <field name="domain">[('invoice_status','=','upselling')]</field>
-        <field name="context">{'create': False}</field>
-        <field name="search_view_id" ref="view_sales_order_filter"/>
-        <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-            No orders to upsell found.
-            </p><p>
-            An order is to upsell when delivered quantities are above initially
-            ordered quantities, and the invoicing policy is based on ordered quantities.
-            </p><p>
-            As an example, if you sell pre-paid hours of services, Odoo recommends you
-            to sell extra hours when all ordered hours have been consumed.
-            </p>
-        </field>
     </record>
 
     <!-- ACTIONS (SERVER) -->

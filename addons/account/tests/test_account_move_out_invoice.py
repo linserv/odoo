@@ -1390,13 +1390,75 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
         with self.assertRaises(UserError):
             move.invoice_cash_rounding_id = self.cash_rounding_a
 
+    def test_out_invoice_cash_rounding_conditions(self):
+        self.env.user.group_ids += self.env.ref('account.group_cash_rounding')
+        currencies = self.env['res.currency'].concat(self.setup_other_currency(code) for code in ('AED', 'SEK', 'CAD'))
+        categories = self.env['res.partner.category'].create([{'name': f'Category {index}'} for index in range(3)])
+        partner_without_category, partner_with_category, partner_with_categories = self.env['res.partner'].create([
+            {'name': 'Partner without category'},
+            {'name': 'Partner with category', 'category_id': categories[0].ids},
+            {'name': 'Partner with categories', 'category_id': categories[:2].ids},
+        ])
+        payment_method_lines = self.env['account.payment.method.line'].create([
+            {
+                'name': f'Payment Method {index}',
+                'payment_method_id': self.env.ref('account.account_payment_method_manual_in').id,
+                'journal_id': self.company_data['default_journal_bank'].id,
+            }
+            for index in range(3)
+        ])
+        rounding_methods = self.env['account.cash.rounding'].create([
+            {
+                'name': f'Rounding {sequence}',
+                'sequence': sequence,
+                'currency_ids': currencies[:currency_count].ids,
+                'partner_category_ids': categories[1:category_count].ids,  # first category is excluded to test condition intersection check
+                'payment_method_line_ids': payment_method_lines[:payment_method_line_count].ids,
+            }
+            for sequence, (currency_count, category_count, payment_method_line_count) in enumerate([
+                (0, 0, 0),
+                (3, 3, 3),
+                (3, 3, 0),
+                (3, 0, 3),
+                (0, 3, 3),
+                (0, 0, 3),
+                (0, 3, 0),
+                (3, 0, 0),
+            ], start=1)
+        ])
+
+        def assert_rounding_method(currency, partner, payment_method_line, expected_rounding_method):
+            invoice = self._create_invoice_one_line(
+                price_unit=100.0,
+                partner_id=partner,
+                currency_id=currency,
+                preferred_payment_method_line_id=payment_method_line,
+            )
+            self.assertRecordValues(invoice, [{'invoice_cash_rounding_id': expected_rounding_method.id}])
+
+        no_payment_method_line = self.env['account.payment.method.line']
+        no_rounding_method = self.env['account.cash.rounding']
+        unmatched_currency = self.company_data['currency']
+        for currency, partner, payment_method_line, expected_rounding_method in (
+            (unmatched_currency, partner_without_category, no_payment_method_line, no_rounding_method),
+            (unmatched_currency, partner_without_category, payment_method_lines[0], rounding_methods[5]),
+            (unmatched_currency, partner_with_category, no_payment_method_line, no_rounding_method),
+            (unmatched_currency, partner_with_category, payment_method_lines[1], rounding_methods[5]),
+            (unmatched_currency, partner_with_categories, payment_method_lines[2], rounding_methods[4]),
+            (currencies[0], partner_without_category, no_payment_method_line, rounding_methods[7]),
+            (currencies[1], partner_with_category, no_payment_method_line, rounding_methods[7]),
+            (currencies[2], partner_with_categories, payment_method_lines[0], rounding_methods[1]),
+        ):
+            with self.subTest(currency=currency.name, partner=partner.name, payment_method_line=payment_method_line.name):
+                assert_rounding_method(currency, partner, payment_method_line, expected_rounding_method)
+
     def test_out_invoice_line_onchange_cash_rounding_1(self):
         # Required for `invoice_cash_rounding_id` to be visible in the view
         self.env.user.group_ids += self.env.ref('account.group_cash_rounding')
         # Test 'add_invoice_line' rounding
         move_form = Form(self.invoice)
         # Add a cash rounding having 'add_invoice_line'.
-        move_form.invoice_cash_rounding_id = self.cash_rounding_a
+        self.invoice.invoice_cash_rounding_id = self.cash_rounding_a
         move_form.save()
 
         # The cash rounding does nothing as the total is already rounded.
@@ -3545,14 +3607,8 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
         # unreconcile
         debit_aml = invoice.line_ids.filtered('debit')
         debit_aml.remove_move_reconcile()
-        # check caba move reverse is same as caba move with only debit/credit inverted
-        reversed_caba_move = self.env['account.move'].search([('reversed_entry_id', '=', caba_move.id)])
-        for value in expected_values:
-            value.update({
-                'debit': value['credit'],
-                'credit': value['debit'],
-            })
-        self.assertRecordValues(reversed_caba_move.line_ids, expected_values)
+        # unlocked caba moves should get deleted upon unreconciliation
+        self.assertFalse(caba_move.exists())
 
     def test_out_invoice_with_down_payment_caba(self):
         tax_waiting_account = self.env['account.account'].create({
@@ -3729,9 +3785,40 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
         # But ideally, they shouldn't exist since no cash was involved.
         tax_lines = (invoice + credit_note).line_ids.filtered(lambda l: l.account_id == tax_waiting_account)
         invoice_tax_matching, refund_tax_matching = tax_lines.mapped('matching_number')
-        self.assertNotEqual(invoice_tax_matching, refund_tax_matching)
-        self.assertTrue(all([invoice_tax_matching, refund_tax_matching, invoice_receivable_matching, refund_receivable_matching]))
+        self.assertEqual(invoice_tax_matching, refund_tax_matching)
 
+    def test_non_payment_caba_refund(self):
+        """ Reversing a move with a CABA tax that has not been paid should not
+        create a CABA move.
+        """
+        self.env.company.tax_exigibility = True
+        tax_waiting_account = self.env['account.account'].create({
+            'name': 'TAX_WAIT',
+            'code': 'TWAIT',
+            'account_type': 'liability_current',
+        })
+        caba_tax = self.env['account.tax'].create({
+            'name': 'cash basis 10%',
+            'type_tax_use': 'sale',
+            'amount': 10,
+            'tax_exigibility': 'on_payment',
+            'cash_basis_transition_account_id': tax_waiting_account.id,
+        })
+        invoice = self._create_invoice(
+            move_type='out_invoice',
+            partner_id=self.partner_a.id,
+            invoice_line_ids=[
+                self._prepare_invoice_line(price_unit=1000.0, tax_ids=caba_tax.ids),
+            ],
+            post=True,
+        )
+        credit_note = invoice._reverse_moves()
+        credit_note.action_post()
+        cash_basis_moves = self.env['account.move'].search([
+            ('company_id', '=', invoice.company_id.id),
+            ('journal_id', '=', invoice.company_id.tax_cash_basis_journal_id.id),
+        ])
+        self.assertFalse(cash_basis_moves)
 
     def test_tax_grid_remove_tax(self):
         # Add a tag to tax_sale_a

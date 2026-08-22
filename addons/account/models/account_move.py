@@ -479,6 +479,12 @@ class AccountMove(models.Model):
         tracking=True,
         compute='_compute_payment_reference', inverse='_inverse_payment_reference', store=True, readonly=False,
     )
+    sanitize_payment_reference = fields.Char(
+        string="Label sanitize",
+        compute='_compute_sanitize_payment_reference',
+        compute_sql='_compute_sql_sanitize_payment_reference',
+        compute_sudo=False,
+    )
     display_qr_code = fields.Boolean(
         string="Display QR-code",
         compute='_compute_display_qr_code',
@@ -739,7 +745,10 @@ class AccountMove(models.Model):
         comodel_name='account.cash.rounding',
         string='Cash Rounding Method',
         help='Defines the smallest coinage of the currency that can be used to pay by cash.',
+        compute='_compute_invoice_cash_rounding_id',
+        store=True, readonly=False, index=True,
     )
+    has_biggest_tax_cash_rounding_line = fields.Boolean(compute='_compute_has_biggest_tax_cash_rounding_line')
     sending_data = fields.Json(copy=False)
     invoice_pdf_report_id = fields.Many2one(
         comodel_name='ir.attachment',
@@ -816,6 +825,7 @@ class AccountMove(models.Model):
     # used in <account.journal>._query_has_sequence_holes
     _made_gaps = models.Index('(journal_id, state, payment_state, move_type, date) WHERE (made_sequence_gap IS TRUE)')
     _duplicate_bills_idx = models.Index("(ref) WHERE (move_type IN ('in_invoice', 'in_refund'))")
+    _account_move_sanitize_payment_ref_idx = models.Index("(regexp_replace(COALESCE(payment_reference, ''), '[^a-zA-Z0-9]', '', 'g'))")
 
     _check_document_tax_mode_set = models.Constraint(
         "check(move_type NOT IN ('out_invoice', 'out_refund', 'out_receipt', 'in_invoice', 'in_refund', 'in_receipt') OR document_tax_mode IS NOT NULL)",
@@ -864,6 +874,14 @@ class AccountMove(models.Model):
         )):
             move.payment_reference = move._get_invoice_computed_reference()
         self._inverse_payment_reference()
+
+    @api.depends('payment_reference')
+    def _compute_sanitize_payment_reference(self):
+        for move in self:
+            move.sanitize_payment_reference = re.sub(r'[^a-zA-Z0-9]', '', move.payment_reference or '')
+
+    def _compute_sql_sanitize_payment_reference(self, table):
+        return SQL("regexp_replace(COALESCE(%s, ''), '[^a-zA-Z0-9]', '', 'g')", table.payment_reference)
 
     def _get_accounting_date_source(self):
         self.ensure_one()
@@ -1873,6 +1891,7 @@ class AccountMove(models.Model):
         'invoice_line_ids.price_total',
         'invoice_line_ids.price_subtotal',
         'invoice_payment_term_id',
+        'invoice_cash_rounding_id',
         'partner_id',
         'currency_id',
         'document_tax_mode',
@@ -2517,6 +2536,36 @@ class AccountMove(models.Model):
             elif not move.document_tax_mode:
                 company = move.company_id or self.env.company
                 move.document_tax_mode = company.account_price_include
+
+    @api.depends('currency_id', 'partner_id.category_id', 'preferred_payment_method_line_id')
+    def _compute_invoice_cash_rounding_id(self):
+        sale_moves = self.filtered(lambda move: move.is_sale_document(include_receipts=True) and move.state == 'draft')
+        if not sale_moves:
+            return
+        CashRounding = self.env['account.cash.rounding']
+        cash_roundings = CashRounding.search([
+            *CashRounding._check_company_domain(sale_moves.company_id),
+            '|', '|',
+            ('currency_ids', 'in', sale_moves.currency_id.ids),
+            ('partner_category_ids', 'in', sale_moves.partner_id.category_id.ids),
+            ('payment_method_line_ids', 'in', sale_moves.preferred_payment_method_line_id.ids),
+        ])
+        if not cash_roundings:
+            return
+        for move in sale_moves:
+            move.invoice_cash_rounding_id = next((
+                cash_rounding
+                for cash_rounding in cash_roundings
+                if (not cash_rounding.company_id or cash_rounding.company_id == move.company_id)
+                and (not cash_rounding.currency_ids or move.currency_id in cash_rounding.currency_ids)
+                and (not cash_rounding.partner_category_ids or move.partner_id.category_id & cash_rounding.partner_category_ids)
+                and (not cash_rounding.payment_method_line_ids or move.preferred_payment_method_line_id in cash_rounding.payment_method_line_ids)
+            ), False)
+
+    @api.depends('invoice_cash_rounding_id.strategy', 'line_ids')
+    def _compute_has_biggest_tax_cash_rounding_line(self):
+        for move in self:
+            move.has_biggest_tax_cash_rounding_line = move.invoice_cash_rounding_id.strategy == 'biggest_tax' and any(line.display_type == 'rounding' for line in move.line_ids)
 
     # -------------------------------------------------------------------------
     # ALERTS
@@ -4274,16 +4323,12 @@ class AccountMove(models.Model):
         self.ensure_one()
         move_date = self.date or self.invoice_date or fields.Date.context_today(self)
         year_part = "%04d" % move_date.year
-        last_day = int(self.company_id.fiscalyear_last_day)
-        last_month = int(self.company_id.fiscalyear_last_month)
-        is_staggered_year = last_month != 12 or last_day != 31
+        fiscalyear_dates = self.env.company.compute_fiscalyear_dates(self.date)
+        date_from = fiscalyear_dates['date_from']
+        date_to = fiscalyear_dates['date_to']
+        is_staggered_year = date_from.year != date_to.year
         if is_staggered_year:
-            max_last_day = calendar.monthrange(move_date.year, last_month)[1]
-            last_day = min(last_day, max_last_day)
-            if move_date > date(move_date.year, last_month, last_day):
-                year_part = "%s-%s" % (move_date.strftime('%y'), (move_date + relativedelta(years=1)).strftime('%y'))
-            else:
-                year_part = "%s-%s" % ((move_date + relativedelta(years=-1)).strftime('%y'), move_date.strftime('%y'))
+            year_part = "%s-%s" % (date_from.strftime('%y'), date_to.strftime('%y'))
 
         return year_part, move_date, is_staggered_year
 
@@ -4321,10 +4366,11 @@ class AccountMove(models.Model):
         if reset not in ('year_range', 'year_range_month'):
             return super()._get_sequence_date_range(reset)
 
-        fiscalyear_last_day = self.company_id.fiscalyear_last_day
-        fiscalyear_last_month = int(self.company_id.fiscalyear_last_month)
-        date_start, date_end = date_utils.get_fiscal_year(self.date, day=fiscalyear_last_day, month=fiscalyear_last_month)
-
+        fiscalyear_dates = self.env.company.compute_fiscalyear_dates(self.date)
+        date_start = fiscalyear_dates['date_from']
+        date_end = fiscalyear_dates['date_to']
+        fiscalyear_last_day = date_end.day
+        fiscalyear_last_month = date_end.month
         if reset == 'year_range':
             return (date_start, date_end) + (None, None)
 
@@ -5857,15 +5903,21 @@ class AccountMove(models.Model):
 
     def _can_be_unlinked(self):
         self.ensure_one()
-        lock_date = self.company_id._get_user_fiscal_lock_date(self.journal_id)
+        tax_lock_date = self.company_id._get_user_lock_date('tax_lock_date')
+        fiscal_lock_date = self.company_id._get_user_fiscal_lock_date(self.journal_id)
         posted_caba_entry = self.state == 'posted' and (self.tax_cash_basis_rec_id or self.tax_cash_basis_origin_move_id)
         posted_exchange_diff_entry = self.state == 'posted' and self.exchange_diff_partial_ids
-        return not self.inalterable_hash and self.date > lock_date and not posted_caba_entry and not posted_exchange_diff_entry
+        return (
+            not self.inalterable_hash
+            and self.date > fiscal_lock_date
+            and not (posted_caba_entry and self.date <= tax_lock_date)
+            and not posted_exchange_diff_entry
+        )
 
     def _is_protected_by_audit_trail(self):
         return any(move.posted_before and move.company_id.restrictive_audit_trail for move in self)
 
-    def _unlink_or_reverse(self):
+    def _unlink_or_reverse(self, default_values_list=None):
         if not self:
             return
         to_unlink = self.env['account.move']
@@ -5881,7 +5933,7 @@ class AccountMove(models.Model):
         to_unlink.filtered(lambda m: m.state in ('posted', 'cancel')).button_draft()
         to_unlink.filtered(lambda m: m.state == 'draft').unlink()
         to_cancel.filtered(lambda m: m.state != 'cancel').button_cancel()
-        return to_reverse._reverse_moves(cancel=True)
+        return to_reverse._reverse_moves(default_values_list=default_values_list, cancel=True)
 
     def _get_lines_with_wrong_partner(self):
         self.ensure_one()
@@ -6746,13 +6798,6 @@ class AccountMove(models.Model):
         for move in self:
             if move.id in exchange_move_ids:
                 raise UserError(_('You cannot reset to draft an exchange difference journal entry.'))
-            if move.tax_cash_basis_rec_id or move.tax_cash_basis_origin_move_id:
-                # If the reconciliation was undone, move.tax_cash_basis_rec_id will be empty;
-                # but we still don't want to allow setting the caba entry to draft
-                # (it'll have been reversed automatically, so no manual intervention is required),
-                # so we also check tax_cash_basis_origin_move_id, which stays unchanged
-                # (we need both, as tax_cash_basis_origin_move_id did not exist in older versions).
-                raise UserError(_('You cannot reset to draft a tax cash basis journal entry.'))
             if move.inalterable_hash:
                 raise UserError(_('You cannot reset to draft a locked journal entry.'))
 
@@ -7479,6 +7524,13 @@ class AccountMove(models.Model):
             if journal := journal_by_account_id.get(line.account_id.id):
                 lines_by_journal[journal] += line
 
+        opening_balance_payment_ref = self.env._("Opening balance")
+
+        existing_bank_statement_lines = dict(self.env['account.bank.statement.line']._read_group([
+            ('journal_id', 'in', [journal.id for journal in lines_by_journal]),
+            ('payment_ref', '=', opening_balance_payment_ref),
+        ], groupby=['journal_id'], aggregates=['id:recordset']))
+
         for journal, opening_lines in lines_by_journal.items():
             balance = sum(opening_lines.mapped('balance'))
             if self.company_id.currency_id.is_zero(balance):
@@ -7491,6 +7543,14 @@ class AccountMove(models.Model):
             else:
                 amount = balance
 
+            statement_line = existing_bank_statement_lines.get(journal)
+            if statement_line and len(statement_line) == 1:
+                # Delete statement, statement lines and move so that everything is correctly re-created
+                move = statement_line.move_id
+                statement_line.statement_id.unlink()
+                move.button_draft()
+                move.unlink()  # Deletes move and statement line
+
             self.env['account.bank.statement'].create({
                 'name': self.env._("Opening Balance"),
                 'date': self.date,
@@ -7498,7 +7558,7 @@ class AccountMove(models.Model):
                 'line_ids': [
                     Command.create({
                         'date': self.date,
-                        'payment_ref': self.env._("Opening balance"),
+                        'payment_ref': opening_balance_payment_ref,
                         'amount': amount,
                         'journal_id': journal.id,
                         'counterpart_account_id': unaffected_earnings_account,
@@ -7985,3 +8045,36 @@ class AccountMove(models.Model):
         with the Documents app.
         """
         return self.message_main_attachment_id
+
+    def get_cash_roundings(self, limit=5):
+        """
+        returns the most relevant rounding methods to the current invoice (or active company if invoice not saved yet).
+        """
+
+        # should be called only on one invoice (saved or not)
+        if len(self) > 1:
+            return
+
+        CashRounding = self.env['account.cash.rounding']
+
+        query = CashRounding._search(
+            domain=CashRounding._check_company_domain(self.company_id or self.env.company),
+            order=CashRounding._order,
+            limit=limit,
+        )
+        if self.invoice_cash_rounding_id:
+            query.order = SQL(
+                "(%s = %s) DESC, %s",
+                query.table.id,
+                self.invoice_cash_rounding_id.id,
+                query.order,
+            )
+        rows = self.env.execute_query(query.select(
+            query.table.id,
+            query.table.name,
+            SQL("COUNT(*) OVER ()"),
+        ))
+        return {
+            'total_length': rows[0][2] if rows else 0,
+            'records': [{'id': rounding_method_id, 'display_name': name} for rounding_method_id, name, _count in rows],
+        }

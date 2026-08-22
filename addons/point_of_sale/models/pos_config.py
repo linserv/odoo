@@ -298,6 +298,7 @@ class PosConfig(models.Model):
         record['_has_cash_move_perm'] = self.env.user._has_cash_move_permission()
         record['_has_cash_delete_perm'] = self.env.user._has_cash_delete_permission()
         record['_pos_special_products_ids'] = self.env['pos.config']._get_special_products().ids
+        record["_unit_uom_id"] = self.env.ref('uom.product_uom_unit').id
 
         session = config.current_session_id
         last_opening = config._get_opening_balance() if session else 0.0
@@ -651,6 +652,9 @@ class PosConfig(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        service_fee_product = self.env.ref('point_of_sale.product_product_service_fee', raise_if_not_found=False).product_tmpl_id
+        if not service_fee_product.active:
+            service_fee_product.active = True
         for vals in vals_list:
             if not vals.get('iface_tipproduct', False):
                 vals['tip_product_id'] = False
@@ -734,10 +738,14 @@ class PosConfig(models.Model):
         if 'iface_tipproduct' in vals and not vals['iface_tipproduct']:
             vals['tip_product_id'] = False
             vals['set_tip_after_payment'] = False
-        elif vals.get('iface_tipproduct') and 'tip_product_id' not in vals \
-                and not all(config.tip_product_id for config in self) \
-                and (default_tip := self._get_default_tip_product()):
-            vals['tip_product_id'] = default_tip.id
+        else:
+            product = self.env.ref('point_of_sale.product_product_tip', raise_if_not_found=False).product_tmpl_id
+            if vals.get('iface_tipproduct') and not product.active:
+                product.active = True
+            if 'tip_product_id' not in vals \
+                    and not all(config.tip_product_id for config in self) \
+                    and (default_tip := self._get_default_tip_product()):
+                vals['tip_product_id'] = default_tip.id
 
         self._check_header_footer(vals)
         self._reset_default_on_vals(vals)
@@ -1097,9 +1105,9 @@ class PosConfig(models.Model):
         fee_products = self.env['pos.preset'].search([('service_fee', '=', True)]).mapped('service_fee_product_id')
         return default_tip | default_fee | fee_products
 
-    def update_customer_display(self, order, device_uuid):
+    def update_customer_display(self, order, identifier):
         self.ensure_one()
-        self._notify(f"UPDATE_CUSTOMER_DISPLAY-{device_uuid}", order)
+        self._notify(f"UPDATE_CUSTOMER_DISPLAY-{identifier}", order)
 
     def _get_customer_display_data(self):
         self.ensure_one()
@@ -1262,7 +1270,10 @@ class PosConfig(models.Model):
         self.ensure_one()
         convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/scenarios/clothes_category_data.xml', idref=None, mode='init', noupdate=True)
         if with_demo_data:
-            self._load_product_demo_data([('data/product_attribute_demo.xml', 'product.pa_sides')])
+            self._load_product_demo_data([
+                ('data/product_attribute_data.xml', 'product.pa_sides'),
+                ('data/product_attribute_demo.xml', 'product.pav_brand_adidas'),
+            ])
             convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/scenarios/clothes_data.xml', idref=None, mode='init', noupdate=True)
         clothes_categories = self.get_record_by_ref([
             'point_of_sale.pos_category_upper',
@@ -1334,7 +1345,8 @@ class PosConfig(models.Model):
         if with_demo_data:
             self._load_product_demo_data([
                 ('data/product_category_demo.xml', 'product.product_category_furniture'),
-                ('data/product_attribute_demo.xml', 'product.pa_sides'),
+                ('data/product_attribute_data.xml', 'product.pa_sides'),
+                ('data/product_attribute_demo.xml', 'product.pav_brand_adidas'),
                 ('data/product_demo.xml', 'product.desk_organizer'),
             ])
             convert.convert_file(self._env_with_clean_context(), 'point_of_sale', 'data/scenarios/furniture_data.xml', idref=None, mode='init', noupdate=True)

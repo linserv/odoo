@@ -4520,28 +4520,6 @@ test("edit the kanban color with translated colors resulting in the same terms",
     expect(getKanbanRecord({ index: 0 })).toHaveClass("o_kanban_color_9");
 });
 
-test("dropdown menu doesn't appear when missing access rights", async () => {
-    await mountView({
-        type: "kanban",
-        resModel: "category",
-        arch: `
-            <kanban edit="0">
-                <templates>
-                    <t t-name="menu">
-                        <field name="color" widget="kanban_color_picker"/>
-                    </t>
-                    <t t-name="card">
-                        <field name="name"/>
-                    </t>
-                </templates>
-            </kanban>`,
-    });
-
-    // When the Kanban record is read-only (e.g., edit='0'), the dropdown menu and its toggle
-    // are not rendered to prevent displaying empty dropdowns
-    expect(`.o_kanban_record:eq(0) .o_dropdown_kanban .dropdown-toggle`).toHaveCount(0);
-});
-
 test("load more records in column", async () => {
     onRpc("web_search_read", ({ kwargs }) => {
         expect.step(`web_search_read ${kwargs.limit} - ${kwargs.offset}`);
@@ -9253,4 +9231,25 @@ test("widgets in kanban view: verify immediate autosave", async () => {
 
     await contains(".o_field_boolean_toggle input").click();
     expect.verifySteps(["web_save"]);
+});
+
+test("web_read_group must not load base64 images", async () => {
+    onRpc("web_read_group", async (args) => {
+        expect.step("web_read_group");
+        expect(args.kwargs.context.bin_size).toBe(true);
+        expect(args.kwargs.context.read_group_expand).toBe(true);
+    });
+    await mountView({
+        type: "kanban",
+        resModel: "partner",
+        arch: `
+            <kanban default_group_by="product_id">
+                <templates>
+                    <t t-name="card">
+                        <field name="display_name" />
+                    </t>
+                </templates>
+            </kanban>`,
+    });
+    expect.verifySteps(["web_read_group"]);
 });

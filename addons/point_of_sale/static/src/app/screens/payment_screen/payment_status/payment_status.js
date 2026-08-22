@@ -3,6 +3,7 @@ import { PriceFormatter } from "@point_of_sale/app/components/price_formatter/pr
 import { usePos } from "@point_of_sale/app/hooks/pos_hook";
 import { PosOrder } from "@point_of_sale/app/models/pos_order";
 import { _t } from "@web/core/l10n/translation";
+import { formatCurrency } from "@web/core/currency";
 
 export class PaymentScreenStatus extends Component {
     static template = "point_of_sale.PaymentScreenStatus";
@@ -36,7 +37,7 @@ export class PaymentScreenStatus extends Component {
     }
 
     get isComplete() {
-        return this.isRemaining && this.order.orderHasZeroRemaining;
+        return this.order.hasRemainingDue && this.order.orderHasZeroRemaining;
     }
 
     get isIncompleteAndPositive() {
@@ -47,30 +48,11 @@ export class PaymentScreenStatus extends Component {
         return this.props.order;
     }
 
-    get isRemaining() {
-        const isNegative = this.order.totalDue < 0;
-        const remainingDue = this.order.remainingDue;
-
-        if ((isNegative && remainingDue >= 0) || (!isNegative && remainingDue <= 0)) {
-            return false;
-        } else {
-            return true;
-        }
-    }
-
-    get statusText() {
-        return this.isRemaining ? _t("Remaining") : _t("Change");
-    }
-
     get showStatus() {
         return Boolean(this.order.remainingDue || this.order.change);
     }
 
     get amountText() {
-        if (!this.isRemaining) {
-            return this.env.utils.formatCurrency(this.order.change);
-        } else {
-            return this.env.utils.formatCurrency(this.order.remainingDue);
-        }
+        return formatCurrency(this.order.remainingDueAmount, this.order.orderCurrency.id);
     }
 }

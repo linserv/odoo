@@ -58,7 +58,9 @@ class PosOrderReceipt(models.AbstractModel):
         return [[name, self.env['ir.qweb']._get_template(name)[1]] for name in names]
 
     @api.model
-    def _order_receipt_format_currency(self, amount):
+    def _order_receipt_format_currency(self, amount, currency=None):
+        if currency:
+            return currency.format(amount).replace('\xa0', ' ')  # Wkhtmltoimage does not support non-breaking spaces
         return self.currency_id.format(amount).replace('\xa0', ' ')  # Wkhtmltoimage does not support non-breaking spaces
 
     def _get_common_record_data(self):
@@ -116,7 +118,8 @@ class PosOrderReceipt(models.AbstractModel):
         for line in self.payment_ids:
             data = line.read(payment_fields, load=False)[0]
             data['payment_method_data'] = {'name': line.payment_method_id.name}
-            data['amount'] = self._order_receipt_format_currency(data['amount'])
+            currency = line.foreign_currency_id or self.currency_id
+            data['amount'] = self._order_receipt_format_currency(data['amount'], currency)
             payments.append(data)
 
         return payments
@@ -152,10 +155,16 @@ class PosOrderReceipt(models.AbstractModel):
             data['product_unit_price'] = self._order_receipt_format_currency(product_unit_price)
 
             if service_fee_product and line.product_id.id == service_fee_product.id:
+                is_percent = preset_id.service_fee_type == 'percent'
+                # `based on` says which total the percentage is taken from: it has
+                # nothing to qualify on a flat amount.
+                description = ''
+                if is_percent:
+                    description = _(" (before discount)") if preset_id.service_fee_based_on == 'pre_discount' else _(" (after discount)")
                 data['is_service_fee_line'] = True
                 data['service_fee_display_info'] = {
-                    'amount': (preset_id.service_fee_type == 'percent' and f"{preset_id.service_fee_amount * 100}%") or self._order_receipt_format_currency(line.price_subtotal_incl),
-                    'description': (preset_id.service_fee_based_on == 'pre_discount' and _(" (before discount)")) or _(" (after discount)"),
+                    'amount': (is_percent and f"{preset_id.service_fee_amount * 100}%") or self._order_receipt_format_currency(line.price_subtotal_incl),
+                    'description': description,
                 }
             else:
                 data['is_service_fee_line'] = False
@@ -183,6 +192,18 @@ class PosOrderReceipt(models.AbstractModel):
 
     def _order_receipt_generate_cashier_name(self):
         return self.user_id.name.split(' ')[0] if self.user_id else ''
+
+    # Used to override inside `pos_loyalty`
+    def _is_item_count_excluded_line(self, line):
+        return bool(line.combo_line_ids)
+
+    def _get_total_item_count(self):
+        total = sum(
+            line.qty if line.product_id.uom_id.is_pos_groupable else 1
+            for line in self.lines
+            if not self._is_item_count_excluded_line(line)
+        )
+        return int(total) if total.is_integer() else total
 
     def order_receipt_generate_data(self, basic_receipt=False):
         self.ensure_one()
@@ -214,6 +235,7 @@ class PosOrderReceipt(models.AbstractModel):
                     [f"{p}%", self._order_receipt_format_currency(self.amount_total * (p / 100))]
                     for p in tip_percentage
                 ] if tip_percentage else False,
+                'total_item_count': self._get_total_item_count(),
             },
         }
 
@@ -237,7 +259,7 @@ class PosOrderReceipt(models.AbstractModel):
         for printer in self.config_id.preparation_printer_ids:
             categ_set = set(printer.product_categories_ids.ids)
             data = self._generate_preparation_change_for_categories(categ_set)
-            changes[printer] = self._generate_preparation_receipt_data(data)
+            changes[printer] = self._generate_preparation_receipt_data(data, printer.is_split_per_product)
         return changes
 
     def _generate_preparation_change_for_categories(self, prep_categ_ids):
@@ -328,7 +350,59 @@ class PosOrderReceipt(models.AbstractModel):
             )
         return changes
 
-    def _generate_preparation_receipt_data(self, order_change):
+    def _split_receipts_per_product(self, receipts_data):
+        result = []
+        for receipt in receipts_data:
+            data = receipt.get("data") or []
+            if not data:
+                result.append(receipt)
+                continue
+
+            children_by_parent_uuid = {}
+            for line in data:
+                parent_uuid = line.get("combo_parent_uuid")
+                if not parent_uuid:
+                    continue
+                children_by_parent_uuid.setdefault(parent_uuid, []).append(line)
+
+            items = []
+            for line in data:
+                if line.get("combo_parent_uuid"):
+                    continue
+                children = children_by_parent_uuid.get(line.get("uuid"), [])
+                if children:
+                    items.append([line] + children)
+                else:
+                    items.append([line])
+            for item_lines in items:
+                parent_line = item_lines[0]
+                is_combo = len(item_lines) > 1
+                qty = parent_line.get("quantity")
+                if qty != int(qty) or not parent_line.get("uom_is_base_unit"):
+                    split_receipt = {
+                        **receipt,
+                        "data": [{**line, "quantity": line["quantity"]} for line in item_lines],
+                    }
+                    self._prepare_preparation_grouped_data(split_receipt)
+                    result.append(split_receipt)
+                    continue
+                parent_qty = int(qty)
+                for _i in range(abs(parent_qty)):
+                    ticket_lines = []
+                    for line in item_lines:
+                        line_qty = int(line["quantity"])
+                        per_unit_qty = (line_qty / parent_qty) if is_combo and line.get("combo_parent_uuid") else 1
+                        line_qty_per_unit = per_unit_qty if int(line["quantity"]) > 0 else -per_unit_qty
+                        ticket_lines.append({**line, "quantity": line_qty_per_unit})
+                    split_receipt = {
+                        **receipt,
+                        "data": ticket_lines,
+                    }
+                    self._prepare_preparation_grouped_data(split_receipt)
+                    result.append(split_receipt)
+        return result
+
+    def _generate_preparation_receipt_data(self, order_change, is_split_per_product=False):
         is_empty_change = (
             not order_change["added_quantity"]
             and not order_change["removed_quantity"]
@@ -373,6 +447,9 @@ class PosOrderReceipt(models.AbstractModel):
                 self._prepare_preparation_grouped_data({"title": "", "data": []})
             )
 
+        if is_split_per_product:
+            receipts_data = self._split_receipts_per_product(receipts_data)
+
         receipts = []
         for change in receipts_data:
             receipts.append({
@@ -402,7 +479,12 @@ class PosOrderReceipt(models.AbstractModel):
         is_restaurant = self.config_id.module_pos_restaurant
         first_categ = product.pos_categ_ids[:1]
 
+        group = False
+        if is_restaurant and line.course_id:
+            group = {"name": line.course_id.name, "index": line.course_id.index}
+
         return {
+            "uuid": line.uuid,
             "basic_name": product.name if is_restaurant else product.display_name,
             "product_id": product.id,
             "attribute_value_names": attributes.mapped("name"),
@@ -411,9 +493,10 @@ class PosOrderReceipt(models.AbstractModel):
             "customer_note": _get_str_notes(line.customer_note),
             "pos_categ_id": first_categ.id,
             "pos_categ_sequence": first_categ.sequence,
-            "group": False,
+            "group": group,
             "combo_line_ids": line.combo_line_ids.ids,
             "combo_parent_uuid": line.combo_parent_id.uuid,
+            "uom_is_base_unit": line.product_id.uom_id.id == self.env.ref('uom.product_uom_unit').id
         }
 
     # Preparation ticket generation

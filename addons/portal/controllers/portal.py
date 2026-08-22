@@ -19,6 +19,7 @@ from odoo.http import Controller, request, route
 from odoo.http.session import logout
 from odoo.http.stream import content_disposition
 from odoo.tools import clean_context, consteq, single_email_re, str2bool
+from odoo.tools.partner_identifiers import validation_error_message
 from odoo.tools.translate import LazyTranslate
 
 _lt = LazyTranslate(__name__)
@@ -250,7 +251,6 @@ class CustomerPortal(Controller):
         :rtype: dict
         """
         return {
-            'page_name': 'my_details',
             **self._prepare_portal_layout_values(),
             **self._prepare_address_form_values(
                 partner_sudo=request.env.user.partner_id,
@@ -258,6 +258,7 @@ class CustomerPortal(Controller):
                 use_delivery_as_billing=True,
                 callback=redirect,
             ),
+            'page_name': 'my_details',
         }
 
     @route('/my/addresses', type='http', auth='user', readonly=True, website=True)
@@ -384,14 +385,15 @@ class CustomerPortal(Controller):
         """
         current_partner = request.env['res.partner']._get_current_partner(**kwargs)
         commercial_partner = current_partner.commercial_partner_id  # handling commercial fields
+        has_confirmed_documents = current_partner and current_partner._has_confirmed_documents()
 
         if partner_sudo:
             # Existing address, use the values defined on the address
             state_id = partner_sudo.state_id.id
             country_sudo = partner_sudo.country_id
             is_main_address = partner_sudo == current_partner
-            can_edit_commercial_fields = (
-                is_main_address and current_partner._can_edit_commercial_fields()
+            is_main_contact = (
+                is_main_address and current_partner._is_main_contact()
             )
         else:
             # New address, take default values from current partner
@@ -401,28 +403,23 @@ class CustomerPortal(Controller):
             # Commercial fields can only be updated on main customer address, so they can only be
             # updated on new addresses if it's gonna be the customer main address
             is_main_address = not current_partner
-            can_edit_commercial_fields = not current_partner
+            is_main_contact = not current_partner
 
         commercial_fields_warning = commercial_address_update_url = vat_warning = ""
-        if not can_edit_commercial_fields:
-            if not is_main_address:
-                commercial_fields_warning = self.env._(
-                    "The company name and VAT number can only be updated on your main account."
-                )
-                commercial_address_update_url = "/my/account?redirect=/my/addresses"
-            elif (
-                current_partner != commercial_partner
-                and commercial_partner.is_company
-                and commercial_partner.user_ids
-            ):
-                commercial_fields_warning = self.env._(
-                    "The company billing details can only be updated on the company account."
-                )
-            else:
-                vat_warning = self.env._(
-                    "Updating VAT number is not allowed once document(s) have been issued for your"
-                    " account. Please contact us directly for this operation."
-                )
+        if not is_main_address:
+            commercial_fields_warning = self.env._(
+                "The company name and VAT number can only be updated on your main account."
+            )
+            commercial_address_update_url = "/my/account?redirect=/my/addresses"
+        elif not is_main_contact:
+            commercial_fields_warning = self.env._(
+                "The company billing details can only be updated on the company account."
+            )
+        elif current_partner.vat and has_confirmed_documents:
+            vat_warning = self.env._(
+                "Updating VAT number is not allowed once document(s) have been issued for your"
+                " account. Please contact us directly for this operation."
+            )
 
         address_fields = (country_sudo and country_sudo.get_address_fields()) or ['city', 'zip']
 
@@ -430,10 +427,10 @@ class CustomerPortal(Controller):
             'partner_sudo': partner_sudo,  # If set, customer is editing an existing address
             'partner_id': partner_sudo.id,
             'current_partner': current_partner,
-            'commercial_partner': current_partner.commercial_partner_id,
+            'commercial_partner': commercial_partner,
             'is_main_address': is_main_address,
             'address_type': address_type,
-            'can_edit_commercial_fields': can_edit_commercial_fields,
+            'can_edit_commercial_fields': not has_confirmed_documents and is_main_contact,
             'commercial_address_update_url': commercial_address_update_url,
             'commercial_fields_warning': commercial_fields_warning,
             'can_edit_country': not partner_sudo.country_id or partner_sudo._can_edit_country(),
@@ -711,21 +708,26 @@ class CustomerPortal(Controller):
             def get_commercial_field_error_msg(field_description):
                 if partner_sudo.commercial_partner_id.is_company:
                     return self.env._(
-                        "The %(field_name)s is managed on your company account.",
-                        field_name=field_description,
+                        "The %(field_description)s is managed on your company account."
                     )
-                return self.env._(
-                    "The %(field_name)s is managed on your main account address.",
-                    field_name=field_description,
-                )
+                elif current_partner != partner_sudo:
+                    return self.env._(
+                        "The %(field_description)s is managed on your main account address."
+                    )
+                else:
+                    return self.env._(
+                        "Changing %(field_description)s is not allowed once document(s) have been"
+                        " issued for your account. Please contact us directly for this operation."
+                    )
 
             # Prevent changing commercial fields on sub-addresses, as they are expected to match
             # commercial partner values, and would be reset if modified on the commercial partner.
-            can_edit_commercial_fields = (
+            is_main_contact = (
                 not current_partner
-                or (partner_sudo == current_partner and current_partner._can_edit_commercial_fields())
+                or (partner_sudo == current_partner and current_partner._is_main_contact())
             )
-            if not can_edit_commercial_fields:
+            has_confirmed_documents = current_partner and current_partner._has_confirmed_documents()
+            if not is_main_contact or has_confirmed_documents:
                 commercial_fields = partner_sudo._commercial_fields()
                 # The additional_identifiers field need to be handled separately, as it has multiple
                 # values handled differently on the partner.
@@ -738,6 +740,9 @@ class CustomerPortal(Controller):
                         partner_sudo[commercial_field_name],
                         partner_sudo,
                     )
+                    # Allow to update commercial fields on individual addresses, if not set.
+                    if is_main_contact and not bool(partner_sudo_value):
+                        continue
                     if (
                         partner_sudo_value != address_values[commercial_field_name]
                         and (
@@ -753,31 +758,22 @@ class CustomerPortal(Controller):
 
                 for additional_identifier, value in address_values.get("additional_identifiers", {}).items():
                     partner_sudo_value = partner_sudo._get_additional_identifier(additional_identifier)
-                    # Only set to invalid field if the additional identifier is already set on the
-                    # partner.
-                    if partner_sudo_value != value and bool(partner_sudo_value):
+                    # Allow to update additional identifiers on individual addresses, if not set.
+                    if is_main_contact and not bool(partner_sudo_value):
+                        continue
+                    if partner_sudo_value != value and (bool(partner_sudo_value) or bool(value)):
                         invalid_fields.add(additional_identifier.lower())
                         error_messages.append(get_commercial_field_error_msg(additional_identifier))
+                    else:
+                        address_values["additional_identifiers"].pop(additional_identifier, None)
 
                 # Company name shouldn't be updated anywhere but the main and company address, even
                 # if it's not in the fields returned by _commercial_fields.
                 if partner_sudo != request.env['res.partner']._get_current_partner(**kwargs):
                     address_values.pop('parent_name', None)
-            # Prevent changing the VAT number on a commercial partner if documents have been issued.
-            elif (
-                'vat' in address_values
-                and partner_sudo.vat
-                and address_values['vat'] != partner_sudo.vat
-                and not can_edit_commercial_fields
-            ):
-                invalid_fields.add('vat')
-                error_messages.append(_(
-                    "Changing VAT number is not allowed once document(s) have been issued for your"
-                    " account. Please contact us directly for this operation."
-                ))
         else:
             # We're creating a new address, it'll only be the main address of public customers
-            can_edit_commercial_fields = not current_partner
+            is_main_contact = not current_partner
 
         # Validate the email.
         if address_values.get('email') and not single_email_re.match(address_values['email']):
@@ -802,6 +798,22 @@ class CustomerPortal(Controller):
                 invalid_fields.add('vat')
                 error_messages.append(exception.args[0])
 
+        # Validate additional_identifiers
+        for additional_identifier, value in address_values.get("additional_identifiers", {}).items():
+            validation_vals = self.env["res.partner"]._validate_identifier(
+                additional_identifier, value
+            )
+            if not validation_vals["valid"]:
+                invalid_fields.add(additional_identifier.lower())
+                identifier_label = self.env["res.partner"]._get_identifier_label(additional_identifier)
+                error_messages.append(
+                    validation_error_message(
+                        self.env, identifier_label,
+                        validation_vals["value"],
+                        example=validation_vals["example"]
+                    )
+                )
+
         # Build the set of required fields from the address form's requirements.
         required_field_set = {f for f in required_fields.split(',') if f}
 
@@ -816,7 +828,7 @@ class CustomerPortal(Controller):
             required_field_set |= self.env["res.partner"]._get_mandatory_billing_address_fields(
                 country, **kwargs
             )
-            if not can_edit_commercial_fields:
+            if not is_main_contact:
                 commercial_fields = ResPartnerSudo._commercial_fields()
                 for fname in commercial_fields:
                     if fname in required_field_set and fname not in address_values:

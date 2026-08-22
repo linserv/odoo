@@ -35,6 +35,22 @@ export class PosOrderAccounting extends Base {
         this._prices.unit = this._constructPriceData({ baseLineOpts: { quantity: 1 } });
     }
 
+    get paymentAmountInCurrency() {
+        const otherCurrencyPayments = this.payment_ids.filter(
+            (payment) => payment.foreign_currency_id
+        );
+        if (!otherCurrencyPayments.length) {
+            return formatCurrency(this.totalDue, this.config.currency_id.id);
+        }
+
+        const currency = otherCurrencyPayments[0].currency;
+        const totalOtherCurrencyAmount = otherCurrencyPayments.reduce(
+            (total, payment) => total + payment.amount_currency,
+            0
+        );
+        return formatCurrency(totalOtherCurrencyAmount, currency.id);
+    }
+
     /**
      * Currency formatted prices, these getters already handle included/excluded tax configuration.
      * They must be used each time a price is displayed to the user.
@@ -243,6 +259,74 @@ export class PosOrderAccounting extends Base {
      */
     getPriceWithOptions(opts = {}) {
         return this._constructPriceData(opts);
+    }
+
+    /**
+     * Carve a target `amount` out of `lines` and return one base line per tax group,
+     * attributed to `product` and spread over `qty` units, each paired with the extra
+     * tax data to persist on the orderline written from it.
+     *
+     * @param lines: The lines the amount is carved from.
+     * @param product: The product the resulting base lines are attributed to.
+     * @param type: "percent" or "fixed", how `amount` is read.
+     * @param amount: The target amount, taxes included.
+     * @param qty: The number of units the target amount is spread over.
+     * @param ignoreDiscount: Carve the amount from the lines before their discount.
+     */
+    getBaseLinesReducedToAmount(lines, { product, type, amount, qty = 1, ignoreDiscount = false }) {
+        const company = this.company;
+        const baseLines = lines.map((line) =>
+            accountTaxHelpers.prepare_base_line_for_taxes_computation(
+                line,
+                line.prepareBaseLineForTaxesComputationExtraValues()
+            )
+        );
+        // Reduction groups by {tax_ids, computation_key}, callers reconcile on tax_ids
+        // alone. Strip the key so one tax group yields one line.
+        baseLines.forEach((line) => {
+            line.computation_key = null;
+            if (line.extra_tax_data) {
+                line.extra_tax_data.computation_key = undefined;
+            }
+            if (ignoreDiscount) {
+                line.discount = 0;
+            }
+        });
+
+        accountTaxHelpers.add_tax_details_in_base_lines(baseLines, company);
+        accountTaxHelpers.round_base_lines_tax_details(baseLines, company);
+
+        const reducedBaseLines = accountTaxHelpers.reduce_base_lines_to_target_amount(
+            baseLines,
+            company,
+            type,
+            amount,
+            {
+                grouping_function: () => ({
+                    grouping_key: { product_id: product },
+                    raw_grouping_key: { product_id: product.id },
+                }),
+            }
+        );
+        accountTaxHelpers.fix_base_lines_tax_details_on_manual_tax_amounts(
+            reducedBaseLines,
+            company
+        );
+
+        // The spread must precede the export: the export stamps `price_unit`,
+        // `discount` and `quantity`, and `import_base_line_extra_tax_data` drops the
+        // exact per-tax amounts when they no longer match the line they are read back
+        // onto. Those amounts are what makes the per-unit rounding below safe.
+        return reducedBaseLines.map((baseLine) => {
+            if (qty > 1) {
+                baseLine.quantity = qty;
+                baseLine.price_unit = baseLine.price_unit / qty;
+            }
+            return {
+                baseLine,
+                extraTaxData: accountTaxHelpers.export_base_line_extra_tax_data(baseLine),
+            };
+        });
     }
 
     /**

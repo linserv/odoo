@@ -11,16 +11,7 @@ export class Store extends Record {
     /** @type {import("./store_internal").StoreInternal} */
     _;
     [STORE_SYM] = true;
-    /** @type {Map<string, Record>} */
-    recordByLocalId;
     storeReady = false;
-    /**
-     * @param {string} localId
-     * @returns {Record}
-     */
-    get(localId) {
-        return this.recordByLocalId.get(localId);
-    }
 
     handleError(err) {
         this._.ERRORS.push(err);
@@ -40,7 +31,6 @@ export class Store extends Record {
         }
         this._.UPDATE--;
         this._.lowerUpdateDepth();
-        const deletingRecordsByLocalId = new Map();
         if (this._.UPDATE === 0) {
             // pretend an increased update cycle so that nothing in queue creates many small update cycles
             this._.UPDATE++;
@@ -49,21 +39,18 @@ export class Store extends Record {
                 this._.FA_QUEUE.size > 0 ||
                 this._.FD_QUEUE.size > 0 ||
                 this._.FU_QUEUE.size > 0 ||
-                this._.RD_QUEUE.size > 0 ||
-                this._.RHD_QUEUE.size > 0
+                this._.RD_QUEUE.size > 0
             ) {
                 const FC_QUEUE = new Map(this._.FC_QUEUE);
                 const FA_QUEUE = new Map(this._.FA_QUEUE);
                 const FD_QUEUE = new Map(this._.FD_QUEUE);
                 const FU_QUEUE = new Map(this._.FU_QUEUE);
                 const RD_QUEUE = new Map(this._.RD_QUEUE);
-                const RHD_QUEUE = new Map(this._.RHD_QUEUE);
                 this._.FC_QUEUE.clear();
                 this._.FA_QUEUE.clear();
                 this._.FD_QUEUE.clear();
                 this._.FU_QUEUE.clear();
                 this._.RD_QUEUE.clear();
-                this._.RHD_QUEUE.clear();
                 while (FC_QUEUE.size > 0) {
                     /** @type {[Record, Map<string, true>]} */
                     const [record, recMap] = FC_QUEUE.entries().next().value;
@@ -123,20 +110,24 @@ export class Store extends Record {
                     /** @type {Record} */
                     const record = RD_QUEUE.keys().next().value;
                     RD_QUEUE.delete(record);
-                    for (const [localId, names] of record._.uses.data.entries()) {
+                    record._.isDeleted.set(true);
+                    delete record.Model.records[record.localId];
+                    for (const [usingRecord, names] of record._.uses.data.entries()) {
                         for (const [name2, count] of names.entries()) {
-                            const existingRecordProxy = toRaw(this.recordByLocalId).get(localId);
-                            const usingRecord =
-                                existingRecordProxy?._raw || deletingRecordsByLocalId.get(localId);
-                            if (!usingRecord) {
-                                // record already deleted, clean inverses
-                                record._.uses.data.delete(localId);
-                                continue;
-                            }
                             for (let c = 0; c < count; c++) {
                                 usingRecord[name2].delete(record);
                             }
                         }
+                    }
+                    for (const name of [
+                        ...record.Model._.fieldsOne.keys(),
+                        ...record.Model._.fieldsMany.keys(),
+                    ]) {
+                        const recordList = record[name];
+                        for (const usedRecord of recordList._.data) {
+                            usedRecord._.uses.delete(recordList);
+                        }
+                        recordList._.data.length = 0;
                     }
                     for (const lsFieldName of record.Model._.fieldsLocalStorage) {
                         const { localStorageKeyToRecordFields } = record.store._;
@@ -147,18 +138,7 @@ export class Store extends Record {
                             localStorageKeyToRecordFields.delete(key);
                         }
                     }
-                    deletingRecordsByLocalId.set(record.localId, record);
-                    this.recordByLocalId.delete(record.localId);
-                    record._.isDeleted.set(true);
-                    this._.ADD_QUEUE("hard_delete", record);
-                }
-                while (RHD_QUEUE.size > 0) {
-                    // effectively delete the record
-                    /** @type {Record} */
-                    const record = RHD_QUEUE.keys().next().value;
                     record._runDisposeFns();
-                    RHD_QUEUE.delete(record);
-                    deletingRecordsByLocalId.delete(record.localId);
                 }
             }
             this._.UPDATE--;

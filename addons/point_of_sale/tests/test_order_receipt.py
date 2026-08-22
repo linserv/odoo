@@ -11,21 +11,22 @@ from odoo.tools import (
     DEFAULT_SERVER_DATETIME_FORMAT,
     BinaryBytes,
 )
-
+from odoo.addons.point_of_sale.tests.common import CommonPosTest
+from odoo.addons.point_of_sale.tests.common_setup_methods import setup_product_combo_items
 from odoo.addons.point_of_sale.tests.test_frontend import TestPointOfSaleHttpCommon
 
 _logger = logging.getLogger(__name__)
 
 
 @tagged('post_install', '-at_install')
-class TestPosOrderReceipt(TestPointOfSaleHttpCommon):
+class TestPosOrderReceipt(TestPointOfSaleHttpCommon, CommonPosTest):
     _test_user_groups = None  # FIXME list needed groups
 
     @classmethod
     def setUpClass(self):
         super().setUpClass()
 
-        tax = self.env['account.tax'].create({
+        self.tax = self.env['account.tax'].create({
             'name': 'Tax 15%',
             'amount': 25,
             'price_include_override': 'tax_included',
@@ -41,7 +42,7 @@ class TestPosOrderReceipt(TestPointOfSaleHttpCommon):
             'name': 'Example Simple Product',
             'available_in_pos': True,
             'list_price': 5.80,
-            'taxes_id': [(6, 0, [tax.id])],
+            'taxes_id': [(6, 0, [self.tax.id])],
             'weight': 0.01,
             'to_weight': True,
             'pos_categ_ids': [(4, self.category.id)],
@@ -177,6 +178,7 @@ class TestPosOrderReceipt(TestPointOfSaleHttpCommon):
         self.comparator(backend['preset'], frontend['preset'], 'pos.preset')
         self.comparator(backend['conditions'], frontend['conditions'], 'conditions')
         self.comparator(backend['image'], frontend['image'], 'image')
+        self.assertEqual(backend['extra_data']['total_item_count'], frontend['extra_data']['total_item_count'])
 
         for taxes in zip(backend_taxes, frontend_taxes):
             self.comparator(taxes[0], taxes[1])
@@ -261,3 +263,198 @@ class TestPosOrderReceipt(TestPointOfSaleHttpCommon):
         with patch.object(self.env.registry['pos.order'], 'get_order_frontend_receipt_data', get_order_frontend_receipt_data, create=True):
             self.start_pos_tour("test_change_receipt_data")
             self.compare_change_receipt_data(data['frontend_data'], data['backend_data'])
+
+    def _get_service_fee_receipt_info(self, service_fee_type):
+        preset = self.env['pos.preset'].create({
+            'name': 'Service fee preset',
+            'service_fee': True,
+            'service_fee_type': service_fee_type,
+            'service_fee_amount': 0.1 if service_fee_type == 'percent' else 2,
+            'service_fee_based_on': 'pre_discount',
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        product = self.example_simple_product.product_variant_id
+        fee_product = preset.service_fee_product_id
+        fee_amount = 0.58 if service_fee_type == 'percent' else 2
+        order = self.env['pos.order'].create({
+            'session_id': self.main_pos_config.current_session_id.id,
+            'company_id': self.env.company.id,
+            'preset_id': preset.id,
+            'amount_total': product.lst_price + fee_amount,
+            'amount_paid': 0,
+            'amount_tax': 0,
+            'amount_return': 0,
+            'lines': [
+                Command.create({
+                    'product_id': product.id,
+                    'qty': 1,
+                    'price_unit': product.lst_price,
+                    'price_subtotal': product.lst_price,
+                    'price_subtotal_incl': product.lst_price,
+                }),
+                Command.create({
+                    'product_id': fee_product.id,
+                    'qty': 1,
+                    'price_unit': fee_amount,
+                    'price_subtotal': fee_amount,
+                    'price_subtotal_incl': fee_amount,
+                }),
+            ],
+        })
+        fee_line = next(
+            line for line in order._order_receipt_generate_line_data()
+            if line['is_service_fee_line']
+        )
+        return fee_line['service_fee_display_info']
+
+    def test_service_fee_receipt_description_percent(self):
+        """
+        A percentage fee is taken from an order total, so the receipt says which.
+        """
+        self.assertEqual(
+            self._get_service_fee_receipt_info('percent')['description'],
+            " (before discount)",
+        )
+
+    def test_service_fee_receipt_description_fixed(self):
+        """
+        `based on` has nothing to qualify on a flat amount.
+        """
+        self.assertEqual(self._get_service_fee_receipt_info('fixed')['description'], "")
+
+    def test_split_per_product_preserves_combo_children(self):
+        """Test that split_per_product keeps combo parent + children on the same ticket."""
+        category_a = self.env['pos.category'].create({'name': 'Category A'})
+        category_b = self.env['pos.category'].create({'name': 'Category B'})
+
+        product_a = self.env['product.product'].create({
+            'name': 'Product A',
+            'available_in_pos': True,
+            'list_price': 10.0,
+            'pos_categ_ids': [(4, category_a.id)],
+        })
+        product_b = self.env['product.product'].create({
+            'name': 'Product B',
+            'available_in_pos': True,
+            'list_price': 5.0,
+            'pos_categ_ids': [(4, category_b.id)],
+        })
+        product_c = self.env['product.product'].create({
+            'name': 'Product C',
+            'available_in_pos': True,
+            'list_price': 3.0,
+            'pos_categ_ids': [(4, category_b.id)],
+        })
+
+        combo = self.env['product.combo'].create({'name': 'Test Combo'})
+        self.env['product.combo.item'].create({
+            'product_id': product_b.id,
+            'combo_id': combo.id,
+        })
+        self.env['product.combo.item'].create({
+            'product_id': product_c.id,
+            'combo_id': combo.id,
+        })
+
+        combo_template = self.env['product.template'].create({
+            'name': 'Combo Product',
+            'type': 'combo',
+            'combo_ids': [(4, combo.id)],
+            'list_price': 15.0,
+        })
+        combo_product = combo_template.product_variant_id
+
+        printer = self.env['pos.printer'].create({
+            'name': 'Split Printer',
+            'printer_type': 'epson_epos',
+            'printer_ip': '0.0.0.0',
+            'use_type': 'preparation',
+            'product_categories_ids': [Command.set(self.env['pos.category'].search([]).ids)],
+            'is_split_per_product': True,
+        })
+        self.main_pos_config.write({
+            'preparation_printer_ids': [(4, printer.id)],
+            'module_pos_restaurant': True,
+        })
+
+        order, _ = self.create_backend_pos_order({
+            'pos_config': self.main_pos_config,
+            'line_data': [
+                {'product_id': combo_product.id, 'qty': 2},
+                {'product_id': product_b.id, 'qty': 2},
+                {'product_id': product_c.id, 'qty': 2},
+                {'product_id': product_a.id, 'qty': 2},
+            ],
+        })
+
+        parent_line = order.lines.filtered(lambda l: l.product_id == combo_product)[:1]
+        order.lines.filtered(lambda l: l.product_id == product_b).write({'combo_parent_id': parent_line.id})
+        order.lines.filtered(lambda l: l.product_id == product_c).write({'combo_parent_id': parent_line.id})
+
+        prep_set = set(self.env['pos.category'].search([]).ids)
+        prep_data = order._generate_preparation_change_for_categories(prep_set)
+        receipts = order._generate_preparation_receipt_data(prep_data, is_split_per_product=True)
+
+        self.assertTrue(len(receipts) > 0, "Should have at least one receipt")
+
+        combo_tickets = [
+            r for r in receipts
+            if r['changes'].get('data') and any(
+                d.get('product_id') == combo_product.id
+                for d in r['changes']['data']
+            )
+        ]
+        self.assertEqual(len(combo_tickets), 2, "Combo product (qty=2) should produce 2 tickets")
+
+        for ticket in combo_tickets:
+            product_ids = [d['product_id'] for d in ticket['changes']['data']]
+            self.assertIn(combo_product.id, product_ids, "Combo parent should be on ticket")
+            self.assertIn(product_b.id, product_ids, "Combo child B should be on same ticket as parent")
+            self.assertIn(product_c.id, product_ids, "Combo child C should be on same ticket as parent")
+            self.assertEqual(len(ticket['changes']['data']), 3, "Combo ticket should have parent + 2 children")
+
+        standalone_tickets = [
+            r for r in receipts
+            if r['changes'].get('data') and any(
+                d.get('product_id') == product_a.id
+                for d in r['changes']['data']
+            )
+        ]
+        self.assertEqual(len(standalone_tickets), 2, "Standalone product A (qty=2) should produce 2 tickets")
+        for ticket in standalone_tickets:
+            product_ids = [d['product_id'] for d in ticket['changes']['data']]
+            self.assertEqual(product_ids, [product_a.id], "Standalone ticket should only have product A")
+
+    def test_total_item_count(self):
+        setup_product_combo_items(self)
+        self.weighted_product = self.env['product.template'].create({
+            'name': 'Weighted Product',
+            'available_in_pos': True,
+            'list_price': 4.20,
+            'taxes_id': [(6, 0, [self.tax.id])],
+            'uom_id': self.env.ref('uom.product_uom_kgm').id,
+            'pos_categ_ids': [(4, self.category.id)],
+            'company_id': self.env.company.id,
+        })
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        order, _ = self.create_backend_pos_order({
+            'pos_config': self.main_pos_config,
+            'line_data': [
+                {'product_id': self.example_simple_product.product_variant_id.id, 'qty': 2, 'price_subtotal': 0.0, 'price_subtotal_incl': 0.0},
+                {'product_id': self.weighted_product.product_variant_id.id, 'qty': 2.5, 'price_subtotal': 0.0, 'price_subtotal_incl': 0.0},
+                {'product_id': self.office_combo.id, 'qty': 1, 'price_subtotal': 0.0, 'price_subtotal_incl': 0.0},
+            ],
+        })
+        order.lines.filtered(lambda line: line.product_id == self.office_combo).write({
+            "combo_line_ids": [
+                Command.create({
+                    "order_id": order.id,
+                    "product_id": item.product_id.id,
+                    "qty": 1,
+                    "price_subtotal": 0.0,
+                    "price_subtotal_incl": 0.0,
+                })
+                for item in self.desks_combo.combo_item_ids
+            ],
+        })
+        self.assertEqual(order.order_receipt_generate_data()['extra_data']['total_item_count'], 5)

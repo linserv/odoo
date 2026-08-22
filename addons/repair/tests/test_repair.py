@@ -689,7 +689,8 @@ class TestRepair(TestRepairCommon):
 
     def test_repair_components_lots_show_in_invoice(self):
         """
-        Test that the lots of the components of a repair order are shown in the invoice
+        Test that the lots of the components of a repair order are shown in the invoice.
+        Also checks that picking description is propogated to sales orders and invoices.
         """
         quant = self.create_quant(self.product_storable_serial, 1)
         quant.action_apply_inventory()
@@ -703,6 +704,7 @@ class TestRepair(TestRepairCommon):
                     'product_uom_qty': 1.0,
                     'state': 'draft',
                     'repair_line_type': 'add',
+                    'description_picking': 'Picking Description',
                 })
             ],
         })
@@ -718,6 +720,8 @@ class TestRepair(TestRepairCommon):
         self.assertEqual(len(res), 1, "The invoice should have one line")
         self.assertEqual(res[0]['product_name'], self.product_storable_serial.display_name, "The product name should be the same")
         self.assertEqual(res[0]['lot_name'], quant.lot_id.name, "The lot name should be the same")
+        self.assertEqual(sale_order.order_line[0].name, f'{self.product_storable_serial.display_name}\nPicking Description')
+        self.assertEqual(invoice.line_ids[0].name, f'{self.product_storable_serial.display_name}\nPicking Description')
 
     def test_create_repair_order_from_cross_company_sn(self):
         """
@@ -1097,6 +1101,17 @@ class TestRepair(TestRepairCommon):
 
         self.assertEqual(so_part_line.product_uom_qty, 0)
         self.assertEqual(so_service_line.product_uom_qty, 0)
+
+    def test_warranty_sets_repair_service_sale_order_line_price_to_zero(self):
+        repair_order = self._create_repair_order_with_moves_and_services()
+        repair_order.action_create_sale_order()
+        repair_order.under_warranty = True
+
+        repair_order.action_validate()
+        repair_order.action_repair_start()
+        repair_order.action_repair_end()
+
+        self.assertEqual(repair_order.repair_service_line_ids.sale_line_id.price_unit, 0.0)
 
 
 @tagged('post_install', '-at_install')

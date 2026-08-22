@@ -1438,10 +1438,8 @@ export class ListRenderer extends Component {
         ) {
             const clickedSubFieldName = ev.target.closest("[data-field-name]")?.dataset.fieldName;
             if (record.isInEdition && this.editedRecord() === record) {
-                const cellName =
-                    column.type === "column_group" ? column.fields[0].name : column.name;
                 const cell = this.tableRef().querySelector(
-                    `.o_selected_row td[name='${cellName}']`
+                    `.o_selected_row td[name='${column.name}']`
                 );
                 const focusTarget = clickedSubFieldName
                     ? cell?.querySelector(`[data-field-name='${clickedSubFieldName}']`)
@@ -2465,6 +2463,9 @@ export class ListRenderer extends Component {
         const refId = previous ? previous.dataset.id : null;
         try {
             if (dataGroupId) {
+                if (!previous?.dataset?.groupId) {
+                    return;
+                }
                 this.resequencePromise = this.props.list.moveRecord(
                     dataRowId,
                     dataGroupId,

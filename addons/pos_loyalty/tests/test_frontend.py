@@ -1,7 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from datetime import date, timedelta
-from unittest import skip
 from unittest.mock import patch
 from freezegun import freeze_time
 
@@ -1226,7 +1225,6 @@ class TestUi(TestPointOfSaleHttpCommon):
         self.main_pos_config.open_ui()
         self.start_pos_tour("PosLoyaltyTour7")
 
-    @skip('Skip for fast merge, task (6221973) created to be reintroduced later')
     def test_discount_with_reward_product_domain(self):
         self.env['loyalty.program'].search([]).write({'active': False})
 
@@ -3478,9 +3476,6 @@ class TestUi(TestPointOfSaleHttpCommon):
             login="pos_user",
         )
         self.assertEqual(loyalty_card.points, 90)
-
-    def test_customer_display_loyalty_points(self):
-        self.start_tour(f"/pos_customer_display/{self.main_pos_config.id}/{self.main_pos_config.access_token}?access_token={self.main_pos_config.access_token}", 'test_customer_display_loyalty_points', login="pos_user")
 
     def test_refund_order_deduct_loyalty_points(self):
         """
