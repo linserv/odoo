@@ -15,7 +15,7 @@ from odoo import _, api, fields, models, modules, tools
 from odoo.exceptions import AccessError, MissingError
 from odoo.fields import Domain
 from odoo.tools import clean_context, groupby, SQL
-from odoo.tools.constants import PREFETCH_MAX
+from odoo.tools.constants import IN_MAX
 from odoo.tools.misc import OrderedSet
 from odoo.addons.base.models.ir_attachment import condition_values
 from odoo.addons.mail.tools.discuss import Store
@@ -28,7 +28,7 @@ _logger = logging.getLogger(__name__)
 _image_dataurl = re.compile(r'(data:image/[a-z]+?);base64,([a-z0-9+/\n]{3,}=*)\n*([\'"])(?: data-filename="([^"]*)")?', re.I)
 
 MAX_COMODELS_FOR_DOMAIN = 5
-MAX_SEARCH_LIMIT = PREFETCH_MAX * 10
+MAX_SEARCH_LIMIT = IN_MAX * 10
 SHARE_DOMAIN = (
     Domain("message_type", "!=", "tracking")
     & Domain("is_internal", "=", False)
@@ -436,8 +436,34 @@ class MailMessage(models.Model):
             return super()._search(domain, offset, limit, order, bypass_access=True, **kwargs)
         if self.env.context.get('_generating_sql_for_fields'):
             raise ValueError("Cannot generate SQL for whole mail.message")
+        if limit is None or 0 < len(condition_values(self, 'model', domain) or ()) <= MAX_COMODELS_FOR_DOMAIN:
+            return super()._search(domain, offset, limit, order, bypass_access=bypass_access, **kwargs)
 
-        return super()._search(domain, offset, limit, order, bypass_access=bypass_access, **kwargs)
+        self_sudo = self.sudo()
+        if self._active_name and not kwargs.get('active_test', True):  # user set active_test=False
+            domain &= Domain(self._active_name, 'in', [True, False])
+        ordered = bool(order)
+        # Fetch by small batches
+        looping_offset = 0
+        limit += offset
+        result = []
+        if not ordered:
+            # By default, order by model to batch access checks.
+            order = 'model nulls first, id'
+        while len(result) < limit:
+            records = self_sudo.search_fetch(
+                domain,
+                [],
+                offset=looping_offset,
+                limit=IN_MAX,
+                order=order,
+            ).sudo(False)
+            result.extend(records._filtered_access('read')._ids)
+            if len(records) < IN_MAX:
+                # There are no more records
+                break
+            looping_offset += IN_MAX
+        return self.browse(result[offset:limit])._as_query(ordered)
 
     def _compute_res_access(self, operation: str):
         assert self.env.su
@@ -593,20 +619,20 @@ class MailMessage(models.Model):
                 SQL('partner_cc_rel.mail_message_id = %s AND partner_cc_rel.res_partner_id = %s', id_sql, pid))
             query.add_join('LEFT JOIN', 'needaction_rel', 'mail_notification',
                 SQL('needaction_rel.mail_message_id = %s AND needaction_rel.res_partner_id = %s', id_sql, pid))
-            query = query.select(*(
+            sql = query.select(*(
                 table[fname]
                 for fname in ('id', 'model', 'res_id', 'author_id', 'parent_id', 'message_type', 'create_uid')
             ), SQL('bool_or(partner_rel.res_partner_id IS NOT NULL OR partner_cc_rel.res_partner_id IS NOT NULL '
                    'OR needaction_rel.res_partner_id IS NOT NULL) AS notified'))
         elif operation in ('create', 'unlink'):
-            query = query.select(*(
+            sql = query.select(*(
                 table[fname]
                 for fname in ('id', 'model', 'res_id', 'author_id', 'parent_id', 'message_type')
             ))
         else:
             raise ValueError(_('Wrong operation name (%s)', operation))
         # skip flush which is already done
-        self.env.cr.execute(query)
+        self.env.cr.execute(sql)
         messages_to_check = {
             values['id']: values
             for values in self.env.cr.dictfetchall()

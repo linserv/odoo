@@ -86,18 +86,29 @@ class PosSession(models.Model):
         string='Closing Difference',
         compute='_compute_closing_difference',
     )
-    sales_move_id = fields.Many2one(
+    sale_move_count = fields.Integer(
+        string='Number of related sales journal entries',
+        compute='_compute_account_move_count',
+    )
+    refund_move_count = fields.Integer(
+        string='Number of related refunds journal entries',
+        compute='_compute_account_move_count',
+    )
+    sale_move_ids = fields.One2many(
         'account.move',
+        'pos_session_sales_id',
         string='Sales Entry',
         index=True,
     )
-    refunds_move_id = fields.Many2one(
+    refund_move_ids = fields.One2many(
         'account.move',
+        'pos_session_refunds_id',
         string='Refunds Entry',
         index=True,
     )
-    correction_move_ids = fields.Many2many(
+    correction_move_ids = fields.One2many(
         'account.move',
+        'pos_session_correction_id',
         string='Correction Entries',
         index=True,
     )
@@ -111,14 +122,8 @@ class PosSession(models.Model):
         string='Number of related journal entries',
         compute='_compute_account_move_count',
     )
-
     order_ids = fields.One2many('pos.order', 'session_id', string='Orders')
     order_count = fields.Integer(compute='_compute_order_count')
-    rescue = fields.Boolean(
-        string='Recovery Session',
-        help="Auto-generated session for orphan orders, ignored in constraints",
-        readonly=True,
-        copy=False)
     payment_method_ids = fields.Many2many(
         'pos.payment.method',
         related='config_id.payment_method_ids',
@@ -148,40 +153,6 @@ class PosSession(models.Model):
         return super().write(vals)
 
     @api.model
-    def _load_pos_data_relations(self, model, fields):
-        model_fields = self.env[model]._fields
-        relations = {}
-
-        for name, params in model_fields.items():
-            if (name not in fields and len(fields)) or (params.manual and not len(fields)):
-                continue
-
-            if params.relational:
-                relations[name] = {
-                    'name': name,
-                    'model': params.model_name,
-                    'compute': bool(params.compute),
-                    'related': bool(params.related),
-                    'relation': params.comodel_name,
-                    'type': params.type,
-                }
-                if params.type == 'many2one' and params.ondelete:
-                    relations[name]['ondelete'] = params.ondelete
-                if params.type == 'one2many' and params.inverse_name:
-                    relations[name]['inverse_name'] = params.inverse_name
-                if params.type == 'many2many':
-                    relations[name]['relation_table'] = self.env[model]._fields[name].relation
-            else:
-                relations[name] = {
-                    'name': name,
-                    'type': params.type,
-                    'compute': bool(params.compute),
-                    'related': bool(params.related),
-                }
-
-        return relations
-
-    @api.model
     def _load_pos_data_models(self, config):
         return [
             'pos.config', 'pos.preset', 'resource.calendar.attendance', 'pos.order',
@@ -193,12 +164,11 @@ class PosSession(models.Model):
             'product.uom', 'decimal.precision', 'uom.uom', 'res.country', 'res.country.state',
             'res.lang', 'product.category', 'product.pricelist', 'product.pricelist.item',
             'account.cash.rounding', 'account.fiscal.position', 'res.currency', 'pos.note',
-            'product.tag', 'ir.module.module', 'account.move', 'account.account',
-            'pos.snooze', 'pos.prep.order', 'pos.prep.line',
-        ]
+            'product.tag', 'account.move', 'account.account',
+            'pos.snooze', 'pos.prep.order', 'pos.prep.line', 'ir.ui.view']
 
     @api.model
-    def _load_pos_data_domain(self, data, config):
+    def _load_pos_data_domain(self, data):
         return [('id', '=', self.id)]
 
     @api.model
@@ -208,49 +178,110 @@ class PosSession(models.Model):
             'payment_method_ids', 'state', 'access_token',
         ]
 
-    def load_data(self, models_to_load):
-        response = {}
-        response['pos.session'] = self._load_pos_data_search_read(response, self.config_id)
+    def load_data(self, local_data={}):
+        """
+        Load POS data for the session, optionally scoped by what the client already holds.
 
-        for model in self._load_pos_data_models(self.config_id):
-            if models_to_load and model not in models_to_load:
+        param local_data: dict with the following optional keys:
+
+        - ``models`` (list): restrict the response to these model names only.
+        - ``records`` (dict): per-model mapping of ``{id: write_date}`` already in the client cache;
+          used to compute records that should be removed locally, or updated.
+        - ``search_params`` (dict): per-model overrides for ``domain``, ``offset``, ``limit``, and ``context`` passed to ``_load_pos_metadata``.
+        - ``only_records`` (bool): if ``True``, return ``{model: [records]}`` without metadata (fields, relations, etc.).
+
+        :return: A dictionary where the keys are the model names and the values are list of records
+         if ``only_records`` is ``True``, or a dictionary with the following keys:
+
+        - ``records``: list of records
+        - ``fields``: list of fields
+        - ``relations``: list of relations
+        - ``to_remove``: list of ids that should be removed from the client cache.
+          Present only if local_data['records'] is not empty.
+        """
+        default_params = {
+            'models': [],
+            'records': {},
+            'search_params': {},
+            'only_records': False,
+        }
+        local_data = default_params | local_data
+        models = self._load_pos_data_models(self.config_id)
+        metadata = self._load_metadata(models, local_data['search_params'])
+        to_read = metadata
+        if local_data['models']:
+            to_read = {model: data for model, data in metadata.items() if model in local_data['models']}
+        data = self._read_from_metadata(to_read, local_data, self.config_id)
+        if local_data['only_records']:
+            return {model: d['records'] for model, d in data.items()}
+        if local_data['records']:
+            # Add data to remove from the indexedDB
+            data_to_remove = self.filter_local_data({model: list(d.keys()) for model, d in local_data['records'].items()})
+            for model, ids in data_to_remove.items():
+                if model in data:
+                    data[model]['to_remove'] = ids
+
+        # If there are more models than last time, we need to add the metadata (especially fields and relations) to the response
+        for model, d in metadata.items():
+            if not model in data:
+                data[model] = {
+                    'records': [],
+                }
+            del d['records']
+            data[model].update(d)
+        return data
+
+    def _load_metadata(self, models, search_params={}):
+        records = {}
+        self._load_pos_metadata(records, search_params.get('pos.session', {'limit': 1}))
+        self.env['pos.config']._load_pos_metadata(records, search_params.get('pos.config', {'limit': 1}))
+        for model in models:
+            if model in ['pos.session', 'pos.config']:
                 continue
-
             try:
-                response[model] = self.env[model]._load_pos_data_search_read(response, self.config_id)
+                params = search_params.get(model, {})
+                context = {**self.env.context, **params.get('context', {})}
+                self.env[model].with_context(context)._load_pos_metadata(records, params)
             except AccessError as e:
-                response[model] = []
+                records[model] = {
+                    **self.env[model]._load_pos_data_domain_and_dependencies(records),
+                    'records': self.env[model],
+                }
+                if model != 'ir.ui.view':
+                    # The model ir.ui.view can rarely be accessed so it will raise a warning
+                    # almost every single time. We load it only to load the templates.
+                    _logger.info("Could not load model %s due to AccessError: %s", model, e)
+        return records
+
+    @api.model
+    def _read_from_metadata(self, server_data, local_data, config_id):
+        response = {}
+        for model, data in server_data.items():
+            try:
+                del data['domain']
+                response[model] = self.env[model]._read_pos_data_from_metadata(data, local_data, config_id)
+            except AccessError as e:
+                response[model] = {
+                    **data,
+                    'records': [],
+                }
                 _logger.info("Could not load model %s due to AccessError: %s", model, e)
 
         return response
 
-    def load_data_params(self):
-        response = {}
-        fields = self._load_pos_data_fields(self.config_id)
-        response['pos.session'] = {
-            'fields': fields,
-            'relations': self._load_pos_data_relations('pos.session', fields),
-        }
-
-        for model in self._load_pos_data_models(self.config_id):
-            fields = self.env[model]._load_pos_data_fields(self.config_id)
-            response[model] = {
-                'fields': fields,
-                'relations': self._load_pos_data_relations(model, fields),
-            }
-
-        return response
-
     def filter_local_data(self, models_to_filter):
-        response = {}
+        non_existent_and_inactive_ids = {}
         for model, ids in models_to_filter.items():
-            existing_records = self.env[model].browse(ids).exists()
+            ids = list(map(int, ids))
+            try:
+                existing_active_records = self.env[model].search_read([('id', 'in', ids)], ['id'])
+            except AccessError:
+                continue
+            existing_active_records = [r['id'] for r in existing_active_records]
 
-            non_existent_ids = set(ids) - set(existing_records.ids)
-            inactive_ids = set(existing_records._unrelevant_records(self.config_id))
+            non_existent_and_inactive_ids[model] = list(set(ids) - set(existing_active_records))
 
-            response[model] = list(non_existent_ids | inactive_ids)
-        return response
+        return non_existent_and_inactive_ids
 
     def delete_opening_control_session(self):
         self.ensure_one()
@@ -306,14 +337,14 @@ class PosSession(models.Model):
         moves = self.env['account.move'].search([('id', operator, value)])
         return [
             '|',
-            ('sales_move_id', 'in', moves.ids),
-            ('refunds_move_id', 'in', moves.ids),
+            ('sale_move_ids', 'in', moves.ids),
+            ('refund_move_ids', 'in', moves.ids),
         ]
 
-    @api.depends('sales_move_id', 'refunds_move_id')
+    @api.depends('sale_move_ids', 'refund_move_ids')
     def _compute_move_ids(self):
         for session in self:
-            session.move_ids = session.sales_move_id | session.refunds_move_id
+            session.move_ids = session.sale_move_ids | session.refund_move_ids
 
     def _compute_order_count(self):
         orders_data = self.env['pos.order']._read_group([('session_id', 'in', self.ids)], ['session_id'], ['__count'])
@@ -327,7 +358,6 @@ class PosSession(models.Model):
         if not onboarding_creation and self.search_count([
                 ('state', '!=', 'closed'),
                 ('config_id', '=', self.config_id.id),
-                ('rescue', '=', False),
             ]) > 1:
             raise ValidationError(_("Another session is already opened for this point of sale."))
 
@@ -367,10 +397,10 @@ class PosSession(models.Model):
         return {'config_id': config_id}
 
     def get_session_orders(self):
-        today = fields.Date.context_today(self)
-        return self.order_ids.filtered(lambda o:
-            not (o.preset_time and fields.Datetime.context_timestamp(self, o.preset_time).date() > today),
-        )
+        return self.env['pos.order'].search([
+            ('session_id', '=', self.id),
+            '|', ('preset_time', '=', False), ('preset_time', '<=', fields.Datetime.now())
+        ])
 
     def get_order_count_by_preset(self):
         orders = self.order_ids.filtered(lambda o: o.state != 'cancel' and o.preset_id and o.preset_time and o.preset_time > fields.Datetime.now())
@@ -384,6 +414,53 @@ class PosSession(models.Model):
                 }
             orders_by_preset[order.preset_id.id]['count'] += 1
         return list(orders_by_preset.values())
+
+    @api.model
+    def _launch_cron_generate_invoice_period(self, additional_domain=[]):
+        domain = [
+            ('state', '!=', 'closed'),
+            ('order_ids', '!=', False),
+            ('config_id.session_closing_mode', '=', 'daily'),
+        ]
+        domain += additional_domain
+        sessions = self.search(domain)
+        for session in sessions:
+            try:
+                session.with_company(session.company_id)._validate_session_accounting()
+            except Exception as e:  # noqa: BLE001
+                # We don't block the cron if one session fails to validate, we log the error and continue with the next session
+                _logger.error("Failed to validate session accounting for session %s: %s", session.id, e)
+
+    @api.model
+    def _cron_generate_invoice_period(self):
+        """
+        The cron runs every 10 minutes. A session matches only if its
+        configured closing hour falls within the (now - 10min, now]
+        window, so each session is processed at most once per day.
+        """
+        now = fields.Datetime.now()
+        window_start_dt = now - timedelta(minutes=10)
+
+        # float hours, 21:30 => 21.5
+        window_end = now.hour + now.minute / 60.0 + now.second / 3600.0
+        window_start = (window_start_dt.hour + window_start_dt.minute / 60.0 + window_start_dt.second / 3600.0)
+        domain = []
+
+        if window_start <= window_end:
+            # normal case, (14.33, 14.5)
+            domain += [
+                ('config_id.session_closing_daily_hour', '>', window_start),
+                ('config_id.session_closing_daily_hour', '<=', window_end),
+            ]
+        else:
+            # window wraps midnight, (23.83, 0.0) => match > 23.83 or <= 0.0
+            domain += [
+                '|',
+                ('config_id.session_closing_daily_hour', '>', window_start),
+                ('config_id.session_closing_daily_hour', '<=', window_end),
+            ]
+
+        self._launch_cron_generate_invoice_period(domain)
 
     def close_session_from_ui(self, payment_method_closing={}):
         """
@@ -423,17 +500,15 @@ class PosSession(models.Model):
         if statement:
             statement._compute_balance_end_real()
 
-        if self.config_id.order_edit_tracking:
-            edited_orders = self.get_session_orders().filtered(lambda o: o.is_edited)
-            if len(edited_orders) > 0:
-                order_links = Markup().join(
-                    Markup("<li>%s</li>") % order._get_html_link() for order in edited_orders
-                )
-                body = _(
-                    "Edited order(s) during the session:%s",
-                    Markup("<br/><ul>%s</ul>") % order_links,
-                )
-                self.message_post(body=body)
+        if edited_orders := self.get_session_orders().filtered(lambda o: o.is_edited):
+            order_links = Markup().join(
+                Markup("<li>%s</li>") % order._get_html_link() for order in edited_orders
+            )
+            body = _(
+                "Edited order(s) during the session:%s",
+                Markup("<br/><ul>%s</ul>") % order_links,
+            )
+            self.message_post(body=body)
 
         if self.env.user.email:
             self.post_close_register_message()
@@ -535,12 +610,15 @@ class PosSession(models.Model):
             ],
         }
 
+    @api.depends('sale_move_ids', 'refund_move_ids')
     def _compute_account_move_count(self):
         for record in self:
             record.account_move_count = len(record._get_session_and_order_account_moves())
+            record.sale_move_count = len(record.sale_move_ids)
+            record.refund_move_count = len(record.refund_move_ids)
 
     def _get_session_and_order_account_moves(self):
-        return self.sales_move_id | self.refunds_move_id | self.order_ids.mapped('account_move')
+        return self.sale_move_ids | self.refund_move_ids | self.order_ids.mapped('account_move')
 
     def _get_related_account_moves(self):
         invoices = self._get_session_and_order_account_moves()
@@ -860,20 +938,25 @@ class PosSession(models.Model):
         non_invoiced_orders, invoiced_orders = self._get_invoiced_and_non_invoiced_orders()
         self._check_invoiced_orders_are_posted(invoiced_orders)
 
+        # Zero quantity orders are not considered for accounting, as they have no financial impact
+        zero_quantity_orders = non_invoiced_orders.filtered(lambda order: all(line.qty == 0 for line in order.lines))
+        non_invoiced_orders -= zero_quantity_orders
+
         # Build the out_receipt lines. Returns pm_data_list so we can
         # create the matching account.payment / statement line records after posting.
         sale_orders = non_invoiced_orders.filtered(
-            lambda order: not order.is_refund_or_negative() and order.amount_total > 0,
+            lambda order: not order.is_refund_or_negative() and order.amount_total >= 0,
         )
         refund_orders = non_invoiced_orders - sale_orders
         sales_move = self._create_session_account_move(sale_orders)
         refunds_move = self._create_session_account_move(refund_orders)
-        self.sales_move_id = sales_move
-        self.refunds_move_id = refunds_move
+        self.sudo().sale_move_ids |= sales_move
+        self.sudo().refund_move_ids |= refunds_move
 
         # Ensure tracking of pos orders in the account moves
         sale_orders.account_move = sales_move
         refund_orders.account_move = refunds_move
+        non_invoiced_orders.write({'state': 'done'})
 
     def _prepare_session_closing_extra_line_commands(self, orders, refund, payments=[]):
         """ Inherited in pos_stock """
@@ -1042,7 +1125,7 @@ class PosSession(models.Model):
         """ Return the paid orders of the session that are not invoiced. """
         self.ensure_one()
         orders = self._get_order_for_session_closing()
-        invoiced_orders = orders.filtered(lambda o: o.is_singly_invoiced)
+        invoiced_orders = orders.filtered(lambda o: o.is_singly_invoiced or o.is_globally_invoiced)
         non_invoiced_orders = orders - invoiced_orders
         return non_invoiced_orders, invoiced_orders
 
@@ -1089,7 +1172,8 @@ class PosSession(models.Model):
 
         reverse_move_lines = []
         invoice_to_reverse = order.account_move
-        original_move = self.refunds_move_id if order.is_refund_or_negative() else self.sales_move_id
+        is_refund = order.is_refund_or_negative()
+        original_move = order.account_move if order.is_globally_invoiced else self.refund_move_ids[-1] if is_refund else self.sale_move_ids[-1]
         reverse_move_lines += self._prepare_account_move_line_commands_for_reversal(
             order,
             invoice_to_reverse,

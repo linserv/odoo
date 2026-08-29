@@ -25,13 +25,20 @@ from odoo.tools import _, config, frozendict, partition, unique, SQL
 from odoo.tools.convert import _fix_multiple_roots
 from odoo.tools.misc import file_path, get_diff, ConstantMapping
 from odoo.tools.template_inheritance import apply_inheritance_specs, locate_node
-from odoo.tools.translate import xml_translate, TRANSLATED_ATTRS
+from odoo.tools.translate import xml_translate, TRANSLATED_ATTRS, StoredTranslations
 from odoo.tools.view_validation import valid_view, get_domain_value_names, get_expression_field_names, get_dict_asts
 
 _logger = logging.getLogger(__name__)
 
 MOVABLE_BRANDING = ['data-oe-model', 'data-oe-id', 'data-oe-field', 'data-oe-xpath', 'data-oe-source-id']
 VIEW_MODIFIERS = ('column_invisible', 'invisible', 'readonly', 'required')
+
+# Period options of a date filter that are not month/year offsets, and relative
+# ("smart date") options of its companion relative filter. Both can be used in
+# the `default_period` attribute.
+# @see web/static/src/search/utils/dates.js
+QUARTER_PERIODS = {'first_quarter', 'second_quarter', 'third_quarter', 'fourth_quarter'}
+RELATIVE_PERIODS = {'today', 'this_week', 'this_month', 'this_quarter', 'this_year'}
 
 # Some views have a js compiler that generates an owl template from the arch. In that template,
 # `__comp__` is a reserved keyword giving access to the component instance (e.g. the form renderer
@@ -240,8 +247,8 @@ actual arch.
                 # replace %(xml_id)s, %(xml_id)d, %%(xml_id)s, %%(xml_id)d by the res_id
                 if arch_fs:
                     arch_fs = resolve_external_ids(arch_fs, xml_id).replace('%%', '%')
-                    translation_dictionary = field_arch_db.get_translation_dictionary(
-                        view.with_env(env_en).arch_db, {lang: view.with_env(env_lang).arch_db}
+                    translation_dictionary = StoredTranslations._get_translation_dictionary(
+                        field_arch_db, view.with_env(env_en).arch_db, {lang: view.with_env(env_lang).arch_db}
                     )
                     arch_fs = field_arch_db.translate(
                         lambda term: translation_dictionary[term][lang],
@@ -2012,7 +2019,7 @@ actual arch.
             custom_options = {f'custom_{child.attrib["name"]}' for child in node.getchildren()}
             for default_period in default_periods.split(","):
                 if not re.fullmatch(r"(year|month)((-|\+)[1-9]\d*)?", default_period)\
-                    and default_period not in custom_options | {"first_quarter", "second_quarter", "third_quarter", "fourth_quarter"}:
+                    and default_period not in custom_options | QUARTER_PERIODS | RELATIVE_PERIODS:
                     msg = _(
                         "Invalid default period %(default_period)s for date filter",
                         default_period=default_period,
@@ -3230,7 +3237,7 @@ class Base(models.AbstractModel):
         return [
             'change_default', 'context', 'currency_field', 'definition_record', 'definition_record_field', 'digits', 'min_display_digits', 'domain',
             'aggregator', 'groups', 'help', 'model_field', 'name', 'readonly', 'related', 'relation', 'relation_field', 'required', 'searchable',
-            'selection', 'size', 'sortable', 'store', 'string', 'translate', 'trim', 'type', 'groupable', 'falsy_value_label'
+            'selection', 'size', 'sortable', 'store', 'string', 'translate', 'trim', 'type', 'groupable', 'falsy_value_label', 'group_expand',
         ]
 
     @api.readonly

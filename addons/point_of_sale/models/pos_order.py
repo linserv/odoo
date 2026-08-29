@@ -55,8 +55,12 @@ class PosOrder(models.Model):
         raise UserError(_('No open session available. Please open a new session to capture the order.'))
 
     @api.model
-    def _load_pos_data_domain(self, data, config):
-        return [('state', '=', 'draft'), ('config_id', '=', config.id)]
+    def _load_pos_data_domain(self, data):
+        return [('state', '=', 'draft'), ('config_id', '=', data['pos.config'].id)]
+
+    @api.model
+    def _load_pos_data_dependencies(self):
+        return ['res.partner']
 
     @api.model
     def _process_order(self, order, existing_order):
@@ -309,7 +313,6 @@ class PosOrder(models.Model):
     mobile = fields.Char(string='Mobile', compute="_compute_contact_details", readonly=False, store=True)
     is_edited = fields.Boolean(string='Edited', compute='_compute_is_edited')
     has_deleted_line = fields.Boolean(string='Has Deleted Line')
-    order_edit_tracking = fields.Boolean(related="config_id.order_edit_tracking", readonly=True)
     available_payment_method_ids = fields.Many2many('pos.payment.method', related='config_id.payment_method_ids', string='Available Payment Methods', readonly=True, store=False)
     invoice_status = fields.Selection([
         ('invoiced', 'Fully Invoiced'),
@@ -935,10 +938,9 @@ class PosOrder(models.Model):
 
     def read_pos_data(self, data, config):
         # If the previous session is closed, the order will get a new session_id due to _get_valid_session in _process_order
-        account_moves = self.sudo().account_move | self.sudo().payment_ids.account_move_id | self.session_id.sales_move_id | self.session_id.refunds_move_id
+        account_moves = self.sudo().account_move | self.sudo().payment_ids.account_move_id | self.session_id.sale_move_ids | self.session_id.refund_move_ids
         return {
             'pos.order': self._load_pos_data_read(self, config) if config else [],
-            'pos.session': [],
             'pos.payment': self.env['pos.payment']._load_pos_data_read(self.payment_ids, config) if config else [],
             'pos.order.line': self.env['pos.order.line']._load_pos_data_read(self.lines, config) if config else [],
             'product.attribute.custom.value': self.env['product.attribute.custom.value']._load_pos_data_read(self.lines.custom_attribute_value_ids, config) if config else [],
@@ -1130,7 +1132,13 @@ class PosOrder(models.Model):
         if state_filter == 'cancelled':
             state_domain = Domain('state', '=', 'cancel')
         else:
-            state_domain = Domain('state', 'not in', ['cancel', 'draft'])
+            state_domain = Domain([
+                '|',
+                ('state', 'not in', ['cancel', 'draft']),
+                '&',
+                ('state', '!=', 'draft'),
+                ('is_refund', '=', True),
+            ])
         order_domain = state_domain & Domain(domain) & Domain([
             ('config_id', 'in', [config_id] + pos_config.trusted_config_ids.ids),
             ('config_id.currency_id', '=', pos_config.currency_id.id)
@@ -1687,11 +1695,14 @@ class PosOrder(models.Model):
 
     def action_pos_order_invoice(self):
         self.ensure_one()
+        account_move = self.account_move
+        globally = self.is_globally_invoiced
+        singly = self.is_singly_invoiced
 
-        if self.invoice_status == 'invoiced':
+        if singly and account_move:
             # Already has a real customer invoice (account_move is not a session closing entry).
             move = self.account_move
-        elif self.session_id and self.session_id.state == 'closed':
+        elif (self.session_id and self.session_id.state == 'closed') or (globally and account_move):
             # Session is closed: reverse the closing entry and create a proper invoice.
             move = self._generate_invoice_after_session_closing()
         else:
@@ -1718,13 +1729,14 @@ class PosOrder(models.Model):
         of the session closing.
         """
         self.ensure_one()
-        if not self.session_id or self.session_id.state != "closed":
+        if self.session_id.state != "closed" and not self.is_globally_invoiced:
             return self._generate_pos_order_invoice()
 
         session = self.session_id
-        refund_move = session.refunds_move_id
-        sale_move = session.sales_move_id
+        refund_move = self.account_move if self.is_globally_invoiced or not session.refund_move_ids else session.refund_move_ids[-1]
+        sale_move = self.account_move if self.is_globally_invoiced or not session.sale_move_ids else session.sale_move_ids[-1]
         global_move = refund_move if self.is_refund_or_negative() else sale_move
+
         if not global_move or global_move.state != "posted":
             return self.env['account.move']
 

@@ -54,7 +54,7 @@ class ProjectProject(models.Model):
     @api.model
     def default_get(self, fields):
         defaults = super().default_get(fields)
-        if self.env.context.get('order_state') == 'sale':
+        if self.env.context.get('order_state') in ['draft', 'sent', 'sale']:
             order_id = self.env.context.get('order_id')
             sale_line_id = self.env['sale.order.line'].search(
                 [('order_id', '=', order_id), ('is_service', '=', True)],
@@ -63,8 +63,6 @@ class ProjectProject(models.Model):
                 'reinvoiced_sale_order_id': order_id,
                 'sale_line_id': sale_line_id,
             })
-        if defaults.get('sale_order_id') and self.env['sale.order'].search([('id', '=', defaults['sale_order_id']), ('state', '=', 'draft')]):
-            defaults.pop('sale_line_id', False)
         return defaults
 
     @api.model
@@ -540,7 +538,11 @@ class ProjectProject(models.Model):
         self.ensure_one()
         embedded_action_context = self.env.context.get('from_embedded_action', False)
         action = self.env['ir.actions.act_window']._for_xml_id('sale_project.action_analytic_reporting_inherit_sale_project')
-        action['views'] = [(self.env.ref('sale_project.view_account_analytic_line_inherit_sale_project_pivot_single').id, 'pivot')]
+        pivot_view_id = self.env.ref('sale_project.view_account_analytic_line_inherit_sale_project_pivot_single', raise_if_not_found=False).id
+        action['views'] = [
+            (pivot_view_id if view_type == 'pivot' else view_id, view_type)
+            for view_id, view_type in action['views']
+        ]
         action['display_name'] = self.env._("%(name)s's Margins", name=self.name)
         action['domain'] = [('account_id', 'in', self.account_id.ids)]
         action['context'] = {

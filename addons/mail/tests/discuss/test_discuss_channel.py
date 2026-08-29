@@ -15,7 +15,7 @@ from odoo.addons.bus.tests.common import BusResult
 from odoo.addons.mail.models.discuss.discuss_channel import group_avatar
 from odoo.addons.mail.tests.common import MailCommon, mail_new_test_user
 from odoo.addons.mail.tools.discuss import Store
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, ValidationError
 from odoo.tests import HttpCase, users
 from odoo.tools import BinaryBytes, html_escape, mute_logger
 
@@ -43,6 +43,37 @@ class TestChannelInternals(MailCommon, HttpCase):
             signature='--\nEvite'
         )
         cls.partner_employee_nomail = cls.user_employee_nomail.partner_id
+
+    def _new_chat_notifications(self, correspondent_user):
+        # the author is notified twice, by discuss.channel.create and by _broadcast
+        return [
+            BusResult(self.user_employee, "mail.record/insert"),
+            BusResult(correspondent_user, "mail.record/insert"),
+            BusResult(self.user_employee, "mail.record/insert"),
+        ]
+
+    def _new_partner_with_an_archived_user(self, suffix, archived_user_group="base.group_portal"):
+        partner = self.env["res.partner"].sudo().create({"name": f"Two Logins {suffix}"})
+        archived_user_group_ids = self.env.ref(archived_user_group).ids if archived_user_group else []
+        archived_user, active_user = (
+            self.env["res.users"]
+            .sudo()
+            .with_context(self._test_context)
+            .create([
+                {
+                    "group_ids": [Command.set(archived_user_group_ids)],
+                    "login": f"two_logins_old_{suffix}",
+                    "partner_id": partner.id,
+                },
+                {
+                    "group_ids": [Command.set([self.env.ref("base.group_user").id])],
+                    "login": f"two_logins_new_{suffix}",
+                    "partner_id": partner.id,
+                },
+            ])
+        )
+        archived_user.active = False
+        return partner, active_user
 
     def test_channel_member_cannot_be_public_user(self):
         """Public users can only join channels as guest."""
@@ -174,6 +205,7 @@ class TestChannelInternals(MailCommon, HttpCase):
                                 "channel_role": False,
                                 "create_date": fields.Datetime.to_string(member.create_date),
                                 "id": member.id,
+                                "invitation_sent_dt": False,
                                 "last_seen_dt": False,
                                 "partner_id": self.test_partner.id,
                                 "seen_message_id": False,
@@ -245,6 +277,7 @@ class TestChannelInternals(MailCommon, HttpCase):
                                 "channel_role": False,
                                 "create_date": fields.Datetime.to_string(member.create_date),
                                 "id": member.id,
+                                "invitation_sent_dt": False,
                                 "last_seen_dt": False,
                                 "partner_id": self.test_partner.id,
                                 "seen_message_id": False,
@@ -352,6 +385,34 @@ class TestChannelInternals(MailCommon, HttpCase):
         ])
         self.assertEqual(len(mentions_notif), 1, "Shoule have Inbox notification for the mentioned internal user")
 
+    @mute_logger('odoo.addons.mail.models.mail_mail', 'odoo.models.unlink')
+    def test_channel_recipients_user_of_partner_with_archived_user(self):
+        """The user picked for a recipient partner is one of its active users."""
+        archived_only, two_logins = self.env["res.partner"].with_context(self._test_context).create([
+            {"email": "archived.only@example.com", "name": "Archived Only"},
+            {"email": "two.logins@example.com", "name": "Two Logins"},
+        ])
+        group_ids = [Command.set([self.env.ref("base.group_user").id])]
+        old_alone, old_login, new_login = (
+            self.env["res.users"].with_context(self._test_context).create([
+                {"group_ids": group_ids, "login": "old_alone", "partner_id": archived_only.id},
+                {"group_ids": group_ids, "login": "old_login", "partner_id": two_logins.id},
+                {"group_ids": group_ids, "login": "new_login", "partner_id": two_logins.id},
+            ])
+        )
+        (old_alone | old_login).active = False
+        recipients = self.test_channel._notify_get_recipients(
+            self.env["mail.message"].new({
+                "author_id": self.partner_employee.id,
+                "message_type": "comment",
+                "partner_ids": (archived_only | two_logins).ids,
+            }),
+        )
+        self.assertEqual(
+            {r["id"]: r["uid"] for r in recipients if r["notif"] != "web_push"},
+            {archived_only.id: None, two_logins.id: new_login.id},
+        )
+
     @mute_logger("odoo.models.unlink")
     def test_channel_special_mention(self):
         """ Posting a message on a channel should support special mention """
@@ -385,6 +446,31 @@ class TestChannelInternals(MailCommon, HttpCase):
         self.user_employee_nomail.unlink()
         self.assertEqual(group_restricted_channel.channel_partner_ids, self.env['res.partner'])
         self.assertEqual(self.test_channel.channel_partner_ids, self.user_employee.partner_id | self.partner_employee_nomail)
+
+    @mute_logger("odoo.models.unlink")
+    def test_channel_user_synchronize_partner_with_several_users(self):
+        """A partner stays in a group restricted channel as long as one of its users has access"""
+        group_restricted_channel = self.env["discuss.channel"]._create_channel(
+            name="Sic Mundus",
+            group_id=self.env.ref("base.group_user").id,
+        )
+        second_user = (
+            self.env["res.users"]
+            .with_context(self._test_context)
+            .create(
+                {
+                    "group_ids": [Command.set([self.env.ref("base.group_user").id])],
+                    "login": "employee_second_login",
+                    "partner_id": self.partner_employee.id,
+                },
+            )
+        )
+        group_restricted_channel._add_members(partners=self.partner_employee)
+        self.assertIn(self.partner_employee, group_restricted_channel.channel_partner_ids)
+        self.user_employee.active = False
+        self.assertIn(self.partner_employee, group_restricted_channel.channel_partner_ids)
+        second_user.active = False
+        self.assertNotIn(self.partner_employee, group_restricted_channel.channel_partner_ids)
 
     @users('employee_nomail')
     def test_channel_info_get(self):
@@ -428,6 +514,54 @@ class TestChannelInternals(MailCommon, HttpCase):
         store_3 = Store().add(same_solo_channel, "_store_channel_fields")
         same_solo_channel_info = store_3._build_result()["discuss.channel"][0]
         self.assertEqual(same_solo_channel_info['id'], solo_channel_info['id'])
+
+    @users("employee")
+    def test_chat_with_partner_having_a_user_without_access(self):
+        """A correspondent user that cannot read the chat does not break its creation."""
+        partner = self.env["res.partner"].sudo().create({"name": "No Access"})
+        no_access_user, active_user = (
+            self.env["res.users"]
+            .sudo()
+            .with_context(self._test_context)
+            .create([
+                {
+                    "group_ids": [Command.set([])],
+                    "login": "chat_no_access",
+                    "partner_id": partner.id,
+                },
+                {
+                    "group_ids": [Command.set([self.env.ref("base.group_user").id])],
+                    "login": "chat_with_access",
+                    "partner_id": partner.id,
+                },
+            ])
+        )
+        self.assertFalse(no_access_user.group_ids)
+        with self.assertBus(self._new_chat_notifications(active_user)):
+            self.env["discuss.channel"]._get_or_create_chat(partners_to=partner.ids)
+
+    @users("employee")
+    def test_chat_with_partner_having_an_archived_user(self):
+        """A new chat is not broadcast to the archived users of the correspondent."""
+        partner, active_user = self._new_partner_with_an_archived_user("chat")
+        with self.assertBus(self._new_chat_notifications(active_user)):
+            self.env["discuss.channel"]._get_or_create_chat(partners_to=partner.ids)
+
+    @users("employee")
+    def test_chat_with_partner_having_an_archived_user_without_access(self):
+        """The chat is created even when an archived user of the correspondent has no access."""
+        partner, active_user = self._new_partner_with_an_archived_user("acl", archived_user_group=None)
+        with self.assertBus(self._new_chat_notifications(active_user)):
+            self.env["discuss.channel"]._get_or_create_chat(partners_to=partner.ids)
+
+    @users("employee")
+    def test_chat_with_partner_having_an_archived_user_without_active_test(self):
+        """The correspondent is resolved to its active users whatever the caller context."""
+        partner, active_user = self._new_partner_with_an_archived_user("no_active_test")
+        with self.assertBus(self._new_chat_notifications(active_user)):
+            self.env["discuss.channel"].with_context(active_test=False)._get_or_create_chat(
+                partners_to=partner.ids,
+            )
 
     # `channel_get` will pin the channel by default and thus last interest will be updated.
     @users('employee')
@@ -1242,3 +1376,16 @@ class TestChannelInternals(MailCommon, HttpCase):
             "/discuss/channel/notify_typing",
             {"channel_id": 999999999, "is_typing": True},
         )
+
+    @users("employee")
+    def test_only_admin_can_update_default_display_mode(self):
+        meeting = self.env["discuss.channel"]._create_group(
+            users_to=self.user_employee | self.test_user,
+            default_display_mode="video_full_screen",
+        )
+        self.assertEqual(meeting.self_member_id.sudo().channel_role, "owner")
+        self.assertFalse(meeting.with_user(self.test_user).self_member_id.sudo().channel_role)
+        with self.assertRaises(AccessError):
+            meeting.with_user(self.test_user).write({"default_display_mode": False})
+        meeting.with_user(self.user_employee).write({"default_display_mode": False})
+        self.assertFalse(meeting.default_display_mode)

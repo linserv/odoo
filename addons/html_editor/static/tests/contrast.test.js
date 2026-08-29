@@ -1,8 +1,9 @@
-import { describe, expect, test } from "@odoo/hoot";
+import { beforeEach, describe, expect, test } from "@odoo/hoot";
 import { ContrastPlugin, adjustColorContrast } from "@html_editor/main/font/contrast_plugin";
 import { testEditor } from "./_helpers/editor";
 import { setColor } from "./_helpers/user_actions";
 import { unformat } from "./_helpers/format";
+import { defineStyle } from "@web/../tests/web_test_helpers";
 
 const lightModeTests = [
     {
@@ -195,17 +196,25 @@ describe("Dark background", () => {
     testContrast(darkModeTests);
 });
 
+beforeEach(() => {
+    defineStyle(`
+        :root {
+            --o-control-panel-background-color: rgb(248, 249, 250);
+        }
+    `);
+});
+
 test("should not restore manually applied colors while restoring other original colors on save", async () => {
     await testEditor({
         contentBefore: '<p>abc<font style="color: rgb(255, 255, 255)">d[e]f</font></p>',
         contentBeforeEdit:
-            '<p>abc<font style="color: rgb(183, 183, 183);" data-original-color="rgb(255, 255, 255)">d[e]f</font></p>',
+            '<p>abc<font style="color: rgb(178, 178, 178);" data-original-color="rgb(255, 255, 255)">d[e]f</font></p>',
         stepFunction: setColor("rgb(255, 255, 255)", "color"),
         contentAfterEdit: unformat(`
             <p>abc
-                <font style="color: rgb(183, 183, 183);" data-original-color="rgb(255, 255, 255)">d</font>
+                <font style="color: rgb(178, 178, 178);" data-original-color="rgb(255, 255, 255)">d</font>
                 <font style="color: rgb(255, 255, 255);">[e]</font>
-                <font style="color: rgb(183, 183, 183);" data-original-color="rgb(255, 255, 255)">f</font>
+                <font style="color: rgb(178, 178, 178);" data-original-color="rgb(255, 255, 255)">f</font>
             </p>
         `),
         contentAfter: unformat(`
@@ -223,13 +232,13 @@ test("should apply contrast to color classes with important style and remove it 
     await testEditor({
         contentBefore: '<p>abc<font class="text-o-color-3">[def]</font></p>',
         contentBeforeEdit:
-            '<p>abc<font class="text-o-color-3" data-original-color="" style="color: rgb(190, 182, 175) !important;">[def]</font></p>',
-        stepFunction: setColor("rgb(190, 182, 175)", "color"),
+            '<p>abc<font class="text-o-color-3" data-original-color="" style="color: rgb(185, 177, 169) !important;">[def]</font></p>',
+        stepFunction: setColor("rgb(185, 177, 169)", "color"),
         contentAfterEdit: unformat(`
-            <p>abc<font class="" style="color: rgb(190, 182, 175);">[def]</font></p>
+            <p>abc<font class="" style="color: rgb(185, 177, 169);">[def]</font></p>
         `),
         contentAfter: unformat(`
-            <p>abc<font style="color: rgb(190, 182, 175);">[def]</font></p>
+            <p>abc<font style="color: rgb(185, 177, 169);">[def]</font></p>
         `),
         config: { includePlugins: [ContrastPlugin] },
     });

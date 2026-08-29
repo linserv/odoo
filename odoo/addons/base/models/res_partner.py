@@ -24,7 +24,6 @@ from odoo.tools.date_utils import all_timezones
 from odoo.tools.translate import LazyGettext
 from odoo.tools.partner_identifiers import (
     ADDITIONAL_IDENTIFIERS_METADATA,
-    ALL_IDENTIFIERS_METADATA,
     TIN_METADATA,
     get_deduced_identifiers,
     get_tin_metadata_of_country,
@@ -1445,10 +1444,10 @@ class ResPartner(models.Model):
                 try:
                     return self._run_vat_checks(self.env['res.country'].search([('code', '=', country_code)], limit=1), vat_prefix + vat_number, partner_name, validation)
                 except ValidationError:
-                    msg = self._build_vat_error_message(code_to_check, vat, partner_label)
+                    msg = self._build_vat_error_message(code_to_check, vat_to_return, partner_label)
                     raise ValidationError(msg + "\n\n" + self.env._('If you are trying to input a European number, this is the expected format: ') + _ref_vat[country_code.lower()])
             if validation == 'error':
-                msg = self._build_vat_error_message(code_to_check, vat, partner_label)
+                msg = self._build_vat_error_message(code_to_check, vat_to_return, partner_label)
                 raise ValidationError(msg)
             else:
                 return '', code_to_check
@@ -1659,10 +1658,7 @@ class ResPartner(models.Model):
         partner = self.commercial_partner_id
         identifiers = partner.additional_identifiers or {}
         if not is_identifier_void(partner.vat):
-            country_code = partner._deduce_country_code()
-            vat_prefix = partner.vat[:2].upper()
-            tin_country = vat_prefix if get_tin_metadata_of_country(vat_prefix) else country_code
-            key = get_tin_metadata_of_country(tin_country).get('key', 'TIN')
+            key = get_tin_metadata_of_country(partner.country_code).get('key', 'TIN')
             identifiers = {key: partner.vat, **identifiers}
         enriched_identifiers = {}
         if enrich:
@@ -1672,10 +1668,13 @@ class ResPartner(models.Model):
 
     @api.model
     def _get_all_identifiers_metadata(self):
-        """ Returns a dict with the metadata of the additional identifiers.
-        TO BE OVERRIDEN by modules that want to add or modify the default metadata.
+        """ Returns a dict with the metadata of every known identifier: the TIN ones, which
+        describe the generic `vat` field, plus the additional ones.
+        Only override this to register an identifier that must NOT be added in
+        `additional_identifiers` (e.g. a corner case scheme); in any other case override
+        `_get_all_additional_identifiers_metadata` instead.
         """
-        return ALL_IDENTIFIERS_METADATA
+        return {**TIN_METADATA, **self._get_all_additional_identifiers_metadata()}
 
     @api.model
     def _get_all_identifiers_metadata_by_scheme(self):
@@ -1687,10 +1686,12 @@ class ResPartner(models.Model):
 
     @api.model
     def _get_all_additional_identifiers_metadata(self):
-        """ Returns a dict with the metadata of the additional identifiers.
-        TO BE OVERRIDEN by modules that want to add or modify the default metadata.
+        """ Returns a dict with the metadata of the identifiers available in `additional_identifiers`.
+        TO BE OVERRIDDEN by modules that want to add or modify the default
+        metadata. Entries added here are automatically picked up by
+        `_get_all_identifiers_metadata`, hence used for validation, labels, etc.
         """
-        return ADDITIONAL_IDENTIFIERS_METADATA
+        return {**ADDITIONAL_IDENTIFIERS_METADATA}
 
     @api.model
     def _get_legal_entity_category_priority(self):

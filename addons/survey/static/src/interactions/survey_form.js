@@ -11,7 +11,7 @@ import {
     serializeDate,
 } from "@web/core/l10n/dates";
 import { registry } from "@web/core/registry";
-import { utils as uiUtils } from "@web/core/ui/ui_service";
+import { utils as uiUtils } from "@web/core/ui/ui_utils";
 import { resizeTextArea } from "@web/core/utils/autoresize";
 import { Interaction } from "@web/public/interaction";
 import { redirect } from "@web/core/utils/urls";
@@ -1454,16 +1454,6 @@ export class SurveyForm extends Interaction {
                 const answerId = buttonEl.querySelector("input").value;
                 const isCorrect = correctAnswer.includes(parseInt(answerId));
                 buttonEl.classList.add(`bg-${isCorrect ? "success" : "danger"}`, "text-white");
-                // For the user incorrect answers, replace the empty check icon by a crossed check icon
-                if (!isCorrect && buttonEl.classList.contains("o_survey_selected")) {
-                    let fromIcon = "check_circle";
-                    let toIcon = "cancel";
-                    if (questionType === "multiple_choice") {
-                        fromIcon = "check_box";
-                        toIcon = "cancel";
-                    }
-                    buttonEl.querySelector(`i.[data-icon="${fromIcon}"]`)?.setAttribute("data-icon", toIcon);
-                }
             }
         }
     }

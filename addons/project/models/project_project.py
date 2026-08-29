@@ -10,7 +10,7 @@ from odoo.exceptions import UserError
 from odoo.fields import Command, Domain
 from odoo.tools import get_lang, SQL, LazyTranslate
 from odoo.tools.misc import unquote
-from odoo.tools.translate import _
+from odoo.tools.translate import _, mark_as_copy
 from .project_update import STATUS_COLOR
 from .project_task import CLOSED_STATES
 from markupsafe import Markup
@@ -535,10 +535,10 @@ class ProjectProject(models.Model):
                 for field in self._get_template_field_blacklist():
                     if field in vals and field not in default:
                         del vals[field]
-            if copy_from_template or (not project.is_template and vals.get('is_template')):
-                vals['name'] = default.get('name', project.name)
-            else:
-                vals['name'] = default.get('name', self.env._('%s (copy)', project.name))
+            if 'name' not in default and not (
+                copy_from_template or (not project.is_template and vals.get('is_template'))
+            ):
+                vals['name'] = mark_as_copy('name')(project)
         return vals_list
 
     def copy(self, default=None):
@@ -558,7 +558,7 @@ class ProjectProject(models.Model):
             for follower in old_project.message_follower_ids:
                 new_project.message_subscribe(partner_ids=follower.partner_id.ids, subtype_ids=follower.subtype_ids.ids)
             if old_project.allow_milestones:
-                new_project.milestone_ids = self.milestone_ids.copy().ids
+                new_project.milestone_ids = old_project.milestone_ids.copy().ids
             if 'tasks' not in default:
                 old_project.map_tasks(new_project.id)
             if not old_project.active:

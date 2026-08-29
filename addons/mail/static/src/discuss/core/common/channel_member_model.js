@@ -13,6 +13,19 @@ const { DateTime } = luxon;
 export class ChannelMember extends Record {
     static _name = "discuss.channel.member";
 
+    setup() {
+        super.setup(...arguments);
+        this.onChange(
+            () => [this.is_pinned],
+            () => {
+                // The channel pin state follows self member only: reacting to the other
+                // members makes Discuss leave a channel that is still displayed.
+                this.channelAsSelf?.onPinStateUpdated();
+            },
+            { immediate: true, initialRun: false }
+        );
+    }
+
     /** @type {string} */
     create_date;
     /**
@@ -23,24 +36,16 @@ export class ChannelMember extends Record {
     custom_notifications;
     /** @type {number} */
     id;
+    invitation_sent_dt = fields.Datetime();
     /** @type {boolean} */
     is_favorite;
-    is_pinned = fields.Attr(undefined, {
-        compute() {
-            return (
-                !this.unpin_dt ||
-                (this.last_interest_dt && this.last_interest_dt >= this.unpin_dt) ||
-                (this.channel_id?.last_interest_dt &&
-                    this.channel_id?.last_interest_dt >= this.unpin_dt)
-            );
-        },
-        /** @this {import("models").ChannelMember} */
-        onUpdate() {
-            // The channel pin state follows self member only: reacting to the other
-            // members makes Discuss leave a channel that is still displayed.
-            this.channelAsSelf?.onPinStateUpdated();
-        },
-    });
+    is_pinned = this.computed(
+        () =>
+            !this.unpin_dt ||
+            (this.last_interest_dt && this.last_interest_dt >= this.unpin_dt) ||
+            (this.channel_id?.last_interest_dt &&
+                this.channel_id?.last_interest_dt >= this.unpin_dt)
+    );
     last_interest_dt = fields.Datetime();
     last_seen_dt = fields.Datetime();
     guest_id = fields.One("mail.guest");
@@ -161,6 +166,14 @@ export class ChannelMember extends Record {
         );
     }
 
+    get canResendInvitation() {
+        return (
+            this.isInvitationPending &&
+            Boolean(this.channel_id?.self_member_id) &&
+            this.store.self_user?.share === false
+        );
+    }
+
     get canSetAdmin() {
         return (
             this.partner_id?.main_user_id?.active &&
@@ -219,12 +232,24 @@ export class ChannelMember extends Record {
             : undefined;
     }
 
+    get isInvitationPending() {
+        return Boolean(this.invitation_sent_dt);
+    }
+
     get selfChannelRole() {
         return this.channel_id?.self_member_id?.channel_role;
     }
 
     get isSelf() {
         return Boolean(this.store.self?.eq(this.persona));
+    }
+
+    async resendInvitation() {
+        await rpc("/discuss/channel/member/resend_invitation", { member_id: this.id });
+        this.store.env.services.notification.add(
+            _t("Invitation sent again to %(member_name)s.", { member_name: this.name }),
+            { type: "success" }
+        );
     }
 
     /** @param {string} role */

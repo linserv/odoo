@@ -1,9 +1,12 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+from collections import defaultdict
+
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Command, Domain
 from odoo.tools import SetDefinitions
+from odoo.tools.translate import mark_as_copy
 
 
 class ResGroups(models.Model):
@@ -14,8 +17,7 @@ class ResGroups(models.Model):
     _order = 'privilege_id, sequence, name, id'
     _clear_cache_name = 'groups'
     _clear_cache_on_fields = {'implied_ids', 'implied_by_ids'}
-
-    name = fields.Char(required=True, translate=True)
+    name = fields.Char(required=True, translate=True, copy=mark_as_copy('name'))
     user_ids = fields.Many2many('res.users', 'res_groups_users_rel', 'gid', 'uid', help='Users explicitly in this group')
     all_user_ids = fields.Many2many('res.users', string='Users and implied users',
         compute='_compute_all_user_ids', search='_search_all_user_ids', inverse='_inverse_all_user_ids')
@@ -216,13 +218,6 @@ class ResGroups(models.Model):
             return groups._as_query(order)
         return super()._search(domain, offset, limit, order, **kwargs)
 
-    def copy_data(self, default=None):
-        default = dict(default or {})
-        vals_list = super().copy_data(default=default)
-        for group, vals in zip(self, vals_list):
-            vals['name'] = default.get('name') or self.env._('%s (copy)', group.name)
-        return vals_list
-
     def write(self, vals):
         if 'name' in vals:
             names = v.values() if isinstance((v := vals['name']), dict) else [v]
@@ -235,7 +230,28 @@ class ResGroups(models.Model):
         if any(self._ids):
             self.env['ir.access']._clear_caches()
 
+        if 'user_ids' in vals:
+            old_user_ids = {group.id: group.user_ids.ids for group in self.sudo()}
+
         res = super().write(vals)
+
+        if 'user_ids' in vals:
+            # Reverse the writing of users on res.groups so we can call users._log_group_changes
+            group_changes = defaultdict(lambda: {'added': set(), 'removed': set()})
+            for group in self.sudo():
+                old = set(old_user_ids[group.id])
+                new = set(group.user_ids.ids)
+                for user_id in new - old:
+                    group_changes[user_id]['added'].add(group.id)
+                for user_id in old - new:
+                    group_changes[user_id]['removed'].add(group.id)
+            users = self.env['res.users'].browse(group_changes.keys())
+            users.fetch(['group_ids'])
+            old_group_ids = {}
+            for user_id, changes in group_changes.items():
+                current_groups = set(users.browse(user_id).group_ids.ids)
+                old_group_ids[user_id] = (current_groups - changes['added']) | changes['removed']
+            users._log_group_changes(vals, old_group_ids, self.ids)
 
         # invalidate caches after the write (if not su) because we check access
         # when writing

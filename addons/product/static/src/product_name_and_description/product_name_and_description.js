@@ -1,8 +1,7 @@
-import { useLayoutEffect } from "@web/owl2/utils";
 /** @odoo-module */
 
 import { _t } from "@web/core/l10n/translation";
-import { getActiveHotkey } from "@web/core/hotkeys/hotkey_service";
+import { getActiveHotkey } from "@web/core/hotkeys/hotkey_utils";
 import { Component, onMounted, onPatched, onWillUnmount, proxy, signal, useProps } from "@odoo/owl";
 import { many2OneFieldProps } from "@web/views/fields/many2one/many2one_field";
 import { useProductAndLabelAutoresize } from "./product_and_label_autoresize";
@@ -43,7 +42,6 @@ export class ProductNameAndDescriptionField extends Component {
         this.isPrintMode = proxy({ value: false });
         this.labelVisibility = proxy({ value: false });
         this.switchToLabel = false;
-        this.columnIsProductAndLabel = proxy({ value: this.props.record.columnIsProductAndLabel });
         this.labelNode = signal.ref();
         useProductAndLabelAutoresize(this.labelNode, { targetParentName: this.props.name });
         this.productNode = signal.ref();
@@ -56,13 +54,6 @@ export class ProductNameAndDescriptionField extends Component {
             getValue: () => this.label,
             parse: (v) => this.parseLabel(v),
         });
-
-        useLayoutEffect(
-            () => {
-                this.columnIsProductAndLabel.value = this.props.record.columnIsProductAndLabel;
-            },
-            () => [this.props.record.columnIsProductAndLabel]
-        );
 
         onPatched(() => {
             const labelEl = this.labelNode();
@@ -122,12 +113,16 @@ export class ProductNameAndDescriptionField extends Component {
         };
     }
 
+    get columnIsProductAndLabel() {
+        return this.props.record.columnIsProductAndLabel;
+    }
+
     get isProductClickable() {
         return this.props.record.evalContext.parent.state !== "draft";
     }
 
     get showLabelVisibilityToggler() {
-        return !this.props.readonly && this.columnIsProductAndLabel.value && !this.label;
+        return !this.props.readonly && this.columnIsProductAndLabel && !this.label;
     }
 
     switchLabelVisibility() {

@@ -1443,10 +1443,16 @@ def _optimize_any_domain_at_level(level: OptimizationLevel, condition, model):
     if isinstance(search_domain := model.env.context.get('search_domain'), Domain):
         # model with search_domain like (field, 'any', comodel_domain)
         # => comodel with comodel_domain
+        # a plain (field, 'in', ids) condition on the same field is just as
+        # informative: it directly constrains the comodel's own 'id'.
+        # '=' is not checked: it's always normalized to 'in' by the time a
+        # domain is fully optimized (see _operator_equal_as_in), so it can
+        # never survive here.
         comodel_domain = Domain.OR(
-            c.value
+            c.value if isinstance(c.value, Domain) else DomainCondition('id', c.operator, c.value)
             for c in search_domain.iter_conditions()
-            if c.is_condition(condition.field_expr, value=Domain)
+            if c.is_condition(condition.field_expr)
+            and (isinstance(c.value, Domain) or c.operator == 'in')
         )
         if comodel_domain.is_false() and not search_domain.is_false():
             # we don't know the condition, accept all
@@ -1772,23 +1778,6 @@ def _optimize_type_selection(condition, model):
     excluded = condition.value
     included = OrderedSet([*field._selection, False]) - excluded
     return DomainCondition(condition.field_expr, 'in', included)
-
-
-@field_type_optimization(['binary'])
-def _optimize_type_binary_attachment(condition, model):
-    field = condition._field(model)
-    operator = condition.operator
-    value = condition.value
-    if field.attachment and not (operator in ('in', 'not in') and set(value) == {False}):
-        try:
-            condition._raise('Binary field stored in attachment, accepts only existence check; skipping domain')
-        except ValueError:
-            # log with stacktrace
-            _logger.exception("Invalid operator for a binary field")
-        return _TRUE_DOMAIN
-    if operator.endswith('like'):
-        condition._raise('Cannot use like operators with binary fields', error=NotImplementedError)
-    return condition
 
 
 @operator_optimization(['parent_of', 'child_of'], OptimizationLevel.FULL)

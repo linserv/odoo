@@ -291,6 +291,27 @@ class Website(models.Model):
         relation="website_extra_step_category_rel",
     )
 
+    show_category_title = fields.Boolean(
+        string="Show Category Title",
+        default=False,
+        help="Display the category title on the shop page. Corresponds to the 'Show Title' editor"
+        " option.",
+    )
+
+    show_category_description = fields.Boolean(
+        string="Show Category Description",
+        default=True,
+        help="Display the category description on the shop page. Corresponds to the"
+        " 'Show Description' editor option.",
+    )
+
+    align_category_content = fields.Boolean(
+        string="Align Category Content",
+        default=False,
+        help="Align the category content on the shop page. Corresponds to the 'Center Content'"
+        " editor option.",
+    )
+
     # === COMPUTE METHODS ===#
 
     def _compute_pricelist_ids(self):
@@ -374,14 +395,12 @@ class Website(models.Model):
 
         website = self.env["website"].browse(res["website_id"])
         website_settings = {}
-        category_settings = {}
         views_to_disable = []
         views_to_enable = []
         ThemeUtils = self.env["theme.utils"].with_context(website_id=website.id)
 
         def parse_style_config(style_config_):
             website_settings.update(style_config_["website_fields"])
-            category_settings.update(style_config_.get("category_fields", {}))
             views_to_disable.extend(style_config_["views"]["disable"])
             views_to_enable.extend(style_config_["views"]["enable"])
 
@@ -398,10 +417,6 @@ class Website(models.Model):
         # Apply eCommerce page style configurations.
         if website_settings:
             website.write(website_settings)
-        if category_settings:
-            self.env["product.public.category"].search(website.website_domain()).write(
-                category_settings
-            )
         for xml_id in views_to_disable:
             ThemeUtils.disable_view(xml_id)
         for xml_id in views_to_enable:
@@ -534,7 +549,8 @@ class Website(models.Model):
             pricelists |= (
                 self
                 .env["res.country.group"]
-                .search([("country_ids.code", "=", country_code)]).sudo()
+                .search([("country_ids.code", "=", country_code)])
+                .sudo()
                 .pricelist_ids.filtered(
                     lambda pl: pl._is_available_on_website(self) and check_pricelist(pl)
                 )
@@ -674,7 +690,7 @@ class Website(models.Model):
         return {
             "company_id": self.company_id.id,
             "partner_id": partner_sudo.id,
-            "fiscal_position_id": request.fiscal_position.id,
+            **(self.is_public_user() and {"fiscal_position_id": request.fiscal_position.id} or {}),
             "pricelist_id": request.pricelist.id,
             "team_id": self.salesteam_id.id,
             "website_id": self.id,
@@ -990,20 +1006,22 @@ class Website(models.Model):
                 )
             step.copy({"website_id": self.id, "is_published": is_published})
 
-    def _get_checkout_step_values(self, href):
-        next_href = self._get_next_breadcrumb_step_href(href)
+    def _get_checkout_step_values(self, href, order_sudo):
+        """Prepare the common rendering values of checkout step pages.
+
+        :param str href: the technical step href.
+        :param sale.order order_sudo: the current cart.
+        :return: rendering values.
+        :rtype: dict
+        """
+        next_href = self._get_next_breadcrumb_step_href(href, order_sudo)
 
         # /shop/address is a "hidden" step of /shop/checkout
         if href == "/shop/address":
             href = "/shop/checkout"
         current_step_sudo = self._get_checkout_step(href)
-        breadcrumb_domain = self._get_breadcrumb_checkout_steps_domain()
-        next_step_sudo = current_step_sudo._get_next_steps(
-            additional_domain=breadcrumb_domain, limit=1
-        )
-        previous_step_sudo = current_step_sudo._get_previous_steps(
-            additional_domain=breadcrumb_domain, limit=1
-        )
+        next_step_sudo = self._get_next_breadcrumb_step(href, order_sudo)
+        previous_step_sudo = self._get_previous_breadcrumb_step(href, order_sudo)
 
         return {
             "current_website_checkout_step_href": current_step_sudo.step_href,
@@ -1020,43 +1038,52 @@ class Website(models.Model):
         self.ensure_one()
         return self.env["website.checkout.step"].sudo()._get_step_by_href(href, self).id
 
-    def _get_next_breadcrumb_step_href(self, href):
+    def _get_next_breadcrumb_step(self, href, order_sudo):
+        return self._get_checkout_step(href)._get_next_steps(
+            additional_domain=self._get_breadcrumb_checkout_steps_domain(order_sudo), limit=1
+        )
+
+    def _get_previous_breadcrumb_step(self, href, order_sudo):
+        return self._get_checkout_step(href)._get_previous_steps(
+            additional_domain=self._get_breadcrumb_checkout_steps_domain(order_sudo), limit=1
+        )
+
+    def _get_next_breadcrumb_step_href(self, href, order_sudo):
         # redirect handled by '/shop/address/submit' route when all values are properly filled
         if href == "/shop/address":
             return False
-        current_step_sudo = self._get_checkout_step(href)
-        next_step_sudo = current_step_sudo._get_next_steps(
-            additional_domain=self._get_breadcrumb_checkout_steps_domain(), limit=1
-        )
+
+        next_step_sudo = self._get_next_breadcrumb_step(href, order_sudo)
 
         # try_skip_step option required on /shop/checkout next button
         if next_step_sudo.step_href == "/shop/checkout":
             return "/shop/checkout?try_skip_step=true"
         return next_step_sudo.step_href
 
-    def _get_checkout_breadcrumb_steps(self):
+    def _get_checkout_breadcrumb_steps(self, order_sudo):
         return (
             self
             .env["website.checkout.step"]
             .sudo()
-            .search(self._get_breadcrumb_checkout_steps_domain(), order="sequence")
+            .search(self._get_breadcrumb_checkout_steps_domain(order_sudo), order="sequence")
         )
 
-    def _get_breadcrumb_checkout_steps_domain(self):
-        return self._get_allowed_checkout_steps_domain() & Domain("show_in_breadcrumb", "=", True)
+    def _get_breadcrumb_checkout_steps_domain(self, order_sudo):
+        return self._get_allowed_checkout_steps_domain(order_sudo) & Domain(
+            "show_in_breadcrumb", "=", True
+        )
 
-    def _get_allowed_checkout_steps_domain(self):
+    def _get_allowed_checkout_steps_domain(self, order_sudo):
         domain = Domain([("website_id", "=", self.id), ("is_published", "=", True)])
-        if not self._cart_has_extra_step_category():
+        if not self._cart_has_extra_step_category(order_sudo):
             domain &= Domain("step_href", "!=", "/shop/extra_info")
         return domain
 
-    def _cart_has_extra_step_category(self):
+    def _cart_has_extra_step_category(self, order_sudo):
         """Whether the cart contains a product from the restricted extra-step
         categories."""
         restricted_categories = self.sudo().extra_step_category_ids
-        order_sudo = request.cart if request else None
-        if not (order_sudo and restricted_categories):
+        if not restricted_categories:
             return True
         order_categories = order_sudo.order_line.product_id.public_categ_ids
         return bool(
@@ -1174,8 +1201,12 @@ class Website(models.Model):
 
     @api.model
     def _get_settings_to_copy_onto_new_default_website(self):
-        """ Provides a list of settings that should always be set on the default
-        website. When the default website changes, a check is performed. If some
-        of these settings are not already set on the new default website, they
-        are copied from the previous default website."""
-        return super()._get_settings_to_copy_onto_new_default_website() + ['salesperson_id', 'salesteam_id']
+        """Provide a list of settings that should always be set on the default website.
+
+        When the default website changes, a check is performed. If some of these settings are not
+        already set on the new default website, they are copied from the previous default website.
+        """
+        return super()._get_settings_to_copy_onto_new_default_website() + [
+            "salesperson_id",
+            "salesteam_id",
+        ]

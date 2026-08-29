@@ -2,21 +2,6 @@
 /// This file regroups the website design rules.
 ///
 
-$-seen-urls: ();
-@each $alias, $key in $o-font-aliases-to-keys {
-    $-url: o-get-font-info($alias, 'url');
-    @if $-url and index($-seen-urls, $-url) == null {
-        $-seen-urls: append($-seen-urls, $-url);
-        @import url("https://fonts.googleapis.com/css?family=#{unquote($-url)}&display=swap");
-    } @else {
-        $-name: o-get-font-info($alias, 'name');
-        $-attachment: o-get-font-info($alias, 'attachment');
-        @if $-attachment {
-            @import url("/web/content/#{$-attachment}/google-font-#{unquote($-name)}");
-        }
-    }
-}
-
 :root {
     // Border color
     // Let borders color adapt according to body and CCs. Also, set a fallback
@@ -807,7 +792,7 @@ font[class*='bg-'] {
         height: $-size;
         line-height: $-size;
         @for $i from 2 through 5 {
-            &.fa-#{$i}x, &.oi-#{$i}x {
+            &.oi-#{$i}x {
                 width: $-size + $i;
                 height: $-size + $i;
                 line-height: $-size + $i;
@@ -2241,6 +2226,21 @@ header {
     }
 }
 
+@if not index(('hamburger', 'sidebar'), o-website-value('header-template')) {
+    body:not(.editor_enable) {
+        header.o_hoverable_dropdown .navbar:not(.o_header_mobile) {
+            .o_mega_menu_toggle.show {
+                &::before {
+                    content: "";
+                    @include o-position-absolute($right: 0, $bottom: 0, $left: 0);
+                    z-index: 1000; // Same as --bs-dropdown-zindex.
+                    height: var(--o-mega-menu-bridge-height);
+                    cursor: auto;
+                }
+            }
+        }
+    }
+}
 
 // The design of some of the new mega menu templates required a column with
 // an overlay that would overflow until the end of the container. For
@@ -2523,10 +2523,13 @@ span.list-inline-item.o_add_language:last-child {
     display: flex;
     // Need to update button size based on icon size.
     @for $i from 1 through 5 {
-        &:has(i.fa-#{$i}x, i.oi-#{$i}x) {
+        &:has(i.oi-#{$i}x) {
             width: #{$i}em;
             height: #{$i}em;
         }
+    }
+    & > .oi::before {
+        vertical-align: middle;
     }
 
     &, &:hover {
@@ -3654,7 +3657,7 @@ input[value*="data-oe-translation-source-sha"] {
         font-size: 0.875em;
     }
     a {
-        .fa-stack, .oi-stack {
+        .oi-stack {
             /*
             Ensures consistent size and padding around icons when the
             layout is set to "none" and the size is "huge" or "large".
@@ -3663,7 +3666,7 @@ input[value*="data-oe-translation-source-sha"] {
             s_social_media/000.scss and s_share/000.scss).
             */
             @for $i from 2 through 3 {
-                &.fa-#{$i}x, &.oi-#{$i}x {
+                &.oi-#{$i}x {
                     width: $-size + $i;
                     height: $-size + $i;
                     line-height: $-size + $i;
@@ -3712,4 +3715,15 @@ in a huge font size since it isn’t redefined for the frontend.
     outline: auto;
     outline-color: black;
     outline-offset: 2px;
+}
+
+// Specific styles for the BottomSheet component when it is used in the frontend
+body.bottom-sheet-open {
+    --BottomSheetStatusBar__entry-background--active: #{$primary-bg-subtle};
+    --BottomSheetStatusBar__entry-color--active: #{$primary-text-emphasis};
+    --BottomSheetStatusBar__entry-caret--active: var(--BottomSheetStatusBar__entry-color--active);
+
+    // Prevent the page from being scrollable when a bottom sheet is open.
+    // (mimics the overflow: hidden applied to o_action_manager in the backend)
+    overflow: hidden;
 }

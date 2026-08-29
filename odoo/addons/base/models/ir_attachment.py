@@ -31,7 +31,7 @@ from odoo.tools import (
     str2bool,
 )
 from odoo.tools.binary import EMPTY_BINARY, BinaryBytes, BinaryValue
-from odoo.tools.constants import PREFETCH_MAX
+from odoo.tools.constants import IN_MAX
 from odoo.tools.mimetypes import guess_file_mimetype, guess_mimetype
 from odoo.tools.misc import limited_field_access_token
 
@@ -41,7 +41,7 @@ if typing.TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 SECURITY_FIELDS = ('res_model', 'res_id', 'create_uid', 'public', 'res_field')
 MAX_COMODELS_FOR_DOMAIN = 5
-MAX_SEARCH_LIMIT = PREFETCH_MAX * 10
+MAX_SEARCH_LIMIT = IN_MAX * 10
 CREATE_FROM_STREAM_FLAG = object()  # sentinel that cannot be given over RPC
 DIRECTORY_MODE = 0o751
 GC_FILE_SUFFIX = '.__gc'
@@ -142,13 +142,12 @@ class IrAttachment(models.Model):
         # we use '/' in the db (even on windows)
         return sha[:2] + '/' + sha
 
-    @api.model
-    def _file_read(self, fname: str) -> BinaryValue:
-        assert isinstance(self, IrAttachment)
+    def _file_read(self) -> BinaryValue:
+        assert isinstance(self, IrAttachment) and self.store_fname
         try:
-            return LocalBinaryFile(fname, self)
+            return LocalBinaryFile(self)
         except OSError:
-            full_path = self._full_path(fname)
+            full_path = self._full_path(self.store_fname)
             _logger.info("_file_read reading %s", full_path, exc_info=True)
             return EMPTY_BINARY
 
@@ -194,7 +193,10 @@ class IrAttachment(models.Model):
                     with open(tmp_path, 'wb') as tmp_file:
                         shutil.copyfileobj(bin_value, tmp_file)
                         tmp_file.flush()
-                        os.fchmod(tmp_file.fileno(), 0o444)  # r--r--r--
+                        if hasattr(os, 'fchmod'):
+                            os.fchmod(tmp_file.fileno(), 0o444)  # r--r--r--
+                        else:
+                            os.chmod(tmp_path, 0o444)  # r--r--r--
                 else:
                     os.chmod(tmp_path, 0o444)  # r--r--r--
 
@@ -303,7 +305,7 @@ class IrAttachment(models.Model):
         # for each chunk.
         checked = 0
         removed = 0
-        for name_pairs in split_every(self.env.cr.IN_MAX, files_to_gc()):
+        for name_pairs in split_every(IN_MAX, files_to_gc()):
             # start a new transaction (see latest data) and release locks of
             # previous loop which we don't want modified during processing
             self.env.cr.commit()
@@ -374,13 +376,14 @@ class IrAttachment(models.Model):
 
         _logger.info("filestore gc %d checked, %d removed", checked, removed)
 
-    @api.depends('store_fname', 'db_datas')
+    @api.depends('store_fname', 'db_datas', 'name')
     def _compute_raw(self):
         for attach in self:
             if attach.store_fname:
-                attach.raw = attach._file_read(attach.store_fname)
+                raw = attach._file_read()
             else:
-                attach.raw = attach.db_datas
+                raw = BinaryBytes(attach.db_datas, filename=attach.name)
+            attach.raw = raw
 
     def _get_pdf_raw(self):
         self.ensure_one()
@@ -518,7 +521,7 @@ class IrAttachment(models.Model):
                         output = img.image_quality(quality)
                     else:
                         output = img.image_quality()
-                    values['raw'] = BinaryBytes(output)
+                    values['raw'] = BinaryBytes(output, filename=raw.filename)
             except UserError as e:
                 # Catch error during test where we provide fake image
                 # raise UserError(_("This file could not be decoded as an image file. Please try with a different file."))
@@ -539,6 +542,8 @@ class IrAttachment(models.Model):
         if raw or 'raw' in values:
             values['raw'] = raw
 
+        if 'name' not in values and (filename := raw.filename or values.get('res_field')):
+            values['name'] = filename
         mimetype = values['mimetype'] = self._compute_mimetype(values)
         xml_like = 'ht' in mimetype or ( # hta, html, xhtml, etc.
                 'xml' in mimetype and    # other xml (svg, text/xml, etc)
@@ -845,14 +850,14 @@ class IrAttachment(models.Model):
                 domain,
                 SECURITY_FIELDS,
                 offset=sub_offset,
-                limit=PREFETCH_MAX,
+                limit=IN_MAX,
                 order=order,
             ).sudo(False)
             result.extend(records._filtered_access('read')._ids)
-            if len(records) < PREFETCH_MAX:
+            if len(records) < IN_MAX:
                 # There are no more records
                 break
-            sub_offset += PREFETCH_MAX
+            sub_offset += IN_MAX
         return self.browse(result[offset:limit])._as_query(ordered)
 
     def write(self, vals):
@@ -1158,22 +1163,24 @@ class IrAttachment(models.Model):
 
 class LocalBinaryFile(BinaryValue):
     """Lazily loaded file."""
-    __slots__ = ('__content', '__mimetype', '__path', '__stat')
+    __slots__ = ('__checksum', '__content', '__mimetype', '__path', '__stat', 'filename')
 
-    def __init__(self, path: str, model: IrAttachment):
+    def __init__(self, record: IrAttachment):
         """ Open a file as a binary value.
 
         :param path: absolute path to the file
         :param model: model to check the path
         :raise OSError: if the file cannot be opened
         """
-        path = model._full_path(path)
+        path = record._full_path(record.store_fname)
         self.__path = path
         self.__stat = os.stat(path)  # checks that the file exists
         if not stat.S_ISREG(self.__stat.st_mode):
             raise FileNotFoundError(f"Path is not a regular file: {path}")
+        self.__checksum: str = record.checksum
         self.__content: bytes | None = None
         self.__mimetype: str | None = None
+        self.filename = record.name
 
     def open(self):
         assert isinstance(self, LocalBinaryFile)
@@ -1198,6 +1205,10 @@ class LocalBinaryFile(BinaryValue):
     @property
     def size(self):
         return self.__stat.st_size
+
+    @property
+    def checksum(self):
+        return self.__checksum
 
     def __repr__(self):
         return f"LocalBinaryFile({self.__path!r})"

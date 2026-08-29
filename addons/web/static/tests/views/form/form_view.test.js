@@ -68,7 +68,7 @@ import { browser } from "@web/core/browser/browser";
 import { makeErrorFromResponse } from "@web/core/network/rpc";
 import { registry } from "@web/core/registry";
 import { config as transitionConfig } from "@web/core/transition";
-import { SIZES } from "@web/core/ui/ui_service";
+import { SIZES } from "@web/core/ui/ui_utils";
 import { useBus, useService } from "@web/core/utils/hooks";
 import { redirect } from "@web/core/utils/urls";
 import { CharField } from "@web/views/fields/char/char_field";
@@ -992,16 +992,13 @@ test(`decoration on widgets works on same widget`, async () => {
     expect(`.o_field_widget[name="int_field"]`).toHaveClass("text-danger");
 });
 
-test(`only necessary fields are fetched with correct context`, async () => {
+test(`only necessary fields are fetched`, async () => {
     onRpc("web_read", ({ kwargs }) => {
         expect.step("web_read");
         expect(kwargs.specification).toEqual(
             { foo: {}, display_name: {} },
             { message: "should only fetch requested fields" }
         );
-        expect(kwargs.context.bin_size).toBe(true, {
-            message: "bin_size should always be in the context",
-        });
     });
     await mountView({
         resModel: "partner",
@@ -3268,7 +3265,7 @@ test(`form with custom cog action that has a confirmation target="new" action`, 
     await getService("action").doAction(1);
     expect(".o_form_view").toHaveCount(1);
 
-    await contains(`.o_cp_action_menus button:has([data-icon="settings"])`).click();
+    await contains(`.o_cp_action_menus button:has([data-icon="more_vert"])`).click();
     await contains(`.o-dropdown-item:contains(Sort of confirmation dialog)`).click();
     expect(".o_dialog").toHaveCount(1);
 
@@ -8328,22 +8325,6 @@ test(`correct amount of buttons`, async () => {
     await assertFormContainsNButtonsWithSizeClass(SIZES.XXL, 7);
 });
 
-test(`can set bin_size to false in context`, async () => {
-    onRpc("web_read", ({ kwargs }) => {
-        expect.step("web_read");
-        expect(kwargs.context.bin_size).toBe(false);
-    });
-    await mountView({
-        resModel: "partner",
-        type: "form",
-        arch: `<form><field name="foo"/></form>`,
-        resId: 1,
-        context: {
-            bin_size: false,
-        },
-    });
-    expect.verifySteps(["web_read"]);
-});
 
 test(`create with false values`, async () => {
     onRpc("web_save", ({ args }) => {
@@ -10041,7 +10022,7 @@ test(`support header button as widgets on form statusbar on mobile`, async () =>
         type: "form",
         arch: `<form><header><widget name="attach_document" string="Attach document"/></header></form>`,
     });
-    await contains(`.o_cp_action_menus button:has([data-icon="settings"])`).click();
+    await contains(`.o_cp_action_menus button:has([data-icon="more_vert"])`).click();
     expect(`button.o_attachment_button`).toHaveCount(1);
     expect(`span.o_attach_document`).toHaveText("Attach document");
 });
@@ -10242,7 +10223,6 @@ test(`coming to a form view from a grouped and sorted list`, async () => {
 
     onRpc("partner", "web_read", ({ kwargs }) => {
         expect(kwargs.context).toEqual({
-            bin_size: true,
             lang: "en",
             tz: "taht",
             uid: 7,
@@ -13120,23 +13100,23 @@ test(`CogMenu dropdown's open/close state shouldn't be modified after 'onchange'
             `,
     });
 
-    expect(".o_cp_action_menus button:has([data-icon='settings'])").toHaveCount(1, {
+    expect(".o_cp_action_menus button:has([data-icon='more_vert'])").toHaveCount(1, {
         message: "statusbar should contain a dropdown",
     });
-    expect(".o_cp_action_menus button:has([data-icon='settings'])").not.toHaveClass("show", {
+    expect(".o_cp_action_menus button:has([data-icon='more_vert'])").not.toHaveClass("show", {
         message: "dropdown should be opened",
     });
 
     await contains(".o_field_widget[name=name] input").edit("before onchange");
-    await contains(".o_cp_action_menus button:has([data-icon='settings'])").click();
-    expect(".o_cp_action_menus button:has([data-icon='settings'])").toHaveClass("show", {
+    await contains(".o_cp_action_menus button:has([data-icon='more_vert'])").click();
+    expect(".o_cp_action_menus button:has([data-icon='more_vert'])").toHaveClass("show", {
         message: "dropdown should be opened",
     });
 
     onchangeDef.resolve({ value: { name: "after onchange" } });
     await animationFrame();
     expect(".o_field_widget[name=name] input").toHaveValue("after onchange");
-    expect(".o_cp_action_menus button:has([data-icon='settings'])").toHaveClass("show", {
+    expect(".o_cp_action_menus button:has([data-icon='more_vert'])").toHaveClass("show", {
         message: "dropdown should be opened",
     });
 });

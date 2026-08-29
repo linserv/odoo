@@ -1,5 +1,4 @@
 import { registry } from "@web/core/registry";
-import { stepUtils } from "@web_tour/tour_utils";
 import { clickOnEditAndWaitEditMode, clickOnSnippet } from "@website/js/tours/tour_utils";
 
 registry.category("web_tour.tours").add("blog_context_and_social_media", {
@@ -10,12 +9,13 @@ registry.category("web_tour.tours").add("blog_context_and_social_media", {
         },
         {
             content: "Click on 'aaa Blog Test' Blog",
-            trigger: ":iframe .website_blog nav .nav-item a:contains('aaa Blog Test')",
+            trigger: ":iframe .website_blog .o_wblog_category li a:contains('aaa Blog Test')",
             run: "click",
         },
         {
             content: "Check that 'aaa Blog Test' Blog is open",
-            trigger: ":iframe .website_blog nav .nav-item a.active:contains('aaa Blog Test')",
+            trigger:
+                ":iframe .website_blog .o_wblog_category li a.active:contains('aaa Blog Test')",
         },
         {
             content: "Click on New Post",
@@ -55,15 +55,14 @@ registry.category("web_tour.tours").add("blog_context_and_social_media", {
         {
             trigger: "body:not(.o_builder_open)",
         },
-        stepUtils.waitIframeIsReady(),
         {
             content: "Click on the first article",
             trigger: ":iframe article[name='blog_post'] a.o_blog_post_title",
             run: "click",
         },
         {
-            content: "Check the blog info is available",
-            trigger: ":iframe #o_wblog_post_info",
+            content: "Check the post comment counter is available",
+            trigger: ":iframe .o_wblog_post_info",
         },
     ],
 });

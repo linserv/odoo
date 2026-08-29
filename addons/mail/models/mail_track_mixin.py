@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import babel
 import typing
 
 from datetime import datetime
 
 from odoo import _, api, fields, models
 from odoo.exceptions import MissingError
-from odoo.tools import clean_context, format_datetime, format_date, format_amount, formatLang
+from odoo.tools import babel_locale_parse, clean_context, format_datetime, format_date, format_amount, formatLang
 
 if typing.TYPE_CHECKING:
     from odoo.api import ValuesType
@@ -208,10 +209,20 @@ class MailTrackMixin(models.AbstractModel):
             for name, field in self._fields.items()
             if getattr(field, 'tracking', None)
         }
-        # track the properties changes ONLY if the parent changed
+
+        # track properties if any property definition contains a tracking = True
+        for fname, f in self._fields.items():
+            if f.type == "properties":
+                properties = self.sudo()[f.definition_record].mapped(f.definition_record_field)
+                tracking_properties = [any(x.get('tracking') for x in p) for p in properties]
+                if any(tracking_properties):
+                    model_fields.add(fname)
+
+        # track the properties changes if the parent changed
         model_fields |= {
             fname for fname, f in self._fields.items()
             if f.type == "properties"
+            and fname not in model_fields
             and f.definition_record in model_fields
             and getattr(f, "tracking", None) is not False
         }
@@ -375,17 +386,15 @@ class MailTrackMixin(models.AbstractModel):
                 continue
 
             if col_name in self and self._fields[col_name].type == "properties":
-                definition_record_field = self._fields[col_name].definition_record
-                if self[definition_record_field] == initial_values[definition_record_field]:
-                    # track the change only if the parent changed
-                    continue
-
                 updated.add(col_name)
+                properties = {p['name']: p.get('value') for p in self._fields[col_name].convert_to_read(self[col_name], self)}
                 tracking_values.extend(
                     self._create_mail_tracking_values_property(property_, col_name, fields_get_info)
                     # Show the properties in the same order as in the definition
                     for property_ in initial_value[::-1]
-                    if property_['type'] not in ('separator', 'html', 'signature') and property_.get('value')
+                    if property_['type'] not in ('separator', 'html', 'signature', 'many2many', 'tags') and
+                        property_.get('value') != properties.get(property_.get('name')) and
+                        property_.get('tracking')
                 )
                 continue
 
@@ -521,15 +530,15 @@ class MailTrackMixin(models.AbstractModel):
             values.update({
                 'old_value_datetime': initial_value,
                 'new_value_datetime': new_value,
-                'old_value': format_datetime(self.env, initial_value, tz=self.env.tz) if initial_value else 'None',
-                'new_value': format_datetime(self.env, new_value, tz=self.env.tz) if new_value else 'None',
+                'old_value': self._format_tracking_datetime(initial_value) if initial_value else 'None',
+                'new_value': self._format_tracking_datetime(new_value) if new_value else 'None',
             })
         elif col_info['type'] == 'date':
             values.update({
                 'old_value_datetime': initial_value and fields.Datetime.to_string(datetime.combine(fields.Date.from_string(initial_value), datetime.min.time())) or False,
                 'new_value_datetime': new_value and fields.Datetime.to_string(datetime.combine(fields.Date.from_string(new_value), datetime.min.time())) or False,
-                'old_value': format_date(self.env, initial_value) if initial_value else 'None',
-                'new_value': format_date(self.env, new_value) if new_value else 'None',
+                'old_value': self._format_tracking_date(initial_value) if initial_value else 'None',
+                'new_value': self._format_tracking_date(new_value) if new_value else 'None',
             })
         elif col_info['type'] == 'boolean':
             values.update({
@@ -613,6 +622,23 @@ class MailTrackMixin(models.AbstractModel):
 
         return values
 
+    def _format_tracking_date(self, value):
+        """Format a tracked date with locale formatting."""
+        date_format = babel.dates.get_date_format(locale=babel_locale_parse(self.env.lang))
+        # must be done manually as format_datetime forces lang format which is usually very different
+        return format_date(self.env, value, date_format=date_format)
+
+    def _format_tracking_datetime(self, value):
+        """Format a tracked datetime with locale formatting and timezone."""
+        tz_name = str(self.env.tz)
+        locale = babel_locale_parse(self.env.lang)
+        # must be done manually as format_datetime forces lang format which is usually very different
+        dt_format = babel.dates.get_datetime_format(locale=locale)
+        date_format = babel.dates.get_date_format(locale=locale)
+        time_format = babel.dates.get_time_format(format="short", locale=locale)
+        tracking_format = f"{dt_format.format(time_format, date_format)} (ZZZZ)"
+        return format_datetime(self.env, value, tz=tz_name, dt_format=tracking_format)
+
     def _create_mail_tracking_values_property(
         self, initial_value: typing.Any, col_name: str, col_info: ValuesType,
     ) -> ValuesType:
@@ -629,8 +655,9 @@ class MailTrackMixin(models.AbstractModel):
             value = [t for t in initial_value.get('tags', []) if t[0] in value]
 
         tracking_values = self._create_mail_tracking_values(
-            value, False, col_name, col_info,
+            value, self[col_name].get(initial_value.get('name')), col_name, col_info,
         )
+
         field_info = {
             **(tracking_values.get('field_info') or {}),
             'desc': f"{col_info['string']}: {initial_value['string']}",

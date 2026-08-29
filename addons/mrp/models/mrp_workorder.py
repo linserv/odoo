@@ -46,7 +46,7 @@ class MrpWorkorder(models.Model):
         related='production_id.reservation_state', store=True) # Technical: used in views and domains only
     production_state = fields.Selection(
         string='Production State', readonly=True,
-        related='production_id.state') # Technical: used in views only
+        related='production_id.state', tracking=False)  # Technical: used in views only
     production_bom_id = fields.Many2one('mrp.bom', related='production_id.bom_id')
     qty_production = fields.Float('Original Production Quantity', readonly=True, related='production_id.product_qty')
     company_id = fields.Many2one(related='production_id.company_id')
@@ -168,7 +168,7 @@ class MrpWorkorder(models.Model):
             has_qty_ready = workorder.uom_id.compare(workorder.qty_ready, 0) > 0
             continuous_production = not workorder.blocked_by_workorder_ids or workorder.production_bom_id.continuous
             has_all_qties_ready = workorder.uom_id.compare(workorder.qty_ready, workorder.qty_remaining) == 0 and continuous_production
-            if workorder.production_bom_id.continuous and workorder.qty_produced and workorder.state != 'blocked':
+            if workorder.qty_produced and workorder.state != 'blocked':
                 workorder.state = 'progress'
             elif all_blocked_by_workorders_done or has_all_qties_ready or (has_qty_ready and continuous_production):
                 workorder.state = 'ready'
@@ -184,8 +184,6 @@ class MrpWorkorder(models.Model):
             ids_by_state[wo.state].append(wo.id)
         wo_to_update = self.browse(ids_to_update)
         self.browse(ids_by_state.get('progress')).button_pending()
-        if state != 'done':
-            self.browse(ids_by_state.get('done')).write({'qty_produced': 0})
         if state == 'cancel':
             wo_to_update.action_cancel()
         elif state == 'done':
@@ -193,8 +191,7 @@ class MrpWorkorder(models.Model):
             for wo in wo_to_update:
                 if float_is_zero(wo.qty_produced, precision_digits=0):
                     wo.qty_produced = wo.qty_producing or wo.qty_to_produce
-                if not float_is_zero(wo.qty_produced, precision_digits=0):
-                    wo_to_done.add(wo.id)
+                wo_to_done.add(wo.id)
             wo_to_done = self.env['mrp.workorder'].browse(wo_to_done)
             return wo_to_done.with_context(check_create_backorder=True).action_mark_as_done()
         elif state == 'progress':
@@ -326,10 +323,7 @@ class MrpWorkorder(models.Model):
     @api.depends('operation_id', 'workcenter_id', 'qty_producing', 'qty_production')
     def _compute_duration_expected(self):
         for workorder in self:
-            # Recompute the duration expected if the qty_producing has been changed:
-            # compare with the origin record if it happens during an onchange
-            if workorder.state not in ['done', 'cancel'] and (workorder.qty_producing != workorder.qty_production
-                or (workorder._origin != workorder and workorder._origin.qty_producing and workorder.qty_producing != workorder._origin.qty_producing)):
+            if workorder.state not in ['done', 'cancel']:
                 workorder.duration_expected = workorder._get_duration_expected()
 
     @api.depends('time_ids.duration', 'time_ids.loss_type', 'qty_produced')
@@ -499,7 +493,7 @@ class MrpWorkorder(models.Model):
             for wo in self:
                 if wo.uom_id.compare(values['qty_produced'], 0) < 0:
                     raise UserError(_('The quantity produced must be positive.'))
-                if wo.state == 'done':
+                if wo.state == 'done' and not self.env.context.get('allow_qty_change'):
                     raise UserError(_('This production order has been closed.'))
 
         workorders_with_new_wc = self.env['mrp.workorder']
@@ -694,7 +688,7 @@ class MrpWorkorder(models.Model):
                     continue
                 raise UserError(_('You cannot start a work order that is already done or cancelled'))
 
-            if wo.qty_producing == 0:
+            if wo.qty_producing == 0 and not wo.production_bom_id.continuous:
                 wo.qty_producing = wo.qty_remaining
 
             if wo._should_start_timer():

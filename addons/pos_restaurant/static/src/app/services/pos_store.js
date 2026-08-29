@@ -87,7 +87,7 @@ patch(PosStore.prototype, {
         const count = await makeAwaitable(this.dialog, NumberPopup, {
             startingValue: currentOrder.customer_count,
             feedback: (buffer) => {
-                const value = this.env.utils.formatCurrency(
+                const value = this.formatCurrency(
                     currentOrder?.amountPerGuest(parseInt(buffer, 10) || 0) || 0
                 );
                 return value ? `${value} / ${_t("Guest")}` : "";
@@ -159,6 +159,65 @@ patch(PosStore.prototype, {
     handlePreparationLine(destLine, prepLines) {
         for (const prepLine of prepLines) {
             prepLine.pos_order_line_id = destLine;
+        }
+    },
+    _assignCoursesToOrderLines(order, affectedLines) {
+        for (const line of affectedLines) {
+            const { course } = this.autoCourseAllocation(line.product_id) || {};
+            if (course) {
+                line.course_id = course;
+            }
+        }
+    },
+    breakCombo(orderline) {
+        if (!this.isSelectedLineCombo || !this.config.use_course_allocation) {
+            return super.breakCombo(...arguments);
+        }
+        const order = this.getOrder();
+        const comboLines = orderline.combo_line_ids;
+        const result = super.breakCombo(...arguments);
+
+        this._assignCoursesToOrderLines(order, comboLines);
+        order.cleanCourses();
+
+        return result;
+    },
+    autoCourseAllocation(product) {
+        const config = this.config;
+        if (!config.module_pos_restaurant || !config.use_course_allocation) {
+            return null;
+        }
+
+        const order = this.getOrder();
+
+        const categories = product.pos_categ_ids
+            .map((c) => c.id)
+            .includes(this.selectedCategory?.id)
+            ? [this.selectedCategory]
+            : product.pos_categ_ids;
+
+        const courseCandidate = categories
+            .map((c) => c.course_id)
+            .filter(Boolean)
+            .sort((a, b) => a.sequence - b.sequence);
+
+        if (courseCandidate.length === 0) {
+            return null;
+        }
+
+        let isNew = false;
+        let course = order.course_ids.find((c) => c.name === courseCandidate[0].name);
+        if (!course) {
+            isNew = true;
+            course = this.addCourse({ backendCourse: courseCandidate[0] });
+        }
+
+        order.selectCourse(course);
+        return { course, isNew };
+    },
+    cleanAutoCourseAllocation(result, allocation) {
+        if (!result && allocation?.isNew) {
+            allocation.course.delete();
         }
     },
     async mergeOrders(sourceOrder, destOrder) {
@@ -392,7 +451,9 @@ patch(PosStore.prototype, {
     },
     createOrderIfNeeded(data) {
         if (this.config.module_pos_restaurant && !data["table_id"]) {
-            let order = this.models["pos.order"].find((order) => order.isDirectSale);
+            let order = this.models["pos.order"].find(
+                (order) => order.isDirectSale && !order.isSynced
+            );
             if (!order) {
                 order = this.createNewOrder(data);
             }
@@ -482,6 +543,7 @@ patch(PosStore.prototype, {
                     !o.table_id &&
                     !o.finalized &&
                     o.lines.length === 0 &&
+                    !o.isSynced &&
                     !o.floating_order_name &&
                     !o.preset_time &&
                     (!o.preset_id || o.preset_id.id === this.config.default_preset_id?.id)
@@ -709,7 +771,7 @@ patch(PosStore.prototype, {
     },
     prepareOrderTransfer(order, destinationTable) {
         const originalTable = order.table_id;
-        this.alert.dismiss();
+        this.alert.remove();
 
         if (destinationTable.rootTable.id === originalTable?.id) {
             this.setOrder(order);

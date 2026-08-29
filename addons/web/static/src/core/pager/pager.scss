@@ -1,13 +1,23 @@
 .o_pager {
-    // Same color as .o_field_widget:focus-within
-    @include print-variable(o-input-border-color, $o-action);
-
-    span.o_pager_value:not(:hover) {
-        --border-opacity: 1;
-        border-color: transparent !important;
+    .btn-group {
+        padding: map-get($spacers, 1)  map-get($spacers, 1);
+        background: var(--o-Pager-backgroundColor, #{$o-view-background-color});
+        border: var(--o-Pager-border, #{$border-width solid var(--border-color)});
+        border-radius: calc(#{map-get($spacers, 1)} + #{$btn-border-radius});
     }
 
-    input.o_pager_value {
-        border-color: var(--o-input-border-color) !important;
+    .btn {
+        --#{$prefix}btn-disabled-bg: transparent;
+        --#{$prefix}btn-disabled-border-color: transparent;
+        --#{$prefix}btn-border-color: transparent;
+        --#{$prefix}btn-bg: transparent;
+        --#{$prefix}btn-padding-x: #{map-get($spacers, 1) * 1.5};
+        --#{$prefix}btn-padding-y: #{map-get($spacers, 1) * 0.5};
+        --#{$prefix}btn-hover-border-color: transparent;
+        --#{$prefix}btn-hover-bg: #{rgba($o-gray-200, 0.5)};
+        --#{$prefix}btn-active-bg: #{$o-gray-200};
+        --#{$prefix}btn-active-border-color: transparent;
+
+        border-radius: var(--border-radius) !important;
     }
 }

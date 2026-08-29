@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import functools
 import collections
-import itertools
 import logging
 import operator as pyoperator
 import re
@@ -18,8 +17,9 @@ from psycopg2.extras import Json as PsycopgJson
 
 from odoo.exceptions import AccessError, MissingError
 from odoo.tools import SQL, reset_cached_properties, sql
-from odoo.tools.constants import PREFETCH_MAX
+from odoo.tools.constants import IN_MAX
 from odoo.tools.misc import frozendict, SENTINEL, Sentinel, unique
+
 
 from .domains import Domain
 from .query import Query
@@ -136,10 +136,13 @@ class Field[T]:
         The field's default values stored in model ir.default are used as fallbacks for
         unspecified values in the jsonb dict.
 
-    :param bool copy: whether the field value should be copied when the record
-        is duplicated (default: ``True`` for normal fields, ``False`` for
+    :param bool|callable copy: whether the field value should be copied when the
+        record is duplicated (default: ``True`` for normal fields, ``False`` for
         ``one2many`` and computed fields, including property fields and
-        related fields)
+        related fields). Can also be a ``(record) -> value`` callable used by
+        :meth:`~odoo.models.Model.copy_data` to produce the copied value
+        (e.g. ``copy=mark_as_copy('name')``).
+        Not called when the field is provided in ``default``.
 
     :param bool store: whether the field is stored in database
         (default:``True``, ``False`` for computed fields)
@@ -286,7 +289,7 @@ class Field[T]:
     store: bool = True                  # whether the field is stored in database
     index: str | None = None            # how the field is indexed in database
     manual: bool = False                # whether the field is a custom field
-    copy: bool = True                   # whether the field is copied over by BaseModel.copy()
+    copy: bool | Callable[[BaseModel], typing.Any] = True  # copied by BaseModel.copy()
     _depends: Collection[str] | None = None  # collection of field dependencies
     _depends_context: Collection[str] | None = None  # collection of context key dependencies
     recursive: bool = False             # whether self depends on itself
@@ -1035,6 +1038,8 @@ class Field[T]:
             return True
 
         model = env[self.model_name]
+        if self.relational and getattr(env[self.comodel_name], '_access_domain_heavy', False):
+            return False
         query = model._as_query(ordered=False)
         try:
             model._order_field_to_sql(query.table, self.name, SQL(), SQL())
@@ -1054,6 +1059,8 @@ class Field[T]:
             return False
 
         model = env[self.model_name]
+        if self.relational and getattr(env[self.comodel_name], '_access_domain_heavy', False):
+            return False
         groupby = self.name if self.type not in ('date', 'datetime') else f"{self.name}:month"
         try:
             model._read_group_groupby(Query(model).table, groupby)
@@ -1073,6 +1080,8 @@ class Field[T]:
             return False
 
         model = env[self.model_name]
+        if self.relational and getattr(env[self.comodel_name], '_access_domain_heavy', False):
+            return None
         query = model._as_query(ordered=False)
         try:
             model._read_group_select(query.table, f"{self.name}:{self.aggregator}")
@@ -1096,6 +1105,9 @@ class Field[T]:
 
     def _description_falsy_value_label(self, env) -> str | None:
         return env._(self.falsy_value_label) if self.falsy_value_label else None # pylint: disable=gettext-variable
+
+    def _description_group_expand(self, env) -> bool:
+        return bool(self.group_expand)
 
     def is_editable(self) -> bool:
         """ Return whether the field can be editable in a view. """
@@ -1327,10 +1339,15 @@ class Field[T]:
             ))
         # Mark computed fields to recompute
         if to_compute and self.compute:
-            _logger.info("Prepare computation of %s", self)
             cr.execute(SQL('SELECT id FROM %s WHERE %s IS NULL', SQL.identifier(model._table), SQL.identifier(self.name)))
             records = model.browse(row[0] for row in cr.fetchall())
+            self._init_column_notify_compute(records)
             model.env.add_to_compute(self, records)
+
+    def _init_column_notify_compute(self, records):
+        _logger.info("Prepare computation of %s in %s records", self, len(records))
+        if len(records) > 100000:
+            _logger.warning("%s: %s records will be computed", self, len(records))
 
     ############################################################################
     #
@@ -1735,18 +1752,19 @@ class Field[T]:
         either not in cache, or different from ``cache_value``.
         """
         field_cache = self._get_cache(records.env)
-        return records.browse(
+        ids_to_update = tuple(
             record_id
             for record_id in records._ids
             if field_cache.get(record_id, SENTINEL) != cache_value
         )
+        return records.__class__(records.env, ids_to_update, records._prefetch_ids)
 
     def _to_prefetch(self, record: ModelType) -> ModelType:
         """ Return a recordset including ``record`` to prefetch the field. """
         ids = expand_ids(record.id, record._prefetch_ids)
         field_cache = self._get_cache(record.env)
         prefetch_ids = (id_ for id_ in ids if id_ not in field_cache)
-        return record.browse(itertools.islice(prefetch_ids, PREFETCH_MAX))
+        return record.browse(prefetch_ids)
 
     def _insert_cache(self, records: BaseModel, values: Iterable) -> None:
         """ Update the cache of the given records with the corresponding values,
@@ -2043,8 +2061,8 @@ class Field[T]:
 
         for record in records:
             if record.id in to_compute_ids:
-                ids = expand_ids(record.id, to_compute_ids)
-                recs = record.browse(itertools.islice(ids, PREFETCH_MAX))
+                ids = tuple(expand_ids(record.id, to_compute_ids))
+                recs = record.browse(ids[:IN_MAX]).with_prefetch(ids)
                 try:
                     apply_except_missing(self.compute_value, recs)
                     continue

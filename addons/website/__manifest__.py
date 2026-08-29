@@ -144,6 +144,7 @@
         'views/snippets/s_adventure.xml',
         'views/snippets/s_image_title.xml',
         'views/snippets/s_banner_glow.xml',
+        'views/snippets/s_intro_spotlight.xml',
         'views/snippets/s_bento_grid_avatars.xml',
         'views/snippets/s_key_images.xml',
         'views/snippets/s_kickoff.xml',
@@ -237,6 +238,7 @@
         'views/snippets/s_projects_list.xml',
         'views/snippets/s_about_bold.xml',
         'views/snippets/s_age_verification_popup.xml',
+        'views/http_routing_template.xml',
         'views/new_page_template_templates.xml',
         'views/website_views.xml',
         'views/website_pages_views.xml',
@@ -254,6 +256,7 @@
         'wizard/base_language_install_views.xml',
         'wizard/blocked_third_party_domains.xml',
         'wizard/website_robots.xml',
+        'wizard/website_llms.xml',
         # Replaces a post_init_hook that should be run on upgrade too.
         'data/update_theme_images.xml',
         'views/website_templates_svg.xml',
@@ -454,6 +457,14 @@
         'web._assets_bootstrap_frontend': [
             ('after', 'web/static/src/scss/utilities_custom.scss', 'html_builder/static/src/scss/utilities_custom.scss'),
         ],
+        'website.font_urls_export': [
+            # A minimal bundle that includes all the variable/function files
+            # needed to compile font_urls_export.scss.
+            ('include', 'web._assets_helpers'),
+            ('include', 'web._assets_primary_variables'),
+            ('include', 'web._assets_secondary_variables'),
+            'website/static/src/scss/options/font_urls_export.scss',
+        ],
         'html_editor.assets_link_popover': [
             'html_builder/static/src/utils/utils_css.js',
             'website/static/src/js/editor/html_editor.js',
@@ -488,7 +499,6 @@
             'website/static/src/components/edit_head_body_dialog/edit_head_body_dialog.scss',
             'website/static/src/components/edit_head_body_dialog/edit_head_body_dialog.xml',
             'website/static/src/utils/**/*',
-            'website/static/src/js/delayed_translation.js',
             'website/static/src/components/dialog/*.js',
             'website/static/src/components/dialog/*.scss',
             'website/static/src/components/dialog/*.xml',

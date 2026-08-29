@@ -30,7 +30,7 @@
                             </setting>
                             <setting id="process_transfers" help="Optimize your transfers by grouping operations together and assigning jobs to workers"
                                      documentation="/applications/inventory_and_mrp/inventory/management/misc/batch_transfers.html">
-                                <field name="module_stock_picking_batch"/>
+                                <field name="group_stock_picking_batch"/>
                             </setting>
                             <setting id="warning_info" string="Partner-Specific Instructions" help="Display instructions tailored to the customer or vendor on stock operations.">
                                 <field name="group_warning_stock"/>
@@ -202,7 +202,7 @@
             <field name="name">Settings</field>
             <field name="res_model">res.config.settings</field>
             <field name="view_mode">form</field>
-            <field name="context">{'module' : 'stock', 'bin_size': False}</field>
+            <field name="context">{'module' : 'stock'}</field>
         </record>
 
         <menuitem id="menu_stock_config_settings" name="Configuration" parent="menu_stock_root"

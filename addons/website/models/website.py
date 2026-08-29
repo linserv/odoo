@@ -34,7 +34,7 @@ from odoo.fields import Domain
 from odoo.http import request
 from odoo.models import Query
 from odoo.modules.module import get_manifest
-from odoo.tools import BinaryBytes, file_open, lazy
+from odoo.tools import BinaryBytes, BinaryValue, file_open, lazy
 from odoo.tools.image import image_process
 from odoo.tools.sql import SQL, escape_like_value
 from odoo.tools.translate import _
@@ -136,6 +136,7 @@ class Website(models.CachedModel):
         'website.page',
         string="Cookie Policy Page",
         help="Page used as the Cookie Policy link in the cookies bar.",
+        ondelete='restrict',
     )
     configurator_done = fields.Boolean(help='True if configurator has been completed or ignored')
     block_third_party_domains = fields.Boolean(
@@ -176,10 +177,11 @@ class Website(models.CachedModel):
     custom_code_footer = fields.Html('Custom end of <body> code', sanitize=False)
 
     robots_txt = fields.Html('Robots.txt', translate=False, groups='website.group_website_designer', sanitize=False)
+    llms_txt = fields.Text('LLMs.txt', translate=False)
 
     def _default_favicon(self):
         with file_open('web/static/img/favicon.ico', 'rb') as f:
-            return BinaryBytes(f.read())
+            return BinaryBytes(f.read(), filename='favicon.ico')
 
     favicon = fields.Binary(string="Website Favicon", help="This field holds the image used to display a favicon on the website.", default=_default_favicon)
     theme_id = fields.Many2one('ir.module.module', help='Installed theme')
@@ -315,15 +317,16 @@ class Website(models.CachedModel):
                 company = self.env['res.company'].browse(values['company_id'])
                 super(Website, public_user_to_change_websites).write(dict(values, user_id=company and company._get_public_user().id))
 
-        if 'cookies_bar' in values:
+        default_policy_page_to_unlink = self.env['website.page']
+        if 'cookies_bar' in values or ('cookie_policy_id' in values and not values['cookie_policy_id']):
             default_policy_page = self.env['website.page'].search([
                 ('website_id', '=', self.id),
                 ('url', '=', '/cookie-policy'),
             ])
-            if not values['cookies_bar']:
-                default_policy_page.unlink()
-                self.cookie_policy_id = False
-            elif not self.cookie_policy_id:
+            if not values.get('cookies_bar', self.cookies_bar):
+                default_policy_page_to_unlink = default_policy_page
+                values['cookie_policy_id'] = False
+            elif not values.get('cookie_policy_id', self.cookie_policy_id):
                 cookies_view = self.env.ref('website.cookie_policy', raise_if_not_found=False)
                 if cookies_view:
                     cookies_view.with_context(website_id=self.id).write({'website_id': self.id})
@@ -339,6 +342,7 @@ class Website(models.CachedModel):
                     values["cookie_policy_id"] = default_policy_page
 
         result = super(Website, self - public_user_to_change_websites).write(values)
+        default_policy_page_to_unlink.unlink()
 
         if 'logo' in values:
             self._ensure_logo_media_attachment()
@@ -395,7 +399,8 @@ class Website(models.CachedModel):
     @api.model
     def _handle_favicon(self, vals):
         if icon := vals.get('favicon'):
-            vals['favicon'] = BinaryBytes(image_process(icon, size=(256, 256), crop='center', output_format='ICO'))
+            filename = icon.filename if isinstance(icon, BinaryValue) else ''
+            vals['favicon'] = BinaryBytes(image_process(icon, size=(256, 256), crop='center', output_format='ICO'), filename)
 
     @api.model
     def _handle_domain(self, vals):
@@ -1286,6 +1291,33 @@ class Website(models.CachedModel):
         self.copy_menu_hierarchy(default_menu)
         home_menu = self.env['website.menu'].search([('website_id', '=', self.id), ('url', '=', '/')])
         home_menu.page_id = homepage_page
+
+    @tools.conditional(
+        'xml' not in tools.config['dev_mode'],
+        api.ormcache(
+            'self.id',
+            "tuple(sorted(self.env['ir.asset']._get_asset_params().items()))",
+            cache='assets',
+        ),
+    )
+    def _get_font_urls(self):
+        """Return the list of font URLs to emit as <link> tags in <head>."""
+
+        # 1. Compile the font_urls_export bundle using Odoo's asset system.
+        try:
+            bundle = self.env['ir.qweb']._get_asset_bundle(
+                'website.font_urls_export',
+                js=False,
+                css=True,
+                assets_params=self.env['ir.asset']._get_asset_params(),
+            )
+            compiled = bundle.preprocess_css()
+        except Exception as e:
+            logger.warning("Font URL bundle compilation failed: %s", e)
+            raise
+
+        # 2. Parse --o-font-url-N: "..." custom properties
+        return re.findall(r'--o-font-url-\d+:\s*"([^"]*)"', compiled)
 
     def copy_menu_hierarchy(self, top_menu):
         def copy_menu(menu, t_menu):

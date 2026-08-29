@@ -12,9 +12,20 @@ import { MessageReactions } from "@mail/core/common/message_reactions";
 import { Poll } from "@mail/core/common/poll";
 import { PollResult } from "@mail/core/common/poll_result";
 import { RelativeTime } from "@mail/core/common/relative_time";
+import { groupAttachments } from "@mail/utils/common/attachments";
 import { htmlToTextContentInline } from "@mail/utils/common/format";
 
-import { Component, computed, proxy, signal, t, untrack, useApp, useProps } from "@odoo/owl";
+import {
+    Component,
+    computed,
+    proxy,
+    signal,
+    status,
+    t,
+    untrack,
+    useApp,
+    useProps,
+} from "@odoo/owl";
 import { MessageSearchState } from "@mail/core/common/message_search_hook";
 
 import { isMobileOS } from "@web/core/browser/feature_detection";
@@ -333,6 +344,10 @@ export class Message extends Component {
         return this.props.message;
     }
 
+    get attachmentGroups() {
+        return groupAttachments(this.message.extra_body_attachment_ids);
+    }
+
     get showTextVisually() {
         return (
             !this.message.linkPreviewSquash &&
@@ -447,8 +462,9 @@ export class Message extends Component {
         return true;
     }
 
-    onClickAttachmentUnlink(attachment) {
-        return attachment.remove();
+    /** @param {import("models").Attachment[]} attachments */
+    onClickAttachmentUnlink(attachments) {
+        return this.store.removeAttachments(attachments);
     }
 
     /**
@@ -554,6 +570,9 @@ export class Message extends Component {
                 this.env,
                 {
                     onBeforeComplete: () => {
+                        if (status(this) === "destroyed") {
+                            return false;
+                        }
                         if (!el.isConnected) {
                             return false;
                         }

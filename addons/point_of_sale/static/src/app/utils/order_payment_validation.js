@@ -148,7 +148,7 @@ export default class OrderPaymentValidation {
 
         this.pos.addPendingOrder([this.order.id]);
         this.order.state = "paid";
-        this.pos.data.localUnsyncedPaidOrderUuids.add(this.order.uuid);
+        this.pos.data.localUnsyncedPaidOrderUuids().add(this.order.uuid);
 
         this.pos.customerDisplay.send({ processingValidation: true });
         try {
@@ -213,7 +213,7 @@ export default class OrderPaymentValidation {
         if (this.order.nb_print === 0 && this.pos.config.autoPrint) {
             const invoiced_finalized = this.order.isToInvoice() ? this.order.finalized : true;
             if (invoiced_finalized) {
-                await this.pos.ticketPrinter.printOrderReceipt({ order: this.order });
+                this.pos.ticketPrinter.printOrderReceipt({ order: this.order });
             }
         }
     }
@@ -359,11 +359,11 @@ export default class OrderPaymentValidation {
                 body:
                     _t("Are you sure that the customer wants to  pay") +
                     " " +
-                    this.pos.env.utils.formatCurrency(this.order.amountPaid) +
+                    this.pos.formatCurrency(this.order.amountPaid) +
                     " " +
                     _t("for an order of") +
                     " " +
-                    this.pos.env.utils.formatCurrency(this.order.priceIncl) +
+                    this.pos.formatCurrency(this.order.priceIncl) +
                     " " +
                     _t('? Clicking "Confirm" will validate the payment.'),
                 confirm: () => this.validateOrder(true),

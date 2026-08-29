@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import fields, models, tools
+from odoo.tools import SQL
 
 
 class ReportStockQuantity(models.Model):
@@ -31,7 +31,7 @@ class ReportStockQuantity(models.Model):
     warehouse_id = fields.Many2one('stock.warehouse', readonly=True)
 
     def _get_product_qty_col(self):
-        return "q.quantity"
+        return SQL("q.quantity")
 
     def init(self):
         """
@@ -46,8 +46,9 @@ class ReportStockQuantity(models.Model):
             - the dest warehouse is kept if the SM is not the duplicated one and is not an interwarehouse
                 OR the SM is the duplicated one and is an interwarehouse
         """
+        report_period = self.env['ir.config_parameter'].sudo().get_int('stock.report_stock_quantity_period') or 3
         tools.drop_view_if_exists(self.env.cr, 'report_stock_quantity')
-        query = f"""
+        query = SQL("""
 CREATE or REPLACE VIEW report_stock_quantity AS (
 WITH
     warehouse_cte AS(
@@ -73,7 +74,7 @@ WITH
         LEFT JOIN uom_uom uom_product ON uom_product.id = pt.uom_id
         WHERE pt.is_storable = true AND
             source.w_id IS DISTINCT FROM dest.w_id AND
-            m.product_qty != 0 AND
+            (m.product_qty != 0 OR m.quantity != 0) AND
             m.state NOT IN ('draft', 'cancel') AND
             (m.state != 'done' or m.date >= ((now() at time zone 'utc')::date - interval '%(report_period)s month'))
     ),
@@ -142,7 +143,7 @@ FROM (SELECT
         pp.product_tmpl_id,
         'forecast' as state,
         date.*::date,
-        {self._get_product_qty_col()} as product_qty,
+        %(product_qty_col)s as product_qty,
         q.company_id,
         wh.id as warehouse_id
     FROM
@@ -186,9 +187,8 @@ FROM (SELECT
     FROM
         all_sm m
     WHERE
-        m.product_qty != 0) AS forecast_qty
+        m.product_qty != 0 OR (m.state = 'done' AND m.quantity != 0)) AS forecast_qty
 GROUP BY product_id, product_tmpl_id, state, date, company_id, warehouse_id
 );
-"""
-        report_period = self.env['ir.config_parameter'].sudo().get_int('stock.report_stock_quantity_period') or 3
-        self.env.cr.execute(query, {'report_period': report_period})
+""", product_qty_col=self._get_product_qty_col(), report_period=report_period)
+        self.env.cr.execute(query)

@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 from odoo import api, Command, fields, models, release, _
 from odoo.exceptions import AccessError, ValidationError
 from odoo.fields import Domain
-from odoo.addons.bus.websocket import WebsocketConnectionHandler
 from odoo.addons.mail.tools.discuss import Store
 
 BUFFER_TIME = 120  # Time in seconds between two sessions assigned to the same operator. Not enforced if the operator is the best suited.
@@ -624,9 +623,9 @@ class Im_LivechatChannel(models.Model):
         info['available'] = self._is_livechat_available()
         info['server_url'] = self.get_base_url()
         info["session_info"] = {
+            "bus_info": self.env["ir.http"]._get_bus_session_info(),
             "server_version": release.version,
             "server_version_info": release.version_info,
-            "websocket_worker_version": WebsocketConnectionHandler._VERSION,
         }
         if info['available']:
             info['options'] = self._get_channel_infos()
@@ -656,7 +655,7 @@ class Im_LivechatChannelRule(models.Model):
         ('hide_button', 'Hide')], string='Live Chat Button', required=True, default='display_button',
         help="* 'Show' displays the chat button on the pages.\n"\
              "* 'Show with notification' is 'Show' in addition to a floating text just next to the button.\n"\
-             "* 'Open automatically' displays the button and automatically opens the conversation pane.\n"\
+             "* 'Open automatically' displays the button and automatically opens the conversation pane on larger screens. On small screens, this behaves like 'Show'.\n"
              "* 'Hide' hides the chat button on the pages.\n")
     auto_popup_timer = fields.Integer('Time to Open', default=0,
         help="Delay (in seconds) to automatically open the conversation window. Note: the selected action must be 'Open automatically' otherwise this parameter will not be taken into account.")

@@ -51,7 +51,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #       - search_fetch discuss_channel (channels_domain)
     #       2: check permissions
     #       - fetch discuss_channel (chathub given channel ids, missing search_fetch)
-    #       25: store add channel:
+    #       26: store add channel:
+    #           - search discuss_channel (has_meeting_today, resolved upfront for the whole
+    #             recordset; [calendar] joins the meetings of today into that domain)
     #           - read group member (prefetch _compute_self_member_id from _compute_is_member)
     #           - read group member (_compute_invited_member_ids)
     #           - fetch discuss_channel_member (invited member, _compute_invited_member_ids)
@@ -80,14 +82,16 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #           - search discuss_channel_res_groups_rel (group_ids)
     #           - fetch res_groups (group_public_id)
     #           - select the current db snapshot
-    _query_count_init_messaging = 33
+    _query_count_init_messaging = 34
     # Queries for _query_count_discuss_channels (in order):
     #   3: _search_is_member (for current user, first occurence channels_as_member)
     #       - fetch res_users
     #       - search discuss_channel_member
     #       - search_fetch discuss_channel
     #   1: search_count discuss_channel_member (store_has_hidden_channels)
-    #   34: channel _to_store_defaults:
+    #   35: channel _to_store_defaults:
+    #       - search discuss_channel (has_meeting_today, resolved upfront for the whole
+    #         recordset; [calendar] joins the meetings of today into that domain)
     #       - read group member (prefetch _compute_self_member_id from _compute_is_member)
     #       - read group member (_compute_invited_member_ids)
     #       - search discuss_channel_rtc_session
@@ -154,7 +158,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
     #       - fetch user (author)
     #       - fetch discuss_call_history
     #       - select the current db snapshot
-    _query_count_discuss_channels = 63
+    _query_count_discuss_channels = 64
 
     def setUp(self):
         super().setUp()
@@ -491,6 +495,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "has_access_create_lead": False,
                 "internalUserGroupId": self.env.ref("base.group_user").id,
                 "mt_comment": self.env.ref("mail.mt_comment").id,
+                "mt_important_notification": self.env.ref("mail.mt_important_notification").id,
                 "mt_note": self.env.ref("mail.mt_note").id,
                 "odoobot": self.user_root.partner_id.id,
                 "self_user": self.users[0].id,
@@ -612,6 +617,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
             "mail.message.subtype": [
                 {"description": False, "id": self.env.ref("mail.mt_note").id},
                 {"description": False, "id": self.env.ref("mail.mt_comment").id},
+                {"description": False, "id": self.env.ref("mail.mt_important_notification").id},
             ],
             "mail.thread": self._filter_threads_fields(
                 self._expected_result_for_thread(self.channel_general),
@@ -1015,6 +1021,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 1,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1034,6 +1041,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 0,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1053,6 +1061,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 0,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1072,8 +1081,9 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
-                "message_unread_counter": 0,
+                "message_unread_counter": 1,
                 "message_unread_counter_bus_id": bus_last_id,
                 "mute_until_dt": False,
                 "last_seen_dt": member_0_last_seen_dt,
@@ -1097,6 +1107,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 0,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1116,6 +1127,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 1,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1137,6 +1149,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "fetched_message_id": first_message.id,
                 "id": member_2.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 1,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1156,6 +1169,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 0,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1174,6 +1188,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "create_date": fields.Datetime.to_string(member_12.create_date),
                 "last_seen_dt": False,
                 "id": member_12.id,
+                "invitation_sent_dt": False,
                 "partner_id": self.users[12].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": channel.id,
@@ -1185,6 +1200,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 0,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1203,6 +1219,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "create_date": fields.Datetime.to_string(member_14.create_date),
                 "last_seen_dt": False,
                 "id": member_14.id,
+                "invitation_sent_dt": False,
                 "partner_id": self.users[14].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": channel.id,
@@ -1214,6 +1231,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 0,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1232,6 +1250,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "create_date": fields.Datetime.to_string(member_15.create_date),
                 "last_seen_dt": False,
                 "id": member_15.id,
+                "invitation_sent_dt": False,
                 "partner_id": self.users[15].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": channel.id,
@@ -1242,6 +1261,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "create_date": member_0_create_date,
                 "custom_notifications": False,
                 "id": member_0.id,
+                "invitation_sent_dt": False,
                 "is_favorite": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 0,
@@ -1261,6 +1281,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "create_date": fields.Datetime.to_string(member_2.create_date),
                 "last_seen_dt": False,
                 "id": member_2.id,
+                "invitation_sent_dt": False,
                 "partner_id": self.users[2].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": channel.id,
@@ -1272,6 +1293,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 0,
                 "message_unread_counter_bus_id": bus_last_id,
@@ -1290,6 +1312,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "create_date": fields.Datetime.to_string(member_3.create_date),
                 "last_seen_dt": False,
                 "id": member_3.id,
+                "invitation_sent_dt": False,
                 "partner_id": self.users[3].partner_id.id,
                 "seen_message_id": False,
                 "channel_id": channel.id,
@@ -1301,6 +1324,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "livechat_member_type": "agent",
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 1,
@@ -1320,6 +1344,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "create_date": fields.Datetime.to_string(member_1.create_date),
                 "last_seen_dt": fields.Datetime.to_string(member_1.last_seen_dt),
                 "id": member_1.id,
+                "invitation_sent_dt": False,
                 "livechat_member_type": "visitor",
                 "partner_id": self.users[1].partner_id.id,
                 "seen_message_id": last_message.id,
@@ -1332,6 +1357,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "custom_notifications": False,
                 "id": member_0.id,
                 "is_favorite": False,
+                "invitation_sent_dt": False,
                 "livechat_member_type": "agent",
                 "last_interest_dt": member_0_last_interest_dt,
                 "message_unread_counter": 1,
@@ -1351,6 +1377,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "create_date": fields.Datetime.to_string(member_g.create_date),
                 "last_seen_dt": fields.Datetime.to_string(member_g.last_seen_dt),
                 "id": member_g.id,
+                "invitation_sent_dt": False,
                 "livechat_member_type": "visitor",
                 "guest_id": guest.id,
                 "seen_message_id": last_message.id,
@@ -1524,7 +1551,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "author_id": self.user_root.partner_id.id,
                 "body": [
                     "markup",
-                    '<div data-oe-type=\"call\" class="o_mail_notification"></div>',
+                    f'<div data-oe-type="call" class="o_mail_notification">{self.user_root.partner_id.name} started a call</div>',
                 ],
                 "call_history_ids": [channel.call_history_ids[0].id],
                 "create_date": create_date,
@@ -1552,7 +1579,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "scheduledDatetime": False,
                 "is_bookmarked": False,
                 "subject": False,
-                "subtype_id": self.env.ref("mail.mt_note").id,
+                "subtype_id": self.env.ref("mail.mt_important_notification").id,
                 "write_date": write_date,
             }
         if channel == self.channel_channel_group_2:
@@ -1691,7 +1718,7 @@ class TestDiscussFullPerformance(HttpCase, MailCommon):
                 "scheduledDatetime": False,
                 "is_bookmarked": False,
                 "subject": False,
-                "subtype_id": self.env.ref("mail.mt_note").id,
+                "subtype_id": self.env.ref("mail.mt_comment").id,
                 "write_date": write_date,
             }
         return {}

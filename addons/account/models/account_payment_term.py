@@ -2,6 +2,7 @@ from odoo import api, fields, models, _, Command
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import SQL, format_date, formatLang, frozendict, date_utils
 from odoo.tools.float_utils import float_round
+from odoo.tools.translate import mark_as_copy
 
 from dateutil.relativedelta import relativedelta
 
@@ -18,7 +19,7 @@ class AccountPaymentTerm(models.Model):
     def _default_example_date(self):
         return self.env.context.get('example_date') or fields.Date.context_today(self)
 
-    name = fields.Char(string='Payment Terms', translate=True, required=True)
+    name = fields.Char(string='Payment Terms', translate=True, required=True, copy=mark_as_copy('name'))
     active = fields.Boolean(default=True, help="If the active field is set to False, it will allow you to hide the payment terms without removing it.")
     note = fields.Html(string='Description on the Invoice', translate=True)
     line_ids = fields.One2many('account.payment.term.line', 'payment_id', string='Terms', copy=True, default=_default_line_ids)
@@ -270,11 +271,6 @@ class AccountPaymentTerm(models.Model):
             return None
         return format_date(self.env, self._get_last_discount_date(date_ref))
 
-    def copy_data(self, default=None):
-        default = dict(default or {})
-        vals_list = super().copy_data(default=default)
-        return [dict(vals, name=_("%s (copy)", line.name)) for line, vals in zip(self, vals_list)]
-
 
 class AccountPaymentTermLine(models.Model):
     _name = 'account.payment.term.line'
@@ -318,7 +314,7 @@ class AccountPaymentTermLine(models.Model):
             except ValueError:
                 days_next_month = 1
 
-            if not days_next_month:
+            if days_next_month <= 0:
                 return date_utils.end_of(due_date + relativedelta(days=self.nb_days), 'month')
 
             return due_date + relativedelta(days=self.nb_days) + relativedelta(months=1, day=days_next_month)
@@ -327,7 +323,7 @@ class AccountPaymentTermLine(models.Model):
     @api.constrains('days_next_month')
     def _check_valid_char_value(self):
         for record in self:
-            if record.days_next_month and record.days_next_month.isnumeric():
+            if record.days_next_month and record.days_next_month.removeprefix('-').isnumeric():
                 if not (0 <= int(record.days_next_month) <= 31):
                     raise ValidationError(_('The days added must be between 0 and 31.'))
             else:

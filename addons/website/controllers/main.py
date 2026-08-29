@@ -217,6 +217,29 @@ class Website(Home):
 
         raise request.not_found()
 
+    def system_page_http_error(env):
+        template_codes = ['403', '404']
+        debug_mode = request and request.session.debug
+        if debug_mode:
+            template_codes += ['4xx', '400', '415', '422']
+
+        return [
+            {
+                'route_title': _lt("Error Page %s", code),
+                'route_url': f'/website/http_error/{code}',
+            } for code in template_codes
+        ]
+
+    @http.route("/website/http_error/<string:status_code>", type="http", auth="public", website=True, list_as_website_content=system_page_http_error)
+    def website_http_error_page(self, status_code):
+        """
+        Generic error page renderer for 4xx, 403, 404, 500, etc.
+        """
+        template = f"http_routing.{status_code}"
+        if not request.env.user.has_group('website.group_website_designer') or not request.env.ref(template, raise_if_not_found=False):
+            template = "http_routing.404"
+        return request.render(template)
+
     @http.route('/website/force/<int:website_id>', type='http', auth="user", website=True, sitemap=False, multilang=False, readonly=True)
     def website_force(self, website_id, path='/', isredir=False, **kw):
         """ To switch from a website to another, we need to force the website in
@@ -360,6 +383,16 @@ class Website(Home):
             'allowed_routes': self._get_allowed_robots_routes(),
             'url_root': request.httprequest.url_root,
         }, mimetype='text/plain')
+
+    @http.route('/llms.txt', type='http', auth='public', website=True, multilang=False, sitemap=False)
+    def llms_txt(self):
+        website = request.env.website
+        llms_txt = website.llms_txt
+
+        if not llms_txt or not llms_txt.strip():
+            raise request.not_found()
+
+        return request.make_response(llms_txt, headers=[('Content-Type', 'text/plain; charset=utf-8')])
 
     @http.route('/sitemap.xml', type='http', auth="public", website=True, multilang=False, sitemap=False)
     def sitemap_xml_index(self, **kwargs):
@@ -1665,7 +1698,8 @@ class Website(Home):
             field = record._fields.get(field_name)
             if not field.store:
                 return record[field_name] or ''
-            translations = field._get_stored_translations(record) or {}
+
+            translations = dict(record._get_stored_translations(field_name) or {})
             return translations.get(lang_code or request.lang.code, '')
 
         # Access checks

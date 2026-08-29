@@ -1,6 +1,7 @@
 import { EventBus, proxy, toRaw, usePlugin } from "@odoo/owl";
 import { router } from "@web/core/browser/router";
 import { makeContext } from "@web/core/context";
+import { DebugModePlugin } from "@web/core/debug_mode_plugin";
 import { Domain } from "@web/core/domain";
 import { getDefaultDomain } from "@web/core/domain_selector/utils";
 import { DomainSelectorDialog } from "@web/core/domain_selector_dialog/domain_selector_dialog";
@@ -69,6 +70,8 @@ const { DateTime } = luxon;
  *  groupBys: string[];
  * }} Search
  */
+
+const DEFAULT_GROUPBY_ID = -1;
 
 /** @todo rework doc */
 // interface SectionCommon { // check optional keys
@@ -215,7 +218,9 @@ export class SearchModel extends EventBus {
 
     setup(services) {
         // services
+        this.debugMode = usePlugin(DebugModePlugin);
         this.offlinePlugin = usePlugin(OfflinePlugin);
+
         const { field: fieldService, orm, view, dialog, treeProcessor } = services;
         this.orm = orm;
         this.fieldService = fieldService;
@@ -509,9 +514,6 @@ export class SearchModel extends EventBus {
         return deepCopy(this._orderBy);
     }
 
-    get isDebugMode() {
-        return !!this.env.debug;
-    }
     //--------------------------------------------------------------------------
     // Public
     //--------------------------------------------------------------------------
@@ -712,6 +714,11 @@ export class SearchModel extends EventBus {
      * with given groupId.
      */
     deactivateGroup(groupId) {
+        if (groupId === DEFAULT_GROUPBY_ID) {
+            delete this.defaultGroupBy;
+            this._notify();
+            return;
+        }
         this._filterQuery((item) => this.searchItems[item.searchItemId].groupId !== groupId);
         this._checkOrderByCountStatus();
         this._notify();
@@ -822,7 +829,7 @@ export class SearchModel extends EventBus {
         const tree = await this.treeProcessor.treeFromDomain(
             this.resModel,
             domain,
-            !this.isDebugMode
+            !this.debugMode.isActive()
         );
         const trees =
             !tree.negate &&
@@ -864,7 +871,11 @@ export class SearchModel extends EventBus {
             if (type === "favorite") {
                 const activeItemGroupBys = this._getSearchItemGroupBys(firstActiveItem);
                 let createNewGroupBys = Boolean(activeItemGroupBys.length);
-                if (createNewGroupBys && this.defaultGroupBy) {
+                if (
+                    createNewGroupBys &&
+                    this.defaultGroupBy &&
+                    this.env.config.viewType === "kanban"
+                ) {
                     const currentGroupBy = this._getGroupBy({ fallbackOnDefault: false });
                     if (JSON.stringify(currentGroupBy) === JSON.stringify(this.defaultGroupBy)) {
                         createNewGroupBys = false;
@@ -1139,6 +1150,9 @@ export class SearchModel extends EventBus {
 
     shiftRelativeFilter(groupId, delta) {
         const filter = this.query.find((q) => this.searchItems[q.searchItemId].groupId === groupId);
+        if (!filter) {
+            throw new Error(`shiftRelativeFilter: no active search item in group ${groupId}`);
+        }
         filter.offset = (filter.offset || 0) + delta;
         this._notify();
     }
@@ -1165,8 +1179,17 @@ export class SearchModel extends EventBus {
             title: _t("Custom Filter"),
             confirmButtonText: _t("Search"),
             discardButtonText: _t("Discard"),
-            isDebugMode: this.isDebugMode,
+            isDebugMode: this.debugMode.isActive(),
         });
+    }
+
+    switchGroupBySort() {
+        if (this.orderByCount === "Desc") {
+            this.orderByCount = "Asc";
+        } else {
+            this.orderByCount = "Desc";
+        }
+        this._notify();
     }
 
     /**
@@ -1477,6 +1500,8 @@ export class SearchModel extends EventBus {
                 .forEach((f) => {
                     if (f.type === "dateFilter" || f.type === "parentFilter") {
                         this.toggleParentFilter(f.id);
+                    } else if (f.type === "relativeFilter") {
+                        this.toggleRelativeFilter(f.id, f.defaultOptionId);
                     } else if (f.type === "dateGroupBy") {
                         this.toggleDateGroupBy(f.id);
                     } else if (f.type === "field") {
@@ -1667,6 +1692,18 @@ export class SearchModel extends EventBus {
                 id: this.nextId,
                 dateFilterId: dateFilterItem.id,
             };
+            if (dateFilterItem.defaultRelativeOptionId) {
+                relativeFilterItem.defaultOptionId = dateFilterItem.defaultRelativeOptionId;
+                if (dateFilterItem.isDefault) {
+                    // The default targets a relative option: it is the relative
+                    // filter that must be activated, not a period of the date
+                    // filter (they are mutually exclusive).
+                    relativeFilterItem.isDefault = true;
+                    relativeFilterItem.defaultRank = dateFilterItem.defaultRank;
+                    delete dateFilterItem.isDefault;
+                    delete dateFilterItem.defaultRank;
+                }
+            }
             dateFilterItem.relativeFilterId = this.nextId;
             this.searchItems[this.nextId] = relativeFilterItem;
             this.nextId++;
@@ -2027,7 +2064,7 @@ export class SearchModel extends EventBus {
                     )}`,
                 ];
             case "relativeFilter": {
-                const option = searchItem.options.find((o) => o.id === activeItem.optionId);
+                const option = this._getRelativeFilterOption(searchItem, activeItem.optionId);
                 const label = getRelativeDateLabel(this.referenceMoment, option, activeItem.offset);
                 return [`${description}: ${label}`];
             }
@@ -2074,7 +2111,12 @@ export class SearchModel extends EventBus {
             if (type === "field") {
                 facet.title = title;
             } else {
-                facet.icon = FACET_ICONS[type];
+                if (type === "groupBy" && this.orderByCount) {
+                    facet.icon =
+                        FACET_ICONS[this.orderByCount === "Asc" ? "groupByAsc" : "groupByDesc"];
+                } else {
+                    facet.icon = FACET_ICONS[type];
+                }
                 facet.color = FACET_COLORS[type];
             }
             if (tooltip) {
@@ -2084,6 +2126,30 @@ export class SearchModel extends EventBus {
                 facet.domain = Domain.or(groupActiveItemDomains).toString();
             }
             facets.push(facet);
+        }
+        const hasAGroupByFacet = facets.some((f) => f.type === "groupBy");
+        if (
+            !hasAGroupByFacet &&
+            !this.globalGroupBy.length &&
+            this.defaultGroupBy &&
+            this.env.config.viewType !== "kanban"
+        ) {
+            facets.unshift({
+                groupId: DEFAULT_GROUPBY_ID,
+                type: "groupBy",
+                values: this.defaultGroupBy.map((gb) => {
+                    const [fieldName, interval] = gb.split(":");
+                    const { string } = this.searchViewFields[fieldName];
+                    if (interval) {
+                        const { description } = this._getIntervalOptionByIntervalId(interval);
+                        return `${string}:${description}`;
+                    }
+                    return string;
+                }),
+                separator: ">",
+                icon: FACET_ICONS.groupBy,
+                color: FACET_COLORS.groupBy,
+            });
         }
         return facets;
     }
@@ -2185,8 +2251,8 @@ export class SearchModel extends EventBus {
         const groupBy = groupBys.length
             ? groupBys
             : this.globalGroupBy.length
-              ? this.globalGroupBy.slice()
-              : (fallbackOnDefault && this.defaultGroupBy?.slice()) || [];
+            ? this.globalGroupBy.slice()
+            : (fallbackOnDefault && this.defaultGroupBy?.slice()) || [];
         return typeof groupBy === "string" ? [groupBy] : groupBy;
     }
 
@@ -2487,8 +2553,21 @@ export class SearchModel extends EventBus {
     }
 
     _getRelativeFilterDomain(searchItem, optionId, offset) {
-        const option = searchItem.options.find((o) => o.id === optionId);
+        const option = this._getRelativeFilterOption(searchItem, optionId);
         return constructRelativeDateDomain(searchItem, option, offset);
+    }
+
+    /**
+     * @param {Object} searchItem a search item of type "relativeFilter"
+     * @param {string} optionId
+     * @returns {Object} the option of searchItem with the given id
+     */
+    _getRelativeFilterOption(searchItem, optionId) {
+        const option = searchItem.options.find((o) => o.id === optionId);
+        if (!option) {
+            throw new Error(`unknown option "${optionId}" on field "${searchItem.fieldName}"`);
+        }
+        return option;
     }
 
     _getSearchItemGroupBys(activeItem) {

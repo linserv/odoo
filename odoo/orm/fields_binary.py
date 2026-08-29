@@ -9,10 +9,11 @@ from operator import attrgetter
 import psycopg2
 
 from odoo.exceptions import UserError
-from odoo.tools import SQL, human_size
+from odoo.tools import SQL
 from odoo.tools.binary import EMPTY_BINARY, BinaryBytes, BinaryValue
 
 from .fields import Field
+from .utils import parse_field_expr
 
 if typing.TYPE_CHECKING:
     from .environments import Environment
@@ -90,6 +91,19 @@ class Binary(Field[BinaryValue]):
             # a string may come from RPC, it is base64 encoded
             decoded_value = base64.b64decode(value, validate=validate)
             return BinaryBytes(decoded_value)
+        if isinstance(value, dict):
+            # {filename, content}
+            if 'content' not in value:
+                if len(records) == 1 and 'filename' in value:
+                    # we support changing only the file name when the content
+                    # can be read from the record
+                    return BinaryBytes(records[self.name].content, filename=value['filename'])
+                raise ValueError(f"{self}: missing 'content' when writing a dict")
+            filename = value.get('filename') or ''
+            binary_value = self.convert_to_cache(value['content'], records)
+            if filename and binary_value.filename != filename:
+                binary_value = BinaryBytes(binary_value.content, filename=filename)
+            return binary_value
         # Error needed because we used to write base64 encoded data and we
         # cannot distinguish whether bytes are encoded or not in base64.
         if isinstance(value, bytes) and (self.related_field or self).name == 'raw':
@@ -118,15 +132,15 @@ class Binary(Field[BinaryValue]):
         if not value:
             return False
         value = self.convert_to_cache(value, record, validate=False)
-        if (
-            record.env.context.get('bin_size')
-            or record.env.context.get('bin_size_' + self.name)
-        ):
-            # TODO js detects that value looks like a size otherwise it
-            # supposes that this is base64 encoded and requests the image
-            return human_size(value.size)
-        # we read bytes in base64 format for RPC
-        return value.to_base64()
+        filename = value.filename
+        res = {
+            'filename': filename,
+            'content': value.to_base64(),
+            'size': value.size,
+        }
+        if not filename or filename == self.name:  # remove empty name
+            res.pop('filename')
+        return res
 
     def read(self, records):
         # values are stored in attachments, retrieve them
@@ -150,7 +164,6 @@ class Binary(Field[BinaryValue]):
         env = record_values[0][0].env
         env['ir.attachment'].sudo().create([
             {
-                'name': self.name,
                 'res_model': self.model_name,
                 'res_field': self.name,
                 'res_id': record.id,
@@ -190,37 +203,74 @@ class Binary(Field[BinaryValue]):
                     ('res_field', '=', self.name),
                     ('res_id', 'in', real_records.ids),
                 ])
-            if value:
+            if cache_value:
                 # update the existing attachments
-                atts.write({'raw': value})
+                atts.write({'raw': cache_value})
                 atts_records = records.browse(atts.mapped('res_id'))
                 # create the missing attachments
                 missing = (real_records - atts_records)
                 if missing:
                     atts.create([{
-                            'name': self.name,
                             'res_model': record._name,
                             'res_field': self.name,
                             'res_id': record.id,
                             'type': 'binary',
-                            'raw': value,
+                            'raw': cache_value,
                         }
                         for record in missing
                     ])
             else:
                 atts.unlink()
 
+    def expression_getter(self, field_expr):
+        get_value = self.__get__
+        _fname, property_name = parse_field_expr(field_expr)
+        if property_name == 'size':
+            return lambda record: get_value(record).size
+        if property_name == 'filename':
+            return lambda record: get_value(record).filename
+        return super().expression_getter(field_expr)
+
+    def to_sql(self, table):
+        if self.attachment and self.store and not self.compute and not self.compute_sql:
+            Attachment = table._model.sudo().env['ir.attachment']
+            alias = table._make_alias(self.name, Attachment)
+            table._query.add_join('LEFT JOIN', alias, SQL("""(
+                SELECT DISTINCT (res_id) res_id, file_size, name, id
+                FROM ir_attachment
+                WHERE res_model = %s AND res_field = %s AND res_id IS NOT NULL
+                ORDER BY res_id, id
+            )""", self.model_name, self.name), SQL("%s = %s", alias.res_id, table.id, to_flush=self))
+            return alias.id  # dummy value
+        return super().to_sql(table)
+
+    def property_to_sql(self, field_sql, property_name):
+        if self.attachment:
+            Attachment = field_sql._table._model.sudo().env['ir.attachment']
+            alias = field_sql._table._make_alias(self.name, Attachment)
+            if property_name == 'size':
+                return SQL("COALESCE(%s, 0)", alias.file_size)
+            if property_name == 'filename':
+                return SQL("COALESCE(NULLIF(%s, %s), '')", alias.name, self.name)
+        else:
+            if property_name == 'size':
+                return SQL("COALESCE(octet_length(%s), 0)", field_sql)
+            if property_name == 'filename':
+                return SQL("''::varchar")
+        return super().property_to_sql(field_sql, property_name)
+
     def condition_to_sql(self, table: TableSQL, field_expr: str, operator: str, value) -> SQL:
-        if not self.attachment or field_expr != self.name:
+        if field_expr != self.name or (not self.attachment and operator in ('in', 'not in') and set(value) == {False}):
             return super().condition_to_sql(table, field_expr, operator, value)
-        assert operator in ('in', 'not in') and set(value) == {False}, "Should have been done in Domain optimization"
-        return SQL(
-            "%sEXISTS (SELECT 1 FROM ir_attachment WHERE res_model = %s AND res_field = %s AND res_id = %s)",
-            SQL("NOT ") if operator == 'in' else SQL(),
-            table._model._name,
-            self.name,
-            table.id,
-        )
+        if self.attachment and operator in ('in', 'not in') and set(value) == {False}:
+            return SQL(
+                "%sEXISTS (SELECT 1 FROM ir_attachment WHERE res_model = %s AND res_field = %s AND res_id = %s)",
+                SQL("NOT ") if operator == 'in' else SQL(),
+                table._model._name,
+                self.name,
+                table.id,
+            )
+        raise ValueError('Binary field, accepts only existence check; skipping domain')
 
 
 class Image(Binary):
@@ -366,6 +416,13 @@ class BinaryValueAttachment(BinaryValue):
         return self.__attachment.raw.content
 
     @property
+    def filename(self) -> str:
+        self._check_concurrent_modification()
+        name = self.__attachment.name or ''
+        field_name = self.__attachment.res_field
+        return name if name != field_name else ''
+
+    @property
     def mimetype(self) -> str:
         self._check_concurrent_modification()
         return self.__attachment.mimetype
@@ -376,6 +433,10 @@ class BinaryValueAttachment(BinaryValue):
         # get from the attachment
         # if we don't have a size, read raw to be consistent
         return self.__attachment.file_size or super().size
+
+    @property
+    def checksum(self):
+        return self.__checksum
 
     def open(self):
         self._check_concurrent_modification()

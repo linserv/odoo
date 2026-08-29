@@ -2126,6 +2126,8 @@ class MailThread(models.AbstractModel):
         alias_emails = self.env['mail.alias.domain'].sudo()._find_aliases(emails_key_all) if avoid_alias else []
         ban_emails = (ban_emails or []) + alias_emails
 
+        emails_set = set(chain.from_iterable(records_emails.values()))
+
         # inspired notably from odoo/odoo@80a0b45df806ffecfb068b5ef05ae1931d655810; final
         # ordering is search order defined in '_find_or_create_from_emails', which is id ASC
         def sort_key(p):
@@ -2137,6 +2139,7 @@ class MailThread(models.AbstractModel):
                 p.company_id.id == emails_key_company_id.get(
                     p.email_normalized, False
                 ),                                                  # then partner associated w/ record's company
+                p.email_formatted in emails_set,                    # prioritize exact mail match
                 not p.company_id,                                   # then company-agnostic to avoid issues
             )
 
@@ -3106,7 +3109,7 @@ class MailThread(models.AbstractModel):
         DESC -> most important one is given last to be inserted last (see
         'mail_tracking' module). HTML therefore needs to reverse ordering. """
         tracking_html = self.env['ir.qweb']._render(
-            "mail.mail_tracking_template", {'trackingValues': reversed(tracking_values)}
+            "mail.mail_tracking_template", {'trackingValues': list(reversed(tracking_values))}
         ).strip()
         return append_content_to_html(
             body, tracking_html,
@@ -4502,8 +4505,10 @@ class MailThread(models.AbstractModel):
         notif_pids_notinbox = []
         for recipient in (r for r in recipients_data if r['active'] and r['id']):
             notif_pids.append(recipient['id'])
-            if recipient['notif'] != 'inbox':
-                notif_pids_notinbox.append(recipient['id'])
+            if recipient["notif"] != "inbox" and message.subtype_id.id != self.env[
+                "ir.model.data"
+            ]._xmlid_to_res_id("mail.mt_important_notification"):
+                notif_pids_notinbox.append(recipient["id"])
         if not notif_pids:
             return []
 

@@ -15,7 +15,7 @@ import {
 
 definePosModels();
 
-test("ticket data renders totals, cashier, payments, order lines and qr code", async () => {
+test("ticket data renders totals, cashier, payments, order lines and qr code for processed order", async () => {
     const store = await setupPosEnv();
     const order = store.addNewOrder();
     const product = store.models["product.template"].get(5);
@@ -25,24 +25,25 @@ test("ticket data renders totals, cashier, payments, order lines and qr code", a
     cardPm.name = "Bank";
     store.user.name = "Mitchell Admin";
     await store.addLineToOrder({ product_tmpl_id: product, qty: 3 }, order);
-    addPayment(order, cardPm, 10.35);
+    addPayment(order, cardPm, 345.0);
     order.setOrderPrices();
+    order.state = "paid";
 
     const { ticket } = renderReceipt(store, order);
 
     expectTicketData(ticket, {
-        total_amount: "$ 10.35",
+        total_amount: "$ 345.00",
         cashier_name: "Mitchell",
         is_to_pay: true,
         is_change: false,
         is_qr_code: true,
-        payment_lines: [{ name: "Bank", amount: "10.35" }],
+        payment_lines: [{ name: "Bank", amount: "345.00" }],
         orderlines: [
             {
                 name: "Desk Pad",
                 quantity: "3",
-                price_unit: "3.45",
-                line_price: "$ 10.35",
+                price_unit: "115.00",
+                line_price: "$ 345.00",
             },
         ],
         cssRules: [
@@ -74,14 +75,14 @@ test("ticket data renders tip lines and line css rules", async () => {
 
     const { ticket } = renderReceipt(store, order);
     expectTicketData(ticket, {
-        total_amount: "$ 11.35",
+        total_amount: "$ 346.00",
         payment_lines: [{ name: "Bank", amount: "7.00" }],
         orderlines: [
             {
                 name: "Desk Pad",
                 quantity: "3",
-                price_unit: "3.45",
-                line_price: "$ 10.35",
+                price_unit: "115.00",
+                line_price: "$ 345.00",
                 cssRules: [
                     {
                         css: ".line-note",
@@ -146,17 +147,17 @@ test("ticket data renders discount details and can omit discount summary for man
         discountedOrder
     );
     discountedLine.setDiscount(5);
-    addPayment(discountedOrder, cardPm, 3.28);
+    addPayment(discountedOrder, cardPm, 109.25);
 
     const { ticket: discountedTicket } = renderReceipt(store, discountedOrder);
     expectTicketData(discountedTicket, {
-        total_amount: "$ 3.28",
+        total_amount: "$ 109.25",
         is_discount: true,
         orderlines: [
             {
                 name: "TEST",
                 quantity: "1",
-                line_price: "$ 3.28",
+                line_price: "$ 109.25",
             },
         ],
     });
@@ -191,14 +192,14 @@ test("ticket data renders receipt change on overpayment", async () => {
     const cashPm = store.models["pos.payment.method"].get(1);
 
     await store.addLineToOrder({ product_tmpl_id: product, qty: 1 }, order);
-    addPayment(order, cashPm, 5);
+    addPayment(order, cashPm, 120.0);
     order.setOrderPrices();
 
     const { ticket } = renderReceipt(store, order);
     expectTicketData(ticket, {
-        total_amount: "$ 3.45",
+        total_amount: "$ 115.00",
         is_change: true,
-        change_amount: "-1.55",
+        change_amount: "-5",
     });
 });
 
@@ -240,13 +241,15 @@ test("point_of_sale.test_receipt_company_logo_tour, point_of_sale.test_receipt_n
         const product = store.models["product.template"].get(5);
 
         setProductPrice(product, 5, []);
-        store.config.logo = receiptCase.logo;
+        store.config.logo = {
+            content: receiptCase.logo,
+        };
         store.config.phone = receiptCase.contact_info;
         await store.addLineToOrder({ product_tmpl_id: product, qty: 1 }, order);
 
         const { ticket } = renderReceipt(store, order);
         expectTicketData(ticket, {
-            logo: imageDataUri(receiptCase.logo),
+            logo: imageDataUri(receiptCase.logo.content),
             contact_info: receiptCase.contact_info,
         });
     }
@@ -259,8 +262,11 @@ test("point_of_sale.test_receipt_custom_logo_tour: custom logo and phone display
 
     setProductPrice(product, 5, []);
     store.config.use_custom_receipt_info = true;
-    const customLogo =
+    const data =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z9DwHwAGBQKA3H7sNwAAAABJRU5ErkJggg==";
+    const customLogo = {
+        content: data,
+    };
     store.config.custom_logo = customLogo;
     store.config.logo = customLogo;
     store.config.custom_phone = "555-999";

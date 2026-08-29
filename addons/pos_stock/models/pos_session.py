@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from odoo import Command, _, api, fields, models
 from odoo.tools import float_compare, float_is_zero, split_every
-from odoo.tools.constants import PREFETCH_MAX
+from odoo.tools.constants import IN_MAX
 
 
 class PosSession(models.Model):
@@ -19,7 +19,7 @@ class PosSession(models.Model):
             session.picking_count = self.env['stock.picking'].search_count([('pos_session_id', 'in', session.ids)])
             session.failed_pickings = bool(self.env['stock.picking'].search_count([('pos_session_id', 'in', session.ids), ('state', '!=', 'done')], limit=1))
 
-    @api.depends('sales_move_id', 'refunds_move_id')
+    @api.depends('sale_move_ids', 'refund_move_ids')
     def _compute_move_ids(self):
         super()._compute_move_ids()
         for session in self:
@@ -166,7 +166,7 @@ class PosSession(models.Model):
             ('product_id.is_storable', '=', True),
         ])
 
-        for stock_moves_batch in split_every(PREFETCH_MAX, stock_moves._ids, stock_moves.browse):
+        for stock_moves_batch in split_every(IN_MAX, stock_moves._ids, stock_moves.browse):
             for move in stock_moves_batch:
                 product_accounts = move.with_company(move.company_id).product_id._get_product_accounts()
                 exp_key = product_accounts['expense']

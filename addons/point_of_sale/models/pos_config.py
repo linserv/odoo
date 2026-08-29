@@ -10,10 +10,11 @@ from babel.dates import format_date
 import odoo.release
 from odoo import SUPERUSER_ID, Command, _, api, fields, models, tools
 from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.fields import Domain
 from odoo.http import request
 from odoo.tools import SQL, convert
-from odoo.fields import Domain
 from odoo.tools.misc import get_lang
+from odoo.tools.translate import mark_as_copy
 
 DEFAULT_LIMIT_LOAD_PRODUCT = 5000
 DEFAULT_LIMIT_LOAD_PARTNER = 100
@@ -67,7 +68,7 @@ class PosConfig(models.Model):
     def _default_partner(self):
         return self.sudo()._get_or_create_default_partner()
 
-    name = fields.Char(string='Point of Sale', required=True, translate=True, help="An internal identification of the point of sale.")
+    name = fields.Char(string='Point of Sale', required=True, translate=True, help="An internal identification of the point of sale.", copy=mark_as_copy('name'))
     preparation_printer_ids = fields.Many2many('pos.printer', 'pos_config_printer_rel', 'config_id', 'printer_id', string="Preparation Printers", domain="[('use_type', '=', 'preparation')]")
     receipt_printer_ids = fields.Many2many('pos.printer', 'pos_config_receipt_printer_rel', 'config_id', 'printer_id', string="Receipt Printers", domain="[('use_type', '=', 'receipt')]")
     use_order_printer = fields.Boolean('Order Printer')
@@ -87,6 +88,17 @@ class PosConfig(models.Model):
         required=True,
         default=_default_partner,
         check_company=True)
+    session_closing_mode = fields.Selection(
+        [('daily', 'Daily'), ('closing', 'At closing')],
+        string='Closing Mode',
+        default='daily',
+        readonly=True,
+    )
+    session_closing_daily_hour = fields.Float(
+        string='Daily Closing Hour',
+        default=4.0,
+        help="The hour at which the session will be automatically closed when the closing mode is set to 'Daily'.",
+    )
     currency_id = fields.Many2one('res.currency', compute='_compute_currency', store=True, compute_sudo=True, string="Currency")
     order_seq_id = fields.Many2one('ir.sequence', string='Order Sequence', readonly=True, copy=False)
     order_backend_seq_id = fields.Many2one('ir.sequence', string='Order Backend Sequence', readonly=True, copy=False)
@@ -116,7 +128,6 @@ class PosConfig(models.Model):
     session_ids = fields.One2many('pos.session', 'config_id', string='Sessions')
     current_session_id = fields.Many2one('pos.session', compute='_compute_current_session', string="Current Session", search='_search_current_session')
     current_session_state = fields.Char(compute='_compute_current_session')
-    number_of_rescue_session = fields.Integer(string="Number of Rescue Session", compute='_compute_current_session')
     current_cash_register_balance = fields.Float(compute='_compute_current_cash_register_balance', string="Cash Register")
     last_session_closing_date = fields.Date(compute='_compute_last_session')
     pos_session_username = fields.Char(compute='_compute_current_session_user')
@@ -185,7 +196,6 @@ class PosConfig(models.Model):
     use_closing_entry_by_product = fields.Boolean(
         string='Closing Entry by product',
         help="Display the breakdown of sales lines by product in the automatically generated closing entry.")
-    order_edit_tracking = fields.Boolean(string="Track orders edits", help="Store edited orders in the backend", default=False)
     last_data_change = fields.Datetime(string='Last Write Date', readonly=True, compute='_compute_local_data_integrity', store=True)
     fallback_nomenclature_id = fields.Many2one('barcode.nomenclature', string="Fallback Nomenclature")
     use_custom_receipt_info = fields.Boolean(string="Customise info", default=False, help="Fill in if your shop does not have the same info as your company")
@@ -224,11 +234,30 @@ class PosConfig(models.Model):
 
     def _notify_synchronisation(self, session_id, device_identifier, records={}, deleted_record_ids=None):
         self.ensure_one()
-        static_records = {}
+        models = []
+        search_params = {}
 
         for model, ids in records.items():
-            records = self.env[model].browse(ids).exists()
-            static_records[model] = self.env[model]._load_pos_data_read(records, self)
+            models.append(model)
+            search_params[model] = {
+                'domain': [('id', 'in', ids)],
+            }
+
+        if len(models) == 0:
+            self._notify('SYNCHRONISATION', {
+                'static_records': {},
+                'session_id': session_id,
+                'device_identifier': device_identifier,
+                'records': records,
+            })
+            return
+
+        static_records = self.current_session_id.load_data({
+            'models': models,
+            'records': {},
+            'search_params': search_params,
+            'only_records': True,
+        })
 
         self._notify('SYNCHRONISATION', {
             'static_records': static_records,
@@ -278,8 +307,8 @@ class PosConfig(models.Model):
         }
 
     @api.model
-    def _load_pos_data_domain(self, data, config):
-        return [('id', '=', config.id)]
+    def _load_pos_data_domain(self, data):
+        return [('id', '=', data['pos.session'].config_id.id)]
 
     @api.model
     def _load_pos_data_read(self, records, config):
@@ -297,7 +326,6 @@ class PosConfig(models.Model):
         record['_data_server_date'] = self.env.context.get('pos_last_server_date') or self.env.cr.now()
         record['_has_cash_move_perm'] = self.env.user._has_cash_move_permission()
         record['_has_cash_delete_perm'] = self.env.user._has_cash_delete_permission()
-        record['_pos_special_products_ids'] = self.env['pos.config']._get_special_products().ids
         record["_unit_uom_id"] = self.env.ref('uom.product_uom_unit').id
 
         session = config.current_session_id
@@ -306,7 +334,7 @@ class PosConfig(models.Model):
 
         # Add custom fields for 'formula' taxes.
         # We can ignore data for _load_pos_data_domain since isn't needed in the domain computation of account.tax
-        taxes = self.env['account.tax'].search(self.env['account.tax']._load_pos_data_domain({}, config))
+        taxes = self.env['account.tax'].search(self.env['account.tax']._load_pos_data_domain({'pos.config': config}))
         product_fields = taxes._eval_taxes_computation_prepare_product_fields()
         record['_product_default_values'] = \
             self.env['account.tax']._eval_taxes_computation_prepare_product_default_values(product_fields)
@@ -361,13 +389,11 @@ class PosConfig(models.Model):
         self.session_ids.fetch(["state"])
         for pos_config in self:
             opened_sessions = pos_config.session_ids.filtered(lambda s: s.state != 'closed')
-            rescue_sessions = opened_sessions.filtered('rescue')
-            session = pos_config.session_ids.filtered(lambda s: s.state != 'closed' and not s.rescue)
+            session = pos_config.session_ids.filtered(lambda s: s.state != 'closed')
             # sessions ordered by id desc
             pos_config.has_active_session = bool(opened_sessions.filtered(lambda s: s.state != 'opening_control')) or False
             pos_config.current_session_id = (session and session[0].id) or False
             pos_config.current_session_state = (session and session[0].state) or False
-            pos_config.number_of_rescue_session = len(rescue_sessions)
 
     def _search_current_session(self, operator, value):
         if operator != 'in':
@@ -376,7 +402,7 @@ class PosConfig(models.Model):
 
     def _compute_statistics_for_session(self):
         for config in self:
-            session = config.session_ids.filtered(lambda s: s.state != 'closed' and not s.rescue)
+            session = config.session_ids.filtered(lambda s: s.state != 'closed')
             session_record = session[0] if session else None
             if not session_record or not session_record.exists():
                 config.statistics_for_current_session = False
@@ -528,7 +554,7 @@ class PosConfig(models.Model):
     @api.depends('session_ids')
     def _compute_current_session_user(self):
         for pos_config in self:
-            session = pos_config.session_ids.filtered(lambda s: s.state in ['opening_control', 'opened', 'closing_control'] and not s.rescue)
+            session = pos_config.session_ids.filtered(lambda s: s.state in ['opening_control', 'opened', 'closing_control'])
             if session:
                 pos_config.pos_session_username = session[0].user_id.sudo().name
                 pos_config.pos_session_state = session[0].state
@@ -788,14 +814,6 @@ class PosConfig(models.Model):
             self._update_preparation_printers_menuitem_visibility()
         return result
 
-    def copy_data(self, default=None):
-        default = dict(default or {})
-        vals_list = super().copy_data(default=default)
-        if 'name' not in default:
-            for config, vals in zip(self, vals_list):
-                vals['name'] = _("%s (copy)", config.name)
-        return vals_list
-
     def link_category_form_pos(self, category):
         self.ensure_one()
         category = self.env['pos.category'].browse(category.id).exists()
@@ -1020,39 +1038,8 @@ class PosConfig(models.Model):
             'type': 'ir.actions.act_window',
         }
 
-    def open_opened_rescue_session_form(self):
-        rescue_session_ids = self.session_ids.filtered(lambda s: s.state != 'closed' and s.rescue)
-
-        if len(rescue_session_ids) == 1:
-            return {
-                'res_model': 'pos.session',
-                'view_mode': 'form',
-                'res_id': rescue_session_ids.id,
-                'type': 'ir.actions.act_window',
-            }
-        return {
-            'name': _('Rescue Sessions'),
-            'res_model': 'pos.session',
-            'view_mode': 'list,form',
-            'domain': [('id', 'in', rescue_session_ids.ids)],
-            'type': 'ir.actions.act_window',
-        }
-
-    def get_limited_product_count(self):
+    def _get_limited_product_count(self):
         return self.env['ir.config_parameter'].sudo().get_int('point_of_sale.limited_product_count') or DEFAULT_LIMIT_LOAD_PRODUCT
-
-    def get_product_loading_info(self):
-        """Return total product.template count matching the PoS domain and the configured loading limit.
-
-        Used by the frontend to warn the user before triggering a full sync when the product
-        count exceeds the configured limit or crosses the dangerous threshold (20 000+).
-        """
-        self.ensure_one()
-        ProductTemplate = self.env['product.template']
-        domain = ProductTemplate._load_pos_data_domain({}, self)
-        total_count = ProductTemplate.search_count(domain)
-        limit = self.get_limited_product_count()
-        return {'total_count': total_count, 'limit': limit}
 
     def _get_limited_partner_count(self):
         return self.env['ir.config_parameter'].sudo().get_int('point_of_sale.limited_customer_count') or DEFAULT_LIMIT_LOAD_PARTNER

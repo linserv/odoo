@@ -2,7 +2,7 @@ import { Reactive } from "@web/core/utils/reactive";
 import { ConnectionLostError, RPCError, rpc } from "@web/core/network/rpc";
 import { _t } from "@web/core/l10n/translation";
 import { formatCurrency as webFormatCurrency } from "@web/core/currency";
-import { markup } from "@odoo/owl";
+import { markup, usePlugin } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { registry } from "@web/core/registry";
 import { cookie } from "@web/core/browser/cookie";
@@ -25,35 +25,28 @@ import { SnoozeTracker } from "@point_of_sale/app/models/utils/snooze_tracker";
 import { InfoPopup } from "@pos_self_order/app/components/info_popup/info_popup";
 import { ComboSuggestion } from "@point_of_sale/app/models/utils/combo_suggestion";
 import { session } from "@web/session";
+import { PosDataPlugin } from "@point_of_sale/app/plugins/pos_data_plugin";
+import { PosTicketPrinterPlugin } from "@point_of_sale/app/plugins/pos_ticket_printer_plugin";
 
 const { DateTime } = luxon;
 
 export class SelfOrder extends Reactive {
-    static serviceDependencies = [
-        "notification",
-        "router",
-        "pos_data",
-        "pos_ticket_printer",
-        "barcode",
-        "bus_service",
-        "dialog",
-    ];
+    static serviceDependencies = ["notification", "router", "barcode", "bus_service", "dialog"];
 
     constructor(...args) {
         super();
         this.ready = this.setup(...args).then(() => this);
     }
 
-    async setup(
-        env,
-        { notification, router, pos_ticket_printer, barcode, bus_service, dialog, pos_data }
-    ) {
+    async setup(env, { notification, router, barcode, bus_service, dialog }) {
+        this.data = usePlugin(PosDataPlugin);
+        this.ticketPrinter = usePlugin(PosTicketPrinterPlugin);
+        this.ticketPrinter.init(env);
+
         // services
         this.notification = notification;
         this.router = router;
-        this.data = pos_data;
         this.env = env;
-        this.ticketPrinter = pos_ticket_printer;
         this.barcode = barcode;
         this.bus = bus_service;
         this.dialog = dialog;
@@ -155,11 +148,6 @@ export class SelfOrder extends Reactive {
                     this.paymentError = true;
                 }
             });
-
-            this.data.connectWebSocket(
-                "FINALIZE_KIOSK_PAYMENT",
-                this._onFinalizeKioskPayment.bind(this)
-            );
         }
         this.data.connectWebSocket("REMOVE_ORDERS", (data) => {
             this.removeOrdersByAccessTokens(data.deleted_order_tokens);
@@ -194,36 +182,6 @@ export class SelfOrder extends Reactive {
             this.addToCart(productTemplate, 1, "", {}, {});
             this.router.navigate("cart");
         });
-    }
-
-    _onFinalizeKioskPayment(args) {
-        const payment = this.currentOrder?.payment_ids.at(-1);
-        const order_id = args.order_id || payment?.pos_order_id?.id;
-        if (
-            !this.currentOrder ||
-            this.currentOrder.id !== order_id ||
-            payment?.pos_order_id?.id !== order_id
-        ) {
-            return;
-        }
-
-        if (args.status === "success" && payment) {
-            payment.setPaymentStatus("done");
-            rpc(`/kiosk/payment/${this.config.id}/kiosk`, {
-                order: this.currentOrder.serializeForORM(),
-                access_token: this.access_token,
-                payment_method_id: payment.payment_method_id.id,
-            });
-        } else {
-            for (const p of this.currentOrder.payment_ids) {
-                this.currentOrder.removePaymentline(p);
-            }
-            this.paymentError = true;
-            this.notification.add(_t("Please try again or select another payment method"), {
-                title: args.error || _t("Payment failed"),
-                type: "danger",
-            });
-        }
     }
 
     /**
@@ -392,6 +350,20 @@ export class SelfOrder extends Reactive {
         }
     }
 
+    resetTip() {
+        const tipLine = this.currentOrder.lines.find((l) => l.isTipLine());
+        if (!tipLine) {
+            return;
+        }
+        // Synced tip lines are zeroed instead of deleted to avoid server-side issues (especially in pay-after-meal mode).
+        if (tipLine.isSynced) {
+            tipLine.setUnitPrice(0);
+        } else {
+            tipLine.delete();
+        }
+        this.currentOrder.setTip(false);
+    }
+
     async addToCart(
         productTemplate,
         qty,
@@ -401,6 +373,7 @@ export class SelfOrder extends Reactive {
         comboValues = {}
     ) {
         const product = productTemplate.product_variant_ids[0];
+        this.resetTip();
         const values = getOrderLineValues(
             this,
             productTemplate,
@@ -578,8 +551,9 @@ export class SelfOrder extends Reactive {
         this.productByCategIds = this.models["product.template"].getAllBy("pos_categ_ids");
 
         const excludedProductTemplateIds = new Set(
-            this.config._pos_special_products_ids
-                .map((id) => this.models["product.product"].get(id)?.product_tmpl_id?.id)
+            this.models["product.product"]
+                .filter((p) => p._is_pos_special_product)
+                .map((p) => p.product_tmpl_id?.id)
                 .filter(Boolean)
         );
 
@@ -806,11 +780,11 @@ export class SelfOrder extends Reactive {
     }
 
     async sendDraftOrderToServer() {
-        if (
-            Object.keys(this.currentOrder.changes).length === 0 ||
-            this.currentOrder.lines.length === 0
-        ) {
-            return this.currentOrder;
+        const order = this.currentOrder;
+        const hasTipLine = this.config.tip_product_id && order.lines.some((l) => l.isTipLine());
+        // tip is excluded from `changes`, so a tip-only update still needs a sync
+        if ((Object.keys(order.changes).length === 0 && !hasTipLine) || order.lines.length === 0) {
+            return order;
         }
 
         try {
@@ -1117,6 +1091,9 @@ export class SelfOrder extends Reactive {
             (acc, [key, { qty }]) => {
                 const line = this.models["pos.order.line"].getBy("uuid", key);
                 if (line && qty && qty > 0) {
+                    if (line.isTipLine()) {
+                        return acc;
+                    }
                     if (!line.combo_parent_id) {
                         acc.count += qty;
                     }

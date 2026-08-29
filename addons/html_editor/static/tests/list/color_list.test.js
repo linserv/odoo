@@ -10,6 +10,7 @@ import { execCommand } from "../_helpers/userCommands";
 import { unformat } from "../_helpers/format";
 import { nodeSize } from "@html_editor/utils/position";
 import { ContrastPlugin } from "@html_editor/main/font/contrast_plugin";
+import { defineStyle } from "@web/../tests/web_test_helpers";
 
 test("should apply color to completely selected list item", async () => {
     await testEditor({
@@ -317,6 +318,11 @@ test("should remove color from partially selected text inside list item", async 
 });
 
 test("should remove data-original-color attribute with color on removeFormat", async () => {
+    defineStyle(`
+        :root {
+            --o-control-panel-background-color: rgb(248, 249, 250);
+        }
+    `);
     await testEditor({
         contentBefore: unformat(`
             <ol>
@@ -330,7 +336,7 @@ test("should remove data-original-color attribute with color on removeFormat", a
         `),
         contentBeforeEdit: unformat(`
             <ol>
-                <li style="color: rgb(183, 183, 183);" data-original-color="rgb(255, 255, 255)">
+                <li style="color: rgb(178, 178, 178);" data-original-color="rgb(255, 255, 255)">
                     <p>[abc]</p>
                     <ol class="o_default_color">
                         <li style="color: rgb(255, 0, 0);">def</li>
@@ -411,5 +417,13 @@ test("should apply gradient color style only on font inside list item", async ()
         ),
         contentAfter:
             '<ol><li><font class="text-gradient" style="background-image: linear-gradient(135deg, rgb(255, 0, 0) 0%, rgb(0, 0, 255) 100%);">[abc]</font></li><li>def</li></ol>',
+    });
+});
+
+test("should be able to remove background-color from list item", async () => {
+    await testEditor({
+        contentBefore: `<ul><li style="background-color: red;">[a]</li></ul>`,
+        stepFunction: (editor) => execCommand(editor, "removeFormat"),
+        contentAfter: `<ul><li>[a]</li></ul>`,
     });
 });

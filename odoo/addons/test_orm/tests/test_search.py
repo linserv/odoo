@@ -1,6 +1,8 @@
+from unittest.mock import patch
+
 from odoo.fields import Command, Domain
 from odoo.tests import TransactionCase, tagged, warmup
-from odoo.tools import SQL, mute_logger
+from odoo.tools import BinaryBytes, SQL, mute_logger
 
 from .common import TestOrmPartnerCommon
 from odoo.addons.test_orm.tests.test_domain_expression import TransactionExpressionCase
@@ -1773,6 +1775,70 @@ class TestSearchAny(TransactionCase):
             model.search(Domain('foo_ids', 'any', Domain('bar_id', 'any', Domain('name', '=', 'a'))))
 
 
+@tagged('at_install', '-post_install')
+class TestAnyDomainSearchContext(TransactionCase):
+    """A plain (field, 'in', ids) condition in the outer search domain
+    should narrow the comodel scan of a nested `any` domain (e.g. an ir.rule
+    like ('attachment_id.res_access_write', '=', True)), instead of falling
+    back to scanning every candidate record.
+
+    This needs a real ir.rule (not a plain `.search([(..., 'any', ...)])`
+    call) because `search_domain` - the context key that carries the outer
+    domain down to the `any` optimizer - is only ever populated in
+    `BaseModel._search` while optimizing `sec_domain`, the security domain
+    built from the model's ir.rule records.
+    """
+
+    def test_any_domain_search_context_narrows_scan(self):
+        partner = self.env.ref('base.main_partner')
+        decoys = self.env['ir.attachment'].create([
+            {'name': f'decoy{i}', 'res_model': 'res.partner', 'res_id': partner.id, 'raw': b'x'}
+            for i in range(5)
+        ])
+        target = self.env['ir.attachment'].create({
+            'name': 'target', 'res_model': 'res.partner', 'res_id': partner.id, 'raw': b'x',
+        })
+        link = self.env['test_orm.attachment_link'].create({'attachment_id': target.id})
+
+        # dotted path -> decomposed into ('attachment_id', 'any', [...]),
+        # exercising the code path described in the class docstring.
+        model_id = self.env['ir.model']._get('test_orm.attachment_link').id
+        self.env['ir.access'].search([('model_id', '=', model_id)]).unlink()
+        self.env['ir.access'].create({
+            'name': 'test any domain search context',
+            'model_id': model_id,
+            'domain': "[('attachment_id.res_access_read', '=', True)]",
+            'group_id': self.env.ref('base.group_user').id,
+            'operation': 'r',
+        })
+
+        restricted_user = self.env['res.users'].create({
+            'name': 'Restricted user',
+            'login': 'test_any_domain_search_context_user',
+            'group_ids': [Command.set([self.env.ref('base.group_user').id])],
+        })
+
+        Attachment = self.registry['ir.attachment']
+        original_search_fetch = Attachment.search_fetch
+        seen_ids = set()
+
+        def spy(self, domain, *args, **kwargs):
+            result = original_search_fetch(self, domain, *args, **kwargs)
+            seen_ids.update(result.ids)
+            return result
+
+        with patch.object(Attachment, 'search_fetch', spy):
+            result = self.env['test_orm.attachment_link'].with_user(restricted_user).search(
+                [('attachment_id', 'in', [target.id])]
+            )
+
+        self.assertEqual(result, link)
+        self.assertFalse(
+            seen_ids & set(decoys.ids),
+            "the fallback scan should never look at attachments unrelated to the search",
+        )
+
+
 @tagged('at_install', '-post_install')  # LEGACY at_install
 class TestFlushSearch(TransactionCase):
 
@@ -2141,6 +2207,43 @@ class TestDatePartNumber(TransactionExpressionCase):
 
         result = self._search(self.env["test_orm.person.account"], [('person_id.birthday.month_number', '=', 2)])
         self.assertEqual(result, account)
+
+
+class TestBinarySearch(TransactionExpressionCase):
+    def test_binary_search(self):
+        binary_value = BinaryBytes(b'content', filename='test')
+        binary_value_noname = BinaryBytes(b'nocontent')
+        record = self.env['test_orm.mixed'].create({
+            'binary_with_attachment': binary_value,
+            'binary_without_attachment': binary_value,
+        })
+        record_noname = record.create({
+            'binary_with_attachment': binary_value_noname,
+            'binary_without_attachment': binary_value_noname,
+        })
+        empty = record.create({})
+        records = record + record_noname + empty
+
+        for field_name in ('binary_with_attachment', 'binary_without_attachment'):
+            with self.subTest("per field", field=field_name):
+                has_att = field_name == 'binary_with_attachment'
+                res = self._search(record, [(field_name, '=', False)])
+                self.assertEqual(res & records, empty)
+
+                res = self._search(record, [(f'{field_name}.size', '>', 0)])
+                self.assertEqual(res & records, record + record_noname)
+
+                res = self._search(record, [(f'{field_name}.size', '=', 0)])
+                self.assertEqual(res & records, empty)
+
+                res = self._search(record, [(f'{field_name}.filename', 'like', 't%')])
+                self.assertEqual(res & records, record if has_att else record.browse())
+
+                with self.assertRaises(ValueError):
+                    record.search([(field_name, '=', binary_value)])
+
+                with self.assertRaises(ValueError):
+                    self._search(record, [(field_name, 'like', 't%')])
 
 
 @tagged('at_install', '-post_install')  # LEGACY at_install

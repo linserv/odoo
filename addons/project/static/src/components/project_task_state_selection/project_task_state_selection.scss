@@ -3,35 +3,21 @@
         width: $o-bubble-color-size-xl;
         height: $o-bubble-color-size-xl;
         text-align: center;
-        margin-top: -0.5px;
     }
 
-    .oi-lg {
-        font-size: 1.75em;
-        margin-top: -2.5px;
-        max-width: 20px;
-        max-height: 20px;
-    }
-
-    [data-icon="hourglass_empty"] {
-        font-size: 1.4em !important;
-        margin-top: 0.5px !important;
+    .oi {
+        font-size: $o-bubble-color-size-xl;
     }
 
     .o_task_state_list_view {
         height: $o-line-size;
 
-        .oi-lg {
-            font-size: 1.315em;
-            vertical-align: -6%;
+        .oi {
+            font-size: $o-bubble-color-size;
         }
         .o_status {
             width: $o-bubble-color-size;
             height: $o-bubble-color-size;
-        }
-        [data-icon="hourglass_empty"] {
-            font-size: 1.15em !important;
-            padding-left: 1px !important;
         }
     }
 
@@ -41,27 +27,7 @@
 }
 
 .project_task_state_selection_menu {
-    .oi {
-        margin-top: -1.5px;
-        font-size: 1.315em;
-        vertical-align: -6%;
-        transform: translateX(-50%);
-    }
-
-    .o_status {
-        margin-top: 1px;
-        width: 14.65px;
-        height: 14.65px;
-        text-align: center;
-    }
-
     .o_status_changes_requested {
         color: $warning;
-    }
-}
-
-.o_field_task_stage_with_state_selection {
-    .oi-lg {
-        font-size: 1.57em;
     }
 }

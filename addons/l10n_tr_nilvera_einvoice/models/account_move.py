@@ -39,6 +39,8 @@ TICARIFATURA_ANSWER_TO_FIELD_VALUE_MAP = {
     "documentAnsweredAutomatically": "commercial_answered_automatically",
 }
 
+SUCCESSFUL_SEND_STATUSES = {'succeed', 'commercial_approved', 'commercial_answered_automatically'}
+
 UNSYNCED_COMMERCIAL_MOVE_DOMAIN = [
     ("move_type", "in", ["out_invoice", "in_invoice"]),
     ("l10n_tr_gib_invoice_scenario", "=", "TICARIFATURA"),
@@ -142,6 +144,17 @@ class AccountMove(models.Model):
         string="GİB Product Export Invoice",
         help="Check this box if this is a product export invoice.",
     )
+    l10n_tr_sales_type = fields.Selection(
+        selection=[
+            ('normal', "Normal Sale"),
+            ('website', "Website Sale"),
+        ],
+        compute='_compute_l10n_tr_sales_type',
+        string="Sales Type",
+        store=True,
+        readonly=False,
+        copy=False,
+    )
     l10n_tr_shipping_type = fields.Selection(
         selection=[
             ('1', "Sea Transportation"),
@@ -173,7 +186,7 @@ class AccountMove(models.Model):
         "list of available exemption codes based on the selected "
         "GIB Invoice Type or other criteria.",
     )
-    l10n_tr_zero_vat_warning = fields.Binary(compute="_compute_l10n_tr_l10n_tr_zero_vat_warning")
+    l10n_tr_zero_vat_warning = fields.Boolean(compute="_compute_l10n_tr_l10n_tr_zero_vat_warning")
     l10n_tr_nilvera_customer_status = fields.Selection(
         string="Partner Nilvera Status",
         related='partner_id.l10n_tr_nilvera_customer_status',
@@ -283,6 +296,18 @@ class AccountMove(models.Model):
     def _compute_l10n_tr_exemption_code_id(self):
         for record in self:
             record.l10n_tr_exemption_code_id = False
+
+    @api.depends('partner_id')
+    def _compute_l10n_tr_sales_type(self):
+        for move in self:
+            if (
+                move.country_code == 'TR'
+                and move.is_sale_document()
+                and move.l10n_tr_nilvera_customer_status == 'earchive'
+            ):
+                move.l10n_tr_sales_type = 'website' if 'website_id' in move._fields and move.website_id else 'normal'
+            else:
+                move.l10n_tr_sales_type = None
 
     @api.onchange("partner_id")
     def _onchange_partner_id(self):
@@ -677,6 +702,8 @@ class AccountMove(models.Model):
                     )
 
                     nilvera_status = response.get('InvoiceStatus', {}).get('Code') or response.get('StatusCode')
+                    answer = response.get('Answer') or {}
+                    answer_code = answer.get('AnswerCode')
                     if nilvera_status in dict(invoice._fields['l10n_tr_nilvera_send_status'].selection):
                         if nilvera_status == 'error':
                             invoice.l10n_tr_nilvera_send_status = nilvera_status
@@ -689,11 +716,15 @@ class AccountMove(models.Model):
                                     response.get('InvoiceStatus', {}).get('DetailDescription') or response.get('ReportStatus'),
                                 )
                             )
-                        elif invoice.l10n_tr_gib_invoice_scenario == "TICARIFATURA" and invoice.move_type in {'out_invoice', 'in_invoice'} and nilvera_status == 'succeed':
-                            if response['Answer'] and response['Answer'].get('AnswerCode') in {'approved', 'rejected', 'documentAnsweredAutomatically'}:
-                                invoice.l10n_tr_nilvera_send_status = TICARIFATURA_ANSWER_TO_FIELD_VALUE_MAP[response['Answer']['AnswerCode']]
-                                if response['Answer']['AnswerCode'] == 'rejected':
-                                    invoice._l10n_tr_action_process_rejected_ticarifatura(response['Answer'].get('Description', ''), client)
+                        elif (
+                            invoice.l10n_tr_gib_invoice_scenario == "TICARIFATURA"
+                            and invoice.move_type in {'out_invoice', 'in_invoice'}
+                            and nilvera_status == 'succeed'
+                            and answer_code in {'approved', 'rejected', 'documentAnsweredAutomatically'}
+                        ):
+                            invoice.l10n_tr_nilvera_send_status = TICARIFATURA_ANSWER_TO_FIELD_VALUE_MAP[answer_code]
+                            if answer_code == 'rejected':
+                                invoice._l10n_tr_action_process_rejected_ticarifatura(answer.get('Description', ''), client)
                         else:
                             invoice.l10n_tr_nilvera_send_status = nilvera_status
                     else:
@@ -701,6 +732,10 @@ class AccountMove(models.Model):
 
     def l10n_tr_nilvera_fetch_move_status(self):
         self._l10n_tr_nilvera_get_submitted_document_status()
+        if successful_moves := self.filtered(
+            lambda move: move.l10n_tr_nilvera_send_status in SUCCESSFUL_SEND_STATUSES and not move.l10n_tr_nilvera_pdf_id
+        ):
+            successful_moves.l10n_tr_nilvera_get_pdf()
 
     def _l10n_tr_nilvera_get_documents(self, invoice_channel="einvoice", document_category="Purchase", journal_type="purchase"):
         with _get_nilvera_client(self.env._, self.env.company) as client:
@@ -921,7 +956,7 @@ class AccountMove(models.Model):
             ):
                 continue
             status = invoice.l10n_tr_nilvera_send_status
-            if status in {'succeed', 'draft_sent'}:
+            if status in SUCCESSFUL_SEND_STATUSES | {'draft_sent'}:
                 successful_and_draft_invoice_ids.append(invoice.id)
             elif status in {'sent', 'waiting'}:
                 pending_invoices_ids.append(invoice.id)
@@ -933,7 +968,7 @@ class AccountMove(models.Model):
         # Update pending invoices to catch any that succeeded since the last check.
         if pending_invoices:
             pending_invoices._l10n_tr_nilvera_get_submitted_document_status()
-            newly_succeed = pending_invoices.filtered(lambda i: i.l10n_tr_nilvera_send_status == 'succeed')
+            newly_succeed = pending_invoices.filtered(lambda i: i.l10n_tr_nilvera_send_status in SUCCESSFUL_SEND_STATUSES)
             successful_and_draft_invoices |= newly_succeed
             failed_invoices |= pending_invoices - newly_succeed
 

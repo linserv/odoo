@@ -782,13 +782,11 @@
                                         class="fw-normal text-muted"
                                     />
                                 </column>
-                                <column
-                                    width="[130px]"
-                                    column_invisible="parent.state != 'sale'"
-                                >
+                                <column column_invisible="parent.state != 'sale'">
                                     <field
                                         name="qty_delivered"
                                         string="Delivered"
+                                        invisible="display_type"
                                         decoration-info="(not display_type and invoice_status == 'to invoice')"
                                         decoration-bf="(not display_type and invoice_status == 'to invoice')"
                                         decoration-danger="qty_overage and qty_delivered &gt; qty_invoiced"
@@ -798,6 +796,7 @@
                                     <field
                                         name="qty_delivered_percent"
                                         widget="labeled_percentage_field"
+                                        invisible="display_type"
                                         decoration-info="(not display_type and invoice_status == 'to invoice')"
                                         decoration-bf="(not display_type and invoice_status == 'to invoice')"
                                         readonly="qty_delivered_method != 'manual' or is_downpayment or product_uom_qty == 0"
@@ -824,7 +823,11 @@
                                     require duplicating this definition.
                                 -->
                                 <column name="price_unit">
-                                    <field name="price_unit" readonly="qty_invoiced &gt; 0"/>
+                                    <field
+                                        name="price_unit"
+                                        invisible="display_type"
+                                        readonly="qty_invoiced &gt; 0"
+                                    />
                                 </column>
                                 <field
                                     name="tax_ids"
@@ -840,7 +843,6 @@
                                     width="50px"
                                     optional="show"/>
                                 <column
-                                    width="[170px]"
                                     column_invisible="parent.document_tax_mode == 'tax_included'"
                                 >
                                     <field
@@ -851,20 +853,19 @@
                                     <field
                                         name="price_subtotal"
                                         string="Tax Excl."
-                                        invisible="is_downpayment"
+                                        invisible="display_type or is_downpayment"
                                         widget="labeled_monetary_field"
                                         optional="hide"
                                     />
                                     <field
                                         name="price_total"
                                         string="Tax Incl."
-                                        invisible="is_downpayment"
+                                        invisible="display_type or is_downpayment"
                                         widget="labeled_monetary_field"
                                         optional="hide"
                                     />
                                 </column>
                                 <column
-                                    width="[170px]"
                                     column_invisible="parent.document_tax_mode == 'tax_excluded'"
                                 >
                                     <field
@@ -875,14 +876,14 @@
                                     <field
                                         name="price_subtotal"
                                         string="Tax Excl."
-                                        invisible="is_downpayment"
+                                        invisible="display_type or is_downpayment"
                                         widget="labeled_monetary_field"
                                         optional="hide"
                                     />
                                     <field
                                         name="price_total"
                                         string="Tax Incl."
-                                        invisible="is_downpayment"
+                                        invisible="display_type or is_downpayment"
                                         widget="labeled_monetary_field"
                                         optional="hide"
                                     />
@@ -914,7 +915,7 @@
                                 <templates>
                                     <t t-name="card" class="row g-0 ps-0 pe-0">
                                         <t t-if="!record.display_type.raw_value">
-                                            <aside class="col-2 p-1">
+                                            <aside t-if="record.product_id.value" class="col-2 p-1">
                                                 <span t-att-title="record.product_id.value">
                                                     <field name="product_id" widget="image" options="{'preview_image': 'image_128', 'img_class': 'object-fit-contain w-100'}"/>
                                                 </span>
@@ -926,7 +927,8 @@
                                                             title="This product is archived"
                                                             invisible="state not in ['draft', 'sent'] or not is_product_archived"
                                                         />
-                                                        <field name="product_id" class="fw-bold"/>
+                                                        <field t-if="record.product_id.value" name="product_id" class="fw-bold"/>
+                                                        <field t-else="" name="name" class="fw-bold"/>
                                                     </div>
                                                     <div class="col-auto">
                                                         <field name="price_subtotal" class="fw-bolder float-end pe-1" widget="monetary"/>

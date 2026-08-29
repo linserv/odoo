@@ -1,7 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, time, timedelta, UTC
 from hashlib import sha512
 from secrets import choice
 
@@ -51,6 +51,24 @@ def is_channel(channel):
     :rtype: bool
     """
     return channel.channel_type == "channel"
+
+
+def is_videocall(channel):
+    """Predicate to filter the channels hosting a video call meeting.
+
+    :returns: Whether the channel is displayed as a full screen video call.
+    :rtype: bool
+    """
+    return channel.default_display_mode == "video_full_screen"
+
+
+def is_meeting(channel):
+    """Predicate to filter the channels a meeting takes place in, its threads included.
+
+    :returns: Whether the channel hosts a video call meeting or is a thread of one.
+    :rtype: bool
+    """
+    return is_videocall(channel) or bool(channel.parent_channel_id)
 
 
 def is_channel_or_group(channel):
@@ -121,6 +139,8 @@ class DiscussChannel(models.Model):
     can_self_edit_readonly_channel = fields.Boolean(compute="_compute_can_self_edit_readonly_channel")
     # sudo: discuss.channel - sudo for performance, invited members can be accessed on accessible channel
     invited_member_ids = fields.One2many("discuss.channel.member", compute="_compute_invited_member_ids", compute_sudo=True)
+    meeting_start_dt = fields.Datetime("Meeting Start", compute="_compute_meeting_dt")
+    meeting_stop_dt = fields.Datetime("Meeting End", compute="_compute_meeting_dt")
     member_count = fields.Integer(string="Member Count", compute='_compute_member_count', compute_sudo=True)
     message_count = fields.Integer("# Messages", readonly=True, compute="_compute_message_count")
     last_interest_dt = fields.Datetime(
@@ -423,6 +443,20 @@ class DiscussChannel(models.Model):
         for channel in self:
             channel.invited_member_ids = members_by_channel.get(channel)
 
+    @api.depends("call_history_ids.end_dt", "create_date", "default_display_mode", "parent_channel_id")
+    def _compute_meeting_dt(self):
+        """When the meeting hosted by a video call channel takes place. An ad-hoc meeting
+        ("Start Now") starts when its channel is created and lasts as long as the call it was
+        started for, and a thread of a meeting takes place along with the meeting it belongs to."""
+        # sudo: discuss.call.history - when the call of an accessible channel ended is not private
+        calls_by_meeting = (self | self.parent_channel_id).sudo().call_history_ids.grouped("channel_id")
+        for channel in self:
+            meeting = channel.parent_channel_id or channel
+            is_meeting = meeting.default_display_mode == "video_full_screen"
+            last_call = calls_by_meeting.get(meeting, self.env["discuss.call.history"])[:1]
+            channel.meeting_start_dt = is_meeting and meeting.create_date
+            channel.meeting_stop_dt = is_meeting and (last_call.end_dt or meeting.create_date)
+
     @api.depends('channel_member_ids')
     def _compute_member_count(self):
         read_group_res = self.env['discuss.channel.member']._read_group(domain=[('channel_id', 'in', self.ids)], groupby=['channel_id'], aggregates=['__count'])
@@ -593,6 +627,20 @@ class DiscussChannel(models.Model):
                             channels=", ".join(failing_channels.mapped("name")),
                         )
                     )
+        if (
+            "default_display_mode" in vals
+            and not self.env.user._is_admin()
+            and self.filtered(
+                lambda channel: (
+                    channel.default_display_mode != vals["default_display_mode"]
+                    # sudo: discuss.channel.member - allow reading channel_role for access checks
+                    and channel.self_member_id.sudo().channel_role not in ("owner", "admin")
+                ),
+            )
+        ):
+            raise AccessError(
+                self.env._("Only the channel owner or database admins can convert a meeting to a chat."),
+            )
         result = super().write(vals)
         if vals.get('group_ids'):
             self._subscribe_users_automatically()
@@ -928,8 +976,9 @@ class DiscussChannel(models.Model):
 
     def invite_by_email(self, emails):
         """
-        Send channel invitation emails to a list of email addresses. Existing members'
-        email addresses are ignored.
+        Send channel invitation emails to a list of email addresses.
+        This creates "pending" members until the member has joined the conversation.
+        These "pending" members can have their invitation sent again by email.
 
         :param emails: List of email addresses to invite.
         :type emails: list[str]
@@ -943,7 +992,8 @@ class DiscussChannel(models.Model):
                 % self.channel_type
             )
         eligible_emails = OrderedSet(norm for email in emails if email and (norm := email_normalize(email)))
-        # Removing emails linked to members of this channel.
+        # Removing emails linked to members of this channel, keeping the ones
+        # whose invitation is still pending to send them the link again.
         member_domain = Domain("channel_id", "=", self.id) & Domain.OR(
             [
                 [(field, "=ilike", email)]
@@ -951,6 +1001,7 @@ class DiscussChannel(models.Model):
                 for field in ("guest_id.email", "partner_id.email")
             ],
         )
+        member_domain &= Domain("invitation_sent_dt", "=", False)
         eligible_emails -= set(
             self.env["discuss.channel.member"]
             .search_fetch(member_domain, ["partner_id", "guest_id"])
@@ -1004,10 +1055,67 @@ class DiscussChannel(models.Model):
                     "Could not contact the mail server, please check your outgoing email server configuration."
                 )
             raise UserError(error_msg) from mde
+        invited_emails = list(eligible_emails)
+        found_partners = self.env["res.partner"]._find_or_create_from_emails(
+            invited_emails, no_create=True
+        )
+        partners = self.env["res.partner"].union(*found_partners)
+        guest_emails = [
+            email for email, partner in zip(invited_emails, found_partners) if not partner
+        ]
+        guests = self.env["mail.guest"].search_fetch([("email", "in", guest_emails)])
+        if guests_to_create := [
+            {"email": email, "name": email}
+            for email in guest_emails
+            if email not in guests.mapped("email")
+        ]:
+            # sudo: mail.guest - internal users only have read access on guests, and the
+            # invited addresses back no contact to invite under their own identity.
+            guests |= self.env["mail.guest"].sudo().create(guests_to_create).sudo(False)
+        invitation_sent_dt = fields.Datetime.now()
+        create_member_params = {"invitation_sent_dt": invitation_sent_dt}
+        new_members = self._add_members(
+            guests=guests, create_member_params=create_member_params, post_joined_message=False
+        )
+        new_members += self._add_members(
+            partners=partners, create_member_params=create_member_params
+        )
+        resent_members = self.env["discuss.channel.member"].sudo().search_fetch(
+            Domain("channel_id", "=", self.id)
+            & (Domain("guest_id", "in", guests.ids) | Domain("partner_id", "in", partners.ids))
+            & Domain("id", "not in", new_members.ids),
+            ["invitation_sent_dt"],
+        )
+        resent_members.invitation_sent_dt = invitation_sent_dt
 
     # ------------------------------------------------------------
     # RTC
     # ------------------------------------------------------------
+
+    def _get_today_bounds(self):
+        """Start and end of the current day of the user asking, in UTC."""
+        today = fields.Date.context_today(self)
+        return tuple(
+            datetime.combine(today, bound, tzinfo=self.env.tz).astimezone(UTC).replace(tzinfo=None)
+            for bound in (time.min, time.max)
+        )
+
+    def _get_meeting_today_domain(self):
+        """Channels hosting a meeting that takes place today. An ad-hoc meeting ("Start Now")
+        takes place the day its channel is created."""
+        start_of_day, end_of_day = self._get_today_bounds()
+        return (
+            Domain("default_display_mode", "=", "video_full_screen")
+            & Domain("create_date", ">=", start_of_day)
+            & Domain("create_date", "<=", end_of_day)
+        )
+
+    def _get_meeting_ongoing_domain(self):
+        """Channels whose meeting is not over yet. An ad-hoc meeting ("Start Now") lasts as
+        long as the call it was started for."""
+        return Domain("default_display_mode", "=", "video_full_screen") & Domain(
+            "call_history_ids", "any", [("end_dt", "=", False)]
+        )
 
     def _get_call_notification_tag(self):
         self.ensure_one()
@@ -1061,7 +1169,13 @@ class DiscussChannel(models.Model):
 
         # notify only user input (comment, whatsapp messages or incoming / outgoing emails)
         message_type = message.message_type
-        if message_type not in ('comment', 'email', 'email_outgoing', 'whatsapp_message'):
+        if (
+            message_type not in ("comment", "email", "email_outgoing", "whatsapp_message")
+            and not (
+                message_type == "notification"
+                and message.subtype_id.id == self.env["ir.model.data"]._xmlid_to_res_id("mail.mt_important_notification")
+            )
+        ):
             return []
 
         recipients_data = []
@@ -1070,18 +1184,25 @@ class DiscussChannel(models.Model):
         if pids:
             email_from = tools.email_normalize(message.email_from)
             self.env['res.partner'].flush_model(['active', 'email', 'partner_share'])
-            self.env['res.users'].flush_model(['notification_type', 'partner_id'])
+            self.env['res.users'].flush_model(['active', 'partner_id', 'share'])
             sql_query = SQL(
                 """
-                SELECT DISTINCT ON (partner.id) partner.id,
+                SELECT partner.id,
                        partner.email_normalized,
                        partner.lang,
                        partner.name,
                        partner.partner_share,
-                       users.id as uid,
-                       COALESCE(users.share, FALSE) as ushare
+                       sub_user.uid as uid,
+                       COALESCE(sub_user.share, FALSE) as ushare
                   FROM res_partner partner
-             LEFT JOIN res_users users on partner.id = users.partner_id
+     LEFT JOIN LATERAL (
+                        SELECT users.id AS uid,
+                               users.share AS share
+                          FROM res_users users
+                         WHERE users.partner_id = partner.id AND users.active
+                      ORDER BY users.share ASC NULLS FIRST, users.id ASC
+                         FETCH FIRST ROW ONLY
+                       ) sub_user ON TRUE
                  WHERE partner.active IS TRUE
                        AND partner.email != %(email)s
                        AND partner.id IN %(partner_ids)s AND partner.id != %(author_id)s
@@ -1281,13 +1402,20 @@ class DiscussChannel(models.Model):
                 ("channel_id", "=", self.parent_channel_id.id),
                 ("partner_id", "in", message.partner_ids.ids),
             ])
+
+            def wants_channel_notifications(partner):
+                return not partner.user_ids or any(
+                    user.res_users_settings_id.channel_notifications != "no_notif"
+                    for user in partner.user_ids
+                )
+
             to_invite = members.filtered(lambda m:
                 m.custom_notifications != "no_notif" if m.custom_notifications
-                else m.partner_id.user_ids.res_users_settings_id.channel_notifications != "no_notif"
+                else wants_channel_notifications(m.partner_id)
             ).partner_id
             if self.parent_channel_id.channel_type == "channel":
-                to_invite |= (message.partner_ids - members.partner_id).filtered(lambda p:
-                    p.user_ids.res_users_settings_id.channel_notifications != "no_notif"
+                to_invite |= (message.partner_ids - members.partner_id).filtered(
+                    wants_channel_notifications
                 )
             self._add_members(partners=to_invite)
         return super()._message_post_after_hook(message)
@@ -1362,10 +1490,9 @@ class DiscussChannel(models.Model):
             :param users : the users to notify
         """
         for user in users:
-            Store(bus_channel=user).add(
-                self.with_user(user).with_context(allowed_company_ids=[]),
-                "_store_channel_fields",
-            )
+            channel = self.with_user(user).with_context(allowed_company_ids=[])
+            if channel.has_access("read"):
+                Store(bus_channel=user).add(channel, "_store_channel_fields")
 
     # ------------------------------------------------------------
     # INSTANT MESSAGING API
@@ -1430,6 +1557,8 @@ class DiscussChannel(models.Model):
         self.ensure_one()
         guest = self.env["mail.guest"]
         if member := self.self_member_id:
+            if member.invitation_sent_dt:
+                member.invitation_sent_dt = False
             return member.partner_id, member.guest_id
         if not self.env.user._is_public():
             self._add_members(users=self.env.user, post_joined_message=post_joined_message)
@@ -1492,7 +1621,7 @@ class DiscussChannel(models.Model):
         res.one("discuss_category_id", "_store_category_fields", sudo=True)
         res.attr("channel_type")
         res.attr("create_uid")
-        res.attr("create_date", predicate=lambda channel: channel.default_display_mode == "video_full_screen" or channel.parent_channel_id)
+        res.attr("create_date", predicate=is_meeting)
         res.many(
             "channel_member_ids",
             "_store_member_fields",
@@ -1506,9 +1635,19 @@ class DiscussChannel(models.Model):
         # sudo: we are reading only the ids (comodel is inaccessible)
         res.many("group_ids", [], predicate=is_channel, sudo=True)
         res.one("group_public_id", ["full_name"], predicate=is_channel)
+        videocalls = self.filtered(is_videocall)
+        today_meetings = self.browse()
+        if videocalls:
+            # sudo: discuss.channel: when an accessible video call takes place is not private
+            today_meetings = videocalls.sudo().search(
+                Domain("id", "in", videocalls.ids) & self._get_meeting_today_domain()
+            )
+        res.attr("has_meeting_today", lambda channel: channel in today_meetings, predicate=is_videocall)
         res.many("invited_member_ids", "_store_avatar_card_fields", mode="ADD")
         res.attr("is_readonly", predicate=is_channel)
         res.attr("last_interest_dt")
+        res.attr("meeting_start_dt", predicate=is_meeting)
+        res.attr("meeting_stop_dt", predicate=is_meeting)
         res.attr("member_count")
         res.attr("message_count", predicate=lambda c: c.parent_channel_id)
         res.attr("name")
@@ -1560,6 +1699,7 @@ class DiscussChannel(models.Model):
             self.env["res.partner"]
             .with_context(active_test=False)
             .search([("id", "in", partners_to)])
+            .with_env(self.env)
         ) | self.env.user.partner_id
         if len(partners) > 2:
             raise UserError(_("A chat should not be created with more than 2 persons. Create a group instead."))
@@ -1618,7 +1758,7 @@ class DiscussChannel(models.Model):
                     "name": ", ".join(partners.mapped("name")),
                 }
             )
-            channel._broadcast(partners.user_ids)
+            channel._broadcast(partners.with_context(active_test=True).user_ids)
         return channel
 
     def _allow_invite_by_email(self):

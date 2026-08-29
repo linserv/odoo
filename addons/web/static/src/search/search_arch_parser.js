@@ -2,7 +2,7 @@ import { makeContext } from "@web/core/context";
 import { _t } from "@web/core/l10n/translation";
 import { evaluateBooleanExpr, evaluateExpr } from "@web/core/py_js/py";
 import { visitXML } from "@web/core/utils/xml";
-import { DEFAULT_INTERVAL } from "@web/search/utils/dates";
+import { DEFAULT_INTERVAL, RELATIVE_FILTER_OPTIONS } from "@web/search/utils/dates";
 
 const ALL = _t("All");
 const DEFAULT_LIMIT = 200;
@@ -170,6 +170,16 @@ export class SearchArchParser {
                         orm
                             .call(relation, "read", [value, ["display_name"]], { context })
                             .then((results) => {
+                                if (!results.length) {
+                                    console.error(
+                                        _t(
+                                            "The autocomplete value for %(field)s has not been found: the record with id %(id)s doesn't seem to exist",
+                                            { field: preField.fieldName, id: value }
+                                        )
+                                    );
+                                    preField.isDefault = false;
+                                    return;
+                                }
                                 preField.defaultAutocompleteValue.label =
                                     results[0]["display_name"];
                             })
@@ -285,6 +295,15 @@ export class SearchArchParser {
                 ) {
                     preSearchItem.defaultGeneratorIds = value.split(",");
                 }
+            }
+        }
+        if (preSearchItem.type === "dateFilter") {
+            const relativeOptionId = preSearchItem.defaultGeneratorIds.find((id) =>
+                Object.hasOwn(RELATIVE_FILTER_OPTIONS, id)
+            );
+            if (relativeOptionId) {
+                preSearchItem.defaultRelativeOptionId = relativeOptionId;
+                preSearchItem.defaultGeneratorIds = [];
             }
         }
         if (node.hasAttribute("string")) {

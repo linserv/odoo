@@ -30,16 +30,20 @@
 
         <template id="message_activity_assigned">
 <div style="margin: 0px; padding: 0px; font-size: 13px;">
-    Dear <span t-field="activity.user_id.name"/>,
+    <!-- All activities must be assigned to the same user (activities.user_id). -->
+    Dear <span t-field="activities.user_id.name"/>,
     <br/><br/>
     <p>
-        <span t-field="activity.create_uid.name"/> has just assigned you the following activity:
+        <span t-field="author.name"/>
+        <t t-if="len(activities) == 1">has just assigned you the following activity on document</t>
+        <t t-else="">has just assigned you the following activities on document</t>
+        "<t t-out="activities[0].res_name"/>"<t t-if="model_description"> (<t t-out="model_description"/>)</t>:
         <ul>
-            <li>Document: "<t t-out="activity.res_name"/>"
-                <t t-if="model_description"> (<t t-out="model_description"/>)</t>
+            <li t-foreach="activities" t-as="activity">
+                <span t-if="activity.summary" t-field="activity.summary"/>
+                <span t-else="" t-field="activity.activity_type_id.name"/>
+                - deadline: <span t-field="activity.date_deadline"/>
             </li>
-            <li t-if="activity.summary">Summary: <span t-field="activity.summary"/></li>
-            <li>Deadline: <span t-field="activity.date_deadline"/></li>
         </ul>
     </p>
 </div>
@@ -76,8 +80,29 @@
         <template id="mail_tracking_template">
 <div t-if="trackingValues">
     <t t-foreach="trackingValues" t-as="val">
-        <em t-if="val.get('company_name')" t-out="val['company_name'] + ': '"/><t t-out="val['old_value']" t-if="val['old_value']"/><b t-out="val['new_value']"/><i t-out="val['field_label']"/><br/>
+        <em t-if="val.get('company_name')" t-out="val['company_name'] + ': '"/><t t-out="val['old_value']" t-if="val['old_value']"/> → <b t-out="val['new_value']"/> <i>(<t t-out="val['field_label']"/>)</i><br t-if="val_index &lt; len(trackingValues) - 1"/>
     </t>
 </div></template>
+
+        <template id="group_change_template">
+<div class="o_mail_group_log">
+    <t t-if="added">
+        <span>Added groups:</span>
+        <ul>
+            <t t-foreach="added" t-as="group">
+                <li><a href="#" data-oe-model="res.groups" t-att-data-oe-id="group.id" t-out="group.display_name"/></li>
+            </t>
+        </ul>
+    </t>
+    <t t-if="removed">
+        <span>Removed groups:</span>
+        <ul>
+            <t t-foreach="removed" t-as="group">
+                <li><a href="#" data-oe-model="res.groups" t-att-data-oe-id="group.id" t-out="group.display_name"/></li>
+            </t>
+        </ul>
+    </t>
+</div>
+        </template>
     </data>
 </odoo>

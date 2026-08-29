@@ -43,7 +43,14 @@ class PosOrderLine(models.Model):
     is_total_cost_computed = fields.Boolean(help="Allows to know if the total cost has already been computed or not")
     discount = fields.Float(string='Discount (%)', digits=0)
     order_id = fields.Many2one('pos.order', string='Order Ref', ondelete='cascade', required=True, index=True)
-    tax_ids = fields.Many2many('account.tax', string='Taxes', readonly=True)
+    tax_ids = fields.Many2many(
+        comodel_name='account.tax',
+        relation='account_tax_pos_order_line_rel',
+        column1='pos_order_line_id',
+        column2='account_tax_id',
+        string='Taxes',
+        readonly=True,
+    )
     tax_ids_after_fiscal_position = fields.Many2many('account.tax', compute='_get_tax_ids_after_fiscal_position', string='Taxes to Apply')
     product_uom_id = fields.Many2one('uom.uom', string='Product Unit', related='product_id.uom_id')
     currency_id = fields.Many2one('res.currency', related='order_id.currency_id')
@@ -68,8 +75,12 @@ class PosOrderLine(models.Model):
     prep_line_ids = fields.One2many('pos.prep.line', 'pos_order_line_id', string='Preparation lines')
 
     @api.model
-    def _load_pos_data_domain(self, data, config):
-        return [('order_id', 'in', [order['id'] for order in data['pos.order']]), ('product_id.active', '=', True)]
+    def _load_pos_data_domain(self, data):
+        return [('order_id', 'in', data['pos.order'].ids), ('product_id.active', '=', True)]
+
+    @api.model
+    def _load_pos_data_dependencies(self):
+        return ['pos.order']
 
     @api.model
     def _load_pos_data_fields(self, config):
@@ -107,6 +118,11 @@ class PosOrderLine(models.Model):
             'refunded_orderline_id': self.id,
         }
 
+    def _is_tip_line(self):
+        self.ensure_one()
+        tip_product = self.order_id.config_id.tip_product_id
+        return bool(self.order_id.config_id.iface_tipproduct) and bool(tip_product) and self.product_id == tip_product
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
@@ -122,10 +138,10 @@ class PosOrderLine(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
-        if self.order_id.config_id.order_edit_tracking and vals.get('qty') is not None and vals.get('qty') < self.qty:
-            self.is_edited = True
+        if vals.get('qty') is not None and vals.get('qty') < self.qty:
+            vals['is_edited'] = True
             body = _("%(product_name)s: Ordered quantity: %(old_qty)s", product_name=self.full_product_name, old_qty=self.qty)
-            body += Markup("&rarr;") + str(vals.get('qty'))
+            body += Markup(" &rarr; ") + str(vals.get('qty'))
             for line in self:
                 line.order_id.message_post(body=line.order_id._prepare_pos_log(body))
         return super().write(vals)
@@ -134,7 +150,7 @@ class PosOrderLine(models.Model):
     def _unlink_except_order_state(self):
         if self.filtered(lambda x: x.order_id.state not in ["draft", "cancel"]):
             raise UserError(_("You can only unlink PoS order lines that are related to orders in new or cancelled state."))
-        for line in self.filtered(lambda line: line.order_id.config_id.order_edit_tracking):
+        for line in self:
             line.order_id.has_deleted_line = True
             body = _("%(product_name)s: Deleted line (quantity: %(qty)s)", product_name=line.full_product_name, qty=line.qty)
             line.order_id.message_post(body=line.order_id._prepare_pos_log(body))

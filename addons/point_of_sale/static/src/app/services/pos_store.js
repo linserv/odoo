@@ -49,8 +49,18 @@ import { GeneratePrinterData } from "../utils/printer/generate_printer_data";
 import { ComboSuggestion } from "../models/utils/combo_suggestion";
 import { PosRouterPlugin } from "@point_of_sale/app/plugins/pos_router_plugin";
 import { CustomerDisplayTerminalPlugin } from "@point_of_sale/app/plugins/customer_display_terminal_plugin";
-import { SIZES } from "@web/core/ui/ui_service";
+import { SIZES } from "@web/core/ui/ui_utils";
 import { SnoozeDialog } from "@point_of_sale/app/components/popups/product_info_popup/snooze_dialog/snooze_dialog";
+import { formatCurrency } from "@web/core/currency";
+import { parseFloat } from "@web/views/fields/parsers";
+import { localization } from "@web/core/l10n/localization";
+import { escapeRegExp } from "@web/core/utils/strings";
+import { formatFloat } from "@web/core/utils/numbers";
+import { PosDataPlugin } from "../plugins/pos_data_plugin";
+import { PosTicketPrinterPlugin } from "../plugins/pos_ticket_printer_plugin";
+import { PosAlertPlugin } from "../plugins/pos_alert_plugin";
+import { PosNumberBufferPlugin } from "@point_of_sale/app/plugins/pos_number_buffer_plugin";
+import { DebugModePlugin } from "@web/core/debug_mode_plugin";
 
 const { DateTime } = luxon;
 export const CONSOLE_COLOR = "#F5B427";
@@ -76,15 +86,11 @@ export class PosStore extends WithLazyGetterTrap {
 
     static serviceDependencies = [
         "bus_service",
-        "number_buffer",
         "barcode_reader",
         "ui",
-        "pos_data",
         "dialog",
         "notification",
-        "pos_ticket_printer",
         "action",
-        "alert",
         "mail.sound_effects",
     ];
 
@@ -99,29 +105,21 @@ export class PosStore extends WithLazyGetterTrap {
      */
     async setup(
         env,
-        {
-            number_buffer,
-            barcode_reader,
-            ui,
-            dialog,
-            notification,
-            pos_ticket_printer,
-            bus_service,
-            pos_data,
-            action,
-            alert,
-        }
+        { number_buffer, barcode_reader, ui, dialog, notification, bus_service, action }
     ) {
+        this.data = usePlugin(PosDataPlugin);
+        this.alert = usePlugin(PosAlertPlugin);
+        this.ticketPrinter = usePlugin(PosTicketPrinterPlugin);
+        this.ticketPrinter.init(env);
+        const debugMode = usePlugin(DebugModePlugin);
+
         this.env = env;
-        this.numberBuffer = number_buffer;
+        this.numberBuffer = usePlugin(PosNumberBufferPlugin);
         this.barcodeReader = barcode_reader;
         this.ui = ui;
         this.dialog = dialog;
-        this.ticketPrinter = pos_ticket_printer;
         this.bus = bus_service;
-        this.data = pos_data;
         this.action = action;
-        this.alert = alert;
         this.sound = env.services["mail.sound_effects"];
         this.notification = notification;
         this.pushOrderMutex = new Mutex();
@@ -172,7 +170,7 @@ export class PosStore extends WithLazyGetterTrap {
         this.syncAllOrdersDebounced = debounce(this.syncAllOrders, 100);
         this._searchTriggered = false;
 
-        if (this.env.debug) {
+        if (debugMode.isActive()) {
             registry.category("main_components").add("DebugWidget", {
                 Component: DebugWidget,
             });
@@ -242,7 +240,43 @@ export class PosStore extends WithLazyGetterTrap {
         this.checkAccessRight();
         await this.initCustomerDisplay();
     }
+    formatCurrency(amount, currencyId = this.config.currency_id.id, opts = {}) {
+        /**
+         * This method is made to be available in the templates. Imports
+         * are not available in templates, so we need to wrap the function
+         * to be able to use it in templates.
+         */
+        return formatCurrency(amount, currencyId, opts);
+    }
+    isValidFloat(inputValue) {
+        let floatRegex;
+        const decimalPoint = localization.decimalPoint;
+        const thousandsSep = localization.thousandsSep;
+        const escapedDecimalPoint = escapeRegExp(decimalPoint);
 
+        if (thousandsSep) {
+            const escapedThousandsSep = escapeRegExp(thousandsSep);
+            floatRegex = new RegExp(
+                `^-?(?:\\d+(${escapedThousandsSep}\\d+)*)?(?:${escapedDecimalPoint}\\d*)?$`
+            );
+        } else {
+            floatRegex = new RegExp(`^-?(?:\\d+)?(?:${escapedDecimalPoint}\\d*)?$`);
+        }
+
+        return ![decimalPoint, "-"].includes(inputValue) && floatRegex.test(inputValue);
+    }
+    parseValidFloat(inputValue) {
+        return this.isValidFloat(inputValue) ? parseFloat(inputValue) : 0;
+    }
+    formatProductQty(qty, trailingZeros = true) {
+        const productUnit = this.data.models["decimal.precision"].find(
+            (dp) => dp.name === "Product Unit"
+        );
+        return formatFloat(qty, {
+            digits: [true, productUnit.digits],
+            trailingZeros: trailingZeros,
+        });
+    }
     handleQRPaymentLines() {
         // Ensure that all Bank QR payments in the 'waiting' status are automatically set to 'retry'
         // when the POS session is started or restarted.
@@ -282,14 +316,14 @@ export class PosStore extends WithLazyGetterTrap {
         }
         const loadResult = await this.loadNewProducts(domain, offset, 30);
         const result = loadResult["product.product"];
-        if (result.length === 0) {
-            this.notification.add(_t('No other products found for "%s".', query), 3000);
-        }
         if (previousQuery === query) {
             this.searchProductDBState.offset += result.length;
         } else {
             this.searchProductDBState.previousQuery = query;
             this.searchProductDBState.offset = result.length;
+        }
+        if (result.length === 0) {
+            this.notification.add(_t('No other products found for "%s".', query), 3000);
         }
     }
 
@@ -396,17 +430,33 @@ export class PosStore extends WithLazyGetterTrap {
         }?access_token=${this.config.access_token}&theme=${getColorScheme()}`;
     }
 
-    async reloadData(fullReload = false) {
-        const orders = this.models["pos.order"].getAll();
-        this.device.saveUnusedNumber(orders);
-        await this.data.resetIndexedDB();
-        const url = new URL(window.location.href);
-
-        if (fullReload) {
-            url.searchParams.set("limited_loading", "0");
+    async reloadData(showWarning = false) {
+        const reloadData = async () => {
+            const orders = this.models["pos.order"].getAll();
+            this.device.saveUnusedNumber(orders);
+            await this.data.resetIndexedDB();
+            sessionStorage.clear();
+            localStorage.clear();
+            window.location.reload();
+        };
+        if (showWarning) {
+            // Implement warning logic here
+            this.dialog.add(ConfirmationDialog, {
+                title: _t("Reload Data?"),
+                body: _t(
+                    "All data will be downloaded again from the server. On databases with " +
+                        "many records (products, pricelists, pricelist rules, …), this can take several minutes."
+                ),
+                confirmLabel: _t("Reload"),
+                confirm: async () => {
+                    await reloadData();
+                },
+                cancelLabel: _t("Cancel"),
+                cancel: () => {},
+            });
+            return;
         }
-
-        window.location.href = url.href;
+        await reloadData();
     }
 
     async showLoginScreen() {
@@ -704,7 +754,7 @@ export class PosStore extends WithLazyGetterTrap {
                     _t(
                         "%s has a total amount of %s, are you sure you want to delete this order?",
                         order.pos_reference,
-                        this.env.utils.formatCurrency(order.priceIncl)
+                        this.formatCurrency(order.priceIncl)
                     ),
             });
         }
@@ -810,7 +860,24 @@ export class PosStore extends WithLazyGetterTrap {
      * @returns {Promise<Object>}
      */
     async loadNewProducts(domain, offset = 0, limit = 0) {
-        const result = await this.data.loadProductFromPos(domain, offset, limit);
+        const modelDomain = {
+            "product.template": domain,
+        };
+        const modelOffset = {
+            "product.template": offset,
+        };
+        const modelLimit = {
+            "product.template": limit,
+        };
+        const result = await this.data.loadRecordsFromPos(
+            ["product.template"],
+            modelDomain,
+            modelOffset,
+            modelLimit,
+            {
+                active_test: false,
+            }
+        );
         this.productAttributesExclusion = this.computeProductAttributesExclusion(
             result["product.template.attribute.value"]
         );
@@ -1008,6 +1075,13 @@ export class PosStore extends WithLazyGetterTrap {
             this.numpadMode = "quantity";
         }
     }
+
+    autoCourseAllocation(product) {
+        return null;
+    }
+
+    cleanAutoCourseAllocation(result, allocation) {}
+
     // This method should be called every time a product is added to an order.
     // The configure parameter is available if the orderline already contains all
     // the information without having to be calculated. For example, importing a SO.
@@ -1541,6 +1615,7 @@ export class PosStore extends WithLazyGetterTrap {
             (order) =>
                 order.isEmptyOrder() &&
                 !order.finalized &&
+                !order.isSynced &&
                 (!order.partner_id || order.partner_id.id === defaultPartnerId) &&
                 order.pricelist_id?.id === this.config.pricelist_id?.id &&
                 order.fiscal_position_id?.id === this.config.default_fiscal_position_id?.id
@@ -1607,7 +1682,7 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     removePendingOrder(order) {
-        this.pendingOrder["create"].delete(order.id);
+        this.pendingOrder["create"].delete(order.uuid);
         this.pendingOrder["write"].delete(order.id);
         this.pendingOrder["delete"].delete(order.id);
         return true;
@@ -1671,7 +1746,6 @@ export class PosStore extends WithLazyGetterTrap {
         // We are now syncing orders one by one to avoid cancelling all sync
         // when one order fails, this also avoid timeout issues with a lot of orders
         let errorOccurred = false;
-        let newSession = false;
         const syncedOrders = [];
 
         for (const order of orders) {
@@ -1710,7 +1784,6 @@ export class PosStore extends WithLazyGetterTrap {
                 await this.postSyncAllOrders(newData["pos.order"]);
                 this.removePendingOrder(order);
                 syncedOrders.push(...newData["pos.order"]);
-                newSession = newSession || data["pos.session"].length > 0;
             } catch (error) {
                 if (options.throw) {
                     throw error;
@@ -1737,21 +1810,6 @@ export class PosStore extends WithLazyGetterTrap {
             // the order can be deleted from the server side during the sync_from_ui call
             this.deviceSync.readDataFromServer();
         }
-
-        if (newSession) {
-            // Replace the original session by the rescue one. And the rescue one will have
-            // a higher id than the original one since it's the last one created.
-            const sessions = this.models["pos.session"].sort((a, b) => a.id - b.id);
-            if (sessions.length > 1) {
-                const sessionToDelete = sessions.slice(0, -1);
-                this.models["pos.session"].deleteMany(sessionToDelete);
-            }
-            this.models["pos.order"]
-                .getAll()
-                .filter((order) => order.state === "draft")
-                .forEach((order) => (order.session_id = this.session));
-        }
-
         return syncedOrders;
     }
 
@@ -1808,13 +1866,13 @@ export class PosStore extends WithLazyGetterTrap {
         const orderPriceWithoutTax = order.priceExcl;
         const orderCost = order.getTotalCost();
         const orderMargin = orderPriceWithoutTax - orderCost;
-        const orderTaxTotalCurrency = this.env.utils.formatCurrency(
+        const orderTaxTotalCurrency = this.formatCurrency(
             order.prices.taxDetails.order_sign * order.prices.taxDetails.tax_amount_currency
         );
-        const orderPriceWithTaxCurrency = this.env.utils.formatCurrency(
+        const orderPriceWithTaxCurrency = this.formatCurrency(
             order.prices.taxDetails.order_sign * order.prices.taxDetails.total_amount_currency
         );
-        const taxAmount = this.env.utils.formatCurrency(
+        const taxAmount = this.formatCurrency(
             productTaxDetails.taxes_data.reduce((sum, d) => sum + d.tax_amount_currency, 0)
         );
         const taxes = order.fiscal_position_id
@@ -1822,14 +1880,14 @@ export class PosStore extends WithLazyGetterTrap {
             : productTemplate.taxes_id;
         const taxName = taxes.map((t) => t.name)?.join(", ");
 
-        const costCurrency = this.env.utils.formatCurrency(productTemplate.standard_price);
-        const marginCurrency = this.env.utils.formatCurrency(margin);
+        const costCurrency = this.formatCurrency(productTemplate.standard_price);
+        const marginCurrency = this.formatCurrency(margin);
         const marginPercent = priceWithoutTax
             ? Math.round((margin / priceWithoutTax) * 10000) / 100
             : 0;
-        const orderPriceWithoutTaxCurrency = this.env.utils.formatCurrency(orderPriceWithoutTax);
-        const orderCostCurrency = this.env.utils.formatCurrency(orderCost);
-        const orderMarginCurrency = this.env.utils.formatCurrency(orderMargin);
+        const orderPriceWithoutTaxCurrency = this.formatCurrency(orderPriceWithoutTax);
+        const orderCostCurrency = this.formatCurrency(orderCost);
+        const orderMarginCurrency = this.formatCurrency(orderMargin);
         const orderMarginPercent = orderPriceWithoutTax
             ? Math.round((orderMargin / orderPriceWithoutTax) * 10000) / 100
             : 0;
@@ -2129,7 +2187,7 @@ export class PosStore extends WithLazyGetterTrap {
             return;
         }
         await this.data.call("pos.config", "load_demo_data", [[this.config.id]]);
-        await this.reloadData(true);
+        await this.reloadData();
     }
 
     async checkAccessRight() {
@@ -2497,9 +2555,9 @@ export class PosStore extends WithLazyGetterTrap {
     getExcludedProductIds() {
         return [
             this.config.tip_product_id?.product_tmpl_id?.id,
-            ...this.config._pos_special_products_ids.map(
-                (id) => this.models["product.product"].get(id)?.product_tmpl_id?.id
-            ),
+            ...this.models["product.product"]
+                .filter((p) => p._is_pos_special_product)
+                .map((p) => p.product_tmpl_id?.id),
         ].filter(Boolean);
     }
 
@@ -2683,7 +2741,7 @@ export class PosStore extends WithLazyGetterTrap {
     }
     getPaymentMethodFmtAmount(pm, order) {
         const amount = order.getDefaultAmountDueToPayIn(pm);
-        const fmtAmount = this.env.utils.formatCurrency(amount, true);
+        const fmtAmount = this.formatCurrency(amount);
 
         if (!this.currency.isPositive(amount) || !this.config.cash_rounding) {
             return;
@@ -2735,6 +2793,7 @@ export class PosStore extends WithLazyGetterTrap {
             !paymentLines.length ||
             (!order.is_refund &&
                 paymentLines.length === 1 &&
+                paymentLines[0].payment_method_id.type === "pay_later" &&
                 this.currency.isNegative(paymentLines[0].amount))
         ) {
             opts.fastPaymentMethod = this.config.payment_method_ids[0];
@@ -2978,7 +3037,7 @@ export class PosStore extends WithLazyGetterTrap {
                 this.snoozeTracker.setSnoozes(this.config.pos_snooze_ids);
             }
         });
-        if (this.data.isDataLoadedFromCache()) {
+        if (this.data.dataLoadedFromCache()) {
             try {
                 const snoozes = await this.data.searchRead("pos.snooze", [
                     ["pos_config_id", "=", this.config.id],

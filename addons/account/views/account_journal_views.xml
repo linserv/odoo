@@ -163,7 +163,7 @@
                                     <group string="Automation" groups="account.group_account_manager">
                                         <field name="restrict_mode_hash_table" groups="account.group_account_readonly" invisible="type not in ['sale', 'purchase', 'general']"
                                         />
-                                        <field name="is_self_billing" invisible="type != 'purchase'"/>
+                                        <field name="is_self_billing" invisible="type not in ('sale', 'purchase')"/>
                                     </group>
                                     <group string="Emails" name="group_email_alias"
                                            invisible="type not in ('general', 'sale', 'purchase', 'cash', 'credit', 'bank')">
@@ -196,6 +196,9 @@
                                     <group string="Payment Communications" invisible="type != 'sale'">
                                         <field name="invoice_reference_type"/>
                                         <field name="invoice_reference_model" invisible="invoice_reference_type == 'none'"/>
+                                    </group>
+                                    <group string="Dashboard" groups="base.group_no_one" invisible="type not in ('sale', 'purchase')">
+                                        <field name="disable_dashboard_graph"/>
                                     </group>
                                 </group>
                             </page>

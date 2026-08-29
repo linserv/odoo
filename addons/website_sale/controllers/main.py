@@ -247,7 +247,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             options=options,
         )
         search_result = (
-            details[0].get("results", self.env["product.template"]).with_context(bin_size=True)
+            details[0].get("results", self.env["product.template"])
         )
 
         return fuzzy_search_term, product_count, search_result
@@ -359,7 +359,6 @@ class WebsiteSale(payment_portal.PaymentPortal):
                 pair.split("-") for pair in attribute_values if pair and pair.count("-") == 1
             ])
         attribute_value_dict = self._get_attribute_value_dict(attribute_value_params)
-        attribute_ids = set(attribute_value_dict.keys())
         attribute_value_ids = set(itertools.chain.from_iterable(attribute_value_dict.values()))
         grouped_attributes_values = (
             self
@@ -459,6 +458,9 @@ class WebsiteSale(payment_portal.PaymentPortal):
         )
         shop_query = request.env["product.template"]._search(shop_domain)
 
+        filters_domain = self._get_shop_domain(search_term, category, attribute_value_dict={})
+        filters_query = request.env["product.template"]._search(filters_domain)
+
         filter_by_price_enabled = website.is_view_active("website_sale.filter_products_price")
         if filter_by_price_enabled:
             # TODO Find an alternative way to obtain the domain through the search metadata.
@@ -502,11 +504,9 @@ class WebsiteSale(payment_portal.PaymentPortal):
                 Domain("list_price", ">=", (min_price or available_min_price) / conversion_rate),
                 Domain("list_price", "<=", (max_price or available_max_price) / conversion_rate),
             ])
-            filtered_query = request.env["product.template"]._search(
-                Domain.AND([shop_domain, price_domain])
+            filters_query = request.env["product.template"]._search(
+                Domain.AND([filters_domain, price_domain])
             )
-        else:
-            filtered_query = shop_query
 
         # Dynamic ribbon filters ("On sale" / "In stock")
         on_sale_active = on_sale == "1"
@@ -541,13 +541,13 @@ class WebsiteSale(payment_portal.PaymentPortal):
             product_count = len(search_product)
 
         ProductTag = self.env["product.tag"]
-        if filter_by_tags_enabled and search_product:
+        if filter_by_tags_enabled:
             all_tags = ProductTag.search_fetch(
                 Domain.AND([
                     Domain("visible_to_customers", "=", True),
                     Domain.OR([
-                        Domain("product_template_ids", "in", filtered_query),
-                        Domain("product_product_ids.product_tmpl_id", "in", filtered_query),
+                        Domain("product_template_ids", "in", filters_query),
+                        Domain("product_product_ids.product_tmpl_id", "in", filters_query),
                     ]),
                     website_domain,
                 ])
@@ -565,7 +565,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             # using a sub-query is more efficient than using a query in the shape of "ids in (...)"
             # when there are 100k product ids to match.
             search_categories = Category.search(
-                Domain('product_tmpl_ids', 'in', shop_query)
+                Domain("product_tmpl_ids", "in", shop_query)
             ).parents_and_self
             categs_domain &= Domain("id", "in", search_categories.ids)
         else:
@@ -618,21 +618,19 @@ class WebsiteSale(payment_portal.PaymentPortal):
         ProductAttribute = self.env["product.attribute"]
         ProductAttributeValue = self.env["product.attribute.value"]
         pavs_per_attribute = defaultdict(lambda: ProductAttributeValue)
-        if products:
-            grouped_pavs = ProductAttributeValue._read_group(
-                domain=[
-                    ("pav_attribute_line_ids.product_tmpl_id", "in", filtered_query),
-                    ("attribute_id.visibility", "=", "visible"),
-                ],
-                groupby=["attribute_id"],
-                order="attribute_id",
-                aggregates=["id:recordset"],
-            )
-            pavs_per_attribute.update({attribute: pavs.sorted() for attribute, pavs in grouped_pavs})
-            # Return attributes as recordset of `product.attribute`
-            attributes = ProductAttribute.union(pavs_per_attribute.keys())
-        else:
-            attributes = ProductAttribute.browse(attribute_ids).exists().sorted()
+
+        grouped_pavs = ProductAttributeValue._read_group(
+            domain=[
+                ("pav_attribute_line_ids.product_tmpl_id", "in", filters_query),
+                ("attribute_id.visibility", "=", "visible"),
+            ],
+            groupby=["attribute_id"],
+            order="attribute_id",
+            aggregates=["id:recordset"],
+        )
+        pavs_per_attribute.update({attribute: pavs.sorted() for attribute, pavs in grouped_pavs})
+        # Return attributes as recordset of `product.attribute`
+        attributes = ProductAttribute.union(pavs_per_attribute.keys())
         products_prices = products._get_sales_prices(
             # Make sure latest context is applied (see update_context calls in overrides)
             request.pricelist.with_context(self.env.context),
@@ -1239,7 +1237,9 @@ class WebsiteSale(payment_portal.PaymentPortal):
                 ):
                     order_sudo._set_delivery_method(delivery_method, rate=rate)
 
-        checkout_page_values.update(self.env.website._get_checkout_step_values("/shop/checkout"))
+        checkout_page_values.update(
+            self.env.website._get_checkout_step_values("/shop/checkout", order_sudo)
+        )
         if try_skip_step and can_skip_delivery:
             return request.redirect(checkout_page_values["next_website_checkout_step_href"])
 
@@ -1312,7 +1312,9 @@ class WebsiteSale(payment_portal.PaymentPortal):
             use_delivery_as_billing=use_delivery_as_billing,
             **query_params,
         )
-        address_form_values.update(self.env.website._get_checkout_step_values("/shop/address"))
+        address_form_values.update(
+            self.env.website._get_checkout_step_values("/shop/address", order_sudo)
+        )
         return request.render("website_sale.address", address_form_values)
 
     def _prepare_address_form_values(self, *args, callback="", order_sudo=False, **kwargs):
@@ -1695,9 +1697,12 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
     # === CHECKOUT FLOW - EXTRA STEP METHODS === #
     def system_page_extra_info(env):  # noqa: N805
-        if env.website.is_view_active("website_sale.extra_info"):
-            return _lt("Shop Checkout - Extra Information")
-        return False
+        if not env.website.is_view_active("website_sale.extra_info"):
+            return []
+        return [{
+                "route_title": _lt("Shop Checkout - Extra Information"),
+                "route_url": "/shop/extra_info",
+            }]
 
     @route(
         ["/shop/extra_info"],
@@ -1710,9 +1715,9 @@ class WebsiteSale(payment_portal.PaymentPortal):
     def extra_info(self, **post):
         order_sudo = request.cart
         extra_step = self.env.website.viewref("website_sale.extra_info")
-        if not extra_step.active or not self.env.website._cart_has_extra_step_category():
+        if not extra_step.active or not self.env.website._cart_has_extra_step_category(order_sudo):
             return request.redirect(
-                self.env.website._get_next_breadcrumb_step_href("/shop/extra_info")
+                self.env.website._get_next_breadcrumb_step_href("/shop/extra_info", order_sudo)
             )
 
         if redirect := self.env["website.checkout.step"].validate_checkout_progress(
@@ -1728,7 +1733,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             "order": order_sudo,
         }
 
-        values.update(self.env.website._get_checkout_step_values("/shop/extra_info"))
+        values.update(self.env.website._get_checkout_step_values("/shop/extra_info", order_sudo))
 
         return request.render("website_sale.extra_info", values)
 
@@ -1742,7 +1747,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             "partner": order.partner_invoice_id,
             "order": order,
             "only_services": order.only_services,
-            **self.env.website._get_checkout_step_values("/shop/payment"),
+            **self.env.website._get_checkout_step_values("/shop/payment", order),
             "payment_tracking_info": (
                 order._get_order_tracking_info() if self.env.website.google_analytics_key else {}
             ),
@@ -1993,6 +1998,10 @@ class WebsiteSale(payment_portal.PaymentPortal):
             "product_page_cols_order",
             "product_page_image_roundness",
             "product_page_cta_design",
+            # category
+            "align_category_content",
+            "show_category_title",
+            "show_category_description",
             # wishlist
             "wishlist_opt_products_design_classes",
             "wishlist_grid_columns",
@@ -2020,24 +2029,6 @@ class WebsiteSale(payment_portal.PaymentPortal):
         write_vals = {k: v for k, v in options.items() if k in writable_fields}
         if write_vals:
             self.env.website.write(write_vals)
-
-    @route(["/shop/config/category"], type="jsonrpc", auth="user")
-    def _change_category_config(self, category_id, **options):
-        category = self.env["product.public.category"].browse(int(category_id))
-        if not category.exists():
-            raise NotFound
-
-        # Restrict options we can write to.
-        targeted_options = {
-            "show_category_title",
-            "show_category_description",
-            "align_category_content",
-        }
-        modified_options = {
-            option: value for option, value in options.items() if option in targeted_options
-        }
-        if modified_options:
-            category.write(modified_options)
 
     @route(["/shop/config/tag"], type="jsonrpc", auth="user")
     def _change_tag_config(self, tag_id, **options):

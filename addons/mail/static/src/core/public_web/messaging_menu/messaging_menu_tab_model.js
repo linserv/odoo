@@ -10,10 +10,30 @@ import { _t } from "@web/core/l10n/translation";
  *   includesMessage?: (message: import("models").Message) => boolean,
  *   includesChannel?: (channel: import("models").DiscussChannel) => boolean,
  *   isDefault?: boolean,
+ *   sequence?: number,
+ *   compareChannels?: (c1: import("models").DiscussChannel, c2: import("models").DiscussChannel) => number,
  * }} MessagingMenuTabFilter
+ *
+ * The channels of a tab are ordered by the comparator of the active filter, falling back to the
+ * one of the tab, then to the default order of the messaging menu.
  */
 
-/** @typedef {{id: string, text: string, icon?: string, isDisabled?: () => boolean, onClick: () => void, preventDropdownClose?: boolean}} MessagingMenuTabAction */
+/**
+ * A button shown next to the search bar. An action carrying `subActions` is rendered as a
+ * dropdown offering them instead: clicking it only opens the menu, so such an action has no
+ * `onClick` of its own.
+ *
+ * @typedef {{
+ *   id: string,
+ *   text: string,
+ *   icon?: string,
+ *   iconClass?: string,
+ *   isDisabled?: () => boolean,
+ *   onClick?: () => void,
+ *   preventDropdownClose?: boolean,
+ *   subActions?: MessagingMenuTabAction[],
+ * }} MessagingMenuTabAction
+ */
 
 /**
  * Defines a messaging menu tab with:
@@ -42,11 +62,7 @@ export class MessagingMenuTab extends Record {
     actions = [];
     /** @type {?string} */
     activeIcon;
-    counter = fields.Attr(0, {
-        compute() {
-            return this._computeCounter();
-        },
-    });
+    counter = this.computed(() => this._computeCounter());
 
     /**
      * Determines if a message should be included in this tab. Centralizes membership
@@ -69,16 +85,14 @@ export class MessagingMenuTab extends Record {
      */
     emptyState = { title: _t("Nothing here yet.") };
     /** Additional counter not tracked server-side (e.g. failures, push permission request). */
-    extraCounter = fields.Attr(0, {
-        compute() {
-            if (!this.eq(this.store.messagingMenu?.odooBotNotificationsTab)) {
-                return 0;
-            }
-            return (
-                (this.store.showPushPermissionRequest ? 1 : 0) +
-                this.store.failures.reduce((acc, failure) => acc + failure.notifications.length, 0)
-            );
-        },
+    extraCounter = this.computed(() => {
+        if (!this.eq(this.store.messagingMenu?.odooBotNotificationsTab)) {
+            return 0;
+        }
+        return (
+            (this.store.showPushPermissionRequest ? 1 : 0) +
+            this.store.failures.reduce((acc, failure) => acc + failure.notifications.length, 0)
+        );
     });
     /**
      * Filters shown as buttons next to the search bar. Selecting a filter narrows the
@@ -117,11 +131,7 @@ export class MessagingMenuTab extends Record {
      */
     loadStatusByFilterId = fields.Attr({}, { asProxy: true });
     /** IDs of already loaded records, used to exclude them from `loadMore` requests. */
-    loadMoreExcludeIds = fields.Attr([], {
-        compute() {
-            return this._computeLoadMoreExcludeIds();
-        },
-    });
+    loadMoreExcludeIds = this.computed(() => this._computeLoadMoreExcludeIds());
     messagingMenuAsTab = fields.One("MessagingMenu", {
         inverse: "allTabs",
         compute() {
@@ -175,6 +185,11 @@ export class MessagingMenuTab extends Record {
     /** The filter selected by default when this tab is opened, if any. */
     get defaultFilter() {
         return this.filters.find((f) => f.isDefault);
+    }
+
+    /** Filters in the order they are shown, right after the "All" one. */
+    get sortedFilters() {
+        return [...this.filters].sort((f1, f2) => (f1.sequence ?? 0) - (f2.sequence ?? 0));
     }
 
     /**

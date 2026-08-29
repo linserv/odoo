@@ -179,12 +179,24 @@ class TestPoSSale(PoSSaleSyncCommon, TestPointOfSaleHttpCommon):
             'taxes': self.env['account.tax'],
             'extra_values': {
                 'refunded_orderline_id': self.env['pos.order'].browse(order_id).lines.id,
+                'price_subtotal': 10,
+                'price_subtotal_incl': 10,
             },
         }], partner=sale_order.partner_id)
 
-        self.assertEqual(len(sale_order.order_line), 4)
+        self.assertEqual(len(sale_order.order_line), 3)
         self.assertEqual(sale_order.order_line[2].qty_invoiced, 0)
-        self.assertEqual(sale_order.order_line[3].qty_invoiced, -1)
+        self.assertEqual(sale_order.order_line[2].price_unit, 0)
+        self.assertEqual(sale_order.amount_invoiced, 0)
+        payment = self.env['sale.advance.payment.inv'].with_context(
+            active_model='sale.order',
+            active_ids=sale_order.ids,
+            active_id=sale_order.id,
+        ).create({
+            'advance_payment_method': 'delivered',
+        })
+        payment.create_invoices()
+        self.assertEqual(sale_order.invoice_ids.amount_untaxed, 100)
 
     def test_pos_not_groupable_product(self):
         #Create a UoM Category that is not pos_groupable
@@ -1301,6 +1313,49 @@ class TestPoSSale(PoSSaleSyncCommon, TestPointOfSaleHttpCommon):
             "a positive refund line must be treated as negative in the computation",
         )
 
+    def test_for_ecommerce_postpaid_order_amount_unpaid_equals_amount_paid(self):
+        if self.env['ir.module.module']._get('website_sale_collect').state != 'installed':
+            self.skipTest("This test requires 'Click & Collect' module to be installed.")
+        partner_1 = self.env['res.partner'].create({'name': 'A Test Partner 1'})
+        self.env.user.group_ids += self.quick_ref('sales_team.group_sale_salesman')
+        product_a = self.env['product.product'].create({
+            'name': 'Product A',
+            'available_in_pos': True,
+            'lst_price': 10.0,
+        })
+        sale_order = self.env['sale.order'].create({
+            'partner_id': partner_1.id,
+            'order_line': [Command.create({
+                'product_id': product_a.id,
+                'product_uom_qty': 2,
+                'price_unit': product_a.lst_price
+            })]
+        })
+        provider = self.env['payment.provider'].create({
+            'name': 'Test',
+            'code': 'custom',
+            'custom_mode': 'on_site',
+        })
+        payment_method = self.env["payment.method"].create({
+            "name": "Payment method",
+            "code": "pay_on_site",
+            "provider_id": provider.id,
+        })
+        self.assertTrue(payment_method._is_postpaid())
+        self.env['payment.transaction'].create({
+            'provider_id': provider.id,
+            'payment_method_id': payment_method.id,
+            'amount': sale_order.amount_total,
+            'currency_id': sale_order.currency_id.id,
+            'partner_id': sale_order.partner_id.id,
+            'state': 'done',
+            'sale_order_ids': [Command.set(sale_order.ids)],
+        })
+        self.assertEqual(
+            sale_order.amount_unpaid, sale_order.amount_paid,
+            "The amount_unpaid for the SO should be equal to amount_paid after a postpaid transaction."
+        )
+
 
 @tagged('post_install', '-at_install')
 class TestPoSSalePayment(PoSSaleSyncCommon, TestPointOfSaleHttpCommon, PaymentCommon):
@@ -1321,6 +1376,7 @@ class TestPoSSalePayment(PoSSaleSyncCommon, TestPointOfSaleHttpCommon, PaymentCo
                 'product_uom_qty': 1,
                 'price_unit': self.product_a.lst_price,
             })],
+            'require_signature': False,
             'prepayment_percent': 0.3,
         })
         # Manual downpayment invoice

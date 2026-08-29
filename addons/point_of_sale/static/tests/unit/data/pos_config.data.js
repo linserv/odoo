@@ -49,7 +49,6 @@ export class PosConfig extends models.ServerModel {
         data[0]["_data_server_date"] = "2025-07-03 12:40:15";
         data[0]["_has_cash_move_perm"] = true;
         data[0]["_has_available_products"] = true;
-        data[0]["_pos_special_products_ids"] = [25];
         data[0]["_unit_uom_id"] = 1;
         return data;
     }
@@ -84,7 +83,6 @@ export class PosConfig extends models.ServerModel {
             session_ids: [1],
             current_session_id: 1,
             current_session_state: "opening_control",
-            number_of_rescue_session: 0,
             last_session_closing_date: false,
             pos_session_username: "Administrator",
             pos_session_state: "opening_control",
@@ -128,7 +126,6 @@ export class PosConfig extends models.ServerModel {
             note_ids: [],
             module_pos_sms: false,
             use_closing_entry_by_product: false,
-            order_edit_tracking: false,
             last_data_change: "2025-07-03 14:35:55",
             fallback_nomenclature_id: false,
             create_date: "2025-07-03 12:40:00",

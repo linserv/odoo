@@ -4,6 +4,7 @@ import {
     proxy,
     signal,
     t,
+    untrack,
     usePlugin,
     useProps,
     useScope,
@@ -16,7 +17,7 @@ import { ConnectionLostError, RPCError } from "@web/core/network/rpc";
 import { OfflinePlugin } from "@web/core/offline/offline_plugin";
 import { ORM } from "@web/core/orm_plugin";
 import { evaluateBooleanExpr } from "@web/core/py_js/py";
-import { SIZES } from "@web/core/ui/ui_service";
+import { SIZES } from "@web/core/ui/ui_utils";
 import { KeepLast } from "@web/core/utils/concurrency";
 import { useBus, useOwnedDialogs, useService } from "@web/core/utils/hooks";
 import { highlightText, odoomark } from "@web/core/utils/html";
@@ -176,8 +177,9 @@ export function useSpecialData(loadFn) {
 
     /** @type {{ data: Record<string, T> }} */
     const result = proxy({ data: {} });
-    useRecordObserver(async (record, props) => {
-        result.data = await loadFn(ormWithCache, { ...props, record });
+    useRecordObserver(async () => {
+        const currentProps = untrack(() => ({ ...props }));
+        result.data = await loadFn(ormWithCache, currentProps);
     });
     onWillUpdateProps(async (nextProps) => {
         // useRecordObserver callback is not called when the record doesn't change
@@ -786,14 +788,17 @@ export class X2ManyFieldDialog extends Component {
             }`,
         };
         if (!this.record.isNew) {
-            props.onExpand = async () => {
+            props.onExpand = async (_ev, newWindow) => {
                 await this.save({ saveAndNew: false });
-                this.actionService.doAction({
-                    type: "ir.actions.act_window",
-                    res_model: this.props.record.resModel,
-                    res_id: this.props.record.resId,
-                    views: [[false, "form"]],
-                });
+                this.actionService.doAction(
+                    {
+                        type: "ir.actions.act_window",
+                        res_model: this.props.record.resModel,
+                        res_id: this.props.record.resId,
+                        views: [[false, "form"]],
+                    },
+                    { newWindow }
+                );
             };
         }
         return props;

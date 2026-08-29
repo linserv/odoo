@@ -1265,14 +1265,11 @@ class MrpProduction(models.Model):
     def action_update_bom(self):
         for production in self:
             if production.bom_id:
-                old_durations = production.is_planned and production.workorder_ids.mapped('duration_expected')
+                was_planned = production.is_planned
                 production._link_bom(production.bom_id)
-
-                if production.is_planned:
-                    new_durations = production.workorder_ids.mapped('duration_expected')
-                    if old_durations != new_durations:
-                        production._unplan_workorders()
-                        production._plan_workorders()
+                # the workorders are recreated unplanned, plan them back
+                if was_planned:
+                    production._plan_workorders()
         self.is_outdated_bom = False
 
     def _get_bom_values(self, ratio=1):
@@ -1856,6 +1853,7 @@ class MrpProduction(models.Model):
                         all_lines |= bom.bom_line_ids.filtered(lambda line:
                             line.child_bom_id.type != 'phantom'
                             and not line._skip_bom_line(order.product_id)
+                            and line.product_id.type == "consu"
                         )
                 missing_lines = all_lines - order.move_raw_ids.bom_line_id
             for move in order.move_raw_ids:
@@ -2273,7 +2271,7 @@ class MrpProduction(models.Model):
             for workorder in production.workorder_ids.sorted('id'):
                 initial_workorder_remaining_qty.append(max(initial_qty - workorder.qty_reported_from_previous_wo - workorder.qty_produced, 0))
                 if workorder.production_id.id not in (self.env.context.get('mo_ids_to_backorder') or []):
-                    workorder.qty_produced = min(workorder.qty_produced, workorder.qty_production)
+                    workorder.with_context(allow_qty_change=True).qty_produced = min(workorder.qty_produced, workorder.qty_production)
             workorders_len = len(production.workorder_ids)
             for index, workorder in enumerate(bo.workorder_ids):
                 remaining_qty = initial_workorder_remaining_qty[index % workorders_len]
@@ -2292,6 +2290,9 @@ class MrpProduction(models.Model):
 
     def button_mark_done(self):
         for production in self:
+            if production.bom_id.continuous and self.env.context.get('last_qty_produced'):
+                production.qty_producing = self.env.context.get('last_qty_produced')
+                production.set_qty_producing()
             if production.product_tracking not in ['lot', 'serial']:
                 continue
             if production.lot_producing_ids:
@@ -2734,6 +2735,7 @@ class MrpProduction(models.Model):
                 self.write({'product_qty': product_qty, 'uom_id': uom.id})
             return
 
+        # TODO: remove in master
         def operation_key_values(record):
             return tuple(record[key] for key in ('company_id', 'name', 'workcenter_id'))
 
@@ -2753,27 +2755,16 @@ class MrpProduction(models.Model):
         bom_byproducts_by_id = {byproduct.id: byproduct for byproduct in bom.byproduct_ids.filtered(filter_by_attributes)}
         operations_by_id = {op.id: op for bom, _ in all_boms for op in bom.operation_ids.filtered(filter_by_attributes)}
 
+        workorders_to_unlink_ids = set()
         # Compares the BoM's operations to the MO's workorders.
         for workorder in self.workorder_ids:
-            operation = operations_by_id.pop(workorder.operation_id.id, False)
-            if not operation:
-                for operation_id in operations_by_id:
-                    _operation = operations_by_id[operation_id]
-                    if operation_key_values(_operation) == operation_key_values(workorder):
-                        operation = operations_by_id.pop(operation_id)
-                        break
-            if operation and workorder.operation_id != operation:
-                workorder.operation_id = operation
-            elif operation and workorder.operation_id == operation:
-                if workorder.workcenter_id != operation.workcenter_id:
-                    workorder.workcenter_id = operation.workcenter_id
-                if workorder.name != operation.name:
-                    workorder.name = operation.name
-            elif workorder.operation_id and workorder.operation_id not in operations_by_id:
-                workorders_to_unlink |= workorder
-        # Resequence of workorder as per the BOM operation sequance
-        if self.workorder_ids.operation_id.ids != self.bom_id.operation_ids.ids:
-            self._resequence_workorders()
+            if workorder.state in ['progress', 'done', 'cancel']:
+                # Do not recreate the associate operation
+                operations_by_id.pop(workorder.operation_id.id, False)
+            else:
+                workorders_to_unlink_ids.add(workorder.id)
+        # Unlink first since linking the new workorders to the MO might replan them based on the still planned obsolete ones.
+        self.env['mrp.workorder'].browse(workorders_to_unlink_ids).unlink()
         # Creates a workorder for each remaining operation.
         workorders_values = []
         for operation in operations_by_id.values():
@@ -2865,7 +2856,6 @@ class MrpProduction(models.Model):
             moves_to_unlink.product_uom_qty = 0
         moves_to_unlink._action_cancel()
         moves_to_unlink.unlink()
-        workorders_to_unlink.unlink()
         self.bom_id = bom
 
     def _get_quantity_to_backorder(self):
@@ -3085,8 +3075,7 @@ class MrpProduction(models.Model):
             if order.picking_type_id.auto_print_mrp_reception_report_labels:
                 print_label_move_ids.update(order.move_finished_ids.move_dest_ids.ids)
         if orders_for_reception_report:
-            action = self.env.ref('stock.stock_reception_report_action').report_action(orders_for_reception_report, config=False)
-            action['context'] = dict(default_production_ids=orders_for_reception_report.ids, **self.env.context)
+            action = self.env.ref('mrp.action_report_production_order').report_action(orders_for_reception_report, config=False)
             clean_action(action, self.env)
             report_actions.append(action)
         if print_label_move_ids:

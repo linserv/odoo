@@ -40,7 +40,6 @@ from operator import call, itemgetter
 
 import psycopg2.errors
 import psycopg2.extensions
-from psycopg2.extras import Json
 
 from odoo.exceptions import AccessError, LockError, MissingError, ValidationError, UserError
 from odoo.tools import (
@@ -49,7 +48,7 @@ from odoo.tools import (
     partition, split_every, unique,
     SQL, sql, groupby,
 )
-from odoo.tools.constants import PREFETCH_MAX
+from odoo.tools.constants import BIG_RECORDSET_SIZE, IN_MAX
 from odoo.tools.func import deprecated
 from odoo.tools.lru import LRU
 from odoo.tools.misc import ReversedIterable, exception_to_unicode, unquote
@@ -1067,7 +1066,7 @@ class BaseModel(metaclass=MetaModel):
 
         # make 'flush' available to the methods below, in the case where XMLID
         # resolution fails, for instance
-        flush_recordset = self.with_context(import_flush=flush, import_cache=LRU(1024))
+        flush_recordset = self.with_context(import_flush=flush, import_cache=LRU(10000))
 
         # TODO: break load's API instead of smuggling via context?
         limit = self.env.context.get('_import_limit')
@@ -1835,7 +1834,7 @@ class BaseModel(metaclass=MetaModel):
         query.order = self._read_group_orderby(query.table, order, groupby_terms)
         # GROUPING SET ((a, b), (a), ())
         grouping_sets_sql = [
-            SQL("(%s)", SQL(", ").join(groupby_terms[groupby_spec] for groupby_spec in grouping_set))
+            SQL("(%s)", SQL(", ").join(unique(groupby_terms[groupby_spec] for groupby_spec in grouping_set)))
             for grouping_set in grouping_sets
         ]
         query.groupby = SQL("GROUPING SETS (%s)", SQL(", ").join(unique(grouping_sets_sql)))
@@ -1855,9 +1854,13 @@ class BaseModel(metaclass=MetaModel):
         # grouping set defined by the user.
         aggregates_indexes = tuple(range(len(all_groupby_specs), len(all_groupby_specs) + len(aggregates)))
 
-        # Map each possible GROUPING() bitmask to its corresponding result list and value extractor.
-        # {GROUPING(...): (append_method, extractor_method)}
-        mask_grouping_mapping = {}
+        # Map each possible GROUPING() bitmask to the corresponding result lists and value
+        # extractors: several grouping sets can share the same bitmask (either because
+        # they are literally the same groupby list: [['foo'], ['foo']], or because one of them
+        # repeats a term [['foo'], ['foo', 'foo']], so a single SQL result row may need to
+        # be dispatched to more than one of them.
+        # {GROUPING(...): [(append_method, extractor_method), ...]}
+        mask_grouping_mapping = defaultdict(list)
 
         # Create a mapping from each unique SQL GROUP BY term to its bitmask value.
         # The terms are reversed to match the PostgreSQL logic where the bitmask was
@@ -1868,7 +1871,6 @@ class BaseModel(metaclass=MetaModel):
             for i, sql_groupby in enumerate(unique(reversed(groupby_terms.values())))
         }
 
-        mask_grouping_result_indexes = defaultdict(list)  # To manage "duplicated" groupby
         for result_index, groupby in enumerate(grouping_sets):
             # E.g. GROUPING SET ((a, b), (a), ())
             # GROUPING(a, b): a and b included = 0, a included = 1, b included = 2, none included = 3
@@ -1880,15 +1882,13 @@ class BaseModel(metaclass=MetaModel):
                 if sql_term not in sql_terms
             )
 
-            mask_grouping_result_indexes[groupby_mask].append(result_index)
-            if groupby_mask not in mask_grouping_mapping:
-                mask_grouping_mapping[groupby_mask] = (
-                    result[result_index].append,
-                    itemgetter_tuple(list(itertools.chain(
-                        (all_groupby_specs.index(groupby_spec) for groupby_spec in groupby),
-                        aggregates_indexes,
-                    ))),
-                )
+            mask_grouping_mapping[groupby_mask].append((
+                result[result_index].append,
+                itemgetter_tuple(list(itertools.chain(
+                    (all_groupby_specs.index(groupby_spec) for groupby_spec in groupby),
+                    aggregates_indexes,
+                ))),
+            ))
 
         aggregates_start_index = len(all_groupby_specs) + 1
         # Transpose rows to columns for efficient, column-wise post-processing.
@@ -1906,17 +1906,9 @@ class BaseModel(metaclass=MetaModel):
         #   [(a1, <aggregates>), (a2, <aggregates>), ...],
         #   [(<aggregates>)],
         # ]
-        for (append_method, extractor), *row in zip(dispatch_info, *columns, strict=True):
-            append_method(extractor(row))
-
-        # Manage groupbys targetting the same column(s), then having the same results
-        for duplicate_groups_indexes in mask_grouping_result_indexes.values():
-            if len(duplicate_groups_indexes) < 2:
-                continue
-            # The first index's result is the source for all others in this group
-            source_result_group = result[duplicate_groups_indexes[0]]
-            for duplicate_group_index in duplicate_groups_indexes[1:]:
-                result[duplicate_group_index] = source_result_group[:]
+        for append_extractors, *row in zip(dispatch_info, *columns, strict=True):
+            for append_method, extractor in append_extractors:
+                append_method(extractor(row))
 
         return result
 
@@ -2907,79 +2899,40 @@ class BaseModel(metaclass=MetaModel):
             value_en = translations.get('en_US', True)
             if not value_en and value_en != '':
                 translations.pop('en_US')
-            translations = {
-                lang: translation if isinstance(translation, str) else None
-                for lang, translation in translations.items()
-            }
             if not translations:
                 return False
 
-            translation_fallback = translations['en_US'] if translations.get('en_US') is not None \
-                else translations[self.env.lang] if translations.get(self.env.lang) is not None \
-                else next((v for v in translations.values() if v is not None), None)
-            self.invalidate_recordset([field_name])
-            self.env.cr.execute(SQL(
-                """ UPDATE %(table)s
-                    SET %(field)s = NULLIF(
-                        jsonb_strip_nulls(%(fallback)s || COALESCE(%(field)s, '{}'::jsonb) || %(value)s),
-                        '{}'::jsonb)
-                    WHERE id = %(id)s
-                """,
-                table=SQL.identifier(self._table),
-                field=SQL.identifier(field_name),
-                fallback=Json({'en_US': translation_fallback}),
-                value=Json(translations),
-                id=self.id,
-            ))
+            drop_langs = {lang for lang, value in translations.items() if not isinstance(value, str)}
+            translations = {lang: value for lang, value in translations.items() if lang not in drop_langs}
+            if drop_langs:
+                stored_translations = self._get_stored_translations(field_name)
+                if field.type == 'html':
+                    translations = {lang: field._validated_cache_value(value, self.env) for lang, value in translations.items()}
+                if stored_translations is None:
+                    if not translations:
+                        return False
+                    write_value = StoredTranslations({
+                        'en_US': translations.get(self.env.lang or 'en_US', next(iter(translations.values()))),
+                        **translations,
+                    })
+                else:
+                    write_value = StoredTranslations({
+                        **{lang: value for lang, value in stored_translations.items() if lang not in drop_langs},
+                        **translations,
+                    })
+            else:
+                write_value = translations
+            self[field_name] = write_value
+            return True
         else:
-            old_values = field._get_stored_translations(self)
-            if not old_values:
+            stored_translations = self._get_stored_translations(field_name)
+            if not stored_translations:
                 return False
-
-            for lang in translations:
-                # for languages to be updated, use the unconfirmed translated value to replace the language value
-                if f'_{lang}' in old_values:
-                    old_values[lang] = old_values.pop(f'_{lang}')
-            translations = {lang: _translations for lang, _translations in translations.items() if _translations}
-
-            old_source_lang_value = old_values[next(
-                lang
-                for lang in [f'_{source_lang}', source_lang, '_en_US', 'en_US']
-                if lang in old_values)]
-            old_values_to_translate = {
-                lang: value
-                for lang, value in old_values.items()
-                if lang != source_lang and lang in translations
-            }
-            old_translation_dictionary = field.get_translation_dictionary(old_source_lang_value, old_values_to_translate)
-
-            if digest:
-                # replace digested old_en_term with real old_en_term
-                digested2term = {
-                    digest(old_en_term): old_en_term
-                    for old_en_term in old_translation_dictionary
-                }
-                translations = {
-                    lang: {
-                        digested2term[src]: value
-                        for src, value in lang_translations.items()
-                        if src in digested2term
-                    }
-                    for lang, lang_translations in translations.items()
-                }
-
-            new_values = old_values
-            for lang, _translations in translations.items():
-                _old_translations = {src: values[lang] for src, values in old_translation_dictionary.items() if lang in values}
-                _new_translations = {**_old_translations, **_translations}
-                new_values[lang] = field.convert_to_cache(field.translate(_new_translations.get, old_source_lang_value), self)
-            field._update_cache(self.with_context(prefetch_langs=True), StoredTranslations(new_values), dirty=True)
-
-        # the following write is incharge of
-        # 1. mark field as modified
-        # 2. execute logics in the override `write` method
-        # even if the value in cache is the same as the value written
-        self[field_name] = self[field_name]
+            write_value = stored_translations.translated(
+                self.env, field, source_lang, translations, digest=digest,
+                delay_translations=bool(self.env.context.get('delay_translations')),
+            )
+            self[field_name] = write_value
         return True
 
     def get_field_translations(self, field_name: str, langs: Collection[str] | None = None) -> tuple[list[dict[str, str]], dict[str, typing.Any]]:
@@ -3007,8 +2960,8 @@ class BaseModel(metaclass=MetaModel):
                 'value': self_lang.with_context(lang=lang)[field_name]
             } for lang in langs]
         else:
-            translation_dictionary = field.get_translation_dictionary(
-                val_en, {lang: self_lang.with_context(lang=lang)[field_name] for lang in langs}
+            translation_dictionary = StoredTranslations._get_translation_dictionary(
+                field, val_en, {lang: self_lang.with_context(lang=lang)[field_name] for lang in langs}
             )
             translations = [{
                 'lang': lang,
@@ -3021,6 +2974,22 @@ class BaseModel(metaclass=MetaModel):
         context['translation_show_source'] = callable(field.translate)
 
         return translations, context
+
+    def _get_stored_translations(self, field_name: str) -> StoredTranslations | None:
+        """Return the cached StoredTranslations for ``field_name``, or ``None`` if the column is NULL.
+
+        For non-stored related fields, follows the related path to the first stored
+        translated field.
+        """
+        self.ensure_one()
+        field = self._fields[field_name]
+        record = self
+        while field.related and not field.store:
+            record = record.mapped(field.related.rsplit('.', 1)[0])[:1]
+            if not record:
+                return None
+            field = field.related_field
+        return field._get_stored_translations(record)
 
     def _get_base_lang(self) -> str:
         """ Return the base language of the record. """
@@ -3060,6 +3029,24 @@ class BaseModel(metaclass=MetaModel):
                 continue
 
             convert = field.convert_to_read
+            if field.type == 'binary' and load == 'web':
+                def binary_convert(value, record, use_display_name):
+                    if not value:
+                        return False
+                    res = {}
+                    # Include the file name
+                    filename = value.filename
+                    if filename and filename != field.name:
+                        res['filename'] = filename
+                    # For NewIds, always include the content
+                    include_content = not any(record._ids)
+                    if include_content:
+                        res['content'] = value.to_base64()
+                    res['size'] = value.size
+                    res['checksum'] = value.checksum
+                    return res
+                convert = binary_convert
+
             for record, vals in data:
                 # missing records have their vals empty
                 if not vals:
@@ -3077,7 +3064,7 @@ class BaseModel(metaclass=MetaModel):
             instance) for ``self`` in cache.
         """
         # determine which fields can be prefetched
-        if self.env.context.get('prefetch_fields', True) and field.prefetch:
+        if field.prefetch and self.env.context.get('prefetch_fields', len(self) < BIG_RECORDSET_SIZE):
             fnames = [
                 name
                 for name, f in self._fields.items()
@@ -3111,10 +3098,11 @@ class BaseModel(metaclass=MetaModel):
             return
 
         fields_to_fetch = self._determine_fields_to_fetch(field_names, ignore_when_in_cache=True)
-
+        queries = []
         # first determine a query that satisfies the domain and access rules
         if any(field.column_type for field in fields_to_fetch):
-            query = self._search([('id', 'in', self.ids)], active_test=False)
+            for ids in split_every(BIG_RECORDSET_SIZE, self._ids):
+                queries.append(self._search([('id', 'in', ids)], active_test=False))
         else:
             try:
                 self.check_access('read')
@@ -3127,10 +3115,17 @@ class BaseModel(metaclass=MetaModel):
                 self.check_access('read')
             if not fields_to_fetch:
                 return
-            query = self._as_query(ordered=False)
+            # The query is split into domains of BIG_RECORDSET_SIZE so no one
+            # query would have a domain large enough to spill to disk and slow
+            # the transaction
+            for ids in split_every(BIG_RECORDSET_SIZE, self._ids):
+                queries.append(self.browse(ids)._as_query(ordered=False))
 
         # fetch the fields
-        fetched = self._fetch_query(query, fields_to_fetch)
+        fetched = self.browse().union(
+            self._fetch_query(query, fields_to_fetch)
+            for query in queries
+        )
         env = self.env
         if not env.su:
             env._add_to_access_cache(fetched)
@@ -3528,13 +3523,7 @@ class BaseModel(metaclass=MetaModel):
         # access in batch.
         # We want to avoid rechecking *all* the prefetch every time we have an
         # inaccessible record.
-        ids_to_check = tuple(id_ for id_ in ids if not access.get(id_))
-        if len(ids) < PREFETCH_MAX and self._prefetch_ids is not ids:
-            ids_to_check = itertools.chain(ids_to_check, (
-                id_ for id_ in self._prefetch_ids
-                if id_ not in access
-            ))
-            ids_to_check = itertools.islice(unique(ids_to_check), PREFETCH_MAX)
+        ids_to_check = tuple(id_ for id_ in unique(itertools.chain(ids, self._prefetch_ids)) if not access.get(id_))
         records = self.browse(ids_to_check).sudo().with_context(active_test=False)
 
         # Check access
@@ -3683,7 +3672,7 @@ class BaseModel(metaclass=MetaModel):
         with self.env.protecting(self._fields.values(), self):
             self.modified(self._fields, before=True)
 
-        for sub_ids in split_every(cr.IN_MAX, self.ids):
+        for sub_ids in split_every(IN_MAX, self.ids):
             records = self.browse(sub_ids)
 
             cr.execute(SQL(
@@ -4026,10 +4015,13 @@ class BaseModel(metaclass=MetaModel):
                     #     (column or {'en_US': next(iter(expr.values()))}) | expr
                     # )
                     expr = SQL(
-                        """CASE WHEN %(expr)s IS NULL THEN NULL ELSE
-                            COALESCE(%(table)s.%(column)s, jsonb_build_object(
-                                'en_US', jsonb_path_query_first(%(expr)s, '$.*')
-                            )) || %(expr)s
+                        """CASE
+                            WHEN (%(expr)s -> 0)::boolean THEN
+                                COALESCE(
+                                    %(table)s.%(column)s,
+                                    jsonb_build_object('en_US', jsonb_path_query_first(%(expr)s -> 1, '$.*'))
+                                ) || (%(expr)s -> 1)
+                            ELSE (%(expr)s -> 1)
                         END""",
                         table=SQL.identifier(self._table),
                         column=column,
@@ -4956,6 +4948,7 @@ class BaseModel(metaclass=MetaModel):
         fields_to_copy = {name: field
                           for name, field in self._fields.items()
                           if field.copy and name not in default and name not in blacklist}
+        active_langs = self.env['res.lang']._get_active_by('code')
 
         for record in self:
             seen_map = self.env.context['__copy_data_seen']
@@ -4967,9 +4960,10 @@ class BaseModel(metaclass=MetaModel):
             vals = default.copy()
 
             for name, field in fields_to_copy.items():
-                if field.type == 'one2many':
-                    # duplicate following the order of the ids because we'll rely on
-                    # it later for copying translations in copy_translation()!
+                if callable(field.copy):
+                    vals[name] = field.copy(record)
+                elif field.type == 'one2many':
+                    # duplicate following the order of the ids for deterministic pairing
                     lines = record[name].sorted(key='id').copy_data()
                     # the lines are duplicated using the wrong (old) parent, but then are
                     # reassigned to the correct one thanks to the (Command.CREATE, 0, ...)
@@ -4977,75 +4971,22 @@ class BaseModel(metaclass=MetaModel):
                 elif field.type == 'many2many':
                     # copy only links that we can read, otherwise the write will fail
                     vals[name] = [Command.set(record[name]._filtered_access('read').ids)]
+                elif field.translate:
+                    translations = record._get_stored_translations(name)
+                    if not translations:
+                        vals[name] = False
+                    elif field.translate is True:
+                        vals[name] = translations.normalize(record.env, field)
+                    else:
+                        vals[name] = translations.translated(
+                            record.env, field, 'en_US', {lang: {} for lang in active_langs}
+                        )
                 else:
                     vals[name] = field.convert_to_write(record[name], record)
+
             vals_list.append(vals)
+
         return vals_list
-
-    def copy_translations(self, new: Self, excluded: Collection[str] = ()) -> None:
-        """ Recursively copy the translations from original to new record
-
-        :param self: the original record
-        :param new: the new record (copy of the original one)
-        :param excluded: a container of user-provided field names
-        """
-        old = self
-        # avoid recursion through already copied records in case of circular relationship
-        if '__copy_translations_seen' not in old.env.context:
-            old = old.with_context(__copy_translations_seen=defaultdict(set))
-        seen_map = old.env.context['__copy_translations_seen']
-        if old.id in seen_map[old._name]:
-            return
-        seen_map[old._name].add(old.id)
-        valid_langs = set(code for code, _ in self.env['res.lang'].get_installed()) | {'en_US'}
-
-        for name, field in old._fields.items():
-            if not field.copy:
-                continue
-
-            if field.inherited and field.related.split('.')[0] in excluded:
-                # inherited fields that come from a user-provided parent record
-                # must not copy translations, as the parent record is not a copy
-                # of the old parent record
-                continue
-
-            if field.type == 'one2many' and field.name not in excluded:
-                # we must recursively copy the translations for o2m; here we
-                # rely on the order of the ids to match the translations as
-                # foreseen in copy_data()
-                old_lines = old[name].sorted(key='id')
-                new_lines = new[name].sorted(key='id')
-                for (old_line, new_line) in zip(old_lines, new_lines):
-                    # don't pass excluded as it is not about those lines
-                    old_line.copy_translations(new_line)
-
-            elif field.translate and field.store and name not in excluded and old[name]:
-                # for translatable fields we copy their translations
-                old_stored_translations = field._get_stored_translations(old)
-                if not old_stored_translations:
-                    continue
-                lang = self.env.lang or 'en_US'
-                if field.translate is True:
-                    new.update_field_translations(name, {
-                        k: v for k, v in old_stored_translations.items() if k in valid_langs and k != lang
-                    })
-                else:
-                    old_translations = {
-                        k: old_stored_translations.get(f'_{k}', v)
-                        for k, v in old_stored_translations.items()
-                        if k in valid_langs
-                    }
-                    # {from_lang_term: {lang: to_lang_term}
-                    translation_dictionary = field.get_translation_dictionary(
-                        old_translations.pop(lang, old_translations['en_US']),
-                        old_translations
-                    )
-                    # {lang: {old_term: new_term}}
-                    translations = defaultdict(dict)
-                    for from_lang_term, to_lang_terms in translation_dictionary.items():
-                        for lang, to_lang_term in to_lang_terms.items():
-                            translations[lang][from_lang_term] = to_lang_term
-                    new.update_field_translations(name, translations)
 
     def copy(self, default: ValuesType | None = None) -> Self:
         """ Duplicate record ``self`` updating it with default values.
@@ -5056,10 +4997,7 @@ class BaseModel(metaclass=MetaModel):
 
         """
         vals_list = self.with_context(active_test=False).copy_data(default)
-        new_records = self.create(vals_list)
-        for old_record, new_record in zip(self, new_records):
-            old_record.copy_translations(new_record, excluded=default or ())
-        return new_records
+        return self.create(vals_list)
 
     @api.private
     def exists(self) -> Self:
@@ -5658,10 +5596,6 @@ class BaseModel(metaclass=MetaModel):
             records = self
             for rel_field_name in rel_field_names:
                 records = records[rel_field_name]
-            if len(records) > PREFETCH_MAX:
-                # fetch fields for all recordset in case we have a recordset
-                # that is larger than the prefetch
-                records.fetch([field_name])
             field = records._fields[field_name]
             getter = field.__get__
             if field.relational:
@@ -5715,7 +5649,7 @@ class BaseModel(metaclass=MetaModel):
             raise TypeError(f"Invalid function {func!r} to filter on {self._name}")
 
         ids = tuple(id_ for id_, rec in zip(self._ids, self) if func(rec))
-        return self.__class__(self.env, ids, Prefetch.union(ids, self._prefetch_ids))
+        return self.__class__(self.env, ids, self._prefetch_ids)
 
     @typing.overload
     def grouped(self, key: str) -> dict[typing.Any, Self]:
@@ -5761,7 +5695,7 @@ class BaseModel(metaclass=MetaModel):
             return self
         predicate = Domain(domain)._as_predicate(self)
         ids = tuple(id_ for id_, rec in zip(self._ids, self) if predicate(rec))
-        return self.__class__(self.env, ids, Prefetch.union(ids, self._prefetch_ids))
+        return self.__class__(self.env, ids, self._prefetch_ids)
 
     @api.private
     def sorted(self, key: Callable[[Self], typing.Any] | str | None = None, reverse: bool = False) -> Self:
@@ -5998,13 +5932,8 @@ class BaseModel(metaclass=MetaModel):
         cls = self.__class__
         env = self.env
         prefetch_ids = self._prefetch_ids
-        if size > PREFETCH_MAX and prefetch_ids is ids:
-            for sub_ids in split_every(PREFETCH_MAX, ids):
-                for id_ in sub_ids:
-                    yield cls(env, (id_,), sub_ids)
-        else:
-            for id_ in ids:
-                yield cls(env, (id_,), prefetch_ids)
+        for id_ in ids:
+            yield cls(env, (id_,), prefetch_ids)
 
     def __reversed__(self) -> Iterator[Self]:
         """ Return an reversed iterator over ``self``. """
@@ -6017,15 +5946,9 @@ class BaseModel(metaclass=MetaModel):
             return
         cls = self.__class__
         env = self.env
-        prefetch_ids = self._prefetch_ids
-        if size > PREFETCH_MAX and prefetch_ids is ids:
-            for sub_ids in split_every(PREFETCH_MAX, reversed(ids)):
-                for id_ in sub_ids:
-                    yield cls(env, (id_,), sub_ids)
-        else:
-            prefetch_ids = ReversedIterable(prefetch_ids)
-            for id_ in reversed(ids):
-                yield cls(env, (id_,), prefetch_ids)
+        prefetch_ids = ReversedIterable(self._prefetch_ids)
+        for id_ in reversed(ids):
+            yield cls(env, (id_,), prefetch_ids)
 
     def __contains__(self, item: BaseModel | str) -> bool:
         """ Test whether ``item`` (record or field name) is an element of ``self``.

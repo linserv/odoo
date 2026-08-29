@@ -15,7 +15,7 @@ import {
 } from "@odoo/owl";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
 import { _t } from "@web/core/l10n/translation";
-import { useActiveElement } from "@web/core/ui/ui_service";
+import { useActiveElement } from "@web/core/ui/ui_plugin";
 import { useService } from "@web/core/utils/hooks";
 import { closestScrollableY, scrollTo } from "@web/core/utils/scrolling";
 
@@ -232,15 +232,6 @@ export class ImageCrop extends Component {
         this.closeCropper();
     }
     /**
-     * Resets the crop box to prevent it going outside the image.
-     *
-     * @private
-     */
-    resetCropBox() {
-        this.cropper.clear();
-        this.cropper.crop();
-    }
-    /**
      * Make sure the targeted image is in the visible viewport before crop.
      *
      * @private
@@ -325,15 +316,5 @@ export class ImageCrop extends Component {
                 .map((field) => [field, cropper.getData()[field]])
                 .filter(([, value]) => value)
         );
-    }
-    /**
-     * Resets the cropbox on zoom to prevent crop box overflowing.
-     *
-     * @private
-     */
-    async onCropZoom() {
-        // Wait for the zoom event to be fully processed before reseting.
-        await new Promise((res) => setTimeout(res, 0));
-        this.resetCropBox();
     }
 }

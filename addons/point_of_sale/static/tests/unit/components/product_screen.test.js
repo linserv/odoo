@@ -28,12 +28,24 @@ test("_getProductByBarcode", async () => {
     const { store, order, productScreen } = await mountProductScreen();
     await productScreen.addProductToOrder(store.models["product.template"].get(5));
 
-    expect(order.displayPrice).toBe(3.45);
-    expect(productScreen.total).toBe("$\u00a03.45");
+    expect(order.displayPrice).toBe(115);
+    expect(productScreen.total).toBe("$\u00a0115.00");
     expect(productScreen.items).toBe("1");
 
     const productByBarcode = await productScreen._getProductByBarcode({ base_code: "test_test" });
     expect(productByBarcode.id).toEqual(5);
+});
+
+test("_barcodeProductAction", async () => {
+    const store = await setupPosEnv();
+    store.addNewOrder();
+    const order = store.getOrder();
+    const comp = await mountWithCleanup(ProductScreen, { props: { orderUuid: order.uuid } });
+
+    await comp._barcodeProductAction({ base_code: "test_test" });
+
+    expect(order.lines).toHaveLength(1);
+    expect(order.lines[0].product_id.id).toBe(5);
 });
 
 test("fastValidate", async () => {
@@ -41,15 +53,15 @@ test("fastValidate", async () => {
     const fastPaymentMethod = order.config.fast_payment_method_ids[0];
     await productScreen.addProductToOrder(store.models["product.template"].get(5));
 
-    expect(order.displayPrice).toBe(3.45);
-    expect(productScreen.total).toBe("$\u00a03.45");
+    expect(order.displayPrice).toBe(115);
+    expect(productScreen.total).toBe("$\u00a0115.00");
     expect(productScreen.items).toBe("1");
 
     await productScreen.fastValidate(fastPaymentMethod);
 
     expect(order.payment_ids[0].payment_method_id).toEqual(fastPaymentMethod);
     expect(order.state).toBe("paid");
-    expect(order.amount_paid).toBe(3.45);
+    expect(order.amount_paid).toBe(115);
 });
 
 test("long press on a product opens the product info popup", async () => {
@@ -140,4 +152,38 @@ test("multiplePrinter using mock records", async () => {
     localStorage.setItem(printer.printerStorageKey, "4");
     const defaultPrinter2 = await printer.selectPrinter();
     expect(defaultPrinter2.id).toBe(4);
+});
+
+test("addProductToOrder presets the variant matched by default_code search", async () => {
+    const store = await setupPosEnv();
+    store.addNewOrder();
+    const order = store.getOrder();
+    const productTemplate = store.models["product.template"].get(60);
+    store.models["product.product"].get(61).default_code = "BELT-M-REF";
+
+    store.session.state = "opened";
+    const comp = await mountWithCleanup(ProductScreen, { props: { orderUuid: order.uuid } });
+    store.searchProductWord = "BELT-M-REF";
+
+    await comp.addProductToOrder(productTemplate);
+
+    expect(order.lines[0].product_id.id).toBe(61);
+});
+
+test("discarding the product configurator does not open the optional products popup", async () => {
+    const store = await setupPosEnv();
+    store.addNewOrder();
+    const order = store.getOrder();
+    const productTemplate = store.models["product.template"].get(60);
+    productTemplate.update({
+        pos_optional_product_ids: [store.models["product.template"].get(5)],
+    });
+
+    store.session.state = "opened";
+    const comp = await mountWithCleanup(ProductScreen, { props: { orderUuid: order.uuid } });
+
+    comp.addProductToOrder(productTemplate);
+
+    expect(order.lines.length).toBe(0);
+    expect(document.querySelectorAll(".modal").length).toBe(0);
 });

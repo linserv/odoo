@@ -10,12 +10,7 @@ import { BusParametersPlugin } from "@bus/bus_parameters_plugin";
 import { WorkerPlugin } from "@bus/services/worker_plugin";
 
 // List of worker events that should not be broadcasted.
-const INTERNAL_EVENTS = new Set([
-    "BUS:INITIALIZED",
-    "BUS:LAST_ID_RESET",
-    "BUS:NOTIFICATION",
-    "BUS:PROVIDE_LOGS",
-]);
+const INTERNAL_EVENTS = new Set(["BUS:INITIALIZED", "BUS:NOTIFICATION", "BUS:PROVIDE_LOGS"]);
 // Slightly delay the reconnection when coming back online as the network is not
 // ready yet and the exponential backoff would delay the reconnection by a lot.
 export const BACK_ONLINE_RECONNECT_DELAY = 5000;
@@ -55,7 +50,7 @@ export class BusPlugin extends Plugin {
 
     setup() {
         this.startedAt = luxon.DateTime.now().set({ milliseconds: 0 });
-
+        browser.localStorage.removeItem("bus.last_notification_id");
         useListener(browser, "pagehide", ({ persisted }) => {
             if (!persisted) {
                 // Page is gonna be unloaded, disconnect this client
@@ -114,14 +109,8 @@ export class BusPlugin extends Plugin {
             }
             case "BUS:NOTIFICATION": {
                 const notifications = data.map(({ id, message }) => ({ id, ...message }));
-                const receivedLastId = notifications.at(-1).id;
-                const lsLastId = parseInt(localStorage.getItem("bus.last_notification_id") ?? 0);
-                if (receivedLastId > lsLastId) {
-                    localStorage.setItem("bus.last_notification_id", receivedLastId);
-                }
                 for (const { id, type, payload } of notifications) {
                     this.notificationBus.trigger(type, { id, payload });
-                    this._onMessage(this.env, id, type, payload);
                 }
                 break;
             }
@@ -138,9 +127,6 @@ export class BusPlugin extends Plugin {
                 }
                 break;
             }
-            case "BUS:LAST_ID_RESET":
-                localStorage.setItem("bus.last_notification_id", data);
-                break;
         }
         if (!INTERNAL_EVENTS.has(type)) {
             this.bus.trigger(type, data);
@@ -160,14 +146,21 @@ export class BusPlugin extends Plugin {
         if (!uid && uid !== undefined) {
             uid = false;
         }
-        await this.workerService.ensureWorkerStarted();
+        const started = await this.workerService.ensureWorkerStarted();
+        if (!started) {
+            console.warn(
+                "BusService: Real-time notifications disabled (WorkerService failed to start)."
+            );
+            this.resolveWorkerInit();
+            return;
+        }
         await this.workerService.registerHandler((ev) => this.handleMessage(ev));
         this.workerService.send("BUS:INITIALIZE_CONNECTION", {
             websocketURL: `${this.params.serverURL().replace("http", "ws")}/websocket?version=${
-                session.websocket_worker_version
+                session.bus_info.worker_version
             }`,
             db: session.db,
-            lastNotificationId: parseInt(localStorage.getItem("bus.last_notification_id")) || 0,
+            lastNotificationId: session.bus_info.last_id ?? null,
             uid,
             startTs: this.startedAt.valueOf(),
         });
@@ -180,10 +173,6 @@ export class BusPlugin extends Plugin {
 
     removeEventListener(type, listener) {
         this.bus.removeEventListener(type, listener);
-    }
-
-    trigger(type, data) {
-        this.bus.trigger(type, data);
     }
 
     async addChannel(channel) {
@@ -205,8 +194,9 @@ export class BusPlugin extends Plugin {
         return this.workerService.send("BUS:REQUEST_LOGS");
     }
 
-    forceUpdateChannels() {
-        return this.workerService.send("BUS:FORCE_UPDATE_CHANNELS");
+    async forceUpdateChannels() {
+        await this.ensureWorkerStarted();
+        this.workerService.send("BUS:FORCE_UPDATE_CHANNELS");
     }
 
     send(eventName, data) {
@@ -254,9 +244,6 @@ export class BusPlugin extends Plugin {
         );
         this.subscribeFnToWrapper.delete(callback);
     }
-
-    /** Overridden to provide logs in tests. Use subscribe() in production. */
-    _onMessage(env, id, type, payload) {}
 }
 
 services.add(BusPlugin);
@@ -282,7 +269,7 @@ export const busService = {
                 return busPlugin.workerState();
             },
         });
-        const INTERNAL_METHODS = new Set(["constructor", "setup", "handleMessage", "_onMessage"]);
+        const INTERNAL_METHODS = new Set(["constructor", "setup", "handleMessage"]);
         for (const method of Object.getOwnPropertyNames(BusPlugin.prototype)) {
             if (!INTERNAL_METHODS.has(method) && typeof busPlugin[method] === "function") {
                 busServiceWrapper[method] = busPlugin[method].bind(busPlugin);

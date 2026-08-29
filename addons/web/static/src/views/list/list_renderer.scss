@@ -2,7 +2,8 @@
 .o_list_renderer {
     --ListRenderer-table-padding-x: #{$table-cell-padding-x-sm};
     --ListRenderer-thead-padding-y: #{map-get($spacers, 4)};
-    --ListRenderer-thead-bg-color: #{$o-webclient-background-color};
+    --ListRenderer-thead-bg-color: linear-gradient(to bottom, #{$o-webclient-background-color}, #{rgba($o-webclient-background-color, .75)} );
+    --ListRendererGrouped__th-bg-color: #{rgba($o-view-background-color, .5)};
     --ListRenderer-thead-border-end-color: #{$border-color};
     --ListRenderer-tfoot-bg-color: #{$o-list-footer-bg-color};
     --sticky-header-zindex: 1;
@@ -30,6 +31,14 @@
     th, td {
         // This fixes a bug that was hidding part of cell borders on Firefox.
         background-clip: padding-box;
+    }
+
+    .o_search_panel_resize + &,
+    .o_search_panel_sidebar + & {
+        border: $border-width solid $border-color;
+        border-bottom: 0;
+        margin-right: map-get($spacers, 3);
+        border-radius: $border-radius-xl $border-radius-xl 0 0;
     }
 
     .o_list_view & {
@@ -82,15 +91,19 @@
 
             th {
                 padding-top: var(--ListRenderer-thead-padding-y);
-                background-color: var(--ListRenderer-thead-bg-color);
+                background: var(--ListRenderer-thead-bg-color);
                 color: $headings-color;
+
+                // Currently sticky thead > th elements have a border bottom that doens't follow when scrolling.
+                // Temporary workaround: We replace the border with a box-shadow to simulate the border bottom so it keeps visible when scrolling.
+                border-bottom: 0;
+                box-shadow: inset 0px -1px 0 0px var(--ListRenderer-thead-border-end-color);
+
+                // Define backdrop blur here to ensure it will applied on all th
+                backdrop-filter: var(--o-backdrop-blur-sm);
 
                 @include media-only(print) {
                     font-weight: $font-weight-bold;
-                }
-
-                &.table-active {
-                    box-shadow: none;
                 }
             }
 
@@ -262,23 +275,9 @@
             }
         }
 
-        .o_count_header, .o_count_column {
-            min-width: 105px;
-            white-space: nowrap;
-            background-color: var(--ListRenderer-thead-bg-color);
-            .o_pager {
-                > .btn-group {
-                    display: none;
-                }
-            }
-        }
-        .o_pager_cell_buttons .o_pager_counter {
-            display: none;
-        }
-
         // Grouped list views
         tbody > tr.o_group_header {
-            --table-bg: var(--ListRenderer-thead-bg-color);
+            --table-bg: var(--ListRendererGrouped__th-bg-color);
             --table-color: var(--ListRenderer-thead-bg-color);
             height: 40px;
 
@@ -293,7 +292,6 @@
             }
             .o_group_name {
                 @include o-text-overflow(table-cell);
-                vertical-align: middle;
             }
             .o_group_buttons {
                 display: inline-block;
@@ -305,44 +303,40 @@
                     margin-right: 3px;
                 }
             }
-            .o_pager_cell_buttons {
-                width: 100%;
-                display: flex;
-                justify-content: center;
+            .o_pager {
+                cursor: text;
+                user-select: none;
+                text-align: right;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+                margin-top: -2px;
+                margin-bottom: -2px;
 
-                .o_pager {
-                    gap: 0 !important;
-                    margin: 0;
-                    padding: 0;
-
-                    .btn-group {
-                        display: flex;
+                .o_pager_previous,
+                .o_pager_next {
+                    max-height: 30px;
+                    padding: 0 5px !important;
+                    background-color: lighten($o-brand-lightsecondary, 10%);
+                    display: flex;
+                    align-items: center;
+                    &:hover {
+                        background-color: $o-brand-lightsecondary;
                     }
-
-                    .o_pager_previous,
-                    .o_pager_next {
-                        padding: 0 !important;
-                        width: 16px !important;
-                        height: 24px !important;
-
-                        display: flex !important;
-                        align-items: center !important;
-                        justify-content: center !important;
-
-                        background-color: lighten($o-brand-lightsecondary, 10%);
-                        &:hover {
-                            background-color: $o-brand-lightsecondary;
-                        }
-                        i {
-                            // Needed to avoid the chevrons to be misaligned
-                            line-height: 0 !important;
-                            font-size: 10px;
-                            margin: 0;
-                        }
+                    i {
+                        font-size: 10px;
+                        font-weight: 500 !important;
                     }
                 }
-            }
 
+                .btn-group {
+                    // The pager wraps its buttons in a padded, bordered container.
+                    // Inside a group header it would make the row taller than its
+                    // collapsed state, so reset it here.
+                    padding: 0;
+                    border: 0;
+                    background: none;
+                }
+            }
             .o_group_caret {
                 margin-inline-start: calc(var(--o-list-group-level, 0) * #{map-get($spacers, 4)});
             }
@@ -400,9 +394,9 @@
         }
 
         .o_list_actions_header {
-            width: 36px !important;
-            min-width: 36px;
-            background-color: var(--ListRenderer-thead-bg-color);
+            width: 32px;
+            min-width: 32px;
+            background: var(--ListRenderer-thead-bg-color);
         }
 
         .o_data_row.o_list_no_open {
@@ -490,7 +484,7 @@
 
             .o_mass_edit_btn {
                 display: var(--mass-edit-btn-display);
-               
+
             }
 
             &:hover {

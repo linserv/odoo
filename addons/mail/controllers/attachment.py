@@ -5,13 +5,15 @@ import io
 import logging
 import zipfile
 
-from werkzeug.exceptions import NotFound, UnsupportedMediaType
+from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType
 
 from odoo import _, http
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, MissingError, UserError
 from odoo.http import request
-from odoo.http.stream import content_disposition
-from odoo.tools import BinaryBytes, file_open
+from odoo.http.stream import content_disposition, STATIC_CACHE_LONG
+from odoo.tools import BinaryBytes, file_open, str2bool
+from odoo.tools.mail import html_remove_links, html_sanitize
+from odoo.tools.misc import replace_exceptions
 from odoo.tools.pdf import DependencyError, PdfReadError, extract_page
 
 from odoo.addons.mail.controllers.thread import ThreadController
@@ -19,8 +21,20 @@ from odoo.addons.mail.tools.discuss import Store, add_guest_to_context, mail_rou
 
 logger = logging.getLogger(__name__)
 
+try:
+    from markdown2 import markdown
+except ImportError:
+    markdown = None
+    logger.warning("markdown2 is not installed, markdown will not be rendered")
+
 
 class AttachmentController(ThreadController):
+    TEXTUAL_THUMBNAIL_SIZE = 4096
+    SUPPORTED_TEXT_MIMETYPES = (
+        'application/javascript', 'application/json', 'application/xml',
+        'text/css', 'text/csv', 'text/html', 'text/markdown', 'text/plain', 'text/xml',
+    )
+
     def _make_zip(self, name, attachments):
         streams = (request.env['ir.binary']._get_stream_from(record, 'raw') for record in attachments)
         # TODO: zip on-the-fly while streaming instead of loading the
@@ -95,18 +109,49 @@ class AttachmentController(ThreadController):
         return request.make_json_response(res)
 
     @mail_route("/mail/attachment/delete", methods=["POST"], type="jsonrpc", auth="public")
-    def mail_attachment_delete(self, attachment_id, access_token=None):
-        attachment = request.env["ir.attachment"].browse(int(attachment_id)).exists()
-        if not attachment or not attachment._has_attachments_ownership([access_token]):
-            request.env.user._bus_send("ir.attachment/delete", {"id": attachment_id})
+    def mail_attachment_delete(self, access_token_by_attachment_id, keep_on_messages=False):
+        """ Delete the given attachments at once, so that removing several of
+            them, such as the copies of a same file, takes a single query.
+
+            :param dict access_token_by_attachment_id: ownership token of each
+                attachment to delete, keyed by attachment id. A token may be
+                None to rely on the access rights only.
+            :param bool keep_on_messages: only unlink the attachments posted on
+                a message from their thread, keeping them on that message. Set
+                when deleting from the attachment list of a record, as trimming
+                that list is not meant to edit the messages of the record.
+            :return: the ids of the attachments that were kept on their message
+        """
+        access_token_by_attachment_id = {
+            int(attachment_id): access_token
+            for attachment_id, access_token in access_token_by_attachment_id.items()
+        }
+        attachments = request.env["ir.attachment"].browse(access_token_by_attachment_id.keys()).exists()
+        is_allowed = len(attachments) == len(access_token_by_attachment_id) and (
+            attachments._has_attachments_ownership(
+                [access_token_by_attachment_id[attachment.id] for attachment in attachments]
+            )
+        )
+        if not is_allowed:
+            for attachment_id in access_token_by_attachment_id:
+                request.env.user._bus_send("ir.attachment/delete", {"id": attachment_id})
             raise NotFound()
-        message = request.env["mail.message"].sudo().search(
-            [("attachment_ids", "in", attachment.ids)], limit=1)
-        if message:
+        messages = request.env["mail.message"].sudo().search([("attachment_ids", "in", attachments.ids)])
+        attachments_by_message = {message: attachments & message.attachment_ids for message in messages}
+        posted = attachments & messages.attachment_ids
+        orphans = attachments - posted
+        for message, message_attachments in attachments_by_message.items():
+            if keep_on_messages:
+                # sudo: ir.attachment: access is validated with _has_attachments_ownership
+                message_attachments.sudo()._unlink_from_thread_and_notify(message)
+                continue
             thread = request.env[message.model].browse(message.res_id)
             thread._message_update_content(message, body=message.body)  # marks the message edited
+            # sudo: ir.attachment: access is validated with _has_attachments_ownership
+            message_attachments.sudo()._delete_and_notify(message)
         # sudo: ir.attachment: access is validated with _has_attachments_ownership
-        attachment.sudo()._delete_and_notify(message)
+        orphans.sudo()._delete_and_notify()
+        return {"kept_attachment_ids": posted.ids if keep_on_messages else []}
 
     @mail_route(['/mail/attachment/zip'], methods=["POST"], type="http", auth="public")
     def mail_attachment_get_zip(self, file_ids, zip_name, **kw):
@@ -179,3 +224,84 @@ class AttachmentController(ThreadController):
         if attachment.name:
             headers.append(("Content-Disposition", content_disposition(attachment.name)))
         return request.make_response(content, headers)
+
+    @http.route(
+        "/mail/attachment/render_text/<int:attachment_id>",
+        type="http",
+        auth="public",
+        readonly=True,
+    )
+    def mail_attachment_render_text(self, attachment_id, access_token=None, head=False, unique=False, **kwargs):
+        """Render the text content for preview and thumbnail.
+
+        Render the document content / preview for:
+        - Simple text
+        - HTML
+        - XML
+        - JSON
+        - Markdown
+
+        :param int attachment_id: ID of the attachment
+        :param str access_token: The access token to the record
+        :param bool head: Show only the thumbnail (first 4kiB) of text-like documents.
+            Note: HTML files are always streamed in full to prevent breaking their structural markup.
+        :param str unique: Indicates if the response can be cached
+        """
+        with replace_exceptions(AccessError, MissingError, by=request.not_found()):
+            attachment = request.env['ir.binary']._find_record(
+                res_model='ir.attachment',
+                res_id=int(attachment_id),
+                access_token=access_token,
+                field='raw',
+            )
+        return self._render_text_attachment(attachment, str2bool(head, False), unique)
+
+    def _set_render_with_headers(self, response, unique):
+        """Apply the security headers and cache policy shared by every rendered text preview"""
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; sandbox;"
+        )
+        # Settings below are mirroring settings in stream.get_response()
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.cache_control.pop('public', '')
+        response.cache_control.private = True
+        if unique:
+            response.cache_control['immutable'] = None
+            response.cache_control.max_age = STATIC_CACHE_LONG
+        return response
+
+    def _render_text_attachment(self, attachment, head=False, unique=False):
+        """Shared rendering engine for text attachments."""
+        mimetype = attachment.mimetype
+        if mimetype not in self.SUPPORTED_TEXT_MIMETYPES:
+            raise BadRequest(f"bad document mimetype: expect a recognized text type, got {mimetype}")
+        immutable = bool(unique) and unique == attachment.checksum
+        if (mimetype == 'application/json' and not head) or mimetype == 'text/html':
+            with replace_exceptions(ValueError, MissingError, by=request.not_found()):
+                stream = request.env['ir.binary']._get_stream_from(attachment)
+            stream.public = False
+            return stream.get_response(
+                as_attachment=False, immutable=immutable, content_security_policy="default-src 'none'; sandbox;"
+            )
+        with attachment.raw.open() as f:
+            content = f.read(self.TEXTUAL_THUMBNAIL_SIZE) if head else f.read()
+        text_content = content.decode(errors='replace')
+        if mimetype == 'text/markdown' and markdown:
+            rendered = markdown(
+                text_content,
+                safe_mode='escape',
+                extras=['strike', 'fenced-code-blocks', 'tables', 'footnotes'],
+            )
+            response = request.render("mail.content_markdown", {
+                'content': html_sanitize(
+                    html_remove_links(rendered),
+                    sanitize_attributes=True,
+                    strip_style=True,
+                    strip_classes=True,
+                ),
+            })
+        else:
+            response = request.render("mail.content_text", {
+                'content': text_content,
+            })
+        return self._set_render_with_headers(response, immutable)

@@ -6,6 +6,7 @@ import random
 
 from odoo import api, fields, models, _
 from odoo.exceptions import ValidationError, UserError
+from odoo.tools.translate import mark_as_copy
 
 
 class PosCategory(models.Model):
@@ -26,7 +27,7 @@ class PosCategory(models.Model):
     def _default_sequence(self):
         return (self.search([], order="sequence desc", limit=1).sequence or 0) + 1
 
-    name = fields.Char(string='Category Name', required=True, translate=True)
+    name = fields.Char(string='Category Name', required=True, translate=True, copy=mark_as_copy('name'))
     complete_name = fields.Char('Complete Name', compute='_compute_complete_name', recursive=True, store=True)
     parent_id = fields.Many2one('pos.category', string='Parent Category', index=True)
     child_ids = fields.One2many('pos.category', 'parent_id', string='Children Categories')
@@ -45,12 +46,12 @@ class PosCategory(models.Model):
     product_count = fields.Integer(compute="_compute_product_count")
 
     @api.model
-    def _load_pos_data_domain(self, data, config):
+    def _load_pos_data_domain(self, data):
         domain = []
+        config = data['pos.config']
         if config.limit_categories:
-            preparation_categories = [printer['product_categories_ids'] for printer in data['pos.printer']]
-            flattened_preparation_categories = [item for sublist in preparation_categories for item in sublist]
-            domain += [('id', 'in', flattened_preparation_categories + config.iface_available_categ_ids.ids)]
+            preparation_categories = data['pos.printer'].product_categories_ids
+            domain += [('id', 'in', preparation_categories.ids + config.iface_available_categ_ids.ids)]
         return domain
 
     @api.model
@@ -123,14 +124,6 @@ class PosCategory(models.Model):
                 raise ValidationError(_('The Availability After must be set between 00:00 and 24:00'))
             if category.hour_until and category.hour_after and category.hour_until < category.hour_after:
                 raise ValidationError(_('The Availability Until must be greater than Availability After.'))
-
-    def copy_data(self, default=None):
-        default = dict(default or {})
-        vals_list = super().copy_data(default=default)
-        if 'name' not in default:
-            for pos_category, vals in zip(self, vals_list):
-                vals['name'] = _("%s (copy)", pos_category.name)
-        return vals_list
 
     def _compute_product_count(self):
         all_categories = self.search_fetch(

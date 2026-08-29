@@ -15,6 +15,7 @@ class PosSelfKiosk(http.Controller):
                     'access_token': config_access_token,
                     'session_info': {
                         **request.env["ir.http"].get_frontend_session_info(),
+                        'bus_info': request.env["ir.http"]._get_bus_session_info(),
                         'currencies': request.env["res.currency"].get_all_currencies(),
                         'data': {
                             'config_id': pos_config.id,
@@ -32,18 +33,8 @@ class PosSelfKiosk(http.Controller):
     def get_self_ordering_data(self, config_id=None, access_token=None, table_identifier=None):
         pos_config, _, config_access_token = self._verify_entry_access(config_id, access_token, table_identifier)
         data = pos_config.load_self_data()
-        data['pos.config'][0]['access_token'] = config_access_token
+        data['pos.config']['records'][0]['access_token'] = config_access_token
         return data
-
-    @http.route("/pos-self/receipt-template/<config_id>", type='jsonrpc', auth='public')
-    def get_self_ordering_receipt_template(self, config_id=None, access_token=None, table_identifier=None):
-        pos_config, _, _ = self._verify_entry_access(config_id, access_token, table_identifier)
-        return pos_config.env['pos.order'].get_receipt_template_for_pos_frontend()
-
-    @http.route("/pos-self/relations/<config_id>", type='jsonrpc', auth='public')
-    def get_self_ordering_relations(self, config_id=None, access_token=None, table_identifier=None):
-        pos_config, _, _ = self._verify_entry_access(config_id, access_token, table_identifier)
-        return pos_config.load_data_params()
 
     def _verify_entry_access(self, config_id=None, access_token=None, table_identifier=None):
         table_sudo = False

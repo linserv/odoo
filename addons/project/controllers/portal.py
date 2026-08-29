@@ -355,9 +355,15 @@ class ProjectCustomerPortal(CustomerPortal):
 
         return values
 
+    def _task_get_name_search_domain(self, search):
+        domain = Domain('name', 'ilike', search)
+        if search.isdigit():
+            domain |= Domain('id', '=', int(search))
+        return domain
+
     def _task_get_search_domain(self, search_in, search, milestones_allowed, project):
         if not search_in or search_in == 'name':
-            return ['|', ('name', 'ilike', search), ('id', 'ilike', search)]
+            return self._task_get_name_search_domain(search)
         elif search_in == 'user_ids':
             user_ids = request.env['res.users'].sudo().search([('name', 'ilike', search)])
             return [('user_ids', 'in', user_ids.ids)]
@@ -382,7 +388,26 @@ class ProjectCustomerPortal(CustomerPortal):
         elif search_in in self._task_get_searchbar_inputs(milestones_allowed, project):
             return [(search_in, 'ilike', search)]
         else:
-            return ['|', ('name', 'ilike', search), ('id', 'ilike', search)]
+            return self._task_get_name_search_domain(search)
+
+    def _concat_tasks(self, task_sudo, groupby, tasks):
+        tasks_project_allow_milestone = tasks.filtered(lambda t: t.allow_milestones)
+        tasks_no_milestone = tasks - tasks_project_allow_milestone
+        if groupby == 'milestone_id':
+            grouped_tasks = [task_sudo.concat(g) for k, g in groupbyelem(tasks_project_allow_milestone, itemgetter(groupby))]
+
+            if not grouped_tasks:
+                if tasks_no_milestone:
+                    grouped_tasks = [tasks_no_milestone]
+            else:
+                if grouped_tasks[len(grouped_tasks) - 1][0].milestone_id and tasks_no_milestone:
+                    grouped_tasks.append(tasks_no_milestone)
+                else:
+                    grouped_tasks[len(grouped_tasks) - 1] |= tasks_no_milestone
+
+            return grouped_tasks
+
+        return [task_sudo.concat(g) for k, g in groupbyelem(tasks, itemgetter(groupby))]
 
     def _prepare_tasks_values(self, page, date_begin, date_end, sortby, search, search_in, groupby, url="/my/tasks", domain=None, su=False, project=False):
         values = self._prepare_portal_layout_values()
@@ -434,24 +459,8 @@ class ProjectCustomerPortal(CustomerPortal):
             tasks = Task_sudo.search(domain, order=order, limit=self._items_per_page, offset=pager_offset)
             request.session['my_project_tasks_history' if url.startswith('/my/projects') else 'my_tasks_history'] = tasks.ids[:100]
 
-            tasks_project_allow_milestone = tasks.filtered(lambda t: t.allow_milestones)
-            tasks_no_milestone = tasks - tasks_project_allow_milestone
-
             if groupby != 'none':
-                if groupby == 'milestone_id':
-                    grouped_tasks = [Task_sudo.concat(g) for k, g in groupbyelem(tasks_project_allow_milestone, itemgetter(groupby))]
-
-                    if not grouped_tasks:
-                        if tasks_no_milestone:
-                            grouped_tasks = [tasks_no_milestone]
-                    else:
-                        if grouped_tasks[len(grouped_tasks) - 1][0].milestone_id and tasks_no_milestone:
-                            grouped_tasks.append(tasks_no_milestone)
-                        else:
-                            grouped_tasks[len(grouped_tasks) - 1] |= tasks_no_milestone
-
-                else:
-                    grouped_tasks = [Task_sudo.concat(g) for k, g in groupbyelem(tasks, itemgetter(groupby))]
+                grouped_tasks = self._concat_tasks(Task_sudo, groupby, tasks)
             else:
                 grouped_tasks = [tasks] if tasks else []
 

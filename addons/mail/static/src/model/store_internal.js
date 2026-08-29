@@ -207,9 +207,13 @@ export class StoreInternal extends RecordInternal {
             Reflect.set(record._proxy[parentFieldName], fieldName, value);
             return;
         }
+        if (Model._.fieldsComputable.has(fieldName)) {
+            console.warn(`${Model.getName()}.${fieldName} is computed: dropping the write.`);
+            return;
+        }
         const fieldType = Model._.fieldsType.get(fieldName);
         const fieldHtml = Model._.fieldsHtml.get(fieldName);
-        const sig = record._.ensureFieldSignal(record, fieldName);
+        const sig = record._.ensureFieldSignal(fieldName);
         const current = sig();
         let shouldChange = current !== value;
         if (fieldType === "datetime" && value) {
@@ -245,8 +249,12 @@ export class StoreInternal extends RecordInternal {
     /**
      * @param {Record} record
      * @param {Object} vals
+     * @param {Object} [options={}]
+     * @param {boolean} [options.forceApply=true] Apply the values even when the
+     * current insert version is out of order. Only versioned server data turns
+     * it off.
      */
-    updateFields(record, vals) {
+    updateFields(record, vals, { forceApply = true } = {}) {
         const fieldEntries = Object.entries(vals).concat(
             Object.getOwnPropertySymbols(vals).map((sym) => [sym, vals[sym]])
         );
@@ -269,10 +277,17 @@ export class StoreInternal extends RecordInternal {
                           ]?.[record.id]?.includes(fieldName),
                   }
                 : version.lastRevision;
-            const toApply = version.resolveApply(
-                isMany(record.Model, fieldName) ? normalizeManyCommands(value) : value,
-                revision
-            );
+            const normalized = isMany(record.Model, fieldName)
+                ? normalizeManyCommands(value)
+                : value;
+            // ".noinv" commands only come from inverse echoes: they are
+            // client-generated even when found inside server data to insert.
+            const toApply = version.resolveApply(normalized, revision, {
+                forceApply:
+                    forceApply ||
+                    (isCommandList(normalized) &&
+                        normalized.every(([mode]) => mode.endsWith(".noinv"))),
+            });
             if (toApply === SKIP_REVISION) {
                 continue;
             }

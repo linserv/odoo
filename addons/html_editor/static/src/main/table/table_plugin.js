@@ -25,7 +25,7 @@ import { withSequence } from "@html_editor/utils/resource";
 import { findInSelection } from "@html_editor/utils/selection";
 import { getColumnIndex, getRowIndex, getTableCells } from "@html_editor/utils/table";
 import { isBrowserFirefox } from "@web/core/browser/feature_detection";
-import { getActiveHotkey } from "@web/core/hotkeys/hotkey_service";
+import { getActiveHotkey } from "@web/core/hotkeys/hotkey_utils";
 import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 import { BG_CLASSES_REGEX } from "@html_editor/utils/color";
 import { rgbaToHex } from "@web/core/utils/colors";
@@ -449,8 +449,10 @@ export class TablePlugin extends Plugin {
 
             if (tableColor || tableBgColor) {
                 for (const td of table.querySelectorAll("td")) {
-                    td.style.color = td.style.color || tableColor;
-                    td.style.backgroundColor = td.style.backgroundColor || tableBgColor;
+                    if (closestElement(td, "table") === table) {
+                        td.style.color = td.style.color || tableColor;
+                        td.style.backgroundColor = td.style.backgroundColor || tableBgColor;
+                    }
                 }
                 removeStyle(table, "color", "background-color");
             }
@@ -811,7 +813,6 @@ export class TablePlugin extends Plugin {
         this.dependencies.selection.setSelection(selectionToRestore);
         this.tableGridMap?.delete(closestElement(row, "table"));
     }
-
 
     /**
      * @param {HTMLTableCellElement} cell

@@ -3,7 +3,6 @@ import {
     clickOnSave,
     clickOnSnippet,
 } from "@website/js/tours/tour_utils";
-import { stepUtils } from "@web_tour/tour_utils";
 import { registry } from "@web/core/registry";
 
 /**
@@ -11,7 +10,6 @@ import { registry } from "@web/core/registry";
  */
 registry.category("web_tour.tours").add("blog_tags", {
     steps: () => [
-        stepUtils.waitIframeIsReady(),
         {
             content: "Go to the 'Post Test' blog",
             trigger: ":iframe article[name=blog_post] a:contains('Post Test')",
@@ -72,7 +70,7 @@ registry.category("web_tour.tours").add("blog_tags", {
             run: "click",
         },
         {
-            trigger: ":iframe .h1:contains(our latest posts)",
+            trigger: ":iframe html[data-view-xmlid='website_blog.blog_post_short']",
         },
         {
             content: "Click on the adventure tag",
@@ -81,7 +79,7 @@ registry.category("web_tour.tours").add("blog_tags", {
         },
         {
             content: "Verify we are still on the backend",
-            trigger: ":iframe span:contains(adventure) i[data-icon='label']",
+            trigger: ":iframe span:contains(adventure) i[data-icon='sell']",
         },
     ],
 });

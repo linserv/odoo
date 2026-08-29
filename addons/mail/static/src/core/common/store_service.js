@@ -1,4 +1,5 @@
 import { Store as BaseStore, fields, makeStore } from "@mail/model/export";
+import { formatLocalDateTime, resolveTimeZoneName } from "@mail/utils/common/dates";
 import {
     attClassObjectToString,
     generateEmojisOnHtml,
@@ -55,16 +56,13 @@ export class Store extends BaseStore {
      */
     inPublicPage = false;
     odoobot = fields.One("res.partner");
-    useMobileView = fields.Attr(undefined, {
-        compute() {
-            return this.store.env.services.ui.isSmall || isMobileOS();
-        },
-    });
+    useMobileView = this.computed(() => this.store.env.services.ui.isSmall || isMobileOS());
     /** @type {number|undefined} id of the mail.action_discuss action */
     action_discuss_id;
     /** @type {number} */
     internalUserGroupId;
     mt_comment = fields.One("mail.message.subtype");
+    mt_important_notification = fields.One("mail.message.subtype");
     mt_note = fields.One("mail.message.subtype");
     /** @type {boolean} */
     hasMessageTranslationFeature;
@@ -88,6 +86,53 @@ export class Store extends BaseStore {
     });
     /** local settings of the current device (not stored server side) */
     settings = fields.One("Settings", { compute: () => ({}) });
+
+    /**
+     * @param {import("luxon").DateTime<true>} [datetime]
+     * @returns {number} days from the start of today, 1 being tomorrow
+     */
+    daysUntil(datetime) {
+        if (!datetime) {
+            return 0;
+        }
+        return datetime.diff(this.startOfToday, "days").days;
+    }
+
+    /**
+     * @param {string} [tz]
+     * @returns {string|null}
+     */
+    localTimeIn(tz) {
+        const partnerTz = resolveTimeZoneName(tz);
+        const selfTz = resolveTimeZoneName(this.self?.tz);
+        if (
+            !partnerTz ||
+            !selfTz ||
+            [partnerTz, selfTz].includes("local") ||
+            partnerTz === selfTz
+        ) {
+            return null;
+        }
+        return formatLocalDateTime(partnerTz, selfTz, this.startOfMinute);
+    }
+
+    /**
+     * Start of the current minute, made again when the minute changes:
+     * nothing observes the clock, so what shows a time reads this.
+     */
+    startOfMinute = this.computedUntilStale(
+        () => DateTime.now().startOf("minute"),
+        (startOfMinute) => startOfMinute.plus({ minutes: 1 }).diffNow().toMillis()
+    );
+
+    /**
+     * Start of the current day, made again when the day changes: nothing
+     * observes the clock, so what derives from today reads this.
+     */
+    startOfToday = this.computedUntilStale(
+        () => DateTime.now().startOf("day"),
+        (startOfToday) => startOfToday.plus({ days: 1 }).diffNow().toMillis()
+    );
 
     /** @type {[[string, any, import("models").DataResponse]]} */
     fetchParams = fields.Attr([], { asProxy: true });
@@ -645,7 +690,10 @@ export class Store extends BaseStore {
             "partner_cc_emails",
             "role_ids",
         ]) {
-            if (Object.prototype.hasOwnProperty.call(postData, field) && !postData[field].length) {
+            if (
+                Object.prototype.hasOwnProperty.call(postData, field) &&
+                !Object.keys(postData[field]).length
+            ) {
                 delete postData[field];
             }
         }
@@ -665,6 +713,50 @@ export class Store extends BaseStore {
         this.env.services.notification.add(_t('Message posted on "%s"', recordName), {
             type: "info",
         });
+    }
+
+    /**
+     * Delete the given attachments in a single query.
+     * Uploading attachments are cancelled.
+     *
+     * @param {import("models").Attachment[]} attachments
+     * @param {Object} [options]
+     * @param {boolean} [options.keepOnMessages=false] only remove the
+     *  attachments posted on a message from their thread, keeping them on that
+     *  message: trimming the attachment list of a record is not meant to edit
+     *  the messages of that record.
+     */
+    async removeAttachments(attachments, { keepOnMessages = false } = {}) {
+        const uploadService = this.env.services["mail.attachment_upload"];
+        const uploading = [];
+        if (uploadService) {
+            for (const att of attachments) {
+                if (uploadService.uploadingAttachmentIds.has(att.id)) {
+                    uploading.push(att);
+                }
+            }
+            if (uploading.length) {
+                uploadService.cancelUploads(uploading);
+            }
+        }
+        const stored = attachments.filter(({ id }) => id > 0);
+        let keptIds = [];
+        if (stored.length) {
+            const { kept_attachment_ids } = await rpc("/mail/attachment/delete", {
+                access_token_by_attachment_id: Object.fromEntries(
+                    stored.map(({ id, ownership_token }) => [id, ownership_token ?? null])
+                ),
+                keep_on_messages: keepOnMessages,
+            });
+            keptIds = kept_attachment_ids;
+        }
+        for (const attachment of attachments) {
+            if (keptIds.includes(attachment.id)) {
+                attachment.thread = undefined; // only leaves the attachment list of the thread
+            } else {
+                attachment.delete();
+            }
+        }
     }
 
     getNextTemporaryId() {

@@ -193,6 +193,16 @@
                             </div>
                         </setting>
                         <setting
+                            id="llms_setting"
+                            string="LLMs.txt"
+                            help="LLMs.txt: This file tells LLMs how your content should be accessed and used. Write it as a plain text, human-readable markdown document."
+                            documentation="https://llmstxt.org/"
+                        >
+                            <div class="mt4">
+                                <button type="object" name="action_open_llms" string="Edit llms.txt" class="btn-link" icon="oi_android" noSaveDialog="true"/>
+                            </div>
+                        </setting>
+                        <setting
                             id="social_default_image_setting"
                             string="Default Social Share Image"
                             help="If set, replaces the website logo as the default social share image."
@@ -254,10 +264,10 @@
                                         string="Add domains to the block list" class="btn-link"
                                         icon="block" noSaveDialog="true"/>
                                 </div>
-                                <div class="content-group" invisible="cookie_policy_id" groups="base.group_no_one">
+                                <div class="content-group" invisible="has_cookie_policy" groups="base.group_no_one">
                                     <div class="mt16 text-warning"><strong>Save</strong> this page and come back here to choose your Cookie Policy Configuration.</div>
                                 </div>
-                                <div class="content-group" invisible="not cookie_policy_id" groups="base.group_no_one" title="Select your custom cookie policy page">
+                                <div class="content-group" invisible="not has_cookie_policy" groups="base.group_no_one" title="Select your custom cookie policy page">
                                     <div class="row mt16">
                                         <label class="col-lg-5 o_light_label" string="Cookie policy page" for="cookie_policy_id"/>
                                         <field name="cookie_policy_id" options="{'no_create': True}" domain="[('website_id', '=', website_id)]"/>
@@ -275,7 +285,7 @@
         <field name="name">Settings</field>
         <field name="res_model">res.config.settings</field>
         <field name="view_mode">form</field>
-        <field name="context">{'module' : 'website', 'bin_size': False}</field>
+        <field name="context">{'module' : 'website'}</field>
     </record>
 
     <menuitem id="menu_website_global_configuration" parent="menu_website_configuration"

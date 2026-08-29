@@ -44,7 +44,7 @@ class WebsitePage(models.Model):
         compute='_compute_name', inverse='_inverse_name', store=True,
         translate=True,
     )
-    url = fields.Char('Page URL', required=True, translate=True)
+    url = fields.Char('Page URL', required=True, translate=True, copy=lambda self: self.env['website'].get_unique_path(self.url))
     view_id = fields.Many2one('ir.ui.view', string='View', required=True, index=True, ondelete="cascade")
 
     view_write_uid = fields.Many2one('res.users', "Last Content Update by",
@@ -150,7 +150,6 @@ class WebsitePage(models.Model):
                 new_view = page.view_id.copy({'website_id': default.get('website_id')})
                 vals['view_id'] = new_view.id
                 vals['key'] = new_view.key
-            vals['url'] = default.get('url', self.env['website'].get_unique_path(page.url))
         return vals_list
 
     @api.model
@@ -235,7 +234,7 @@ class WebsitePage(models.Model):
         if url_in_vals := ('url' in vals):
             vals_url = vals.pop('url')
             vals_url = adapt_translated_field_value(
-                self.env, vals_url,
+                self.env, self._fields['url'], vals_url,
                 lambda lang, url: (
                     '/' + self.env['ir.http']._slugify(url, max_length=1024, path=True)
                 )
@@ -252,7 +251,7 @@ class WebsitePage(models.Model):
         if url_in_vals:
             for page in self:
                 url = adapt_translated_field_value(
-                    self.env, vals_url,
+                    self.env, self._fields['url'], vals_url,
                     lambda lang, url: self._handle_url_update(page, page.website_id.id, url, lang)
                 )
                 super(WebsitePage, page).write({'url': url})
@@ -421,7 +420,13 @@ class WebsitePage(models.Model):
         the cache serves the correct version of a page based on specific
         parameters like user language or currency.
         """
-        return (self.env.context.get('website_id'), self.env.context.get('lang'), request.httprequest.path, request.session.debug)
+        return (
+            self.env.context.get('website_id'),
+            self.env.context.get('lang'),
+            self.env.context.get('cookies_allowed'),
+            request.httprequest.path,
+            request.session.debug,
+        )
 
     def _get_response(self, request):
         """ Returns the response corresponding to the request.
@@ -465,7 +470,10 @@ class WebsitePage(models.Model):
             # The cached response is too old and considered out-of-date. Get it
             # from scratch and update the cache accordingly.
             response = self._get_response_raw(request)
-            self._get_response_cached.__cache__.add_value(self, request, cache_value=(response, cache_key))
+            if response:
+                response.flatten()
+                if self._allow_cache_insertion(response.response[-1]):
+                    self._get_response_cached.__cache__.add_value(self, request, cache_value=(response, cache_key))
             return response
 
         return self._get_response_raw(request)

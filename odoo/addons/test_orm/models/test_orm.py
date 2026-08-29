@@ -982,7 +982,7 @@ class TesOrmComputedInverseOne2manyLine(models.Model):
 
 class TestOrmModel_Binary(models.Model):
     _name = 'test_orm.model_binary'
-    _description = 'Test Image field'
+    _description = 'Test Binary field'
 
     binary = fields.Binary()
     binary_x_filename = fields.Char()
@@ -2418,3 +2418,10 @@ class TestOrmOnchangeOrderLine(models.Model):
     def _compute_subtotal(self):
         for line in self:
             line.subtotal = line.order_id.base * line.price
+
+
+class TestOrmAttachmentLink(models.Model):
+    _name = 'test_orm.attachment_link'
+    _description = 'Test ORM Attachment Link'
+
+    attachment_id = fields.Many2one('ir.attachment', ondelete='cascade')

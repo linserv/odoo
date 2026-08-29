@@ -62,7 +62,7 @@ class Cart(PaymentPortal):
             if self.env.website.google_analytics_key:
                 values["cart_tracking_info"] = order_sudo._get_order_tracking_info()
 
-        values.update(self.env.website._get_checkout_step_values("/shop/cart"))
+        values.update(self.env.website._get_checkout_step_values("/shop/cart", order_sudo))
         values.update(self._cart_values(**post))
         values.update(self._prepare_order_history())
         return request.render("website_sale.cart", values)
@@ -116,6 +116,14 @@ class Cart(PaymentPortal):
         quantity = (quantity and int(quantity)) or 1
 
         product = self.env["product.product"].browse(product_id).exists()
+        if product and no_variant_attribute_value_ids:
+            product = product.with_context(
+                **product._get_product_price_context(
+                    self.env["product.template.attribute.value"].browse([
+                        int(v) for v in no_variant_attribute_value_ids
+                    ])
+                )
+            )
         if not product or not product._is_add_to_cart_allowed():
             raise UserError(
                 self.env._("The given product does not exist therefore it cannot be added to cart.")
@@ -253,7 +261,7 @@ class Cart(PaymentPortal):
                 "website_sale_order": order_sudo,
                 "show_shorter_cart_summary": True,
                 **self._get_express_shop_payment_values(order_sudo),
-                **self.env.website._get_checkout_step_values("/shop/cart"),
+                **self.env.website._get_checkout_step_values("/shop/cart", order_sudo),
             },
         )
         # Products already in the cart should not appear in quick reorder suggestions.
