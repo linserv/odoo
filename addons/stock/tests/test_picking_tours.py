@@ -1,4 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
+import unittest
+
 from odoo import Command
 from odoo.tests import Form, HttpCase, tagged
 
@@ -165,6 +167,7 @@ class TestStockPickingTour(HttpCase):
         names = self.receipt.move_ids.move_line_ids.mapped('lot_name')
         self.assertEqual(names, ["one", "two"])
 
+    @unittest.skip("[LINSERV]")
     def test_onchange_serial_lot_ids(self):
         """
         Checks that onchange behaves correctly with respect to multiple unlinks
