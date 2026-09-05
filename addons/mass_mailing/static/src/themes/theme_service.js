@@ -36,7 +36,9 @@ export class ThemeModel extends Reactive {
         for (const theme of children(themesEl)) {
             this.preProcessImages(theme);
             const themeOptions = {
-                className: getClassName(theme.dataset.name),
+                className: [getClassName(theme.dataset.name), theme.dataset.layoutClass]
+                    .filter(Boolean)
+                    .join(" "),
                 hideFromMobile: hasDataOption(theme, "hide-from-mobile"),
                 html: htmlTrim(getInnerHtml(theme)),
                 imgPath: theme.dataset.img || "",

@@ -41,9 +41,9 @@ class _SQLMeta(type):
         """ Return an SQL object that represents an identifier. """
         assert name.isidentifier() or IDENT_RE.match(name), f"{name!r} invalid for SQL.identifier()"
         if subname is None:
-            return SQL(f'"{name}"', to_flush=to_flush)
+            return SQL(f'"{name}"', to_flush=to_flush)  # pylint: disable=sql-injection
         assert subname.isidentifier() or IDENT_RE.match(subname), f"{subname!r} invalid for SQL.identifier()"
-        return SQL(f'"{name}"."{subname}"', to_flush=to_flush)
+        return SQL(f'"{name}"."{subname}"', to_flush=to_flush)  # pylint: disable=sql-injection
 
 
 class SQL(metaclass=_SQLMeta):
@@ -186,12 +186,12 @@ class LiteralSQL(SQL):
             return args[0]
         code, params, to_flush = self.__sql_tuple
         if not params:
-            return SQL(code.join(("%s",) * len(args)), *args, to_flush=to_flush)
+            return SQL(code.join(("%s",) * len(args)), *args, to_flush=to_flush)  # pylint: disable=sql-injection
         # general case: alternate args with self
         items = [self] * (len(args) * 2 - 1)
         for index, arg in enumerate(args):
             items[index * 2] = arg
-        return SQL("%s" * len(items), *items)
+        return SQL("%s" * len(items), *items)  # pylint: disable=sql-injection
 
 
 def existing_tables(cr: Cursor, tablenames: Iterable[str]) -> list[str]:
@@ -296,24 +296,53 @@ def table_columns(cr: Cursor, tablename: str) -> dict[str, tuple[str, str, int, 
     # Do not select the field `character_octet_length` from `information_schema.columns`
     # because specific access right restriction in the context of shared hosting (Heroku, OVH, ...)
     # might prevent a postgres user to read this field.
-    cr.execute(SQL(
-        ''' SELECT column_name, udt_name, character_maximum_length, is_nullable
-            FROM information_schema.columns WHERE table_name=%s
-            AND table_schema = current_schema ''',
-        tablename,
-    ))
+    query = """
+        SELECT a.attname AS column_name,
+               coalesce(bt.typname, t.typname) AS udt_name,
+               information_schema._pg_char_max_length(information_schema._pg_truetypid(a.*, t.*), information_schema._pg_truetypmod(a.*, t.*)) AS character_maximum_length,
+               CASE WHEN a.attnotnull OR t.typtype = 'd' AND t.typnotnull THEN 'NO'
+                    ELSE 'YES'
+               END AS is_nullable
+          FROM pg_attribute a
+          JOIN pg_class c
+            ON a.attrelid = c.oid
+          JOIN pg_namespace nc
+            ON c.relnamespace = nc.oid
+          JOIN pg_type t
+            ON a.atttypid = t.oid
+     LEFT JOIN (pg_type bt JOIN pg_namespace nbt ON bt.typnamespace = nbt.oid)
+            ON t.typtype = 'd'::"char"
+           AND t.typbasetype = bt.oid
+         WHERE nc.nspname = current_schema
+           AND a.attnum > 0
+           AND NOT a.attisdropped
+           AND c.relkind IN ('r', 'v', 'f', 'p')
+           AND (pg_has_role(c.relowner, 'USAGE'::text) OR has_column_privilege(c.oid, a.attnum, 'SELECT, INSERT, UPDATE, REFERENCES'))
+           AND c.relname=%s
+    """
+    cr.execute(SQL(query, tablename))
     return {row['column_name']: row for row in cr.dictfetchall()}
 
 
 def column_exists(cr: Cursor, tablename: str, columnname: str) -> bool:
     """ Return whether the given column exists. """
-    cr.execute(SQL(
-        """ SELECT 1 FROM information_schema.columns
-            WHERE table_name=%s AND column_name=%s
-            AND table_schema = current_schema """,
-        tablename, columnname,
-    ))
-    return bool(cr.rowcount)
+    query = """
+        SELECT 1
+          FROM pg_attribute a
+          JOIN pg_class c
+            ON a.attrelid = c.oid
+          JOIN pg_namespace nc
+            ON c.relnamespace = nc.oid
+         WHERE nc.nspname = current_schema
+           AND a.attnum > 0
+           AND NOT a.attisdropped
+           AND c.relkind IN ('r', 'v', 'f', 'p')
+           AND (pg_has_role(c.relowner, 'USAGE'::text) OR has_column_privilege(c.oid, a.attnum, 'SELECT, INSERT, UPDATE, REFERENCES'))
+           AND c.relname=%s
+           AND a.attname=%s
+    """
+    cr.execute(SQL(query, tablename, columnname))
+    return cr.rowcount
 
 
 def create_column(cr: Cursor, tablename: str, columnname: str, columntype: str | SQL, comment: str | None = None):
@@ -448,7 +477,7 @@ def add_constraint(cr: Cursor, tablename: str, constraintname: str, definition: 
     """ Add a constraint on the given table. """
     query1 = SQL(
         "ALTER TABLE %s ADD CONSTRAINT %s %s",
-        SQL.identifier(tablename), SQL.identifier(constraintname), SQL(definition.replace('%', '%%')),
+        SQL.identifier(tablename), SQL.identifier(constraintname), SQL(definition.replace('%', '%%')),  # pylint: disable=sql-injection
     )
     query2 = SQL(
         "COMMENT ON CONSTRAINT %s ON %s IS %s",
@@ -474,7 +503,7 @@ def add_foreign_key(cr: Cursor, tablename1: str, columnname1: str, tablename2: s
         "ALTER TABLE %s ADD FOREIGN KEY (%s) REFERENCES %s(%s) ON DELETE %s",
         SQL.identifier(tablename1), SQL.identifier(columnname1),
         SQL.identifier(tablename2), SQL.identifier(columnname2),
-        SQL(ondelete),
+        SQL(ondelete),  # pylint: disable=sql-injection
     ))
     _schema.debug("Table %r: added foreign key %r references %r(%r) ON DELETE %s",
                   tablename1, columnname1, tablename2, columnname2, ondelete)
@@ -585,19 +614,17 @@ def create_index(
         return
     definition = SQL(
         "USING %s (%s)%s",
-        SQL(method),
-        SQL(", ").join(SQL(expression) for expression in expressions),
-        SQL(" WHERE %s", SQL(where)) if where else SQL(),
+        SQL.identifier(method.lower()),
+        SQL(", ").join(SQL(expression) for expression in expressions),  # pylint: disable=sql-injection
+        SQL(" WHERE %s", SQL(where)) if where else SQL(),  # pylint: disable=sql-injection
     )
     add_index(cr, indexname, tablename, definition, unique=unique, comment=comment)
 
 
-def add_index(cr: Cursor, indexname: str, tablename: str, definition: str, *, unique: bool, comment: str | None = ''):
+def add_index(cr: Cursor, indexname: str, tablename: str, definition: str | SQL, *, unique: bool, comment: str | None = ''):
     """ Create an index. """
     if isinstance(definition, str):
-        definition = SQL(definition.replace('%', '%%'))
-    else:
-        definition = SQL(definition)
+        definition = SQL(definition.replace('%', '%%'))  # pylint: disable=sql-injection
     query = SQL(
         "CREATE %sINDEX %s ON %s %s",
         SQL("UNIQUE ") if unique else SQL(),

@@ -4,7 +4,7 @@ from odoo.fields import Command, Domain
 from odoo.tools import frozendict, groupby, html2plaintext, is_html_empty, split_every, SQL
 from odoo.tools.float_utils import float_is_zero, float_repr, float_round, float_compare
 from odoo.tools.misc import clean_context, formatLang
-from odoo.tools.translate import html_translate, adapt_translated_field_value, mark_as_copy
+from odoo.tools.translate import html_translate, adapt_translated_field_value
 
 from collections import defaultdict
 from collections.abc import Iterable
@@ -92,7 +92,7 @@ class AccountTax(models.Model):
     _rec_names_search = ('name', 'description', 'invoice_label')
     _check_company_domain = models.check_company_domain_parent_of
 
-    name = fields.Char(string='Tax Name', required=True, translate=True, tracking=True, copy=mark_as_copy('name'))
+    name = fields.Char(string='Tax Name', required=True, translate=True, tracking=True)
     type_tax_use = fields.Selection(TYPE_TAX_USE, string='Tax Type', required=True, default="sale", tracking=True,
         help="Determines where the tax is selectable. Note: 'None' means a tax can't be used by itself, however it can still be used in a group. 'adjustment' is used to perform tax adjustment.")
     tax_scope = fields.Selection([('service', 'Services'), ('consu', 'Goods')], string="Tax Scope")
@@ -363,11 +363,14 @@ class AccountTax(models.Model):
 
     @api.depends('account_move_line_ids', 'account_reconcile_model_line_ids')
     def _compute_is_used(self):
-        self.sudo().search([
+        used_taxes = set(self.sudo().search([
+            ('id', 'in', self.ids),
             '|',
             ('account_move_line_ids', '!=', False),
             ('account_reconcile_model_line_ids', '!=', False),
-        ]).is_used = True
+        ]))
+        for tax in self:
+            tax.is_used = tax in used_taxes
 
     @api.depends('is_used', 'repartition_line_ids.account_id', 'repartition_line_ids.sequence', 'repartition_line_ids.factor_percent', 'repartition_line_ids.use_in_tax_closing', 'repartition_line_ids.tag_ids')
     def _compute_repartition_lines_str(self):
@@ -2803,6 +2806,9 @@ class AccountTax(models.Model):
                                                     If there is no amount added, the key is not in the result.
             cash_rounding_base_amount:              The delta added by 'cash_rounding' expressed in local currency.
                                                     If there is no amount added, the key is not in the result.
+            has_biggest_tax_cash_rounding:          Flag indicating the delta added by 'cash_rounding' has been added to the
+                                                    tax group having the biggest tax amount.
+                                                    If there is no amount added, the key is not in the result.
             subtotals:                              A list of subtotal (like "Untaxed Amount"), each one being a python dictionary
                                                     containing:
                 base_amount_currency:                   The base amount expressed in foreign currency.
@@ -2991,6 +2997,7 @@ class AccountTax(models.Model):
                         (subtotal, tax_group)
                         for subtotal in tax_totals_summary['subtotals']
                         for tax_group in subtotal['tax_groups']
+                        if not currency.is_zero(tax_group['tax_amount_currency'])
                     ]
 
                     if all_subtotal_tax_group:
@@ -3004,6 +3011,7 @@ class AccountTax(models.Model):
                         max_subtotal['tax_amount'] += cash_rounding_base_amount
                         tax_totals_summary['tax_amount_currency'] += cash_rounding_base_amount_currency
                         tax_totals_summary['tax_amount'] += cash_rounding_base_amount
+                        tax_totals_summary['has_biggest_tax_cash_rounding'] = True
                     else:
                         # Failed to apply the cash rounding since there is no tax.
                         cash_rounding_base_amount_currency = 0.0

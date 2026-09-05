@@ -11,7 +11,10 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Domain
 from odoo.tools import SQL, unique
-from odoo.tools.partner_identifiers import is_identifier_void
+from odoo.tools.partner_identifiers import (
+    get_tin_metadata_of_country,
+    is_identifier_void,
+)
 
 from odoo.addons.account.models.account_move import BYPASS_LOCK_CHECK
 from odoo.addons.base.models.res_partner import _ref_vat
@@ -263,7 +266,7 @@ class AccountFiscalPosition(models.Model):
 
         company = self.env.company
         intra_eu = vat_exclusion = False
-        if company.vat and partner.vat:
+        if company.has_vat and partner.has_vat:
             eu_country_codes = set(self.env.ref('base.europe').country_ids.mapped('code'))
             intra_eu = company.vat[:2] in eu_country_codes and partner.vat[:2] in eu_country_codes
             vat_exclusion = company.vat[:2] == partner.vat[:2]
@@ -461,25 +464,43 @@ class ResPartner(models.Model):
         return self._asset_difference_search('liability_payable', operator, operand)
 
     def _invoice_total(self):
-        self.total_invoiced = 0
-        if not self.ids:
-            return True
+        """Compute the total amount invoiced to the partner. Multiple currencies may have been linked to the invoices, then it
+        is important to define a unique currency to compute the total amount otherwise this one is meaningless. This currency
+        is either the one of the partner's company if they have one or the currency of the environment's company."""
+        if self.ids:
+            query_res = self.env.execute_query(SQL(
+                """SELECT move.partner_id, SUM(move.amount_total_signed * COALESCE(currency_rate.rate, 1))
+                     FROM account_move move
+                     LEFT JOIN res_partner partner
+                       ON partner.id = move.partner_id
+                     LEFT JOIN res_company company
+                       ON company.id = COALESCE(partner.company_id, %(default_company_id)s)
+                     /* To use the exchange rate effective at the creation of the invoice. */
+                     LEFT JOIN LATERAL (
+                         SELECT rate
+                           FROM res_currency_rate
+                          WHERE company_id = move.company_id
+                            AND currency_id = company.currency_id
+                            AND name < move.date
+                          ORDER BY name DESC
+                          LIMIT 1
+                     ) currency_rate
+                       ON TRUE
+                    WHERE move.state NOT IN ('draft', 'cancel')
+                      AND move.company_id IN %(company_ids)s
+                      AND move.partner_id IN %(partner_ids)s
+                      AND move.move_type IN ('out_invoice', 'out_refund')
+                    GROUP BY move.partner_id""",
+                partner_ids=tuple(self.ids),
+                company_ids=tuple(self.env.companies.ids),
+                default_company_id=self.env.company.id,
+            ))
+            data_map = dict(query_res)
+        else:
+            data_map = {}
 
-        all_partners_and_children = {}
-        all_partner_ids = []
-        for partner in self.filtered('id'):
-            # price_total is in the company currency
-            all_partners_and_children[partner] = self.with_context(active_test=False).search([('id', 'child_of', partner.id)]).ids
-            all_partner_ids += all_partners_and_children[partner]
-
-        domain = [
-            ('partner_id', 'in', all_partner_ids),
-            ('state', 'not in', ['draft', 'cancel']),
-            ('move_type', 'in', ('out_invoice', 'out_refund')),
-        ]
-        price_totals = self.env['account.invoice.report']._read_group(domain, ['partner_id'], ['price_subtotal:sum'])
-        for partner, child_ids in all_partners_and_children.items():
-            partner.total_invoiced = sum(price_subtotal_sum for partner, price_subtotal_sum in price_totals if partner.id in child_ids)
+        for partner in self:
+            partner.total_invoiced = data_map.get(partner.id, 0.0)
 
     @api.depends('credit')
     def _compute_days_sales_outstanding(self):
@@ -749,7 +770,7 @@ class ResPartner(models.Model):
             ('move_type', 'in', ('out_invoice', 'out_refund')),
             ('partner_id', 'in', all_child.ids)
         ]
-        action['context'] = {'default_move_type': 'out_invoice', 'move_type': 'out_invoice', 'journal_type': 'sale', 'search_default_unpaid': 1}
+        action['context'] = {'default_move_type': 'out_invoice', 'move_type': 'out_invoice', 'journal_type': 'sale', 'search_default_unpaid': 1, 'search_default_posted': 1}
         return action
 
     def _has_invoice(self, partner_domain):
@@ -777,6 +798,26 @@ class ResPartner(models.Model):
         return super()._has_confirmed_documents() or self._has_invoice(
             [('partner_id', 'child_of', self.commercial_partner_id.id)]
         )
+
+    @api.constrains('additional_identifiers', 'vat')
+    def _check_identifier_combination(self):
+        """A partner cannot combine an individual identifier (citizen number) with a company
+        identifier (tax or enterprise number)."""
+        for partner in self:
+            identifiers = partner.additional_identifiers or {}
+            individual = next((key for key in identifiers if partner._is_individual_identifier(key)), None)
+            if not individual:
+                continue
+            company = next((key for key in identifiers if partner._is_company_identifier(key)), None)
+            if not company and partner.vat and not is_identifier_void(partner.vat):
+                company = get_tin_metadata_of_country(partner.country_code).get('key', 'TIN')
+            if company:
+                raise ValidationError(_(
+                    "A partner cannot have both an individual identifier (%(individual)s) and a"
+                    " company identifier (%(company)s).",
+                    individual=str(partner._get_identifier_label(individual) or individual),
+                    company=str(partner._get_identifier_label(company) or company),
+                ))
 
     def write(self, vals):
         parent_write = self.env["res.partner"]
@@ -873,7 +914,7 @@ class ResPartner(models.Model):
     def _get_vat_required_valid(self, company=None):
         """ Hook for determining VAT validity with more complex VAT requirements. (like VIES)"""
         self.ensure_one()
-        return bool(self.vat and self.vat != '/')
+        return self.has_vat
 
     # TODO accounting/JCO, seems strange that this address validation logic is only there for pos, and
     # not for standard address management on portal/ecommerce

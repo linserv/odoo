@@ -1,5 +1,5 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
-from odoo import models, _
+from odoo import _, models
 
 
 class PosOrderReceipt(models.AbstractModel):
@@ -27,7 +27,7 @@ class PosOrderReceipt(models.AbstractModel):
             if self.table_stand_number:
                 receipt['extra_data']['order_label'] = _("Table Tracker %s", self.table_stand_number)
             elif not self.table_id:
-                receipt['extra_data']['order_label'] = False
+                receipt['extra_data']['order_label'] = self.floating_order_name
 
             if not self.table_id and self.self_ordering_table_id:
                 receipt['extra_data']['table_name'] = self.self_ordering_table_id.table_number if self.self_ordering_table_id else False

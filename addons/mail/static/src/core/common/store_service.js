@@ -55,10 +55,14 @@ export class Store extends BaseStore {
      * public page.
      */
     inPublicPage = false;
+    /** @type {boolean|undefined} */
+    isOdooWhiteTheme;
     odoobot = fields.One("res.partner");
     useMobileView = this.computed(() => this.store.env.services.ui.isSmall || isMobileOS());
     /** @type {number|undefined} id of the mail.action_discuss action */
     action_discuss_id;
+    /** @type {number|undefined} */
+    emailActivityTypeId;
     /** @type {number} */
     internalUserGroupId;
     mt_comment = fields.One("mail.message.subtype");
@@ -69,7 +73,7 @@ export class Store extends BaseStore {
     hasLinkPreviewFeature = true;
     // messaging menu
     menu = { counter: 0 };
-    chatHub = fields.One("ChatHub", { compute: () => ({}) });
+    chatHub = this.computed(() => this.ChatHub.insert({}));
     failures = fields.Many("Failure");
     sortedFailures = fields.Many("Failure", {
         compute() {
@@ -85,7 +89,7 @@ export class Store extends BaseStore {
         },
     });
     /** local settings of the current device (not stored server side) */
-    settings = fields.One("Settings", { compute: () => ({}) });
+    settings = this.computed(() => this.Settings.insert({}));
 
     /**
      * @param {import("luxon").DateTime<true>} [datetime]
@@ -157,7 +161,7 @@ export class Store extends BaseStore {
         },
     ];
 
-    isNotificationPermissionDismissed = fields.Attr(false, { localStorage: true });
+    isNotificationPermissionDismissed = this.localStorage(false);
 
     messagePostMutex = new Mutex();
 
@@ -175,7 +179,7 @@ export class Store extends BaseStore {
     discussDropdownMenuClass(ctx) {
         const simulateDarkTheme = this.shouldSimulateDarkTheme(ctx);
         return attClassObjectToString({
-            "o-discuss-dropdownMenu d-flex flex-column border-secondary": true,
+            "o-discuss-dropdownMenu d-flex flex-column border-secondary px-1": true,
             "o-simulateDarkTheme": simulateDarkTheme,
         });
     }
@@ -570,10 +574,9 @@ export class Store extends BaseStore {
 
     /** @returns {number} */
     getLastMessageId() {
-        return Object.values(this["mail.message"].records).reduce(
-            (lastMessageId, message) => Math.max(lastMessageId, message.id),
-            0
-        );
+        return this["mail.message"].records
+            .values()
+            .reduce((lastMessageId, message) => Math.max(lastMessageId, message.id), 0);
     }
 
     handleValidChannelMention(channelLinks) {

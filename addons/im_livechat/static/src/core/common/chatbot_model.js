@@ -20,6 +20,8 @@ export class Chatbot extends Record {
     id;
     isTyping = false;
     isProcessingAnswer = false;
+    /** @type {number|undefined} */
+    nextStepTimeout;
     script = fields.One("chatbot.script");
     currentStep = fields.One("ChatbotStep");
     steps = fields.Many("ChatbotStep");
@@ -30,16 +32,15 @@ export class Chatbot extends Record {
         },
     });
     tmpAnswer = "";
-    typingMessage = fields.One("mail.message", {
-        compute() {
-            if (this.isTypingUi && this.channel_id) {
-                return {
-                    id: -0.1 - this.channel_id.id,
-                    thread: this.channel_id.thread,
-                    author_id: this.script.operator_partner_id,
-                };
-            }
-        },
+    typingMessage = this.computed(() => {
+        if (this.isTyping && this.channel_id) {
+            return this.store["mail.message"].insert({
+                id: -0.1 - this.channel_id.id,
+                thread: this.channel_id.thread,
+                author_id: this.script.operator_partner_id,
+            });
+        }
+        return undefined;
     });
     /**
      * @type {(message: import("models").Message) => Promise<void>}

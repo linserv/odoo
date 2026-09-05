@@ -320,7 +320,7 @@ test("should remove color from partially selected text inside list item", async 
 test("should remove data-original-color attribute with color on removeFormat", async () => {
     defineStyle(`
         :root {
-            --o-control-panel-background-color: rgb(248, 249, 250);
+            --o-html-editor-background-contrast: rgb(255, 255, 255);
         }
     `);
     await testEditor({
@@ -336,7 +336,7 @@ test("should remove data-original-color attribute with color on removeFormat", a
         `),
         contentBeforeEdit: unformat(`
             <ol>
-                <li style="color: rgb(178, 178, 178);" data-original-color="rgb(255, 255, 255)">
+                <li style="color: rgb(183, 183, 183);" data-original-color="rgb(255, 255, 255)">
                     <p>[abc]</p>
                     <ol class="o_default_color">
                         <li style="color: rgb(255, 0, 0);">def</li>

@@ -7,15 +7,12 @@ patch(Store.prototype, {
     setup() {
         super.setup(...arguments);
         this.discuss = fields.One("DiscussApp");
-        this.messagingMenu = fields.One("MessagingMenu", { compute: () => ({}) });
-        this.showPushPermissionRequest = fields.Attr(false, {
-            compute() {
-                return (
-                    this.env.services["mail.notification.permission"]?.permission === "prompt" &&
-                    !this.isNotificationPermissionDismissed
-                );
-            },
-        });
+        this.messagingMenu = this.computed(() => this.MessagingMenu.insert({}));
+        this.showPushPermissionRequest = this.computed(
+            () =>
+                this.env.services["mail.notification.permission"]?.permission === "prompt" &&
+                !this.isNotificationPermissionDismissed
+        );
     },
     onStarted() {
         super.onStarted(...arguments);

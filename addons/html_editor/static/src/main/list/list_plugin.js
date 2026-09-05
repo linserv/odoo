@@ -18,6 +18,7 @@ import {
     isPhrasingContent,
     isProtected,
     isProtecting,
+    isVisible,
     isVisibleTextNode,
     listElementSelector,
 } from "@html_editor/utils/dom_info";
@@ -212,6 +213,17 @@ export class ListPlugin extends Plugin {
                         return true;
                     }
                 }
+            }
+        },
+        can_contain_selection_placeholder_predicates: (container) => {
+            if (isListItemElement(container)) {
+                return true;
+            }
+        },
+        is_node_in_same_block_segment_predicates: (node, blockNode) => {
+            const listAncestor = closestElement(node, "ul, ol");
+            if (listAncestor && blockNode.contains(listAncestor)) {
+                return false;
             }
         },
 
@@ -962,15 +974,24 @@ export class ListPlugin extends Plugin {
 
     handleSplitBlock(params) {
         const closestLI = closestElement(params.targetNode, "LI");
-        const isBlockUnsplittable =
+        // Do not split the LI if the cursor is inside an unsplittable element.
+        const isTargetInUnsplittable =
             closestLI &&
-            Array.from(closestLI.childNodes).some(
-                (node) => isBlock(node) && this.dependencies.split.isUnsplittable(node)
+            ancestors(params.targetNode, closestLI).find((node) =>
+                this.dependencies.split.isUnsplittable(node)
             );
-        if (!closestLI || isBlockUnsplittable) {
+        if (!closestLI || isTargetInUnsplittable) {
             return;
         }
-        if (isEmptyBlock(closestBlock(params.targetNode))) {
+        if (
+            childNodes(closestLI).every(
+                (child) =>
+                    isListElement(child) ||
+                    isEmptyBlock(child) ||
+                    child.nodeName === "BR" ||
+                    !isVisible(child)
+            )
+        ) {
             this.outdentLI(closestLI);
             return true;
         }
@@ -1226,22 +1247,23 @@ export class ListPlugin extends Plugin {
         cursors.restore();
     }
 
-    postFormatAppliedOnList(node, formatName, applyStyle) {
-        if (formatName !== "fontSize") {
-            return;
-        }
+    postFormatAppliedOnList(node, formatSpec, applyStyle) {
         const listsSet = new Set();
         if (isListItem(node)) {
             const sublists = childNodes(node).filter(isListElement);
             for (const list of sublists) {
                 if (applyStyle) {
-                    list.classList.add("o_default_font_size");
+                    formatSpec.addNeutralStyle(list);
+                } else {
+                    formatSpec.removeStyle(list);
                 }
             }
             listsSet.add(node.parentElement);
         }
-        for (const list of listsSet) {
-            this.adjustListPadding(list);
+        if (formatSpec.id === "fontSize") {
+            for (const list of listsSet) {
+                this.adjustListPadding(list);
+            }
         }
     }
 

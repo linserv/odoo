@@ -10,6 +10,7 @@ import {
     nextLeaf,
     previousLeaf,
     isTableCell,
+    getTableColgroup,
 } from "@html_editor/utils/dom_info";
 import {
     ancestors,
@@ -23,12 +24,18 @@ import { parseHTML } from "@html_editor/utils/html";
 import { DIRECTIONS, leftPos, rightPos, nodeSize } from "@html_editor/utils/position";
 import { withSequence } from "@html_editor/utils/resource";
 import { findInSelection } from "@html_editor/utils/selection";
-import { getColumnIndex, getRowIndex, getTableCells } from "@html_editor/utils/table";
+import {
+    getColumnIndex,
+    getRowIndex,
+    getTableCells,
+    getSelectedCellsMergeInfo,
+} from "@html_editor/utils/table";
 import { isBrowserFirefox } from "@web/core/browser/feature_detection";
 import { getActiveHotkey } from "@web/core/hotkeys/hotkey_utils";
 import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 import { BG_CLASSES_REGEX } from "@html_editor/utils/color";
 import { rgbaToHex } from "@web/core/utils/colors";
+import { _t } from "@web/core/l10n/translation";
 
 export const BORDER_SENSITIVITY = 5;
 const LONG_PRESS_DELAY = 200;
@@ -47,6 +54,7 @@ function isUnremovableTableComponent(node, root) {
 
 /**
  * @typedef { Object } TableShared
+ * @property { TablePlugin['insertTable'] } insertTable
  * @property { TablePlugin['addColumn'] } addColumn
  * @property { TablePlugin['addRow'] } addRow
  * @property { TablePlugin['turnIntoHeader'] } turnIntoHeader
@@ -99,6 +107,7 @@ export class TablePlugin extends Plugin {
         "unmergeSelectedCell",
         "buildTableGrid",
     ];
+    toolbarNamespace = "table";
     /** @type {import("plugins").EditorResources} */
     resources = {
         user_commands: [
@@ -108,6 +117,22 @@ export class TablePlugin extends Plugin {
                     this.insertTable(params);
                 },
                 isAvailable: isHtmlContentSupported,
+            },
+            {
+                id: "mergeTableCells",
+                title: _t("Merge Cells"),
+                description: _t("Merge selected table cells"),
+                icon: "cell_merge",
+                run: this.toggleMergeCellCommand.bind(this),
+                isAvailable: () => this.isMergeCellsAvailable() || this.isUnmergeCellsAvailable(),
+            },
+        ],
+        toolbar_items: [
+            {
+                id: "mergeCells",
+                groupId: "table_cell_merge",
+                commandId: "mergeTableCells",
+                isActive: () => this.isUnmergeCellsAvailable(),
             },
         ],
         table_menu_commands: [
@@ -123,21 +148,23 @@ export class TablePlugin extends Plugin {
                 clearColumnContent: this.clearColumnContent.bind(this),
                 clearRowContent: this.clearRowContent.bind(this),
                 toggleAlternatingRows: this.toggleAlternatingRows.bind(this),
-                mergeSelectedCells: this.mergeSelectedCells.bind(this),
-                unmergeSelectedCell: this.unmergeSelectedCell.bind(this),
                 buildTableGrid: this.buildTableGrid.bind(this),
             },
         ],
-        toolbar_groups: withSequence(25, { id: "table" }),
+        toolbar_groups: [
+            withSequence(35, { id: "table_cell_merge", namespaces: ["expanded", "table"] }),
+        ],
 
         /** Providers */
         toolbar_namespace_providers: [
             withSequence(
                 90,
                 (targetedNodes, editableSelection) =>
-                    closestElement(editableSelection.anchorNode, ".o_selected_td") && "compact"
+                    closestElement(editableSelection.anchorNode, ".o_selected_td") &&
+                    this.toolbarNamespace
             ),
         ],
+        expandable_toolbar_namespaces_providers: "table",
         color_target_providers: (node) => closestElement(node, ".o_selected_td"),
         overlay_selection_target_rect_providers: this.getTableSelectionRangeRect.bind(this),
         selected_background_color_providers: withSequence(
@@ -179,6 +206,7 @@ export class TablePlugin extends Plugin {
         normalize_processors: this.normalizeTable.bind(this),
         clipboard_content_processors: this.processContentForClipboard.bind(this),
         resize_target_processors: this.processTableResizeTargets.bind(this),
+        resize_width_reset_processors: this.processTableWidthReset.bind(this),
         targeted_nodes_processors: this.adjustTargetedNodes.bind(this),
         on_history_commit_undone_handlers: () => {
             delete this.tableGridMap;
@@ -262,9 +290,9 @@ export class TablePlugin extends Plugin {
         this.normalizeTableStructure(this.editable);
     }
 
-    processTableResizeTargets(item, neighbor, position) {
+    processTableResizeTargets(item, neighbor, position, defaultMinSize) {
         if (!isTableCell(item)) {
-            return [item, neighbor];
+            return [item, neighbor, defaultMinSize, defaultMinSize];
         }
         const table = closestElement(item, "table");
         const tableGrid = this.buildTableGrid(table);
@@ -273,7 +301,7 @@ export class TablePlugin extends Plugin {
         const columnIndex =
             position === "middle" ? row.findLastIndex((c) => c === item) : row.indexOf(item);
         const adjacentColumnIndex = row.indexOf(neighbor);
-        let colgroup = table.querySelector("colgroup");
+        let colgroup = getTableColgroup(table);
         if (!colgroup) {
             colgroup = this.document.createElement("colgroup");
             for (const cell of tableGrid[0]) {
@@ -284,7 +312,70 @@ export class TablePlugin extends Plugin {
             table.insertBefore(colgroup, table.firstChild);
         }
         const columns = colgroup.children;
-        return [columns[columnIndex], columns[adjacentColumnIndex]];
+
+        const getNestedTableMinSize = (colIndex) => {
+            const visited = new Set();
+            return tableGrid.reduce((minSize, r) => {
+                const cell = r[colIndex];
+                if (!cell || visited.has(cell) || cell.colSpan > 1) {
+                    return minSize;
+                }
+                visited.add(cell);
+                const cellStyle = getComputedStyle(cell);
+                for (const nestedTable of cell.querySelectorAll(":scope > table")) {
+                    if (!nestedTable.style.width) {
+                        continue;
+                    }
+                    const nestedTableStyle = getComputedStyle(nestedTable);
+                    const width =
+                        nestedTable.getBoundingClientRect().width +
+                        parseFloat(cellStyle.paddingLeft) +
+                        parseFloat(cellStyle.paddingRight) +
+                        parseFloat(nestedTableStyle.marginLeft) +
+                        parseFloat(nestedTableStyle.marginRight);
+                    minSize = Math.max(minSize, width);
+                }
+                return minSize;
+            }, defaultMinSize);
+        };
+
+        return [
+            columns[columnIndex],
+            columns[adjacentColumnIndex],
+            getNestedTableMinSize(columnIndex),
+            adjacentColumnIndex >= 0 ? getNestedTableMinSize(adjacentColumnIndex) : defaultMinSize,
+        ];
+    }
+
+    processTableWidthReset(targetElement, elementsToAdjust, { layoutContainer } = {}) {
+        const table = layoutContainer || closestElement(targetElement, "table");
+        const colgroup = getTableColgroup(table);
+        if (!colgroup) {
+            return;
+        }
+        const colElements = [...colgroup.children];
+        const tableGrid = this.buildTableGrid(table);
+        const affectedCols = [targetElement, ...elementsToAdjust];
+        const affectedColIndices = affectedCols.map((col) => colElements.indexOf(col));
+        const visited = new Set();
+        for (const rowGrid of tableGrid) {
+            for (const colIndex of affectedColIndices) {
+                const cell = rowGrid[colIndex];
+                if (!cell || visited.has(cell)) {
+                    continue;
+                }
+                visited.add(cell);
+                const nestedTables = cell.querySelectorAll("table");
+                for (const nestedTable of nestedTables) {
+                    if (nestedTable.style.width) {
+                        this.shared.resetSize(nestedTable, {
+                            proxyElementSelector: "colgroup",
+                            heightElementsSelector: "tr",
+                        });
+                    }
+                }
+            }
+        }
     }
 
     handlePasteTableIntoExistingTable(selection, clipboardRoot) {
@@ -504,7 +595,7 @@ export class TablePlugin extends Plugin {
 
             // Temporarily set widths so proportions are respected.
             let totalWidth = 0;
-            const colgroup = table.querySelector("colgroup");
+            const colgroup = getTableColgroup(table);
             if (tableWidth && colgroup) {
                 for (const col of colgroup.children) {
                     const width = parseFloat(col.style.width);
@@ -658,7 +749,7 @@ export class TablePlugin extends Plugin {
      */
     removeColumn(cell) {
         const table = closestElement(cell, "table");
-        const colgroup = table.querySelector("colgroup");
+        const colgroup = getTableColgroup(table);
         const tableGrid = this.buildTableGrid(table);
         const rowIndex = getRowIndex(cell);
         const cells = [...closestElement(cell, "tr").querySelectorAll("th, td")];
@@ -764,7 +855,7 @@ export class TablePlugin extends Plugin {
                 index += moveStep;
             }
         });
-        const colgroup = table.querySelector("colgroup");
+        const colgroup = getTableColgroup(table);
         if (colgroup) {
             const cols = colgroup.children;
             insertBefore
@@ -855,6 +946,89 @@ export class TablePlugin extends Plugin {
         table.before(baseContainer);
         table.remove();
         this.dependencies.selection.setCursorStart(baseContainer);
+    }
+
+    /**
+     * Checks if merge is available for the current selection
+     * @returns {boolean}
+     */
+    isMergeCellsAvailable() {
+        const selectedTds = this.document.querySelectorAll(".o_selected_td");
+        if (selectedTds.length < 2) {
+            return false;
+        }
+        const firstTd = selectedTds[0];
+        const table = closestElement(firstTd, "table");
+        if (!table) {
+            return false;
+        }
+        const grid = this.buildTableGrid(table);
+        const { canMerge, cells, spanType } = getSelectedCellsMergeInfo(
+            this.document,
+            grid,
+            firstTd
+        );
+
+        if (canMerge) {
+            this.canMergeCells = canMerge;
+            this.cellsToMerge = cells;
+            this.mergeSpanType = spanType;
+        } else {
+            this.canMergeCells = null;
+            this.cellsToMerge = null;
+            this.mergeSpanType = null;
+        }
+        return canMerge;
+    }
+
+    /**
+     * Checks if unmerge is available for the current selection
+     * @returns {boolean}
+     */
+    isUnmergeCellsAvailable() {
+        const selectedTds = this.document.querySelectorAll(".o_selected_td");
+        // We only show the unmerge option, e.g. activated merge button, when
+        // only the merged cell is selected.
+        if (selectedTds.length !== 1) {
+            return false;
+        }
+        const firstTd = selectedTds[0];
+        const table = closestElement(firstTd, "table");
+        if (!table) {
+            return false;
+        }
+        const grid = this.buildTableGrid(table);
+        const { canUnmerge } = getSelectedCellsMergeInfo(this.document, grid, firstTd);
+        return canUnmerge;
+    }
+
+    toggleMergeCellCommand() {
+        if (this.isUnmergeCellsAvailable()) {
+            this.unmergeCellsCommand();
+        } else {
+            this.mergeCellsCommand();
+        }
+    }
+
+    /**
+     * Command handler for merging table cells
+     */
+    mergeCellsCommand() {
+        if (this?.canMergeCells && this?.mergeSpanType) {
+            this.mergeSelectedCells(this.cellsToMerge, this.mergeSpanType);
+            this.canMergeCells = null;
+            this.cellsToMerge = null;
+            this.mergeSpanType = null;
+            this.dependencies.history.commit();
+        }
+    }
+
+    /**
+     * Command handler for unmerging table cells
+     */
+    unmergeCellsCommand() {
+        this.unmergeSelectedCell();
+        this.dependencies.history.commit();
     }
 
     /**

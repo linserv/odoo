@@ -6,6 +6,7 @@ from odoo.exceptions import AccessError, ValidationError
 from odoo.fields import Command
 from odoo.tools import SQL
 from odoo.tools.float_utils import float_round
+from odoo.tools.translate import mark_as_copy
 import itertools
 
 from odoo.addons.base.models.res_company import company_default_for
@@ -283,6 +284,31 @@ class TestOrmMultiTag(models.Model):
             if name and self.env.context.get('special_tag'):
                 name += "!"
             record.display_name = name or ""
+
+
+class TestOrmNonStoredM2m(models.Model):
+    """ Model with a non-stored, context-dependent many2many field (compute +
+    inverse backed by a stored many2many). Used to test write_real()'s
+    handling of such fields.
+    """
+    _name = 'test_orm.non_stored_m2m'
+    _description = 'Test ORM Non Stored Many2many'
+
+    real_tag_ids = fields.Many2many('test_orm.multi.tag')
+    tag_ids = fields.Many2many(
+        'test_orm.multi.tag',
+        compute='_compute_tag_ids', inverse='_inverse_tag_ids', store=False,
+    )
+
+    @api.depends('real_tag_ids')
+    @api.depends_context('uid')
+    def _compute_tag_ids(self):
+        for record in self:
+            record.tag_ids = record.real_tag_ids
+
+    def _inverse_tag_ids(self):
+        for record in self:
+            record.real_tag_ids = record.tag_ids
 
 
 class TestOrmCreativeworkEdition(models.Model):
@@ -795,7 +821,7 @@ class TestOrmComputeOnchange(models.Model):
     _description = "Compute method as an onchange"
 
     active = fields.Boolean()
-    foo = fields.Char()
+    foo = fields.Char(copy=mark_as_copy('foo'))
     bar = fields.Char(compute='_compute_bar', store=True)
     baz = fields.Char(compute='_compute_baz', store=True, readonly=False)
     quux = fields.Char(compute='_compute_quux')
@@ -840,10 +866,6 @@ class TestOrmComputeOnchange(models.Model):
         for record in self:
             if record.foo:
                 record.tag_ids = Tag.search([('name', '=', record.foo)])
-
-    def copy_data(self, default=None):
-        vals_list = super().copy_data(default=default)
-        return [dict(vals, foo=self.env._("%s (copy)", record.foo)) for record, vals in zip(self, vals_list)]
 
 
 class TestOrmComputeOnchangeLine(models.Model):

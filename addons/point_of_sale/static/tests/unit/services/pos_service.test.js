@@ -405,18 +405,8 @@ describe("pos_store.js", () => {
                 {
                     uuid: "combo-parent-uuid",
                     combo_line_ids: [
-                        {
-                            uuid: "combo-child-a-uuid",
-                            combo_parent_uuid: "combo-parent-uuid",
-                            product_id: productA,
-                            combo_line_ids: false,
-                        },
-                        {
-                            uuid: "combo-child-b-uuid",
-                            combo_parent_uuid: "combo-parent-uuid",
-                            product_id: productB,
-                            combo_line_ids: false,
-                        },
+                        { id: 1, product_id: productA.id },
+                        { id: 2, product_id: productB.id },
                     ],
                 },
                 {
@@ -448,6 +438,45 @@ describe("pos_store.js", () => {
         const actualUuids = filtered.addedQuantity.map((c) => c.uuid);
 
         expect(actualUuids.sort()).toEqual(expectedUuids.sort());
+    });
+
+    test("filterChangeByCategories on a combo after a print history round trip", async () => {
+        const store = await setupPosEnv();
+        const order = store.addNewOrder();
+
+        await store.addLineToOrder(
+            {
+                product_tmpl_id: store.models["product.template"].get(7),
+                payload: [
+                    [{ combo_item_id: store.models["product.combo.item"].get(1), qty: 1 }],
+                    [{ combo_item_id: store.models["product.combo.item"].get(3), qty: 1 }],
+                ],
+                qty: 1,
+            },
+            order
+        );
+
+        const parentLine = order.lines.find((l) => l.combo_line_ids.length);
+        const childLines = parentLine.combo_line_ids;
+        const childCategIds = childLines.flatMap((l) => l.product_id.parentPosCategIds);
+        expect(childCategIds.length).toBeGreaterThan(0);
+
+        const change = { addedQuantity: [order.dataMaker(parentLine, 1).data] };
+        const restored = JSON.parse(JSON.stringify(change));
+
+        expect(restored.addedQuantity[0].combo_line_ids).toEqual(
+            childLines.map((l) => ({ id: l.id, product_id: l.product_id.id }))
+        );
+
+        const filtered = filterChangeByCategories(new Set(childCategIds), restored, store.models);
+        expect(filtered.addedQuantity).toHaveLength(1);
+
+        const otherCategId = store.models["pos.category"].find(
+            (c) => !childCategIds.includes(c.id)
+        ).id;
+        expect(
+            filterChangeByCategories(new Set([otherCategId]), restored, store.models).addedQuantity
+        ).toEqual([]);
     });
 
     test("deleteOrders", async () => {
@@ -845,5 +874,98 @@ describe("pos_store.js", () => {
         store.setOrder(order);
         await store.setTip(numberBuffer.getFloat());
         expect(order.tip_amount).toBe(2.5);
+    });
+
+    describe("updateCustomerDisplayQrData", () => {
+        test("sets, clears, and merges extra data", async () => {
+            const store = await setupPosEnv();
+            const qrCode = "https://example.com/qr-code";
+
+            store.updateCustomerDisplayQrData(qrCode, { extra: { amount: 10 } });
+            expect(store.customerDisplayQrData).toEqual({
+                title: "Scan the QR for payment",
+                qrCode,
+                amount: 10,
+            });
+
+            store.updateCustomerDisplayQrData(null);
+            expect(store.customerDisplayQrData).toBe(null);
+
+            store.updateCustomerDisplayQrData("correct-qr", {
+                extra: { qrCode: "stale-qr", amount: 10 },
+            });
+            expect(store.customerDisplayQrData).toEqual({
+                title: "Scan the QR for payment",
+                qrCode: "correct-qr",
+                amount: 10,
+            });
+
+            // title overrides the default
+            store.updateCustomerDisplayQrData(qrCode, { title: "Custom title" });
+            expect(store.customerDisplayQrData).toEqual({ title: "Custom title", qrCode });
+        });
+
+        test("merges payment props, explicit qrCode wins", async () => {
+            const store = await setupPosEnv();
+            const order = await getFilledOrder(store);
+            const paymentMethod = store.models["pos.payment.method"].get(1);
+            const payment = createPaymentLine(store, order, paymentMethod, { qr_code: "stale-qr" });
+
+            store.updateCustomerDisplayQrData("fresh-qr", { payment });
+
+            expect(store.customerDisplayQrData).toEqual({
+                title: "Scan the QR for payment",
+                ...payment.getQrPopupProps(),
+                qrCode: "fresh-qr",
+            });
+        });
+    });
+
+    describe("customerDisplayQrData", () => {
+        test("falls back to the selected in-progress payment line", async () => {
+            const store = await setupPosEnv();
+            const order = await getFilledOrder(store);
+            const paymentMethod = store.models["pos.payment.method"].get(1);
+            const payment = createPaymentLine(store, order, paymentMethod, {
+                qr_code: "data:image/png;base64,qr",
+                payment_status: "waitingScan",
+            });
+
+            // Not selected
+            order.selectPaymentline(undefined);
+            expect(store.customerDisplayQrData).toBe(null);
+
+            // Selected and in progress.
+            order.selectPaymentline(payment);
+            expect(store.customerDisplayQrData).toEqual({
+                title: "Scan the QR for payment",
+                ...payment.getQrPopupProps(),
+            });
+
+            // No longer in progress
+            payment.payment_status = "done";
+            expect(store.customerDisplayQrData).toBe(null);
+        });
+
+        test("an explicit value takes precedence over the fallback", async () => {
+            const store = await setupPosEnv();
+            const order = await getFilledOrder(store);
+            const paymentMethod = store.models["pos.payment.method"].get(1);
+            const payment = createPaymentLine(store, order, paymentMethod, {
+                qr_code: "data:image/png;base64,qr",
+                payment_status: "waitingScan",
+            });
+            order.selectPaymentline(payment);
+
+            store._customerDisplayQrData = {
+                title: "Custom",
+                qrCode: "data:image/png;base64,explicit",
+            };
+
+            expect(store.customerDisplayQrData).toEqual({
+                title: "Custom",
+                qrCode: "data:image/png;base64,explicit",
+            });
+        });
     });
 });

@@ -163,7 +163,7 @@ class CalendarEvent(models.Model):
         ]
 
     # description
-    name = fields.Char('Meeting Subject', required=True)
+    name = fields.Char('Meeting Subject', required=True, copy=True)
     description = fields.Html('Description',
         help="""When synchronization with an external calendar is active, this description is synchronized \
         with the one of the associated meeting in that external calendar. Any update will be propagated there \
@@ -1865,6 +1865,8 @@ class CalendarEvent(models.Model):
                 event.add('description').value = description
             if meeting.location:
                 event.add('location').value = meeting.location
+            if meeting.videocall_location:
+                event.add('url').value = meeting.videocall_location
             if meeting.rrule:
                 # meeting.rrule may be a full dateutil string: "DTSTART:...\nRRULE:FREQ=..."
                 # Take the last line and strip the "RRULE:" prefix if present.

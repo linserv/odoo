@@ -17,6 +17,7 @@ import { mockBrowserFactory } from "./mock_browser.hoot";
 import { mockCurrencyFactory } from "./mock_currency.hoot";
 import { mockFunctionsFactory } from "./mock_functions.hoot";
 import { mockIndexedDBFactory } from "./mock_indexed_db.hoot";
+import { mockPatchFactory } from "./mock_patch.hoot";
 import { mockSessionFactory } from "./mock_session.hoot";
 import { mockTemplatesFactory } from "./mock_templates.hoot";
 import { mockUserFactory } from "./mock_user.hoot";
@@ -148,18 +149,30 @@ async function fetchDependencies(addons) {
             });
         }
         dependencyBatch.push(...addonsToFetch);
-        dependencyBatchPromise.then((allDependencies) => {
-            for (const [moduleName, dependencyNames] of Object.entries(allDependencies)) {
-                dependencyCache[moduleName] ||= Promise.withResolvers();
-                dependencyCache[moduleName].resolve();
+        dependencyBatchPromise.then(
+            (allDependencies) => {
+                for (const [moduleName, dependencyNames] of Object.entries(allDependencies)) {
+                    dependencyCache[moduleName] ||= Promise.withResolvers();
+                    dependencyCache[moduleName].resolve();
 
-                dependencies[moduleName] = dependencyNames.filter(
-                    (dep) => !DEFAULT_ADDONS.includes(dep)
+                    dependencies[moduleName] = dependencyNames.filter(
+                        (dep) => !DEFAULT_ADDONS.includes(dep)
+                    );
+                }
+
+                resolveAddonDependencies(dependencies);
+            },
+            (error) => {
+                const reason = new Error(
+                    `could not fetch the dependencies of ${addonsToFetch.join(", ")}: ${
+                        error.message
+                    }`
                 );
+                for (const addon of addonsToFetch) {
+                    dependencyCache[addon].reject(reason);
+                }
             }
-
-            resolveAddonDependencies(dependencies);
-        });
+        );
     }
 
     await Promise.all([...addons].map((addon) => dependencyCache[addon]?.promise));
@@ -528,6 +541,7 @@ const MODULE_MOCKS_BY_NAME = new Map([
     ["@web/core/user", mockUserFactory],
     ["@web/core/utils/functions", mockFunctionsFactory],
     ["@web/core/utils/indexed_db", mockIndexedDBFactory],
+    ["@web/core/utils/patch", mockPatchFactory],
     ["@web/session", mockSessionFactory],
 ]);
 const MODULE_MOCKS_BY_REGEX = new Map([
@@ -721,8 +735,6 @@ export async function runTests(options) {
         await __gcAndLogMemory(lastSuiteName, lastNumberTests);
     }
 
-    await stop();
-
     // Perform final cleanups
     moduleNamesCache.clear();
     serverModelCache.clear();
@@ -736,6 +748,9 @@ export async function runTests(options) {
     }
 
     await __gcAndLogMemory("tests done");
+
+    // Report last, as the server kills the browser on the result report.
+    await stop();
 }
 
 /**

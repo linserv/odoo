@@ -181,6 +181,9 @@ function scrollToSelection(selection) {
  * @property { SelectionPlugin['isNodeEditable'] } isNodeEditable
  * @property { SelectionPlugin['selectAroundNonEditable'] } selectAroundNonEditable
  * @property { SelectionPlugin['selectElement'] } selectElement
+ * @property { SelectionPlugin['editableDocumentHasFocus'] } editableDocumentHasFocus
+ * @property { SelectionPlugin['getCachedSelection'] } getCachedSelection
+ * @property { SelectionPlugin['setCachedSelection'] } setCachedSelection
  * @property { SelectionPlugin['stageSelection'] } stageSelection
  * @property { SelectionPlugin['stageFocus'] } stageFocus
  * @property { SelectionPlugin['serializeEditableSelection'] } serializeEditableSelection
@@ -338,9 +341,6 @@ export class SelectionPlugin extends Plugin {
             if (ev.detail && ev.detail % 3 === 0) {
                 this.onTripleClick(ev);
             }
-            if (!ev.detail || ev.detail === 1) {
-                this.onClick(ev);
-            }
         });
         this.addDomListener(this.editable, "keydown", (ev) => {
             const handled = [
@@ -441,12 +441,6 @@ export class SelectionPlugin extends Plugin {
 
     resetSelection() {
         this.activeSelection = this.makeActiveSelection();
-    }
-
-    onClick(ev) {
-        if (this.delegateTo("click_overrides", ev)) {
-            return;
-        }
     }
 
     onDoubleClick(ev) {

@@ -3,7 +3,7 @@
 import itertools
 from collections import defaultdict
 from datetime import datetime
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlsplit
 
 from werkzeug.exceptions import Forbidden, NotFound
 from werkzeug.urls import url_decode, url_encode, url_parse
@@ -13,7 +13,7 @@ from odoo.exceptions import ValidationError
 from odoo.fields import Command, Domain
 from odoo.http import request, route
 from odoo.http.stream import content_disposition
-from odoo.tools import SQL, BinaryBytes, clean_context, float_round, lazy, str2bool
+from odoo.tools import SQL, clean_context, float_round, lazy, str2bool
 from odoo.tools.translate import LazyTranslate
 
 from odoo.addons.payment.controllers import portal as payment_portal
@@ -151,16 +151,13 @@ class WebsiteSale(payment_portal.PaymentPortal):
     ):
         domains = [self.env.website.sale_product_domain()]
         if search:
+            product_template = request.env["product.template"]
+            search_fields = product_template._get_website_sale_search_fields(search_in_description)
             for srch in search.split(" "):
                 subdomains = [
-                    Domain("name", "ilike", srch),
-                    Domain("variants_default_code", "ilike", srch),
+                    product_template._search_get_field_domain(field, srch)
+                    for field in search_fields
                 ]
-                if search_in_description:
-                    subdomains.extend((
-                        Domain("website_description", "ilike", srch),
-                        Domain("description_sale", "ilike", srch),
-                    ))
                 extra_subdomain = self._add_search_subdomains_hook(srch)
                 if extra_subdomain:
                     subdomains.append(extra_subdomain)
@@ -273,6 +270,25 @@ class WebsiteSale(payment_portal.PaymentPortal):
             "in_stock": in_stock,
             **request.session.get("attribute_value_params", {}),
         }
+
+    def _get_shop_filter_reset_params(self):
+        """Query-string params that clear the filters, for the `keep()` reset links.
+
+        Returns the attribute-only reset (used by the attribute filter form) and the
+        full reset extending it with the tag, price and ribbon filters.
+        """
+        reset_attribute_value_params = {
+            attr: 0 for attr in request.session.get("attribute_value_params", {})
+        }
+        reset_filters = {
+            **reset_attribute_value_params,
+            "tags": 0,
+            "min_price": 0,
+            "max_price": 0,
+            "on_sale": 0,
+            "in_stock": 0,
+        }
+        return reset_attribute_value_params, reset_filters
 
     def _get_additional_shop_values(self, _values, **_kwargs):
         """Update values used for rendering website_sale.products template."""
@@ -639,6 +655,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
         )
         product_query_params = self._get_product_query_params(**post)
 
+        reset_attribute_value_params, reset_filters = self._get_shop_filter_reset_params()
         values = {
             "auto_assign_ribbons": auto_assign_ribbons,
             "show_on_sale_filter": show_on_sale_filter,
@@ -668,6 +685,8 @@ class WebsiteSale(payment_portal.PaymentPortal):
             "get_product_prices": lambda product: products_prices[product.id],
             "float_round": float_round,
             "shop_path": SHOP_PATH,
+            "reset_attribute_value_params": reset_attribute_value_params,
+            "reset_filters": reset_filters,
             "product_query_params": product_query_params,
             "grouped_attributes_values": grouped_attributes_values,
             "previewed_attribute_values": lazy(
@@ -818,30 +837,6 @@ class WebsiteSale(payment_portal.PaymentPortal):
         if not self.env.user.has_group("website.group_website_restricted_editor"):
             raise NotFound
 
-        if type == "image":  # Image case
-            image_ids = self.env["ir.attachment"].browse(i["id"] for i in media)
-            media_create_data = [
-                Command.create({
-                    "name": image.name,  # Images uploaded from url do not have any datas.
-                    # This recovers them manually.
-                    "image_1920": image.raw
-                    or self.env["ir.qweb.field.image"].load_remote_url(image.url),
-                })
-                for image in image_ids
-            ]
-        elif type == "video":  # Video case
-            video_data = media[0]
-            url = urlparse(video_data["video_url"])
-            if not url.netloc:
-                raise ValidationError(self.env._("Invalid video URL provided."))
-            media_create_data = [
-                Command.create({
-                    "name": video_data.get("name", "Odoo Video"),
-                    "video_url": video_data["video_url"],
-                    "image_1920": video_data.get("image_1920"),
-                })
-            ]
-
         product_product = (
             self.env["product.product"].browse(int(product_product_id))
             if product_product_id
@@ -861,82 +856,81 @@ class WebsiteSale(payment_portal.PaymentPortal):
             product_product = product_template._get_variant_for_combination(combination)
             if not product_product:
                 product_product = product_template._create_product_variant(combination)
-        if (
+
+        is_variant_media = (
             product_template.has_configurable_attributes
             and product_product
             and not all(
                 pa.create_variant == "no_variant"
                 for pa in product_template.attribute_line_ids.attribute_id
             )
-        ):
-            product_product.write({"product_variant_image_ids": media_create_data})
-        else:
-            product_template.write({"product_template_image_ids": media_create_data})
-
-    @route(["/shop/product/clear-images"], type="jsonrpc", auth="user", website=True)
-    def clear_product_images(self, product_product_id, product_template_id):
-        """Unlink all images from the product."""
-        if not self.env.user.has_group("website.group_website_restricted_editor"):
-            raise NotFound
-
-        product_product = (
-            self.env["product.product"].browse(int(product_product_id))
-            if product_product_id
-            else False
         )
-        product_template = (
-            self.env["product.template"].browse(int(product_template_id))
-            if product_template_id
-            else False
-        )
+        variant_media_values = {}
+        if is_variant_media:
+            variant_media_values["attribute_value_ids"] = [Command.set(combination_ids)]
 
-        if product_product and not product_template:
-            product_template = product_product.product_tmpl_id
+        if type == "image":  # Image case
+            image_ids = self.env["ir.attachment"].browse(i["id"] for i in media)
+            media_create_data = [
+                Command.create({
+                    "name": image.name,  # Images uploaded from url do not have any datas.
+                    # This recovers them manually.
+                    "image_1920": image.raw
+                    or self.env["ir.qweb.field.image"].load_remote_url(image.url),
+                    **variant_media_values,
+                })
+                for image in image_ids
+            ]
+        elif type == "video":  # Video case
+            video_data = media[0]
+            url = urlsplit(video_data["video_url"])
+            if not url.netloc:
+                raise ValidationError(self.env._("Invalid video URL provided."))
+            media_create_data = [
+                Command.create({
+                    "name": video_data.get("name", "Odoo Video"),
+                    "video_url": video_data["video_url"],
+                    "image_1920": video_data.get("image_1920"),
+                    **variant_media_values,
+                })
+            ]
 
-        if product_product and product_product.product_variant_image_ids:
-            product_product.product_variant_image_ids.unlink()
-        else:
-            product_template.product_template_image_ids.unlink()
+        product_template.write({"product_template_image_ids": media_create_data})
 
     @route(["/shop/product/resequence-image"], type="jsonrpc", auth="user", website=True)
-    def resequence_product_image(self, image_res_model, image_res_id, move):
+    def resequence_product_image(self, image_res_id, move, product_variant_id):
         """
         Move the product image in the given direction and update all images' sequence.
 
-        :param str image_res_model: The model of the image. It can be 'product.template',
-                                    'product.product', or 'product.image'.
         :param str image_res_id: The record ID of the image to move.
         :param str move: The direction of the move. It can be 'first', 'left', 'right', or 'last'.
+        :param str product_variant_id: The ID of the product variant in whose context the image
+                                       resequencing is performed
         :raises NotFound: If the user does not have the required permissions, if the model of the
                           image is not allowed, or if the move direction is not allowed.
         :raise ValidationError: If the product is not found.
         :raise ValidationError: If the image to move is not found in the product images.
-        :raise ValidationError: If a video is moved to the first position.
         :return: None
         """
-        if (
-            not self.env.user.has_group("website.group_website_restricted_editor")
-            or image_res_model not in {"product.product", "product.template", "product.image"}
-            or move not in {"first", "left", "right", "last"}
-        ):
+        if not self.env.user.has_group("website.group_website_restricted_editor") or move not in {
+            "first",
+            "left",
+            "right",
+            "last",
+        }:
             raise NotFound
 
         image_res_id = int(image_res_id)
-        image_to_resequence = self.env[image_res_model].browse(image_res_id)
-        if image_res_model == "product.product":
-            product = image_to_resequence
-            product_template = product.product_tmpl_id
-        elif image_res_model == "product.template":
-            product_template = image_to_resequence
-            product = product_template.product_variant_id
-        else:
-            product = image_to_resequence.product_variant_id
-            product_template = product.product_tmpl_id or image_to_resequence.product_tmpl_id
+        image_to_resequence = self.env["product.image"].browse(image_res_id)
+
+        product_template = image_to_resequence.product_tmpl_id
+        product = self.env["product.product"].browse(int(product_variant_id))
 
         if not product and not product_template:
             raise ValidationError(self.env._("Product not found"))
 
-        product_images = (product or product_template)._get_images()
+        product_images = list((product or product_template)._get_images())
+
         if image_to_resequence not in product_images:
             raise ValidationError(self.env._("Invalid image"))
 
@@ -955,31 +949,6 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
         # Reorder images locally.
         product_images.insert(new_image_idx, product_images.pop(image_idx))
-
-        # If the main image has been reordered (i.e. it's no longer in first position), use the
-        # image that's now in first position as main image instead.
-        # Additional images are product.image records. The main image is a product.product or
-        # product.template record.
-        main_image_idx = next(
-            idx for idx, image in enumerate(product_images) if image._name != "product.image"
-        )
-        if main_image_idx != 0:
-            main_image = product_images[main_image_idx]
-            additional_image = product_images[0]
-            if additional_image.video_url:
-                raise ValidationError(
-                    self.env._("You can't use a video as the product's main image.")
-                )
-            # Swap records.
-            product_images[main_image_idx], product_images[0] = additional_image, main_image
-            # Swap image data. The contents are read eagerly before writing: the images are
-            # stored in attachments, and writing the first field mutates its attachment, which
-            # would invalidate the other value that is still lazily bound to its attachment.
-            main_image_data = main_image.image_1920.content
-            additional_image_data = additional_image.image_1920.content
-            main_image.image_1920 = BinaryBytes(additional_image_data)
-            additional_image.image_1920 = BinaryBytes(main_image_data)
-            additional_image.name = main_image.name  # Update image name but not product name.
 
         # Resequence additional images according to the new ordering.
         for idx, product_image in enumerate(product_images):
@@ -1038,7 +1007,13 @@ class WebsiteSale(payment_portal.PaymentPortal):
                             )
                         )[:1]
                     )
-                    or ptal.product_template_value_ids.filtered("ptav_active")[:1]
+                    or (
+                        ptal.product_template_value_ids.filtered(
+                            lambda ptav: (
+                                ptav.ptav_active and ptal.attribute_id.display_type != "multi"
+                            )
+                        )[:1]
+                    )
                 )
             )
             combination_info = product._get_combination_info(
@@ -1053,6 +1028,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
 
         # Needed to trigger the recently viewed product rpc
         view_track = website.viewref("website_sale.product").track
+        _, reset_filters = self._get_shop_filter_reset_params()
 
         return {
             "attribute_value_images": attribute_value_images,
@@ -1067,6 +1043,7 @@ class WebsiteSale(payment_portal.PaymentPortal):
             "view_track": view_track,
             "structured_data": structured_data,
             "shop_path": SHOP_PATH,
+            "reset_filters": reset_filters,
             "user_email": self.env.user.email
             or request.session.get("stock_notification_email", ""),
         }
@@ -2139,24 +2116,38 @@ class WebsiteSale(payment_portal.PaymentPortal):
         :rtype: dict(int, list(int))
         """
         unslug = self.env["ir.http"]._unslug
-        # For each attribute value query param, unslug its key (attribute) and value (attribute
-        # values).
-        attribute_value_dict = {
-            unslug(attr)[1]: [unslug(attr_value)[1] for attr_value in attr_values.split(",")]
-            for attr, attr_values in attribute_value_params.items()
-        }
-        # Only keep the attributes and attribute values that were correctly unslugged.
-        filtered_attribute_value_dict = {
-            attr_id: [attr_value_id for attr_value_id in attr_value_ids if attr_value_id]
-            for attr_id, attr_value_ids in attribute_value_dict.items()
-            if attr_id
-        }
-        # Only keep attributes that have at least one attribute value.
-        return {
-            attr_id: attr_value_ids
-            for attr_id, attr_value_ids in filtered_attribute_value_dict.items()
-            if attr_value_ids
-        }
+        # For each attribute value query param, unslug its key (attribute)
+        # and value (attribute values).
+        attribute_value_dict = {}
+        for attr, attr_values in attribute_value_params.items():
+            attr_id = unslug(attr)[1]
+            attribute = self.env["product.attribute"].browse(attr_id).exists()
+            if not attribute:
+                continue
+
+            if attribute.display_type == "range":
+                pavs = attribute.value_ids.sorted("sequence")
+                min_slug, _separator, max_slug = attr_values.partition("<")
+                min_id = unslug(min_slug)[1]
+                max_id = unslug(max_slug)[1]
+
+                if min_id not in pavs._ids or max_id not in pavs._ids:
+                    continue
+
+                min_index = pavs._ids.index(min_id)
+                max_index = pavs._ids.index(max_id)
+                attribute_value_dict[attr_id] = pavs._ids[min_index:max_index + 1]
+                continue
+
+            value_ids = []
+            for attr_value in attr_values.split(","):
+                if value_id := unslug(attr_value)[1]:
+                    value_ids.append(value_id)
+
+            if value_ids:
+                attribute_value_dict[attr_id] = value_ids
+
+        return attribute_value_dict
 
     def _get_url_with_attribute_values(self, grouped_attributes_values):
         """Return the current request's URL, but replace the attribute value query params with

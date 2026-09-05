@@ -91,7 +91,7 @@ class TestAccountEdiUblCii(TestUblCiiCommon, HttpCase):
             }, {
                 'product_id': self.displace_prdct.id,
                 'name': 'Displacement',
-                'product_uom_id': self.uom_units.id,
+                'product_uom_id': False,
                 'tax_ids': [self.company_data_2['default_tax_sale'].id]
             }, {
                 'product_id': self.displace_prdct.id,
@@ -139,6 +139,8 @@ class TestAccountEdiUblCii(TestUblCiiCommon, HttpCase):
         })]
 
         company.partner_id.with_company(company).invoice_edi_format = 'facturx'
+        if "predict_bill_product" in company._fields:
+            company.predict_bill_product = True
 
         invoice = self.env['account.move'].create({
             'company_id': company.id,
@@ -533,7 +535,8 @@ comment-->1000.0</TaxExclusiveAmount></xpath>"""
             self.partner_a.country_id = self.env.ref('base.nl').id
             company_bank_journal.bank_account_id.allow_out_payment = True
 
-            mandate = self.env['sdd.mandate'].create({
+            mandate = self.env['account.direct.debit.mandate'].create({  # noqa: OLS03001
+                'mandate_type': 'sepa',
                 'name': 'mandate ' + (self.partner_a.name or ''),
                 'partner_bank_id': partner_bank.id,
                 'one_off': True,

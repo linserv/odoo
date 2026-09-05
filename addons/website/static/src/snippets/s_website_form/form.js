@@ -1,6 +1,8 @@
+import { usePlugin } from "@odoo/owl";
 import { scrollTo } from "@html_builder/utils/scrolling";
 import { Interaction } from "@web/public/interaction";
 import { registry } from "@web/core/registry";
+import { BootstrapInstance } from "@web/core/utils/bootstrap_plugin";
 
 import { ReCaptcha } from "@google_recaptcha/js/recaptcha";
 import { localization } from "@web/core/l10n/localization";
@@ -20,6 +22,7 @@ import {
     serializeDateTime,
 } from "@web/core/l10n/dates";
 import { getParsedDataFor } from "@website/js/utils";
+import { generateHTMLId } from "@web/core/utils/strings";
 
 const { DateTime } = luxon;
 
@@ -74,6 +77,7 @@ export class Form extends Interaction {
     };
 
     setup() {
+        this.bootstrap = usePlugin(BootstrapInstance);
         this.isHidden = false;
         this.datepickerInitialized = false;
         this.recaptcha = new ReCaptcha();
@@ -615,6 +619,7 @@ export class Form extends Interaction {
                     ".s_website_form_input:not(#editable_select), .o_website_form_input:not(#editable_select)"
                 ),
             ]; // !compatibility
+            inputEls.forEach((el) => el.removeAttribute("aria-errormessage"));
             const invalidInputs = inputEls.filter((inputEl) => {
                 // Special check for multiple required checkbox for same
                 // field as it seems checkValidity forces every required
@@ -699,21 +704,27 @@ export class Form extends Interaction {
             fieldEl.classList.remove("o_has_error");
             for (const controlEl of controlEls) {
                 controlEl.classList.remove("is-invalid");
+                controlEl.removeAttribute("aria-invalid");
             }
             if (invalidInputs.length || errorFields[fieldName]) {
                 fieldEl.classList.add("o_has_error");
                 for (const controlEl of controlEls) {
                     controlEl.classList.add("is-invalid");
+                    controlEl.setAttribute("aria-invalid", "true");
+                    if (!controlEl.hasAttribute("aria-errormessage")) {
+                        this.updateStatusInline(controlEl.validationMessage, controlEl, true);
+                    }
                 }
                 if (typeof errorFields[fieldName] === "string") {
                     // update error message and show it.
-                    const popover = Popover.getOrCreateInstance(fieldEl, {
-                        content: errorFields[fieldName],
-                        trigger: "hover",
-                        container: "body",
-                        placement: "top",
-                    });
-                    popover.show();
+                    this.bootstrap
+                        .getOrCreateInstance(Popover, fieldEl, {
+                            content: errorFields[fieldName],
+                            trigger: "hover",
+                            container: "body",
+                            placement: "top",
+                        })
+                        .show();
                 }
                 if (!firstInvalidInput) {
                     firstInvalidInput = invalidInputs[0] || controlEls[0];
@@ -765,14 +776,20 @@ export class Form extends Interaction {
      *
      * @param {string} message The error message to be displayed.
      * @param {HTMLElement} inputEl The input field where the error message
-     *     should be displayed.
+     *      should be displayed.
+     * @param {boolean} hidden Whether the error message should be visually hidden (screen reader).
      */
-    updateStatusInline(message, inputEl) {
+    updateStatusInline(message, inputEl, hidden = false) {
+        const errorMessageId = generateHTMLId();
+        inputEl.setAttribute("aria-errormessage", errorMessageId);
+
         if (inputEl.parentElement.classList.contains("date")) {
             this.renderAt(
                 "website.s_website_form_status_custom_error",
                 {
+                    id: errorMessageId,
                     message,
+                    hidden,
                 },
                 inputEl.parentElement,
                 "afterend"
@@ -781,7 +798,9 @@ export class Form extends Interaction {
             this.renderAt(
                 "website.s_website_form_status_custom_error",
                 {
+                    id: errorMessageId,
                     message,
+                    hidden,
                 },
                 inputEl.parentElement,
                 "beforeend"

@@ -18,12 +18,14 @@ from werkzeug import urls
 
 from odoo import api, fields, models, tools, _, Command
 from odoo.exceptions import RedirectWarning, UserError, ValidationError
-from odoo.tools import LazyTranslate
+from odoo.tools import SQL, LazyTranslate
 from odoo.tools.business_data import street_split, split_vat
 from odoo.tools.date_utils import all_timezones
 from odoo.tools.translate import LazyGettext
 from odoo.tools.partner_identifiers import (
     ADDITIONAL_IDENTIFIERS_METADATA,
+    COMPANY_CATEGORIES,
+    INDIVIDUAL_CATEGORIES,
     TIN_METADATA,
     get_deduced_identifiers,
     get_tin_metadata_of_country,
@@ -316,7 +318,15 @@ class ResPartner(models.Model):
         precompute=True,  # avoid queries post-create
         readonly=False, store=True,
         help='The internal user in charge of this contact.')
-    vat = fields.Char(string='Tax ID', index=True, inverse='_inverse_vat', help="You can use '/' to indicate that the customer has no Tax ID.")
+    vat = fields.Char(string='Tax ID', index='btree_not_null', inverse='_inverse_vat', help="You can use '/' to indicate that the customer has no Tax ID.")
+    has_vat = fields.Boolean(
+        string="Has Tax ID",
+        compute="_compute_has_vat",
+        compute_sql="_compute_sql_has_vat",
+        compute_sudo=True,
+        help="Technical field indicating whether the Tax ID is not a placeholder."
+             "Returns False for placeholder values such as '/', 'NA', 'na', or an empty string.",
+    )
     additional_identifiers = fields.Json(string="Additional Identifiers", copy=False)
     available_additional_identifiers_metadata = fields.Json(compute='_compute_available_additional_identifiers_metadata')
     vat_label = fields.Char(string='Tax ID Label', compute='_compute_vat_label')
@@ -536,9 +546,8 @@ class ResPartner(models.Model):
             # so that you can reactivate it instead of creating a new one, which would lose its history.
             Partner = self.with_context(active_test=False).sudo()
             vats = [partner.vat]
-            should_check_vat = not self._is_vat_void(partner.vat)
 
-            if should_check_vat and partner.country_id and 'EU_PREFIX' in partner.country_id.country_group_codes:
+            if partner.has_vat and partner.country_id and 'EU_PREFIX' in partner.country_id.country_group_codes:
                 if partner.vat[:2].isalpha():
                     vats.append(partner.vat[2:])
                 else:
@@ -556,7 +565,7 @@ class ResPartner(models.Model):
                 domain += [('id', '!=', partner_id), '!', ('id', 'child_of', partner_id)]
             # For VAT number being only one character, we will skip the check just like the regular check_vat
 
-            partner.same_vat_partner_id = should_check_vat and not partner.parent_id and Partner.search(domain, limit=1)
+            partner.same_vat_partner_id = partner.has_vat and not partner.parent_id and Partner.search(domain, limit=1)
 
     @api.depends_context('company')
     def _compute_vat_label(self):
@@ -610,13 +619,6 @@ class ResPartner(models.Model):
         for company in companies:
             if company != company.partner_id.company_id:
                 raise ValidationError(_('The company assigned to this partner does not match the company this partner represents.'))
-
-    def copy_data(self, default=None):
-        default = dict(default or {})
-        vals_list = super().copy_data(default=default)
-        if default.get('name'):
-            return vals_list
-        return [dict(vals, name=self.env._("%s (copy)", partner.name)) for partner, vals in zip(self, vals_list)]
 
     @api.onchange('parent_id')
     def onchange_parent_id(self):
@@ -756,21 +758,24 @@ class ResPartner(models.Model):
     def _apply_synced_identifiers(self, source_identifiers):
         """ Mirror the *synced* identifiers of ``source_identifiers`` onto every record
         in ``self``, while keeping per-contact identifiers untouched.
-        Per-contact identifiers are those flagged ``synced=False`` in their metadata
+        Per-contact identifiers are those flagged ``synced=False`` in their metadata, and
+        individual identifiers, which stay on their own record.
         """
         all_metadata = self._get_all_identifiers_metadata()
+
+        def is_shared(key):
+            metadata = all_metadata.get(key, {})
+            return metadata.get('synced', True) and metadata.get('category') not in INDIVIDUAL_CATEGORIES
+
         synced = {
             key: value
             for key, value in (source_identifiers or {}).items()
-            if all_metadata.get(key, {}).get('synced', True)
+            if is_shared(key)
         }
         for record in self:
             existing = record.additional_identifiers or {}
-            merged = {
-                key: value
-                for key, value in existing.items()
-                if not all_metadata.get(key, {}).get('synced', True)
-            } | synced
+            own = {key: value for key, value in existing.items() if not is_shared(key)}
+            merged = own if any(record._is_individual_identifier(key) for key in own) else own | synced
             if merged != existing:
                 record.write({'additional_identifiers': merged})
 
@@ -782,7 +787,14 @@ class ResPartner(models.Model):
         if 'additional_identifiers' in sync_vals:
             sync_vals = dict(sync_vals)
             self._apply_synced_identifiers(sync_vals.pop('additional_identifiers'))
-        self.write(sync_vals)
+        if 'vat' in sync_vals:
+            individuals = self.filtered(lambda p: any(
+                p._is_individual_identifier(key) for key in (p.additional_identifiers or {})
+            ))
+            individuals.write({key: value for key, value in sync_vals.items() if key != 'vat'})
+            (self - individuals).write(sync_vals)
+        else:
+            self.write(sync_vals)
 
     @api.model
     def _company_dependent_commercial_fields(self):
@@ -921,7 +933,16 @@ class ResPartner(models.Model):
             website = url.replace(scheme='http').to_url()
         return website
 
-    @api.depends('vat', 'commercial_partner_id')
+    @api.depends('vat')
+    def _compute_has_vat(self):
+        for partner in self:
+            vat = partner.vat
+            partner.has_vat = vat and vat not in ('/', 'na', 'NA')
+
+    def _compute_sql_has_vat(self, table):
+        return SQL("%s NOT IN ('/', 'na', 'NA', '')", table.vat)
+
+    @api.depends('has_vat', 'commercial_partner_id')
     def _compute_is_company(self):
         """ By default, a partner is considered as a company if they are their own
         commercial entity (see computed field), and if their VAT is considered as being
@@ -931,7 +952,7 @@ class ResPartner(models.Model):
         definition of what is a company (e.g. more strict VAT, specific field usage,
         ...) """
         for partner in self:
-            partner.is_company = partner.commercial_partner_id == partner and not partner._is_vat_void(partner.vat)
+            partner.is_company = partner.commercial_partner_id == partner and partner.has_vat
 
     def _compute_is_public(self):
         for partner in self.with_context(active_test=False):
@@ -1030,11 +1051,6 @@ class ResPartner(models.Model):
             vals = self.env['res.partner']._add_missing_default_values(vals)
             partner._fields_sync(vals)
         return partners
-
-    def _is_vat_void(self, vat):
-        if not vat:
-            return True
-        return vat in ['/', 'na', 'NA']
 
     @api.ondelete(at_uninstall=False)
     def _unlink_except_user(self):
@@ -1399,7 +1415,7 @@ class ResPartner(models.Model):
         if not country or not vat:
             return vat, False
         if 1 <= len(vat) <= 2:
-            if self._is_vat_void(vat) or not validation:
+            if not self.env['res.partner'].new({'vat': vat}).has_vat or not validation:
                 return vat, False
             if validation == 'setnull':
                 return '', False
@@ -1611,12 +1627,9 @@ class ResPartner(models.Model):
     def _compute_available_additional_identifiers_metadata(self):
         for partner in self:
             vals = {
-                key: {
                     # Resolve lazy translations now: JSON would otherwise stringify them in a frame where
                     # no language can be detected.
-                    k: self.env._(v) if isinstance(v, LazyGettext) else v  # pylint: disable=gettext-variable
-                    for k, v in metadata.items()
-                }
+                key: self._lazy_translate_additional_identifiers_metadata(metadata)
                 for key, metadata in self._get_all_additional_identifiers_metadata().items()
                 if not metadata.get('countries') or partner.country_code in metadata['countries']  # includes international
             }
@@ -1624,6 +1637,13 @@ class ResPartner(models.Model):
                 # Pops out the default 'OTHER' only if another 'EN' identifier is available
                 vals.pop('OTHER', None)
             partner.available_additional_identifiers_metadata = vals
+
+    def _lazy_translate_additional_identifiers_metadata(self, metadata):
+        """Resolve lazy translation in additional identifier metadata"""
+        return {
+            key: self.env._(value) if isinstance(value, LazyGettext) else value  # pylint: disable=gettext-variable
+            for key, value in metadata.items()
+        }
 
     def _get_additional_identifier(self, identifier_type):
         """Convenience getter for an entry of the JSON."""
@@ -1677,6 +1697,15 @@ class ResPartner(models.Model):
         return {**TIN_METADATA, **self._get_all_additional_identifiers_metadata()}
 
     @api.model
+    def _get_allowed_identifier_metadata_keys(self):
+        """ Metadata keys an identifier may declare. Localizations extend it with the keys
+        they read themselves, e.g. the code they report the identifier with. """
+        return {
+            'category', 'countries', 'display_optional', 'examples', 'format', 'help', 'label',
+            'placeholder', 'scheme', 'sequence', 'synced', 'validation_function',
+        }
+
+    @api.model
     def _get_all_identifiers_metadata_by_scheme(self):
         return {
             metadata.get('scheme'): {'key': key, **metadata}
@@ -1705,6 +1734,18 @@ class ResPartner(models.Model):
     def _get_identifier_label(self, identifier_key):
         """Return the label of an identifier given its key."""
         return self._get_all_identifiers_metadata().get(identifier_key, {}).get('label', '')
+
+    @api.model
+    def _is_individual_identifier(self, identifier_key):
+        """ Whether the identifier represents an individual (e.g. a citizen number). """
+        return self._get_all_identifiers_metadata().get(identifier_key, {}).get('category') in INDIVIDUAL_CATEGORIES
+
+    @api.model
+    def _is_company_identifier(self, identifier_key):
+        """ Whether the identifier represents a company (a tax number or an enterprise number).
+        Identifiers without a category fall on the company side, like `is_company` defaults to False. """
+        category = self._get_all_identifiers_metadata().get(identifier_key, {}).get('category')
+        return not category or category in COMPANY_CATEGORIES
 
     def _get_preferred_legal_entity_identifier_vals(self):
         """Return a dict {'scheme': scheme, 'value': value, ...metadata} of the preferred legal entity identifier for the given partner.
@@ -1911,10 +1952,12 @@ class ResPartner(models.Model):
 
     def check_vat_gr(self, vat):
         """ Allows some custom test VAT number to be valid to allow testing Greece EDI. """
+        gr_vat = stdnum.util.get_cc_module('gr', 'vat')
+        vat = gr_vat.compact(vat)
         greece_test_vats = ('047747270', '047747210', '047747220', '117747270', '127747270')
         if vat in greece_test_vats:
             return True
-        return stdnum.util.get_cc_module('gr', 'vat').is_valid(vat)
+        return gr_vat.is_valid(vat)
 
     # Our EDI provider Infile has designated this range of testing VATs for our customers.
     __check_vat_gt_testing_infile = re.compile(r'98[0-9]{10}K')

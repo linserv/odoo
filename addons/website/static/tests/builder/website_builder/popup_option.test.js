@@ -1,6 +1,6 @@
 import { beforeEach, delay, describe, expect, test } from "@odoo/hoot";
 import { advanceTime, animationFrame, queryOne, waitFor } from "@odoo/hoot-dom";
-import { contains } from "@web/../tests/web_test_helpers";
+import { contains, onRpc } from "@web/../tests/web_test_helpers";
 import {
     addPlugin,
     defineWebsiteModels,
@@ -41,7 +41,10 @@ describe("Popup options: empty page before edit", () => {
     // Note: for some reason, `before()` doesn't work.
     // Done in `beforeEach` because frontend JS takes too much time to load.
     beforeEach(async () => {
-        await setupWebsiteBuilder("", { loadIframeBundles: true, loadAssetsFrontendJS: true });
+        await setupWebsiteBuilder("", {
+            loadIframeBundles: true,
+            loadAssetsFrontendJS: true,
+        });
     });
     test("dropping the popup snippet automatically displays it", async () => {
         await insertCategorySnippet({ group: "content", snippet: "s_popup" });
@@ -67,6 +70,26 @@ describe("Popup options: empty page before edit", () => {
             display: "block",
             "background-color": "rgb(255, 0, 0)",
         });
+    });
+
+    test("saving a visible popup hides it in the saved document", async () => {
+        await insertCategorySnippet({ group: "content", snippet: "s_popup" });
+        expect(".o_add_snippet_dialog").toHaveCount(0);
+        // Check if the popup is visible.
+        expect(":iframe .s_popup .modal").toHaveClass("show");
+        expect(":iframe .s_popup .modal").toHaveStyle({ display: "block" });
+
+        onRpc("ir.ui.view", "save", ({ args }) => {
+            expect(args[1]).toMatch(/display: none;/);
+            expect(args[1]).not.toMatch(/display: block;/);
+            expect(args[1]).not.toMatch(/[ "]show[ "]/);
+            expect(args[1]).toMatch(/data-invisible="1"/);
+            expect.step("save");
+            return true;
+        });
+
+        await contains("button[data-action=save]").click();
+        await expect.waitForSteps(["save"]);
     });
 });
 

@@ -579,7 +579,10 @@ class CustomerPortal(Controller):
                     parent_company = partner_sudo.commercial_partner_id
                     if parent_company.name != parent_name_value:
                         parent_company.name = parent_name_value
-            elif partner_sudo.is_company:
+            elif (
+                not partner_sudo.parent_id
+                and partner_sudo.child_ids.filtered(lambda c: c.type == "contact")
+            ):
                 if partner_sudo.name != parent_name_value:
                     partner_sudo.name = parent_name_value
             else:  # Current partner is an individual with no parent
@@ -627,9 +630,10 @@ class CustomerPortal(Controller):
                     address_values[key] = field.convert_to_cache(value, ResPartner)
             elif (key_upper := key.upper()) in all_additional_identifiers:
                 # Set the additional identifier values in the `additional_identifiers` field of the
-                # address values.
-                address_values.setdefault("additional_identifiers", {})
-                address_values["additional_identifiers"][key_upper] = value
+                # address values. Empty values are dropped, which clears them on the partner.
+                address_values.setdefault('additional_identifiers', {})
+                if value:
+                    address_values['additional_identifiers'][key_upper] = value
             elif value:  # The value cannot be saved on the `res.partner` model.
                 extra_form_data[key] = value
 
@@ -762,7 +766,7 @@ class CustomerPortal(Controller):
                     if is_main_contact and not bool(partner_sudo_value):
                         continue
                     if partner_sudo_value != value and (bool(partner_sudo_value) or bool(value)):
-                        invalid_fields.add(additional_identifier.lower())
+                        invalid_fields.add(additional_identifier)
                         error_messages.append(get_commercial_field_error_msg(additional_identifier))
                     else:
                         address_values["additional_identifiers"].pop(additional_identifier, None)
@@ -804,7 +808,7 @@ class CustomerPortal(Controller):
                 additional_identifier, value
             )
             if not validation_vals["valid"]:
-                invalid_fields.add(additional_identifier.lower())
+                invalid_fields.add(additional_identifier)
                 identifier_label = self.env["res.partner"]._get_identifier_label(additional_identifier)
                 error_messages.append(
                     validation_error_message(

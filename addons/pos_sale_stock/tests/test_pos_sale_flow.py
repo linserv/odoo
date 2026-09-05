@@ -671,9 +671,9 @@ class TestPoSSaleStock(TestPosStockHttpCommon, TestPoSSale):
             },
         }], partner=self.partner_a, to_invoice=True, is_refund=True, shipping_date='2023-01-01')
         pos_order_refund_record = self.env['pos.order'].browse(pos_order_refund_id)
-        self.assertEqual(sale_order.order_line.qty_delivered, 5)
-        for picking in pos_order_refund_record.picking_ids:
-            picking.button_validate()
+        # For both the normal refund and ship later + refund cases, we will create a picking with a negative quantity and validate it immediately.
+        self.assertEqual(len(pos_order_refund_record.picking_ids), 1)
+        self.assertEqual(pos_order_refund_record.picking_ids.state, 'done')
         self.assertEqual(sale_order.order_line.qty_delivered, 2)
 
     def test_amount_unpaid_with_downpayment_and_credit_note(self):
@@ -808,3 +808,60 @@ class TestPoSSaleStock(TestPosStockHttpCommon, TestPoSSale):
             picking.button_validate()
         self.assertEqual(sale_order.order_line.qty_delivered, 0)
         self.assertEqual(sale_order.order_line.qty_invoiced, 0)
+
+    def test_variant_popup_qty_free(self):
+        """
+        Tests that the variant popup will correctly display the qty_free instead
+        of the qty_remaining, like the other popups.
+        """
+        warehouse_2 = self.env['stock.warehouse'].create({
+            'name': 'Warehouse 2',
+            'code': 'WH2',
+            'company_id': self.env.company.id,
+        })
+        color = self.env['product.attribute'].create({
+            'name': 'Color',
+            'create_variant': 'always',
+        })
+        black, white = self.env['product.attribute.value'].create([
+            {'name': 'Black', 'attribute_id': color.id},
+            {'name': 'White', 'attribute_id': color.id}
+        ])
+        product_template = self.env['product.template'].create({
+            'name': 'Color Product',
+            'available_in_pos': True,
+            'is_storable': True,
+            'tracking': 'lot',
+            'attribute_line_ids': [Command.create({
+                'attribute_id': color.id,
+                'value_ids': [Command.set([black.id, white.id])]
+            })]
+        })
+
+        black_product = product_template.product_variant_ids.filtered(
+            lambda p: black in p.product_template_attribute_value_ids.product_attribute_value_id
+        )
+        lot_black = self.env['stock.lot'].create({
+            'name': 'LOT1',
+            'product_id': black_product.id,
+            'company_id': self.env.company.id,
+        })
+        self.env['stock.quant'].with_context(inventory_mode=True).create({
+            'product_id': black_product.id,
+            'inventory_quantity': 50,
+            'location_id': warehouse_2.lot_stock_id.id,
+            'lot_id': lot_black.id,
+        }).action_apply_inventory()
+
+        sale_order = self.env['sale.order'].create({
+            'partner_id': self.partner_a.id,
+            'warehouse_id': warehouse_2.id,
+            'order_line': [Command.create({
+                'product_id': black_product.id,
+                'product_uom_qty': 50,
+                'price_unit': 15.0,
+            })]
+        })
+        sale_order.action_confirm()
+        self.main_pos_config.with_user(self.pos_user).open_ui()
+        self.start_pos_tour('test_variant_popup_qty_free', login="pos_user")

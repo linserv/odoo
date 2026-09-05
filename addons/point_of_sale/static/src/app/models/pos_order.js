@@ -197,6 +197,10 @@ export class PosOrder extends PosOrderAccounting {
         return this.is_refund === true;
     }
 
+    get isSelfOrder() {
+        return this.source === "mobile" || this.source === "kiosk";
+    }
+
     get adjustableTipLine() {
         return this.payment_ids.find((p) => p.canBeAdjusted());
     }
@@ -770,7 +774,10 @@ export class PosOrder extends PosOrderAccounting {
                 pos_categ_id: product.pos_categ_ids[0]?.id || 0,
                 pos_categ_sequence: product.pos_categ_ids[0]?.sequence || 0,
                 group: (!opts.hideCourse && line?.getCourse?.()) || false,
-                combo_line_ids: line?.combo_line_ids,
+                combo_line_ids: line?.combo_line_ids?.map((l) => ({
+                    id: l.id,
+                    product_id: l.product_id.id,
+                })),
                 combo_parent_uuid: line?.combo_parent_id?.uuid,
                 uom_is_base_unit: line?.product_id?.uom_id?.id == line?.config?._unit_uom_id,
             },

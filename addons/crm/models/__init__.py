@@ -2,13 +2,13 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from . import calendar
+from . import discuss_channel
 from . import crm_lead
 from . import crm_lost_reason
 from . import crm_stage
 from . import crm_team
 from . import crm_team_member
 from . import ir_config_parameter
-from . import ir_http
 from . import res_config_settings
 from . import res_partner
 from . import digest

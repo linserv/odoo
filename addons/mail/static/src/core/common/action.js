@@ -16,6 +16,21 @@ export const ACTION_TAGS = Object.freeze({
     JOIN_LEAVE_CALL: "JOIN_LEAVE_CALL",
 });
 
+export const ACTION_GROUP_TAGS = Object.freeze({
+    INLINE_SWITCHER_LOOK: "INLINE_SWITCHER_LOOK",
+});
+
+export const IS_ACTION_DEFINITION_SYM = Symbol("isActionDefinition");
+export const IS_ACTION_GROUP_DESCRIPTION_SYM = Symbol("isActionGroupDescription");
+
+/** @param {undefined|T|T[]} val @returns {T[]} @template T */
+function toArray(val) {
+    if (!val) {
+        return [];
+    }
+    return Array.isArray(val) ? val : [val];
+}
+
 /** @typedef {import("@odoo/owl").Component} Component */
 /** @typedef {import("@mail/model/record").Record} Record */
 /** @typedef {Component|Record} ActionOwner */
@@ -44,6 +59,11 @@ export const ACTION_TAGS = Object.freeze({
  * @typedef {ActionRootRefParam & {actions: UseActions_T, action: Action_T, store: import("models").Store, owner: ActionOwner}} ActionParams
  */
 
+/** @typedef {number} ActionGroupId id of group is a number that also represents its sequence between groups! */
+
+/** @typedef {{ name: string?, tags?: string|string[] }} ActionGroupDescriptionDefinition */
+/** @typedef {ActionGroupDescriptionDefinition & {id: ActionGroupId, tags: string[] }} ActionGroupDescription */
+
 /**
  * @template ActionParams_T
  * @template Action_T
@@ -61,11 +81,13 @@ export const ACTION_TAGS = Object.freeze({
  * @property {Object|(params: ActionParams_T) => Object} [btnAttrs]
  * @property {string|(params: ActionParams_T) => string} [btnClass]
  * @property {Component} [component]
+ * @property {Component} [extraContentComponent]
  * @property {boolean|(params: ActionParams_T) => boolean} [componentCondition=true]
  * @property {(params: ActionParams_T) => Component<Props, Env>} [componentProps]
+ * @property {(params: ActionParams_T) => Component<Props, Env>} [extraContentComponentProps]
  * @property {boolean|(params: ActionParams_T) => boolean} [condition=true]
  * @property {boolean|(params: ActionParams_T) => boolean} [disabledCondition]
- * @property {boolean} [dropdown]
+ * @property {boolean|(params: ActionParams_T) => boolean} [dropdownTrigger]
  * @property {Component|(params: ActionParams_T) => Component} [dropdownComponent]
  * @property {Object|(params: ActionParams_T) => Object} [dropdownComponentProps]
  * @property {string|(params: ActionParams_T) => string} [dropdownMenuClass]
@@ -85,8 +107,8 @@ export const ACTION_TAGS = Object.freeze({
  * @property {string|(params: ActionParams_T) => string} [nameClass]
  * @property {(params: ActionParams_T, ev: Event) => void} [onSelected]
  * @property {number|(params: ActionParams_T) => number} [sequence]
- * @property {boolean|(params: ActionParams_T) => boolean} [sequenceGroup]
- * @property {boolean|(params: ActionParams_T) => boolean} [sequenceQuick]
+ * @property {ActionGroupId|(params: ActionParams_T) => ActionGroupId} [sequenceGroup]
+ * @property {number|(params: ActionParams_T) => number} [sequenceQuick]
  * @property {(params: ActionParams_T) => void} [setup]
  * @property {string|string[]|(params: ActionParams_T) => string|string[]} [tags]
  */
@@ -367,20 +389,20 @@ export class Action {
     }
 
     /** @param {Action} action @returns {boolean|undefined} */
-    _dropdown(action) {}
+    _dropdownTrigger(action) {}
     /** Determines whether this action opens a dropdown on selection. */
-    get dropdown() {
+    get dropdownTrigger() {
         return (
-            this._dropdown(this.params) ??
-            (typeof this.definition.dropdown === "function"
-                ? this.definition.dropdown.call(this, this.params)
-                : this.definition.dropdown)
+            this._dropdownTrigger(this.params) ??
+            (typeof this.definition.dropdownTrigger === "function"
+                ? this.definition.dropdownTrigger.call(this, this.params)
+                : this.definition.dropdownTrigger)
         );
     }
 
     /** @param {Action} action @returns {Component|undefined} */
     _dropdownComponent(action) {}
-    /** When action is a dropdown @see dropdown, this determines an optional component to use for the content slot */
+    /** When action is a dropdown @see dropdownTrigger, this determines an optional component to use for the content slot */
     get dropdownComponent() {
         return (
             this._dropdownComponent(this.params) ??
@@ -393,7 +415,7 @@ export class Action {
 
     /** @param {Action} action @returns {Object|undefined} */
     _dropdownComponentProps(action) {}
-    /** When action is a dropdown @see dropdown, this determines optional props to pass to component of the content slot of dropdown. */
+    /** When action is a dropdown @see dropdownTrigger, this determines optional props to pass to component of the content slot of dropdown. */
     get dropdownComponentProps() {
         return (
             this._dropdownComponentProps(this.params) ??
@@ -405,7 +427,7 @@ export class Action {
 
     /** @param {Action} action @returns {string|undefined} */
     _dropdownMenuClass(action) {}
-    /** When action is a dropdown @see dropdown, this determines an optional menu class for the dropdown, in addition to default dropdown menu classes */
+    /** When action is a dropdown @see dropdownTrigger, this determines an optional menu class for the dropdown, in addition to default dropdown menu classes */
     get dropdownMenuClass() {
         return (
             this._dropdownMenuClass(this.params) ??
@@ -417,7 +439,7 @@ export class Action {
 
     /** @param {Action} action @returns {string|undefined} */
     _dropdownPosition(action) {}
-    /** When action is a dropdown @see dropdown, this determines the preferred position of the dropdown */
+    /** When action is a dropdown @see dropdownTrigger, this determines the preferred position of the dropdown */
     get dropdownPosition() {
         return (
             this._dropdownPosition(this.params) ??
@@ -429,7 +451,7 @@ export class Action {
 
     /** @param {Action} action @returns {DropdownState|undefined} */
     _dropdownState(action) {}
-    /** When action is a dropdown @see dropdown, this determines the preferred position of the dropdown */
+    /** When action is a dropdown @see dropdownTrigger, this determines the preferred position of the dropdown */
     get dropdownState() {
         return (
             this._dropdownState(this.params) ??
@@ -441,7 +463,7 @@ export class Action {
 
     /** @param {Action} action @returns {string|undefined} */
     _dropdownTemplate(action) {}
-    /** When action is a dropdown @see dropdown, this determines an optional template to use for the content slot */
+    /** When action is a dropdown @see dropdownTrigger, this determines an optional template to use for the content slot */
     get dropdownTemplate() {
         return (
             this._dropdownTemplate(this.params) ??
@@ -454,7 +476,7 @@ export class Action {
     /** @param {Action} action @returns {Object|undefined} */
     _dropdownTemplateParams(action) {}
     /**
-     * When action is a dropdown @see dropdown, this determines optional params to pass to template of the content slot of dropdown.
+     * When action is a dropdown @see dropdownTrigger, this determines optional params to pass to template of the content slot of dropdown.
      * The params are provided to template in object `templateParams` with named parameters as given by explicit definition.
      * For example: `{ myParam1: 1 }` is retrieved in template with `templateParams.myParam1`.
      */
@@ -620,7 +642,7 @@ export class Action {
         return this._sequenceComputed();
     }
 
-    /** @param {Action} action @returns {number|undefined} */
+    /** @param {Action} action @returns {ActionGroupId|undefined} */
     _sequenceGroup(action) {}
     _computeSequenceGroup() {
         return (
@@ -664,11 +686,15 @@ export class Action {
             (typeof this.definition.tags === "function"
                 ? this.definition.tags.call(this, this.params)
                 : this.definition.tags);
-        return Array.isArray(res) ? res : [res];
+        return toArray(res);
     }
 
     get tagClassNames() {
         return this.tags.map((tag) => `o-tag-${tag}`).join(" ");
+    }
+
+    get closingModeAsDropdown() {
+        return this.definition.closingModeAsDropdown ?? "all";
     }
 }
 
@@ -683,6 +709,8 @@ export class UseActions extends Reactive {
     component;
     /** @type {Map<string, Action_T>} */
     moreActions = new Map();
+    /** @type {Map<ActionGroupId, ActionGroupDescription>} */
+    actionGroupDescriptions = new Map();
     /** @type {Action<ActionParams_T>[]} */
     transformedActions;
     /** @type {import("models").Store} */
@@ -735,8 +763,8 @@ export class UseActions extends Reactive {
                     // a reused more-action gets its list swapped in place
                     actionsSignal: signal(data.actions),
                     btnAttrs: { "data-available-offline": true },
-                    dropdown: true,
                     dropdownState: new DropdownState(),
+                    dropdownTrigger: true,
                     icon: data?.icon ?? "more_vert",
                     isActive: ({ action }) => action.dropdownState.isOpen,
                     isMoreAction: true,
@@ -826,17 +854,30 @@ function useActionState({ UseActionClass, component }) {
 export function useAction(actionRegistry, UseActionClass, ActionClass, actionClassParams) {
     const component = useScope().component;
     const actions = useActionState({ UseActionClass, component });
-    /** @type {Action_T[]} */
-    const transformedActions = actionRegistry.getEntries().map(
-        ([id, definition]) =>
-            new ActionClass({
-                actions,
-                owner: component,
-                id,
-                definition,
-                ...actionClassParams,
-            })
+    actions.actionGroupDescriptions = new Map(
+        actionRegistry
+            .getEntries()
+            .filter(([id, definition]) => definition?.[IS_ACTION_GROUP_DESCRIPTION_SYM])
+            .map(([id, definition]) => [
+                Number(id),
+                { id: Number(id), ...definition, tags: toArray(definition.tags) },
+            ])
     );
+
+    /** @type {Action_T[]} */
+    const transformedActions = actionRegistry
+        .getEntries()
+        .filter(([id, definition]) => definition?.[IS_ACTION_DEFINITION_SYM])
+        .map(
+            ([id, definition]) =>
+                new ActionClass({
+                    actions,
+                    owner: component,
+                    id,
+                    definition,
+                    ...actionClassParams,
+                })
+        );
     for (const action of transformedActions) {
         action.setup();
     }

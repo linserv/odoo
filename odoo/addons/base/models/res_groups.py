@@ -6,7 +6,6 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Command, Domain
 from odoo.tools import SetDefinitions
-from odoo.tools.translate import mark_as_copy
 
 
 class ResGroups(models.Model):
@@ -17,7 +16,7 @@ class ResGroups(models.Model):
     _order = 'privilege_id, sequence, name, id'
     _clear_cache_name = 'groups'
     _clear_cache_on_fields = {'implied_ids', 'implied_by_ids'}
-    name = fields.Char(required=True, translate=True, copy=mark_as_copy('name'))
+    name = fields.Char(required=True, translate=True)
     user_ids = fields.Many2many('res.users', 'res_groups_users_rel', 'gid', 'uid', help='Users explicitly in this group')
     all_user_ids = fields.Many2many('res.users', string='Users and implied users',
         compute='_compute_all_user_ids', search='_search_all_user_ids', inverse='_inverse_all_user_ids')
@@ -423,10 +422,10 @@ class ResGroups(models.Model):
     def _get_group_definitions(self):
         """ Return the definition of all the groups as a :class:`~odoo.tools.SetDefinitions`. """
         groups = self.sudo().search([], order='id')
-        id_to_ref = groups.get_external_id()
+        id_to_refs = groups._get_external_ids()
         data = {
             group.id: {
-                'ref': id_to_ref[group.id] or str(group.id),
+                'refs': id_to_refs[group.id] or [str(group.id)],
                 'supersets': group.implied_ids.ids,
                 'disjoints': group.disjoint_ids.ids,
             }

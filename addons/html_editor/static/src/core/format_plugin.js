@@ -21,6 +21,7 @@ import {
     isStrikeThrough,
     isTextNode,
     isUnderline,
+    isVisible,
     isVisibleTextNode,
     isZWS,
     paragraphRelatedElementsSelector,
@@ -37,7 +38,6 @@ import { FORMATTABLE_TAGS, removeStyle } from "../utils/formatting";
 import { boundariesIn, leftPos, rightPos } from "../utils/position";
 import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 
-const allWhitespaceRegex = /^[\s\u200b]*$/;
 const NOT_A_NUMBER = /[^\d]/g;
 
 /**
@@ -67,7 +67,7 @@ const NOT_A_NUMBER = /[^\d]/g;
  * @typedef {(() => void)[]} on_all_formats_removed_handlers
  * @typedef {(() => void)[]} on_format_requested_handlers
  * @typedef {(() => void)[]} on_collapsed_formats_removed_handlers
- * @typedef {((node: Node, formatName: string, applyStyle: boolean) => void)[]} on_format_applied_handlers
+ * @typedef {((node: Node, FormatSpec: FormatSpec, applyStyle: boolean) => void)[]} on_format_applied_handlers
  * @typedef {((root: Node) => void)[]} on_will_merge_adjacent_siblings_handlers
  * @typedef {((root: Node) => void)[]} on_merged_adjacent_siblings_handlers
  *
@@ -76,6 +76,7 @@ const NOT_A_NUMBER = /[^\d]/g;
  * @typedef {((className: string) => boolean | undefined)[]} is_format_class_predicates
  * @typedef {((node: Node) => boolean | undefined)[]} is_formattable_node_predicates
  * @typedef {((node: Node) => boolean | undefined)[]} can_remove_format_predicates
+ * @typedef {((node: Node, blockNode: Node) => boolean | undefined)[]} is_node_in_same_block_segment_predicates
  *
  * @typedef {(({
  *      node: Node,
@@ -152,7 +153,7 @@ export class FormatPlugin extends Plugin {
                 id: "bold",
                 description: _t("Bold (Ctrl + B)"),
                 groupId: "decoration",
-                namespaces: ["compact", "expanded", "text"],
+                namespaces: ["compact", "expanded", "text", "table"],
                 commandId: "formatBold",
                 isActive: () =>
                     this.activeFormats["bold"]?.applyStyle ?? this.isFormatActive("bold"),
@@ -161,7 +162,7 @@ export class FormatPlugin extends Plugin {
                 id: "italic",
                 description: _t("Italic (Ctrl + I)"),
                 groupId: "decoration",
-                namespaces: ["compact", "expanded", "text"],
+                namespaces: ["compact", "expanded", "text", "table"],
                 commandId: "formatItalic",
                 isActive: () =>
                     this.activeFormats["italic"]?.applyStyle ?? this.isFormatActive("italic"),
@@ -170,7 +171,7 @@ export class FormatPlugin extends Plugin {
                 id: "underline",
                 description: _t("Underline (Ctrl + U)"),
                 groupId: "decoration",
-                namespaces: ["compact", "expanded", "text"],
+                namespaces: ["compact", "expanded", "text", "table"],
                 commandId: "formatUnderline",
                 isActive: () =>
                     this.activeFormats["underline"]?.applyStyle ?? this.isFormatActive("underline"),
@@ -571,15 +572,16 @@ export class FormatPlugin extends Plugin {
                     }
                 }
             } else {
-                const nodesToUnformat = descendants(node).filter((n) => {
-                    if (!isElement(n)) {
-                        return false;
-                    }
-                    const block =
-                        closestElement(n, "LI") ??
-                        closestElement(n, paragraphRelatedElementsSelector);
-                    return block === node;
-                });
+                const nodesToUnformat = descendants(node).filter(
+                    (n) =>
+                        isElement(n) &&
+                        (this.checkPredicates(
+                            "is_node_in_same_block_segment_predicates",
+                            n,
+                            node
+                        ) ??
+                            true)
+                );
                 for (const n of [node, ...nodesToUnformat]) {
                     removeFormat(n, formatSpec, cursor);
                 }
@@ -593,7 +595,7 @@ export class FormatPlugin extends Plugin {
                     formatSpec.addNeutralStyle(node);
                 }
             }
-            this.trigger("on_format_applied_handlers", node, formatName, applyStyle);
+            this.trigger("on_format_applied_handlers", node, formatSpec, applyStyle);
         }
 
         cursor.restore();
@@ -670,7 +672,7 @@ export class FormatPlugin extends Plugin {
 
     normalize(root) {
         for (const el of selectElements(root, "[data-oe-zws-empty-inline]")) {
-            if (!allWhitespaceRegex.test(el.textContent)) {
+            if (isVisible(el)) {
                 // The element has some meaningful text. Remove the ZWS in it.
                 delete el.dataset.oeZwsEmptyInline;
                 this.cleanZWS(el);
@@ -710,7 +712,7 @@ export class FormatPlugin extends Plugin {
     }
 
     cleanElement(element, { preserveSelection }) {
-        if (!allWhitespaceRegex.test(element.textContent)) {
+        if (isVisible(element)) {
             // The element has some meaningful text. Remove the ZWS in it.
             delete element.dataset.oeZwsEmptyInline;
             this.cleanZWS(element, { preserveSelection });

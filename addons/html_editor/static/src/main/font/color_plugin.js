@@ -38,6 +38,7 @@ const COLOR_COMBINATION_SELECTOR = COLOR_COMBINATION_CLASSES.map((c) => `.${c}`)
  * @property { ColorPlugin['removeAllColor'] } removeAllColor
  * @property { ColorPlugin['getElementColors'] } getElementColors
  * @property { ColorPlugin['applyColor'] } applyColor
+ * @property { ColorPlugin['getColorCombination'] } getColorCombination
  * @property { ColorPlugin['requestColor'] } requestColor
  * @property { ColorPlugin['getActiveColorInfo'] } getActiveColorInfo
  */
@@ -287,7 +288,9 @@ export class ColorPlugin extends Plugin {
                 .getTargetedNodes()
                 .filter(
                     (node) =>
-                        this.dependencies.selection.isNodeEditable(node) && node.nodeName !== "T"
+                        this.dependencies.selection.isNodeEditable(node) &&
+                        node.nodeName !== "T" &&
+                        this.dependencies.selection.areNodeContentsFullySelected(node)
                 );
             if (isEmptyBlock(selection.endContainer)) {
                 targetedNodes.push(selection.endContainer, ...descendants(selection.endContainer));
@@ -531,7 +534,6 @@ export class ColorPlugin extends Plugin {
             removePresetGradient(element);
         }
 
-        const hasGradientStyle = element.style.backgroundImage.includes("-gradient");
         if (mode === "backgroundColor") {
             if (!color) {
                 element.classList.remove("o_cc", ...COLOR_COMBINATION_CLASSES);
@@ -541,7 +543,7 @@ export class ColorPlugin extends Plugin {
             let newBackgroundImage = backgroundImagePartsToCss(parts);
             // we override the bg image if the new bg image is empty, but the previous one is a gradient.
             if (hasGradient && !newBackgroundImage) {
-                newBackgroundImage = "none";
+                newBackgroundImage = "";
             }
             element.style.backgroundImage = newBackgroundImage;
             removeStyle(element, "background-color");
@@ -584,8 +586,8 @@ export class ColorPlugin extends Plugin {
             );
         } else {
             delete parts.gradient;
-            if (hasGradientStyle && !backgroundImagePartsToCss(parts)) {
-                removeStyle(element, "background-image");
+            if (oldClassName.includes("text-gradient") && !backgroundImagePartsToCss(parts)) {
+                element.style["background-image"] = "";
             }
             if (color.startsWith("text") || color.startsWith("bg-")) {
                 removeStyle(element, mode);

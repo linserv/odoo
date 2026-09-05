@@ -615,7 +615,7 @@ class StockPicking(models.Model):
         ResPartner = self.env['res.partner']
         # TODO Change domain if is_company is stored
         existing_partners = dict(ResPartner.with_context(active_test=False)._read_group(
-            [('country_id.code', '=', 'TR'), ('vat', 'not in', [False, 'na', 'NA', '/'])], ['name'], ['id:min'],
+            [('country_id.code', '=', 'TR'), ('has_vat', '=', True)], ['name'], ['id:min'],
         ))
         country_id = self.env.ref('base.tr', raise_if_not_found=False)
         driver_ids = []
@@ -864,7 +864,7 @@ class StockPicking(models.Model):
     def _cron_nilvera_get_edispatch_purchase_pdf(self, batch_size=100):
         """ Fetches the Nilvera generated PDFs for the sales generated on Odoo. """
         pickings_to_fetch_pdf = self.env['stock.picking'].search([
-            ('l10n_tr_nilvera_edispatch_xml_file', '=', True),
+            ('l10n_tr_nilvera_edispatch_xml_file', '!=', False),
             ('l10n_tr_nilvera_edispatch_pdf_file', '=', False),
             ('l10n_tr_nilvera_send_status', '=', 'pdf_not_fetched'),
         ], limit=batch_size)

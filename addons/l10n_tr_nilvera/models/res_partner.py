@@ -50,7 +50,7 @@ class ResPartner(models.Model):
             if partner.invoice_edi_format != "ubl_tr":
                 continue
             partner.is_company = False
-            if not partner._is_vat_void(partner.vat) and partner.vat.isdigit() and len(partner.vat) <= 10:
+            if partner.has_vat and partner.vat.isdigit() and len(partner.vat) <= 10:
                 partner.is_company = True
             l10n_tr_partners += partner
 
@@ -110,7 +110,7 @@ class ResPartner(models.Model):
         if not self.vat:
             return
 
-        with _get_nilvera_client(self.env._, self.env.company.sudo()) as client:
+        with _get_nilvera_client(self.env._, self.env.company) as client:
             response = client.request("GET", "/general/GlobalCompany/Check/TaxNumber/" + urllib.parse.quote(self.vat), handle_response=False)
             if response.status_code == 200:
                 query_result = response.json()

@@ -24,9 +24,11 @@ import { withSequence } from "@html_editor/utils/resource";
 import { isBlock, closestBlock } from "@html_editor/utils/blocks";
 import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 import { isBrowserFirefox, isBrowserSafari } from "@web/core/browser/feature_detection";
+import { session } from "@web/session";
 
 /** @typedef {import("@odoo/owl").Component} Component */
 /** @typedef {import("plugins").CSSSelector} CSSSelector */
+/** @typedef {import("plugins").LazyTranslatedString} LazyTranslatedString */
 /**
  * @typedef {import("@html_editor/core/selection_plugin").EditorSelection} EditorSelection
  */
@@ -120,6 +122,13 @@ async function fetchInternalMetaData(url) {
             const internalUrlMetaData = await rpc("/html_editor/link_preview_internal", {
                 preview_url: urlParsed.href,
             });
+            if (internalUrlMetaData.error_msg) {
+                // Silence error which does not help.
+                if (!session.test_mode) {
+                    console.warn(internalUrlMetaData.error_msg);
+                }
+                delete internalUrlMetaData.error_msg;
+            }
 
             internalUrlMetaData["favicon"] = doc.querySelector("link[rel~='icon']");
             internalUrlMetaData["ogTitle"] = doc.querySelector("[property='og:title']");
@@ -167,6 +176,15 @@ async function fetchAttachmentMetaData(url, ormService) {
  *      getProps: (props) => props;
  *  }[]} link_popovers
  * @typedef {((linkEl: HTMLAnchorElement) => void)[]} on_link_created_handlers
+ * @typedef {{
+ *      id: string;
+ *      label: string;
+ *      description: LazyTranslatedString;
+ *      attribute: string;
+ *      value: string;
+ *      isMultiValueAttr?: boolean;
+ *      requires?: string;
+ *  }[]} advanced_popover_options
  */
 
 export class LinkPlugin extends Plugin {
@@ -377,6 +395,11 @@ export class LinkPlugin extends Plugin {
             if (linkEl) {
                 if (ev.ctrlKey || ev.metaKey) {
                     window.open(linkEl.href, "_blank");
+                } else if (!linkEl.isContentEditable) {
+                    this.dependencies.selection.setSelection({
+                        anchorNode: linkEl,
+                        anchorOffset: 0,
+                    });
                 }
                 ev.preventDefault();
             }
@@ -730,7 +753,11 @@ export class LinkPlugin extends Plugin {
     openLinkPopover(linkElement, type) {
         this.currentOverlay.close();
         this.LinkPopoverState.editing = false;
-        if (!this.isLinkAllowedOnSelection()) {
+        const selection = this.dependencies.selection.getEditableSelection();
+        const commonAncestor = closestElement(selection.commonAncestorContainer);
+        const isNonEditableLink =
+            commonAncestor.nodeName === "A" && !commonAncestor.isContentEditable;
+        if (!this.isLinkAllowedOnSelection() && !isNonEditableLink) {
             return this.services.notification.add(
                 _t("Unable to create a link on the current selection."),
                 { type: "danger" }
@@ -745,7 +772,10 @@ export class LinkPlugin extends Plugin {
         const popover = this.getActivePopover(context.linkElement);
         if (popover) {
             this.currentOverlay = popover.overlay;
-            if (!context.linkElement.href) {
+            if (
+                !context.linkElement.href &&
+                (!this.linkInDocument || this.linkInDocument?.isContentEditable)
+            ) {
                 this.LinkPopoverState.editing = true;
             }
             this.currentOverlay.open({ props: popover.getProps(props) });
@@ -925,7 +955,7 @@ export class LinkPlugin extends Plugin {
             const closestLinkElement = closestElement(selection.anchorNode, "A");
             const isLinkEditable =
                 this.checkPredicates("is_link_editable_predicates", closestLinkElement) ?? false;
-            if (closestLinkElement && closestLinkElement.isContentEditable) {
+            if (closestLinkElement) {
                 if (closestLinkElement !== this.linkInDocument || !this.currentOverlay.isOpen) {
                     this.openLinkPopover(closestLinkElement);
                 }

@@ -986,6 +986,26 @@ test("call participant shows appropriate status icon", async () => {
     );
 });
 
+test("collapsed call participants show who is talking", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
+    const bobMemberId = pyEnv["discuss.channel.member"].create({
+        channel_id: channelId,
+        partner_id: pyEnv["res.partner"].create({ name: "bob" }),
+    });
+    const env = await start();
+    const network = await makeMockRtcNetwork({ env, channelId });
+    const bobRemote = network.makeMockRemote(bobMemberId);
+    await openDiscuss(channelId);
+    await click("[title='Join Call']");
+    await bobRemote.updateConnectionState("connected");
+    await click("[title='Collapse participants']");
+    await bobRemote.updateInfo({ isTalking: true });
+    await contains(".o-mail-MessagingMenuCallParticipants img[title='bob'].o-isTalking");
+    await bobRemote.updateInfo({ isTalking: false });
+    await contains(".o-mail-MessagingMenuCallParticipants img[title='bob']:not(.o-isTalking)");
+});
+
 test("start call when accepting from push notification", async () => {
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({ name: "General" });
@@ -1220,7 +1240,7 @@ test("single 'join' (without camera) button when last call was audio-only", asyn
     await click("button[title='Join Call']");
     await contains(".o-discuss-Call.o-selfInCall");
     await click("button[title='Disconnect']");
-    await click("button[title='Join Call']:text('Join')", { contains: ["[data-icon='phone']"] });
+    await click("button[title='Join Call']:text('Join')", { contains: ["[data-icon='phone_f']"] });
 });
 
 test("single 'join' (with camera) button when last call had camera on", async () => {
@@ -1248,7 +1268,7 @@ test("single 'join' (with camera) button when last call had camera on", async ()
     await contains(".o-discuss-CallParticipantCard[aria-label='Mitchell Admin'] video");
     await click("button[title='Disconnect']");
     await click("button[title='Join Video Call']:text('Join')", {
-        contains: ["[data-icon='videocam']"],
+        contains: ["[data-icon='videocam_f']"],
     });
 });
 

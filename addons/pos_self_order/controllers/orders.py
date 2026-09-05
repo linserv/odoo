@@ -4,6 +4,7 @@ from odoo import http
 from odoo.addons.google_address_autocomplete.controllers.google_address_autocomplete import AutoCompleteController
 from odoo.fields import Domain
 from odoo.http import request
+from odoo.http.stream import content_disposition
 from odoo.service.model import call_kw
 from werkzeug.exceptions import Forbidden, NotFound, BadRequest, Unauthorized
 from odoo.exceptions import MissingError
@@ -107,6 +108,16 @@ class PosSelfOrderController(http.Controller):
             })
             order._compute_line_price(new_line, price=preset.delivery_product_price)
 
+    @http.route('/pos-self-order/get-order/<int:order_id>', auth='public', type='jsonrpc', website=True)
+    def get_order(self, access_token, order_id, order_access_token):
+        pos_config = self._verify_pos_config(access_token)
+        pos_order = pos_config.env['pos.order'].browse(order_id)
+
+        if not pos_order.exists() or not consteq(pos_order.access_token, order_access_token):
+            raise MissingError(self.env._("Your order does not exist or has been removed"))
+
+        return self._generate_return_values(pos_order, pos_config)
+
     @http.route('/pos-self-order/validate-partner', auth='public', type='jsonrpc', website=True)
     def validate_partner(self, access_token, name, phone, street, zip, city, country_id, state_id=None, partner_id=None, email=None, preset_id=None):
         pos_config = self._verify_pos_config(access_token)
@@ -193,6 +204,16 @@ class PosSelfOrderController(http.Controller):
                 ('write_date', '>', data.get('write_date')),
                 ('state', '!=', data.get('state')),
             ]])
+
+        if (
+            table_identifier
+            and pos_config.self_ordering_service_mode == 'table'
+            and pos_config.self_ordering_pay_after == 'meal'
+        ):
+            table = pos_config.env['restaurant.table'].search([('identifier', '=', table_identifier)], limit=1)
+            if table:
+                domain = Domain.OR([domain, ['&', ('table_id', '=', table.id), ('state', '=', 'draft')]])
+
         orders = pos_config.env['pos.order'].search(domain)
         access_tokens = set({o.get('access_token') for o in order_access_tokens})
         # Do not use session.order_ids, it may fail if there is shared sessions
@@ -201,6 +222,27 @@ class PosSelfOrderController(http.Controller):
             # Remove orders that no longer exist on the server but are still shown in the self-order UI
             pos_config._notify('REMOVE_ORDERS', {'deleted_order_tokens': deleted_order_tokens})
         return self._generate_return_values(orders, pos_config) if orders else {}
+
+    @http.route('/pos-self-order/receipt/<int:order_id>', auth='public', type='http')
+    def pos_self_order_receipt(self, order_id, access_token=None):
+        pos_order_sudo = request.env['pos.order'].sudo().browse(order_id)
+
+        if not pos_order_sudo.exists() or not pos_order_sudo.access_token or pos_order_sudo.state not in ('paid', 'done', 'invoiced'):
+            return request.not_found()
+
+        if not access_token or not consteq(pos_order_sudo.access_token, access_token):
+            return request.not_found()
+
+        image = pos_order_sudo.with_company(pos_order_sudo.company_id).order_receipt_generate_image()
+        if not image:
+            return request.not_found()
+
+        return request.make_response(image, [
+            ('Content-Type', 'image/png'),
+            ('Content-Length', len(image)),
+            ('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"),
+            ('Content-Disposition', content_disposition(f'Receipt-{pos_order_sudo.name}.png')),
+        ])
 
     @http.route('/kiosk/payment/<int:pos_config_id>/<device_type>', auth='public', type='jsonrpc', website=True)
     def pos_self_order_kiosk_payment(self, pos_config_id, order, payment_method_id, access_token, device_type):
@@ -305,7 +347,12 @@ class PosSelfOrderController(http.Controller):
         The restaurant.table record is also returned with reduced privileges.
         """
         pos_config = self._verify_pos_config(access_token)
-        table_sudo = request.env["restaurant.table"].sudo().search([('identifier', '=', table_identifier)], limit=1)
+
+        if pos_config.self_ordering_service_mode == 'dynamic_qr':
+            table_sudo = self._verify_dynamic_qr_order_authorization(pos_config, order)
+        else:
+            table_sudo = request.env["restaurant.table"].sudo().search([('identifier', '=', table_identifier)], limit=1)
+
         preset = request.env['pos.preset'].sudo().browse(order.get('preset_id'))
         is_takeaway = order and pos_config.use_presets and preset and preset.service_at != 'table'
         if not table_sudo and not pos_config.self_ordering_mode == 'kiosk' and pos_config.self_ordering_service_mode == 'table' and not is_takeaway:
@@ -315,6 +362,16 @@ class PosSelfOrderController(http.Controller):
         user = pos_config.self_ordering_default_user_id
         table = table_sudo.sudo(False).with_company(company).with_user(user).with_context(allowed_company_ids=company.ids)
         return pos_config, table
+
+    def _verify_dynamic_qr_order_authorization(self, pos_config, order):
+        existing_order = request.env['pos.order'].sudo().search([('uuid', '=', order.get('uuid'))], limit=1)
+        if not existing_order or existing_order.config_id != pos_config:
+            raise Unauthorized("Self-order is disabled for this table; scan the QR code provided by the staff")
+        if existing_order.state != 'draft':
+            raise Unauthorized("This order has already been paid; ask our staff for a new QR code")
+        if not order.get('access_token') or not consteq(existing_order.access_token or '', order.get('access_token')):
+            raise Unauthorized("Invalid order access token")
+        return existing_order.table_id.sudo()
 
     @http.route(['/pos-self/ping'], type='jsonrpc', auth='public')
     def pos_ping(self, access_token):

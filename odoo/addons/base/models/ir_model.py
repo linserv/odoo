@@ -569,6 +569,12 @@ class IrModel(models.Model):
 # retrieve field types defined by the framework only (not extensions)
 FIELD_TYPES = [(key, key) for key in sorted(fields.Field._by_type__)]
 
+FIELD_INDEX_TYPES = [
+    ('btree', 'B-tree'),
+    ('btree_not_null', 'B-tree, excluding nulls'),
+    ('trigram', 'Trigram'),
+]
+
 
 class IrModelFields(models.Model):
     _name = 'ir.model.fields'
@@ -604,7 +610,15 @@ class IrModelFields(models.Model):
                                        store=True, string="Related Field", ondelete='cascade')
     required = fields.Boolean()
     readonly = fields.Boolean()
-    index = fields.Boolean(string='Indexed')
+    index = fields.Selection(
+        FIELD_INDEX_TYPES,
+        string='Index',
+        help="The kind of database index requested for this field. "
+             "B-tree indexes support equality and range searches; excluding nulls makes the index smaller "
+             "when most values are empty; trigram indexes speed up text pattern searches. "
+             "Leaving this empty does not remove an index that already exists.",
+    )
+    allowed_index_types = fields.Json(compute='_compute_allowed_index_types')
     translate = fields.Selection([
         ('standard', 'Translate as a whole'),
         ('html_translate', 'Translate HTML terms'),
@@ -684,6 +698,46 @@ class IrModelFields(models.Model):
     def _compute_copied(self):
         for rec in self:
             rec.copied = (rec.ttype != 'one2many') and not (rec.related or rec.compute)
+
+    def _get_allowed_index_types(self):
+        self.ensure_one()
+        if not self.store or self.ttype in ('one2many', 'many2many'):
+            return []
+
+        allowed = [] if self.translate else ['btree', 'btree_not_null']
+        if (
+            self.ttype in ('char', 'text', 'html')
+            and not self.company_dependent
+            and self.env.registry.has_trigram
+        ):
+            allowed.append('trigram')
+        return allowed
+
+    @api.depends('state', 'ttype', 'store', 'translate', 'company_dependent')
+    def _compute_allowed_index_types(self):
+        for field in self:
+            field.allowed_index_types = field._get_allowed_index_types()
+
+    @api.onchange('store', 'ttype', 'translate', 'company_dependent')
+    def _onchange_index(self):
+        for field in self:
+            if field.index and field.index not in field._get_allowed_index_types():
+                field.index = False
+
+    @api.constrains('index', 'state', 'ttype', 'store', 'translate', 'company_dependent')
+    def _check_index(self):
+        for field in self:
+            if field.state != 'manual' or not field.index:
+                continue
+            if not field.store or field.ttype in ('one2many', 'many2many'):
+                raise ValidationError(_("Only stored fields with a database column can be indexed."))
+            if field.translate and field.index != 'trigram':
+                raise ValidationError(_("Translated fields only support trigram indexes."))
+            if field.index == 'trigram':
+                if field.ttype not in ('char', 'text', 'html') or field.company_dependent:
+                    raise ValidationError(_("Trigram indexes are only supported on stored Char, Text, and HTML fields."))
+                if not field.env.registry.has_trigram:
+                    raise ValidationError(_("Trigram indexes require the PostgreSQL pg_trgm extension."))
 
     @api.depends()
     def _in_modules(self):
@@ -1094,6 +1148,8 @@ class IrModelFields(models.Model):
     def create(self, vals_list):
         IrModel = self.env['ir.model']
         for vals in vals_list:
+            if 'index' in vals:
+                vals['index'] = 'btree' if vals['index'] is True else vals['index'] or None
             if vals.get('translate') and not isinstance(vals['translate'], str):
                 _logger.warning("Deprecated since Odoo 19, ir.model.fields.translate becomes Selection, the value should be a string")
                 vals['translate'] = 'html_translate' if vals.get('ttype') == 'html' else 'standard'
@@ -1143,6 +1199,9 @@ class IrModelFields(models.Model):
 
         return res
 
+    def _get_writable_properties(self):
+        return [fname for fname in self._fields if self._fields[fname].translate]
+
     def write(self, vals):
         if not self:
             return True
@@ -1152,8 +1211,10 @@ class IrModelFields(models.Model):
 
         # names of the models to patch
         patched_models = set()
-        translate_only = all(self._fields[field_name].translate for field_name in vals)
-        if vals and self and not translate_only:
+
+        writable_properties = self._get_writable_properties()
+        writable_properties_only = all(field_name in writable_properties for field_name in vals)
+        if vals and self and not writable_properties_only:
             for item in self:
                 if item.state != 'manual':
                     raise UserError(_('Properties of base fields cannot be altered in this manner! '
@@ -1191,6 +1252,10 @@ class IrModelFields(models.Model):
             if column_name in vals:
                 del vals[column_name]
 
+        if 'index' in vals:
+            index = vals['index']
+            vals['index'] = 'btree' if index is True or index == 'True' else index or None
+
         if vals.get('translate') and not isinstance(vals['translate'], str):
             _logger.warning("Deprecated since Odoo 19, ir.model.fields.translate becomes Selection, the value should be a string")
             vals['translate'] = 'html_translate' if vals.get('ttype') == 'html' else 'standard'
@@ -1221,7 +1286,7 @@ class IrModelFields(models.Model):
                         SQL.identifier(f'{table}_{newname}_index'),
                     ))
 
-        if column_rename or patched_models or translate_only:
+        if column_rename or patched_models or writable_properties_only:
             # setup models, this will reload all manual fields in registry
             self.env.flush_all()
             model_names = OrderedSet(self.mapped('model'))
@@ -1256,7 +1321,7 @@ class IrModelFields(models.Model):
             'ttype': field.type,
             'state': 'manual' if field.manual else 'base',
             'relation': field.comodel_name if field.relational else None,
-            'index': bool(field.index),
+            'index': 'btree' if field.index is True else field.index or None,
             'store': bool(field.store),
             'copied': bool(field.copy),
             'on_delete': field.ondelete if field.type == 'many2one' else None,
@@ -1372,7 +1437,7 @@ class IrModelFields(models.Model):
             'manual': True,
             'string': field_data['field_description'],
             'help': field_data['help'],
-            'index': bool(field_data['index']),
+            'index': field_data['index'],
             'copy': bool(field_data['copied']),
             'related': field_data['related'],
             'required': bool(field_data['required']),
@@ -1387,6 +1452,8 @@ class IrModelFields(models.Model):
             )
             if field_data['ttype'] == 'char':
                 attrs['size'] = field_data['size'] or None
+                if attrs['copy']:
+                    attrs.pop('copy')  # use the default setting for "(copy)"
             elif field_data['ttype'] == 'html':
                 attrs['sanitize'] = field_data['sanitize']
                 attrs['sanitize_overridable'] = field_data['sanitize_overridable']
@@ -1951,6 +2018,7 @@ class IrModelConstraint(models.Model):
 
     name = fields.Char(
         string='Constraint', required=True, index=True, readonly=True,
+        copy=lambda c: f'{c.name}_name',
         help="PostgreSQL constraint or foreign key name.")
     definition = fields.Char(help="PostgreSQL constraint definition", readonly=True)
     message = fields.Char(help="Error message returned when the constraint is violated.", translate=True)
@@ -2015,10 +2083,6 @@ class IrModelConstraint(models.Model):
                 _logger.info('Dropped INDEX %s@%s', name, data.model.model)
 
         return super().unlink()
-
-    def copy_data(self, default=None):
-        vals_list = super().copy_data(default=default)
-        return [dict(vals, name=constraint.name + '_copy') for constraint, vals in zip(self, vals_list)]
 
     def _reflect_constraint(self, model, conname, type, definition, module, message=None):
         """ Reflect the given constraint, and return its corresponding record.
@@ -2297,6 +2361,7 @@ class IrModelData(models.Model):
 
         # query xml_ids by prefix
         result = []
+        self.flush_model()
         for prefix, suffixes in bymodule.items():
             query = SQL("""
                 SELECT d.id, d.module, d.name, d.model, d.res_id, d.noupdate, r.id

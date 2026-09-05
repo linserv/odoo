@@ -73,6 +73,7 @@ owl.onWillRender = function onWillRender(cb) {
     };
 };
 
+/** kept for spreadsheet */
 owl.useComponent = function useComponent() {
     return owl.useScope().component;
 };
@@ -128,7 +129,7 @@ owl.useLayoutEffect = function useLayoutEffect(effect, computeDependencies = () 
 class EnvPlugin extends owl.Plugin {
     static id = "__ENV__";
     static sequence = 0;
-    env = owl.config("env");
+    env = owl.useConfig("env");
 }
 
 function useEnv() {
