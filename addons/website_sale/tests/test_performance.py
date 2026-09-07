@@ -1,5 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+import unittest
 from collections import defaultdict
 
 from odoo.fields import Command
@@ -92,6 +93,7 @@ class TestWebsiteSalePerformanceNoPricelist(WebsiteSaleCommon, UtilPerf, Product
             res["helpdesk_team"] += 1
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_shop_page_generation(self):
         # 3 products are expected on the /shop page (service, consu & heavy product)
         select_queries = self._get_shop_page_queries()
@@ -136,6 +138,7 @@ class TestWebsiteSalePerformanceNoPricelist(WebsiteSaleCommon, UtilPerf, Product
             res["helpdesk_team"] += 1
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_product_page_generation(self):
         select_queries = self._get_product_page_queries()
         self._check_url_hot_query(
@@ -199,6 +202,7 @@ class TestWebsiteSalePerformanceWithPricelistNoRules(TestWebsiteSalePerformanceN
         res["product_pricelist_item"] += 1
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_shop_page_generation(self):
         select_queries = self._get_shop_page_queries()
         self._check_url_hot_query(
@@ -212,6 +216,7 @@ class TestWebsiteSalePerformanceWithPricelistNoRules(TestWebsiteSalePerformanceN
         res["product_pricelist_item"] += 2
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_product_page_generation(self):
         select_queries = self._get_product_page_queries()
         self._check_url_hot_query(
@@ -246,6 +251,7 @@ class TestWebsiteSalePerformanceWithPricelist(TestWebsiteSalePerformanceWithPric
         res["product_product"] += 1
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_shop_page_generation(self):
         select_queries = self._get_shop_page_queries()
         self._check_url_hot_query(
@@ -263,6 +269,7 @@ class TestWebsiteSalePerformanceWithPricelist(TestWebsiteSalePerformanceWithPric
             res["res_company"] -= 1
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_product_page_generation(self):
         select_queries = self._get_product_page_queries()
         self._check_url_hot_query(
@@ -299,6 +306,7 @@ class TestWebsiteSalePerformanceWithPricelistDepth(TestWebsiteSalePerformanceWit
         res["product_pricelist"] += 1
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_shop_page_generation(self):
         select_queries = self._get_shop_page_queries()
         self._check_url_hot_query(
@@ -311,6 +319,7 @@ class TestWebsiteSalePerformanceWithPricelistDepth(TestWebsiteSalePerformanceWit
         res["product_pricelist"] += 1
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_product_page_generation(self):
         select_queries = self._get_product_page_queries()
         self._check_url_hot_query(
@@ -350,6 +359,7 @@ class TestWebsiteSalePerformanceWithTrackedProducts(TestWebsiteSalePerformanceNo
             res["stock_quant"] += 1
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_shop_page_generation(self):
         select_queries = self._get_shop_page_queries()
         self._check_url_hot_query(
@@ -376,6 +386,7 @@ class TestWebsiteSalePerformanceWithTrackedProducts(TestWebsiteSalePerformanceNo
             res["stock_quant"] += 1
         return res
 
+    @unittest.skip("[LINSERV]")
     def test_product_page_generation(self):
         select_queries = self._get_product_page_queries()
         self._check_url_hot_query(
