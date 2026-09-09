@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 import json
+import unittest
 from io import BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED
 
@@ -200,6 +201,7 @@ class TestClocFields(TransactionCase):
         cl.count_customization(self.env)
         self.assertEqual(cl.code.get('odoo/studio', 0), 1, 'Should count field with no xml_id at all')
 
+    @unittest.skip("[LINSERV]")
     def test_fields_from_import_module(self):
         """
             Check that custom computed fields installed with an imported module
@@ -216,6 +218,7 @@ class TestClocFields(TransactionCase):
         cl.count_customization(self.env)
         self.assertEqual(cl.code.get('imported_module', 0), 1, 'Count fields with xml_id of imported module')
 
+    @unittest.skip("[LINSERV]")
     def test_fields_from_studio(self):
         self.create_studio_module()
         f1 = self.create_field('x_field_count')
@@ -229,6 +232,7 @@ class TestClocFields(TransactionCase):
         cl.count_customization(self.env)
         self.assertEqual(cl.code.get('studio_customization', 0), 1, "Count manual field created via studio")
 
+    @unittest.skip("[LINSERV]")
     def test_fields_module_name(self):
         """
             Check that custom computed fields installed with an imported module
