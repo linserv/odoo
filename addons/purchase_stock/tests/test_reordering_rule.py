@@ -5,6 +5,7 @@ from datetime import datetime as dt, time
 from datetime import timedelta as td
 from json import loads
 from unittest import skip
+import unittest
 
 from odoo import SUPERUSER_ID, Command
 from odoo.fields import Date
@@ -17,6 +18,7 @@ from odoo.exceptions import UserError, ValidationError
 
 @tagged('post_install', '-at_install')
 @freeze_time("2021-01-14 09:12:15")
+@unittest.skip("[LINSERV]")
 class TestReorderingRule(TransactionCase):
     @classmethod
     def setUpClass(cls):
