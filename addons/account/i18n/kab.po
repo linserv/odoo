@@ -10,17 +10,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 11.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-19 23:29+0000\n"
-"Last-Translator: Weblate <noreply-mt-weblate@weblate.org>\n"
-"Language-Team: Kabyle <https://translate.odoo.com/projects/odoo-master/"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 15:52+0000\n"
+"Last-Translator: Anonymous <noreply@weblate.org>\n"
+"Language-Team: Kabyle <https://translate.odoo.com/projects/odoo-s19-4/"
 "account/kab/>\n"
 "Language: kab\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_journal__type
@@ -5294,6 +5294,11 @@ msgid "Catalog"
 msgstr ""
 
 #. module: account
+#: model:ir.model.fields,field_description:account.field_product_product__catalog_is_in_selected_section
+msgid "Catalog Is In Selected Section"
+msgstr ""
+
+#. module: account
 #: model:ir.model.fields,field_description:account.field_account_analytic_line__category
 #: model_terms:ir.ui.view,arch_db:account.view_account_analytic_line_filter_inherit_account
 msgid "Category"
@@ -5929,6 +5934,12 @@ msgstr ""
 #, fuzzy
 msgid "Contents"
 msgstr "Igburen"
+
+#. module: account
+#. odoo-javascript
+#: code:addons/account/static/src/js/tours/account.js:0
+msgid "Continue with the default document layout."
+msgstr ""
 
 #. module: account
 #: model:account.account,description:account.24_l10n_id_12281430
@@ -14597,6 +14608,11 @@ msgid "Overdue Amount"
 msgstr ""
 
 #. module: account
+#: model_terms:ir.ui.view,arch_db:account.res_partner_view_search
+msgid "Overdue Invoices"
+msgstr ""
+
+#. module: account
 #. odoo-python
 #: code:addons/account/controllers/portal.py:0
 msgid "Overdue invoices"
@@ -15770,11 +15786,6 @@ msgstr ""
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_resequence_wizard__preview_moves
 msgid "Preview Moves"
-msgstr ""
-
-#. module: account
-#: model_terms:ir.ui.view,arch_db:account.view_move_form
-msgid "Preview invoice"
 msgstr ""
 
 #. module: account
@@ -23555,39 +23566,8 @@ msgid ""
 "{{ object.name or 'n/a' }})"
 msgstr ""
 
-#~ msgid "%s (copy)"
-#~ msgstr "%s (Anɣel )"
+msgid "Website Messages"
+msgstr "Iznan n n usmel  Web"
 
-#, fuzzy
-#~ msgid "(copy)"
-#~ msgstr "(nɣel)"
-
-#, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-clock-o\" aria-label=\"Date\" role=\"img\" "
-#~ "title=\"Date\"/>"
-#~ msgstr ""
-#~ "<i class=\"fa fa-clock-o\" aria-label=\"Azemz\" role=\"img\" "
-#~ "title=\"Azemz\"/>"
-
-#, fuzzy
-#~ msgid "<i class=\"fa fa-download\"/> Download"
-#~ msgstr "<i class=\"fa fa-download\"/> Zdem"
-
-#, fuzzy
-#~ msgid "<i class=\"oi oi-arrow-right me-1\"/>Back to settings"
-#~ msgstr "<i class=\"oi oi-arrow-right me-1\"/>uɣal ar iɣewwaṛen"
-
-#, fuzzy
-#~ msgid ""
-#~ "<i class=\"oi oi-arrow-right\"/>\n"
-#~ "                                                Preview"
-#~ msgstr ""
-#~ "<i class=\"oi oi-arrow-right\"/>\n"
-#~ "                                                Tamuɣli"
-
-#~ msgid "Website Messages"
-#~ msgstr "Iznan n n usmel  Web"
-
-#~ msgid "Website communication history"
-#~ msgstr "Amazray n Taywalt n usmel  Web"
+msgid "Website communication history"
+msgstr "Amazray n Taywalt n usmel  Web"

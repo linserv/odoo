@@ -220,6 +220,18 @@
             </field>
         </record>
 
+        <record id="action_production_order_unbuild" model="ir.actions.server">
+            <field name="name">Unbuild</field>
+            <field name="model_id" ref="mrp.model_mrp_production"/>
+            <field name="binding_model_id" ref="mrp.model_mrp_production"/>
+            <field name="binding_view_types">form</field>
+            <field name="state">code</field>
+            <field name="code">
+            if record and record.state == 'done':
+                action = record.button_unbuild()
+            </field>
+        </record>
+
         <record id="mrp_production_form_view" model="ir.ui.view">
             <field name="name">mrp.production.form</field>
             <field name="model">mrp.production</field>
@@ -243,7 +255,8 @@
                             confirm="Are you sure you want to cancel this manufacturing order?&#10;This action cannot be undone."
                             confirm-title="Cancel Manufacturing Order"
                             confirm-label="Cancel this Order"/>
-                    <button name="button_unbuild" type="object" string="Unbuild" invisible="state != 'done'" data-hotkey="shift+v"/>
+                    <button name="action_reset_to_draft" type="object" string="Reset to Draft" invisible="state != 'cancel'" groups="mrp.group_mrp_manager"/>
+                    <button name="action_reset_to_progress" type="object" string="Set to In Progress" invisible="state != 'done'" groups="mrp.group_mrp_manager"/>
                 </header>
                 <sheet>
                     <field name="reservation_state" invisible="1"/>
@@ -323,7 +336,7 @@
                                 <span class="o_stat_text">Packages</span>
                             </div>
                         </button>
-                        <button class="oe_stat_button" name="action_view_serial_numbers" type="object" icon="build" invisible="serial_numbers_count == 0">
+                        <button class="oe_stat_button" name="action_view_serial_numbers" type="object" icon="build" invisible="serial_numbers_count == 0 or state == 'draft'">
                             <div class="o_field_widget o_stat_info">
                                 <span class="o_stat_value"><field name="serial_numbers_count"/></span>
                                 <span class="o_stat_text">Serial Numbers</span>
@@ -362,7 +375,7 @@
                                 </button>
                                 <button name="action_update_bom" string="Update BoM" type="object"
                                     title="Note that another version of this BOM is available." class="text-danger"
-                                    invisible="not is_outdated_bom or state not in ['draft', 'confirmed']"/>
+                                    invisible="not is_outdated_bom or state not in ['draft', 'confirmed', 'progress', 'to_close']"/>
                             </div>
                             <label for="product_qty" string="Quantity" class="d-touch-none"/>
                             <div class="o_row g-0 d-flex" name="qty">
@@ -389,10 +402,10 @@
                                 <field name="lot_producing_ids" widget="many2many_tags" options="{'on_tag_click': 'open_form'}"
                                     invisible="product_tracking in ('none', False) or (product_tracking == 'serial' and (product_qty > 1 or serial_numbers_count > 1))"
                                     readonly="lot_producing_ids" force_save="1" context="{'default_product_id': product_id}"/>
-                                <button name="action_generate_serial" type="object" class="btn btn-primary o_right_alignment" string="Generate Serial" aria-label="Creates a new serial number" role="img" invisible="product_tracking in ('none', 'lot', False) or lot_producing_ids"/>
-                                <button name="action_generate_serial" type="object" class="btn btn-secondary o_right_alignment" string="Generate Serial" aria-label="Creates a new serial number" role="img" invisible="product_tracking in ('none', 'lot', False) or not lot_producing_ids or product_qty == 1"/>
-                                <button name="action_generate_serial" type="object" class="btn btn-primary o_right_alignment" string="Generate Lot" aria-label="Creates a new lot number" role="img" invisible="product_tracking in ('none', 'serial', False) or lot_producing_ids"/>
-                                <button name="action_clear_lot_producing_ids" type="object" class="btn btn-secondary o_right_alignment" string="Clear" aria-label="Clears the selected lot/serial number" role="img" invisible="state == 'done' or  (product_tracking == 'serial' and product_qty > 1) or not lot_producing_ids"/>
+                                <button name="action_generate_serial" type="object" class="btn btn-primary o_right_alignment" string="Generate Serial Numbers" aria-label="Creates new serial numbers" role="img" invisible="product_tracking in ('none', 'lot', False) or lot_producing_ids"/>
+                                <button name="action_generate_serial" type="object" class="btn btn-secondary o_right_alignment" string="Edit Serial Numbers" aria-label="Edit generated serial numbers" role="img" invisible="state == 'done' or product_tracking in ('none', 'lot', False) or not lot_producing_ids or (serial_numbers_count &lt;= 1 and product_qty &lt;= 1)"/>
+                                <button name="action_generate_serial" type="object" class="btn btn-primary o_right_alignment" string="Generate Lot Number" aria-label="Creates a new lot number" role="img" invisible="product_tracking in ('none', 'serial', False) or lot_producing_ids"/>
+                                <button name="action_clear_lot_producing_ids" type="object" class="btn btn-secondary o_right_alignment" string="Clear" aria-label="Clears the selected lot/serial number" role="img" invisible="state == 'done' or (product_tracking == 'serial' and (product_qty > 1 or serial_numbers_count > 1)) or not lot_producing_ids"/>
                             </div>
                         </group>
                         <group name="group_extra_info">
@@ -418,7 +431,7 @@
                             <field name="user_id" widget="many2one_avatar" readonly="state in ['cancel', 'done']"/>
                             <field name="show_final_lots" invisible="1"/>
                             <field name="production_location_id" invisible="1" readonly="1"/>
-                            <field name="move_finished_ids" mode="list,kanban" invisible="1" readonly="state == 'cancel' or (state == 'done' and is_locked)">
+                            <field name="move_finished_ids" invisible="1" readonly="state == 'cancel' or (state == 'done' and is_locked)">
                                 <list editable="bottom">
                                     <field name="product_id" readonly="state == 'done'"/>
                                     <field name="product_uom_qty" readonly="state == 'done'"/>

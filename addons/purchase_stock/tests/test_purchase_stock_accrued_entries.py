@@ -61,6 +61,7 @@ class TestAccruedPurchaseStock(AccountTestInvoicingCommon):
         wizard = self.env['account.accrued.orders.wizard'].with_context({
             'active_model': 'purchase.order',
             'active_ids': self.purchase_order.ids,
+            'default_accrual_type': 'bill_to_receive',
         }).create({
             'account_id': self.account_expense.id,
             'date': '2020-01-01',
@@ -118,6 +119,7 @@ class TestAccruedPurchaseStock(AccountTestInvoicingCommon):
         wizard = self.env['account.accrued.orders.wizard'].with_context({
             'active_model': 'purchase.order',
             'active_ids': self.purchase_order.ids,
+            'default_accrual_type': 'billed_not_received',
         }).create({
             'account_id': self.company_data['default_account_expense'].id,
             'date': '2020-01-02',
@@ -221,6 +223,7 @@ class TestAccruedPurchaseStock(AccountTestInvoicingCommon):
         wizard = self.env['account.accrued.orders.wizard'].with_context({
             'active_model': 'purchase.order',
             'active_ids': [purchase_order.id],
+            'default_accrual_type': 'billed_not_received',
         }).create({
             'account_id': account_receivable.id,
             'date': '2025-05-31',
@@ -232,20 +235,21 @@ class TestAccruedPurchaseStock(AccountTestInvoicingCommon):
         self.assertRecordValues(account_moves.line_ids.sorted('id'), [
             # Accrued revenues entries.
             {'account_id': self.account_expense.id, 'debit': 0, 'credit': 2000},
-            {'account_id': account_receivable.id, 'debit': 2000, 'credit': 0},
             {'account_id': stock_price_diff_acc_id.id, 'debit': 0, 'credit': 400},
             {'account_id': account_stock_variation.id, 'debit': 400, 'credit': 0},
+            {'account_id': account_receivable.id, 'debit': 2000, 'credit': 0},
             # Reversal of accrued revenues entries.
             {'account_id': self.account_expense.id, 'debit': 2000, 'credit': 0},
-            {'account_id': account_receivable.id, 'debit': 0, 'credit': 2000},
             {'account_id': stock_price_diff_acc_id.id, 'debit': 400, 'credit': 0},
             {'account_id': account_stock_variation.id, 'debit': 0, 'credit': 400},
+            {'account_id': account_receivable.id, 'debit': 0, 'credit': 2000},
         ])
 
         # Use accrued order wizard and check generated values (at last week.)
         wizard = self.env['account.accrued.orders.wizard'].with_context({
             'active_model': 'purchase.order',
             'active_ids': [purchase_order.id],
+            'default_accrual_type': 'billed_not_received',
         }).create({
             'account_id': account_receivable.id,
             'date': fields.Date.today() - relativedelta(days=7),
@@ -257,20 +261,21 @@ class TestAccruedPurchaseStock(AccountTestInvoicingCommon):
         self.assertRecordValues(account_moves.line_ids.sorted('id'), [
             # Accrued revenues entries.
             {'account_id': self.account_expense.id, 'debit': 0, 'credit': 6500},
-            {'account_id': account_receivable.id, 'debit': 6500, 'credit': 0},
             {'account_id': stock_price_diff_acc_id.id, 'debit': 0, 'credit': 900},
             {'account_id': account_stock_variation.id, 'debit': 900, 'credit': 0},
+            {'account_id': account_receivable.id, 'debit': 6500, 'credit': 0},
             # Reversal of accrued revenues entries.
             {'account_id': self.account_expense.id, 'debit': 6500, 'credit': 0},
-            {'account_id': account_receivable.id, 'debit': 0, 'credit': 6500},
             {'account_id': stock_price_diff_acc_id.id, 'debit': 900, 'credit': 0},
             {'account_id': account_stock_variation.id, 'debit': 0, 'credit': 900},
+            {'account_id': account_receivable.id, 'debit': 0, 'credit': 6500},
         ])
 
         # Use accrued order wizard and check generated values (at yesterday.)
         wizard = self.env['account.accrued.orders.wizard'].with_context({
             'active_model': 'purchase.order',
             'active_ids': [purchase_order.id],
+            'default_accrual_type': 'billed_not_received',
         }).create({
             'account_id': account_receivable.id,
             'date': fields.Date.today() - relativedelta(days=1),
@@ -282,20 +287,21 @@ class TestAccruedPurchaseStock(AccountTestInvoicingCommon):
         self.assertRecordValues(account_moves.line_ids.sorted('id'), [
             # Accrued revenues entries.
             {'account_id': self.account_expense.id, 'debit': 0, 'credit': 5500},
-            {'account_id': account_receivable.id, 'debit': 5500, 'credit': 0},
             {'account_id': stock_price_diff_acc_id.id, 'debit': 0, 'credit': 700},
             {'account_id': account_stock_variation.id, 'debit': 700, 'credit': 0},
+            {'account_id': account_receivable.id, 'debit': 5500, 'credit': 0},
             # Reversal of accrued revenues entries.
             {'account_id': self.account_expense.id, 'debit': 5500, 'credit': 0},
-            {'account_id': account_receivable.id, 'debit': 0, 'credit': 5500},
             {'account_id': stock_price_diff_acc_id.id, 'debit': 700, 'credit': 0},
             {'account_id': account_stock_variation.id, 'debit': 0, 'credit': 700},
+            {'account_id': account_receivable.id, 'debit': 0, 'credit': 5500},
         ])
 
         # Use accrued order wizard and check generated values (at today.)
         wizard = self.env['account.accrued.orders.wizard'].with_context({
             'active_model': 'purchase.order',
             'active_ids': [purchase_order.id],
+            'default_accrual_type': 'billed_not_received',
         }).create({
             'account_id': account_receivable.id,
             'date': fields.Date.today(),
@@ -307,35 +313,32 @@ class TestAccruedPurchaseStock(AccountTestInvoicingCommon):
         self.assertRecordValues(account_moves.line_ids.sorted('id'), [
             # Accrued revenues entries.
             {'account_id': self.account_expense.id, 'debit': 0, 'credit': 3500},
-            {'account_id': account_receivable.id, 'debit': 3500, 'credit': 0},
             {'account_id': stock_price_diff_acc_id.id, 'debit': 0, 'credit': 300},
             {'account_id': account_stock_variation.id, 'debit': 300, 'credit': 0},
+            {'account_id': account_receivable.id, 'debit': 3500, 'credit': 0},
             # Reversal of accrued revenues entries.
             {'account_id': self.account_expense.id, 'debit': 3500, 'credit': 0},
-            {'account_id': account_receivable.id, 'debit': 0, 'credit': 3500},
             {'account_id': stock_price_diff_acc_id.id, 'debit': 300, 'credit': 0},
             {'account_id': account_stock_variation.id, 'debit': 0, 'credit': 300},
+            {'account_id': account_receivable.id, 'debit': 0, 'credit': 3500},
         ])
 
     def test_purchase_stock_accruals_ordered_quantities_no_receipt(self):
-        """Test that accrued expense entries are created from the ordered quantity for
-        a storable product with ordered-quantity control."""
+        """Test that nothing is accrued for a storable, ordered-quantity-controlled
+        product that hasn't been received (or invoiced) yet: the accrual is always
+        based on received/invoiced quantities, regardless of the invoicing policy."""
         self.purchase_order.order_line.product_id.update({
             'is_storable': True,
             'purchase_method': 'purchase',
         })
+        self.assertFalse(self.purchase_order.order_line.amount_to_invoice_at_date)
         wizard = self.env['account.accrued.orders.wizard'].with_context({
             'active_model': 'purchase.order',
             'active_ids': self.purchase_order.ids,
+            'default_accrual_type': 'bill_to_receive',
         }).create({
             'account_id': self.account_expense.id,
             'date': fields.Date.context_today(self),
         })
-        self.assertRecordValues(self.env['account.move'].search(wizard.create_entries()['domain']).line_ids, [
-            # reverse move lines
-            {'account_id': self.account_expense.id, 'debit': 0, 'credit': 300},
-            {'account_id': wizard.account_id.id, 'debit': 300, 'credit': 0},
-            # move lines
-            {'account_id': self.account_expense.id, 'debit': 300, 'credit': 0},
-            {'account_id': wizard.account_id.id, 'debit': 0, 'credit': 300},
-        ])
+        with self.assertRaises(UserError):
+            wizard.create_entries()

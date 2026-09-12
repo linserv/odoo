@@ -1154,9 +1154,10 @@ class BaseCase(case.TestCase):
             return
         http_request_required_key = self.http_request_key
         # Read from the raw transmitted cookies rather than request.cookies.
-        # The latter can be cleared by a handler (e.g. downgrade_to_public_user
-        # in livechat CORS flows) before a new cursor is opened, which would
-        # incorrectly fail this check even though the cookie was sent by the test.
+        # The latter can be cleared by a handler (e.g. the force_guest auth
+        # method in livechat CORS flows) before a new cursor is opened, which
+        # would incorrectly fail this check even though the cookie was sent by
+        # the test.
         http_request_key = request.httprequest.cookies.get(TEST_CURSOR_COOKIE_NAME)
         if http_request_key != http_request_required_key:
             expected = http_request_required_key
@@ -1394,12 +1395,26 @@ class TransactionCase(BaseCase):
         cls.env = api.Environment(cls.cr, api.SUPERUSER_ID, {})
         cls.env.transaction._wrote__ = True  # isolate tests: avoid propagating cache on rollback
 
-        # speedup CryptContext. Many user an password are done during tests, avoid spending time hasing password with many rounds
+        # speedup CryptContext. Many password-type logins are done during tests, avoid spending time hashing password with many rounds
         def _crypt_context(self):  # noqa: ARG001
-            return CryptContext(
+            cryptCtx = CryptContext(
                 ['pbkdf2_sha512', 'plaintext'],
                 pbkdf2_sha512__rounds=1,
             )
+            # The modified hash configuration causes rotation of the in-database password hash values.
+            # Rotating password hashes mid-test causes session_id rotation leading into indeterministic 'user not logged in' errors.
+            # Never returning a replacement hash prevents this problem.
+            original_verify_and_update = cryptCtx.verify_and_update
+
+            def mock_verify_and_update(*args, **kwargs):
+                valid, replacement_hash = original_verify_and_update(*args, **kwargs)
+                if replacement_hash:
+                    _logger.info("Surpressing hash update in CryptContext override")
+                return valid, None
+
+            cryptCtx.verify_and_update = mock_verify_and_update
+            return cryptCtx
+
         cls._crypt_context_patcher = patch('odoo.addons.base.models.res_users.ResUsersPatchedInTest._crypt_context', _crypt_context)
         cls.startClassPatcher(cls._crypt_context_patcher)
 

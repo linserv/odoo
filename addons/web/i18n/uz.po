@@ -14,17 +14,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:43+0000\n"
-"PO-Revision-Date: 2026-06-21 05:29+0000\n"
+"POT-Creation-Date: 2026-09-04 17:46+0000\n"
+"PO-Revision-Date: 2026-08-31 21:09+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Uzbek <https://translate.odoo.com/projects/odoo-master/web/uz/"
+"Language-Team: Uzbek <https://translate.odoo.com/projects/odoo-s19-4/web/uz/"
 ">\n"
 "Language: uz\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: web
 #: model:ir.module.module,description:base.module_web
@@ -1037,6 +1037,7 @@ msgstr "Qovg‘a"
 
 #. module: web
 #. odoo-javascript
+#: code:addons/web/static/src/core/errors/error_dialogs.xml:0
 #: code:addons/web/static/src/model/relational_model/dynamic_list.js:0
 #: code:addons/web/static/src/views/form/form_controller.js:0
 #: code:addons/web/static/src/views/kanban/kanban_controller.js:0
@@ -2726,6 +2727,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/confirmation_dialog/confirmation_dialog.js:0
 #: code:addons/web/static/src/core/domain_selector_dialog/domain_selector_dialog.js:0
+#: code:addons/web/static/src/core/errors/error_dialogs.xml:0
 #: code:addons/web/static/src/core/expression_editor_dialog/expression_editor_dialog.xml:0
 #: code:addons/web/static/src/core/signature/signature_dialog.xml:0
 #: code:addons/web/static/src/search/search_model.js:0
@@ -2836,10 +2838,8 @@ msgstr ""
 #. module: web
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
-#, fuzzy
-msgid "Displays a warning icon if the input dates are in the future."
+msgid "Displays a warning icon for dates in the future or in the past."
 msgstr ""
-"Kiritilgan sanalar kelajakda bo‘lsa, ogohlantirish belgisini ko‘rsatadi"
 
 #. module: web
 #. odoo-javascript
@@ -3722,6 +3722,12 @@ msgstr "To‘liq ism"
 
 #. module: web
 #. odoo-javascript
+#: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
+msgid "Future date"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
 #: code:addons/web/static/src/webclient/settings_form_view/widgets/res_config_edition.xml:0
 #, fuzzy
 msgid "GNU LGPL Licensed"
@@ -3956,6 +3962,18 @@ msgstr ""
 "Xyuston, bizda ma'lumotlar bazasini nomlash muammosi bor! Ma'lumotlar bazasi "
 "nomida faqat harflar, raqamlar, pastki chiziqlar, chiziqchalar yoki "
 "nuqtalardan foydalaning, shunda hammasi joyida bo‘ladi."
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/core/errors/error_dialogs.js:0
+msgid "How about archiving it instead?"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/core/errors/error_dialogs.js:0
+msgid "How about archiving them instead?"
+msgstr ""
 
 #. module: web
 #. odoo-javascript
@@ -5757,12 +5775,24 @@ msgstr "Joriy amaldagi '%s' turidagi ko‘rinish topilmadi."
 
 #. module: web
 #. odoo-javascript
+#: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
+msgid "No warning"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
 #: code:addons/web/static/src/views/calendar/calendar_controller.js:0
 #: code:addons/web/static/src/views/view_hook.js:0
 #: code:addons/web/static/src/webclient/offline_systray/offline_systray.js:0
 #, fuzzy
 msgid "No, keep it"
 msgstr "Yo‘q, shundayligicha qolsin"
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/core/errors/error_dialogs.js:0
+msgid "Non-deletable records"
+msgstr ""
 
 #. module: web
 #. odoo-javascript
@@ -5799,6 +5829,20 @@ msgid ""
 msgstr ""
 "Joriy modelda valyuta mavjud bo‘lmagani sababli pul maydonini yaratish "
 "imkonsiz."
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/core/errors/error_dialogs.js:0
+msgid ""
+"Not possible to delete all the records because some are used in %"
+"(model_name)s"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/core/errors/error_dialogs.js:0
+msgid "Not possible to delete the record because it is used in %(model_name)s"
+msgstr ""
 
 #. module: web
 #. odoo-javascript
@@ -6081,6 +6125,12 @@ msgstr ""
 #. module: web
 #. odoo-javascript
 #: code:addons/web/static/src/core/errors/error_dialogs.xml:0
+msgid "Oops"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/core/errors/error_dialogs.xml:0
 #, fuzzy
 msgid "Oops!"
 msgstr "Voy!"
@@ -6290,6 +6340,12 @@ msgstr "Hamkor"
 #, fuzzy
 msgid "Password"
 msgstr "Parol"
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
+msgid "Past date"
+msgstr ""
 
 #. module: web
 #: model_terms:ir.ui.view,arch_db:web.report_invoice_wizard_preview
@@ -8235,6 +8291,12 @@ msgstr ""
 "bo‘lishi kerak: \"%(action_ids)s\""
 
 #. module: web
+#. odoo-python
+#: code:addons/web/models/models.py:0
+msgid "The operation cannot be completed: %s"
+msgstr ""
+
+#. module: web
 #. odoo-javascript
 #: code:addons/web/static/src/core/errors/error_dialogs.xml:0
 #: code:addons/web/static/src/public/error_notifications.js:0
@@ -8368,6 +8430,12 @@ msgstr ""
 #, fuzzy
 msgid "This date is in the future"
 msgstr "Bu sana kelajakda"
+
+#. module: web
+#. odoo-javascript
+#: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
+msgid "This date is in the past"
+msgstr ""
 
 #. module: web
 #. odoo-javascript
@@ -9201,6 +9269,12 @@ msgstr "Qo‘shimcha guruhlarni ko‘rish"
 
 #. module: web
 #. odoo-javascript
+#: code:addons/web/static/src/core/errors/error_dialogs.xml:0
+msgid "View non-deletable records"
+msgstr ""
+
+#. module: web
+#. odoo-javascript
 #: code:addons/web/static/src/search/control_panel/control_panel.xml:0
 #, fuzzy
 msgid "View related documents"
@@ -9264,18 +9338,12 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/web/static/src/core/errors/error_dialogs.js:0
 #: code:addons/web/static/src/search/control_panel/embedded_actions.js:0
+#: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
 #: code:addons/web/static/src/views/fields/domain/domain_field.xml:0
 #: code:addons/web/static/src/views/fields/json_checkboxes/json_checkboxes_field.xml:0
 #, fuzzy
 msgid "Warning"
 msgstr "Ogohlantirish"
-
-#. module: web
-#. odoo-javascript
-#: code:addons/web/static/src/views/fields/datetime/datetime_field.js:0
-#, fuzzy
-msgid "Warning for future dates"
-msgstr "Kelajak sanalar uchun ogohlantirish"
 
 #. module: web
 #. odoo-javascript
@@ -28728,6 +28796,12 @@ msgid "thirty"
 msgstr "o‘ttiz"
 
 #. module: web
+#. odoo-python
+#: code:addons/web/models/models.py:0
+msgid "this record is used by %(model_name)s"
+msgstr ""
+
+#. module: web
 #. odoo-javascript
 #: code:addons/web/static/src/views/fields/many2many_tags_avatar/many2many_tags_avatar_field.xml:0
 msgid "this.props.placeholder"
@@ -31794,145 +31868,89 @@ msgid "空"
 msgstr ""
 
 #, fuzzy
-#~ msgid "<i class=\"fa fa-download\"/> (html)"
-#~ msgstr "<i class=\"fa fa-download\"/> (html)"
+msgid "Custom"
+msgstr "Maxsus"
 
 #, fuzzy
-#~ msgid "<i class=\"fa fa-download\"/> (json)"
-#~ msgstr "<i class=\"fa fa-download\"/> (json)"
+msgid "Hue"
+msgstr "Rang tusi"
 
 #, fuzzy
-#~ msgid "<i class=\"fa fa-repeat\"/> Reset"
-#~ msgstr "<i class=\"fa fa-repeat\"/> Qayta o‘rnatish"
+msgid "Kanban: no action for type: %(type)s"
+msgstr "Kanban: %(type)s turi uchun hech qanday harakat yo‘q"
 
 #, fuzzy
-#~ msgid "Search emoji"
-#~ msgstr "Emojini qidirish"
+msgid "Model Record Rules"
+msgstr "Model yozuv qoidalari"
 
 #, fuzzy
-#~ msgid ""
-#~ "Select <i class=\"fa fa-database\" role=\"img\" aria-label=\"Database\" "
-#~ "title=\"Database\"/>"
-#~ msgstr ""
-#~ "<i class=\"fa fa-database\" role=\"img\" aria-label=\"Ma'lumotlar "
-#~ "bazasi\" title=\"Ma'lumotlar bazasi\"/>ni tanlang"
+msgid "Opacity"
+msgstr "Shaffoflik"
 
 #, fuzzy
-#~ msgid "Translate: %s"
-#~ msgstr "Tarjima: %s"
+msgid "Record Rules"
+msgstr "Yozuv qoidalari"
 
 #, fuzzy
-#~ msgid "Run Click Everywhere"
-#~ msgstr "Hamma joyda bosishni ishga tushirish"
+msgid "Reset"
+msgstr "Asliga qaytarish"
 
 #, fuzzy
-#~ msgid "All day"
-#~ msgstr "Kun bo‘yi"
+msgid "Saturation and brightness color picker."
+msgstr "To‘yinganlik va yorqinlik rang tanlagichi"
 
 #, fuzzy
-#~ msgid "Memory limit (in bytes)"
-#~ msgstr "Xotira chegarasi (baytlarda)"
+msgid "Saturation: %(saturationLvl)s %. Brightness: %(brightnessLvl)s %"
+msgstr "To‘yinganlik: %(saturationLvl)s%. Yorqinlik: %(brightnessLvl)s%"
 
 #, fuzzy
-#~ msgid "Memory profile"
-#~ msgstr "Xotira profili"
+msgid "Solid"
+msgstr "To‘liq"
 
 #, fuzzy
-#~ msgid ""
-#~ "The Tax Identification Number. Values here will be validated based on the "
-#~ "country format. You can use '/' to indicate that the partner is not "
-#~ "subject to tax."
-#~ msgstr ""
-#~ "Soliq identifikatsiya raqami. Bu yerdagi qiymatlar mamlakat formati "
-#~ "asosida tekshiriladi. Hamkorning soliqqa tortilmasligini ko‘rsatish uchun "
-#~ "'/' belgisidan foydalanishingiz mumkin."
+msgid ""
+"Use up and down arrow keys to adapt the brightness. Use left and right arrow "
+"keys to adapt the saturation. Press the Control or Command key at the same "
+"time to have finer control."
+msgstr ""
+"Yorqinlikni moslashtirish uchun yuqoriga va pastga yo‘nalish tugmalaridan "
+"foydalaning. To‘yinganlikni moslashtirish uchun chapga va o‘ngga yo‘nalish "
+"tugmalaridan foydalaning. Aniqroq boshqaruvga ega bo‘lish uchun bir vaqtning "
+"o‘zida Control yoki Command tugmasini bosing."
 
 #, fuzzy
-#~ msgid "Custom"
-#~ msgstr "Maxsus"
+msgid "hex"
+msgstr "olti burchak"
 
 #, fuzzy
-#~ msgid "Hue"
-#~ msgstr "Rang tusi"
+msgid "Autosave"
+msgstr "Avto-saqlash"
 
 #, fuzzy
-#~ msgid "Kanban: no action for type: %(type)s"
-#~ msgstr "Kanban: %(type)s turi uchun hech qanday harakat yo‘q"
+msgid ""
+"If checked, the record will be saved immediately when the field is modified."
+msgstr "Agar belgilansa, maydon o‘zgartirilishi bilan yozuv darhol saqlanadi."
 
 #, fuzzy
-#~ msgid "Model Record Rules"
-#~ msgstr "Model yozuv qoidalari"
+msgid "Invalid data"
+msgstr "Noto‘g‘ri ma'lumotlar"
 
 #, fuzzy
-#~ msgid "Opacity"
-#~ msgstr "Shaffoflik"
+msgid "No settings found"
+msgstr "Sozlamalar topilmadi"
 
 #, fuzzy
-#~ msgid "Record Rules"
-#~ msgstr "Yozuv qoidalari"
+msgid ""
+"Pie chart cannot mix positive and negative numbers. Try to change your "
+"domain to only display positive results"
+msgstr ""
+"Doiraviy diagrammada musbat va manfiy sonlarni aralashtirib bo‘lmaydi. Faqat "
+"ijobiy natijalarni ko‘rsatish uchun domeningizni o‘zgartiring"
 
 #, fuzzy
-#~ msgid "Reset"
-#~ msgstr "Asliga qaytarish"
+msgid "Try searching for another keyword"
+msgstr "Boshqa kalit so‘zni qidirib ko‘ring"
 
 #, fuzzy
-#~ msgid "Saturation and brightness color picker."
-#~ msgstr "To‘yinganlik va yorqinlik rang tanlagichi"
-
-#, fuzzy
-#~ msgid "Saturation: %(saturationLvl)s %. Brightness: %(brightnessLvl)s %"
-#~ msgstr "To‘yinganlik: %(saturationLvl)s%. Yorqinlik: %(brightnessLvl)s%"
-
-#, fuzzy
-#~ msgid "Solid"
-#~ msgstr "To‘liq"
-
-#, fuzzy
-#~ msgid ""
-#~ "Use up and down arrow keys to adapt the brightness. Use left and right "
-#~ "arrow keys to adapt the saturation. Press the Control or Command key at "
-#~ "the same time to have finer control."
-#~ msgstr ""
-#~ "Yorqinlikni moslashtirish uchun yuqoriga va pastga yo‘nalish tugmalaridan "
-#~ "foydalaning. To‘yinganlikni moslashtirish uchun chapga va o‘ngga "
-#~ "yo‘nalish tugmalaridan foydalaning. Aniqroq boshqaruvga ega bo‘lish uchun "
-#~ "bir vaqtning o‘zida Control yoki Command tugmasini bosing."
-
-#, fuzzy
-#~ msgid "hex"
-#~ msgstr "olti burchak"
-
-#, fuzzy
-#~ msgid "Autosave"
-#~ msgstr "Avto-saqlash"
-
-#, fuzzy
-#~ msgid ""
-#~ "If checked, the record will be saved immediately when the field is "
-#~ "modified."
-#~ msgstr ""
-#~ "Agar belgilansa, maydon o‘zgartirilishi bilan yozuv darhol saqlanadi."
-
-#, fuzzy
-#~ msgid "Invalid data"
-#~ msgstr "Noto‘g‘ri ma'lumotlar"
-
-#, fuzzy
-#~ msgid "No settings found"
-#~ msgstr "Sozlamalar topilmadi"
-
-#, fuzzy
-#~ msgid ""
-#~ "Pie chart cannot mix positive and negative numbers. Try to change your "
-#~ "domain to only display positive results"
-#~ msgstr ""
-#~ "Doiraviy diagrammada musbat va manfiy sonlarni aralashtirib bo‘lmaydi. "
-#~ "Faqat ijobiy natijalarni ko‘rsatish uchun domeningizni o‘zgartiring"
-
-#, fuzzy
-#~ msgid "Try searching for another keyword"
-#~ msgstr "Boshqa kalit so‘zni qidirib ko‘ring"
-
-#, fuzzy
-#~ msgid "props.placeholder"
-#~ msgstr "rekvizitlar.o‘rin to‘ldiruvchi"
+msgid "props.placeholder"
+msgstr "rekvizitlar.o‘rin to‘ldiruvchi"

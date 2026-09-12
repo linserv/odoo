@@ -25,21 +25,22 @@
 # Kristina Pešehodko <kristina@avalah.ee>, 2025.
 # Weblate <noreply-mt-weblate@weblate.org>, 2025.
 # Odoo Translation Bot <c3p@odoo.com>, 2026.
+# Erik Köster <erik@officeplus.ee>, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 16.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-21 23:20+0000\n"
-"Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Estonian <https://translate.odoo.com/projects/odoo-master/"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 17:43+0000\n"
+"Last-Translator: Erik Köster <erik@officeplus.ee>\n"
+"Language-Team: Estonian <https://translate.odoo.com/projects/odoo-s19-4/"
 "project/et/>\n"
 "Language: et\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: project
 #: model:ir.model.fields,field_description:project.field_project_project__rating_count
@@ -863,7 +864,6 @@ msgstr "Tegevused"
 
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_project_base
 msgid "Activities of"
 msgstr "Tegevused"
 
@@ -919,7 +919,6 @@ msgstr ""
 
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_project_base
 msgid "Activity type"
 msgstr "Tegevuste tüüp"
 
@@ -1384,7 +1383,6 @@ msgstr "Blokeeritud ülesanded"
 
 #. module: project
 #: model:ir.actions.act_window,name:project.project_sharing_project_task_action_blocking_tasks
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Blocking"
 msgstr "Blokeerimine"
 
@@ -1441,7 +1439,7 @@ msgstr ""
 #: model:mail.message.subtype,name:project.mt_project_task_changes_requested
 #: model:mail.message.subtype,name:project.mt_task_changes_requested
 msgid "Changes Requested"
-msgstr "Muudatuste taotlused"
+msgstr "Muutmiseks"
 
 #. module: project
 #: model_terms:digest.tip,tip_description:project.digest_tip_project_4
@@ -1570,7 +1568,6 @@ msgstr ""
 #: model:ir.model.fields,field_description:project.field_report_project_task_user__company_id
 #: model_terms:ir.ui.view,arch_db:project.project_project_stage_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Company"
 msgstr "Ettevõte"
 
@@ -1815,6 +1812,7 @@ msgid "Created on"
 msgstr "Loodud"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.view_task_project_user_search
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Creation Date"
 msgstr "Loomise kuupäev"
@@ -1838,7 +1836,6 @@ msgstr "Kohandatud automaatsõnum"
 #: model:ir.model.fields,field_description:project.field_report_project_task_user__partner_id
 #: model_terms:ir.ui.view,arch_db:project.view_project
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Customer"
 msgstr "Klient"
 
@@ -2417,6 +2414,7 @@ msgid "Future"
 msgstr "Tulevik"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "Future Activities"
@@ -2524,6 +2522,11 @@ msgstr "Tere"
 #: code:addons/project/static/src/components/notebook_task_one2many_field/notebook_task_list_renderer.js:0
 msgid "Hide closed tasks"
 msgstr "Peida suletud ülesanded"
+
+#. module: project
+#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
+msgid "High"
+msgstr ""
 
 #. module: project
 #: model:ir.model.fields.selection,name:project.selection__project_task__priority__2
@@ -2905,6 +2908,7 @@ msgid "Last Updated on"
 msgstr "Viimati uuendatud"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "Late Activities"
@@ -3008,6 +3012,11 @@ msgid "Look for the"
 msgstr ""
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
+msgid "Low"
+msgstr ""
+
+#. module: project
 #: model:ir.model.fields.selection,name:project.selection__project_task__priority__0
 #: model:ir.model.fields.selection,name:project.selection__report_project_task_user__priority__0
 msgid "Low priority"
@@ -3072,6 +3081,11 @@ msgid ""
 msgstr ""
 "Mõõtke oma klientide rahulolu, saates hinnanguküsitlusi, kui teie ülesanded "
 "jõuavad teatud etappi."
+
+#. module: project
+#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
+msgid "Medium"
+msgstr ""
 
 #. module: project
 #: model:ir.model.fields.selection,name:project.selection__project_task__priority__1
@@ -3142,6 +3156,7 @@ msgid "Months"
 msgstr "Kuu järel"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "My Activities"
@@ -4766,6 +4781,7 @@ msgid "Show Sub-Tasks"
 msgstr ""
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "Show all records whose next activity date is past"
@@ -5007,7 +5023,6 @@ msgstr "T-särgi trükkimine"
 #: model_terms:ir.ui.view,arch_db:project.project_tags_form_view
 #: model_terms:ir.ui.view,arch_db:project.project_tags_tree_view
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Tags"
 msgstr "Sildid"
 
@@ -5725,6 +5740,7 @@ msgid "Today"
 msgstr "Täna"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "Today Activities"
@@ -5861,6 +5877,7 @@ msgstr ""
 #. module: project
 #: model:ir.model.fields.selection,name:project.selection__project_task__priority__3
 #: model:ir.model.fields.selection,name:project.selection__report_project_task_user__priority__3
+#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Urgent"
 msgstr "Kiireloomuline"
 
@@ -6007,7 +6024,6 @@ msgstr "Nähtavus"
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.edit_project
 #: model_terms:ir.ui.view,arch_db:project.view_task_form2
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_project_fsm_base
 msgid "Visible to all"
 msgstr "Nähtav kõigile"
 
@@ -6493,47 +6509,3 @@ msgstr "👤 Määramata"
 #: code:addons/project/static/src/components/project_many2one_field/project_many2one_field.js:0
 msgid "🔒 Private"
 msgstr "🔒 Isiklik"
-
-#~ msgid " All internal users and invited portal users"
-#~ msgstr " Kõik ettevõttesisesed kasutajad ja kutsutud portaalikasutajad"
-
-#~ msgid ""
-#~ "Add project-specific property fields on tasks to customize your project "
-#~ "management process."
-#~ msgstr ""
-#~ "Lisage ülesannetele projekti-spetsiifilised atribuudiväljad, et kohandada "
-#~ "oma projektijuhtimise protsessi."
-
-#~ msgid ""
-#~ "Create tasks by sending an email to the email address of your project."
-#~ msgstr "Loo ülesandeid, saates e-mail projektis määratud aadressile."
-
-#~ msgid "Emails sent to"
-#~ msgstr "Emailid saadetud aadressile"
-
-#~ msgid ""
-#~ "Quickly check the status of tasks for approvals or change requests and "
-#~ "identify those on hold until dependencies are resolved with the hourglass "
-#~ "icon."
-#~ msgstr ""
-#~ "Kontrolli kiiresti ülesannete staatust, mis on seotud kinnituste või "
-#~ "muudatusettepanekutega, ning tuvastage need, mis on peatatud, kuni "
-#~ "sõltuvused on lahendatud, kasutades liivakella ikooni."
-
-#~ msgid "Tip: Use task states to keep track of your tasks' progression"
-#~ msgstr ""
-#~ "Nipp: kasuta ülesannete olekuid, et jälgida oma ülesannete edenemist"
-
-#~ msgid "Tip: Your Own Personal Kanban"
-#~ msgstr "Nipp: Teie isiklik Kanban"
-
-#~ msgid ""
-#~ "Use personal stages to organize your tasks and create your own workflow."
-#~ msgstr ""
-#~ "Kasuta isiklikke etappe oma ülesannete korraldamiseks ja loo oma töövoog."
-
-#~ msgid "project."
-#~ msgstr "project."
-
-#~ msgid "will generate tasks in your"
-#~ msgstr "genereerib teie ülesandeid"

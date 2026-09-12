@@ -438,6 +438,15 @@
     </t>
 </template>
 
+<template id="icons_fonts_preload" name="Icons fonts preload" inherit_id="web.frontend_layout">
+    <xpath expr="//t[@t-call-assets='web.material_symbols_outlined']" position="replace">
+        <t t-set="icon_font_family" t-value="website and website._get_icon_font_family()"/>
+        <t t-if="icon_font_family == 'Material Symbols Rounded'" t-call-assets="web.material_symbols_rounded" t-binary="True"/>
+        <t t-elif="icon_font_family == 'Material Symbols Sharp'" t-call-assets="web.material_symbols_sharp" t-binary="True"/>
+        <t t-else="" t-call-assets="web.material_symbols_outlined" t-binary="True"/>
+    </xpath>
+</template>
+
 <template id="custom_code_layout" name="Custom Code Layout" inherit_id="website.layout" priority="55">
     <xpath expr="//head" position="inside">
         <t t-out="website._control_third_party_trackers_in_html(website.custom_code_head)"/>
@@ -482,7 +491,7 @@
 </template>
 
 <template id="navbar_nav" name="Navbar Nav">
-    <ul t-att-id="not is_mobile and 'top_menu'" t-attf-class="nav navbar-nav top_menu #{'' if _no_autohide_menu_mobile else 'o_menu_loading'} #{is_vertical_nav and 'o_mega_menu_is_offcanvas mx-n3'} #{_nav_class} #{(_navbar_pills and not is_mobile) and 'nav-pills'}" role="menu">
+    <ul t-att-id="not is_mobile and 'top_menu'" t-attf-class="nav navbar-nav top_menu #{'' if _no_autohide_menu_mobile else 'o_menu_loading'} #{is_vertical_nav and 'o_mega_menu_is_offcanvas mx-n3'} #{_nav_class} #{_navbar_pills and 'nav-pills'}" role="menu">
         <t t-out="0"/>
     </ul>
 </template>
@@ -529,6 +538,7 @@
                     <ul class="navbar-nav">
                         <!-- Search bar -->
                         <t t-call="website.placeholder_header_search_box"
+                            _form_classes.f="mt-1"
                             _input_classes.f="border-0 rounded-start-pill text-bg-light ps-3"
                             _submit_classes.f="rounded-end-pill bg-o-color-3 pe-3"
                             _input_group_classes.f="mb-3"
@@ -1807,7 +1817,7 @@
                                     <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_facebook"/>
                                 </a>
                                 <a href="#" class="s_social_media_twitter" target="_blank" aria-label="X">
-                                    <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_linkedin" target="_blank" aria-label="LinkedIn">
                                     <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_linkedin"/>
@@ -1850,7 +1860,7 @@
                                     <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_facebook"/>
                                 </a>
                                 <a href="#" class="s_social_media_twitter" target="_blank">
-                                    <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_instagram" target="_blank">
                                     <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_instagram"/>
@@ -1880,7 +1890,7 @@
                                     <i class="oi rounded-empty-circle shadow-sm o_editable_media" data-icon="oi_facebook"/>
                                 </a>
                                 <a href="#" class="s_social_media_twitter" target="_blank" aria-label="X">
-                                    <i class="oi rounded-empty-circle shadow-sm o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi rounded-empty-circle shadow-sm o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_linkedin" target="_blank" aria-label="LinkedIn">
                                     <i class="oi rounded-empty-circle shadow-sm o_editable_media" data-icon="oi_linkedin"/>
@@ -1944,7 +1954,7 @@
                             <h5>Follow us</h5>
                             <ul class="list-unstyled">
                                 <li><i class="oi oi-fw me-2" data-icon="oi_facebook-square"/><a href="#" target="_blank">Facebook</a></li>
-                                <li><i class="oi oi-fw me-2" data-icon="oi_twitter-square"/><a href="#" target="_blank">X</a></li>
+                                <li><i class="oi oi-fw me-2" data-icon="oi_x-square"/><a href="#" target="_blank">X</a></li>
                                 <li><i class="oi oi-fw me-2" data-icon="oi_linkedin-square"/><a href="#" target="_blank">Linkedin</a></li>
                                 <li><i class="oi oi-fw me-2" data-icon="oi_instagram"/><a href="#" target="_blank">Instagram</a></li>
                             </ul>
@@ -1996,7 +2006,7 @@
                                     <i class="oi oi-stack o_editable_media" data-icon="oi_facebook"/>
                                 </a>
                                 <a href="#" class="s_social_media_twitter" target="_blank">
-                                    <i class="oi oi-stack o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi oi-stack o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_instagram" target="_blank">
                                     <i class="oi oi-stack o_editable_media" data-icon="oi_instagram"/>
@@ -2032,7 +2042,7 @@
                             <div class="s_social_media text-start no_icon_color o_not_editable" data-snippet="s_social_media" data-name="Social Media" contenteditable="false">
                                 <h6 class="s_social_media_title d-block mb-2" contenteditable="true">Follow us</h6>
                                 <a href="#" class="s_social_media_twitter" target="_blank">
-                                    <i class="oi oi-stack o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi oi-stack o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_linkedin" target="_blank">
                                     <i class="oi oi-stack o_editable_media" data-icon="oi_linkedin"/>
@@ -2136,7 +2146,7 @@
                                     <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_facebook"/>
                                 </a>
                                 <a href="#" class="s_social_media_twitter" target="_blank" aria-label="X">
-                                    <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_instagram" target="_blank" aria-label="Instagram">
                                     <i class="oi rounded-circle shadow-sm o_editable_media" data-icon="oi_instagram"/>
@@ -2209,7 +2219,7 @@
                             <div class="s_social_media text-start o_not_editable no_icon_color" data-snippet="s_social_media" data-name="Social Media" contenteditable="false">
                                 <p class="s_social_media_title d-none" contenteditable="true">Follow us</p>
                                 <a href="#" class="s_social_media_twitter" target="_blank">
-                                    <i class="oi oi-stack o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi oi-stack o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_linkedin" target="_blank">
                                     <i class="oi oi-stack o_editable_media" data-icon="oi_linkedin"/>
@@ -2325,7 +2335,7 @@
                             <div class="s_social_media text-start o_not_editable no_icon_color" data-snippet="s_social_media" data-name="Social Media" contenteditable="false">
                                 <p class="s_social_media_title d-none" contenteditable="true">Follow us</p>
                                 <a href="#" class="s_social_media_twitter" target="_blank">
-                                    <i class="oi oi-stack o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi oi-stack o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_linkedin" target="_blank">
                                     <i class="oi oi-stack o_editable_media" data-icon="oi_linkedin"/>
@@ -2454,7 +2464,7 @@
                             <div class="s_social_media text-start o_not_editable no_icon_color" data-snippet="s_social_media" data-name="Social Media" contenteditable="false">
                                 <p class="s_social_media_title d-none" contenteditable="true">Follow us</p>
                                 <a href="#" class="s_social_media_twitter" target="_blank">
-                                    <i class="oi oi-stack o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi oi-stack o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_linkedin" target="_blank">
                                     <i class="oi oi-stack o_editable_media" data-icon="oi_linkedin"/>
@@ -2533,7 +2543,7 @@
                             <div class="s_social_media text-start o_not_editable" data-snippet="s_social_media" data-name="Social Media" contenteditable="false">
                                 <h5 class="s_social_media_title d-block mb-2" contenteditable="true">Follow us</h5>
                                 <a href="#" class="s_social_media_twitter" target="_blank">
-                                    <i class="oi oi-stack rounded-circle shadow-sm o_editable_media" data-icon="oi_twitter"/>
+                                    <i class="oi oi-stack rounded-circle shadow-sm o_editable_media" data-icon="oi_x"/>
                                 </a>
                                 <a href="#" class="s_social_media_linkedin" target="_blank">
                                     <i class="oi oi-stack rounded-circle shadow-sm o_editable_media" data-icon="oi_linkedin"/>
@@ -3379,20 +3389,22 @@ Disallow: /*/my/*
 <template id="website_search_box_input" inherit_id="website.website_search_box" primary="True">
     <xpath expr="//input[@name='search']" position="attributes">
         <attribute name="t-att-data-search-type">search_type</attribute>
-        <attribute name="t-att-data-limit">limit or '6'</attribute>
-        <attribute name="t-att-data-order-by">order_by or 'name asc'</attribute>
+        <attribute name="t-att-data-limit">limit</attribute>
+        <attribute name="t-att-data-order-by">order_by</attribute>
     </xpath>
     <xpath expr="//div[@role='search']" position="attributes">
         <attribute name="t-attf-class" remove="s_searchbar_input" separator=" "/>
     </xpath>
     <xpath expr="//div[@role='search']" position="replace">
         <t t-if="not placeholder" t-set="placeholder">Search...</t>
+        <t t-set="limit" t-value="'6' if limit is None else str(limit)"/>
+        <t t-set="order_by" t-value="order_by or 'name asc'"/>
         <form t-attf-class="o_searchbar_form s_searchbar_input #{_form_classes}" t-att-action="action" method="get" t-attf-data-snippet="s_searchbar_input">
             <a t-if="_simple_button_layout" t-attf-class="o_search_btn {{_simple_button_classes or 'p-1 bg-o-color-3 lh-1'}} btn o_not_editable" role="button" title="Search" href="#">
                 <i class="oi-stack lh-lg oi" data-icon="search" role="img"/>
             </a>
             <t>$0</t>
-            <input name="order" type="hidden" class="o_search_order_by oe_unremovable" t-att-value="order_by if order_by else 'name asc'"/>
+            <input name="order" type="hidden" class="o_search_order_by oe_unremovable" t-att-value="order_by"/>
             <t t-out="0"/>
         </form>
     </xpath>
@@ -3465,7 +3477,7 @@ Disallow: /*/my/*
                         <i class="oi oi-stack p-1 o_editable_media" data-icon="oi_facebook"/>
                     </a>
                     <a href="#" class="s_social_media_twitter o_nav-link_secondary nav-link m-0 p-0 text-decoration-none" target="_blank" aria-label="X">
-                        <i class="oi oi-stack p-1 o_editable_media" data-icon="oi_twitter"/>
+                        <i class="oi oi-stack p-1 o_editable_media" data-icon="oi_x"/>
                     </a>
                     <a href="#" class="s_social_media_linkedin o_nav-link_secondary nav-link m-0 p-0 text-decoration-none" target="_blank" aria-label="LinkedIn">
                         <i class="oi oi-stack p-1 o_editable_media" data-icon="oi_linkedin"/>
@@ -3485,10 +3497,15 @@ Disallow: /*/my/*
 <template id="website.header_search_box" inherit_id="website.placeholder_header_search_box" name="Header Search Bar" active="True">
     <xpath expr="." position="inside">
         <li t-attf-class="#{_item_class}">
-            <t t-call="website.website_search_box_input"
-                search_type.f="all"
-                action.f="/website/search"
-                limit="limit or '30'"/>
+            <t t-set="_search_scope" t-value="website._get_header_search_scope()"/>
+            <t
+                t-call="website.website_search_box_input"
+                _form_classes.f="o_header_searchbar o_no_save {{_form_classes}}"
+                search_type="_search_scope['search_type']"
+                action="_search_scope['url']"
+                order_by="website.header_search_order_by"
+                limit="website.header_search_limit"
+            />
         </li>
     </xpath>
 </template>

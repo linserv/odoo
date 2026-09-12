@@ -25,6 +25,7 @@ The system is able to add and compute the shipping line.
         "views/ir_module_module_views.xml",
         "views/payment_form_templates.xml",
         "views/payment_provider_views.xml",
+        "views/portal_templates.xml",
         "views/res_partner_views.xml",
         "views/sale_order_views.xml",
         "wizard/res_config_settings_views.xml",
@@ -33,7 +34,14 @@ The system is able to add and compute the shipping line.
         "wizard/delivery_note_views.xml",
     ],
     "demo": ["data/delivery_demo.xml"],
-    "assets": {"web.assets_frontend": ["delivery/static/src/**/*"]},
+    "assets": {
+        "web.assets_frontend": [
+            "delivery/static/src/**/*",
+            ("remove", "delivery/static/src/backend/**/*"),
+        ],
+        "web.assets_backend": ["delivery/static/src/backend/**/*"],
+        'web.assets_tests': ["delivery/static/tests/tours/*.js"],
+    },
     "post_init_hook": "post_init_hook",
     "uninstall_hook": "uninstall_hook",
     "author": "Odoo S.A.",

@@ -1,7 +1,7 @@
 import { expect, getFixture, test } from "@odoo/hoot";
 import { queryOne, scroll, waitFor } from "@odoo/hoot-dom";
 import { animationFrame } from "@odoo/hoot-mock";
-import { Component, onWillStart, useProps, xml } from "@odoo/owl";
+import { Component, onWillStart, xml } from "@odoo/owl";
 import {
     contains,
     defineActions,
@@ -21,7 +21,7 @@ import {
     webModels,
 } from "@web/../tests/web_test_helpers";
 
-import { browser } from "@web/core/browser/browser";
+import { location, browser } from "@web/core/browser/browser";
 import { registry } from "@web/core/registry";
 import { router } from "@web/core/browser/router";
 import { listView } from "@web/views/list/list_view";
@@ -232,7 +232,6 @@ test("getCurrentAction (virtual controller)", async () => {
     stepAllNetworkCalls();
     class ClientAction extends Component {
         static template = xml`<div class="o_client_action_test">Hello World</div>`;
-        props = useProps();
         static path = "plop";
         setup() {
             onWillStart(async () => {
@@ -681,7 +680,7 @@ test("retrieving a stored action should remove 'allowed_company_ids' from its co
     );
 
     // Prepare the URL hash to make sure the stored action will get executed.
-    Object.assign(browser.location, { search: "?model=partner&view_type=kanban" });
+    Object.assign(location, { search: "?model=partner&view_type=kanban" });
 
     // Create the web client. It should execute the stored action.
     await mountWithCleanup(WebClient);
@@ -726,7 +725,7 @@ test("retrieving a stored action should remove 'allowed_company_ids' from its co
     );
 
     // Prepare the URL hash to make sure the stored action will get executed.
-    // Object.assign(browser.location, { search: "?model=partner&view_type=kanban" });
+    // Object.assign(location, { search: "?model=partner&view_type=kanban" });
     redirect("/odoo/action-1?view_type=kanban");
 
     // Create the web client. It should execute the stored action.
@@ -748,7 +747,6 @@ test("action is removed while waiting for another action with selectMenu", async
     let def;
     class SlowClientAction extends Component {
         static template = xml`<div>My client action</div>`;
-        props = useProps();
 
         setup() {
             onWillStart(() => def?.promise);

@@ -27,7 +27,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
         cls.invoice = cls.init_invoice('out_invoice', products=cls.product_a+cls.product_b)
 
         cls.product_line_vals_1 = {
-            'name': 'product_a',
             'product_id': cls.product_a.id,
             'account_id': cls.product_a.property_account_income_id.id,
             'partner_id': cls.partner_a.id,
@@ -46,7 +45,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
             'date_maturity': False,
         }
         cls.product_line_vals_2 = {
-            'name': 'product_b',
             'product_id': cls.product_b.id,
             'account_id': cls.product_b.property_account_income_id.id,
             'partner_id': cls.partner_a.id,
@@ -186,7 +184,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
         self.assertInvoiceValues(self.invoice, [
             {
                 **self.product_line_vals_1,
-                'name': 'product_b',
                 'product_id': self.product_b.id,
                 'product_uom_id': self.product_b.uom_id.id,
                 'account_id': self.product_b.property_account_income_id.id,
@@ -2324,7 +2321,7 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
     def test_out_invoice_post_1(self):
         ''' Check the invoice_date will be set automatically at the post date. '''
         frozen_today = fields.Date.today()
-        with patch.object(fields.Date, 'today', lambda *args, **kwargs: frozen_today), patch.object(fields.Date, 'context_today', lambda *args, **kwargs: frozen_today):
+        with self.mock_datetime_and_now(frozen_today):
             # Create an invoice with rate 1/3.
             move = self.env['account.move'].create({
                 'move_type': 'out_invoice',
@@ -2427,7 +2424,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
             'invoice_payment_term_id': self.pay_terms_a.id,
             'invoice_line_ids': [
                 (0, None, {
-                    'name': self.product_line_vals_1['name'],
                     'product_id': self.product_line_vals_1['product_id'],
                     'product_uom_id': self.product_line_vals_1['product_uom_id'],
                     'quantity': self.product_line_vals_1['quantity'],
@@ -2435,7 +2431,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
                     'tax_ids': self.product_line_vals_1['tax_ids'],
                 }),
                 (0, None, {
-                    'name': self.product_line_vals_2['name'],
                     'product_id': self.product_line_vals_2['product_id'],
                     'product_uom_id': self.product_line_vals_2['product_uom_id'],
                     'quantity': self.product_line_vals_2['quantity'],
@@ -2811,7 +2806,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
             'invoice_payment_term_id': self.pay_terms_a.id,
             'invoice_line_ids': [
                 (0, None, {
-                    'name': self.product_line_vals_1['name'],
                     'product_id': self.product_line_vals_1['product_id'],
                     'product_uom_id': self.product_line_vals_1['product_uom_id'],
                     'quantity': self.product_line_vals_1['quantity'],
@@ -2819,7 +2813,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
                     'tax_ids': self.product_line_vals_1['tax_ids'],
                 }),
                 (0, None, {
-                    'name': self.product_line_vals_2['name'],
                     'product_id': self.product_line_vals_2['product_id'],
                     'product_uom_id': self.product_line_vals_2['product_uom_id'],
                     'quantity': self.product_line_vals_2['quantity'],
@@ -2947,7 +2940,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
             'invoice_payment_term_id': self.pay_terms_a.id,
             'invoice_line_ids': [
                 (0, None, {
-                    'name': self.product_line_vals_1['name'],
                     'product_id': self.product_line_vals_1['product_id'],
                     'product_uom_id': self.product_line_vals_1['product_uom_id'],
                     'quantity': self.product_line_vals_1['quantity'],
@@ -2955,7 +2947,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
                     'tax_ids': self.product_line_vals_1['tax_ids'],
                 }),
                 (0, None, {
-                    'name': self.product_line_vals_2['name'],
                     'product_id': self.product_line_vals_2['product_id'],
                     'product_uom_id': self.product_line_vals_2['product_uom_id'],
                     'quantity': self.product_line_vals_2['quantity'],
@@ -3044,7 +3035,7 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
                 'debit': 0.0,
                 'credit': 300.0,
                 'account_id': wizard.revenue_accrual_account.id,
-                'reconciled': False
+                'reconciled': True
             },
             {
                 'amount_currency': 120.0,
@@ -3058,7 +3049,7 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
                 'debit': 0.0,
                 'credit': 60.0,
                 'account_id': wizard.revenue_accrual_account.id,
-                'reconciled': False
+                'reconciled': True
             },
             {
                 'amount_currency': -600.0,
@@ -3072,7 +3063,7 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
                 'debit': 300.0,
                 'credit': 0.0,
                 'account_id': wizard.revenue_accrual_account.id,
-                'reconciled': False
+                'reconciled': True
             },
             {
                 'amount_currency': -120.0,
@@ -3086,7 +3077,7 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
                 'debit': 60.0,
                 'credit': 0.0,
                 'account_id': wizard.revenue_accrual_account.id,
-                'reconciled': False
+                'reconciled': True
             },
         ])
 
@@ -3103,7 +3094,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
                 'invoice_payment_term_id': self.pay_terms_a.id,
                 'invoice_line_ids': [
                     (0, None, {
-                        'name': self.product_line_vals_1['name'],
                         'product_id': self.product_line_vals_1['product_id'],
                         'product_uom_id': self.product_line_vals_1['product_uom_id'],
                         'quantity': self.product_line_vals_1['quantity'],
@@ -3111,7 +3101,6 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
                         'tax_ids': self.product_line_vals_1['tax_ids'],
                     }),
                     (0, None, {
-                        'name': self.product_line_vals_2['name'],
                         'product_id': self.product_line_vals_2['product_id'],
                         'product_uom_id': self.product_line_vals_2['product_uom_id'],
                         'quantity': self.product_line_vals_2['quantity'],
@@ -5149,7 +5138,7 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
             ]
         )
         self.assertEqual(self.env['account.move'].get_currency_rate(self.env.company.id, self.other_currency.id, '2026-01-01'), 2.0)
-        with (freeze_time('2025-01-02'), patch.object(self.env.cr, 'now', lambda: fields.Datetime.to_datetime("2025-01-02 10:00:00"))):
+        with self.mock_datetime_and_now('2025-01-02 10:00:00'):
             move = self.env['account.move'].create({
                 'move_type': 'out_invoice',
                 'partner_id': self.partner_a.id,
@@ -5242,7 +5231,7 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
 
         self.assertRecordValues(invoice.invoice_line_ids, [{
             'product_id': self.product_a.id,
-            'name': 'product_a',
+            'label': 'product_a',
         }])
 
     def test_out_invoice_fiscal_position_branch_taxes(self):

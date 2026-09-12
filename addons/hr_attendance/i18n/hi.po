@@ -3,22 +3,22 @@
 # * hr_attendance
 #
 # Translators:
-# Weblate <noreply-mt-weblate@weblate.org>, 2025.
+# Weblate <noreply-mt-weblate@weblate.org>, 2025, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo 9.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-21 19:24+0000\n"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 14:50+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Hindi <https://translate.odoo.com/projects/odoo-master/"
+"Language-Team: Hindi <https://translate.odoo.com/projects/odoo-s19-4/"
 "hr_attendance/hi/>\n"
 "Language: hi\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: hr_attendance
 #: model:ir.module.module,description:base.module_hr_attendance
@@ -47,12 +47,6 @@ msgstr ""
 #. odoo-python
 #: code:addons/hr_attendance/models/hr_attendance.py:0
 msgid "%(worked_hours)s (%(check_in)s-%(check_out)s)"
-msgstr ""
-
-#. module: hr_attendance
-#. odoo-python
-#: code:addons/hr_attendance/models/hr_attendance_overtime_ruleset.py:0
-msgid "%s (copy)"
 msgstr ""
 
 #. module: hr_attendance
@@ -110,16 +104,6 @@ msgstr "<span class=\"me-2\">समय अवधि </span>"
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
 msgid "<span class=\"me-2\">Time Period</span>"
 msgstr "<span class=\"me-2\">समय अवधि</span>"
-
-#. module: hr_attendance
-#: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
-msgid "<span class=\"me-2\">Time</span>"
-msgstr ""
-
-#. module: hr_attendance
-#: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
-msgid "<span class=\"me-2\">Tolerance</span>"
-msgstr "<span class=\"me-2\">टॉलरेंस</span>"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
@@ -234,8 +218,9 @@ msgstr "ऐक्टिव कर्मचारी"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/hr_version_list_view.xml:0
+#, fuzzy
 msgid "Add"
-msgstr ""
+msgstr "जोड़ना"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_version_list_view_enhanced_hr_attendance
@@ -253,6 +238,12 @@ msgstr ""
 "                कर्मचारी बनाने के लिए 'कर्मचारी' मेन्यू पर जाएं।"
 
 #. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
+msgid "Add my break times"
+msgstr ""
+
+#. module: hr_attendance
 #: model:res.groups,name:hr_attendance.group_hr_attendance_manager
 msgid "Administrator"
 msgstr "एडमिन"
@@ -260,8 +251,9 @@ msgstr "एडमिन"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/manual_selection/manual_selection.xml:0
+#, fuzzy
 msgid "All"
-msgstr ""
+msgstr "सभी "
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -440,6 +432,12 @@ msgstr "उपस्थिति की स्थिति"
 
 #. module: hr_attendance
 #. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.js:0
+msgid "Attendance saved, but the display could not be refreshed."
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
 msgid "Attendance with barcode"
 msgstr "बारकोड के साथ उपस्थिति"
@@ -527,8 +525,9 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/manual_selection/manual_selection.xml:0
+#, fuzzy
 msgid "Back"
-msgstr ""
+msgstr "वापस जाएं"
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__res_company__attendance_barcode_source__back
@@ -608,6 +607,51 @@ msgid "Based on GPS-Coordinates if available or on IP Address"
 msgstr ""
 
 #. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/attendance_inline_form/attendance_inline_form.xml:0
+#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.xml:0
+msgid "Break"
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/break_duration_dialog/break_duration_dialog.js:0
+#: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__break_duration
+msgid "Break Duration"
+msgstr ""
+
+#. module: hr_attendance
+#: model:ir.model.fields,field_description:hr_attendance.field_res_company__attendance_break_management
+#: model:ir.model.fields,field_description:hr_attendance.field_res_config_settings__attendance_break_management
+#: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+msgid "Break Management on Checkout"
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-python
+#: code:addons/hr_attendance/models/hr_attendance.py:0
+msgid "Break duration cannot be negative."
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-python
+#: code:addons/hr_attendance/models/hr_attendance.py:0
+msgid "Break duration cannot exceed the attendance duration."
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/break_duration_dialog/break_duration_dialog.xml:0
+msgid "Break duration in minutes"
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.xml:0
+msgid "Break:"
+msgstr ""
+
+#. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__in_browser
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_form
 msgid "Browser"
@@ -621,8 +665,9 @@ msgstr ""
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__can_edit
+#, fuzzy
 msgid "Can Edit"
-msgstr ""
+msgstr "बदलाव कर सकते हैं"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
@@ -631,6 +676,7 @@ msgstr "इसे छुट्टी के रूप में बदला ज
 
 #. module: hr_attendance
 #. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/break_duration_dialog/break_duration_dialog.xml:0
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.js:0
 msgid "Cancel"
 msgstr ""
@@ -674,6 +720,9 @@ msgid ""
 msgstr ""
 
 #. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/attendance_inline_form/attendance_inline_form.xml:0
+#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.xml:0
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__check_in
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__last_check_in
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee_public__last_check_in
@@ -682,6 +731,9 @@ msgid "Check In"
 msgstr "चेक इन"
 
 #. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/attendance_inline_form/attendance_inline_form.xml:0
+#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.xml:0
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__check_out
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__last_check_out
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee_public__last_check_out
@@ -726,8 +778,9 @@ msgstr "चेक इन किया गया"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
+#, fuzzy
 msgid "Checked in at"
-msgstr ""
+msgstr "इतने बजे चेक इन किया गया"
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_employee__attendance_state__checked_out
@@ -737,8 +790,9 @@ msgstr "चेक आउट किया गया"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
+#, fuzzy
 msgid "Checked out at"
-msgstr ""
+msgstr "इतने बजे चेक आउट किया गया"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
@@ -748,8 +802,9 @@ msgstr "तय करें कि स्वागत वाला मैसे�
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "Choose how to record attendances"
-msgstr ""
+msgstr "तय करें कि उपस्थिति को कैसे रिकॉर्ड किया जाएगा"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -792,6 +847,7 @@ msgstr "कॉन्फ़िगरेशन"
 
 #. module: hr_attendance
 #. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/break_duration_dialog/break_duration_dialog.xml:0
 #: code:addons/hr_attendance/static/src/components/confirmation/confirmation.xml:0
 msgid "Confirm"
 msgstr "पुष्टि करें"
@@ -799,8 +855,9 @@ msgstr "पुष्टि करें"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "Connect an RFID reader, and scan a token."
-msgstr ""
+msgstr "एक RFID रीडर कनेक्ट करें और एक टोकन स्कैन करें।"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -816,6 +873,18 @@ msgid ""
 "  Sum: sum the *extra* pay (i.e. above 100%).\n"
 "    e.g.: combined rate for 150% & 120% = 100% (baseline) + (150-100)% + "
 "(120-100)% = 170%\n"
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.js:0
+msgid "Could not save break duration. Please identify again."
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.js:0
+msgid "Could not update this attendance."
 msgstr ""
 
 #. module: hr_attendance
@@ -921,6 +990,12 @@ msgstr "विवरण"
 #: model:ir.model.fields,field_description:hr_attendance.field_res_config_settings__attendance_device_tracking
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
 msgid "Device & Location Tracking"
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/attendance_inline_form/attendance_inline_form.xml:0
+msgid "Discard"
 msgstr ""
 
 #. module: hr_attendance
@@ -1051,6 +1126,24 @@ msgstr ""
 
 #. module: hr_attendance
 #. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/break_duration_dialog/break_duration_dialog.js:0
+msgid "Enter a valid break duration in whole minutes."
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/break_duration_dialog/break_duration_dialog.js:0
+msgid "Enter the total break duration (in minutes) for %s."
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/break_duration_dialog/break_duration_dialog.js:0
+msgid "Enter the total break duration in minutes."
+msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/new_employee_dialog/new_employee_dialog.js:0
 msgid "Error creating employee: "
 msgstr ""
@@ -1064,13 +1157,15 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/pin_code/pin_code.xml:0
+#, fuzzy
 msgid "Error: could not find corresponding employee."
-msgstr ""
+msgstr "गड़बड़ी: संबंधित कर्मचारी नहीं मिला।"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_filter
+#, fuzzy
 msgid "Errors"
-msgstr ""
+msgstr "गड़बड़ियां"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance_overtime_line__duration
@@ -1090,19 +1185,27 @@ msgstr ""
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_res_company__attendance_overtime_validation
 #: model:ir.model.fields,field_description:hr_attendance.field_res_config_settings__attendance_overtime_validation
+#, fuzzy
 msgid "Extra Hours Validation"
-msgstr ""
+msgstr "अतिरिक्त घंटे की पुष्टि"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/attendance_calendar/attendance_calendar_overview.xml:0
+#, fuzzy
 msgid "Extra Time"
-msgstr ""
+msgstr "अतिरिक्त समय"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
+#, fuzzy
 msgid "Extra hours"
+msgstr "अतिरिक्त घंटे"
+
+#. module: hr_attendance
+#: model:ir.model.fields,help:hr_attendance.field_hr_attendance__break_duration
+msgid "Extra unpaid break duration (hours)"
 msgstr ""
 
 #. module: hr_attendance
@@ -1130,8 +1233,9 @@ msgstr "फ़ॉलोवर (पार्टनर)"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/badge_scanner/badge_scanner.xml:0
+#, fuzzy
 msgid "For"
-msgstr ""
+msgstr "के लिए"
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance__day_of_date__4
@@ -1146,8 +1250,9 @@ msgstr "के द्वारा"
 #. module: hr_attendance
 #. odoo-python
 #: code:addons/hr_attendance/models/hr_attendance.py:0
+#, fuzzy
 msgid "From %s"
-msgstr ""
+msgstr "%s से"
 
 #. module: hr_attendance
 #. odoo-python
@@ -1157,18 +1262,21 @@ msgstr ""
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__res_company__attendance_barcode_source__front
+#, fuzzy
 msgid "Front Camera"
-msgstr ""
+msgstr "फ्रंट कैमरा"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_form
+#, fuzzy
 msgid "GPS Coordinates"
-msgstr ""
+msgstr "जीपीएस कोआर्डिनेट"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+#, fuzzy
 msgid "Generate new URL"
-msgstr ""
+msgstr "नया यूआरएल बनाएं"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_overtime_rule_view_list
@@ -1182,14 +1290,16 @@ msgstr ""
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
 #: code:addons/hr_attendance/static/src/components/manual_selection/manual_selection.xml:0
 #: code:addons/hr_attendance/static/src/components/pin_code/pin_code.xml:0
+#, fuzzy
 msgid "Go back"
-msgstr ""
+msgstr "वापस जाएं"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
+#, fuzzy
 msgid "Goodbye"
-msgstr ""
+msgstr "अलविदा"
 
 #. module: hr_attendance
 #: model:res.groups,comment:hr_attendance.group_hr_attendance_own
@@ -1217,19 +1327,22 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/attendance_calendar/attendance_calendar_overview.xml:0
+#, fuzzy
 msgid "Hours"
-msgstr ""
+msgstr "घंटे"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__hours_last_month
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee_public__hours_last_month
+#, fuzzy
 msgid "Hours Last Month"
-msgstr ""
+msgstr "पिछले महीने के घंटे"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__hours_last_month_display
+#, fuzzy
 msgid "Hours Last Month Display"
-msgstr ""
+msgstr "पिछले महीने के घंटे डिस्प्ले"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__hours_last_month_overtime
@@ -1238,27 +1351,21 @@ msgid "Hours Last Month Overtime"
 msgstr ""
 
 #. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__hours_previously_today
+#, fuzzy
 msgid "Hours Previously Today"
-msgstr ""
+msgstr "आज पहले के घंटे"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
-msgid "Hours Previously Today:"
-msgstr ""
-
-#. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__hours_today
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee_public__hours_today
+#, fuzzy
 msgid "Hours Today"
-msgstr ""
-
-#. module: hr_attendance
-#. odoo-javascript
-#: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
-msgid "Hours Today:"
-msgstr ""
+msgstr "आज के घंटे"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance_overtime_rule__expected_hours_from_contract
@@ -1273,8 +1380,9 @@ msgstr ""
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_filter
+#, fuzzy
 msgid "Hr Attendance Search"
-msgstr ""
+msgstr "एचआर अटेंडेंस सर्च"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__id
@@ -1295,14 +1403,16 @@ msgstr "आईडी"
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__in_ip_address
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_form
+#, fuzzy
 msgid "IP Address"
-msgstr ""
+msgstr "आईपी पता"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "Identify Manually"
-msgstr ""
+msgstr "मैन्युअल तौर पर पहचान करें"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
@@ -1323,6 +1433,15 @@ msgstr "अगर यह बॉक्स चेक है, तो नए मै�
 #: model:ir.model.fields,help:hr_attendance.field_hr_attendance__message_has_sms_error
 msgid "If checked, some messages have a delivery error."
 msgstr "अगर बॉक्स पर टिक है, तो कुछ मैसेज भेजने में गलती हुई है।"
+
+#. module: hr_attendance
+#: model:ir.model.fields,help:hr_attendance.field_res_company__attendance_break_management
+#: model:ir.model.fields,help:hr_attendance.field_res_config_settings__attendance_break_management
+#: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+msgid ""
+"If enabled, employees can record their total break duration after checking "
+"out."
+msgstr ""
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_overtime_rule_view_form
@@ -1346,13 +1465,15 @@ msgstr "जानकारी"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree
+#, fuzzy
 msgid "Input Mode (In)"
-msgstr ""
+msgstr "इनपुट मोड (इन)"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree
+#, fuzzy
 msgid "Input Mode (Out)"
-msgstr ""
+msgstr "इनपुट मोड (आउट)"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -1372,8 +1493,9 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/confirmation/confirmation.xml:0
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
+#, fuzzy
 msgid "Invalid request"
-msgstr ""
+msgstr "अमान्य अनुरोध"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__message_is_follower
@@ -1400,18 +1522,21 @@ msgstr "किऑस्क"
 #. module: hr_attendance
 #: model:ir.ui.menu,name:hr_attendance.menu_action_open_form
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+#, fuzzy
 msgid "Kiosk Mode"
-msgstr ""
+msgstr "किऑस्क मोड"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+#, fuzzy
 msgid "Kiosk Mode Adress"
-msgstr ""
+msgstr "किऑस्क मोड का पता"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+#, fuzzy
 msgid "Kiosk Settings"
-msgstr ""
+msgstr "किऑस्क सेटिंग"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_overtime_analysis_view_filter
@@ -1420,19 +1545,22 @@ msgstr ""
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_filter
+#, fuzzy
 msgid "Last 3 Months"
-msgstr ""
+msgstr "पिछले 3 महीने"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__last_attendance_id
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee_public__last_attendance_id
+#, fuzzy
 msgid "Last Attendance"
-msgstr ""
+msgstr "आखिरी उपस्थिति"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__last_attendance_worked_hours
+#, fuzzy
 msgid "Last Attendance Worked Hours"
-msgstr ""
+msgstr "पिछली उपस्थिति में काम किए गए घंटे"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__write_uid
@@ -1457,13 +1585,15 @@ msgstr "अक्षांश"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree
+#, fuzzy
 msgid "Latitude (In)"
-msgstr ""
+msgstr "अक्षांश (इन)"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree
+#, fuzzy
 msgid "Latitude (Out)"
-msgstr ""
+msgstr "अक्षांश (आउट)"
 
 #. module: hr_attendance
 #. odoo-python
@@ -1484,14 +1614,16 @@ msgstr ""
 
 #. module: hr_attendance
 #: model:ir.actions.server,name:hr_attendance.action_load_demo_data
+#, fuzzy
 msgid "Load demo data"
-msgstr ""
+msgstr "डेमो डेटा लोड करें"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.xml:0
+#, fuzzy
 msgid "Load sample data"
-msgstr ""
+msgstr "सैंपल डेटा लोड करें"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree
@@ -1510,13 +1642,15 @@ msgstr "देशांतर"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree
+#, fuzzy
 msgid "Longitude (In)"
-msgstr ""
+msgstr "देशांतर (इन)"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree
+#, fuzzy
 msgid "Longitude (Out)"
-msgstr ""
+msgstr "देशांतर (आउट)"
 
 #. module: hr_attendance
 #: model:ir.actions.act_window,name:hr_attendance.hr_attendance_management_action
@@ -1538,25 +1672,29 @@ msgstr "मैन्युअल"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "Manual Attendance"
-msgstr ""
+msgstr "मैन्युअल अटेंडेंस"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "Manual Attendance or with barcode"
-msgstr ""
+msgstr "मैन्युअल उपस्थिति या बारकोड से"
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__res_company__attendance_kiosk_mode__manual
+#, fuzzy
 msgid "Manual Selection"
-msgstr ""
+msgstr "मैन्युअल सलेक्शन"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "Manually (optional PIN)"
-msgstr ""
+msgstr "मैन्युअली (वैकल्पिक पिन)"
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance_overtime_ruleset__rate_combination_mode__max
@@ -1609,8 +1747,9 @@ msgstr ""
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_management_view_filter
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_filter
+#, fuzzy
 msgid "My Attendances"
-msgstr ""
+msgstr "मेरी उपस्थिति"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_overtime_analysis_view_filter
@@ -1637,6 +1776,12 @@ msgid "New Set-up (Employee/Badge)"
 msgstr ""
 
 #. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
+msgid "Next"
+msgstr ""
+
+#. module: hr_attendance
 #: model:res.groups.privilege,placeholder:hr_attendance.res_groups_privilege_attendances
 msgid "No"
 msgstr ""
@@ -1652,8 +1797,9 @@ msgstr ""
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.xml:0
 #: model_terms:ir.actions.act_window,help:hr_attendance.hr_attendance_management_action
 #: model_terms:ir.actions.act_window,help:hr_attendance.hr_attendance_reporting
+#, fuzzy
 msgid "No attendance records found"
-msgstr ""
+msgstr "उपस्थिति को कोई रिकॉर्ड नहीं मिला"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -1663,9 +1809,16 @@ msgstr ""
 
 #. module: hr_attendance
 #. odoo-javascript
-#: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.js:0
-msgid "No employee corresponding to Badge ID '%(barcode)s.'"
+#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.xml:0
+msgid "No break"
 msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.js:0
+#, fuzzy
+msgid "No employee corresponding to Badge ID '%(barcode)s.'"
+msgstr "बैज ID '%(barcode)s' से जुड़ा कोई कर्मचारी नहीं है."
 
 #. module: hr_attendance
 #: model_terms:ir.actions.act_window,help:hr_attendance.hr_attendance_overtime_analysis
@@ -1700,12 +1853,6 @@ msgstr "डिलीवरी में गड़बड़ी वाले म�
 
 #. module: hr_attendance
 #. odoo-javascript
-#: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
-msgid "OK"
-msgstr ""
-
-#. module: hr_attendance
-#. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
 msgid "Odoo Logo"
 msgstr "Odoo का लोगो"
@@ -1723,8 +1870,9 @@ msgstr ""
 
 #. module: hr_attendance
 #: model:res.groups,name:hr_attendance.group_hr_attendance_officer
+#, fuzzy
 msgid "Officer: Manage attendances"
-msgstr ""
+msgstr "ऑफ़िसर: उपस्थिति को मैनेज करें"
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance_overtime_rule__timing_type__public_leave
@@ -1744,8 +1892,9 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/manual_selection/manual_selection.xml:0
+#, fuzzy
 msgid "On site"
-msgstr ""
+msgstr "ऑन साइट"
 
 #. module: hr_attendance
 #: model:ir.ui.menu,name:hr_attendance.menu_hr_attendance_onboarding
@@ -1768,23 +1917,27 @@ msgstr "ऑनलािन"
 
 #. module: hr_attendance
 #: model:ir.actions.server,name:hr_attendance.open_kiosk_url
+#, fuzzy
 msgid "Open Kiosk Url"
-msgstr ""
+msgstr "किऑस्क यूआरएल खोलें"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__out_browser
+#, fuzzy
 msgid "Out Browser"
-msgstr ""
+msgstr "बाहरी ब्राउज़र"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__out_ip_address
+#, fuzzy
 msgid "Out Ip Address"
-msgstr ""
+msgstr "बाहरी आईपी पता"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__out_latitude
+#, fuzzy
 msgid "Out Latitude"
-msgstr ""
+msgstr "बाहरी अक्षांश"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__out_location
@@ -1793,13 +1946,15 @@ msgstr ""
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__out_longitude
+#, fuzzy
 msgid "Out Longitude"
-msgstr ""
+msgstr "बाहरी देशांतर"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__out_mode
+#, fuzzy
 msgid "Out Mode"
-msgstr ""
+msgstr "आउट मोड"
 
 #. module: hr_attendance
 #. odoo-python
@@ -1869,8 +2024,9 @@ msgstr ""
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__overtime_status
+#, fuzzy
 msgid "Overtime Status"
-msgstr ""
+msgstr "ओवरटाइम स्टेटस"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
@@ -1915,17 +2071,25 @@ msgstr ""
 
 #. module: hr_attendance
 #. odoo-javascript
-#: code:addons/hr_attendance/static/src/components/pin_code/pin_code.xml:0
-msgid "Please enter your PIN to"
+#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.xml:0
+msgid "Pending"
 msgstr ""
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/pin_code/pin_code.xml:0
+#, fuzzy
+msgid "Please enter your PIN to"
+msgstr "कृपया अपना पिन दर्ज करें"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/confirmation/confirmation.xml:0
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
 #: code:addons/hr_attendance/static/src/components/pin_code/pin_code.xml:0
+#, fuzzy
 msgid "Please return to the main menu."
-msgstr ""
+msgstr "कृपया मेन मेन्यू पर वापस जाएं।"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -1936,8 +2100,9 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "Powered by"
-msgstr ""
+msgstr "पॉवर्ड बॉय"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -1948,8 +2113,9 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/new_employee_dialog/new_employee_dialog.xml:0
+#, fuzzy
 msgid "Print"
-msgstr ""
+msgstr "प्रिंट करें"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -1986,14 +2152,16 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "RFID Token with reader"
-msgstr ""
+msgstr "रीडर के साथ RFID टोकन"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "RFID Token with reader on tablet"
-msgstr ""
+msgstr "टैबलेट पर रीडर वाला RFID टोकन"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_employee_form_inherit_hr_attendance
@@ -2029,8 +2197,9 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.xml:0
+#, fuzzy
 msgid "Ready to track attendances ?"
-msgstr ""
+msgstr "उपस्थिति को ट्रैक करने के लिए तैयार हैं ?"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_form
@@ -2040,8 +2209,9 @@ msgstr "अस्वीकार"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree
+#, fuzzy
 msgid "Refuse Extra Hours"
-msgstr ""
+msgstr "अतिरिक्त घंटे को अस्वीकार करें"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_form
@@ -2072,8 +2242,9 @@ msgstr ""
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_version_list_view_enhanced_hr_attendance
+#, fuzzy
 msgid "Remove"
-msgstr ""
+msgstr "हटाएं"
 
 #. module: hr_attendance
 #: model:ir.ui.menu,name:hr_attendance.menu_hr_attendance_reporting
@@ -2153,6 +2324,12 @@ msgid "Saturday"
 msgstr ""
 
 #. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/attendance_inline_form/attendance_inline_form.xml:0
+msgid "Save"
+msgstr ""
+
+#. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_create_view_form
 msgid "Save & Close"
 msgstr ""
@@ -2178,13 +2355,15 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "Scan your badge"
-msgstr ""
+msgstr "अपना बैज स्कैन करें"
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__res_company__attendance_barcode_source__scanner
+#, fuzzy
 msgid "Scanner"
-msgstr ""
+msgstr "स्कैनर"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance_overtime_rule__resource_calendar_id
@@ -2206,8 +2385,9 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "Select on Tablet"
-msgstr ""
+msgstr "टैबलेट पर चुनें"
 
 #. module: hr_attendance
 #: model:res.groups,name:hr_attendance.group_hr_attendance_own
@@ -2221,8 +2401,9 @@ msgstr "सीक्वेंस"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+#, fuzzy
 msgid "Set PIN codes in the employee detail form (in HR Settings tab)."
-msgstr ""
+msgstr "कर्मचारी की जानकारी वाले फ़ॉर्म (एचआर सेटिंग टैब में) में पिन कोड सेट करें।"
 
 #. module: hr_attendance
 #: model:ir.actions.act_window,name:hr_attendance.action_hr_attendance_settings
@@ -2233,8 +2414,9 @@ msgstr "कॉन्फ़िगरेशन"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/pin_code/pin_code.xml:0
+#, fuzzy
 msgid "Sign out"
-msgstr ""
+msgstr "साइन आउट करें"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_res_company__single_check_in
@@ -2271,8 +2453,9 @@ msgstr ""
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance__in_mode__systray
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance__out_mode__systray
+#, fuzzy
 msgid "Systray"
-msgstr ""
+msgstr "सिस्ट्रे"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_res_company__attendance_capture_check_in
@@ -2298,14 +2481,16 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.xml:0
+#, fuzzy
 msgid "The attendance records of your employees will be displayed here."
-msgstr ""
+msgstr "आपके कर्मचारियों के उपस्थिति रिकॉर्ड यहां दिखेंगे।"
 
 #. module: hr_attendance
 #: model_terms:ir.actions.act_window,help:hr_attendance.hr_attendance_management_action
 #: model_terms:ir.actions.act_window,help:hr_attendance.hr_attendance_reporting
+#, fuzzy
 msgid "The attendance reporting of your employees will be displayed here."
-msgstr ""
+msgstr "आपके कर्मचारियों की उपस्थिति रिपोर्ट यहां दिखेगी।"
 
 #. module: hr_attendance
 #: model_terms:ir.actions.act_window,help:hr_attendance.hr_attendance_overtime_analysis
@@ -2321,10 +2506,13 @@ msgstr ""
 #: model:ir.model.fields,help:hr_attendance.field_hr_attendance__attendance_manager_id
 #: model:ir.model.fields,help:hr_attendance.field_hr_employee__attendance_manager_id
 #: model:ir.model.fields,help:hr_attendance.field_hr_employee_public__attendance_manager_id
+#, fuzzy
 msgid ""
 "The user set in Attendance will access the attendance of the employee "
 "through the dedicated app and will be able to edit them."
 msgstr ""
+"जिस उपयोगकर्ता को उपस्थिति के लिए अनुमति दी गई है, वह ऐप से कर्मचारियों की उपस्थिति "
+"देख और बदल पाएगा।"
 
 #. module: hr_attendance
 #: model:res.groups,comment:hr_attendance.group_hr_attendance_user
@@ -2335,17 +2523,21 @@ msgstr ""
 
 #. module: hr_attendance
 #: model:res.groups,comment:hr_attendance.group_hr_attendance_own_reader
+#, fuzzy
 msgid ""
 "The user will have access to his own attendances on his user / employee "
 "profile"
-msgstr ""
+msgstr "उपयोगकर्ता/कर्मचारी प्रोफ़ाइल पर अपनी उपस्थिति ऐक्सेस कर सकेगा"
 
 #. module: hr_attendance
 #: model:res.groups,comment:hr_attendance.group_hr_attendance_officer
+#, fuzzy
 msgid ""
 "The user will have access to the attendance records and reporting of "
 "employees where he's set as an attendance manager"
 msgstr ""
+"उपयोगकर्ता को उन कर्मचारियों के उपस्थिति रिकॉर्ड और रिपोर्टिंग का ऐक्सेस होगा जिनका वह "
+"अटेडेंस मैनेजेर है"
 
 #. module: hr_attendance
 #: model_terms:ir.actions.act_window,help:hr_attendance.hr_version_list_view
@@ -2376,18 +2568,24 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-python
 #: code:addons/hr_attendance/models/hr_attendance.py:0
+#, fuzzy
 msgid ""
 "This attendance was automatically checked out because the employee exceeded "
 "the allowed time for their scheduled work hours."
 msgstr ""
+"कर्मचारी द्वारा निर्धारित काम के घंटों से ज़्यादा समय काम करने की वजह से यह उपस्थिति अपने-"
+"आप चेक आउट हो गई।"
 
 #. module: hr_attendance
 #. odoo-python
 #: code:addons/hr_attendance/models/hr_attendance.py:0
+#, fuzzy
 msgid ""
 "This attendance was automatically created to cover an unjustified absence on "
 "that day."
 msgstr ""
+"उस दिन की अनुपस्थिति को सही ठहराने के लिए सिस्टम ने अपने-आप यह उपस्थिति रिकॉर्ड बना "
+"दिया।"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_overtime_ruleset_view_form
@@ -2430,12 +2628,12 @@ msgstr "से"
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance__overtime_status__to_approve
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance_overtime_line__status__to_approve
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_management_view_filter
+#, fuzzy
 msgid "To Approve"
-msgstr ""
+msgstr "मंज़ूरी देने के लिए"
 
 #. module: hr_attendance
 #. odoo-javascript
-#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.xml:0
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
 msgid "Today"
 msgstr "आज"
@@ -2454,15 +2652,18 @@ msgstr ""
 #: model:ir.model.fields,field_description:hr_attendance.field_res_company__overtime_company_threshold
 #: model:ir.model.fields,field_description:hr_attendance.field_res_config_settings__overtime_company_threshold
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+#, fuzzy
 msgid "Tolerance Time In Favor Of Company"
-msgstr ""
+msgstr "वह अतिरिक्त समय जिसमें कंपनी कर्मचारी को देरी करने या जल्दी जाने की अनुमति देती है"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_res_company__overtime_employee_threshold
 #: model:ir.model.fields,field_description:hr_attendance.field_res_config_settings__overtime_employee_threshold
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+#, fuzzy
 msgid "Tolerance Time In Favor Of Employee"
 msgstr ""
+"वह अतिरिक्त समय जिसमें कर्मचारी को फ़ायदा मिलता है (जैसे, जल्दी चेक-आउट या देर से चेक-इन)"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -2473,8 +2674,9 @@ msgstr "कुल"
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee__total_overtime
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_employee_public__total_overtime
+#, fuzzy
 msgid "Total Overtime"
-msgstr ""
+msgstr "कुल ओवरटाइम"
 
 #. module: hr_attendance
 #: model:ir.module.module,summary:base.module_hr_attendance
@@ -2483,26 +2685,30 @@ msgstr ""
 
 #. module: hr_attendance
 #: model:ir.actions.server,name:hr_attendance.action_try_kiosk
+#, fuzzy
 msgid "Try kiosk"
-msgstr ""
+msgstr "किऑस्क आज़माएं"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.xml:0
+#, fuzzy
 msgid "Try the backend and reporting:"
-msgstr ""
+msgstr "बैकएंड और रिपोर्टिंग आज़माएं:"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.xml:0
+#, fuzzy
 msgid "Try the kiosk"
-msgstr ""
+msgstr "किऑस्क आज़माएं"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.xml:0
+#, fuzzy
 msgid "Try the top"
-msgstr ""
+msgstr "टॉप आज़माएं"
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance__day_of_date__1
@@ -2531,13 +2737,15 @@ msgstr "अज्ञात"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+#, fuzzy
 msgid "Use PIN codes (defined on the Employee's profile) to check-in."
-msgstr ""
+msgstr "चेक-इन करने के लिए (कर्मचारी प्रोफ़ाइल में बताया गया) पिन कोड का इस्तेमाल करें।"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.res_config_settings_view_form
+#, fuzzy
 msgid "Use this url to access your kiosk mode from any device."
-msgstr ""
+msgstr "किसी भी डिवाइस से किऑस्क मोड ऐक्सेस करने के लिए इस यूआरएल का इस्तेमाल करें।"
 
 #. module: hr_attendance
 #: model:ir.model,name:hr_attendance.model_res_users
@@ -2546,8 +2754,9 @@ msgstr "उपयोगकर्ता"
 
 #. module: hr_attendance
 #: model:res.groups,name:hr_attendance.group_hr_attendance_own_reader
+#, fuzzy
 msgid "User: Read his own attendances"
-msgstr ""
+msgstr "उपयोगकर्ता: अपनी उपस्थिति का रिकॉर्ड देखें"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance_overtime_rule__expected_hours
@@ -2562,13 +2771,15 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/new_employee_dialog/new_employee_dialog.js:0
+#, fuzzy
 msgid "Validation Error"
-msgstr ""
+msgstr "पुष्टिकरण में गड़बड़ी"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance_overtime_ruleset__version_ids
+#, fuzzy
 msgid "Version"
-msgstr ""
+msgstr "वर्शन"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance_overtime_ruleset__versions_count
@@ -2577,8 +2788,9 @@ msgstr ""
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_form
+#, fuzzy
 msgid "View on Maps"
-msgstr ""
+msgstr "मैप पर देखें"
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance__day_of_date__2
@@ -2587,8 +2799,9 @@ msgstr ""
 
 #. module: hr_attendance
 #: model:ir.model.fields.selection,name:hr_attendance.selection__hr_attendance_overtime_rule__quantity_period__week
+#, fuzzy
 msgid "Week"
-msgstr ""
+msgstr "सप्ताह"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -2624,36 +2837,47 @@ msgid "With a tolerance in favor of the employer of"
 msgstr ""
 
 #. module: hr_attendance
-#: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__overtime_hours
-msgid "Worked Extra Hours"
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.xml:0
+msgid "Worked"
 msgstr ""
+
+#. module: hr_attendance
+#: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__overtime_hours
+#, fuzzy
+msgid "Worked Extra Hours"
+msgstr "काम के अतिरिक्त घंटे"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__worked_hours
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_graph
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_pivot
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree
+#, fuzzy
 msgid "Worked Hours"
-msgstr ""
+msgstr "किए गए काम के घंटे"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/attendance_calendar/attendance_calendar_overview.xml:0
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_view_form
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_attendance_tree_management
+#, fuzzy
 msgid "Worked Time"
-msgstr ""
+msgstr "किए गए काम का समय"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_employee_public_view_form
 #: model_terms:ir.ui.view,arch_db:hr_attendance.view_employee_form_inherit_hr_attendance
+#, fuzzy
 msgid "Worked hours this month"
-msgstr ""
+msgstr "इस महीने किए गए काम के घंटे"
 
 #. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_version_search_view_enhanced_hr_attendance
+#, fuzzy
 msgid "Working Hours"
-msgstr ""
+msgstr "काम के घंटे"
 
 #. module: hr_attendance
 #: model:ir.model.fields,field_description:hr_attendance.field_hr_attendance__resource_calendar_id
@@ -2663,31 +2887,36 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.js:0
+#, fuzzy
 msgid "Wrong Pin"
+msgstr "गलत पिन"
+
+#. module: hr_attendance
+#. odoo-python
+#: code:addons/hr_attendance/models/hr_attendance.py:0
+msgid "You can only set a break duration once the employee has checked out."
 msgstr ""
 
 #. module: hr_attendance
 #. odoo-python
 #: code:addons/hr_attendance/models/hr_attendance.py:0
+#, fuzzy
 msgid "You cannot duplicate an attendance."
-msgstr ""
+msgstr "आप किसी उपस्थिति को डुप्लिकेट नहीं कर सकते हैं।"
 
 #. module: hr_attendance
 #. odoo-python
 #: code:addons/hr_attendance/models/hr_attendance.py:0
+#, fuzzy
 msgid "You don't have the rights to execute that action."
-msgstr ""
-
-#. module: hr_attendance
-#. odoo-python
-#: code:addons/hr_attendance/models/hr_employee.py:0
-msgid "You've already checked in."
-msgstr ""
+msgstr "इस काम को पूरा करने के लिए आपके पास ज़रूरी अनुमति नहीं है।"
 
 #. module: hr_attendance
 #. odoo-javascript
+#. odoo-python
+#: code:addons/hr_attendance/models/hr_employee.py:0
 #: code:addons/hr_attendance/static/src/components/greetings/greetings.xml:0
-msgid "You’ve already checked in."
+msgid "You've already checked in."
 msgstr ""
 
 #. module: hr_attendance
@@ -2698,14 +2927,16 @@ msgstr "और"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/pin_code/pin_code.xml:0
+#, fuzzy
 msgid "check in"
-msgstr ""
+msgstr "चेक इन करें"
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/components/pin_code/pin_code.xml:0
+#, fuzzy
 msgid "check out"
-msgstr ""
+msgstr "चेक आउट करें"
 
 #. module: hr_attendance
 #. odoo-javascript
@@ -2757,12 +2988,6 @@ msgid "from the amount defined on the contract"
 msgstr ""
 
 #. module: hr_attendance
-#. odoo-javascript
-#: code:addons/hr_attendance/static/src/components/attendance_menu/attendance_menu.xml:0
-msgid "h"
-msgstr ""
-
-#. module: hr_attendance
 #: model_terms:ir.ui.view,arch_db:hr_attendance.hr_attendance_overtime_rule_view_form
 msgid "hours"
 msgstr "घंटे"
@@ -2770,19 +2995,28 @@ msgstr "घंटे"
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.xml:0
+#, fuzzy
 msgid "icon (e.g for work from home)"
+msgstr "आइकॉन (जैसे, वर्क फ्रॉम होम)"
+
+#. module: hr_attendance
+#. odoo-javascript
+#: code:addons/hr_attendance/static/src/components/break_duration_dialog/break_duration_dialog.xml:0
+msgid "minutes"
 msgstr ""
 
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/views/attendance_helper_view.xml:0
+#, fuzzy
 msgid "or"
-msgstr ""
+msgstr " "
 
 #. module: hr_attendance
 #: model:ir.model,name:hr_attendance.model_ir_websocket
+#, fuzzy
 msgid "websocket message handling"
-msgstr ""
+msgstr "वेबसॉकेट मैसेज हैंडलिंग"
 
 #. module: hr_attendance
 #. odoo-python
@@ -2798,11 +3032,6 @@ msgstr ""
 #. module: hr_attendance
 #. odoo-javascript
 #: code:addons/hr_attendance/static/src/public_kiosk/public_kiosk_app.xml:0
+#, fuzzy
 msgid "with optional PIN code"
-msgstr ""
-
-#~ msgid "Balance"
-#~ msgstr "बैलेंस"
-
-#~ msgid "Difference"
-#~ msgstr "अंतर"
+msgstr "वैकल्पिक पिन कोड के साथ"

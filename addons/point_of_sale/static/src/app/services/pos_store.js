@@ -23,7 +23,6 @@ import {
     makeActionAwaitable,
 } from "@point_of_sale/app/utils/make_awaitable_dialog";
 import { PartnerList } from "../screens/partner_list/partner_list";
-import { computeComboItems } from "../models/utils/compute_combo_items";
 import { QRPopup } from "@point_of_sale/app/components/popups/qr_code_popup/qr_code_popup";
 import { CashMovePopup } from "@point_of_sale/app/components/popups/cash_move_popup/cash_move_popup";
 import { ClosePosPopup } from "@point_of_sale/app/components/popups/closing_popup/closing_popup";
@@ -50,6 +49,7 @@ import { ComboSuggestion } from "../models/utils/combo_suggestion";
 import { PosRouterPlugin } from "@point_of_sale/app/plugins/pos_router_plugin";
 import { CustomerDisplayTerminalPlugin } from "@point_of_sale/app/plugins/customer_display_terminal_plugin";
 import { SIZES } from "@web/core/ui/ui_utils";
+import { PosAccessRightPlugin } from "@point_of_sale/app/plugins/access_right_plugin";
 import { SnoozeDialog } from "@point_of_sale/app/components/popups/product_info_popup/snooze_dialog/snooze_dialog";
 import { formatCurrency } from "@web/core/currency";
 import { parseFloat } from "@web/views/fields/parsers";
@@ -72,6 +72,7 @@ export class PosStore extends WithLazyGetterTrap {
     _customerDisplayQrData = null;
     router = usePlugin(PosRouterPlugin);
     customerDisplay = usePlugin(CustomerDisplayTerminalPlugin);
+    accessRight = usePlugin(PosAccessRightPlugin);
 
     static excludedLazyGetters = [
         "defaultPage",
@@ -238,7 +239,6 @@ export class PosStore extends WithLazyGetterTrap {
                 }
             }
         });
-        this.checkAccessRight();
         await this.initCustomerDisplay();
     }
     formatCurrency(amount, currencyId = this.config.currency_id.id, opts = {}) {
@@ -398,10 +398,10 @@ export class PosStore extends WithLazyGetterTrap {
                 this.setCashier(this.user);
             }
         } else {
-            this.resetCashier();
+            this.accessRight.resetCashier();
         }
 
-        return !this.cashier ? { page: "LoginScreen", params: {} } : this.defaultPage;
+        return !this.accessRight.cashier ? { page: "LoginScreen", params: {} } : this.defaultPage;
     }
 
     get idleTimeout() {
@@ -461,46 +461,9 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     async showLoginScreen() {
-        this.resetCashier();
+        this.accessRight.resetCashier();
         this.navigate("LoginScreen");
         this.dialog.closeAll();
-    }
-
-    resetCashier() {
-        this.cashier = false;
-        this._resetConnectedCashier();
-    }
-
-    checkPreviousLoggedCashier() {
-        const savedCashier = this._getConnectedCashier();
-        if (savedCashier) {
-            this.setCashier(savedCashier);
-        }
-    }
-
-    setCashier(user) {
-        if (!user) {
-            return;
-        }
-
-        this.cashier = user;
-        this._storeConnectedCashier(user);
-    }
-
-    _getConnectedCashier() {
-        const cashier_id = Number(sessionStorage.getItem(`connected_cashier_${this.config.id}`));
-        if (cashier_id && this.models["res.users"].get(cashier_id)) {
-            return this.models["res.users"].get(cashier_id);
-        }
-        return false;
-    }
-
-    _storeConnectedCashier(user) {
-        sessionStorage.setItem(`connected_cashier_${this.config.id}`, user.id);
-    }
-
-    _resetConnectedCashier() {
-        sessionStorage.removeItem(`connected_cashier_${this.config.id}`);
     }
 
     async initServerData() {
@@ -565,6 +528,22 @@ export class PosStore extends WithLazyGetterTrap {
         setTimeout(() => {
             window.location.reload();
         }, 3000);
+    }
+
+    checkPreviousLoggedCashier() {
+        const savedCashier = this.accessRight._getConnectedCashier();
+        if (savedCashier) {
+            this.setCashier(savedCashier);
+        }
+    }
+
+    setCashier(user) {
+        if (!user) {
+            return;
+        }
+
+        this.accessRight.cashier = user;
+        sessionStorage.setItem(`connected_cashier_${this.config.id}`, user.id);
     }
 
     get session() {
@@ -998,8 +977,10 @@ export class PosStore extends WithLazyGetterTrap {
         return {
             attribute_value_ids: attributeLinesValues.map((values) => values[0].id),
             attribute_custom_values: [],
+            // Only no_variant extras have to be carried by the line: the extras of
+            // variant-creating attributes are already part of the variant lst_price.
             price_extra: attributeLinesValues
-                .filter((attr) => attr[0].attribute_id.create_variant !== "always")
+                .filter((attr) => attr[0].attribute_id.create_variant === "no_variant")
                 .reduce((acc, values) => acc + values[0].price_extra, 0),
             quantity: 1,
         };
@@ -1321,14 +1302,10 @@ export class PosStore extends WithLazyGetterTrap {
 
             // Product template of combo should not have more than 1 variant.
             const [childLineConf, comboExtraLines] = payload;
-            const comboPrices = computeComboItems(
-                values.product_tmpl_id.product_variant_ids[0],
+            const comboPrices = values.product_tmpl_id.product_variant_ids[0].getComboPrice(
                 childLineConf,
-                order.pricelist_id,
-                this.data.models["decimal.precision"].getAll(),
-                this.data.models["product.template.attribute.value"].getAllBy("id"),
                 comboExtraLines,
-                this.currency
+                order.pricelist_id
             );
 
             compleValue(comboPrices);
@@ -1453,7 +1430,7 @@ export class PosStore extends WithLazyGetterTrap {
             if (values.product_id.product_template_variant_value_ids.length > 0) {
                 // Verify price extra of variant products
                 const priceExtra = values.product_id.product_template_variant_value_ids
-                    .filter((attr) => attr.attribute_id.create_variant !== "always" && !opts.code)
+                    .filter((attr) => attr.attribute_id.create_variant === "no_variant")
                     .reduce((acc, attr) => acc + attr.price_extra, 0);
 
                 values.price_extra += priceExtra;
@@ -1518,20 +1495,6 @@ export class PosStore extends WithLazyGetterTrap {
 
         this.device.saveUnusedNumber([order]);
         return this.data.localDeleteCascade(order);
-    }
-
-    /**
-     * Return the current cashier (in this case, the user)
-     * @returns {name: string, id: int, role: string}
-     */
-    getCashier() {
-        return this.user;
-    }
-    getCashierUserId() {
-        return this.user?.id;
-    }
-    cashierHasPriceControlRights() {
-        return !this.config.restrict_price_control || this.getCashier()._role == "manager";
     }
     get showCashMoveButton() {
         return Boolean(this.config.cash_control && this.config._has_cash_move_perm);
@@ -1857,12 +1820,23 @@ export class PosStore extends WithLazyGetterTrap {
             { context: { fiscal_position_id: order.fiscal_position_id?.id ?? false } }
         );
 
-        const productTaxDetails = productTemplate.getTaxDetails({
-            overridedValues: {
-                pricelist: order.pricelist_id,
-                fiscalPosition: order.fiscal_position_id,
-            },
-        });
+        let productTaxDetails = null;
+        if (productTemplate.type === "combo") {
+            productTaxDetails = productTemplate.getComboTaxDetails({
+                overridedValues: {
+                    pricelist: order.pricelist_id,
+                    fiscalPosition: order.fiscal_position_id,
+                },
+            });
+        } else {
+            productTaxDetails = productTemplate.getTaxDetails({
+                overridedValues: {
+                    pricelist: order.pricelist_id,
+                    fiscalPosition: order.fiscal_position_id,
+                },
+            });
+        }
+
         const priceWithoutTax = productTaxDetails.total_excluded;
         const margin = priceWithoutTax - productTemplate.standard_price;
         const orderPriceWithoutTax = order.priceExcl;
@@ -1906,6 +1880,7 @@ export class PosStore extends WithLazyGetterTrap {
             orderTaxTotalCurrency,
             orderPriceWithTaxCurrency,
             productInfo,
+            productTaxDetails,
         };
     }
     async getClosePosInfo() {
@@ -2196,14 +2171,6 @@ export class PosStore extends WithLazyGetterTrap {
         await this.reloadData();
     }
 
-    async checkAccessRight() {
-        this.canUserCreateProduct = await user.checkAccessRight("product.product", "create");
-    }
-
-    get hasProductCreationAccess() {
-        return this.canUserCreateProduct;
-    }
-
     editPayment(order) {
         this.setOrder(order);
         this.navigate("PaymentScreen", {
@@ -2236,7 +2203,7 @@ export class PosStore extends WithLazyGetterTrap {
         });
     }
     async closePos() {
-        this._resetConnectedCashier();
+        this.accessRight.resetCashier();
         // If pos is not properly loaded, we just go back to /web without
         // doing anything in the order data.
         if (!this) {
@@ -2922,14 +2889,10 @@ export class PosStore extends WithLazyGetterTrap {
                 break;
             }
 
-            const comboPrices = computeComboItems(
-                productTmpl.product_variant_ids[0],
+            const comboPrices = productTmpl.getComboPrice(
                 payload[0],
-                order.pricelist_id,
-                this.data.models["decimal.precision"].getAll(),
-                this.data.models["product.template.attribute.value"].getAllBy("id"),
                 payload[1],
-                this.currency
+                order.pricelist_id
             );
 
             comboLine = await this.addLineToCurrentOrder(
@@ -3211,6 +3174,20 @@ export class PosStore extends WithLazyGetterTrap {
             cancelLabel: _t("Cancel"),
             cancel: () => {},
         });
+    }
+
+    toggleScanning() {
+        if (!this.scanning) {
+            const screenName = this.router.currentScreen();
+            if (["ProductScreen", "TicketScreen"].includes(screenName)) {
+                const params =
+                    screenName === "ProductScreen" ? { orderUuid: this.getOrder().uuid } : {};
+                this.navigate(screenName, params);
+            }
+        }
+        this.ticket_screen_mobile_pane = this.scanning ? "left" : "right";
+        this.mobile_pane = "right";
+        this.scanning = !this.scanning;
     }
 }
 

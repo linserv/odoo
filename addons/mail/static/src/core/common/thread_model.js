@@ -37,6 +37,40 @@ export class Thread extends Record {
             () => this.composerDisabledonUpdate(),
             { immediate: true, initialRun: false }
         );
+        this.onChange(
+            () => [this.close_chat_window],
+            function onChangeCloseChatWindow(close_chat_window) {
+                if (close_chat_window) {
+                    this.close_chat_window = undefined;
+                    this.closeChatWindow();
+                }
+            },
+            { immediate: true }
+        );
+        this.onChange(
+            () => [this.isFocusedCounter],
+            function onChangeIsFocusedCounter(isFocusedCounter) {
+                if (isFocusedCounter < 0) {
+                    this.isFocusedCounter = 0;
+                }
+            },
+            { immediate: true }
+        );
+        this.onChange(
+            () => [this.isLoaded],
+            function onChangeIsLoaded(isLoaded) {
+                if (isLoaded) {
+                    this._resolveIsLoaded();
+                } else {
+                    const { promise, resolve } = Promise.withResolvers();
+                    this.isLoadedPromise = promise;
+                    // chain the current resolve before overwriting it
+                    this.isLoadedPromise.then(this._resolveIsLoaded);
+                    this._resolveIsLoaded = resolve;
+                }
+            },
+            { immediate: true }
+        );
     }
 
     /**
@@ -75,13 +109,11 @@ export class Thread extends Record {
 
     autofocus = 0;
     activities = fields.Many("mail.activity", { onDelete: (r) => r?.remove() });
-    sortedActivities = fields.Many("mail.activity", {
-        compute() {
-            return [...this.activities].sort(
-                (a, b) => compareDatetime(a.date_deadline, b.date_deadline) || a.id - b.id
-            );
-        },
-    });
+    sortedActivities = this.computed(() =>
+        [...this.activities].sort(
+            (a, b) => compareDatetime(a.date_deadline, b.date_deadline) || a.id - b.id
+        )
+    );
     create_uid = fields.One("res.users");
     /**
      * Server-side value used in chatter to determine if the thread has pinned messages without
@@ -101,21 +133,10 @@ export class Thread extends Record {
     areAttachmentsLoaded = false;
     group_public_id = fields.One("res.groups");
     attachments = fields.Many("ir.attachment");
-    sortedAttachments = fields.Many("ir.attachment", {
-        compute() {
-            return [...this.attachments].sort((a1, a2) => a2.id - a1.id);
-        },
-    });
+    sortedAttachments = this.computed(() => [...this.attachments].sort((a1, a2) => a2.id - a1.id));
     can_react = true;
-    close_chat_window = fields.Attr(undefined, {
-        /** @this {import("models").Thread} */
-        onUpdate() {
-            if (this.close_chat_window) {
-                this.close_chat_window = undefined;
-                this.closeChatWindow();
-            }
-        },
-    });
+    /** @type {boolean|undefined} */
+    close_chat_window;
     composer = fields.One("Composer", {
         compute: () => ({}),
         inverse: "thread",
@@ -150,38 +171,10 @@ export class Thread extends Record {
     get isFocused() {
         return this.isFocusedCounter !== 0;
     }
-    isFocusedByThread = fields.Attr(false, {
-        onUpdate() {
-            if (this.isFocusedByThread) {
-                this.isFocusedCounter++;
-            } else {
-                this.isFocusedCounter--;
-            }
-        },
-    });
-    isFocusedCounter = fields.Attr(0, {
-        onUpdate() {
-            if (this.isFocusedCounter < 0) {
-                this.isFocusedCounter = 0;
-            }
-        },
-    });
+    isFocusedCounter = 0;
     isLoadingAttachments = false;
     isLoadedPromise = new Promise((resolve) => (this._resolveIsLoaded = resolve));
-    isLoaded = fields.Attr(false, {
-        /** @this {import("models").Thread} */
-        onUpdate() {
-            if (this.isLoaded) {
-                this._resolveIsLoaded();
-            } else {
-                const { promise, resolve } = Promise.withResolvers();
-                this.isLoadedPromise = promise;
-                // chain the current resolve before overwriting it
-                this.isLoadedPromise.then(this._resolveIsLoaded);
-                this._resolveIsLoaded = resolve;
-            }
-        },
-    });
+    isLoaded = false;
     /** @type {Boolean|undefined} */
     has_mail_thread;
     message_main_attachment_id = fields.One("ir.attachment");
@@ -219,11 +212,9 @@ export class Thread extends Record {
     /** @type {Array<[string,string]>} */
     priority_definition;
     needactionMessages = fields.Many("mail.message", { inverse: "threadAsNeedaction" });
-    sortedNeedactionMessages = fields.Many("mail.message", {
-        compute() {
-            return [...this.needactionMessages].sort((m1, m2) => m1.id - m2.id);
-        },
-    });
+    sortedNeedactionMessages = this.computed(() =>
+        [...this.needactionMessages].sort((m1, m2) => m1.id - m2.id)
+    );
     // FIXME: should be in the portal/frontend bundle but live chat can be loaded
     // before portal resulting in the field not being properly initialized.
     portal_partner = fields.One("res.partner");
@@ -246,7 +237,7 @@ export class Thread extends Record {
     /* The suggested recipients are the recipients that are suggested by the
      * current model and includes the recipients of the last message. (e.g: for
      * a crm lead, the model will suggest the customer associated to the lead). */
-    suggestedRecipients = fields.Attr([]);
+    suggestedRecipients = [];
     /** @type {Boolean|undefined} */
     showSubjectInSmallComposer;
     /**
@@ -280,16 +271,14 @@ export class Thread extends Record {
     pid;
     composerDisabled = this.computed(() => this.computeComposerDisabled());
     pinnedMessages = fields.Many("mail.message", { inverse: "threadAsPinned" });
-    sortedPinnedMessages = fields.Many("mail.message", {
-        compute() {
-            return [...this.pinnedMessages].sort((m1, m2) => {
-                if (m1.pinned_at === m2.pinned_at) {
-                    return m2.id - m1.id;
-                }
-                return m1.pinned_at < m2.pinned_at ? 1 : -1;
-            });
-        },
-    });
+    sortedPinnedMessages = this.computed(() =>
+        [...this.pinnedMessages].sort((m1, m2) => {
+            if (m1.pinned_at === m2.pinned_at) {
+                return m2.id - m1.id;
+            }
+            return m1.pinned_at < m2.pinned_at ? 1 : -1;
+        })
+    );
 
     async fetchPinnedMessages() {
         await this.store.fetchStoreData("mail.thread", {
@@ -383,23 +372,23 @@ export class Thread extends Record {
     });
 
     get newestPersistentMessage() {
-        return this.messages.findLast((msg) => Number.isInteger(msg.id));
+        return this.messages.findLast((msg) => msg.persistent);
     }
 
-    newestPersistentAllMessages = fields.Many("mail.message", {
-        compute() {
-            const allPersistentMessages = this.allMessages.filter((message) =>
-                Number.isInteger(message.id)
-            );
-            allPersistentMessages.sort((m1, m2) => m2.id - m1.id);
-            return allPersistentMessages;
-        },
+    newestPersistentAllMessages = this.computed(() => {
+        const allPersistentMessages = this.allMessages.filter((message) => message.persistent);
+        allPersistentMessages.sort((m1, m2) => m2.id - m1.id);
+        return allPersistentMessages;
     });
 
     newestPersistentOfAllMessage = this.computed(() => this.newestPersistentAllMessages[0]);
 
+    get newestPersistentCommentOfAllMessages() {
+        return this.newestPersistentAllMessages.find((e) => e.message_type === "comment");
+    }
+
     get oldestPersistentMessage() {
-        return this.messages.find((msg) => Number.isInteger(msg.id));
+        return this.messages.find((msg) => msg.persistent);
     }
 
     computeComposerDisabled() {}
@@ -411,9 +400,7 @@ export class Thread extends Record {
     }
 
     nonEmptyMessages = this.computed(() => this.messages.filter((message) => !message.isEmpty));
-    persistentMessages = this.computed(() =>
-        this.messages.filter((message) => !message.is_transient && !message.isPending)
-    );
+    persistentMessages = this.computed(() => this.messages.filter((message) => message.persistent));
 
     get prefix() {
         return this.channel?.isChatChannel ? "@" : "#";
@@ -538,6 +525,14 @@ export class Thread extends Record {
         this.pendingNewMessages = [];
     }
 
+    selvesBySequence = this.computed(() =>
+        this.computeSelvesBySequence().sort((a, b) => a.sequence - b.sequence)
+    );
+
+    computeSelvesBySequence() {
+        return [...this.store.selvesBySequence];
+    }
+
     /**
      * Get the effective persona performing actions on this thread.
      * Priority order: logged-in user, portal partner (token-authenticated), guest.
@@ -545,7 +540,7 @@ export class Thread extends Record {
      * @returns {import("models").ResPartner | import("models").MailGuest}
      */
     get effectiveSelf() {
-        return this.store.self_user?.partner_id || this.store.self_guest;
+        return this.selvesBySequence[0]?.self;
     }
 
     /**
@@ -779,9 +774,13 @@ export class Thread extends Record {
         this.channel?.chatWindow?.close();
     }
 
+    /**
+     * @param {import("models").Message} message
+     * @param {import("models").Message} tmpMsg
+     */
     addOrReplaceMessage(message, tmpMsg) {
         // The message from other personas (not self) should not replace the tmpMsg
-        if (tmpMsg && tmpMsg.in(this.messages) && this.effectiveSelf.eq(message.author)) {
+        if (tmpMsg && tmpMsg.in(this.messages) && message.isSelfAuthored) {
             this.messages.splice(this.messages.indexOf(tmpMsg), 1, message);
             return;
         }

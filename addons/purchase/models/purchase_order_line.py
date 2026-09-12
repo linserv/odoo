@@ -5,6 +5,7 @@ from dateutil.relativedelta import relativedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
+from odoo.fields import Domain
 from odoo.tools import DEFAULT_SERVER_DATETIME_FORMAT, get_lang
 from odoo.tools.float_utils import float_compare, float_round
 
@@ -20,8 +21,8 @@ class PurchaseOrderLine(models.Model):
     _order = 'order_id, sequence, id'
 
     name = fields.Text(
-        string='Description', required=True, compute='_compute_price_unit_and_date_planned_and_name', store=True, readonly=False)
-    translated_product_name = fields.Text(compute='_compute_translated_product_name')
+        string='Description', compute='_compute_price_unit_and_date_planned_and_name', store=True, readonly=False)
+    label = fields.Text(string="Label", compute="_compute_label", inverse="_inverse_label")
     sequence = fields.Integer(string='Sequence', default=10)
     product_qty = fields.Float(string='Quantity', digits='Product Unit', required=True)
     product_uom_qty = fields.Float(string='Total Quantity', compute='_compute_product_uom_qty', store=True)
@@ -96,6 +97,22 @@ class PurchaseOrderLine(models.Model):
     )
 
     amount_to_invoice_at_date = fields.Float(string='Amount', compute='_compute_amount_to_invoice_at_date')
+
+    accrual_move_ids = fields.Many2many(
+        comodel_name='account.move',
+        relation='purchase_order_line_accrual_move_rel',
+        column1='order_line_id',
+        column2='move_id',
+        string="Accrual Entries",
+        copy=False,
+        help="Accrual entries generated for this line, so it isn't accrued again while one is "
+             "still standing (posted, not yet reversed or cancelled).",
+    )
+
+    prepaid_expense = fields.Boolean(
+        string='Prepaid Expense', search='_search_prepaid_expense', store=False)
+    bill_to_receive = fields.Boolean(
+        string='Bill to Receive', search='_search_bill_to_receive', store=False)
 
     partner_id = fields.Many2one('res.partner', related='order_id.partner_id', string='Partner', readonly=True, store=True, index='btree_not_null')
     currency_id = fields.Many2one(related='order_id.currency_id', string='Currency')
@@ -325,18 +342,72 @@ class PurchaseOrderLine(models.Model):
             else:
                 line.selected_seller_id = False
 
-    @api.depends('price_unit_discounted', 'qty_invoiced_at_date', 'qty_received_at_date', 'product_qty')
+    @api.depends('price_unit_discounted', 'qty_invoiced_at_date', 'qty_received_at_date')
     @api.depends_context('accrual_entry_date')
     def _compute_amount_to_invoice_at_date(self):
         for line in self:
             line.amount_to_invoice_at_date = line._get_qty_to_invoice_at_date() * line.price_unit_discounted
 
     def _get_qty_to_invoice_at_date(self):
-        """Return the quantity to invoice at the accrual date, respecting the product's purchase method."""
+        """Return the quantity to invoice at the accrual date."""
         self.ensure_one()
-        if self.product_id.purchase_method == 'purchase':
-            return self.product_qty - self.qty_invoiced_at_date
         return self.qty_received_at_date - self.qty_invoiced_at_date
+
+    def _get_accrual_domain(self, date=False):
+        """ Reused by account.accrued.orders.wizard and stock_account's Stock Valuation report.
+        When `date` is given, also restrict to lines that need an accrual entry as of it: the
+        ones currently out of sync, or that were out of sync as of `date` but have since been
+        settled (nothing left to accrue today). Extended by `purchase_stock`, which can also
+        detect a receipt-side mismatch via stock moves.
+        """
+        domain = Domain([
+            ('state', '=', 'purchase'),
+            ('display_type', '=', False),
+            ('is_downpayment', '=', False),
+            ('accrual_move_ids', 'not any', [('state', '=', 'posted'), ('reversal_move_ids', '=', False)]),
+        ])
+        if date:
+            domain &= Domain.OR([
+                [('qty_to_invoice', '!=', 0)],
+                [
+                    ('order_id.invoice_status', '=', 'invoiced'),
+                    ('order_id.receipt_status', 'in', ('pending', 'partial')),
+                ],
+                [('invoice_lines.move_id.date', '>', date)],
+            ])
+        return domain
+
+    def _search_prepaid_expense(self, operator, value):
+        if operator != 'in':
+            return NotImplemented
+        return [('id', 'in', self._get_accrual_line_ids('prepaid').ids)]
+
+    def _search_bill_to_receive(self, operator, value):
+        if operator != 'in':
+            return NotImplemented
+        return [('id', 'in', self._get_accrual_line_ids('bill_to_receive').ids)]
+
+    @api.model
+    def _get_accrual_line_ids(self, mode=False, date=False, extra_domain=None):
+        """ Order lines whose invoiced and received quantities are out of sync, i.e. that need
+        an accrual entry as of `date` (today if not given). `mode` splits the result by the
+        direction of the mismatch: 'prepaid' (invoiced ahead of receipt) or 'bill_to_receive'
+        (received ahead of invoicing). Reused by the `prepaid_expense`/`bill_to_receive` filters
+        and by `res.company._get_accrual_candidate_lines`.
+        """
+        accrual_entry_date = date or fields.Date.context_today(self)
+        domain = self._get_accrual_domain(accrual_entry_date)
+        if extra_domain:
+            domain &= extra_domain
+        order_lines = self.env['purchase.order.line'].search(domain)
+        # Applied after the search: flushing pending computations with this
+        # context would corrupt the stored quantities with at-date values.
+        order_lines = order_lines.with_context(accrual_entry_date=fields.Date.to_string(accrual_entry_date))
+        if mode == 'prepaid':
+            order_lines = order_lines.filtered(lambda l: l.amount_to_invoice_at_date < 0)
+        elif mode == 'bill_to_receive':
+            order_lines = order_lines.filtered(lambda l: l.amount_to_invoice_at_date > 0)
+        return order_lines
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -350,11 +421,6 @@ class PurchaseOrderLine(models.Model):
 
         lines = super().create(vals_list)
         for line in lines:
-            if line.qty_received_method == 'manual' and line.product_id.is_storable:
-                qty_received = line.uom_id._compute_quantity(line.qty_received, line.product_id.uom_id)
-                line.product_id.sudo().with_company(line.company_id).with_context(
-                    skip_qty_available_update=True
-                ).qty_available += qty_received
             if line.product_id and line.order_id.state == 'purchase':
                 msg = _("Extra line with %s ", line.product_id.display_name)
                 line.order_id.message_post(body=msg)
@@ -390,12 +456,6 @@ class PurchaseOrderLine(models.Model):
 
         if 'qty_received' in values:
             for line in self:
-                if line.qty_received_method == 'manual' and line.product_id.is_storable:
-                    delta_qty_received = values['qty_received'] - line.qty_received
-                    delta_qty_received = line.uom_id._compute_quantity(delta_qty_received, line.product_id.uom_id)
-                    line.product_id.sudo().with_company(line.company_id).with_context(
-                        skip_qty_available_update=True
-                    ).qty_available += delta_qty_received
                 line._track_qty_received(values['qty_received'])
         return super().write(values)
 
@@ -482,34 +542,15 @@ class PurchaseOrderLine(models.Model):
         for line in self:
             if not line.product_id or line.invoice_lines or not line.company_id or self.env.context.get('skip_uom_conversion') or (line.technical_price_unit != line.price_unit):
                 continue
-            params = line._get_select_sellers_params()
+
             seller_info = line._get_seller_info()
+
             if seller_info or not line.date_planned:
                 line.date_planned = line._get_date_planned(seller_info).strftime(DEFAULT_SERVER_DATETIME_FORMAT)
 
-            # record product names to avoid resetting custom descriptions
-            default_names = []
-            display_names = []
-            vendors = line.product_id._prepare_sellers(params=params)
-            product_ctx = {'seller_id': None, 'partner_id': None, 'lang': get_lang(line.env, line.partner_id.lang).code}
-            line_without_seller = line.product_id.with_context(product_ctx)
-            default_names.append(line._get_product_purchase_description(line_without_seller))
-            for vendor in vendors:
-                product_ctx = {'seller_id': vendor.id, 'lang': get_lang(line.env, line.partner_id.lang).code}
-                default_names.append(line._get_product_purchase_description(line.product_id.with_context(product_ctx)))
-                display_names.append(line.product_id.with_context(product_ctx).display_name)
-            if not line.name or line.name in default_names:
-                product_ctx = {'seller_id': line.selected_seller_id.id, 'lang': get_lang(line.env, line.partner_id.lang).code}
+            if not line.name:
+                product_ctx = {'lang': get_lang(line.env, line.partner_id.lang).code}
                 line.name = line._get_product_purchase_description(line.product_id.with_context(product_ctx))
-            else:
-                # Checks that the product vendor and vendor name are correct
-                for vendor, display_name in zip(vendors, display_names):
-                    if line.name.startswith(display_name):
-                        if not line.selected_seller_id:
-                            line.name = line_without_seller.display_name + line.name[len(display_name):]
-                        elif vendor.id != line.selected_seller_id.id:
-                            line.name = display_names[vendors.ids.index(line.selected_seller_id.id)] + line.name[len(display_name):]
-                        break
 
             # If no seller, use the standard price. It needs a proper currency conversion.
             if not seller_info:
@@ -560,12 +601,45 @@ class PurchaseOrderLine(models.Model):
             'technical_price_unit': price_unit,
         })
 
-    @api.depends('product_id')
-    def _compute_translated_product_name(self):
+    @api.depends("product_id", "selected_seller_id", "partner_id.lang", "name")
+    def _compute_label(self):
         for line in self:
-            line.translated_product_name = line.product_id.with_context(
-                lang=line.partner_id.lang,
-            ).display_name
+            if not line.product_id:
+                line.label = line.name
+                continue
+
+            product_display_name = line._get_product_display_name()
+            if not line.name:
+                line.label = product_display_name
+            elif line.name.splitlines()[0] == product_display_name:
+                # If description already holds the product name, use it as label
+                line.label = line.name
+            else:
+                line.label = product_display_name + "\n" + line.name
+
+    def _inverse_label(self):
+        for line in self:
+            display_name = line._get_product_display_name()
+
+            if display_name and line.label:
+                line.name = (
+                    line.label
+                    .removeprefix(display_name)
+                    .removeprefix("\n")
+                )
+            else:
+                line.name = line.label
+
+    def _get_product_display_name(self):
+        self.ensure_one()
+        if not self.product_id:
+            return ""
+
+        product = self.product_id.with_context(
+            seller_id=self.selected_seller_id.id,
+            lang=get_lang(self.env, self.partner_id.lang).code,
+        )
+        return product.display_name
 
     @api.depends('uom_id', 'product_qty', 'product_id.uom_id')
     def _compute_product_uom_qty(self):
@@ -684,13 +758,16 @@ class PurchaseOrderLine(models.Model):
 
     def _get_product_purchase_description(self, product_lang):
         self.ensure_one()
-        name = product_lang.display_name
-        if product_lang.description_purchase:
-            name += '\n' + product_lang.description_purchase
-        product_lang_no_variant_attribute_value_ids = self.with_context(product_lang.env.context).product_no_variant_attribute_value_ids
+        name = product_lang.description_purchase or ""
+        product_lang_no_variant_attribute_value_ids = self.with_context(
+            product_lang.env.context
+        ).product_no_variant_attribute_value_ids
         for no_variant_attribute_value in product_lang_no_variant_attribute_value_ids:
-            name += "\n" + no_variant_attribute_value.attribute_id.name + ': ' + no_variant_attribute_value.name
-
+            if name:
+                name += "\n"
+            name += (
+                f"{no_variant_attribute_value.attribute_id.name}: {no_variant_attribute_value.name}"
+            )
         return name
 
     def _prepare_account_move_line(self, move=False):
@@ -700,7 +777,7 @@ class PurchaseOrderLine(models.Model):
 
         res = {
             'display_type': self.display_type or 'product',
-            'name': self.env['account.move.line']._get_journal_items_full_name(self.name, self.product_id.display_name),
+            'name': self.name,
             'product_id': self.product_id.id,
             'product_uom_id': self.uom_id.id,
             'quantity': -self.qty_to_invoice if move and move.move_type == 'in_refund' else self.qty_to_invoice,
@@ -764,15 +841,12 @@ class PurchaseOrderLine(models.Model):
             lang=partner_id.lang,
             partner_id=partner_id.id,
         )
-        name = product_lang.with_context(seller_id=seller_info['supplierinfo'].id if seller_info else False).display_name
-        if product_lang.description_purchase:
-            name += '\n' + product_lang.description_purchase
 
         date_planned = self.order_id.date_planned or self._get_date_planned(seller_info, po=po)
         discount = seller_info.get('discount') or 0.0
 
         return {
-            'name': name,
+            'name': product_lang.description_purchase or '',
             'product_qty': product_qty if product_uom else uom_po_qty,
             'product_id': product_id.id,
             'uom_id': product_uom.id or seller_uom.id,

@@ -28,10 +28,10 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 16.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-18 23:30+0000\n"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 20:19+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Croatian <https://translate.odoo.com/projects/odoo-master/"
+"Language-Team: Croatian <https://translate.odoo.com/projects/odoo-s19-4/"
 "purchase/hr/>\n"
 "Language: hr\n"
 "MIME-Version: 1.0\n"
@@ -39,7 +39,7 @@ msgstr ""
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=3; plural=n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: purchase
 #: model:ir.actions.report,print_report_name:purchase.action_report_purchase_order
@@ -1631,11 +1631,6 @@ msgstr "Je predujam"
 #: model:ir.model.fields,field_description:purchase.field_purchase_order__message_is_follower
 msgid "Is Follower"
 msgstr "Je pratitelj"
-
-#. module: purchase
-#: model:ir.model.fields,field_description:purchase.field_product_product__is_in_purchase_order
-msgid "Is In Purchase Order"
-msgstr "Je u Nalogu za nabavu"
 
 #. module: purchase
 #: model:ir.model.fields,field_description:purchase.field_purchase_order__is_late
@@ -4070,9 +4065,3 @@ msgid ""
 "{{ object.company_id.name }} Request for Quotation (Ref {{ object.name or 'n/"
 "a' }})"
 msgstr ""
-
-#~ msgid "Search a vendor name, or create one on the fly."
-#~ msgstr "Traži naziv dobavljača, ili ga kreiraje nabrzinu."
-
-#~ msgid "Select a product, or create a new one on the fly."
-#~ msgstr "Odaberite artikl ili stvorite novi u letu."

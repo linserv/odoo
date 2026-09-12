@@ -414,8 +414,11 @@ class AccountBankStatementLine(models.Model):
         # Otherwise field narration will be recomputed silently (at next flush) when writing on partner_id
         self.env.remove_to_compute(self.env['account.move']._fields['narration'], st_lines.move_id)
 
-        # No need for the user to manage their status (from 'Draft' to 'Posted')
-        st_lines.move_id.action_post()
+        # We only post the entry when the st_lines has no statement, when having a statement it either means
+        # we have a draft statement and then the move id will be posted on post of the statement.
+        # Or the statement was created and will be put in a statement after.
+        if not self.env.context.get('from_statement_view'):
+            st_lines.move_id.action_post()
         return st_lines.with_env(self.env)  # clear the context
 
     def write(self, vals):
@@ -427,6 +430,9 @@ class AccountBankStatementLine(models.Model):
 
     def unlink(self):
         # OVERRIDE to unlink the inherited account.move (move_id field) as well.
+        # Here we clear the linked reco model on the reconciled lines to remove them from the smart button
+        # in the reco model view, since new 'matching_rules' can match directly aml.
+        self.line_ids.reconciled_lines_ids.reconcile_model_id = None
         tracked_lines = self.filtered(lambda stl: stl.company_id.restrictive_audit_trail)
         tracked_lines.move_id.button_cancel()
         moves_to_delete = (self - tracked_lines).move_id
@@ -469,6 +475,9 @@ class AccountBankStatementLine(models.Model):
         ])
         caba_moves.line_ids._check_tax_lock_date()
 
+        # Here we clear the linked reco model on the reconciled lines to remove them from the smart button
+        # in the reco model view, since new 'matching_rules' can match directly aml.
+        self.line_ids.reconciled_lines_ids.reconcile_model_id = None
         self.line_ids.remove_move_reconcile()
         self.payment_ids.unlink()
 
@@ -484,7 +493,7 @@ class AccountBankStatementLine(models.Model):
 
     @api.ondelete(at_uninstall=False)
     def _check_allow_unlink(self):
-        if self.statement_id.filtered(lambda stmt: stmt.is_valid and stmt.is_complete):
+        if self.statement_id.filtered(lambda stmt: stmt.is_statement_posted and stmt.is_valid and stmt.is_complete):
             raise UserError(_("You can not delete a transaction from a valid statement.\n"
                               "If you want to delete it, please remove the statement first."))
 

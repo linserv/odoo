@@ -60,7 +60,8 @@ class ResCountry(models.CachedModel):
     name = fields.Char(
         string='Country Name', required=True, translate=True)
     code = fields.Char(
-        string='Country Code', size=2,
+        string='Country Code',
+        size=2,
         required=True,
         help='The ISO country code in two chars. \nYou can use this field for quick search.')
     address_format = fields.Text(string="Layout in Reports",
@@ -84,7 +85,7 @@ class ResCountry(models.CachedModel):
         compute="_compute_image_url", string="Flag",
         help="Url of static flag image",
     )
-    phone_code = fields.Integer(string='Country Calling Code')
+    phone_code = fields.Integer(string="Phone Prefix")
     country_group_ids = fields.Many2many('res.country.group', 'res_country_res_country_group_rel',
                          'res_country_id', 'res_country_group_id', string='Country Groups')
     country_group_codes = fields.Json(compute="_compute_country_group_codes")
@@ -97,7 +98,12 @@ class ResCountry(models.CachedModel):
     vat_label = fields.Char(string='Vat Label', translate=True, prefetch=True, help="Use this field if you want to change vat label.")
 
     state_required = fields.Boolean(default=False)
-    zip_required = fields.Boolean(default=True)
+    zip_applicability = fields.Selection(
+        string="Zip",
+        selection=[("required", "Required"), ("optional", "Optional"), ("not_applicable", "Not Applicable")],
+        default="required",
+        required=True,
+    )
 
     _name_uniq = models.Constraint(
         'unique (name)',
@@ -106,6 +112,10 @@ class ResCountry(models.CachedModel):
     _code_uniq = models.Constraint(
         'unique (code)',
         "The code of the country must be unique!",
+    )
+    _code_check = models.Constraint(
+        'check (length(code) = 2 and upper(code) = code)',
+        "The code of the country must be 2 letters and uppercase.",
     )
 
     @api.model

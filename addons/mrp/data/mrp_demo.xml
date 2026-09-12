@@ -6,7 +6,7 @@
             <field eval="[(3, ref('group_mrp_manager')), (4, ref('group_mrp_user'))]" name="group_ids"/>
         </record>
 
-        <record id="base.default_user_regular_group" model="res.groups">
+        <record id="base.default_user_group" model="res.groups">
             <field name="implied_ids" eval="[(4, ref('mrp.group_mrp_manager'))]"/>
         </record>
 
@@ -19,16 +19,19 @@
 
         <record id="mrp_workcenter_3" model="mrp.workcenter">
             <field name="name">Assembly 1</field>
+            <field name="barcode">assembly1</field>
             <field name="resource_calendar_id" ref="mrp.mrp_workcenter_calendar"/>
         </record>
 
         <record id="mrp_workcenter_1" model="mrp.workcenter">
             <field name="name">Drill 1</field>
+            <field name="barcode">drill1</field>
             <field name="resource_calendar_id" ref="mrp.mrp_workcenter_calendar"/>
         </record>
 
         <record id="mrp_workcenter_2" model="mrp.workcenter">
             <field name="name">Assembly 2</field>
+            <field name="barcode">assembly2</field>
             <field name="resource_calendar_id" ref="mrp.mrp_workcenter_calendar"/>
         </record>
 

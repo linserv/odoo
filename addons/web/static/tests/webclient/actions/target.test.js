@@ -1,7 +1,7 @@
 import { describe, expect, test } from "@odoo/hoot";
 import { queryAll, queryAllTexts, queryText } from "@odoo/hoot-dom";
 import { animationFrame } from "@odoo/hoot-mock";
-import { Component, onMounted, useProps, xml } from "@odoo/owl";
+import { Component, onMounted, xml } from "@odoo/owl";
 import {
     contains,
     defineActions,
@@ -382,7 +382,6 @@ describe("new", () => {
 
         class ErrorClientAction extends Component {
             static template = xml`<div/>`;
-            props = useProps();
             setup() {
                 throw new Error("my error");
             }
@@ -391,7 +390,6 @@ describe("new", () => {
 
         class ClientActionTargetNew extends Component {
             static template = xml`<div class="my_action_new" />`;
-            props = useProps();
         }
         registry.category("actions").add("clientActionNew", ClientActionTargetNew);
 
@@ -400,7 +398,6 @@ describe("new", () => {
                 <div class="my_action" t-on-click="this.onClick">
                     My Action
                 </div>`;
-            props = useProps();
             setup() {
                 this.action = useService("action");
             }
@@ -469,6 +466,30 @@ describe("new", () => {
         expect(".modal .o_breadcrumb").toHaveCount(0);
     });
 
+    test('no view switcher in actions in target="new"', async () => {
+        await mountWithCleanup(WebClient);
+
+        // execute an action in target="current"
+        await getService("action").doAction(4);
+        expect(".o_cp_switch_buttons").toHaveCount(1);
+
+        // execute an action in target="new" with several views (s.t. there could
+        // be a view switcher), even though switching view isn't supported
+        await getService("action").doAction({
+            xml_id: "action_5",
+            name: "Create a Partner",
+            res_model: "partner",
+            target: "new",
+            type: "ir.actions.act_window",
+            views: [
+                [false, "list"],
+                [false, "kanban"],
+            ],
+        });
+        expect(".modal .o_list_view").toHaveCount(1);
+        expect(".modal .o_cp_switch_buttons").toHaveCount(0);
+    });
+
     test('call switchView in an action in target="new"', async () => {
         await mountWithCleanup(WebClient);
 
@@ -519,6 +540,27 @@ describe("new", () => {
 
         await getService("action").doAction({ ...action, context: { dialog_size: "extra-large" } });
         expect(".o_dialog .modal-dialog").toHaveClass("modal-xl");
+    });
+
+    test("action in target='new' with 'dialog_size' attribute on the view's arch", async () => {
+        Partner._views["form,2"] = `
+            <form dialog_size="sm">
+                <group>
+                    <field name="display_name"/>
+                </group>
+            </form>`;
+        const action = {
+            name: "Some Action",
+            res_model: "partner",
+            type: "ir.actions.act_window",
+            target: "new",
+            views: [[2, "form"]],
+        };
+        await mountWithCleanup(WebClient);
+
+        // the arch attribute takes precedence over the 'dialog_size' context key
+        await getService("action").doAction({ ...action, context: { dialog_size: "large" } });
+        expect(".o_dialog .modal-dialog").toHaveClass("modal-sm");
     });
 
     test('click on record in list view action in target="new"', async () => {

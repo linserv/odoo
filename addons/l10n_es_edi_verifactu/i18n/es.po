@@ -8,17 +8,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 17.0+e\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-03 18:09+0000\n"
-"PO-Revision-Date: 2025-11-18 14:55+0000\n"
-"Last-Translator: \"Noemi Pla Garcia (nopl)\" <nopl@odoo.com>\n"
-"Language-Team: Spanish <https://translate.odoo.com/projects/odoo-19-l10n/"
+"POT-Creation-Date: 2026-08-28 18:19+0000\n"
+"PO-Revision-Date: 2026-08-31 16:53+0000\n"
+"Last-Translator: Anonymous <noreply@weblate.org>\n"
+"Language-Team: Spanish <https://translate.odoo.com/projects/odoo-s19-4/"
 "l10n_es_edi_verifactu/es/>\n"
 "Language: es\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 5.12.2\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: l10n_es_edi_verifactu
 #. odoo-python
@@ -65,6 +65,18 @@ msgstr ""
 
 #. module: l10n_es_edi_verifactu
 #. odoo-python
+#: code:addons/l10n_es_edi_verifactu/const.py:0
+msgid "11 - Business premises lease"
+msgstr "11 - Arrendamiento de local de negocio"
+
+#. module: l10n_es_edi_verifactu
+#. odoo-python
+#: code:addons/l10n_es_edi_verifactu/const.py:0
+msgid "17 - Special regime for retail traders"
+msgstr "17 - Régimen especial de comerciante minorista"
+
+#. module: l10n_es_edi_verifactu
+#. odoo-python
 #: code:addons/l10n_es_edi_verifactu/models/account_move.py:0
 msgid "17_igic"
 msgstr "17_igic"
@@ -77,15 +89,45 @@ msgstr ""
 
 #. module: l10n_es_edi_verifactu
 #. odoo-python
+#: code:addons/l10n_es_edi_verifactu/const.py:0
+msgid "18 - Equivalence surcharge"
+msgstr "18 - Recargo de equivalencia"
+
+#. module: l10n_es_edi_verifactu
+#. odoo-python
+#: code:addons/l10n_es_edi_verifactu/const.py:0
+msgid "18 - Special regime for small businesses or professionals"
+msgstr "18 - Régimen especial del pequeño empresario o profesional"
+
+#. module: l10n_es_edi_verifactu
+#. odoo-python
 #: code:addons/l10n_es_edi_verifactu/models/account_move.py:0
 msgid "18_iva"
 msgstr ""
 
 #. module: l10n_es_edi_verifactu
 #. odoo-python
+#: code:addons/l10n_es_edi_verifactu/const.py:0
+msgid "19 - Exempt domestic operations (Art. 25, Law 19/1994)"
+msgstr "19 - Operaciones interiores exentas (art. 25 Ley 19/1994)"
+
+#. module: l10n_es_edi_verifactu
+#. odoo-python
+#: code:addons/l10n_es_edi_verifactu/const.py:0
+msgid "19 - REAGYP"
+msgstr "19 - REAGYP"
+
+#. module: l10n_es_edi_verifactu
+#. odoo-python
 #: code:addons/l10n_es_edi_verifactu/models/account_move.py:0
 msgid "19_iva"
 msgstr ""
+
+#. module: l10n_es_edi_verifactu
+#. odoo-python
+#: code:addons/l10n_es_edi_verifactu/const.py:0
+msgid "20 - Simplified regime"
+msgstr "20 - Régimen simplificado"
 
 #. module: l10n_es_edi_verifactu
 #. odoo-python
@@ -96,7 +138,7 @@ msgstr ""
 #. module: l10n_es_edi_verifactu
 #: model_terms:ir.ui.view,arch_db:l10n_es_edi_verifactu.res_config_settings_view_form
 msgid ""
-"<i class=\"o_button_icon oi oi-fw oi oi-arrow-right\"/>\n"
+"<i class=\"o_button_icon oi oi-fw oi\" data-icon=\"east\"/>\n"
 "                                        Access Declaración Responsable"
 msgstr ""
 
@@ -246,6 +288,11 @@ msgstr "Ajustes de configuración"
 #: model:ir.model,name:l10n_es_edi_verifactu.model_res_partner
 msgid "Contact"
 msgstr "Contacto"
+
+#. module: l10n_es_edi_verifactu
+#: model:ir.model,website_form_label:l10n_es_edi_verifactu.model_res_partner
+msgid "Create a Customer"
+msgstr ""
 
 #. module: l10n_es_edi_verifactu
 #: model_terms:ir.actions.act_window,help:l10n_es_edi_verifactu.l10n_es_edi_verifactu_certificate_action
@@ -455,6 +502,11 @@ msgid "Missing Veri*Factu Tax Applicability (Impuesto)."
 msgstr "Falta la aplicabilidad fiscal de Veri*Factu (Impuesto)"
 
 #. module: l10n_es_edi_verifactu
+#: model:ir.module.module,summary:base.module_l10n_es_edi_verifactu
+msgid "Module for sending Spanish Veri*Factu XML to the AEAT"
+msgstr ""
+
+#. module: l10n_es_edi_verifactu
 #. odoo-python
 #: code:addons/l10n_es_edi_verifactu/models/verifactu_document.py:0
 msgid ""
@@ -642,6 +694,11 @@ msgid ""
 msgstr ""
 "Algunos de los documentos no se pueden enviar. Ya fueron enviados o no se "
 "pudieron generar correctamente."
+
+#. module: l10n_es_edi_verifactu
+#: model:ir.module.module,shortdesc:base.module_l10n_es_edi_verifactu
+msgid "Spain - Veri*Factu"
+msgstr ""
 
 #. module: l10n_es_edi_verifactu
 #: model_terms:ir.ui.view,arch_db:l10n_es_edi_verifactu.res_config_settings_view_form
@@ -1123,20 +1180,16 @@ msgstr ""
 "No se pueden eliminar los documentos Veri*Factu que forman parte de la "
 "cadena de documentos Veri*Factu."
 
-#~ msgid "Create a Customer"
-#~ msgstr "Crear un cliente"
+msgid "The Datetime at which the next submission to the AEAT can be made."
+msgstr ""
+"La fecha y hora en la que se puede realizar la siguiente presentación a la "
+"AEAT."
 
-#~ msgid "The Datetime at which the next submission to the AEAT can be made."
-#~ msgstr ""
-#~ "La fecha y hora en la que se puede realizar la siguiente presentación a "
-#~ "la AEAT."
+msgid "Veri*Factu Document Chain Sequence"
+msgstr "Secuencia de cadena del documento Veri*Factu"
 
-#~ msgid "Veri*Factu Document Chain Sequence"
-#~ msgstr "Secuencia de cadena del documento Veri*Factu"
+msgid "Veri*Factu Document Sequence for company %(name)s (%(id)s)"
+msgstr "Secuencia del documento Veri*Factu para la compañía %(name)s (%(id)s)"
 
-#~ msgid "Veri*Factu Document Sequence for company %(name)s (%(id)s)"
-#~ msgstr ""
-#~ "Secuencia del documento Veri*Factu para la compañía %(name)s (%(id)s)"
-
-#~ msgid "Veri*Factu Next Batch Time"
-#~ msgstr "Hora del siguiente lote de Veri*Factu"
+msgid "Veri*Factu Next Batch Time"
+msgstr "Hora del siguiente lote de Veri*Factu"

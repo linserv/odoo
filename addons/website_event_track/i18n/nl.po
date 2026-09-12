@@ -12,17 +12,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 16.0beta\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:43+0000\n"
-"PO-Revision-Date: 2026-06-21 21:18+0000\n"
+"POT-Creation-Date: 2026-09-04 17:46+0000\n"
+"PO-Revision-Date: 2026-08-31 18:58+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Dutch <https://translate.odoo.com/projects/odoo-master/"
+"Language-Team: Dutch <https://translate.odoo.com/projects/odoo-s19-4/"
 "website_event_track/nl/>\n"
 "Language: nl\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: website_event_track
 #. odoo-python
@@ -47,6 +47,12 @@ msgstr "%(name)s van %(company)s"
 #: code:addons/website_event_track/models/event_track.py:0
 msgid "%(name)s, %(function)s at %(company)s"
 msgstr "%(name)s, %(function)s bij %(company)s"
+
+#. module: website_event_track
+#. odoo-python
+#: code:addons/website_event_track/controllers/location_display.py:0
+msgid "%(start_time)s – %(end_time)s"
+msgstr ""
 
 #. module: website_event_track
 #. odoo-python
@@ -161,6 +167,15 @@ msgstr ""
 "</div>"
 
 #. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display
+msgid ""
+"<i class=\"oi me-1 align-middle\" data-icon=\"link_off\" aria-"
+"hidden=\"true\"/>\n"
+"                <span>Last updated at</span>\n"
+"                <time/>"
+msgstr ""
+
+#. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.tracks_search
 msgid ""
 "<i class=\"oi oi-filled mx-2 text-muted\" data-icon=\"notifications\"/> "
@@ -173,6 +188,11 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website_event_track.track_list_item
 msgid "<span class=\"d-none d-md-block\">&amp;bull;</span>"
 msgstr "<span class=\"d-none d-md-block\">&amp;bull;</span>"
+
+#. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_event_view_form
+msgid "<span class=\"o_stat_text\">Track Locations</span>"
+msgstr ""
 
 #. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.event_track_proposal
@@ -209,6 +229,13 @@ msgid ""
 msgstr ""
 "<span class=\"o_wetrack_proposal_label_content\">Presentatietitel</span>\n"
 "                                        <span>*</span>"
+
+#. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display_content
+msgid ""
+"<span class=\"o_wevent_location_display_live_badge d-inline-block align-"
+"middle me-2 bg-danger rounded-pill\"/>Live Now"
+msgstr ""
 
 #. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.agenda_online
@@ -1392,6 +1419,11 @@ msgid "Color Index"
 msgstr "Kleurindex"
 
 #. module: website_event_track
+#: model:ir.model.fields,field_description:website_event_track.field_event_event__location_display_upcoming_track_count
+msgid "Coming Up Sessions"
+msgstr ""
+
+#. module: website_event_track
 #. odoo-python
 #: code:addons/website_event_track/controllers/event_track.py:0
 msgid "Coming soon"
@@ -1401,6 +1433,11 @@ msgstr "Binnenkort beschikbaar"
 #: model_terms:ir.ui.view,arch_db:website_event_track.tracks_display_cards
 msgid "Coming soon ..."
 msgstr "Binnenkort beschikbaar..."
+
+#. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display_content
+msgid "Coming up"
+msgstr ""
 
 #. module: website_event_track
 #: model:ir.model.fields,field_description:website_event_track.field_event_track__company_id
@@ -1612,7 +1649,7 @@ msgstr "Ontdek ons nieuwe design team"
 #: model:ir.model.fields,field_description:website_event_track.field_website_menu__display_name
 #: model:ir.model.fields,field_description:website_event_track.field_website_visitor__display_name
 msgid "Display Name"
-msgstr "Weergavenaam"
+msgstr "Schermnaam"
 
 #. module: website_event_track
 #: model:ir.model.fields,help:website_event_track.field_event_track__website_cta
@@ -1625,7 +1662,7 @@ msgstr ""
 #. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.event_track_aside_other_track
 msgid "Done"
-msgstr "Gereed"
+msgstr "Voltooid"
 
 #. module: website_event_track
 #: model_terms:event.track,description:website_event_track.event_7_track_18
@@ -1636,11 +1673,14 @@ msgstr "Deuvelverbinding hack"
 #: model_terms:ir.ui.view,arch_db:website_event_track.agenda_online
 msgid "Drag blocks here to add them on all event agenda pages"
 msgstr ""
+"Sleep blokken hierheen om ze toe te voegen aan alle evenementagenda-pagina's"
 
 #. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.event_track_proposal
 msgid "Drag blocks here to add them on all event proposal pages"
 msgstr ""
+"Sleep blokken hierheen om ze toe te voegen aan alle pagina's met "
+"evenementvoorstellen"
 
 #. module: website_event_track
 #: model:ir.model.fields,field_description:website_event_track.field_event_track__duration
@@ -1680,6 +1720,11 @@ msgstr "E-mailsjabloon"
 #: code:addons/website_event_track/static/src/xml/website_event_track_email_reminder.xml:0
 msgid "Email*"
 msgstr "E-mail*"
+
+#. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display_empty_state
+msgid "End of the day"
+msgstr ""
 
 #. module: website_event_track
 #: model:ir.model,name:website_event_track.model_event_event
@@ -2305,6 +2350,16 @@ msgid "Location"
 msgstr "Locatie"
 
 #. module: website_event_track
+#: model:ir.model.fields,field_description:website_event_track.field_event_event__location_display_background
+msgid "Location Display Background"
+msgstr ""
+
+#. module: website_event_track
+#: model:ir.model.fields,field_description:website_event_track.field_event_track_location__location_display_url
+msgid "Location Display Link"
+msgstr ""
+
+#. module: website_event_track
 #: model:event.track,name:website_event_track.event_7_track_13
 msgid "Log House Building"
 msgstr "Bouw van houten woningen"
@@ -2467,6 +2522,11 @@ msgid "No Track Visitors yet!"
 msgstr "Nog geen trackbezoekers!"
 
 #. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display_empty_state
+msgid "No talks today"
+msgstr ""
+
+#. module: website_event_track
 #. odoo-javascript
 #: code:addons/website_event_track/static/src/xml/website_event_track_email_reminder.xml:0
 msgid "No thanks"
@@ -2499,6 +2559,16 @@ msgstr "Notitie"
 #: model:ir.model.fields,help:website_event_track.field_event_track_tag__color
 msgid "Note that colorless tags won't be available on the website."
 msgstr "Noteer dat kleurloze labels niet beschikbaar zijn op de website."
+
+#. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display_empty_state
+msgid "Nothing is scheduled in this room today."
+msgstr ""
+
+#. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display_content
+msgid "Nothing planned right now"
+msgstr ""
 
 #. module: website_event_track
 #: model:ir.model.fields,field_description:website_event_track.field_event_track__message_needaction_counter
@@ -2784,7 +2854,7 @@ msgstr "SMS fout bij versturen"
 #. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.session_topbar
 msgid "Search a talk..."
-msgstr ""
+msgstr "Zoek een presentatie ..."
 
 #. module: website_event_track
 #: model:event.track,name:website_event_track.event_7_track_6
@@ -2986,19 +3056,29 @@ msgstr "Presentatietypes"
 #. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.event_track_stage_view_form
 msgid "Task in progress. Click to block or set as done."
-msgstr "Taak in behandeling. Klik op blokkeer of zet op gereed."
+msgstr "Taak in behandeling. Klik op blokkeer of zet op voltooid."
 
 #. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.event_track_stage_view_form
 msgid "Task is blocked. Click to unblock or set as done."
 msgstr ""
-"Taak is geblokkeerd. Klik om blokkering ongedaan te maken of zet op gereed."
+"Taak is geblokkeerd. Klik om blokkering ongedaan te maken of zet op voltooid."
 
 #. module: website_event_track
 #. odoo-javascript
 #: code:addons/website_event_track/static/src/xml/event_track_proposal_templates.xml:0
 msgid "Thank you for your proposal."
 msgstr "Hartelijk dank voor je voorstel."
+
+#. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display_empty_state
+msgid "Thanks for joining us."
+msgstr ""
+
+#. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display_empty_state
+msgid "That’s all for today"
+msgstr ""
 
 #. module: website_event_track
 #: model:ir.model.fields,help:website_event_track.field_event_track__website_absolute_url
@@ -3024,6 +3104,11 @@ msgstr "De nieuwe marketing strategie"
 #: model:event.track,name:website_event_track.event_track5
 msgid "The new way to promote your creations"
 msgstr "De nieuwe manier om je creaties te promoten"
+
+#. module: website_event_track
+#: model_terms:ir.ui.view,arch_db:website_event_track.event_track_location_display_content
+msgid "The next session will begin shortly."
+msgstr ""
 
 #. module: website_event_track
 #. odoo-python
@@ -3129,7 +3214,7 @@ msgstr ""
 #. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.event_track_stage_view_form
 msgid "This step is done. Click to block or set in progress."
-msgstr "Deze stap is gedaan. Klik op blokkeer of zet op gereed."
+msgstr "Deze stap is gedaan. Klik op blokkeer of zet op voltooid."
 
 #. module: website_event_track
 #: model_terms:ir.ui.view,arch_db:website_event_track.event_track_content
@@ -3154,6 +3239,12 @@ msgstr "Titel"
 #: model_terms:ir.ui.view,arch_db:website_event_track.view_event_track_search
 msgid "Today Activities"
 msgstr "Activiteiten van vandaag"
+
+#. module: website_event_track
+#. odoo-python
+#: code:addons/website_event_track/controllers/location_display.py:0
+msgid "Tomorrow · %(date_label)s"
+msgstr ""
 
 #. module: website_event_track
 #: model:event.track,name:website_event_track.event_7_track_22
@@ -3211,6 +3302,8 @@ msgid "Track End Date"
 msgstr "Einddatum track"
 
 #. module: website_event_track
+#. odoo-python
+#: code:addons/website_event_track/models/event_event.py:0
 #: model:ir.ui.menu,name:website_event_track.menu_event_track_location
 msgid "Track Locations"
 msgstr "Tracklocaties"
@@ -3670,6 +3763,7 @@ msgstr "uur"
 
 #. module: website_event_track
 #. odoo-python
+#: code:addons/website_event_track/models/event_event.py:0
 #: code:addons/website_event_track/models/event_track.py:0
 msgid "id"
 msgstr "id"

@@ -189,7 +189,6 @@ class HrVersion(models.Model):
     country_code = fields.Char(related='company_country_id.code', depends=['company_country_id'], readonly=True)
     employee_type_id = fields.Many2one('hr.employee.type', "Employee Type", tracking=1, index=True,
                                        groups="hr.group_hr_manager")
-    additional_note = fields.Text(string='Additional Note', groups="hr.group_hr_user", tracking=1, copy=False)
 
     hr_responsible_id = fields.Many2one(
         'res.users', 'HR Responsible', tracking=1,
@@ -470,7 +469,7 @@ class HrVersion(models.Model):
     def _get_whitelist_fields_from_template(self):
         # Add here any field that you want to copy from a contract template
         # Those fields should have tracking=1 in hr.version to see the change
-        return ['job_id', 'department_id', 'employee_type_id', 'structure_type_id', 'wage', 'resource_calendar_id', 'hr_responsible_id']
+        return ['job_id', 'department_id', 'employee_type_id', 'structure_type_id', 'wage', 'resource_calendar_id', 'reference_calendar_id', 'hr_responsible_id']
 
     def get_values_from_contract_template(self, contract_template_id):
         if not contract_template_id:
@@ -767,9 +766,9 @@ class HrVersion(models.Model):
         that shares the same value for `field_name` as the current version.
 
         Useful to determine since when a given field value has been
-        continuously active (e.g. job category, job position, wage, ...).
+        continuously active (e.g. salary scale, job position, wage, ...).
 
-        :param field_name: str, the field to track (e.g. 'l10n_be_job_category_id')
+        :param field_name: str, the field to track (e.g. 'l10n_be_salary_scale_id')
         :return: date or None
         """
         self.ensure_one()

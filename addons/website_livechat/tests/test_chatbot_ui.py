@@ -4,7 +4,7 @@ from functools import wraps
 from markupsafe import Markup
 from unittest.mock import patch
 
-from odoo import Command, tests
+from odoo import Command, fields, tests
 from odoo.addons.im_livechat.controllers.chatbot import (
     LivechatChatbotScriptController as LivechatChatbotController,
 )
@@ -174,17 +174,17 @@ class TestLivechatChatbotUI(TestLivechatChatbotUICommon):
             message_author = operator or visitor_partner
             if previous_message_author != message_author:
                 if parts:
-                    parts.append(Markup("<br/>"))
+                    parts.append("")
                 parts.append(
-                    Markup("<strong>%s:</strong><br/>")
+                    Markup("<strong>%s:</strong>")
                     % (
                         (message_author.user_livechat_username if message_author._name == "res.partner" else None)
                         or message_author.name
                     ),
                 )
-            parts.append(Markup("%s<br/>") % html2plaintext(body))
+            parts.append(Markup("%s") % html2plaintext(body))
             previous_message_author = message_author
-        expected_history = Markup("").join(parts)
+        expected_history = Markup("<br/>").join(parts)
         self.assertEqual(history, expected_history)
 
     def test_complete_chatbot_flow_ui(self):
@@ -464,6 +464,51 @@ class TestLivechatChatbotUI(TestLivechatChatbotUICommon):
             channel.message_ids.filtered(lambda m: "This step should not be reached" in m.body),
         )
         self.assertEqual(count, 2, "Email step should be triggered twice (1 failure + 1 retry)")
+
+    def test_chatbot_continue_after_login(self):
+        portal_user = tests.new_test_user(
+            self.env,
+            name="Batman",
+            login="portal_user",
+            password="portal_user",
+            groups="base.group_portal",
+        )
+        guest = self.env["mail.guest"].create({"name": "Albert"})
+        closed_channel_id = self.make_jsonrpc_request(
+            "/im_livechat/get_session",
+            {"channel_id": self.livechat_channel.id},
+            cookies={guest._cookie_name: guest._format_auth_cookie()},
+        )["channel_id"]
+        closed_channel = self.env["discuss.channel"].browse(closed_channel_id)
+        closed_channel.livechat_end_dt = fields.Datetime.now()
+        guest_member = closed_channel.channel_member_ids.filtered(lambda m: m.guest_id == guest)
+        self.start_tour(
+            "/",
+            "website_livechat.chatbot_continue_after_login_tour",
+            cookies={guest._cookie_name: guest._format_auth_cookie()},
+        )
+        self.assertFalse(guest_member.exists())
+        self.assertEqual(
+            closed_channel.channel_member_ids.filtered(lambda m: m.livechat_member_type == "visitor").partner_id,
+            portal_user.partner_id,
+        )
+        self.assertCountEqual(
+            [history.partner_id or history.guest_id for history in closed_channel.livechat_customer_history_ids],
+            [guest, portal_user.partner_id],
+        )
+        self.assertFalse(closed_channel.message_ids)
+        active_channel = self.env["discuss.channel"].search([
+            ("id", "!=", closed_channel.id),
+            ("livechat_channel_id", "=", self.livechat_channel.id),
+            ("channel_member_ids.partner_id", "=", portal_user.partner_id.id),
+        ])
+        visitor_members = active_channel.channel_member_ids.filtered(lambda m: m.livechat_member_type == "visitor")
+        self.assertEqual(len(visitor_members), 1)
+        self.assertEqual(visitor_members.partner_id, portal_user.partner_id)
+        self.assertCountEqual(
+            [history.partner_id or history.guest_id for history in active_channel.livechat_customer_history_ids],
+            [guest, portal_user.partner_id],
+        )
 
 
 class TestLivechatChatbotUIMoblie(TestLivechatChatbotUICommon):

@@ -280,6 +280,7 @@
                                         options="{'show_label_warning': True}"
                                         force_save="1" domain="[('purchase_ok', '=', True), '|', ('company_id', '=', False), ('company_id', 'parent_of', parent.company_id)]"/>
                                     <field name="name" optional="show"/>
+                                    <field name="label" string="Description"/>
                                     <field name="date_planned" optional="hide" required="not display_type and not is_downpayment" force_save="1" readonly="is_downpayment"/>
                                     <field name="analytic_distribution" widget="analytic_distribution"
                                            groups="analytic.group_analytic_accounting"
@@ -1003,13 +1004,18 @@
         </field>
     </record>
 
-    <record id="action_accrued_expense_entry" model="ir.actions.act_window">
+    <record id="action_accrued_expense_entry_purchase_order_line" model="ir.actions.server">
         <field name="name">Accrued Expense Entry</field>
-        <field name="res_model">account.accrued.orders.wizard</field>
-        <field name="view_mode">form</field>
-        <field name="binding_model_id" ref="purchase.model_purchase_order"/>
+        <field name="model_id" ref="purchase.model_purchase_order_line"/>
+        <field name="binding_model_id" ref="purchase.model_purchase_order_line"/>
+        <field name="state">code</field>
         <field name="group_ids" eval="[(4, ref('account.group_account_user'))]"/>
-        <field name="target">new</field>
+        <field name="code">
+if not records:
+    raise UserError(env._("Please select at least one item from the list."))
+
+action = records.action_open_accrual_wizard()
+        </field>
     </record>
 
     <record id="action_merger" model="ir.actions.server">

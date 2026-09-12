@@ -1,6 +1,5 @@
 import { Store } from "@mail/core/common/store_service";
 import { MENU_TABS } from "@mail/core/public_web/messaging_menu/messaging_menu_model";
-import { fields } from "@mail/model/export";
 import { browser } from "@web/core/browser/browser";
 import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
@@ -50,15 +49,18 @@ const StorePatch = {
         this.activity_counter_bus_id = 0;
         this.activities_to_assign_count = undefined;
         /** @type {Object[]} */
-        this.activity_groups = fields.Attr(undefined, {
-            onUpdate() {
+        this.activity_groups = undefined;
+        this.onChange(
+            () => [this.activity_groups],
+            function onChangeActivityGroups() {
                 this.onUpdateActivityGroups();
             },
-        });
+            { immediate: true }
+        );
         this.messagingMenuSystrayState = this.computed(
             () =>
                 this.MessagingMenuUIState.get("mail.systray") ??
-                this.MessagingMenuUIState.insert({ id: "mail.systray", activeTab: MENU_TABS.CHATS })
+                this.MessagingMenuUIState.insert({ id: "mail.systray", activeTab: MENU_TABS.CHAT })
         );
     },
     initialize() {
@@ -172,12 +174,15 @@ const StorePatch = {
     async markNeedactionMessagesAsRead() {
         const { orm, notification } = this.env.services;
         const readMessageIds = await orm.silent.call("mail.message", "mark_all_as_read");
-        // Everything was read: the "Unread" filter view is now empty and fully loaded.
+        // Everything was read: any filter combination including "notification_unread" is
+        // now empty and fully loaded.
         const notificationTab = this.store.messagingMenu.notificationTab;
-        notificationTab.loadStatusByFilterId = {
-            ...notificationTab.loadStatusByFilterId,
-            notification_unread: "loaded",
-        };
+        for (const key of Object.keys(notificationTab.loadStatusByFilterId)) {
+            if (key.split("__").includes("notification_unread")) {
+                notificationTab.loadStatusByFilterId[key] = "loaded";
+            }
+        }
+        notificationTab.loadStatusByFilterId.notification_unread = "loaded";
         const close = notification.add(
             readMessageIds.length === 1
                 ? _t("1 item marked as read")

@@ -2,6 +2,7 @@
 
 from collections import Counter, defaultdict
 from ast import literal_eval
+from operator import itemgetter
 
 from odoo import _, api, fields, models
 from odoo.addons.web.controllers.utils import clean_action
@@ -742,6 +743,21 @@ class StockMoveLine(models.Model):
             self.env['stock.quant']._update_available_quantity(self.product_id, location, taken_from_untracked_qty, lot_id=lot, package_id=package, owner_id=owner, in_date=in_date)
         return available_qty, in_date
 
+    def _action_reset_to_progress(self):
+        for ml in self:
+            if not ml.product_id.is_storable or ml.uom_id.is_zero(ml.quantity_product_uom):
+                continue
+            if ml.location_dest_id.usage != 'production':
+                # avoid availability check for components, it's normal they are all consumed in MOs
+                available_at_dest = self.env['stock.quant']._get_available_quantity(
+                    ml.product_id, ml.location_dest_id, lot_id=ml.lot_id,
+                    package_id=ml.result_package_id, owner_id=ml.owner_id, strict=True)
+                if ml.product_id.uom_id.compare(available_at_dest, ml.quantity_product_uom) < 0:
+                    raise UserError(_("Cannot reset move to draft.\nQuantity not enough, product might have been used in some transfer."))
+            in_date = ml._synchronize_quant(-ml.quantity_product_uom, ml.location_dest_id, lot=ml.lot_id, package=ml.result_package_id)[1]
+            ml._synchronize_quant(ml.quantity_product_uom, ml.location_id, lot=ml.lot_id, in_date=in_date, package=ml.result_package_id)
+            ml._synchronize_quant(ml.quantity_product_uom, ml.location_id, action="reserved", lot=ml.lot_id, package=ml.result_package_id)
+
     def _get_similar_move_lines(self):
         self.ensure_one()
         lines = self.env['stock.move.line']
@@ -1234,6 +1250,38 @@ class StockMoveLine(models.Model):
         self.ensure_one()
         moves = self.picking_id.move_ids.filtered(lambda x: x.product_id == self.product_id)
         return sorted(moves, key=lambda m: m.quantity < m.product_qty, reverse=True)
+
+    @api.model
+    def _prepare_merge_distinct_fields(self):
+        return [
+            'location_dest_id', 'location_id', 'lot_id', 'lot_name', 'move_id', 'owner_id',
+            'package_id', 'picked', 'product_id', 'result_package_id', 'uom_id'
+        ]
+
+    def _merge_lines(self):
+        """ This method will try to sum move lines into a single one.
+        :return: Recordset of move lines passed to this method. If some of them were merged
+        into another existing one, return this one and not the (now unlinked) original.
+        """
+        distinct_fields = self._prepare_merge_distinct_fields()
+        lines_to_unlink = self.env['stock.move.line']  # Move lines to remove after merge.
+        merge_getter = itemgetter(*distinct_fields)
+
+        candidate_lines = self.filtered(lambda m: m.state not in ('done', 'cancel', 'draft'))
+        for __, g in groupby(candidate_lines, key=merge_getter):
+            lines = self.env['stock.move.line'].concat(g)
+            # Merge grouped move lines together.
+            if len(lines) > 1:
+                # Sum all quantity on first move line and delete the others.
+                sum_qty = sum(line.quantity for line in lines)
+                lines[0].quantity = sum_qty
+                lines_to_unlink |= lines[1:]
+
+        if lines_to_unlink:
+            lines_to_unlink.sudo().unlink()
+
+        set_ids = set(self.ids) - set(lines_to_unlink)
+        return self.env['stock.move.line'].browse(set_ids)
 
     def _should_display_put_in_pack_wizard(self, package_id, package_type_id, package_name, from_package_wizard):
         define_package_type = self._should_set_package()

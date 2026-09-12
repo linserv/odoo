@@ -120,12 +120,12 @@ export class Message extends Record {
      * @type {() => {} | undefined}
      */
     postFailRedo = undefined;
+    /** @type {string|undefined} */
+    postFailMessage = undefined;
     reactions = fields.Many("MessageReactions", { inverse: "message" });
-    sortedReactions = fields.Many("MessageReactions", {
-        compute() {
-            return [...this.reactions].sort((r1, r2) => r1.sequence - r2.sequence);
-        },
-    });
+    sortedReactions = this.computed(() =>
+        [...this.reactions].sort((r1, r2) => r1.sequence - r2.sequence)
+    );
     notification_ids = fields.Many("mail.notification", { inverse: "mail_message_id" });
     self_notification = this.computed(() =>
         this.notification_ids.find((n) => n.res_partner_id?.eq(this.store.self_user?.partner_id))
@@ -170,7 +170,7 @@ export class Message extends Record {
     pinned_at = fields.Datetime();
     /** @type {string} */
     subject;
-    /** @type {string|undefined} */
+    /** @type {TranslatedString|undefined} */
     translationValue;
     /** @type {string|undefined} */
     translationSource;
@@ -298,6 +298,10 @@ export class Message extends Record {
         return _t("Last edited %(editedDate)s", { editedDate: this.editedDatetimeMedium });
     }
 
+    selvesBySequence = this.computed(
+        () => this.thread?.selvesBySequence ?? this.store.selvesBySequence
+    );
+
     /**
      * Get the effective persona performing actions on this message.
      * Priority order: logged-in user, portal partner (token-authenticated), guest.
@@ -305,7 +309,7 @@ export class Message extends Record {
      * @returns {import("models").Persona}
      */
     get effectiveSelf() {
-        return this.thread?.effectiveSelf ?? this.store.self;
+        return this.selvesBySequence[0]?.self;
     }
 
     get datetimeMedium() {
@@ -313,14 +317,18 @@ export class Message extends Record {
     }
 
     get isSelfMentioned() {
-        return this.effectiveSelf.in(this.partner_ids);
+        return this.partner_ids.some((partner) =>
+            this.selvesBySequence.some(({ self }) => partner.eq(self))
+        );
     }
 
     get isHighlightedFromMention() {
         return this.isSelfMentioned && Boolean(this.thread?.channel);
     }
 
-    isSelfAuthored = this.computed(() => Boolean(this.author?.eq(this.effectiveSelf)));
+    isSelfAuthored = this.computed(() =>
+        this.selvesBySequence.some(({ self }) => this.author?.eq(self))
+    );
 
     isPending = false;
 
@@ -351,7 +359,7 @@ export class Message extends Record {
     }
 
     get persistent() {
-        return Number.isInteger(this.id);
+        return !this.is_transient && !this.isPending;
     }
 
     get resUrl() {
@@ -422,10 +430,9 @@ export class Message extends Record {
 
     inlineBody = this.computed(() => {
         if (this.poll) {
-            let text = this.poll.poll_question;
-            if (this.ended_poll_ids.length) {
-                text = this.poll.pollClosedText;
-            }
+            const text = this.ended_poll_ids.length
+                ? this.poll.pollClosedText
+                : this.poll.poll_question;
             return markup`<i class="oi oi oi-fw o-me-0_5" data-icon="oi_view-cohort"></i>${text}`;
         }
         if (this.notificationType === "thread_deletion") {
@@ -507,7 +514,7 @@ export class Message extends Record {
     }
 
     bodyPreview = this.computed(() => {
-        let messageBody = "";
+        let messageBody;
         if (!this.hasOnlyAttachments) {
             return this.inlineBody || this.subtype_id?.description;
         }
@@ -532,24 +539,21 @@ export class Message extends Record {
         return markup`<i class="oi me-1" data-icon="${this.previewIcon}"></i>${messageBody}`;
     });
 
-    previewText = fields.Html("", {
-        /** @this {import("models").Message} */
-        compute() {
-            const messageBody = this.bodyPreview;
-            if (this.isSelfAuthored) {
-                return markup`<i class="oi me-1 opacity-75" data-icon="reply"></i>${_t(
-                    "You: %(message_content)s",
-                    { message_content: messageBody }
-                )}`;
-            }
-            if (!this.author || this.author.notEq(this.thread?.channel?.correspondent?.persona)) {
-                return _t("%(authorName)s: %(message_content)s", {
-                    authorName: this.authorName,
-                    message_content: messageBody,
-                });
-            }
-            return messageBody;
-        },
+    previewText = this.computed(() => {
+        const messageBody = this.bodyPreview;
+        if (this.isSelfAuthored) {
+            return markup`<i class="oi me-1 opacity-75" data-icon="reply"></i>${_t(
+                "You: %(message_content)s",
+                { message_content: messageBody }
+            )}`;
+        }
+        if (!this.author || this.author.notEq(this.thread?.channel?.correspondent?.persona)) {
+            return _t("%(authorName)s: %(message_content)s", {
+                authorName: this.authorName,
+                message_content: messageBody,
+            });
+        }
+        return messageBody;
     });
 
     get previewIcon() {

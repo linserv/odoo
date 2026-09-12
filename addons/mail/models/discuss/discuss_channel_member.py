@@ -2,7 +2,6 @@
 
 import logging
 import requests
-import uuid
 from datetime import timedelta
 from markupsafe import Markup
 
@@ -269,7 +268,12 @@ class DiscussChannelMember(models.Model):
                     )
                 )
             channel = self.env["discuss.channel"].browse(vals["channel_id"])
-            if channel.channel_type == "chat" and len(channel.channel_member_ids) > 0:
+            partner = self.env["res.partner"].browse(vals.get("partner_id"))
+            guest = self.env["mail.guest"].browse(vals.get("guest_id"))
+            if (
+                channel.channel_type == "chat"
+                and channel._member_indices(partner, guest) not in channel.member_indices.split(",")
+            ):
                 raise UserError(
                     _("Adding more members to this chat isn't possible; it's designed for just two people.")
                 )
@@ -346,6 +350,7 @@ class DiscussChannelMember(models.Model):
                 # sudo: mail.message - post as sudo since the user just unsubscribed from the channel
                 channel.sudo().message_post(
                     body=notification,
+                    message_type='notification',
                     subtype_xmlid="mail.mt_comment",
                     author_id=member.partner_id.id,
                 )
@@ -545,12 +550,9 @@ class DiscussChannelMember(models.Model):
         sfu_server_url = discuss.get_sfu_url(self.env)
         if not sfu_server_url:
             return
-        sfu_local_key = self.env["ir.config_parameter"].sudo().get_str("mail.sfu_local_key")
-        if not sfu_local_key:
-            sfu_local_key = str(uuid.uuid4())
-            self.env["ir.config_parameter"].sudo().set_str("mail.sfu_local_key", sfu_local_key)
+        channel_key = discuss.get_derived_sfu_key(self.env, self.channel_id.id)
         json_web_token = jwt.sign(
-            {"iss": f"{self.get_base_url()}:channel:{self.channel_id.id}", "key": sfu_local_key},
+            {"iss": f"{self.get_base_url()}:channel:{self.channel_id.id}", "key": channel_key},
             key=discuss.get_sfu_key(self.env),
             ttl=30,
             algorithm=jwt.Algorithm.HS256,
@@ -571,7 +573,7 @@ class DiscussChannelMember(models.Model):
         for session in self.channel_id.rtc_session_ids:
             session._bus_send(
                 "discuss.channel.rtc.session/sfu_hot_swap",
-                {"serverInfo": self._get_rtc_server_info(session, ice_servers, key=sfu_local_key)},
+                {"serverInfo": self._get_rtc_server_info(session, ice_servers, key=channel_key)},
             )
 
     def _get_rtc_server_info(self, rtc_session, ice_servers=None, key=None):
@@ -580,8 +582,9 @@ class DiscussChannelMember(models.Model):
         if not sfu_channel_uuid or not sfu_server_url:
             return None
         if not key:
-            key = self.env["ir.config_parameter"].sudo().get_str("mail.sfu_local_key")
+            key = discuss.get_derived_sfu_key(self.env, self.channel_id.id)
         claims = {
+            "sfu_channel_uuid": sfu_channel_uuid,
             "session_id": rtc_session.id,
             "ice_servers": ice_servers,
         }

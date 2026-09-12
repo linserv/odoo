@@ -25,10 +25,13 @@ class StockPicking(models.Model):
         """We'll create some picking based on order_lines"""
 
         pickings = self.env['stock.picking']
-        stockable_lines = lines.filtered(lambda l: l.product_id.type == 'consu' and not l.product_id.uom_id.is_zero(l.qty))
+        stockable_lines = lines.filtered(
+            lambda l: l.product_id.type == 'consu'
+            and not l.product_id.uom_id.is_zero(l._get_qty_to_move())
+        )
         if not stockable_lines:
             return pickings
-        positive_lines = stockable_lines.filtered(lambda l: l.qty > 0)
+        positive_lines = stockable_lines.filtered(lambda l: l._get_qty_to_move() > 0)
         negative_lines = stockable_lines - positive_lines
 
         if positive_lines:
@@ -114,7 +117,7 @@ class StockPicking(models.Model):
             'picking_id': self.id,
             'picking_type_id': self.picking_type_id.id,
             'product_id': first_line.product_id.id,
-            'product_uom_qty': abs(sum(order_lines.mapped('qty'))),
+            'product_uom_qty': abs(sum(line._get_qty_to_move() for line in order_lines)),
             'location_id': self.location_id.id,
             'location_dest_id': self.location_dest_id.id,
             'company_id': self.company_id.id,
@@ -162,15 +165,6 @@ class StockPickingType(models.Model):
 
     has_stock_reports_to_print = fields.Boolean(compute='_compute_has_stock_reports_to_print')
 
-    @api.depends(
-        'auto_print_delivery_slip',
-        'auto_print_return_slip',
-        'auto_print_reception_report',
-        'auto_print_reception_report_labels',
-        'auto_print_product_labels',
-        'auto_print_lot_labels',
-        'auto_print_packages',
-    )
     def _compute_has_stock_reports_to_print(self):
         for record in self:
             record.has_stock_reports_to_print = (
@@ -181,6 +175,7 @@ class StockPickingType(models.Model):
                 or record.auto_print_product_labels
                 or record.auto_print_lot_labels
                 or record.auto_print_packages
+                or (record._fields.get('auto_print_cmr_report') and record.auto_print_cmr_report)
             )
 
     @api.depends('warehouse_id')

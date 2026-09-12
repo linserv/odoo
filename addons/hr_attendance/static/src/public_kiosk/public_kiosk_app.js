@@ -6,8 +6,9 @@ import { KioskBarcodeScanner } from "@hr_attendance/components/kiosk_barcode/kio
 import { KioskManualSelection } from "@hr_attendance/components/manual_selection/manual_selection";
 import { NewEmployeeDialog } from "@hr_attendance/components/new_employee_dialog/new_employee_dialog";
 import { KioskPinCode } from "@hr_attendance/components/pin_code/pin_code";
-import { Component, proxy, whenReady } from "@odoo/owl";
+import { Component, proxy, t, useProps, whenReady } from "@odoo/owl";
 import { browser } from "@web/core/browser/browser";
+import { deserializeDateTime } from "@web/core/l10n/dates";
 import { _t } from "@web/core/l10n/translation";
 import { MainComponentsContainer } from "@web/core/main_components_container";
 import { rpc } from "@web/core/network/rpc";
@@ -19,17 +20,18 @@ import { DocumentationLink } from "@web/views/widgets/documentation_link/documen
 
 class kioskAttendanceApp extends Component {
     static template = "hr_attendance.public_kiosk_app";
-    static props = {
-        token: { type: String },
-        companyId: { type: Number },
-        companyName: { type: String },
-        departments: { type: Array },
-        kioskMode: { type: String },
-        barcodeSource: { type: String },
-        fromTrialMode: { type: Boolean },
-        deviceTrackingEnabled: { type: Boolean },
-        captureCheckInImage: { type: Boolean },
-    };
+
+    props = useProps({
+        token: t.string(),
+        companyId: t.number(),
+        companyName: t.string(),
+        departments: t.array(),
+        kioskMode: t.string(),
+        barcodeSource: t.string(),
+        fromTrialMode: t.boolean(),
+        deviceTrackingEnabled: t.boolean(),
+        captureCheckInImage: t.boolean(),
+    });
     static components = {
         KioskBarcodeScanner,
         CardLayout,
@@ -247,19 +249,36 @@ class kioskAttendanceApp extends Component {
         }
     }
 
-    async continueAsBreakTime() {
+    continueAsBreakTime() {
         const employee = this.employeeData;
         if (!employee?.id) {
             this.kioskReturn();
             return;
         }
 
-        const minutes = await this.requestBreakDuration(employee.employee_name);
-        if (minutes === null) {
-            this.kioskReturn();
-            return;
-        }
+        this.dialogService.add(
+            BreakDurationDialog,
+            {
+                employeeName: employee.employee_name,
+                maxMinutes: this.attendanceDurationInMinutes(employee.attendance),
+                onConfirm: (minutes) => this.saveBreakDuration(employee, minutes),
+            },
+            {
+                onClose: () => this.kioskReturn(),
+            }
+        );
+    }
 
+    attendanceDurationInMinutes(attendance) {
+        if (!attendance?.check_in || !attendance?.check_out) {
+            return undefined;
+        }
+        const checkIn = deserializeDateTime(attendance.check_in);
+        const checkOut = deserializeDateTime(attendance.check_out);
+        return Math.floor(checkOut.diff(checkIn).as("minutes"));
+    }
+
+    async saveBreakDuration(employee, minutes) {
         this.ui.block();
         try {
             const identificationParams =
@@ -273,16 +292,20 @@ class kioskAttendanceApp extends Component {
                 break_duration: minutes / 60,
             });
 
-            if (result && result.attendance) {
-                this.employeeData = result;
-                this.displayServerNotification(result.notification);
-            } else {
-                this.displayNotification(_t("Could not save break duration. Please identify again."));
+            if (!result?.attendance) {
+                // No duration would go through: let the dialog close so that the
+                // employee can identify again.
+                this.displayNotification(
+                    _t("Could not save break duration. Please identify again.")
+                );
+                return true;
             }
-            this.kioskReturn();
+            this.employeeData = result;
+            this.displayServerNotification(result.notification);
+            return true;
         } catch (error) {
             this.displayNotification(error?.data?.message || error?.message);
-            this.kioskReturn();
+            return false;
         } finally {
             this.ui.unblock();
         }
@@ -292,22 +315,6 @@ class kioskAttendanceApp extends Component {
         this.state.displayDemoMessage = false;
         browser.localStorage.setItem("hr_attendance.ShowDemoMessage", "false");
         return;
-    }
-
-    requestBreakDuration(employeeName) {
-        return new Promise((resolve) => {
-            let selectedMinutes = null;
-            this.dialogService.add(
-                BreakDurationDialog,
-                {
-                    employeeName,
-                    onConfirm: (minutes) => (selectedMinutes = minutes),
-                },
-                {
-                    onClose: () => resolve(selectedMinutes),
-                }
-            );
-        });
     }
 
     setCameraCapture(capturePicture) {

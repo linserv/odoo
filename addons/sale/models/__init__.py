@@ -10,6 +10,7 @@ from . import (
     ir_config_parameter,
     payment_provider,
     payment_transaction,
+    product_category,
     product_document,
     product_pricelist_item,
     product_product,
@@ -20,3 +21,5 @@ from . import (
     sale_order_line,
     utm_campaign,
 )
+
+from . import res_groups

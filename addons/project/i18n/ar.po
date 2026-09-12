@@ -19,10 +19,10 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 16.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-19 06:31+0000\n"
-"Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Arabic <https://translate.odoo.com/projects/odoo-master/"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 17:42+0000\n"
+"Last-Translator: \"Malaz Siddig Elsayed Abuidris (msea)\" <msea@odoo.com>\n"
+"Language-Team: Arabic <https://translate.odoo.com/projects/odoo-s19-4/"
 "project/ar/>\n"
 "Language: ar\n"
 "MIME-Version: 1.0\n"
@@ -30,7 +30,7 @@ msgstr ""
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=6; plural=n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 "
 "&& n%100<=10 ? 3 : n%100>=11 ? 4 : 5;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: project
 #: model:ir.model.fields,field_description:project.field_project_project__rating_count
@@ -447,6 +447,22 @@ msgid ""
 "out=\"object.stage_id.name or ''\">Done</b></span>\n"
 "            "
 msgstr ""
+"<div>\n"
+"    عزيزنا <t t-out=\"object.partner_id.name or 'customer'\">براندن فريمان</"
+"t>،<br/>\n"
+"    يسرنا إخبارك بأننا قد أتممنا المشروع \"<strong t-out=\"object.name or "
+"''\">عمليات الترميم</strong>\".\n"
+"    <t t-if=\"user.signature\">\n"
+"        <br/>\n"
+"        <div data-o-mail-quote=\"1\">--<br data-o-mail-quote=\"1\"/><t t-"
+"out=\"user.signature or ''\">ميتشل آدمن</t></div>\n"
+"    </t>\n"
+"</div>\n"
+"<br/><span style=\"margin: 0px 0px 0px 0px; font-size: 12px; opacity: 0.5; "
+"color: #454748;\" groups=\"project.group_project_stages\">لقد وصلتك هذه "
+"الرسالة لأنه قد تم نقل مشروعك إلى مرحلة <b t-out=\"object.stage_id.name or "
+"''\">تم الانتهاء</b></span>\n"
+"            "
 
 #. module: project
 #: model:mail.template,body_html:project.mail_template_data_project_task
@@ -470,6 +486,22 @@ msgid ""
 "</div>\n"
 "        "
 msgstr ""
+"<div>\n"
+"    عزيزنا <t t-out=\"object.partner_id.name or 'customer'\">براندن فريمان</"
+"t>،<br/><br/>\n"
+"    شكراً لتواصلك معنا. نحن نُقدِّر اهتمامك بمنتجاتنا/خدماتنا.<br/>\n"
+"    يقوم فريقنا بمراجعة استفسارك وسيقومون بالرد عليك في أقرب وقت ممكن.<br/>\n"
+"    إذا كانت لديك أي أسئلة أو استفسارات أخرى في الوقت الحالي، لا تتردد في "
+"التواصل معنا. تسرنا مساعدتك.<br/><br/>\n"
+"    شكراً لتعاونك.<br/>\n"
+"    مع وافر الشكر والتقدير،\n"
+"    <t t-if=\"user.signature\">\n"
+"        <br/>\n"
+"        <div data-o-mail-quote=\"1\">--<br data-o-mail-quote=\"1\"/><t t-"
+"out=\"user.signature or ''\">ميتشل آدمن</t></div>\n"
+"    </t>\n"
+"</div>\n"
+"        "
 
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.edit_project
@@ -846,7 +878,6 @@ msgstr "الأنشطة"
 
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_project_base
 msgid "Activities of"
 msgstr "أنشطة"
 
@@ -902,7 +933,6 @@ msgstr ""
 
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_project_base
 msgid "Activity type"
 msgstr "نوع النشاط"
 
@@ -1365,7 +1395,6 @@ msgstr "المهام التي تم حجبها"
 
 #. module: project
 #: model:ir.actions.act_window,name:project.project_sharing_project_task_action_blocking_tasks
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Blocking"
 msgstr "الحجب"
 
@@ -1551,7 +1580,6 @@ msgstr ""
 #: model:ir.model.fields,field_description:project.field_report_project_task_user__company_id
 #: model_terms:ir.ui.view,arch_db:project.project_project_stage_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Company"
 msgstr "الشركة"
 
@@ -1793,6 +1821,7 @@ msgid "Created on"
 msgstr "أنشئ في"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.view_task_project_user_search
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Creation Date"
 msgstr "تاريخ الإنشاء"
@@ -1816,7 +1845,6 @@ msgstr "الرسالة المرتدة المخصصة"
 #: model:ir.model.fields,field_description:project.field_report_project_task_user__partner_id
 #: model_terms:ir.ui.view,arch_db:project.view_project
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Customer"
 msgstr "العميل"
 
@@ -2390,6 +2418,7 @@ msgid "Future"
 msgstr "المستقبل"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "Future Activities"
@@ -2491,6 +2520,11 @@ msgstr "مرحباً"
 #: code:addons/project/static/src/components/notebook_task_one2many_field/notebook_task_list_renderer.js:0
 msgid "Hide closed tasks"
 msgstr "إخفاء المهام التي تم إغلاقها"
+
+#. module: project
+#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
+msgid "High"
+msgstr ""
 
 #. module: project
 #: model:ir.model.fields.selection,name:project.selection__project_task__priority__2
@@ -2871,6 +2905,7 @@ msgid "Last Updated on"
 msgstr "آخر تحديث في"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "Late Activities"
@@ -2973,6 +3008,11 @@ msgid "Look for the"
 msgstr ""
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
+msgid "Low"
+msgstr ""
+
+#. module: project
 #: model:ir.model.fields.selection,name:project.selection__project_task__priority__0
 #: model:ir.model.fields.selection,name:project.selection__report_project_task_user__priority__0
 msgid "Low priority"
@@ -3036,6 +3076,11 @@ msgid ""
 "tasks reach a certain stage."
 msgstr ""
 "قس مدى رضا عملائك عن طريق إرسال طلبات تقييم عندما تصل مهامك إلى مرحلة معينة."
+
+#. module: project
+#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
+msgid "Medium"
+msgstr ""
 
 #. module: project
 #: model:ir.model.fields.selection,name:project.selection__project_task__priority__1
@@ -3106,6 +3151,7 @@ msgid "Months"
 msgstr "شهور"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "My Activities"
@@ -4722,6 +4768,7 @@ msgid "Show Sub-Tasks"
 msgstr ""
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "Show all records whose next activity date is past"
@@ -4963,7 +5010,6 @@ msgstr "طباعة قميص"
 #: model_terms:ir.ui.view,arch_db:project.project_tags_form_view
 #: model_terms:ir.ui.view,arch_db:project.project_tags_tree_view
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Tags"
 msgstr "علامات التصنيف"
 
@@ -5673,6 +5719,7 @@ msgid "Today"
 msgstr "اليوم"
 
 #. module: project
+#: model_terms:ir.ui.view,arch_db:project.project_update_view_search
 #: model_terms:ir.ui.view,arch_db:project.view_project_project_filter
 #: model_terms:ir.ui.view,arch_db:project.view_task_search_form
 msgid "Today Activities"
@@ -5807,6 +5854,7 @@ msgstr ""
 #. module: project
 #: model:ir.model.fields.selection,name:project.selection__project_task__priority__3
 #: model:ir.model.fields.selection,name:project.selection__report_project_task_user__priority__3
+#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_base
 msgid "Urgent"
 msgstr "عاجل"
 
@@ -5953,7 +6001,6 @@ msgstr "الظهور"
 #. module: project
 #: model_terms:ir.ui.view,arch_db:project.edit_project
 #: model_terms:ir.ui.view,arch_db:project.view_task_form2
-#: model_terms:ir.ui.view,arch_db:project.view_task_search_form_project_fsm_base
 msgid "Visible to all"
 msgstr "مرئي للكل"
 
@@ -6424,45 +6471,3 @@ msgstr "👤 غير مسند"
 #: code:addons/project/static/src/components/project_many2one_field/project_many2one_field.js:0
 msgid "🔒 Private"
 msgstr "🔒 خاص"
-
-#~ msgid " All internal users and invited portal users"
-#~ msgstr " كل المستخدمين الداخليين ومستخدمو البوابة المدعوون"
-
-#~ msgid ""
-#~ "Add project-specific property fields on tasks to customize your project "
-#~ "management process."
-#~ msgstr ""
-#~ "قم بإضافة حقول خصائص خاصة بالمشروع في المهام لتخصيص عملية إدارة مشروعك."
-
-#~ msgid ""
-#~ "Create tasks by sending an email to the email address of your project."
-#~ msgstr ""
-#~ "أنشئ المهام عن طريق إرسال رسالة إلى عنوان البريد الإلكتروني في مشروعك."
-
-#~ msgid "Emails sent to"
-#~ msgstr "رسائل البريد الإلكترونية مرسلة إلى"
-
-#~ msgid ""
-#~ "Quickly check the status of tasks for approvals or change requests and "
-#~ "identify those on hold until dependencies are resolved with the hourglass "
-#~ "icon."
-#~ msgstr ""
-#~ "قم بالتحقق من حالة مهامك التي تنتظر الموافقة أو تغيير الطلبات وتعريف "
-#~ "المهام المعلقة إلى أن يتم إكمال تبعياتها من المهام من أيقونة الساعة "
-#~ "الرملية."
-
-#~ msgid "Tip: Use task states to keep track of your tasks' progression"
-#~ msgstr "نصيحة: استخدم حالات المهام لتتبع مدى تقدم مهامك"
-
-#~ msgid "Tip: Your Own Personal Kanban"
-#~ msgstr "نصيحة: نافذة عرض كانبان الخاصة بك"
-
-#~ msgid ""
-#~ "Use personal stages to organize your tasks and create your own workflow."
-#~ msgstr "استخدم المراحل الشخصية لتنظيم مهامك وإنشاء سير العمل الخاص بك."
-
-#~ msgid "project."
-#~ msgstr "المشروع."
-
-#~ msgid "will generate tasks in your"
-#~ msgstr "سيقوم بإنشاء مهام في"

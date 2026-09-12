@@ -17,7 +17,6 @@
     --fieldWidget-margin-bottom: 0;
 
     grid-template-columns: minmax(0, 1fr);
-    margin-bottom: $o-form-spacing-unit * 4;
 
     .o_cell {
         max-width: 100%;
@@ -456,6 +455,18 @@
         }
     }
 
+    // The quick create is a narrow container whatever the viewport, so it never
+    // uses the two columns layout defined above.
+    &.o_kanban_quick_create_form {
+        .o_inner_group {
+            @include form-break-table;
+        }
+
+        &.o_form_editable .o_inner_group {
+            @include editable-form-break-table();
+        }
+    }
+
     .o_group, .o_inner_group {
         .o_field_widget {
             width: 100%;
@@ -482,6 +493,8 @@
 
     // Separators
     .o_horizontal_separator {
+        color: $gray-700;
+
         &:not(:empty) {
             box-shadow: 0 $border-width 0 $o-form-separator-color;
         }
@@ -494,9 +507,13 @@
     // Contextual adaptation
     .o_kanban_renderer {
         --Kanban-background: transparent;
-        --Kanban-gap: #{map-get($spacers, 2)};
         --KanbanRecord-margin-v: 0;
         --KanbanRecord-margin-h: 0;
+
+        &.o_kanban_ungrouped, &.o_kanban_grouped {
+            --Kanban-padding: 0;
+            --Kanban-gap: #{map-get($spacers, 2)};
+        }
     }
 
     // Notebooks
@@ -905,10 +922,10 @@
 
         .o_group {
             margin-top: 0;
+        }
 
-            .o_inner_group {
-                margin-bottom: 0 !important;
-            }
+        .o_inner_group {
+            margin-bottom: 0;
         }
 
         .o_notebook {
@@ -932,10 +949,6 @@
         .btn-add-record {
             margin-left: 0 !important;
             margin-bottom: 10px !important;
-        }
-
-        button.btn.o_external_button.fa {
-            padding-right: 0 !important;
         }
 
         .oe_inline.o_field_widget.o_field_many2one {

@@ -22,6 +22,7 @@ class HrVersion(models.Model):
     def _get_hr_responsible_domain(self):
         return "[('share', '=', False), ('company_ids', 'in', company_id), ('all_group_ids', 'in', %s)]" % self.env.ref('hr_holidays.group_hr_holidays_user').id
     hr_responsible_id = fields.Many2one(domain=_get_hr_responsible_domain)
+    allocation_from_working_schedule_id = fields.Many2one('hr.leave.allocation', string="Allocation from working schedule", copy=False, groups="hr.group_hr_user")
 
     @api.constrains('contract_date_start', 'contract_date_end')
     def _check_contracts(self):
@@ -56,6 +57,7 @@ class HrVersion(models.Model):
             # to keep creation order, not ideal but ok for now.
             if not is_created:
                 created_versions |= super().create([vals])
+            created_versions._action_trigger_accrual_plan_working_schedule()
         try:
             if all_new_leave_vals:
                 self._create_all_new_leave(all_new_leave_origin, all_new_leave_vals)
@@ -68,6 +70,12 @@ class HrVersion(models.Model):
                            "these leaves in such a way the employee no longer has the required allocation for "
                            "them. Please review these leaves and/or allocations before changing the contract.\n\n"
                            "This error has been triggered by:\n") + str(e))
+
+        for employee in created_versions.grouped('employee_id'):
+            for version in employee.version_ids.filtered(lambda v: v.allocation_from_working_schedule_id):
+                if version.allocation_from_working_schedule_id.date_to != version.date_end:
+                    version.allocation_from_working_schedule_id.write({'date_to': version.date_end})
+
         return created_versions
 
     def write(self, vals):
@@ -120,15 +128,15 @@ class HrVersion(models.Model):
 
         if 'resource_calendar_id' in vals:
             # Hour-based allocations store their duration in number_of_days, from
-            # which the accrued hours (number_of_hours_display) are derived using
+            # which the accrued hours (number_of_hours) are derived using
             # the employee's hours per day. When the working schedule changes
             # number_of_days is left stale: the next accrual adds to it and
-            # number_of_hours_display is then recomputed at the new hours per day,
+            # number_of_hours is then recomputed at the new hours per day,
             # revaluing the hours accrued under the old schedule and losing part of
             # the balance. Recompute number_of_days now from the still-correct
-            # number_of_hours_display so the accrued hours are preserved. It is set
+            # number_of_hours so the accrued hours are preserved. It is set
             # explicitly rather than through the compute graph because
-            # number_of_days and number_of_hours_display depend on each other and
+            # number_of_days and number_of_hours depend on each other and
             # the recomputation order is not guaranteed.
             allocations = self.env['hr.leave.allocation'].search([
                 ('employee_id', 'in', self.employee_id.ids),
@@ -137,7 +145,9 @@ class HrVersion(models.Model):
             for allocation in hour_allocations:
                 hours_per_day = allocation.employee_id._get_hours_per_day(allocation.date_from)
                 if hours_per_day:
-                    allocation.number_of_days = allocation.number_of_hours_display / hours_per_day
+                    allocation.number_of_days = allocation.number_of_hours / hours_per_day
+
+            self._action_trigger_accrual_plan_working_schedule()
 
         return result
 
@@ -296,3 +306,34 @@ class HrVersion(models.Model):
     @api.model
     def _get_work_entry_source_fields(self):
         return super()._get_work_entry_source_fields() + ['leave_ids']
+
+    def _action_trigger_accrual_plan_working_schedule(self):
+
+        for version in self:
+            previous_allocation = version.allocation_from_working_schedule_id
+            working_schedule = version.resource_calendar_id
+
+            if previous_allocation:
+                try:
+                    previous_allocation.with_context(allocation_skip_state_check=True).unlink()
+                except ValidationError as e:
+                    raise ValidationError(
+                        self.env._("Can't change current working schedule while there are already validated leaves"
+                                   "that were created with allocations coming from the working schedule"
+                                   "Please review these leaves and/or allocations before changing anything\n\n"
+                                   "This error has been triggered by:\n") + str(e))
+
+            if not working_schedule or (working_schedule.work_time_rate <= 1.0 or not working_schedule.leave_accrual_plan_id):
+                continue
+
+            version.allocation_from_working_schedule_id = self.env['hr.leave.allocation'].create({
+                'name': 'Compensatory Allocations for the difference in working schedules',
+                'accrual_plan_id': working_schedule.leave_accrual_plan_id.id,
+                'employee_id': version.employee_id.id,
+                'work_entry_type_id': working_schedule.leave_accrual_plan_id.work_entry_type_id.id,
+                'date_from': version.date_version,
+                'date_to': version.date_end,
+                'state': 'confirm',
+            })
+            version.allocation_from_working_schedule_id._update_accrual()
+            version.allocation_from_working_schedule_id.action_approve()

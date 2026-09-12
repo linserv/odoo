@@ -8,11 +8,14 @@ import { patch } from "@web/core/utils/patch";
 const discussChannelPatch = {
     setup() {
         super.setup(...arguments);
-        this.isLocallyPinned = fields.Attr(false, {
-            onUpdate() {
+        this.isLocallyPinned = false;
+        this.onChange(
+            () => [this.isLocallyPinned],
+            function onChangeIsLocallyPinned() {
                 this.onPinStateUpdated();
             },
-        });
+            { immediate: true }
+        );
         this.lastSubChannelLoaded = fields.One("discuss.channel");
         this.loadSubChannelsDone = false;
         this.messagingMenuTabs = fields.Many("MessagingMenuTab", {
@@ -25,7 +28,12 @@ const discussChannelPatch = {
             },
             eager: true,
         });
-        this.primaryMessagingMenuTab = this.computed(() => this.messagingMenuTabs[0]);
+        this.primaryMessagingMenuTab = this.computed(
+            () =>
+                // A context specific tab only exists within its context: it wins over the
+                // app wide tab claiming the same channel.
+                this.messagingMenuTabs.find((t) => !t.appWide) ?? this.messagingMenuTabs[0]
+        );
         this.messagingMenuTabsWithCounter = fields.Many("MessagingMenuTab", {
             inverse: "channelsWithCounter",
             /** @this {import("models").DiscussChannel} */

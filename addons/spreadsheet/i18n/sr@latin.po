@@ -2,25 +2,25 @@
 # This file contains the translation of the following modules:
 # * spreadsheet
 #
-# Weblate <noreply-mt-weblate@weblate.org>, 2025, 2026.
+# Weblate <noreply-mt-weblate@weblate.org>, 2025.
 # Odoo Translation Bot <c3p@odoo.com>, 2026.
 # Dragan Vukosavljevic <dragan.vukosavljevic@gmail.com>, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0+e\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:43+0000\n"
-"PO-Revision-Date: 2026-06-21 14:21+0000\n"
-"Last-Translator: Weblate <noreply-mt-weblate@weblate.org>\n"
+"POT-Creation-Date: 2026-09-04 17:46+0000\n"
+"PO-Revision-Date: 2026-08-31 19:29+0000\n"
+"Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Serbian (Latin script) <https://translate.odoo.com/projects/"
-"odoo-master/spreadsheet/sr_Latn/>\n"
+"odoo-s19-4/spreadsheet/sr_Latn/>\n"
 "Language: sr@latin\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=3; plural=n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -85,7 +85,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "%(count)s matches in %(sheetName)s"
+msgid "%(count)s matches in '%(sheetName)s'"
 msgstr ""
 
 #. module: spreadsheet
@@ -97,7 +97,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "%(count)s matches in range %(range)s of %(sheetName)s"
+msgid "%(count)s matches in range %(range)s of '%(sheetName)s'"
 msgstr ""
 
 #. module: spreadsheet
@@ -226,9 +226,8 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/list/plugins/list_ui_plugin.js:0
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "%s (copy)"
-msgstr "%s (kopija)"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -449,7 +448,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "1 match in %(sheetName)s"
+msgid "1 match in '%(sheetName)s'"
 msgstr ""
 
 #. module: spreadsheet
@@ -461,7 +460,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "1 match in range %(range)s of %(sheetName)s"
+msgid "1 match in range %(range)s of '%(sheetName)s'"
 msgstr ""
 
 #. module: spreadsheet
@@ -805,9 +804,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/actions/spreadsheet_download_action.js:0
-#, fuzzy
 msgid "Access Error"
-msgstr "Greška u pristupu"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -820,9 +818,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Accounting"
-msgstr "Računovodstvo"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -985,16 +982,14 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Alignment"
-msgstr "Poravnanje"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "All"
-msgstr "Sve"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1228,9 +1223,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Anonymous"
-msgstr "Anoniman"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1449,9 +1443,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Automatic"
-msgstr "Automatski"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1651,9 +1644,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Black"
-msgstr "Crna"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1758,18 +1750,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "By %(header)s"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "By Category"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "By Name"
 msgstr ""
 
 #. module: spreadsheet
@@ -1918,9 +1898,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Calendar"
-msgstr "Kalendar"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1931,9 +1910,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Cancel"
-msgstr "Otkaži"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2024,9 +2002,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Carousel"
-msgstr "Vrteška"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2082,12 +2059,6 @@ msgstr ""
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
 msgid "Category"
 msgstr "Kategorija"
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Category Comparison"
-msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2494,9 +2465,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Columns"
-msgstr "Kolone"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2659,9 +2629,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Configuration"
-msgstr "Podešavanje"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2802,12 +2771,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "Copy of %s"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Correlation"
 msgstr ""
 
 #. module: spreadsheet
@@ -3100,9 +3063,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Data"
-msgstr "Podaci"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3201,9 +3163,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Date"
-msgstr "Datum"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3346,16 +3307,14 @@ msgstr "Datum:"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Day"
-msgstr "Dan"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Day of Month"
-msgstr "Dan u mesecu"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3379,7 +3338,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/chart/plugins/odoo_chart_feature_plugin.js:0
 msgid "Days"
-msgstr "dana"
+msgstr "Dani"
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3955,9 +3914,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Duplicate"
-msgstr "Dupliraj"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3968,9 +3926,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Duration"
-msgstr "Trajanje"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4331,9 +4288,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "File"
-msgstr "Datoteka"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4388,9 +4344,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Financial"
-msgstr "Finansijski"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4534,9 +4489,8 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Format"
-msgstr "Format"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4661,9 +4615,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Function"
-msgstr "Funkcija"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4984,9 +4937,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Green"
-msgstr "Zeleno"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5010,9 +4962,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Group"
-msgstr "Grupa"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5382,9 +5333,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Image"
-msgstr "Slika"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5493,16 +5443,14 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Info"
-msgstr "Informacija"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Information"
-msgstr "Informacija"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5621,9 +5569,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Integer"
-msgstr "Okidač"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5927,12 +5874,6 @@ msgstr "Jun"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "KPI Overview"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "KURT requires at least 4 values."
 msgstr ""
 
@@ -5962,12 +5903,6 @@ msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Label"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
 msgid "Labels"
 msgstr ""
@@ -5986,9 +5921,8 @@ msgstr ""
 
 #. module: spreadsheet
 #: model:ir.model,name:spreadsheet.model_res_lang
-#, fuzzy
 msgid "Language"
-msgstr "Jezik"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6466,9 +6400,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Medium"
-msgstr "Posrednik"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6624,9 +6557,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Miscellaneous"
-msgstr "Ostalo"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6654,9 +6586,8 @@ msgstr ""
 
 #. module: spreadsheet
 #: model:ir.model,name:spreadsheet.model_ir_model
-#, fuzzy
 msgid "Model"
-msgstr "Model"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6752,13 +6683,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Multi-series"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Multi-series over Time"
+msgid "Multi-series By %(categoryHeader)s"
 msgstr ""
 
 #. module: spreadsheet
@@ -6771,9 +6696,8 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Name"
-msgstr "Ime"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6856,9 +6780,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Next"
-msgstr "Sledeće"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6869,9 +6792,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/hooks.js:0
-#, fuzzy
 msgid "No"
-msgstr "Ne"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6900,7 +6822,10 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-msgid "No chart suggestions available for the selected data."
+msgid ""
+"No chart suggestions available for the selected data. Note that the order of "
+"selected\n"
+"        columns can impact chart suggestions."
 msgstr ""
 
 #. module: spreadsheet
@@ -6954,9 +6879,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "No results"
-msgstr "Nema rezultata"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7358,9 +7282,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Operator"
-msgstr "Operator"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7396,12 +7319,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "Others"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Over Time"
 msgstr ""
 
 #. module: spreadsheet
@@ -7487,9 +7404,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Percent"
-msgstr "Procenat"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7566,9 +7482,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Pivot"
-msgstr "Pivot"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7719,9 +7634,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Power"
-msgstr "Eksponent"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7774,9 +7688,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Print"
-msgstr "Štampaj"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7800,12 +7713,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "Product of values from a table-like range."
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Profile Comparison"
 msgstr ""
 
 #. module: spreadsheet
@@ -7909,9 +7816,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Quarterly"
-msgstr "Kvartalno"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7999,24 +7905,6 @@ msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Rate"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Rate over Time"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Rates by Category"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
 msgid "Re-analyze"
 msgstr ""
@@ -8048,9 +7936,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Red"
-msgstr "Crveno"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8200,9 +8087,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Reset"
-msgstr "Resetuj"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8778,9 +8664,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Second"
-msgstr "Drugi"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8902,9 +8787,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Settings"
-msgstr "Podešavanje"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8933,9 +8817,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/components/share_button/share_button.xml:0
-#, fuzzy
 msgid "Share"
-msgstr "Podeli"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -9606,9 +9489,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Subtotal"
-msgstr "Ukupno"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -9730,9 +9612,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Table"
-msgstr "Sto"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -13944,12 +13825,6 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Two-level hierarchy"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "Two-level hierarchy weighted by value."
 msgstr ""
 
@@ -14170,9 +14045,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Update"
-msgstr "Ažuriraj"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14589,9 +14463,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "View"
-msgstr "Pregled"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14602,9 +14475,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Volume"
-msgstr "Obim"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14659,9 +14531,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Web"
-msgstr "Web"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14684,9 +14555,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Week"
-msgstr "Nedelja"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14717,9 +14587,8 @@ msgstr "Nedelje"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Weight"
-msgstr "Težina"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -15033,9 +14902,8 @@ msgstr "Godine"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/hooks.js:0
-#, fuzzy
 msgid "Yes"
-msgstr "Da"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -15497,5 +15365,5 @@ msgstr ""
 msgid "yesterday"
 msgstr ""
 
-#~ msgid "Filters"
-#~ msgstr "Filteri"
+msgid "Filters"
+msgstr "Filteri"

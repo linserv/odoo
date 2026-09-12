@@ -773,9 +773,9 @@ class Website(Home):
     def _get_configurator_preview_overrides(self, palette, final_html, is_dark=False):
         """Return the CSS variables injected into static configurator previews.
 
-        The selected palette overrides the preview's base colors. Text color
-        variables are derived from the preview color-combination backgrounds to
-        keep text readable after the palette changes.
+        The selected palette overrides the preview's base colors. Text colors
+        are derived from palette and color-combination backgrounds to keep them
+        readable after the palette changes.
 
         :param list[str] palette: selected palette colors ordered from
             ``o-color-1`` to ``o-color-5``
@@ -799,6 +799,14 @@ class Website(Home):
             final_html,
             palette_map,
         )
+        background_color_overrides = ''
+        for color_name, background_color in sorted(palette_map.items()):
+            text_color = self._get_configurator_preview_contrast_color(background_color)
+            if text_color:
+                background_color_overrides += (
+                    f'.bg-{color_name}'
+                    f'{{--color:{text_color};color:{text_color};}}'
+                )
         dark_mode_overrides = ''
         if is_dark:
             root_variables += (
@@ -838,6 +846,7 @@ class Website(Home):
         return (
             '<style id="o_configurator_theme_preview_overrides">'
             f':root{{{root_variables}}}'
+            f'{background_color_overrides}'
             f'{dark_mode_overrides}'
             '.o_we_shape{top:-2px;bottom:-2px;}'
             'section{margin-top:-2px;}'
@@ -885,6 +894,7 @@ class Website(Home):
             raise NotFound()
 
         industry_id = int(industry_id)
+        is_dark_color_palette = is_dark == '1'
         palette = [color1, color2, color3, color4, color5]
         palette_map = {
             f'o-color-{index}': color
@@ -896,7 +906,7 @@ class Website(Home):
         final_html = self._load_configurator_preview_html(preview_url)
         final_html = self._apply_configurator_preview_shape_colors(final_html, palette_map)
         final_html = self._apply_configurator_preview_images(final_html, theme_name, images_map)
-        if is_dark == '1':
+        if is_dark_color_palette:
             preview_doc = html.document_fromstring(final_html)
             preview_doctype = preview_doc.getroottree().docinfo.doctype
             adapt_dark_palette_content(preview_doc)
@@ -910,7 +920,7 @@ class Website(Home):
         preview_overrides = self._get_configurator_preview_overrides(
             palette,
             final_html,
-            is_dark=is_dark == '1',
+            is_dark=is_dark_color_palette,
         )
         final_html = self._inject_configurator_preview_overrides(
             final_html,
@@ -1828,6 +1838,7 @@ class Website(Home):
                     'mimetype': 'application/json',
                     'raw': json_content,
                 })
+                metadata['url'] = f"/web/font/{metadata.id}/{metadata['name']}"
         return json.loads(metadata.raw.content)
 
     def _get_customize_data(self, keys, is_view_data):
@@ -1964,6 +1975,7 @@ class Website(Home):
                 'raw': data,
                 'public': True,
             })
+            attachment['url'] = f"/web/font/{attachment.id}/{font['name']}"
             font['id'] = attachment.id
             font['url'] = f"/web/content/{attachment.id}/{font['name']}"
             return font

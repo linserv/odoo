@@ -2,29 +2,30 @@ import { usePopover } from "@web/core/popover/popover_hook";
 import { user } from "@web/core/user";
 import { formatNumber } from "@hr_holidays/views/hooks";
 import { useService } from "@web/core/utils/hooks";
-import { Component, computed } from "@odoo/owl";
+import { Component, computed, t, useProps } from "@odoo/owl";
 export class TimeOffCardPopover extends Component {
     static template = "hr_holidays.TimeOffCardPopover";
-    static props = [
-        "allocated",
-        "accrual_bonus",
-        "approved",
-        "planned",
-        "left",
-        "warning",
-        "closest",
-        "unit_of_measure",
-        "exceeding_duration",
-        "close?",
-        "allows_negative",
-        "max_allowed_negative",
-        "errorLeaves",
-        "accrualExcess",
-        "timeOffType",
-        "employeeId",
-        "employeeCompany",
-        "employeeCountry",
-    ];
+
+    props = useProps({
+        allocated: t.any(),
+        accrual_bonus: t.any(),
+        approved: t.any(),
+        planned: t.any(),
+        left: t.any(),
+        warning: t.any(),
+        closest: t.any(),
+        unit_of_measure: t.any(),
+        exceeding_duration: t.any(),
+        close: t.any().optional(),
+        allows_negative: t.any(),
+        max_allowed_negative: t.any(),
+        errorLeaves: t.any(),
+        accrualExcess: t.any(),
+        timeOffType: t.any(),
+        employeeId: t.any(),
+        employeeCompany: t.any(),
+        employeeCountry: t.any(),
+    });
 
     setup() {
         this.actionService = useService("action");
@@ -47,15 +48,24 @@ export class TimeOffCardPopover extends Component {
         const today = new Date().toISOString().split("T")[0];
         const isInHolidaysUserGroup = await user.hasGroup("hr_holidays.group_hr_holidays_user");
 
-        const resModel = "hr.leave.allocation"
-        const name = "My Allocations"
-        const context = isInHolidaysUserGroup ? {} : {
-            list_view_ref: "hr_holidays.hr_leave_allocation_view_tree_my",
-            form_view_ref: "hr_holidays.hr_leave_allocation_view_form",
-        }
-        const domain = [["work_entry_type_id", "=", timeOffType], ['employee_company_id','=', employeeCompany],
-                '|', ["date_to", "=", false], ["date_to", ">=", today],
-                employeeId ? ['employee_id', '=', employeeId] : ['employee_id.user_id', '=', user.userId]]
+        const resModel = "hr.leave.allocation";
+        const name = "My Allocations";
+        const context = isInHolidaysUserGroup
+            ? {}
+            : {
+                  list_view_ref: "hr_holidays.hr_leave_allocation_view_tree_my",
+                  form_view_ref: "hr_holidays.hr_leave_allocation_view_form",
+              };
+        const domain = [
+            ["work_entry_type_id", "=", timeOffType],
+            ["employee_company_id", "=", employeeCompany],
+            "|",
+            ["date_to", "=", false],
+            ["date_to", ">=", today],
+            employeeId
+                ? ["employee_id", "=", employeeId]
+                : ["employee_id.user_id", "=", user.userId],
+        ];
 
         openLeaveWindow(this.actionService, resModel, name, domain, context);
     }
@@ -67,9 +77,9 @@ export class TimeOffCardPopover extends Component {
         const resModel = "hr.leave";
         const name = "My Time Off";
         const domain = [
-            ['state', 'in', stateList],
-            ['work_entry_type_id', '=', timeOffType],
-            employeeId ? ['employee_id', '=', employeeId] : ['user_id', '=', user.userId]
+            ["state", "in", stateList],
+            ["work_entry_type_id", "=", timeOffType],
+            employeeId ? ["employee_id", "=", employeeId] : ["user_id", "=", user.userId],
         ];
         const context = isInHolidaysUserGroup
             ? {
@@ -89,7 +99,14 @@ export class TimeOffCardPopover extends Component {
 
 export class TimeOffCard extends Component {
     static template = "hr_holidays.TimeOffCard";
-    static props = ["name", "data", "requires_allocation", "employeeId", "holidayStatusId"];
+
+    props = useProps({
+        name: t.any(),
+        data: t.any(),
+        requires_allocation: t.any(),
+        employeeId: t.any(),
+        holidayStatusId: t.any(),
+    });
 
     setup() {
         this.popover = usePopover(TimeOffCardPopover, {
@@ -140,8 +157,12 @@ export class TimeOffCard extends Component {
     }
 
     onClickInfo(ev) {
+        this.popover.open(ev.target, this.getPopoverProps());
+    }
+
+    getPopoverProps() {
         const { data, holidayStatusId, employeeId } = this.props;
-        this.popover.open(ev.target, {
+        return {
             allocated: formatNumber(this.lang, data.max_leaves),
             accrual_bonus: formatNumber(this.lang, data.accrual_bonus),
             approved: formatNumber(this.lang, data.leaves_approved),
@@ -158,8 +179,8 @@ export class TimeOffCard extends Component {
             timeOffType: holidayStatusId,
             employeeId: employeeId,
             employeeCompany: data.employee_company,
-            employeeCountry: data.employee_country
-        });
+            employeeCountry: data.employee_country,
+        };
     }
 
     getAccrualExcess(data) {
@@ -175,8 +196,9 @@ export class TimeOffCard extends Component {
         const resModel = "hr.leave";
         const name = "My Time Off";
         const domain = [
-            ['work_entry_type_id', '=', holidayStatusId], ['company_id','=', data.employee_company],
-            employeeId ? ['employee_id', '=', employeeId] : ['user_id', '=', user.userId]
+            ["work_entry_type_id", "=", holidayStatusId],
+            ["company_id", "=", data.employee_company],
+            employeeId ? ["employee_id", "=", employeeId] : ["user_id", "=", user.userId],
         ];
         const context = isInHolidaysUserGroup
             ? {
@@ -194,7 +216,9 @@ export class TimeOffCard extends Component {
     }
 
     getColor() {
-        if(!this.props.index) {return "4";}
+        if (!this.props.index) {
+            return "4";
+        }
         const colorMap = {
             0: "4",
             1: "5",

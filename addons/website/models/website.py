@@ -180,6 +180,24 @@ class Website(models.CachedModel):
     robots_txt = fields.Html('Robots.txt', translate=False, groups='website.group_website_designer', sanitize=False)
     llms_txt = fields.Text('LLMs.txt', translate=False)
 
+    header_search_type = fields.Char(
+        string="Header Search Scope",
+        help="Type of records the header search bar searches within.",
+        default='all',
+        required=True,
+    )
+    header_search_order_by = fields.Char(
+        string="Header Search Sort",
+        help="Order in which the header search bar sorts its results.",
+        default='name asc',
+        required=True,
+    )
+    header_search_limit = fields.Integer(
+        string="Header Search Suggestions",
+        help="Number of autocomplete suggestions of the header search bar, 0 to disable them.",
+        default=30,
+    )
+
     def _default_favicon(self):
         with file_open('web/static/img/favicon.ico', 'rb') as f:
             return BinaryBytes(f.read(), filename='favicon.ico')
@@ -1306,8 +1324,8 @@ class Website(models.CachedModel):
         homepage_page.url = '/'
 
         # Bootstrap default menu hierarchy, create a new minimalist one if no default
-        default_menu = self.env.ref('website.main_menu')
-        self.copy_menu_hierarchy(default_menu)
+        if not self.menu_id and (default_menu := self.env.ref('website.main_menu', raise_if_not_found=False)):
+            self.copy_menu_hierarchy(default_menu)
         home_menu = self.env['website.menu'].search([('website_id', '=', self.id), ('url', '=', '/')])
         home_menu.page_id = homepage_page
 
@@ -1319,10 +1337,9 @@ class Website(models.CachedModel):
             cache='assets',
         ),
     )
-    def _get_font_urls(self):
-        """Return the list of font URLs to emit as <link> tags in <head>."""
-
-        # 1. Compile the font_urls_export bundle using Odoo's asset system.
+    def _get_scss_exports(self):
+        """Return the CSS of the export bundle, which prints the scss values the
+        server needs to build the <head> as custom properties."""
         try:
             bundle = self.env['ir.qweb']._get_asset_bundle(
                 'website.font_urls_export',
@@ -1330,13 +1347,20 @@ class Website(models.CachedModel):
                 css=True,
                 assets_params=self.env['ir.asset']._get_asset_params(),
             )
-            compiled = bundle.preprocess_css()
+            return bundle.preprocess_css()
         except Exception as e:
-            logger.warning("Font URL bundle compilation failed: %s", e)
+            logger.warning("Scss export bundle compilation failed: %s", e)
             raise
 
-        # 2. Parse --o-font-url-N: "..." custom properties
-        return re.findall(r'--o-font-url-\d+:\s*"([^"]*)"', compiled)
+    def _get_font_urls(self):
+        """Return the list of font URLs to emit as <link> tags in <head>."""
+        return re.findall(r'--o-font-url-\d+:\s*"([^"]*)"', self._get_scss_exports())
+
+    def _get_icon_font_family(self):
+        """Return the icon font the website renders with, empty if the default
+        one is used."""
+        match = re.search(r'--o-icon-font-family:\s*"([^"]*)"', self._get_scss_exports())
+        return match[1] if match else ''
 
     def copy_menu_hierarchy(self, top_menu):
         def copy_menu(menu, t_menu):
@@ -2185,6 +2209,67 @@ class Website(models.CachedModel):
         # lxml requires one single root element
         tree = etree.fromstring('<p>%s</p>' % html_fragment, etree.XMLParser(recover=True))
         return ' '.join(tree.itertext())
+
+    def _get_search_scopes(self):
+        """
+        Returns the search scopes that can be selected in the search bar options.
+
+        :return: dict, per search type, of the scope label and of the path of its results page
+        """
+        return {
+            'all': {'label': self.env._("Everything"), 'url': '/website/search'},
+            'pages': {'label': self.env._("Pages"), 'url': '/pages'},
+        }
+
+    def get_search_scopes(self):
+        """
+        Returns the search scopes selectable in the search bar options.
+
+        :return: list of dicts of the search type, of the label and of the results page
+            path of each scope
+        """
+        if not self.env.user.has_group('website.group_website_restricted_editor'):
+            return []
+
+        return [
+            {
+                'search_type': search_type,
+                'label': scope['label'],
+                'url': scope['url'],
+            }
+            for search_type, scope in self._get_search_scopes().items()
+        ]
+
+    def set_header_search(self, search_type=None, order_by=None, limit=None):
+        """
+        Stores the header search bar settings edited from the builder.
+
+        :param str search_type: search type to scope the header search bar to
+        :param str order_by: order in which the header search bar sorts its results
+        :param int limit: number of autocomplete suggestions, 0 to disable them
+        """
+        self.ensure_one()
+        values = {}
+        if search_type in self._get_search_scopes():
+            values['header_search_type'] = search_type
+        if order_by:
+            values['header_search_order_by'] = order_by
+        if isinstance(limit, int) and limit >= 0:
+            values['header_search_limit'] = limit
+        self.write(values)
+
+    def _get_header_search_scope(self):
+        """
+        Returns the search type of the header search bar and the path of its results page.
+
+        Falls back to the main search if the configured scope is gone, as the module that
+        declared it may have been uninstalled.
+
+        :return: dict of the search type and of the path of its results page
+        """
+        scopes = self._get_search_scopes()
+        search_type = self.header_search_type if self.header_search_type in scopes else 'all'
+        return {'search_type': search_type, 'url': scopes[search_type]['url']}
 
     def _search_get_details(self, search_type, order, options):
         """

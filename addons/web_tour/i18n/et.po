@@ -11,22 +11,22 @@
 # Maidu Targama <m.targama@gmail.com>, 2022
 # Triine Aavik <triine@avalah.ee>, 2022
 # Anna, 2023
-# Weblate <noreply-mt-weblate@weblate.org>, 2025, 2026.
+# Weblate <noreply-mt-weblate@weblate.org>, 2025.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server saas~14.5\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:43+0000\n"
-"PO-Revision-Date: 2026-06-21 20:34+0000\n"
-"Last-Translator: Weblate <noreply-mt-weblate@weblate.org>\n"
-"Language-Team: Estonian <https://translate.odoo.com/projects/odoo-master/"
+"POT-Creation-Date: 2026-09-04 17:46+0000\n"
+"PO-Revision-Date: 2026-08-31 16:59+0000\n"
+"Last-Translator: Anonymous <noreply@weblate.org>\n"
+"Language-Team: Estonian <https://translate.odoo.com/projects/odoo-s19-4/"
 "web_tour/et/>\n"
 "Language: et\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: web_tour
 #: model:ir.module.module,description:base.module_web_tour
@@ -39,19 +39,19 @@ msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
 msgid "'%s' created"
 msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 msgid "(recording keyboard)"
 msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 msgid "(run:"
 msgstr ""
 
@@ -62,7 +62,7 @@ msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
 msgid ""
 "Are you sure you want to clear all steps?\n"
 "All steps will be lost."
@@ -70,7 +70,7 @@ msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
 msgid ""
 "Are you sure you want to close the tour recorder?\n"
 "All changes will be lost."
@@ -83,22 +83,20 @@ msgstr "Alumine osa"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
-#, fuzzy
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
 msgid "Cancel"
-msgstr "Tühista"
+msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
-#, fuzzy
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 msgid "Clear"
-msgstr "Tühjenda"
+msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
 msgid "Clear all steps?"
 msgstr ""
 
@@ -110,20 +108,19 @@ msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
-#, fuzzy
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 msgid "Close"
-msgstr "Sulge"
+msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
 msgid "Close recorder"
 msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
 msgid "Close tour recorder?"
 msgstr ""
 
@@ -163,7 +160,7 @@ msgstr "Kohandatud veebileht"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
 msgid "Custom tour '%s' couldn't be saved!"
 msgstr ""
 
@@ -177,7 +174,7 @@ msgstr "Näidatav nimi"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_service.js:0
+#: code:addons/web_tour/static/src/tour_service.js:0
 msgid "Enable the tour recorder"
 msgstr ""
 
@@ -224,14 +221,14 @@ msgstr "Menüü"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 #: model:ir.model.fields,field_description:web_tour.field_web_tour_tour__name
 msgid "Name"
 msgstr "Nimi"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/onboarding_item.xml:0
+#: code:addons/web_tour/static/src/onboarding_item.xml:0
 #: code:addons/web_tour/static/src/widgets/tour_start.xml:0
 #: model:ir.model.fields,field_description:web_tour.field_res_users__tour_enabled
 msgid "Onboarding"
@@ -249,11 +246,10 @@ msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 #: code:addons/web_tour/static/src/views/tour_controller.xml:0
-#, fuzzy
 msgid "Record"
-msgstr "Kirje"
+msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
@@ -273,7 +269,7 @@ msgstr "Käivita"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 msgid "Save"
 msgstr "Salvesta"
 
@@ -285,25 +281,25 @@ msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_pointer/tour_pointer.js:0
+#: code:addons/web_tour/static/src/tour_pointer/tour_pointer.js:0
 msgid "Scroll down to reach the next step."
 msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_pointer/tour_pointer.js:0
+#: code:addons/web_tour/static/src/tour_pointer/tour_pointer.js:0
 msgid "Scroll left to reach the next step."
 msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_pointer/tour_pointer.js:0
+#: code:addons/web_tour/static/src/tour_pointer/tour_pointer.js:0
 msgid "Scroll right to reach the next step."
 msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_pointer/tour_pointer.js:0
+#: code:addons/web_tour/static/src/tour_pointer/tour_pointer.js:0
 msgid "Scroll up to reach the next step."
 msgstr ""
 
@@ -338,7 +334,7 @@ msgstr "Alusta tuuri"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 #: model:ir.model.fields,field_description:web_tour.field_web_tour_tour__url
 msgid "Starting URL"
 msgstr ""
@@ -350,14 +346,14 @@ msgstr "Samm"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 #: model_terms:ir.ui.view,arch_db:web_tour.tour_form
 msgid "Steps"
 msgstr "Punktid"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_pointer/tour_pointer.xml:0
+#: code:addons/web_tour/static/src/tour_pointer/tour_pointer.xml:0
 msgid "Stop Tour"
 msgstr ""
 
@@ -370,9 +366,8 @@ msgstr ""
 #. module: web_tour
 #. odoo-javascript
 #: code:addons/web_tour/static/src/widgets/tour_start.xml:0
-#, fuzzy
 msgid "Testing"
-msgstr "Testimine"
+msgstr ""
 
 #. module: web_tour
 #: model_terms:ir.ui.view,arch_db:web_tour.tour_search
@@ -409,7 +404,7 @@ msgstr "Tuurid"
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.xml:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.xml:0
 #: model:ir.model.fields,field_description:web_tour.field_web_tour_tour_step__trigger
 msgid "Trigger"
 msgstr "Käivitaja"
@@ -426,7 +421,7 @@ msgstr ""
 
 #. module: web_tour
 #. odoo-javascript
-#: code:addons/web_tour/static/src/js/tour_recorder/tour_recorder.js:0
+#: code:addons/web_tour/static/src/tour_recorder/tour_recorder.js:0
 msgid "View tour"
 msgstr ""
 

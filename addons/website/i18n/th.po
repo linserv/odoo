@@ -11,24 +11,25 @@
 # Khwunchai Jaengsawang <khwunchai.j@ku.th>, 2023
 # Martin Trigaux, 2023
 # Wichanon Jamwutthipreecha, 2023
-# "Tiffany Chang (tic)" <tic@odoo.com>, 2025.
+# "Tiffany Chang (tic)" <tic@odoo.com>, 2025, 2026.
 # Weblate <noreply-mt-weblate@weblate.org>, 2025.
 # Odoo Translation Bot <c3p@odoo.com>, 2026.
+# Nusara Boonma <nuboo@odoo.com>, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 16.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-20 00:45+0000\n"
-"Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Thai <https://translate.odoo.com/projects/odoo-master/website/"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 18:51+0000\n"
+"Last-Translator: \"Tiffany Chang (tic)\" <tic@odoo.com>\n"
+"Language-Team: Thai <https://translate.odoo.com/projects/odoo-s19-4/website/"
 "th/>\n"
 "Language: th\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_quotes_carousel_compact
@@ -886,6 +887,34 @@ msgid ""
 msgstr ""
 
 #. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_table_of_content
+msgid ""
+"<a href=\"#table_of_content_heading_1_1\" class=\"o_translate_inline "
+"table_of_content_link list-group-item list-group-item-action py-2 border-0 "
+"rounded-0 table_of_content_link_depth_0 active\">Intuitive system</a>\n"
+"                        <a href=\"#table_of_content_heading_1_2\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 table_of_content_link_depth_1\">What you "
+"see is what you get</a>\n"
+"                        <a href=\"#table_of_content_heading_1_3\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 "
+"table_of_content_link_depth_1\">Customization tool</a>\n"
+"                        <a href=\"#table_of_content_heading_1_4\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 table_of_content_link_depth_0\">Design "
+"features</a>\n"
+"                        <a href=\"#table_of_content_heading_1_5\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 table_of_content_link_depth_1\">Building "
+"blocks system</a>\n"
+"                        <a href=\"#table_of_content_heading_1_6\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 "
+"table_of_content_link_depth_1\">Bootstrap-Based Templates</a>"
+msgstr ""
+
+#. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_carousel
 msgid ""
 "<a href=\"/\" class=\"btn btn-primary o_translate_inline\">Start your "
@@ -1007,7 +1036,7 @@ msgid ""
 ">"
 msgstr ""
 "<br/>ขายออนไลน์ได้อย่างง่ายดายด้วยแพลตฟอร์มที่ใช้งานง่ายซึ่งช่วยลดขั้นตอนต่างๆ "
-"รวมไปถึงการตั้งค่า การจัดการสินค้าคงคลัง และการประมวลผลการชำระเงิน<br/>"
+"รวมไปถึงการตั้งค่า การจัดการคลังสินค้า และการประมวลผลการชำระเงิน<br/>"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_company_team_detail
@@ -1307,12 +1336,6 @@ msgstr ""
 msgid ""
 "<i class=\"oi text-success\" data-icon=\"check\" role=\"img\"/>  Unlimited "
 "customization"
-msgstr ""
-
-#. module: website
-#: model_terms:ir.ui.view,arch_db:website.s_countdown_inline_default_template
-#: model_terms:ir.ui.view,arch_db:website.s_countdown_inline_text_template
-msgid "<i class=\"oi\" data-icon=\"schedule\"/> Sale ends in"
 msgstr ""
 
 #. module: website
@@ -1870,6 +1893,20 @@ msgid "<span class=\"me-1\">On:</span>"
 msgstr ""
 
 #. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_dynamic_snippet_carousel_preview_data
+msgid ""
+"<span class=\"o_carousel_arrow oi p-3\" data-icon=\"chevron_backward\"/>\n"
+"                    <span class=\"visually-hidden\">Previous</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_dynamic_snippet_carousel_preview_data
+msgid ""
+"<span class=\"o_carousel_arrow oi p-3\" data-icon=\"chevron_forward\"/>\n"
+"                    <span class=\"visually-hidden\">Next</span>"
+msgstr ""
+
+#. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_carousel_cards
 #: model_terms:ir.ui.view,arch_db:website.s_carousel_intro
 #: model_terms:ir.ui.view,arch_db:website.s_image_gallery
@@ -1888,6 +1925,35 @@ msgid ""
 "<span class=\"o_carousel_pause_icon oi oi-filled\" data-icon=\"pause\" aria-"
 "hidden=\"true\"/>\n"
 "                <span class=\"visually-hidden\">Pause slides</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+msgid "<span class=\"o_count_item_nbs d-inline-flex fw-bold\">00</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+msgid "<span class=\"o_count_item_nbs fs-3 fw-bold\">00</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
+msgid ""
+"<span class=\"o_count_item_nbs o_colored_item d-flex justify-content-center "
+"align-items-center rounded p-2\">00</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+msgid ""
+"<span class=\"o_count_item_nbs o_count_item_nbs_split d-inline-flex\">\n"
+"                            <span class=\"o_count_item_nb o_colored_item "
+"position-relative rounded py-1 px-2 fs-4 fw-bold\">0</span>\n"
+"                            <span class=\"o_count_item_nb o_colored_item "
+"position-relative rounded py-1 px-2 fs-4 fw-bold\">0</span>\n"
+"                        </span>"
 msgstr ""
 
 #. module: website
@@ -2207,6 +2273,8 @@ msgid ""
 "<span class=\"s_website_form_field_description small form-text text-"
 "muted\">We typically respond within 1-2 business days.</span>"
 msgstr ""
+"<span class=\"s_website_form_field_description small form-text text-"
+"muted\">เราจะตอบกลับภายใน 1-2 วันทำการ</span>"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.contactus
@@ -2360,6 +2428,15 @@ msgid ""
 "                            <font class=\"bg-o-color-1\">A PUNCHY</font> "
 "HEADLINE\n"
 "                        </span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+msgid ""
+"<span>\n"
+"                <i class=\"oi\" data-icon=\"schedule\"/> Sale ends in\n"
+"            </span>"
 msgstr ""
 
 #. module: website
@@ -4034,6 +4111,12 @@ msgid "At The End"
 msgstr "ในตอนจบ"
 
 #. module: website
+#. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/form/form_field_option.js:0
+msgid "At least one of these words should match"
+msgstr ""
+
+#. module: website
 #: model:ir.model,name:website.model_ir_attachment
 msgid "Attachment"
 msgstr "การแนบ"
@@ -4089,12 +4172,6 @@ msgstr "กลุ่มที่ได้รับอนุญาต"
 #: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
 msgid "Auto"
 msgstr "ออโต้"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
-msgid "Auto means it will inherit the parent value"
-msgstr ""
 
 #. module: website
 #: model:ir.model.fields,field_description:website.field_res_partner__publish_on
@@ -4204,6 +4281,7 @@ msgstr "ฉากหลัง"
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/base_visibility_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/chart_option.xml:0
+#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/cover_properties_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/footer_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/header/header_icon_background_option.xml:0
@@ -4621,6 +4699,12 @@ msgstr "รัศมีเส้นขอบเล็ก"
 
 #. module: website
 #. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
+msgid "Bordered Text"
+msgstr ""
+
+#. module: website
+#. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/timeline_option.xml:0
 msgid "Both"
 msgstr ""
@@ -4671,12 +4755,6 @@ msgstr "กล่องคำกระตุ้นการตัดสินใ
 #: code:addons/website/static/src/builder/plugins/options/image_gallery_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_tab.xml:0
 msgid "Boxed"
-msgstr "กล่อง"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Boxes"
 msgstr "กล่อง"
 
 #. module: website
@@ -5478,12 +5556,6 @@ msgid "Clay"
 msgstr ""
 
 #. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Clean"
-msgstr "ล้าง"
-
-#. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_bento_features
 msgid "Clear objectives"
 msgstr ""
@@ -6042,6 +6114,12 @@ msgstr "หน้าควบคุม"
 
 #. module: website
 #. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
+msgid "Controls the text's font weight. \"Auto\" inherits the parent value"
+msgstr ""
+
+#. module: website
+#. odoo-javascript
 #: code:addons/website/static/src/xml/website.cookies_bar.xml:0
 #: model_terms:ir.ui.view,arch_db:website.cookie_policy
 msgid "Cookie Policy"
@@ -6516,21 +6594,9 @@ msgid "D - H - M - S"
 msgstr "D - H - M - S"
 
 #. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Danger"
-msgstr "อันตราย"
-
-#. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_company_team_detail
 msgid "Daniel ensures efficient daily operations and process optimization."
 msgstr "ดาเนียลดูแลให้การดำเนินงานประจำวันมีประสิทธิภาพและเพิ่มประสิทธิภาพกระบวนการ"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Dark"
-msgstr ""
 
 #. module: website
 #. odoo-javascript
@@ -6581,7 +6647,12 @@ msgstr "วันที่และเวลา"
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_countdown/countdown.js:0
-#: model_terms:ir.ui.view,arch_db:website.s_countdown
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_circle_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
 msgid "Days"
 msgstr "วัน"
 
@@ -7302,6 +7373,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:website.field_website_structured_data_mixin__display_name
 #: model:ir.model.fields,field_description:website.field_website_technical_page__display_name
 #: model:ir.model.fields,field_description:website.field_website_track__display_name
+#: model:ir.model.fields,field_description:website.field_website_trackable_mixin__display_name
 #: model:ir.model.fields,field_description:website.field_website_visitor__display_name
 msgid "Display Name"
 msgstr "แสดงชื่อ"
@@ -7658,7 +7730,6 @@ msgstr ""
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/blockquote_option.xml:0
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 msgid "Edge Spacing"
 msgstr ""
 
@@ -10010,7 +10081,12 @@ msgstr ""
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_countdown/countdown.js:0
-#: model_terms:ir.ui.view,arch_db:website.s_countdown
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_circle_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
 msgid "Hours"
 msgstr "ชั่วโมง"
 
@@ -10150,6 +10226,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:website.field_website_structured_data_mixin__id
 #: model:ir.model.fields,field_description:website.field_website_technical_page__id
 #: model:ir.model.fields,field_description:website.field_website_track__id
+#: model:ir.model.fields,field_description:website.field_website_trackable_mixin__id
 #: model:ir.model.fields,field_description:website.field_website_visitor__id
 msgid "ID"
 msgstr "ไอดี"
@@ -10592,7 +10669,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 msgid "Info"
 msgstr "ข้อมูล"
@@ -11749,18 +11825,6 @@ msgid "Layout"
 msgstr "เลย์เอาต์"
 
 #. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Layout Background"
-msgstr "เลย์เอาต์พื้นหลัง"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Layout Background Color"
-msgstr "ออกแบบสีพื้นหลัง"
-
-#. module: website
 #: model_terms:ir.ui.view,arch_db:website.bs_debug_view
 msgid "Lead text"
 msgstr "ข้อความนำ"
@@ -11890,7 +11954,6 @@ msgstr "Library"
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/searchbar_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_tab_plugin.js:0
@@ -12250,7 +12313,7 @@ msgstr "มาเกริต้า"
 #: code:addons/website/static/src/builder/plugins/theme/theme_headings_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_tab.xml:0
 msgid "Margins"
-msgstr "อัตราส่วน"
+msgstr "Margins"
 
 #. module: website
 #. odoo-javascript
@@ -12657,7 +12720,12 @@ msgstr ""
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_countdown/countdown.js:0
-#: model_terms:ir.ui.view,arch_db:website.s_countdown
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_circle_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
 msgid "Minutes"
 msgstr "นาที"
 
@@ -13127,6 +13195,7 @@ msgstr "การแจ้งเตือนจดหมายข่าวทา
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_dynamic_snippet_carousel/000.xml:0
 #: model_terms:ir.ui.view,arch_db:website.bs_debug_view
+#: model_terms:ir.ui.view,arch_db:website.s_dynamic_snippet_carousel_preview_data
 msgid "Next"
 msgstr "ถัดไป"
 
@@ -14664,7 +14733,7 @@ msgstr "ทรงยา"
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/navtabs_style_option.xml:0
 msgid "Pills"
-msgstr "ทรงยา"
+msgstr "ปุ่มขอบมน"
 
 #. module: website
 #. odoo-javascript
@@ -14910,6 +14979,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_dynamic_snippet_carousel/000.xml:0
 #: model_terms:ir.ui.view,arch_db:website.bs_debug_view
+#: model_terms:ir.ui.view,arch_db:website.s_dynamic_snippet_carousel_preview_data
 msgid "Previous"
 msgstr "ก่อนหน้า"
 
@@ -14961,7 +15031,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/header/header_font_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 msgid "Primary"
@@ -15057,20 +15126,8 @@ msgstr "แถบความคืบหน้า"
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Progress Bar Color"
-msgstr "สีแถบความคืบหน้า"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 msgid "Progress Bar Style"
 msgstr "สไตล์แถบความคืบหน้า"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Progress Bar Weight"
-msgstr "ความหนาแถบความคืบหน้า"
 
 #. module: website
 #. odoo-javascript
@@ -15354,7 +15411,7 @@ msgstr "เรดาร์"
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/form/form_option.xml:0
 msgid "Radio"
-msgstr "คลื่นวิทยุ"
+msgstr "ปุ่มตัวเลือก"
 
 #. module: website
 #. odoo-javascript
@@ -15366,7 +15423,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/form/form_option.xml:0
 msgid "Radio Buttons"
-msgstr "ปุ่มวิทยุ"
+msgstr "ปุ่มตัวเลือก"
 
 #. module: website
 #. odoo-javascript
@@ -16114,7 +16171,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: model_terms:ir.ui.view,arch_db:website.s_countdown
-msgid "Sales begins in:"
+msgid "Sale begins in:"
 msgstr ""
 
 #. module: website
@@ -16358,6 +16415,11 @@ msgid "Search within"
 msgstr "ค้นหาใน"
 
 #. module: website
+#: model_terms:ir.ui.view,arch_db:website.website_search_box_input
+msgid "Search..."
+msgstr ""
+
+#. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/client_actions/configurator/configurator.js:0
 msgid "Searching your images..."
@@ -16403,7 +16465,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/header/header_font_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 msgid "Secondary"
@@ -16429,7 +16490,12 @@ msgstr "สไตล์รอง"
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_countdown/countdown.js:0
-#: model_terms:ir.ui.view,arch_db:website.s_countdown
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_circle_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
 msgid "Seconds"
 msgstr "ที่สอง"
 
@@ -17679,13 +17745,6 @@ msgstr "ละเอียดอ่อน"
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Subtle colors"
-msgstr ""
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 #: code:addons/website/static/src/xml/website_form.xml:0
 #: code:addons/website/static/src/xml/website_form_editor.xml:0
@@ -17915,7 +17974,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/dynamic_snippet_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/footer_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/header/header_template_option.xml:0
@@ -18035,12 +18093,6 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website.snippets
 msgid "Text Highlight"
 msgstr "เน้นข้อความ"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Text Inline"
-msgstr "ข้อความอินไลน์"
 
 #. module: website
 #. odoo-javascript
@@ -18475,6 +18527,7 @@ msgstr "หนา"
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/highlight/highlight_configurator.xml:0
+#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 msgid "Thickness"
 msgstr "ความหนา"
 
@@ -19021,7 +19074,7 @@ msgstr ""
 #: code:addons/website/static/src/builder/plugins/options/chart_option.xml:0
 #: code:addons/website/static/src/builder/plugins/translation/options/attribute_translation_plugin.js:0
 msgid "Tooltip"
-msgstr "ทูลทิป"
+msgstr "ป้ายแสดงข้อมูล"
 
 #. module: website
 #. odoo-javascript
@@ -20080,7 +20133,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 msgid "Warning"
 msgstr "คำเตือน"
@@ -20219,7 +20271,7 @@ msgstr ""
 msgid ""
 "We collaborate with trusted, high-quality partners to bring you reliable and "
 "top-notch products and services."
-msgstr "เราทำงานร่วมกับพันธมิตรที่มีคุณภาพสูงและเชื่อถือได้เพื่อนำเสนอผลิตภัณฑ์และบริการที่เชื่อถือได้และชั้นยอดให้กับคุณ"
+msgstr "เราทำงานร่วมกับพาร์ทเนอร์ที่มีคุณภาพสูงและเชื่อถือได้เพื่อนำเสนอสินค้าและบริการที่เชื่อถือได้และชั้นยอดให้กับคุณ"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_carousel_intro
@@ -20707,6 +20759,11 @@ msgid "Website Theme Page"
 msgstr "เพจเว็บไซต์ธีม"
 
 #. module: website
+#: model:ir.model,name:website.model_website_trackable_mixin
+msgid "Website Trackable Mixin"
+msgstr ""
+
+#. module: website
 #: model:ir.model.fields,field_description:website.field_res_partner__website_url
 #: model:ir.model.fields,field_description:website.field_res_users__website_url
 #: model:ir.model.fields,field_description:website.field_website_controller_page__website_url
@@ -20831,6 +20888,22 @@ msgstr "เว็บไซต์"
 #: model:ir.model.fields,field_description:website.field_base_language_install__website_ids
 msgid "Websites to translate"
 msgstr "เว็บไซต์ที่จะแปล"
+
+#. module: website
+#. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.js:0
+msgid ""
+"Weight for \"Bold\" in the text toolbar. Unless Font Weight is \"Auto\", "
+"only equal or heavier values are available."
+msgstr ""
+
+#. module: website
+#. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
+msgid ""
+"Weight for \"Light\" in the text toolbar. Unless Font Weight is \"Auto\", "
+"only equal or lighter values are available."
+msgstr ""
 
 #. module: website
 #. odoo-javascript
@@ -21171,6 +21244,12 @@ msgstr ""
 #: code:addons/website/static/src/builder/plugins/form/form_option_plugin.js:0
 msgid "You cannot duplicate this field."
 msgstr "คุณไม่สามารถทำซ้ำช่องนี้ได้"
+
+#. module: website
+#. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/options/card_image_option_plugin.js:0
+msgid "You cannot duplicate this image."
+msgstr ""
 
 #. module: website
 #. odoo-javascript
@@ -22949,531 +23028,3 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website.s_key_benefits
 msgid "✽  What We Offer"
 msgstr ""
-
-#~ msgid "Accounts are usable across all your multiple websites"
-#~ msgstr "บัญชีสามารถใช้งานได้ทั่วทั้งเว็บไซต์หลายแห่งของคุณ"
-
-#~ msgid "CTA, button, btn, action, engagement, link, offer, appeal"
-#~ msgstr "CTA, ปุ่ม, btn, การดำเนินการ, การมีส่วนร่วม, ลิงค์, ข้อเสนอ, การอุทธรณ์"
-
-#~ msgid ""
-#~ "CTA, button, btn, action, engagement, link, offer, appeal, call to "
-#~ "action, prompt, interact, trigger"
-#~ msgstr ""
-#~ "CTA, ปุ่ม, btn, การดำเนินการ, การมีส่วนร่วม, ลิงก์, ข้อเสนอ, การอุทธรณ์, "
-#~ "การเรียกร้องให้ดำเนินการ, แจ้งเตือน, โต้ตอบ, ทริกเกอร์"
-
-#~ msgid ""
-#~ "CTA, button, btn, action, engagement, link, offer, appeal, call to "
-#~ "action, prompt, interact, trigger, items, checklists, entries, sequences, "
-#~ "bullets, points, list, group, benefits, features, advantages"
-#~ msgstr ""
-#~ "CTA, ปุ่ม, btn, การดำเนินการ, การมีส่วนร่วม, ลิงก์, ข้อเสนอ, การอุทธรณ์, "
-#~ "การเรียกร้องให้ดำเนินการ, กระตุ้น, โต้ตอบ, ทริกเกอร์, รายการ, รายการตรวจสอบ, "
-#~ "รายการ, ลำดับ, หัวข้อย่อย, จุด, รายการ, กลุ่ม, ประโยชน์, ฟีเจอร์, ข้อได้เปรียบ"
-
-#~ msgid ""
-#~ "CTA, button, btn, action, engagement, link, offer, appeal, call to "
-#~ "action, prompt, interact, trigger, mockup"
-#~ msgstr ""
-#~ "CTA, ปุ่ม, btn, การดำเนินการ, การมีส่วนร่วม, ลิงก์, ข้อเสนอ, การอุทธรณ์, "
-#~ "การเรียกร้องให้ดำเนินการ, แจ้งเตือน, โต้ตอบ, ทริกเกอร์, โมเดล"
-
-#~ msgid ""
-#~ "CTA, button, btn, action, engagement, link, offer, appeal, call to "
-#~ "action, prompt, interact, trigger, mockups"
-#~ msgstr ""
-#~ "CTA, ปุ่ม, btn, การดำเนินการ, การมีส่วนร่วม, ลิงก์, ข้อเสนอ, การอุทธรณ์, "
-#~ "การเรียกร้องให้ดำเนินการ, แจ้งเตือน, โต้ตอบ, ทริกเกอร์, โมเดลจำลอง"
-
-#~ msgid "Catalog"
-#~ msgstr "แคตตาล็อก"
-
-#~ msgid ""
-#~ "Elevate your living space with furniture that blends modern aesthetics "
-#~ "and classic charm, crafted to bring both comfort and style to your home.\n"
-#~ "                        <br/><br/><br/><br/><br/><br/><br/><br/><br/><br/"
-#~ "><br/><br/><br/><br/><br/>"
-#~ msgstr ""
-#~ "ยกระดับพื้นที่อยู่อาศัยของคุณด้วยเฟอร์นิเจอร์ที่ผสมผสานความทันสมัยและเสน่ห์คลาสสิก "
-#~ "ผลิตอย่างพิถีพิถันเพื่อมอบทั้งความสบายและสไตล์ให้กับบ้านของคุณ\n"
-#~ "                        <br/><br/><br/><br/><br/><br/><br/><br/><br/><br/"
-#~ "><br/><br/><br/><br/><br/>"
-
-#~ msgid "Full-Width"
-#~ msgstr "เต็มความกว้าง"
-
-#~ msgid "Narrow"
-#~ msgstr "แคบ"
-
-#~ msgid "Places API"
-#~ msgstr "API สถานที่"
-
-#~ msgid "This is a small title related to the current image"
-#~ msgstr "นี่คือหัวข้อสั้นๆ ที่เกี่ยวข้องกับภาพปัจจุบัน"
-
-#~ msgid "Why Our Product is the Future of Innovation"
-#~ msgstr "เหตุใดผลิตภัณฑ์ของเราจึงเป็นนวัตกรรมแห่งอนาคต"
-
-#~ msgid "block, blog, post, catalog, feed, items, entries, entry, collection"
-#~ msgstr "บล็อก, บล็อก, โพสต์, แค็ตตาล็อก, ฟีด, รายการ, รายการ, คอลเลกชัน"
-
-#~ msgid ""
-#~ "cite, slogan, tagline, mantra, catchphrase, statements, sayings, "
-#~ "comments, mission, citations, maxim, quotes, principle, ethos, values"
-#~ msgstr ""
-#~ "อ้างอิง สโลแกน สโลแกน คำขวัญ คำคม วลีเด็ด ถ้อยแถลง คำพูด คำวิจารณ์ ภารกิจ การอ้างอิง "
-#~ "คำคม หลักการ จรรยาบรรณ ค่านิยม"
-
-#~ msgid ""
-#~ "columns, gallery, pictures, photos, media, text, content, album, "
-#~ "showcase, visuals, portfolio, arrangement, collection, visual-grid, "
-#~ "split, alignment, added value"
-#~ msgstr ""
-#~ "คอลัมน์, แกลลอรี่, รูปภาพ, ภาพถ่าย, สื่อ, ข้อความ, เนื้อหา, อัลบั้ม, โชว์เคส, ภาพ, "
-#~ "พอร์ตโฟลิโอ, การจัดเรียง, คอลเลกชัน, ตารางภาพ, การแยก, การจัดตำแหน่ง, มูลค่าเพิ่ม"
-
-#~ msgid ""
-#~ "common answers, common questions, faq, QA, collapse, expandable, toggle, "
-#~ "collapsible, hide-show, movement, information, image, picture, photo, "
-#~ "illustration, media, visual"
-#~ msgstr ""
-#~ "คำตอบทั่วไป คำถามทั่วไป คำถามที่พบบ่อย QA ยุบ ขยายได้ สลับ พับได้ ซ่อน-แสดง "
-#~ "การเคลื่อนไหว ข้อมูล รูปภาพ รูปถ่าย ภาพประกอบ สื่อ ภาพ"
-
-#~ msgid ""
-#~ "contact, collect, submission, input, fields, questionnaire, survey, "
-#~ "registration, request"
-#~ msgstr "ติดต่อ รวบรวม ยื่น ป้อน ฟิลด์ แบบสอบถาม แบบสำรวจ การลงทะเบียน การร้องขอ"
-
-#~ msgid ""
-#~ "contact, collect, submission, input, fields, questionnaire, survey, "
-#~ "registration, request, image, picture, photo, illustration, media, "
-#~ "visual, company, organization, address, phone, email, location, get-in-"
-#~ "touch"
-#~ msgstr ""
-#~ "ติดต่อ รวบรวม การส่ง การป้อนข้อมูล ฟิลด์ แบบสอบถาม แบบสำรวจ การลงทะเบียน คำขอ "
-#~ "รูปภาพ รูปถ่าย ภาพประกอบ สื่อ ภาพ บริษัท องค์กร ที่อยู่ โทรศัพท์ อีเมล ที่ตั้ง ติดต่อเรา"
-
-#~ msgid "content, paragraph, article, body, description, information"
-#~ msgstr "เนื้อหา ย่อหน้า บทความ เนื้อเรื่อง คำอธิบาย ข้อมูล"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination"
-#~ msgstr "เนื้อหา ภาพ ภาพถ่าย ภาพประกอบ สื่อ ภาพ บทความ เรื่องราว การรวมกัน"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, engage, call to action, cta, box, showcase"
-#~ msgstr ""
-#~ "เนื้อหา รูปภาพ รูปถ่าย ภาพประกอบ สื่อ ภาพ บทความ เรื่องราว การรวมกัน ดึงดูด "
-#~ "กระตุ้นการดำเนินการ cta กล่อง โชว์เคส"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, heading, headline"
-#~ msgstr ""
-#~ "เนื้อหา, ภาพ, ภาพถ่าย, ภาพประกอบ, สื่อ, ภาพ, บทความ, เรื่องราว, การรวม, หัวเรื่อง, "
-#~ "หัวข้อ"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, more, hexagon, geometric"
-#~ msgstr ""
-#~ "เนื้อหา รูปภาพ ภาพถ่าย ภาพประกอบ สื่อ ภาพ บทความ เรื่องราว การรวมกัน เพิ่มเติม "
-#~ "หกเหลี่ยม เรขาคณิต"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, trendy, pattern, design"
-#~ msgstr ""
-#~ "เนื้อหา ภาพ ภาพถ่าย ภาพประกอบ สื่อ ภาพ บทความ เรื่องราว การรวมกัน ทันสมัย รูปแบบ "
-#~ "การออกแบบ"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, trendy, pattern, design, shape, geometric, patterned"
-#~ msgstr ""
-#~ "เนื้อหา ภาพ ภาพถ่าย ภาพประกอบ สื่อ ภาพ บทความ เรื่องราว การรวมกัน ทันสมัย ลวดลาย "
-#~ "การออกแบบ รูปทรง เรขาคณิต ลวดลาย"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, trendy, pattern, design, shape, geometric, patterned, "
-#~ "contrast"
-#~ msgstr ""
-#~ "เนื้อหา รูปภาพ ภาพถ่าย ภาพประกอบ สื่อ ภาพ บทความ เรื่องราว การผสมผสาน ทันสมัย "
-#~ "ลวดลาย การออกแบบ รูปทรง เรขาคณิต ลวดลาย ความแตกต่าง"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, trendy, pattern, design, shape, geometric, patterned, "
-#~ "contrast, collage, arrangement, gallery, creative, mosaic"
-#~ msgstr ""
-#~ "เนื้อหา รูปภาพ ภาพถ่าย ภาพประกอบ สื่อ ภาพ บทความ เรื่องราว การผสมผสาน ทันสมัย รูปแบบ "
-#~ "การออกแบบ รูปทรง เรขาคณิต ลวดลาย ความแตกต่าง ภาพตัดปะ การจัดเรียง แกลเลอรี "
-#~ "สร้างสรรค์ โมเสก"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, focus, in-depth, "
-#~ "analysis, more, contact, detailed, mockup, explore, insight"
-#~ msgstr ""
-#~ "เนื้อหา รูปภาพ ภาพถ่าย ภาพประกอบ สื่อ ภาพ โฟกัส เจาะลึก วิเคราะห์ เพิ่มเติม ติดต่อ "
-#~ "รายละเอียด โมเดล สำรวจ ข้อมูลเชิงลึก"
-
-#~ msgid ""
-#~ "description, containers, layouts, structures, multi-columns, modules, "
-#~ "boxes"
-#~ msgstr "คำอธิบาย คอนเทนเนอร์ เค้าโครง โครงสร้าง หลายคอลัมน์ โมดูล กล่อง"
-
-#~ msgid ""
-#~ "description, containers, layouts, structures, multi-columns, modules, "
-#~ "boxes, content, picture, photo, illustration, media, visual, article, "
-#~ "story, combination, showcase, announcement, reveal"
-#~ msgstr ""
-#~ "คำอธิบาย คอนเทนเนอร์ เค้าโครง โครงสร้าง หลายคอลัมน์ โมดูล กล่อง เนื้อหา รูปภาพ รูปถ่าย "
-#~ "ภาพประกอบ สื่อ ภาพ บทความ เรื่องราว การรวมกัน จัดแสดง ประกาศ เปิดเผย"
-
-#~ msgid ""
-#~ "description, containers, layouts, structures, multi-columns, modules, "
-#~ "boxes, content, picture, photo, illustration, media, visual, article, "
-#~ "story, combination, showcase, announcement, reveal, trendy, design, "
-#~ "shape, geometric, engage, call to action, cta, button"
-#~ msgstr ""
-#~ "คำอธิบาย คอนเทนเนอร์ เค้าโครง โครงสร้าง หลายคอลัมน์ โมดูล กล่อง เนื้อหา รูปภาพ รูปถ่าย "
-#~ "ภาพประกอบ สื่อ ภาพ บทความ เรื่องราว การรวมกัน โชว์เคส ประกาศ เปิดเผย ทันสมัย "
-#~ "การออกแบบ รูปทรง เรขาคณิต เอนเกจ คำกระตุ้นการตัดสินใจ ปุ่ม cta"
-
-#~ msgid ""
-#~ "four sections, column, grid, division, split, segments, pictures, "
-#~ "illustration, media, photos, tiles, arrangement, gallery, images-grid, "
-#~ "mixed, collection, stacking, visual-grid, showcase, visuals, portfolio, "
-#~ "thumbnails, engage, call to action, cta, showcase"
-#~ msgstr ""
-#~ "สี่ส่วน คอลัมน์ ตาราง การแบ่ง แบ่งส่วน รูปภาพ ภาพประกอบ สื่อ รูปถ่าย ไทล์ การจัดเรียง "
-#~ "แกลเลอรี ตารางรูปภาพ ผสม คอลเลกชัน การซ้อน ตารางภาพ โชว์เคส ภาพกราฟิก พอร์ตโฟลิโอ "
-#~ "ภาพขนาดย่อ เอนเกจ คำกระตุ้นการตัดสินใจ cta โชว์เคส"
-
-#~ msgid ""
-#~ "gallery, carousel, pictures, photos, album, showcase, visuals, portfolio, "
-#~ "thumbnails, slideshow"
-#~ msgstr ""
-#~ "แกลเลอรี่, ภาพหมุน, รูปภาพ, รูปถ่าย, อัลบั้ม, โชว์เคส, ภาพประกอบ, ผลงาน, ภาพขนาดย่อ, "
-#~ "สไลด์โชว์"
-
-#~ msgid ""
-#~ "gallery, carousel, slider, slideshow, picture, photo, image-slider, "
-#~ "rotating, swipe, transition, media-carousel, movement"
-#~ msgstr ""
-#~ "แกลเลอรี่, ภาพหมุน, สไลเดอร์, สไลด์โชว์, รูปภาพ, รูปถ่าย, สไลเดอร์รูปภาพ, การหมุน, "
-#~ "การปัด, การเปลี่ยนภาพ, ภาพหมุน, การเคลื่อนไหว"
-
-#~ msgid ""
-#~ "graph, table, diagram, pie, plot, bar, metrics, figures, data-"
-#~ "visualization, statistics, stats, analytics, infographic, skills, report"
-#~ msgstr ""
-#~ "กราฟ ตาราง ไดอะแกรม วงกลม พล็อต แท่ง เมตริก ตัวเลข การแสดงข้อมูลด้วยภาพ สถิติ "
-#~ "สถิติเชิงวิเคราะห์ อินโฟกราฟิก ทักษะ รายงาน"
-
-#~ msgid ""
-#~ "grid, gallery, pictures, photos, album, showcase, visuals, portfolio, "
-#~ "mosaic, collage, arrangement, collection, visual-grid"
-#~ msgstr ""
-#~ "ตาราง, แกลอรี่, รูปภาพ, รูปถ่าย, อัลบั้ม, โชว์เคส, ภาพ, ผลงาน, โมเสก, คอลลาจ, "
-#~ "การจัดเรียง, คอลเลกชัน, ตารางภาพ"
-
-#~ msgid ""
-#~ "grid, gallery, pictures, photos, media, text, content, album, showcase, "
-#~ "visuals, portfolio, mosaic, collage, arrangement, collection, visual-"
-#~ "grid, split, alignment"
-#~ msgstr ""
-#~ "ตาราง แกลอรี่ รูปภาพ รูปถ่าย สื่อ ข้อความ เนื้อหา อัลบั้ม โชว์เคส ภาพ แฟ้มผลงาน โมเสก "
-#~ "ภาพตัดปะ การจัดเรียง คอลเลกชัน ตารางภาพ แยก การจัดตำแหน่ง"
-
-#~ msgid ""
-#~ "header, introduction, home, content, introduction, overview, spotlight, "
-#~ "presentation, welcome, context, description, primary, highlight, lead"
-#~ msgstr ""
-#~ "ส่วนหัว บทนำ หน้าแรก เนื้อหา บทนำ ภาพรวม จุดสนใจ การนำเสนอ ยินดีต้อนรับ บริบท "
-#~ "คำอธิบาย หลัก ไฮไลท์ นำ"
-
-#~ msgid ""
-#~ "heading, h1, headline, header, main, top, caption, introductory, "
-#~ "principal, key"
-#~ msgstr "หัวเรื่อง, h1, หัวเรื่อง, ส่วนหัว, หลัก, ด้านบน, คำบรรยาย, บทนำ, หลักการ, คีย์"
-
-#~ msgid ""
-#~ "headline, header, content, picture, photo, illustration, media, visual, "
-#~ "article, combination, trendy, pattern, design, bold, impactful, vibrant, "
-#~ "standout"
-#~ msgstr ""
-#~ "หัวเรื่อง, ส่วนหัว, เนื้อหา, รูปภาพ, ภาพถ่าย, ภาพประกอบ, สื่อ, ภาพ, บทความ, "
-#~ "การรวมกัน, ทันสมัย, รูปแบบ, การออกแบบ, โดดเด่น, มีพลัง, สดใส"
-
-#~ msgid ""
-#~ "headline, header, content, picture, photo, illustration, media, visual, "
-#~ "combination"
-#~ msgstr "หัวเรื่อง, ส่วนหัว, เนื้อหา, รูปภาพ, ภาพถ่าย, ภาพประกอบ, สื่อ, ภาพ, การรวมกัน"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, branding, intro, home, showcase, "
-#~ "spotlight, lead, welcome, announcement, splash, top, main"
-#~ msgstr ""
-#~ "ฮีโร่ จัมโบทรอน พาดหัวข่าว ส่วนหัว การสร้างแบรนด์ บทนำ หน้าแรก โชว์เคส สปอตไลท์ นำหน้า "
-#~ "ยินดีต้อนรับ ประกาศ สแปลช ด้านบน หลัก"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, branding, intro, home, showcase, "
-#~ "spotlight, main, landing, presentation, top, splash, parallax"
-#~ msgstr ""
-#~ "ฮีโร่ จอแสดงภาพขนาดใหญ่ พาดหัวข่าว ส่วนหัว การสร้างแบรนด์ บทนำ หน้าแรก การจัดแสดง "
-#~ "สปอตไลท์ หลัก แลนดิ้ง การนำเสนอ ด้านบน สแปลช พารัลแลกซ์"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, intro, home, content, description, "
-#~ "primary, highlight, lead"
-#~ msgstr "ฮีโร่ จัมโบทรอน หัวเรื่อง ส่วนหัว บทนำ หน้าแรก เนื้อหา คำอธิบาย หลัก ไฮไลท์ นำ"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, "
-#~ "introduction, overview, spotlight, presentation, welcome, context, "
-#~ "description, primary, highlight, lead"
-#~ msgstr ""
-#~ "ฮีโร่ จัมโบทรอน หัวเรื่อง ส่วนหัว บทนำ หน้าแรก เนื้อหา บทนำ ภาพรวม จุดสนใจ การนำเสนอ "
-#~ "ยินดีต้อนรับ บริบท คำอธิบาย หลัก ไฮไลท์ ลูกค้าเป้าหมาย"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, "
-#~ "introduction, overview, spotlight, presentation, welcome, context, "
-#~ "description, primary, highlight, lead, CTA, promote, promotion"
-#~ msgstr ""
-#~ "ฮีโร่ จัมโบทรอน หัวเรื่อง ส่วนหัว บทนำ หน้าแรก เนื้อหา บทนำ ภาพรวม จุดสนใจ การนำเสนอ "
-#~ "ยินดีต้อนรับ บริบท คำอธิบาย หลัก ไฮไลท์ นำหน้า CTA ส่งเสริม การส่งเสริมการขาย"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, "
-#~ "introduction, overview, spotlight, presentation, welcome, context, "
-#~ "description, primary, highlight, lead, discover, exploration, reveal"
-#~ msgstr ""
-#~ "ฮีโร่ จัมโบทรอน หัวเรื่อง ส่วนหัว บทนำ หน้าแรก เนื้อหา บทนำ ภาพรวม จุดสนใจ การนำเสนอ "
-#~ "ยินดีต้อนรับ บริบท คำอธิบาย หลัก ไฮไลท์ นำ ค้นพบ การสำรวจ เปิดเผย"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, "
-#~ "introduction, overview, spotlight, presentation, welcome, context, "
-#~ "description, primary, highlight, lead, journey, skills, expertises, "
-#~ "experts, accomplishments, knowledge"
-#~ msgstr ""
-#~ "ฮีโร่ จัมโบ้ทรอน หัวเรื่อง ส่วนหัว บทนำ หน้าแรก เนื้อหา บทนำ ภาพรวม จุดสนใจ การนำเสนอ "
-#~ "ยินดีต้อนรับ บริบท คำอธิบาย หลัก ไฮไลท์ นำทาง การเดินทาง ทักษะ ความเชี่ยวชาญ ผู้เชี่ยวชาญ "
-#~ "ความสำเร็จ ความรู้"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, picture, "
-#~ "photo, illustration, media, visual, article, combination, trendy, "
-#~ "pattern, design"
-#~ msgstr ""
-#~ "ฮีโร่ จัมโบทรอน หัวเรื่อง ส่วนหัว บทนำ บ้าน เนื้อหา ภาพ ภาพถ่าย ภาพประกอบ สื่อ ภาพ "
-#~ "บทความ การรวมกัน ทันสมัย รูปแบบ การออกแบบ"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, picture, "
-#~ "photo, illustration, media, visual, article, combination, trendy, "
-#~ "pattern, design, centered"
-#~ msgstr ""
-#~ "ฮีโร่ จัมโบ้ทรอน หัวเรื่อง ส่วนหัว บทนำ บ้าน เนื้อหา ภาพ ภาพถ่าย ภาพประกอบ สื่อ ภาพ "
-#~ "บทความ การรวมกัน ทันสมัย รูปแบบ การออกแบบ ตรงกลาง"
-
-#~ msgid ""
-#~ "history, story, events, milestones, chronology, sequence, progression, "
-#~ "achievements"
-#~ msgstr ""
-#~ "ประวัติศาสตร์ เรื่องราว เหตุการณ์ เหตุการณ์สำคัญ ลำดับเหตุการณ์ ความก้าวหน้า ความสำเร็จ"
-
-#~ msgid ""
-#~ "history, story, events, milestones, chronology, sequence, progression, "
-#~ "achievements, changelog, updates, announcements, recent, latest"
-#~ msgstr ""
-#~ "ประวัติศาสตร์ เรื่องราว กิจกรรม เหตุการณ์สำคัญ ลำดับเหตุการณ์ ลำดับเหตุการณ์ ความก้าวหน้า "
-#~ "ความสำเร็จ บันทึกการเปลี่ยนแปลง การอัปเดต ประกาศ ล่าสุด ล่าสุด"
-
-#~ msgid ""
-#~ "journey, exploration, travel, outdoor, excitement, quest, start, "
-#~ "onboarding, discovery, thrill"
-#~ msgstr ""
-#~ "การเดินทาง การสำรวจ การเดินทาง กลางแจ้ง ความตื่นเต้น การแสวงหา การเริ่มต้น "
-#~ "การเรียนรู้ การค้นพบ ความตื่นเต้น"
-
-#~ msgid ""
-#~ "masonry, grid, column, pictures, photos, album, showcase, visuals, "
-#~ "portfolio, mosaic, collage, arrangement, collection, visual-grid"
-#~ msgstr ""
-#~ "งานก่ออิฐ ตาราง เสา รูปภาพ อัลบั้ม โชว์เคส ภาพกราฟิก พอร์ตโฟลิโอ โมเสก คอลลาจ "
-#~ "การจัดเรียง คอลเลกชัน ตารางภาพ"
-
-#~ msgid ""
-#~ "menu, pricing, shop, table, cart, product, cost, charges, fees, rates, "
-#~ "prices, expenses"
-#~ msgstr ""
-#~ "เมนู, ราคา, ร้านค้า, โต๊ะ, รถเข็น, สินค้า, ต้นทุน, ค่าบริการ, ค่าธรรมเนียม, อัตรา, "
-#~ "ราคา, ค่าใช้จ่าย"
-
-#~ msgid ""
-#~ "menu, pricing, shop, table, cart, product, cost, charges, fees, rates, "
-#~ "prices, expenses, columns"
-#~ msgstr ""
-#~ "เมนู, การกำหนดราคา, ร้านค้า, โต๊ะ, รถเข็น, สินค้า, ต้นทุน, ค่าบริการ, ค่าธรรมเนียม, "
-#~ "อัตรา, ราคา, ค่าใช้จ่าย, คอลัมน์"
-
-#~ msgid ""
-#~ "organization, company, people, column, members, staffs, profiles, bios, "
-#~ "roles, personnel, crew"
-#~ msgstr "องค์กร บริษัท คน คอลัมน์ สมาชิก พนักงาน โปรไฟล์ ชีวประวัติ บทบาท บุคลากร พนักงาน"
-
-#~ msgid ""
-#~ "organization, company, people, members, staffs, profiles, bios, roles, "
-#~ "personnel, crew, patterned, trendy"
-#~ msgstr ""
-#~ "องค์กร บริษัท ผู้คน สมาชิก พนักงาน โปรไฟล์ ชีวประวัติ บทบาท บุคลากร ลูกเรือ รูปแบบ ทันสมัย"
-
-#~ msgid ""
-#~ "organization, company, people, members, staffs, profiles, bios, roles, "
-#~ "personnel, crew, patterned, trendy, social"
-#~ msgstr ""
-#~ "องค์กร บริษัท ผู้คน สมาชิก พนักงาน โปรไฟล์ ชีวประวัติ บทบาท บุคลากร ลูกเรือ รูปแบบ ทันสมัย "
-#~ "สังคม"
-
-#~ msgid ""
-#~ "organization, structure, people, team, name, role, position, image, "
-#~ "portrait, photo, employees, shapes"
-#~ msgstr ""
-#~ "องค์กร โครงสร้าง ผู้คน ทีม ชื่อ บทบาท ตำแหน่ง รูปภาพ ภาพเหมือน รูปถ่าย พนักงาน รูปร่าง"
-
-#~ msgid ""
-#~ "pricing, promotion, price, feature-comparison, side-by-side, evaluation, "
-#~ "competitive, overview"
-#~ msgstr ""
-#~ "การกำหนดราคา การส่งเสริมการขาย ราคา การเปรียบเทียบฟีเจอร์ "
-#~ "การเปรียบเทียบแบบเคียงข้างกัน การประเมิน การแข่งขัน ภาพรวม"
-
-#~ msgid ""
-#~ "process, progression, guide, workflow, sequence, instructions, stages, "
-#~ "procedure, roadmap"
-#~ msgstr ""
-#~ "กระบวนการ ความก้าวหน้า คำแนะนำ เวิร์กโฟลว์ ลำดับ คำแนะนำ ขั้นตอน ขั้นตอน แผนงาน"
-
-#~ msgid ""
-#~ "promotion, characteristic, quality, highlights, specs, advantages, "
-#~ "functionalities, exhibit, details, capabilities, attributes, promotion"
-#~ msgstr ""
-#~ "การส่งเสริมการขาย คุณลักษณะ คุณภาพ จุดเด่น ข้อมูลจำเพาะ ข้อดี ฟังก์ชัน การจัดแสดง "
-#~ "รายละเอียด ความสามารถ คุณลักษณะ การส่งเสริมการขาย"
-
-#~ msgid ""
-#~ "promotion, characteristic, quality, highlights, specs, advantages, "
-#~ "functionalities, exhibit, details, capabilities, attributes, promotion, "
-#~ "headline, content, overview, spotlight"
-#~ msgstr ""
-#~ "การส่งเสริมการขาย คุณลักษณะ คุณภาพ จุดเด่น ข้อมูลจำเพาะ ข้อดี ฟังก์ชัน การจัดแสดง "
-#~ "รายละเอียด ความสามารถ คุณลักษณะ การส่งเสริมการขาย หัวเรื่อง เนื้อหา ภาพรวม จุดสนใจ"
-
-#~ msgid ""
-#~ "promotion, characteristic, quality, highlights, specs, advantages, "
-#~ "functionalities, exhibit, details, capabilities, attributes, promotion, "
-#~ "presentation, demo, feature"
-#~ msgstr ""
-#~ "โปรโมชั่น คุณลักษณะ คุณภาพ จุดเด่น ข้อมูลจำเพาะ ข้อดี ฟังก์ชัน การจัดแสดง รายละเอียด "
-#~ "ความสามารถ คุณลักษณะ การส่งเสริมการขาย การนำเสนอ การสาธิต ฟีเจอร์"
-
-#~ msgid ""
-#~ "promotion, characteristic, quality, highlights, specs, advantages, "
-#~ "functionalities, features, exhibit, details, capabilities, attributes, "
-#~ "promotion, headline, content, overview, spotlight"
-#~ msgstr ""
-#~ "การส่งเสริมการขาย คุณลักษณะ คุณภาพ จุดเด่น ข้อมูลจำเพาะ ข้อดี ฟังก์ชัน คุณสมบัติ การจัดแสดง "
-#~ "รายละเอียด ความสามารถ คุณลักษณะ การส่งเสริมการขาย หัวเรื่อง เนื้อหา ภาพรวม จุดสนใจ"
-
-#~ msgid ""
-#~ "questions, answers, common answers, common questions, faq, help, support, "
-#~ "information, knowledge, guide, troubleshooting, assistance, QA, terms of "
-#~ "services"
-#~ msgstr ""
-#~ "คำถาม คำตอบ คำตอบทั่วไป คำถามทั่วไป คำถามที่พบบ่อย ความช่วยเหลือ การสนับสนุน ข้อมูล "
-#~ "ความรู้ คำแนะนำ การแก้ไขปัญหา ความช่วยเหลือ QA เงื่อนไขการบริการ"
-
-#~ msgid ""
-#~ "questions, answers, common answers, common questions, faq, help, support, "
-#~ "information, knowledge, guide, troubleshooting, assistance, columns, QA"
-#~ msgstr ""
-#~ "คำถาม คำตอบ คำตอบทั่วไป คำถามทั่วไป คำถามที่พบบ่อย ความช่วยเหลือ การสนับสนุน ข้อมูล "
-#~ "ความรู้ คำแนะนำ การแก้ไขปัญหา ความช่วยเหลือ คอลัมน์ QA"
-
-#~ msgid ""
-#~ "reveal, showcase, launch, presentation, announcement, content, picture, "
-#~ "photo, illustration, media, visual, article, combination"
-#~ msgstr ""
-#~ "เปิดเผย, จัดแสดง, เปิดตัว, การนำเสนอ, ประกาศ, เนื้อหา, รูปภาพ, ภาพถ่าย, "
-#~ "ภาพประกอบ, สื่อ, ภาพ, บทความ, การรวมกัน"
-
-#~ msgid ""
-#~ "reveal, showcase, launch, presentation, announcement, content, picture, "
-#~ "photo, illustration, media, visual, combination"
-#~ msgstr ""
-#~ "เปิดเผย, จัดแสดง, เปิดตัว, การนำเสนอ, ประกาศ, เนื้อหา, รูปภาพ, ภาพถ่าย, "
-#~ "ภาพประกอบ, สื่อ, ภาพ, การรวมกัน"
-
-#~ msgid ""
-#~ "shop, group, list, card, cart, products, inventory, catalog, merchandise, "
-#~ "goods"
-#~ msgstr "ร้านค้า กลุ่ม รายการ การ์ด รถเข็น สินค้า สินค้าคงคลัง แค็ตตาล็อก สินค้า"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, performance, achievements, benchmarks, milestones, indicators, "
-#~ "data, measurements, reports, trends, results, analytics, summaries, "
-#~ "summary"
-#~ msgstr ""
-#~ "สถิติ, สถิติ, KPI, เมตริก, แดชบอร์ด, การวิเคราะห์, ไฮไลท์, ตัวเลข, ประสิทธิภาพ, "
-#~ "ความสำเร็จ, เกณฑ์มาตรฐาน, เหตุการณ์สำคัญ, ตัวบ่งชี้, ข้อมูล, การวัดผล, รายงาน, "
-#~ "แนวโน้ม, ผลลัพธ์, การวิเคราะห์, สรุป, สรุปย่อ"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, skills, achievements, benchmarks, milestones, indicators, data, "
-#~ "measurements, reports, trends, results"
-#~ msgstr ""
-#~ "สถิติ สถิติ KPI เมตริก แผงข้อมูล การวิเคราะห์ ไฮไลท์ ตัวเลข ทักษะ ความสำเร็จ "
-#~ "เกณฑ์มาตรฐาน เหตุการณ์สำคัญ ตัวบ่งชี้ ข้อมูล การวัด รายงาน แนวโน้ม ผลลัพธ์"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, skills, achievements, benchmarks, milestones, indicators, data, "
-#~ "measurements, reports, trends, results, analytics, cta, call to action, "
-#~ "button"
-#~ msgstr ""
-#~ "สถิติ สถิติ KPI เมตริก แผงข้อมูล การวิเคราะห์ ไฮไลท์ ตัวเลข ทักษะ ความสำเร็จ "
-#~ "เกณฑ์มาตรฐาน เหตุการณ์สำคัญ ตัวบ่งชี้ ข้อมูล การวัด รายงาน แนวโน้ม ผลลัพธ์ การวิเคราะห์ "
-#~ "CTA ปุ่มเรียกร้องให้ดำเนินการ ปุ่ม"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, skills, achievements, benchmarks, milestones, indicators, data, "
-#~ "measurements, reports, trends, results, analytics, summaries, summary"
-#~ msgstr ""
-#~ "สถิติ สถิติ KPI เมตริก แผงข้อมูล การวิเคราะห์ ไฮไลท์ ตัวเลข ทักษะ ความสำเร็จ "
-#~ "เกณฑ์มาตรฐาน เหตุการณ์สำคัญ ตัวบ่งชี้ ข้อมูล การวัด รายงาน แนวโน้ม ผลลัพธ์ การวิเคราะห์ "
-#~ "สรุป สรุป"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, skills, achievements, benchmarks, milestones, indicators, data, "
-#~ "measurements, reports, trends, results, analytics, summaries, summary, "
-#~ "large-figures, prominent, standout"
-#~ msgstr ""
-#~ "สถิติ สถิติ KPI เมตริก แผงข้อมูล การวิเคราะห์ ไฮไลท์ ตัวเลข ทักษะ ความสำเร็จ "
-#~ "เกณฑ์มาตรฐาน เหตุการณ์สำคัญ ตัวบ่งชี้ ข้อมูล การวัด รายงาน แนวโน้ม ผลลัพธ์ การวิเคราะห์ "
-#~ "สรุป สรุป ตัวเลขขนาดใหญ่ โดดเด่น โดดเด่น"
-
-#~ msgid "⌙ Style"
-#~ msgstr "⌙ สไตล์"

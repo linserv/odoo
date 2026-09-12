@@ -59,7 +59,7 @@ class AccountTestInvoicingCommon(ProductCommon):
         def _decorator(function):
             @wraps(function)
             def wrapper(self):
-                self.country_code = country_code.upper()
+                self.country_code = country_code[:2].upper()
                 function(self)
             return wrapper
 
@@ -271,6 +271,11 @@ class AccountTestInvoicingCommon(ProductCommon):
                 create_values['country_id'] = country.id
             if 'currency_id' not in create_values:
                 create_values['currency_id'] = country.currency_id.id
+
+        if 'account_opening_date' not in create_values:
+            # To ease tests on returns: don't create the returns by default ; TestAccountReturn assigns that field while patching the return generation
+            create_values['account_opening_date'] = False
+
         company = super()._create_company(**create_values)
         cls._use_chart_template(company, cls.chart_template)
         # if the currency_id was defined explicitly (or via the country), it should override the one from the coa

@@ -223,6 +223,7 @@ class TestMrpOrder(TestMrpCommon, MailCase):
     @freeze_time('2022-06-28 08:00')
     def test_end_date(self):
         """ End date must be the day the MO is done (regardless of lead times)"""
+        self.env = self.env(context={**self.env.context, 'lang': 'en_US'})
         mo, bom_id, _p_final, _p1, _p2 = self.generate_mo(qty_base_1=10, qty_final=1, qty_base_2=1)
         bom_id.produce_delay = 5
         mo.button_mark_done()
@@ -2870,21 +2871,20 @@ class TestMrpOrder(TestMrpCommon, MailCase):
 
         # produce 20 / 10 / 5 on workorders, create backorder
 
-        duration_expected = wo_1.duration_expected
         wo_1.button_start()
         wo_1.qty_producing = 20
         self.assertEqual(mo.state, 'progress')
-        self.assertEqual(duration_expected, wo_1.duration_expected)
+        self.assertEqual(wo_1.duration_expected, 11 + 20 * 60)
         wo_1.button_finish()
 
         wo_2.button_start()
         wo_2.qty_producing = 10
-        self.assertEqual(wo_2.duration_expected, 12 + 10 * 60)
+        self.assertEqual(wo_2.duration_expected, 12 + 20 * 60)
         wo_2.button_finish()
 
         wo_3.button_start()
         wo_3.qty_producing = 5
-        self.assertEqual(wo_3.duration_expected, 13 + 5 * 60)
+        self.assertEqual(wo_3.duration_expected, 13 + 20 * 60)
         wo_3.button_finish()
 
         self.assertEqual(mo.state, 'to_close')
@@ -2900,10 +2900,10 @@ class TestMrpOrder(TestMrpCommon, MailCase):
         self.assertEqual(mo.state, 'done')
 
         mo_2 = mo.production_group_id.production_ids - mo
-        wo_4, wo_5, wo_6 = mo_2.workorder_ids
+        wo_5, wo_6, wo_4 = mo_2.workorder_ids
 
         self.assertEqual(wo_4.state, 'cancel')
-        self.assertEqual(wo_5.duration_expected, 12 + 15 * 60)
+        self.assertEqual(wo_5.duration_expected, 12 + 10 * 60)
 
         # produce 10 / 5, create backorder
 
@@ -2929,7 +2929,7 @@ class TestMrpOrder(TestMrpCommon, MailCase):
         self.assertEqual(mo_2.state, 'done')
 
         mo_3 = mo.production_group_id.production_ids - (mo | mo_2)
-        wo_7, wo_8, wo_9 = mo_3.workorder_ids
+        wo_9, wo_7, wo_8 = mo_3.workorder_ids
 
         self.assertEqual(wo_7.state, 'cancel')
         self.assertEqual(wo_8.state, 'cancel')
@@ -4181,45 +4181,17 @@ class TestMrpOrder(TestMrpCommon, MailCase):
         production_form = Form(self.env['mrp.production'])
         production_form.product_id = self.product_6
         production_form.bom_id = self.bom_4
-        production_form.product_qty = 5.0
+        production_form.product_qty = 1.0
         production = production_form.save()
         production.action_confirm()
-
-        init_duration_expected = production.workorder_ids.duration_expected
-        production.workorder_ids.duration_expected = init_duration_expected + 15
-
-        # changing the qty producing should recompute the expected duration
-        production_form = Form(production)
-        production_form.qty_producing = 3.0
-        production = production_form.save()
-
-        current_duration_expected = production.workorder_ids.duration_expected
-        self.assertNotEqual(current_duration_expected, init_duration_expected + 15)
-        self.assertNotEqual(current_duration_expected, init_duration_expected)
-
-        # one should not recompute the expected duration if the expected duration is changed
-        # after the qty_producing is set
-        production.workorder_ids.duration_expected = current_duration_expected + 10
-
-        backorder_wizard_dict = production.button_mark_done()
-        Form.from_action(self.env, backorder_wizard_dict).save().action_backorder()
-
-        self.assertEqual(production.workorder_ids.duration_expected, current_duration_expected + 10)
-
-        # One should recompute the expected duration of a full production
-        production = production.production_group_id.production_ids[-1]
 
         init_duration_expected = production.workorder_ids.duration_expected
 
         production.workorder_ids.duration_expected = init_duration_expected + 5
 
-        production_form = Form(production)
-        production_form.qty_producing = 2.0
-        production = production_form.save()
-
         production.button_mark_done()
 
-        self.assertEqual(production.workorder_ids.duration_expected, round(init_duration_expected, 2))
+        self.assertEqual(production.workorder_ids.duration_expected, round(init_duration_expected + 5, 2))
 
     def test_multi_edit_start_date_wo(self):
         """
@@ -4330,82 +4302,6 @@ class TestMrpOrder(TestMrpCommon, MailCase):
         mo_2.button_plan()
         self.assertEqual(mo_2.workorder_ids[0].workcenter_id.id, workcenter_1.id)
         self.assertEqual(mo_2.workorder_ids[0].duration_expected, 70)
-
-    def test_duration_expected_when_done(self):
-        """
-        Checks that the expected durations of workorders are updated depending on the produced quantity.
-        """
-        bom = self.bom_2
-        bom.type = 'normal'
-        bom.operation_ids.time_mode = 'manual'
-        bom.operation_ids.time_cycle_manual = 60.0
-        product = bom.product_id
-        component_1, component_2 = bom.bom_line_ids.mapped('product_id')
-        self.env['stock.quant']._update_available_quantity(component_1, self.stock_location, 50.0)
-        self.env['stock.quant']._update_available_quantity(component_2, self.stock_location, 50.0)
-        mo_form = Form(self.env['mrp.production'])
-        mo_form.product_id = product
-        mo_form.bom_id = bom
-        mo_form.product_qty = 10.0
-        mo = mo_form.save()
-        mo.action_confirm()
-        self.assertRecordValues(mo.workorder_ids, [
-            {'qty_produced': 0.0, 'qty_remaining': 10.0, 'duration_expected': 390.0, 'duration': 0.0}
-        ])
-
-        # Dont set any duration and validate the mo for 3 units
-        mo_form = Form(mo)
-        mo_form.qty_producing = 3.0
-        mo = mo_form.save()
-        action = mo.button_mark_done()
-        backorder_form = Form(self.env['mrp.production.backorder'].with_context(**action['context']))
-        backorder_form.save().action_backorder()
-        self.assertRecordValues(mo.workorder_ids, [
-            {'qty_produced': 3.0, 'qty_remaining': 0.0, 'duration_expected': 165.0, 'duration': 165.0, 'state': 'done'}
-        ])
-
-        bo = self.env['mrp.production'].search([('product_id', '=', product.id)]) - mo
-        self.assertRecordValues(bo, [{'product_id': product.id, 'product_uom_qty': 7.0}])
-        self.assertRecordValues(bo.workorder_ids, [
-            {'qty_produced': 0.0, 'qty_remaining': 7.0, 'duration_expected': 315.0, 'duration': 0.0}
-        ])
-
-        # check that the duration expected is correctly updated when the
-        # qty_producing is updated both to partial and full qty_production
-        bo_form = Form(bo)
-        bo_form.qty_producing = 3.0
-        bo = bo_form.save()
-        self.assertEqual(bo.workorder_ids.duration_expected, 165.0)
-        bo_form.qty_producing = 7.0
-        bo = bo_form.save()
-        self.assertEqual(bo.workorder_ids.duration_expected, 315.0)
-        bo_form.qty_producing = 3.0
-        bo = bo_form.save()
-        self.assertEqual(bo.workorder_ids.duration_expected, 165.0)
-        # Set a different expected duration and validate the bo for 3 units
-        bo.workorder_ids.duration_expected = 120.0
-        action = bo.button_mark_done()
-        backorder_form = Form(self.env['mrp.production.backorder'].with_context(**action['context']))
-        backorder_form.save().action_backorder()
-        self.assertRecordValues(bo.workorder_ids, [
-            {'qty_produced': 3.0, 'qty_remaining': 0.0, 'duration_expected': 120.0, 'duration': 120.0, 'state': 'done'}
-        ])
-
-        bo_2 = self.env['mrp.production'].search([('product_id', '=', product.id)]) - mo - bo
-        self.assertRecordValues(bo_2, [{'product_id': product.id, 'product_uom_qty': 4.0}])
-        self.assertRecordValues(bo_2.workorder_ids, [
-            {'qty_produced': 0.0, 'qty_remaining': 4.0, 'duration_expected': 165.0, 'duration': 0.0}
-        ])
-
-        # Set a different duration, finish the wo and validate the second bo
-        bo_2.workorder_ids.button_start()
-        bo_2.workorder_ids.button_finish()
-        bo_2.workorder_ids.duration = 100
-        self.assertRecordValues(bo_2.workorder_ids, [
-            {'qty_produced': 4.0, 'qty_remaining': 0.0, 'duration_expected': 165.0, 'duration': 100.0, 'state': 'done'}
-        ])
-        bo_2.button_mark_done()
-        self.assertRecordValues(bo_2, [{'qty_produced': 4.0, 'state': 'done'}])
 
     def test_update_workcenter_adapt_finish_date(self):
         """
@@ -5685,6 +5581,161 @@ class TestMrpOrder(TestMrpCommon, MailCase):
         )
         mo.qty_producing = 1.0
         self.assertEqual(mo.finished_move_line_ids.production_id, mo)
+
+    def test_reset_to_draft_cancelled_mo(self):
+        """The test assures resetting a canceled basic MO to draft resets its move_row_ids to draft
+        properly and user is able to re-confirm and produce normally.
+        """
+        mo, __, __, p1, p2 = self.generate_mo(qty_final=1, qty_base_1=2, qty_base_2=3)
+
+        mo.action_cancel()
+        self.assertEqual(mo.state, 'cancel')
+        self.assertTrue(all(m.state == 'cancel' for m in mo.move_raw_ids))
+
+        mo.action_reset_to_draft()
+        self.assertEqual(mo.state, 'draft')
+        self.assertEqual(len(mo.move_raw_ids), 2)
+        self.assertTrue(all(m.state == 'draft' for m in mo.move_raw_ids))
+        self.assertFalse(mo.move_raw_ids.filtered(lambda m: m.state == 'cancel'))
+
+        # Confirm and Produce with no errors
+        self.env['stock.quant']._update_available_quantity(p1, self.stock_location, 10)
+        self.env['stock.quant']._update_available_quantity(p2, self.stock_location, 10)
+        mo.action_confirm()
+        mo.action_assign()
+        mo.button_mark_done()
+        self.assertEqual(mo.state, 'done')
+        self.assertTrue(all(m.state == 'done' for m in mo.move_raw_ids))
+
+    def test_reset_to_progress_validated_mo(self):
+        """A validated (done) MO is set back to 'in progress'. Its done moves are reset to assigned
+        to match the pre-produce state.
+        """
+        Quant = self.env['stock.quant']
+        mo, __, p_final, p1, p2 = self.generate_mo(qty_final=1, qty_base_1=2, qty_base_2=3)
+        Quant._update_available_quantity(p1, self.stock_location, 10)
+        Quant._update_available_quantity(p2, self.stock_location, 10)
+        mo.action_assign()
+        mo.button_mark_done()
+        self.assertEqual(mo.state, 'done')
+
+        # components consumed, finished product produced.
+        self.assertEqual(Quant._get_available_quantity(p1, self.stock_location), 8)
+        self.assertEqual(Quant._get_available_quantity(p2, self.stock_location), 7)
+        self.assertEqual(Quant._get_available_quantity(p_final, self.stock_location), 1)
+
+        mo.action_reset_to_progress()
+        # done MOs are reopened to progress/to_close, depending on the workorders state if exist
+        self.assertNotIn(mo.state, ('done', 'draft', 'cancel'))
+
+        # components are returned to stock but re-reserved for the reset MO and the finished product
+        # is removed from stock again.
+        self.assertEqual(Quant._get_available_quantity(p1, self.stock_location), 8)
+        self.assertEqual(Quant._get_available_quantity(p2, self.stock_location), 7)
+        self.assertEqual(Quant._get_available_quantity(p_final, self.stock_location), 0)
+
+        self.assertTrue(all(m.state == 'assigned' for m in mo.move_raw_ids))
+        self.assertFalse(mo.move_raw_ids.filtered(lambda m: m.state == 'done'))
+
+        # Produce again with no errors
+        mo.button_mark_done()
+        self.assertEqual(mo.state, 'done')
+        self.assertEqual(Quant._get_available_quantity(p1, self.stock_location), 8)
+        self.assertEqual(Quant._get_available_quantity(p2, self.stock_location), 7)
+        self.assertEqual(Quant._get_available_quantity(p_final, self.stock_location), 1)
+
+    def test_reset_to_progress_reuses_serial(self):
+        """After setting a serial-tracked done MO back to progress, re-producing reuses the same
+        serial number.
+        """
+        mo, __, p_final, p1, p2 = self.generate_mo(tracking_final='serial', qty_final=1, qty_base_1=1, qty_base_2=1)
+        self.env['stock.quant']._update_available_quantity(p1, self.stock_location, 10)
+        self.env['stock.quant']._update_available_quantity(p2, self.stock_location, 10)
+        mo.action_assign()
+        mo.action_generate_serial()
+        sn = mo.lot_producing_ids
+        self.assertTrue(sn)
+        mo.button_mark_done()
+        self.assertEqual(mo.state, 'done')
+
+        mo.action_reset_to_progress()
+        self.assertNotIn(mo.state, ('done', 'draft', 'cancel'))
+        self.assertEqual(mo.lot_producing_ids, sn, "produced serial should remain attached after reset")
+
+        # Produce again with no blocking, using the same generated lot_producing_ids
+        mo.button_mark_done()
+        self.assertEqual(mo.state, 'done')
+        self.assertEqual(mo.lot_producing_ids, sn, "same serial reused, no new lot generated")
+        self.assertEqual(
+            self.env['stock.lot'].search_count([('product_id', '=', p_final.id)]), 1,
+            "no additional serial should have been created"
+        )
+
+    def test_reset_to_progress_reuses_serial_partial(self):
+        """After producing 2/3 and setting the done MO back to progress, re-producing reuses the
+        same 2 serials on the generating wizard.
+        """
+        mo, __, __, p1, p2 = self.generate_mo(tracking_final='serial', qty_final=3, qty_base_1=1, qty_base_2=1)
+        self.env['stock.quant']._update_available_quantity(p1, self.stock_location, 10)
+        self.env['stock.quant']._update_available_quantity(p2, self.stock_location, 10)
+        mo.action_assign()
+        res = mo.action_generate_serial()
+        wizard = Form.from_action(self.env, res)
+        wizard.lot_name = 'sn#01'
+        wizard.lot_quantity = 2
+        res = wizard.save().action_generate_serial_numbers()
+        wizard = Form.from_action(self.env, res)
+        wizard.save().action_apply()
+        sns = mo.lot_producing_ids
+        self.assertEqual(sns.mapped('name'), ['sn#01', 'sn#02'])
+        self.assertEqual(mo.qty_producing, 2)
+
+        action = mo.button_mark_done()
+        # close MO to confirm producing 2/3 with no backorders
+        backorder = Form(self.env['mrp.production.backorder'].with_context(**action['context'])).save()
+        Form.from_action(self.env, backorder.action_close_mo()).save().action_confirm()
+        self.assertEqual(mo.state, 'done')
+        self.assertEqual(mo.qty_produced, 2)
+
+        mo.action_reset_to_progress()
+        self.assertNotIn(mo.state, ('done', 'draft', 'cancel'))
+        self.assertEqual(mo.lot_producing_ids, sns)
+        finished = mo.move_finished_ids.filtered(lambda m: m.product_id == mo.product_id)
+        self.assertTrue(all(m.state == 'assigned' for m in mo.move_raw_ids))
+        self.assertEqual(finished.move_line_ids.lot_id, sns,
+            "the reopened finished move keeps its two serials")
+
+        # produce the whole MO (3/3): the wizard defaults to the first existing serial and the full
+        # quantity, so it keeps the two already-generated serials and adds a third on its own.
+        res = mo.action_generate_serial()
+        wizard = Form.from_action(self.env, res)
+        res = wizard.save().action_generate_serial_numbers()
+        wizard = Form.from_action(self.env, res)
+        wizard.save().action_apply()
+        self.assertEqual(mo.lot_producing_ids.mapped('name'), ['sn#01', 'sn#02', 'sn#03'])
+        self.assertLessEqual(sns, mo.lot_producing_ids, "the two original serials are kept")
+
+        action = mo.button_mark_done()
+        Form(self.env['mrp.consumption.warning'].with_context(**action['context'])).save().action_confirm()
+        self.assertEqual(mo.state, 'done')
+        self.assertEqual(mo.qty_produced, 3)
+        self.assertEqual(len(mo.lot_producing_ids), 3)
+
+    def test_reset_to_progress_change_serial(self):
+        """Setting to progress a done MO then changing the serial produces a product with the new sn, not the old one."""
+        mo, __, __, p1, __ = self.generate_mo(tracking_final='serial', qty_final=1, qty_base_1=1)
+        self.env['stock.quant']._update_available_quantity(p1, self.stock_location, 1)
+        mo.action_assign()
+        mo.action_generate_serial()
+        old_sn = mo.lot_producing_ids
+        mo.button_mark_done()
+        mo.action_reset_to_progress()
+        mo.lot_producing_ids = [Command.clear()]
+        mo.action_generate_serial()
+        new_sn = mo.lot_producing_ids
+        self.assertNotEqual(old_sn, new_sn)
+        mo.button_mark_done()
+        self.assertEqual(mo.move_finished_ids.move_line_ids.lot_id, new_sn)
 
 
 class TestMrpOrderPostInstall(TestMrpCommon):

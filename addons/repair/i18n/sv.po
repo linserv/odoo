@@ -18,21 +18,22 @@
 # Kim Asplund <kim.asplund@gmail.com>, 2022
 # "Tiffany Chang (tic)" <tic@odoo.com>, 2025.
 # Weblate <noreply-mt-weblate@weblate.org>, 2025.
+# Hanna Kharraziha <hakha@odoo.com>, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 16.0beta\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-21 16:30+0000\n"
-"Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Swedish <https://translate.odoo.com/projects/odoo-master/"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 15:30+0000\n"
+"Last-Translator: Hanna Kharraziha <hakha@odoo.com>\n"
+"Language-Team: Swedish <https://translate.odoo.com/projects/odoo-s19-4/"
 "repair/sv/>\n"
 "Language: sv\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: repair
 #: model:ir.module.module,description:base.module_repair
@@ -77,17 +78,9 @@ msgid ""
 "* The 'New' status is used when a user is encoding a new and unconfirmed "
 "repair order.\n"
 "* The 'Confirmed' status is used when a user confirms the repair order.\n"
-"* The 'Under Repair' status is used when the repair is ongoing.\n"
-"* The 'Repaired' status is set when repairing is completed.\n"
+"* The 'Done' status is set when repairing is completed.\n"
 "* The 'Cancelled' status is used when user cancel repair order."
 msgstr ""
-"* Statusen \"Ny\" används när en användare kodar en ny och obekräftad "
-"reparationsorder.\n"
-"* Statusen \"Bekräftad\" används när en användare bekräftar "
-"reparationsordern.\n"
-"* Statusen \"Under reparation\" används när reparationen pågår.\n"
-"* Status \"Reparerad\" sätts när reparationen är slutförd.\n"
-"* Statusen \"Avbruten\" används när användaren avbryter reparationsordern."
 
 #. module: repair
 #: model_terms:ir.ui.view,arch_db:repair.report_repairorder
@@ -103,11 +96,6 @@ msgstr "<span class=\"col-6\">Konfirmerad</span>"
 #: model_terms:ir.ui.view,arch_db:repair.stock_repair_type_kanban
 msgid "<span class=\"col-6\">Late</span>"
 msgstr "<span class=\"col-6\">Sent</span>"
-
-#. module: repair
-#: model_terms:ir.ui.view,arch_db:repair.stock_repair_type_kanban
-msgid "<span class=\"col-6\">Under Repair</span>"
-msgstr "<span class=\"col-6\">Under reparation</span>"
 
 #. module: repair
 #: model_terms:ir.ui.view,arch_db:repair.stock_production_lot_view_form
@@ -177,17 +165,17 @@ msgstr "Aktiviteter"
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__activity_exception_decoration
 msgid "Activity Exception Decoration"
-msgstr "Aktivitet undantaget dekoration"
+msgstr "Stilmarkeringar för undantagsaktiviteter"
 
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__activity_plans_ids
 msgid "Activity Plans"
-msgstr ""
+msgstr "Aktivitetsplaner"
 
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__activity_state
 msgid "Activity State"
-msgstr "Aktivitetstillstånd"
+msgstr "Aktivitetsstatus"
 
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__activity_type_icon
@@ -350,7 +338,7 @@ msgstr "Färgindex"
 #: model:ir.model.fields,field_description:repair.field_repair_service_line__company_id
 #: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form_filter
 msgid "Company"
-msgstr "Bolag"
+msgstr "Företag"
 
 #. module: repair
 #: model_terms:ir.ui.view,arch_db:repair.repair_view_picking_type_form
@@ -372,7 +360,7 @@ msgstr "Komponent Status"
 #: model:ir.ui.menu,name:repair.repair_menu_config
 #: model_terms:ir.ui.view,arch_db:repair.stock_repair_type_kanban
 msgid "Configuration"
-msgstr "Konfiguration"
+msgstr "Inställningar"
 
 #. module: repair
 #: model_terms:ir.ui.view,arch_db:repair.view_repair_consumption_warning_form
@@ -512,6 +500,12 @@ msgid "Display Name"
 msgstr "Visningsnamn"
 
 #. module: repair
+#: model:ir.model.fields.selection,name:repair.selection__repair_order__state__done
+#: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form_filter
+msgid "Done"
+msgstr ""
+
+#. module: repair
 #: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form
 msgid "End Repair"
 msgstr "Avsluta reparation"
@@ -594,13 +588,15 @@ msgstr "Ikon för att indikera en undantagsaktivitet."
 #. module: repair
 #: model:ir.model.fields,help:repair.field_repair_order__message_needaction
 msgid "If checked, new messages require your attention."
-msgstr "Om markerad så finns det meddelanden som kräver din uppmärksamhet."
+msgstr ""
+"Om rutan är markerad, så finns det nya meddelanden som kräver din "
+"uppmärksamhet."
 
 #. module: repair
 #: model:ir.model.fields,help:repair.field_repair_order__message_has_error
 #: model:ir.model.fields,help:repair.field_repair_order__message_has_sms_error
 msgid "If checked, some messages have a delivery error."
-msgstr "Om markerad, en del meddelanden har leveransfel."
+msgstr "Om rutan är markerad, så har vissa meddelanden leveransfel."
 
 #. module: repair
 #: model:ir.model.fields,help:repair.field_repair_order__under_warranty
@@ -777,7 +773,7 @@ msgstr ""
 #. module: repair
 #: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form_filter
 msgid "My Activities"
-msgstr "Mina aktivieteter"
+msgstr "Mina aktiviteter"
 
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__my_activity_date_deadline
@@ -801,12 +797,12 @@ msgstr "Nästa Kalenderhändelse för Aktivitet"
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__activity_date_deadline
 msgid "Next Activity Deadline"
-msgstr "Nästa slutdatum för aktivitet"
+msgstr "Tidsgräns för nästa aktivitet"
 
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__activity_summary
 msgid "Next Activity Summary"
-msgstr "Nästa aktivitetssammanställning"
+msgstr "Sammanfattning av nästa aktivitet"
 
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__activity_type_id
@@ -858,11 +854,6 @@ msgstr "Antal sena reparationsorder"
 #: model:ir.model.fields,field_description:repair.field_stock_picking_type__count_repair_confirmed
 msgid "Number of Repair Orders Confirmed"
 msgstr "Antal bekräftade reparationsorder"
-
-#. module: repair
-#: model:ir.model.fields,field_description:repair.field_stock_picking_type__count_repair_under_repair
-msgid "Number of Repair Orders Under Repair"
-msgstr "Antal reparationsorder under reparation"
 
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_stock_picking_type__count_repair_ready
@@ -974,11 +965,6 @@ msgstr "Produkt A"
 #: model_terms:ir.ui.view,arch_db:repair.report_repairorder
 msgid "Product B"
 msgstr "Produkt B"
-
-#. module: repair
-#: model:ir.model.fields,field_description:repair.field_product_product__product_catalog_product_is_in_repair
-msgid "Product Catalog Product Is In Repair"
-msgstr "Produktkatalog Produkten är i reparation"
 
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__product_location_dest_id
@@ -1224,10 +1210,8 @@ msgstr ""
 #. module: repair
 #. odoo-python
 #: code:addons/repair/models/repair.py:0
-msgid "Repair must be under repair in order to end reparation."
+msgid "Repair must be confirmed in order to end reparation."
 msgstr ""
-"Reparationen måste vara under reparation för att reparationen ska kunna "
-"avslutas."
 
 #. module: repair
 #. odoo-python
@@ -1239,12 +1223,6 @@ msgstr "Reparationsorder på %s"
 #: model:ir.model.fields,field_description:repair.field_stock_lot__repair_part_count
 msgid "Repair part count"
 msgstr "Antal reparationsdelar"
-
-#. module: repair
-#: model:ir.model.fields.selection,name:repair.selection__repair_order__state__done
-#: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form_filter
-msgid "Repaired"
-msgstr "Reparerad"
 
 #. module: repair
 #: model:ir.model.fields,field_description:repair.field_stock_lot__repaired_count
@@ -1279,7 +1257,7 @@ msgstr "Påfyllning på order (MTO)"
 #: model:ir.ui.menu,name:repair.repair_menu_reporting
 #: model_terms:ir.ui.view,arch_db:repair.stock_repair_type_kanban
 msgid "Reporting"
-msgstr "Rapportering"
+msgstr "Rapporter"
 
 #. module: repair
 #: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form
@@ -1399,11 +1377,6 @@ msgid "Show all records whose next activity date is past"
 msgstr "Visa alla poster vars nästa aktivitetsdatum är passerat"
 
 #. module: repair
-#: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form
-msgid "Start Repair"
-msgstr "Starta reparationen"
-
-#. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__state
 #: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form_filter
 msgid "Status"
@@ -1417,10 +1390,10 @@ msgid ""
 "Today: Activity date is today\n"
 "Planned: Future activities."
 msgstr ""
-"Status baserad på aktiviteter\n"
-"Försenade: Leveranstidpunkten har passerat\n"
-"Idag: Aktivitetsdatum är idag\n"
-"Kommande: Framtida aktiviteter."
+"Status baserat på aktivitetsdatum:\n"
+"Försenade: Aktivitetsdatum har redan passerat.\n"
+"Idag: Aktivitetsdatum är dagens datum.\n"
+"Planerade: Kommande aktiviteter."
 
 #. module: repair
 #: model:ir.model,name:repair.model_stock_move
@@ -1596,12 +1569,6 @@ msgid "Type of the exception activity on record."
 msgstr "Typ av undantagsaktivitet som har registrerats."
 
 #. module: repair
-#: model:ir.model.fields.selection,name:repair.selection__repair_order__state__under_repair
-#: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form_filter
-msgid "Under Repair"
-msgstr "Under reparation"
-
-#. module: repair
 #: model:ir.model.fields,field_description:repair.field_repair_order__under_warranty
 msgid "Under Warranty"
 msgstr "Under garanti"
@@ -1721,21 +1688,18 @@ msgstr "id"
 #. odoo-python
 #: code:addons/repair/models/sale_order.py:0
 msgid "sale_order_id"
-msgstr ""
+msgstr "sale_order_id"
 
 #. module: repair
 #: model_terms:ir.ui.view,arch_db:repair.view_repair_order_form
 msgid "text"
 msgstr ""
 
-#~ msgid "Font awesome icon e.g. fa-tasks"
-#~ msgstr "Font Awesome-ikon t.ex. fa-tasks"
+msgid "Check availability"
+msgstr "Kontrollera tillgänglighet"
 
-#~ msgid "Check availability"
-#~ msgstr "Kontrollera tillgänglighet"
+msgid "Website Messages"
+msgstr "Webbplatsmeddelanden"
 
-#~ msgid "Website Messages"
-#~ msgstr "Webbplatsmeddelanden"
-
-#~ msgid "Website communication history"
-#~ msgstr "Webbplatsens kommunikationshistorik"
+msgid "Website communication history"
+msgstr "Webbplatsens kommunikationshistorik"

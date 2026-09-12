@@ -146,14 +146,9 @@ class SaleOrderLine(models.Model):
     is_product_archived = fields.Boolean(compute="_compute_is_product_archived")
 
     name = fields.Text(
-        string="Description",
-        compute="_compute_name",
-        store=True,
-        readonly=False,
-        required=True,
-        precompute=True,
+        string="Description", compute="_compute_name", store=True, readonly=False, precompute=True
     )
-    translated_product_name = fields.Text(compute="_compute_translated_product_name")
+    label = fields.Text(string="Label", compute="_compute_label", inverse="_inverse_label")
 
     product_uom_qty = fields.Float(
         string="Quantity",
@@ -369,6 +364,16 @@ class SaleOrderLine(models.Model):
     amount_to_invoice_at_date = fields.Float(
         string="Amount", compute="_compute_amount_to_invoice_at_date"
     )
+    accrual_move_ids = fields.Many2many(
+        comodel_name='account.move',
+        relation='sale_order_line_accrual_move_rel',
+        column1='order_line_id',
+        column2='move_id',
+        string="Accrual Entries",
+        copy=False,
+        help="Accrual entries generated for this line, so it isn't accrued again while one is "
+             "still standing (posted, not yet reversed or cancelled).",
+    )
 
     # Same than `qty_delivered` and `qty_invoiced` but non-stored and depending of the context.
     qty_delivered_at_date = fields.Float(
@@ -376,6 +381,12 @@ class SaleOrderLine(models.Model):
     )
     qty_invoiced_at_date = fields.Float(
         string="Invoiced", compute="_compute_qty_invoiced_at_date", digits="Product Unit"
+    )
+    deferred_revenue = fields.Boolean(
+        string="Deferred Revenue", search="_search_deferred_revenue", store=False
+    )
+    invoice_to_be_issued = fields.Boolean(
+        string="Invoice to be Issued", search="_search_invoice_to_be_issued", store=False
     )
 
     # Technical field holding custom data for the taxes computation engine.
@@ -437,15 +448,21 @@ class SaleOrderLine(models.Model):
         for so_line in self.sudo():
             if so_line.order_partner_id.lang:
                 so_line = so_line.with_context(lang=so_line.order_id._get_lang())
-            if (product := so_line.product_id).display_name:
-                default_name = so_line._get_sale_order_line_multiline_description_sale()
-                if so_line.name == default_name:
-                    description = product.display_name
-                else:
-                    parts = (so_line.name or "").split("\n", 2)
-                    description = parts[1] if len(parts) > 1 and parts[1] else product.display_name
-            else:
-                description = (so_line.name or "").split("\n", 1)[0]
+
+            description = (so_line.name or "").split("\n", 1)[0]
+            default_name = so_line._get_sale_order_line_multiline_description_sale()
+            if so_line.product_id and (
+                so_line.name
+                in {
+                    default_name,
+                    f"{so_line.product_id.display_name}\n{default_name}",
+                    so_line.product_id.display_name,
+                }
+            ):
+                # if name (or old product display_name + name) matches the multiline description,
+                # use product's display name
+                description = so_line.product_id.display_name
+
             name = f"{so_line.order_id.name} - {description}"
             additional_name = name_per_id.get(so_line.id)
             if additional_name:
@@ -516,22 +533,34 @@ class SaleOrderLine(models.Model):
     def _get_sale_order_line_multiline_description_sale(self):
         """Compute a default multiline description for this sales order line.
 
-        In most cases the product description is enough but sometimes we need to append information
-        that only exists on the sale order line itself (custom and no_variant attributes, ...).
+        In most cases the product description is enough, but sometimes we need to append
+        information that only exists on the sale order line itself (custom and
+        no_variant attributes, ...).
         """
         self.ensure_one()
-        description = (
-            self.product_id.get_product_multiline_description_sale()
-            + self._get_sale_order_line_multiline_description_variants()
-        )
-        if self.linked_line_id and not self.combo_item_id:
-            description += "\n" + self.env._(
-                "Option for: %s",
-                self.linked_line_id.product_id.with_context(
-                    display_default_code=False
-                ).display_name,
+
+        description_parts = []
+
+        if self.product_id.description_sale:
+            description_parts.append(
+                self.product_id.get_product_multiline_description_sale(with_display_name=False)
             )
-        return description
+
+        variants = self._get_sale_order_line_multiline_description_variants()
+        if variants:
+            description_parts.append(variants)
+
+        if self.linked_line_id and not self.combo_item_id:
+            description_parts.append(
+                self.env._(
+                    "Option for: %s",
+                    self.linked_line_id.product_id.with_context(
+                        display_default_code=False
+                    ).display_name,
+                )
+            )
+
+        return "\n".join(description_parts)
 
     def _get_sale_order_line_multiline_description_variants(self):
         """When using no_variant attributes or is_custom values, the product
@@ -548,7 +577,7 @@ class SaleOrderLine(models.Model):
         if not self.product_custom_attribute_value_ids and not no_variant_ptavs:
             return ""
 
-        name = ""
+        lines = []
 
         custom_ptavs = (
             self.product_custom_attribute_value_ids.custom_product_template_attribute_value_id
@@ -557,15 +586,16 @@ class SaleOrderLine(models.Model):
 
         # display the no_variant attributes, except those that are also
         # displayed by a custom (avoid duplicate description)
-        for ptav in no_variant_ptavs - multi_ptavs - custom_ptavs:
-            name += "\n" + ptav.display_name
+        lines.extend((no_variant_ptavs - multi_ptavs - custom_ptavs).mapped("display_name"))
 
         # display the selected values per attribute on a single for a multi checkbox
         for pta, ptavs in groupby(multi_ptavs, lambda ptav: ptav.attribute_id):
-            name += "\n" + self.env._(
-                "%(attribute)s: %(values)s",
-                attribute=pta.name,
-                values=", ".join(ptav.name for ptav in ptavs),
+            lines.append(
+                self.env._(
+                    "%(attribute)s: %(values)s",
+                    attribute=pta.name,
+                    values=", ".join(ptav.name for ptav in ptavs),
+                )
             )
 
         # Sort the values according to _order settings, because it doesn't work for virtual records
@@ -575,9 +605,9 @@ class SaleOrderLine(models.Model):
             pacv = self.product_custom_attribute_value_ids.filtered(
                 lambda pcav: pcav.custom_product_template_attribute_value_id == patv
             )
-            name += "\n" + pacv.display_name
+            lines.append(pacv.display_name)
 
-        return name
+        return "\n".join(lines)
 
     def _get_downpayment_description(self):
         self.ensure_one()
@@ -612,12 +642,31 @@ class SaleOrderLine(models.Model):
 
         return name
 
-    @api.depends("product_id")
-    def _compute_translated_product_name(self):
+    @api.depends("product_id", "name", "order_id.partner_id")
+    def _compute_label(self):
         for line in self:
-            line.translated_product_name = line.product_id.with_context(
-                lang=line.order_id._get_lang()
-            ).display_name
+            if not line.product_id:
+                line.label = line.name
+                continue
+
+            product_with_lang = line.product_id.with_context(lang=line.order_id._get_lang())
+            if not line.name:
+                line.label = product_with_lang.display_name
+            elif line.name.splitlines()[0] == product_with_lang.display_name:
+                # If description already holds the product name, use it as label
+                line.label = line.name
+            else:
+                line.label = product_with_lang.display_name + "\n" + line.name
+
+    def _inverse_label(self):
+        for line in self:
+            if line.product_id and line.label:
+                display_name = line.product_id.with_context(
+                    lang=line.order_id._get_lang()
+                ).display_name
+                line.name = line.label.removeprefix(display_name).removeprefix("\n")
+            else:
+                line.name = line.label
 
     @api.depends("display_type", "product_id")
     def _compute_product_uom_qty(self):
@@ -773,10 +822,7 @@ class SaleOrderLine(models.Model):
             document_tax_mode=line.document_tax_mode,
         )
         price_unit = line.product_id._adapt_price_unit_to_document_tax_mode(
-            price_unit,
-            product_taxes,
-            line.product_uom_id,
-            line.document_tax_mode,
+            price_unit, product_taxes, line.product_uom_id, line.document_tax_mode
         )
         line.update({"price_unit": price_unit, "technical_price_unit": price_unit})
 
@@ -1528,6 +1574,67 @@ class SaleOrderLine(models.Model):
                 line.qty_delivered_at_date - line.qty_invoiced_at_date
             ) * line.price_unit
 
+    def _get_accrual_domain(self, date=False):
+        """ Reused by account.accrued.orders.wizard and stock_account's Stock Valuation report.
+        When `date` is given, also restrict to lines that need an accrual entry as of it: the
+        ones currently out of sync, or that were out of sync as of `date` but have since been
+        settled (nothing left to accrue today). Extended by `sale_stock`, which can also detect
+        a delivery-side mismatch via stock moves.
+        """
+        domain = Domain([
+            ("state", "=", "sale"),
+            ("display_type", "=", False),
+            ("is_downpayment", "=", False),
+            ("product_id.type", "!=", "combo"),
+            # Lines with an accrual entry that's still standing (posted, not yet reversed or
+            # cancelled) already have their accrual accounted for: excluded until it isn't.
+            ("accrual_move_ids", "not any", [("state", "=", "posted"), ("reversal_move_ids", "=", False)]),
+        ])
+        if date:
+            domain &= Domain.OR([
+                [("qty_to_invoice", "!=", 0)],
+                [
+                    ("order_id.invoice_status", "=", "invoiced"),
+                    ("order_id.delivery_status", "in", ("pending", "started", "partial")),
+                ],
+                [("invoice_lines.move_id.date", ">", date)],
+            ])
+        return domain
+
+    def _search_deferred_revenue(self, operator, value):
+        if operator != "in":
+            return NotImplemented
+        return [("id", "in", self._get_accrual_line_ids("deferred").ids)]
+
+    def _search_invoice_to_be_issued(self, operator, value):
+        if operator != "in":
+            return NotImplemented
+        return [("id", "in", self._get_accrual_line_ids("invoice_issued").ids)]
+
+    @api.model
+    def _get_accrual_line_ids(self, mode=False, date=False, extra_domain=None):
+        """ Order lines whose invoiced and delivered quantities are out of sync, i.e. that need
+        an accrual entry as of `date` (today if not given). `mode` splits the result by the
+        direction of the mismatch: 'deferred' (invoiced ahead of delivery) or 'invoice_issued'
+        (delivered ahead of invoicing). Reused by the `deferred_revenue`/`invoice_to_be_issued`
+        filters and by `res.company._get_accrual_candidate_lines`.
+        """
+        if not date:
+            date = fields.Date.to_date(self.env.context.get('accrual_entry_date'))
+        accrual_entry_date = date or fields.Date.context_today(self)
+        domain = self._get_accrual_domain(accrual_entry_date)
+        if extra_domain:
+            domain &= extra_domain
+        order_lines = self.env["sale.order.line"].search(domain)
+        # Applied after the search: flushing pending computations with this
+        # context would corrupt the stored quantities with at-date values.
+        order_lines = order_lines.with_context(accrual_entry_date=fields.Date.to_string(accrual_entry_date))
+        if mode == "deferred":
+            order_lines = order_lines.filtered(lambda l: l.amount_to_invoice_at_date < 0)
+        elif mode == "invoice_issued":
+            order_lines = order_lines.filtered(lambda l: l.amount_to_invoice_at_date > 0)
+        return order_lines
+
     @api.depends("order_id.partner_id", "product_id")
     def _compute_analytic_distribution(self):
         for line in self:
@@ -1676,13 +1783,6 @@ class SaleOrderLine(models.Model):
             return lines
 
         for line in lines:
-            if line.qty_delivered_method == "manual" and line.is_storable:
-                qty_delivered = line.product_uom_id._compute_quantity(
-                    line.qty_delivered, line.product_id.uom_id
-                )
-                line.product_id.sudo().with_company(line.company_id).with_context(
-                    skip_qty_available_update=True
-                ).sudo().qty_available -= qty_delivered
             if not line.display_type and line.state == "sale":
                 msg = self.env._("Extra line with %s", line.product_id.display_name or line.name)
                 line.order_id.message_post(body=msg)
@@ -1739,18 +1839,6 @@ class SaleOrderLine(models.Model):
             # the field is not sent by the client and expected to be recomputed, but isn't
             # because technical_price_unit is set.
             values.pop("technical_price_unit")
-
-        if "qty_delivered" in values:
-            for line in self:
-                if line.qty_delivered_method != "manual" or not line.is_storable:
-                    continue
-                delta_qty_delivered = values["qty_delivered"] - line.qty_delivered
-                delta_qty_delivered = line.product_uom_id._compute_quantity(
-                    delta_qty_delivered, line.product_id.uom_id
-                )
-                line.product_id.sudo().with_company(line.company_id).with_context(
-                    skip_qty_available_update=True
-                ).qty_available -= delta_qty_delivered
 
         # Prevent writing on a locked SO.
         protected_fields = self._get_protected_fields()
@@ -1871,14 +1959,7 @@ class SaleOrderLine(models.Model):
         if len(self) == 1:
             return self._get_discounted_price()
 
-        return parent_record.pricelist_id._get_product_price(
-            product=self.product_id,
-            quantity=1.0,
-            uom=self._get_product_uom(),
-            currency=parent_record.currency_id,
-            date=parent_record.date_order,
-            **kwargs,
-        )
+        return super()._get_catalog_unit_price(parent_record, **kwargs)
 
     def _can_be_unlinked_from_catalog(self):
         return super()._can_be_unlinked_from_catalog() and self.state in {"draft", "sent"}
@@ -1939,9 +2020,7 @@ class SaleOrderLine(models.Model):
         res = {
             "display_type": self.display_type or "product",
             "sequence": self.sequence,
-            "name": self.env["account.move.line"]._get_journal_items_full_name(
-                self.name, self.product_id.display_name
-            ),
+            "name": self.name,
             "product_id": self.product_id.id,
             "product_uom_id": self.product_uom_id.id,
             "quantity": self.qty_to_invoice,

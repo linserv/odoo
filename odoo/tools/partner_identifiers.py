@@ -18,10 +18,15 @@ from stdnum.ma import ice as ma_ice
 from stdnum.no import orgnr as no_en
 from stdnum.ro import cui as ro_cui
 from stdnum.se import orgnr as se_en
-from stdnum.sg import uen as sg_en
 
 from odoo.tools.translate import LazyGettext, LazyTranslate
-from odoo.tools.partner_identifier_validation import nl_kvk_validate, nl_oin_validate, pk_cn_validate, th_branch_code_validate
+from odoo.tools.partner_identifier_validation import (
+    nl_kvk_validate,
+    nl_oin_validate,
+    pk_cn_validate,
+    sg_uen_validate,
+    th_branch_code_validate,
+)
 
 from odoo.addons.base.models.res_country import (
     FR_AND_OVERSEAS_TERRITORIES,
@@ -345,6 +350,13 @@ TIN_METADATA = {
         'category': 'GST',
         'countries': ['NZ'],
     },
+    'PA_RUC': {
+        'sequence': 1,
+        'label': _lt('RUC'),
+        'help': _lt('Registro Único de Contribuyentes: the DGI tax ID for companies and registered individuals.'),
+        'category': 'TIN',
+        'countries': ['PA'],
+    },
     'PE_RUC': {
         'placeholder': _lt('10XXXXXXXXY or 20XXXXXXXXY or 15XXXXXXXXY or 16XXXXXXXXY or 17XXXXXXXXY'),
         'category': 'TIN',
@@ -577,6 +589,14 @@ ADDITIONAL_IDENTIFIERS_METADATA = {
         'category': 'EN',
         'validation_function': ee_en.validate,
         'countries': ['EE'],
+    },
+    'EG_NIN': {
+        'sequence': 10,
+        'category': 'CN',
+        'label': _lt('National ID'),
+        'help': _lt('Egyptian National ID (14 digits) used to identify individuals.'),
+        'placeholder': '12345678901234',
+        'countries': ['EG'],
     },
     'ES_EN': {
         'label': _lt('Company ID'),
@@ -840,85 +860,6 @@ ADDITIONAL_IDENTIFIERS_METADATA = {
         'category': 'EN',
         'countries': ['RS'],
     },
-    'SA_CRN': {
-        'placeholder': _lt('1010123456'),
-        'help': _lt('Saudi Arabia Commercial Registration Number'),
-        'label': _lt('Commercial Registration Number'),
-        'category': 'EN',
-        'countries': ['SA'],
-        'sequence': 11,
-    },
-    'SA_MOM': {
-        'placeholder': _lt('MOMRAH License Number'),
-        'help': _lt('Saudi Arabia MOMRAH License Number'),
-        'label': _lt('MOMRAH License'),
-        'countries': ['SA'],
-        'sequence': 12,
-    },
-    'SA_MLS': {
-        'placeholder': _lt('MHRSD License Number'),
-        'help': _lt('Saudi Arabia MHRSD License Number'),
-        'label': _lt('MHRSD License'),
-        'countries': ['SA'],
-        'sequence': 13,
-    },
-    'SA_700': {
-        'placeholder': _lt('700 123 4567'),
-        'help': _lt('Saudi Arabia 700 Number'),
-        'label': _lt('700 Number'),
-        'countries': ['SA'],
-        'sequence': 14,
-    },
-    'SA_SAG': {
-        'placeholder': _lt('MISA License Number'),
-        'help': _lt('Saudi Arabia MISA License Number'),
-        'label': _lt('MISA License'),
-        'countries': ['SA'],
-        'sequence': 15,
-    },
-    'SA_NAT': {
-        'placeholder': _lt('1099123456'),
-        'help': _lt('Saudi Arabia National ID Number'),
-        'label': _lt('National ID'),
-        'countries': ['SA'],
-        'sequence': 16,
-    },
-    'SA_GCC': {
-        'placeholder': _lt('GCC ID Number'),
-        'help': _lt('Saudi Arabia GCC ID Number'),
-        'label': _lt('GCC ID'),
-        'countries': ['SA'],
-        'sequence': 17,
-    },
-    'SA_IQA': {
-        'placeholder': _lt('Iqama ID Number'),
-        'help': _lt('Saudi Arabia Iqama ID Number'),
-        'label': _lt('Iqama Number'),
-        'countries': ['SA'],
-        'sequence': 18,
-    },
-    'SA_PAS': {
-        'placeholder': _lt('A00012345'),
-        'help': _lt('Saudi Arabia Passport ID Number'),
-        'label': _lt('Passport ID'),
-        'countries': ['SA'],
-        'sequence': 19,
-    },
-    'SA_OTH': {
-        'placeholder': _lt('Other ID Number'),
-        'help': _lt('Saudi Arabia Other ID Number'),
-        'label': _lt('Other ID'),
-        'countries': ['SA'],
-        'sequence': 20,
-    },
-    'SA_TIN': {
-        'sequence': 10,
-        'placeholder': _lt('3002707692 [Tax identification number]'),
-        'category': 'TIN',
-        'help': _lt('Saudi Arabia Tax Identification Number'),
-        'label': _lt('Tax Identification Number'),
-        'countries': ['SA'],
-    },
     'SE_EN': {
         'sequence': 10,
         'scheme': '0007',
@@ -937,7 +878,7 @@ ADDITIONAL_IDENTIFIERS_METADATA = {
         'help': _lt('Singapore Unique Entity Number.'),
         'placeholder': '00192200M',
         'category': 'EN',
-        'validation_function': sg_en.validate,
+        'validation_function': sg_uen_validate,
         'countries': ['SG'],
     },
     'SK_EN': {
@@ -1004,6 +945,7 @@ ADDITIONAL_IDENTIFIERS_METADATA = {
         'display_optional': 'hide',
         'help': _lt('Global Location Number, used to identify parties and locations.'),
         'countries': False,
+        'synced': False,
     },
     'OTHER': {  # default non-structured identifier
         'sequence': 1000,

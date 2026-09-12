@@ -4,7 +4,6 @@ from lxml import etree
 from zipfile import ZipFile
 from odoo import fields, Command
 from odoo.tests import HttpCase, tagged
-from odoo.tools.safe_eval import datetime
 
 from odoo.addons.account_edi_ubl_cii.tests.common import TestUblCiiCommon
 
@@ -85,42 +84,42 @@ class TestAccountEdiUblCii(TestUblCiiCommon, HttpCase):
         line_vals = [
             {
                 'product_id': self.place_prdct.id,
-                'name': 'Placement',
+                'label': 'Placement',
                 'product_uom_id': self.uom_units.id,
                 'tax_ids': [self.company_data_2['default_tax_sale'].id]
             }, {
                 'product_id': self.displace_prdct.id,
-                'name': 'Displacement',
+                'label': 'Displacement',
                 'product_uom_id': False,
                 'tax_ids': [self.company_data_2['default_tax_sale'].id]
             }, {
                 'product_id': self.displace_prdct.id,
-                'name': 'Displacement',
+                'label': 'Displacement',
                 'product_uom_id': self.uom_units.id,
                 'tax_ids': [self.company_data_2['default_tax_sale'].id]
             }, {
                 'product_id': self.displace_prdct.id,
-                'name': 'Displacement',
+                'label': 'Displacement',
                 'product_uom_id': self.uom_dozens.id,
                 'tax_ids': [self.company_data_2['default_tax_sale'].id]
             }, {
                 'product_id': products[0].id,
-                'name': 'Awesome Product',
+                'label': '[1234] XYZ\nAwesome Product',
                 'product_uom_id': self.uom_units.id,
                 'tax_ids': [self.company_data_2['default_tax_sale'].id],
             }, {
                 'product_id': products[1].id,
-                'name': 'XYZ',
+                'label': '[5678] XYZ',
                 'product_uom_id': self.uom_units.id,
                 'tax_ids': [self.company_data_2['default_tax_sale'].id],
             }, {
                 'product_id': products[2].id,
-                'name': 'XXX',
+                'label': '[1111] XXX',
                 'product_uom_id': self.uom_units.id,
                 'tax_ids': [self.company_data_2['default_tax_sale'].id],
             }, {
                 'product_id': products[3].id,
-                'name': 'YYY',
+                'label': '[1111] YYY',
                 'product_uom_id': self.uom_units.id,
                 'tax_ids': [self.company_data_2['default_tax_sale'].id],
             },
@@ -351,31 +350,6 @@ class TestAccountEdiUblCii(TestUblCiiCommon, HttpCase):
 
         global_end_date = xml_tree.find('.//ram:ApplicableHeaderTradeSettlement/ram:BillingSpecifiedPeriod/ram:EndDateTime/udt:DateTimeString', self.namespaces)
         self.assertEqual(global_end_date.text, '20241226')
-
-        line_vals = [
-            {
-                'product_id': self.product_a.id,
-                'deferred_start_date': datetime.date(2024, 11, 19),
-                'deferred_end_date': datetime.date(2024, 12, 11),
-            },
-            {
-                'product_id': self.product_a.id,
-                'deferred_start_date': datetime.date(2024, 12, 1),
-                'deferred_end_date': datetime.date(2024, 12, 26),
-            },
-            {
-                'product_id': self.product_a.id,
-                'deferred_start_date': False,
-                'deferred_end_date': False,
-            },
-            {
-                'product_id': self.product_a.id,
-                'deferred_start_date': datetime.date(2024, 11, 29),
-                'deferred_end_date': datetime.date(2024, 12, 15),
-            },
-        ]
-        new_invoice = invoice.journal_id._create_document_from_attachment(xml_attachment.ids)
-        self.assertRecordValues(new_invoice.invoice_line_ids, line_vals)
 
     def test_import_bill(self):
         self.env['res.partner.bank'].sudo().create({

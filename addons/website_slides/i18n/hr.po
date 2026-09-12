@@ -20,15 +20,15 @@
 # Bole <bole@dajmi5.com>, 2023
 # Vladimir Vrgoč, 2023
 # "Tiffany Chang (tic)" <tic@odoo.com>, 2025.
-# Weblate <noreply-mt-weblate@weblate.org>, 2025.
+# Weblate <noreply-mt-weblate@weblate.org>, 2025, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 16.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-21 18:43+0000\n"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 15:40+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Croatian <https://translate.odoo.com/projects/odoo-master/"
+"Language-Team: Croatian <https://translate.odoo.com/projects/odoo-s19-4/"
 "website_slides/hr/>\n"
 "Language: hr\n"
 "MIME-Version: 1.0\n"
@@ -36,7 +36,7 @@ msgstr ""
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=3; plural=n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
 "n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: website_slides
 #: model:ir.module.module,description:base.module_website_slides
@@ -940,8 +940,9 @@ msgstr "<span> sati</span>"
 
 #. module: website_slides
 #: model_terms:web_tour.tour,rainbow_man_message:website_slides.slides_tour
+#, fuzzy
 msgid "<span><b>Good job!</b> You went through all steps of this tour.</span>"
-msgstr ""
+msgstr "<span><b>Odlično!</b> Prošli ste kroz sve korake ovog obilaska.</span>"
 
 #. module: website_slides
 #: model_terms:ir.ui.view,arch_db:website_slides.course_main
@@ -1204,8 +1205,9 @@ msgstr "Dekoracija iznimke aktivnosti"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__activity_plans_ids
+#, fuzzy
 msgid "Activity Plans"
-msgstr ""
+msgstr "Planovi aktivnosti"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__activity_state
@@ -1454,8 +1456,9 @@ msgstr "Odgovori"
 
 #. module: website_slides
 #: model:ir.model.fields.selection,name:website_slides.selection__slide_channel__visibility__link
+#, fuzzy
 msgid "Anyone with the link"
-msgstr ""
+msgstr "Bilo tko s poveznicom"
 
 #. module: website_slides
 #. odoo-javascript
@@ -1723,8 +1726,9 @@ msgstr "Odustani"
 
 #. module: website_slides
 #: model:slide.channel.tag,name:website_slides.slide_channel_tag_role_carpenter
+#, fuzzy
 msgid "Carpenter"
-msgstr ""
+msgstr "Stolar"
 
 #. module: website_slides
 #: model_terms:slide.slide,html_content:website_slides.slide_slide_demo_1_4
@@ -2372,6 +2376,17 @@ msgid "Course Type"
 msgstr "Vrsta tečaja"
 
 #. module: website_slides
+#: model:ir.model.fields,field_description:website_slides.field_website_visitor__visitor_slide_channel_count
+#: model_terms:ir.ui.view,arch_db:website_slides.website_slides_visitor_view_form
+msgid "Course Views"
+msgstr ""
+
+#. module: website_slides
+#: model:ir.actions.act_window,name:website_slides.website_slides_visitor_slide_channel_action
+msgid "Course Views History"
+msgstr ""
+
+#. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__karma_gen_channel_finish
 msgid "Course finished"
 msgstr "Tečaj završen"
@@ -2407,6 +2422,7 @@ msgstr ""
 #: code:addons/website_slides/models/website.py:0
 #: code:addons/website_slides/static/src/website_builder/slides_searchbar_option.xml:0
 #: model:ir.actions.act_window,name:website_slides.slide_channel_action_report
+#: model:ir.model.fields,field_description:website_slides.field_website_visitor__slide_channel_ids
 #: model:ir.ui.menu,name:website_slides.menu_slide_channel_pages
 #: model:ir.ui.menu,name:website_slides.website_slides_menu_courses
 #: model:ir.ui.menu,name:website_slides.website_slides_menu_courses_courses
@@ -2419,6 +2435,7 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website_slides.slide_channel_view_search
 #: model_terms:ir.ui.view,arch_db:website_slides.slide_channel_view_tree
 #: model_terms:ir.ui.view,arch_db:website_slides.slide_channel_view_tree_report
+#: model_terms:ir.ui.view,arch_db:website_slides.website_slides_visitor_page_view_search
 msgid "Courses"
 msgstr "Tečajevi"
 
@@ -2635,8 +2652,9 @@ msgstr ""
 
 #. module: website_slides
 #: model:ir.model,name:website_slides.model_digest_digest
+#, fuzzy
 msgid "Digest"
-msgstr ""
+msgstr "Sažetak"
 
 #. module: website_slides
 #. odoo-javascript
@@ -2688,6 +2706,8 @@ msgstr "Prikaži"
 #: model:ir.model.fields,field_description:website_slides.field_slide_slide_resource__display_name
 #: model:ir.model.fields,field_description:website_slides.field_slide_tag__display_name
 #: model:ir.model.fields,field_description:website_slides.field_website__display_name
+#: model:ir.model.fields,field_description:website_slides.field_website_track__display_name
+#: model:ir.model.fields,field_description:website_slides.field_website_visitor__display_name
 msgid "Display Name"
 msgstr "Naziv"
 
@@ -2998,8 +3018,9 @@ msgstr ""
 
 #. module: website_slides
 #: model_terms:ir.ui.view,arch_db:website_slides.slide_fullscreen
+#, fuzzy
 msgid "Exit Fullscreen"
-msgstr ""
+msgstr "Izađi iz cijelog zaslona"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_slide__embed_code_external
@@ -3250,8 +3271,9 @@ msgstr ""
 #. module: website_slides
 #. odoo-javascript
 #: code:addons/website_slides/static/src/core/web/activity_patch.xml:0
+#, fuzzy
 msgid "Grant Access"
-msgstr ""
+msgstr "Dodjeli pristup"
 
 #. module: website_slides
 #: model_terms:ir.ui.view,arch_db:website_slides.slide_slide_view_graph
@@ -3404,6 +3426,8 @@ msgstr ""
 #: model:ir.model.fields,field_description:website_slides.field_slide_slide_resource__id
 #: model:ir.model.fields,field_description:website_slides.field_slide_tag__id
 #: model:ir.model.fields,field_description:website_slides.field_website__id
+#: model:ir.model.fields,field_description:website_slides.field_website_track__id
+#: model:ir.model.fields,field_description:website_slides.field_website_visitor__id
 msgid "ID"
 msgstr "ID"
 
@@ -3668,8 +3692,9 @@ msgstr ""
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_slide__user_has_completed
+#, fuzzy
 msgid "Is Member"
-msgstr ""
+msgstr "Je član"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_slide__is_new_slide
@@ -3745,12 +3770,6 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website_slides.join_course_link
 msgid "Join this Course"
 msgstr ""
-
-#. module: website_slides
-#: model:ir.model.fields.selection,name:website_slides.selection__slide_channel_partner__member_status__joined
-#: model_terms:ir.ui.view,arch_db:website_slides.slide_channel_partner_view_search
-msgid "Joined"
-msgstr "Pridružen"
 
 #. module: website_slides
 #: model_terms:slide.slide,description:website_slides.slide_slide_demo_1_2
@@ -3896,8 +3915,9 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/website_slides/static/src/website_builder/courses_list_page_option.xml:0
 #: model_terms:ir.ui.view,arch_db:website_slides.toggle_leaderboard
+#, fuzzy
 msgid "Leaderboard"
-msgstr ""
+msgstr "Ljestvica"
 
 #. module: website_slides
 #: model_terms:slide.channel,description:website_slides.slide_channel_demo_1_gard1
@@ -4095,8 +4115,9 @@ msgstr "Stavka izbornika"
 
 #. module: website_slides
 #: model:ir.model,name:website_slides.model_base_partner_merge_automatic_wizard
+#, fuzzy
 msgid "Merge Partner Wizard"
-msgstr ""
+msgstr "Čarobnjak za spajanje partnera"
 
 #. module: website_slides
 #: model:ir.model,name:website_slides.model_mail_message
@@ -4333,6 +4354,11 @@ msgid "No content was found using your search"
 msgstr ""
 
 #. module: website_slides
+#: model_terms:ir.actions.act_window,help:website_slides.website_slides_visitor_slide_channel_action
+msgid "No course views yet for this visitor"
+msgstr ""
+
+#. module: website_slides
 #: model_terms:ir.ui.view,arch_db:website_slides.courses_search_results
 msgid "No course was found matching your search"
 msgstr ""
@@ -4381,6 +4407,12 @@ msgstr "Ništa"
 #: model_terms:ir.ui.view,arch_db:website_slides.slide_channel_pages_kanban_view
 msgid "Not Published"
 msgstr "Nije objavljeno"
+
+#. module: website_slides
+#: model:ir.model.fields.selection,name:website_slides.selection__slide_channel_partner__member_status__joined
+#: model_terms:ir.ui.view,arch_db:website_slides.slide_channel_partner_view_search
+msgid "Not Started"
+msgstr ""
 
 #. module: website_slides
 #. odoo-python
@@ -4512,12 +4544,17 @@ msgstr "Otvori"
 
 #. module: website_slides
 #: model:ir.model.fields,help:website_slides.field_slide_channel_invite__lang
+#, fuzzy
 msgid ""
 "Optional translation language (ISO code) to select when sending out an "
 "email. If not set, the main partner's language will be used. This should "
 "usually be a placeholder expression that provides the appropriate language, "
 "e.g. {{ object.partner_id.lang }}."
 msgstr ""
+"Opcionalni jezik prijevoda (ISO kod) koji se odabire pri slanju e-pošte. Ako "
+"nije postavljeno, koristit će se glavni jezik partnera. Ovo obično treba "
+"biti izraz rezerviranog mjesta koji daje odgovarajući jezik, npr. "
+"{{ object.partner_id.lang }}."
 
 #. module: website_slides
 #: model_terms:ir.ui.view,arch_db:website_slides.view_slide_channel_form
@@ -4736,8 +4773,9 @@ msgstr "Datum objavljivanja"
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__published_date
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel_tag_group__published_date
 #: model:ir.model.fields,field_description:website_slides.field_slide_slide__published_date
+#, fuzzy
 msgid "Published date"
-msgstr ""
+msgstr "Datum objavljivanja"
 
 #. module: website_slides
 #. odoo-python
@@ -4817,18 +4855,21 @@ msgstr "Prosječna ocjena (zvjezdice)"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__rating_avg_text
+#, fuzzy
 msgid "Rating Avg Text"
-msgstr ""
+msgstr "Prosječni tekst ocjene"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__rating_last_feedback
+#, fuzzy
 msgid "Rating Last Feedback"
-msgstr ""
+msgstr "Zadnja povratna informacija ocjene"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__rating_last_image
+#, fuzzy
 msgid "Rating Last Image"
-msgstr ""
+msgstr "Zadnja slika ocjene"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__rating_last_value
@@ -4842,8 +4883,9 @@ msgstr "Ocjena zadovoljstva"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__rating_last_text
+#, fuzzy
 msgid "Rating Text"
-msgstr ""
+msgstr "Tekst ocjene"
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__rating_count
@@ -4933,8 +4975,9 @@ msgstr ""
 #. module: website_slides
 #. odoo-javascript
 #: code:addons/website_slides/static/src/xml/slide_quiz.xml:0
+#, fuzzy
 msgid "Reset"
-msgstr ""
+msgstr "Poništi"
 
 #. module: website_slides
 #. odoo-python
@@ -5218,6 +5261,7 @@ msgstr "Pošalji"
 #. module: website_slides
 #. odoo-javascript
 #: code:addons/website_slides/static/src/js/public/components/slide_share_dialog/email_sharing_input.xml:0
+#: model:ir.actions.act_window,name:website_slides.slide_channel_partner_action_send_mail
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel_invite__send_email
 msgid "Send Email"
 msgstr "Pošalji e-mail"
@@ -5424,6 +5468,11 @@ msgstr ""
 #. module: website_slides
 #: model:ir.model,name:website_slides.model_slide_slide_partner
 msgid "Slide / Partner decorated m2m"
+msgstr ""
+
+#. module: website_slides
+#: model:ir.model.fields,field_description:website_slides.field_website_track__slide_channel_id
+msgid "Slide Channel"
 msgstr ""
 
 #. module: website_slides
@@ -5971,6 +6020,11 @@ msgid "Total Views"
 msgstr ""
 
 #. module: website_slides
+#: model:ir.model.fields,help:website_slides.field_website_visitor__visitor_slide_channel_count
+msgid "Total number of views on courses"
+msgstr ""
+
+#. module: website_slides
 #: model:ir.model,name:website_slides.model_gamification_karma_tracking
 msgid "Track Karma Changes"
 msgstr "Prati promjene karme"
@@ -6247,8 +6301,9 @@ msgstr ""
 #. odoo-python
 #: code:addons/website_slides/models/slide_slide.py:0
 #: model:ir.model.fields.selection,name:website_slides.selection__slide_slide__video_source_type__vimeo
+#, fuzzy
 msgid "Vimeo"
-msgstr ""
+msgstr "Vimeo"
 
 #. module: website_slides
 #: model:ir.model.fields.selection,name:website_slides.selection__slide_slide__slide_type__vimeo_video
@@ -6267,6 +6322,16 @@ msgstr ""
 #: model:ir.model.fields,field_description:website_slides.field_slide_slide__website_published
 msgid "Visible on current website"
 msgstr "Vidljivo na trenutnoj web stranicama"
+
+#. module: website_slides
+#: model:ir.model,name:website_slides.model_website_track
+msgid "Visited Page"
+msgstr ""
+
+#. module: website_slides
+#: model_terms:ir.ui.view,arch_db:website_slides.website_slides_visitor_page_view_tree
+msgid "Visitor Course Views History"
+msgstr ""
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__total_views
@@ -6341,6 +6406,11 @@ msgstr ""
 #: model:ir.model.fields,field_description:website_slides.field_slide_slide__website_url
 msgid "Website URL"
 msgstr "URL web stranice"
+
+#. module: website_slides
+#: model:ir.model,name:website_slides.model_website_visitor
+msgid "Website Visitor"
+msgstr ""
 
 #. module: website_slides
 #: model:ir.model.fields,field_description:website_slides.field_slide_channel__website_meta_description
@@ -6753,8 +6823,9 @@ msgstr ""
 #. module: website_slides
 #. odoo-javascript
 #: code:addons/website_slides/static/src/js/public/components/slide_upload_dialog/slide_upload_dialog_select.xml:0
+#, fuzzy
 msgid "app."
-msgstr ""
+msgstr "aplikacija."
 
 #. module: website_slides
 #: model_terms:ir.ui.view,arch_db:website_slides.course_nav
@@ -6955,8 +7026,9 @@ msgstr ""
 
 #. module: website_slides
 #: model_terms:ir.ui.view,arch_db:website_slides.course_join
+#, fuzzy
 msgid "start"
-msgstr ""
+msgstr "početak"
 
 #. module: website_slides
 #: model_terms:ir.ui.view,arch_db:website_slides.course_card
@@ -7033,6 +7105,3 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website_slides.course_nav
 msgid "└<span class=\"ms-1\">Uncategorized</span>"
 msgstr ""
-
-#~ msgid "copy"
-#~ msgstr "kopija"

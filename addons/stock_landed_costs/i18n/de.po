@@ -13,17 +13,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 15.5alpha1\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-19 12:23+0000\n"
-"Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: German <https://translate.odoo.com/projects/odoo-master/"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-09-04 12:56+0000\n"
+"Last-Translator: \"Larissa Manderfeld (lman)\" <lman@odoo.com>\n"
+"Language-Team: German <https://translate.odoo.com/projects/odoo-s19-4/"
 "stock_landed_costs/de/>\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: stock_landed_costs
 #: model:ir.module.module,description:base.module_stock_landed_costs
@@ -70,7 +70,7 @@ msgstr "Konto Journal"
 #. module: stock_landed_costs
 #: model:ir.model.fields,field_description:stock_landed_costs.field_stock_landed_cost__message_needaction
 msgid "Action Needed"
-msgstr "Aktion notwendig"
+msgstr "Aktion erforderlich"
 
 #. module: stock_landed_costs
 #: model:ir.model.fields,field_description:stock_landed_costs.field_stock_landed_cost__activity_ids
@@ -80,7 +80,7 @@ msgstr "Aktivitäten"
 #. module: stock_landed_costs
 #: model:ir.model.fields,field_description:stock_landed_costs.field_stock_landed_cost__activity_exception_decoration
 msgid "Activity Exception Decoration"
-msgstr "Aktivitätsausnahme-Dekoration"
+msgstr "Kennzeichnung von Aktivitätsausnahmen"
 
 #. module: stock_landed_costs
 #: model:ir.model.fields,field_description:stock_landed_costs.field_stock_landed_cost__activity_plans_ids
@@ -118,7 +118,26 @@ msgstr ""
 "%(landed_cost)s"
 
 #. module: stock_landed_costs
+#: model_terms:ir.ui.view,arch_db:stock_landed_costs.view_product_landed_cost_form
+#: model_terms:ir.ui.view,arch_db:stock_landed_costs.view_stock_landed_cost_form
+msgid "All Products"
+msgstr ""
+
+#. module: stock_landed_costs
+#: model:ir.model.fields,field_description:stock_landed_costs.field_stock_landed_cost__allowed_product_ids
+msgid "Allowed Product"
+msgstr ""
+
+#. module: stock_landed_costs
+#: model:ir.model.fields,field_description:stock_landed_costs.field_product_product__landed_cost_on_product_ids
+#: model:ir.model.fields,field_description:stock_landed_costs.field_product_template__landed_cost_on_product_ids
+msgid "Apply Landed Cost On"
+msgstr ""
+
+#. module: stock_landed_costs
 #: model:ir.model.fields,field_description:stock_landed_costs.field_stock_landed_cost__target_model
+#: model:ir.model.fields,field_description:stock_landed_costs.field_stock_landed_cost_lines__apply_on_product_ids
+#: model_terms:ir.ui.view,arch_db:stock_landed_costs.view_product_landed_cost_form
 msgid "Apply On"
 msgstr "Anwenden auf"
 
@@ -339,7 +358,7 @@ msgstr ""
 #. module: stock_landed_costs
 #: model:ir.model.fields,field_description:stock_landed_costs.field_stock_landed_cost__has_message
 msgid "Has Message"
-msgstr "Hat eine Nachricht"
+msgstr "Hat Nachricht"
 
 #. module: stock_landed_costs
 #: model:ir.model.fields,field_description:stock_landed_costs.field_account_move__id
@@ -560,7 +579,7 @@ msgstr "Anzahl der Aktionen"
 #. module: stock_landed_costs
 #: model:ir.model.fields,field_description:stock_landed_costs.field_stock_landed_cost__message_has_error_counter
 msgid "Number of errors"
-msgstr "Anzahl der Fehler"
+msgstr "Anzahl Fehler"
 
 #. module: stock_landed_costs
 #: model:ir.model.fields,help:stock_landed_costs.field_stock_landed_cost__message_needaction_counter
@@ -701,6 +720,18 @@ msgid "Stock Move"
 msgstr "Lagerbuchung"
 
 #. module: stock_landed_costs
+#: model:ir.model.fields,help:stock_landed_costs.field_product_product__landed_cost_on_product_ids
+#: model:ir.model.fields,help:stock_landed_costs.field_product_template__landed_cost_on_product_ids
+#: model:ir.model.fields,help:stock_landed_costs.field_stock_landed_cost_lines__apply_on_product_ids
+msgid ""
+"The landed cost is by default applied only on these products, if they are "
+"included in the transfer.\n"
+"Even if landed costs can be applied on all goods, only products valued using "
+"the AVCO or FIFO methods will have their calculated value affected by landed "
+"costs."
+msgstr ""
+
+#. module: stock_landed_costs
 #: model_terms:ir.ui.view,arch_db:stock_landed_costs.view_stock_landed_cost_search
 msgid "Today Activities"
 msgstr "Heutige Aktivitäten"
@@ -769,16 +800,6 @@ msgstr ""
 #: model:ir.model.fields,field_description:stock_landed_costs.field_stock_valuation_adjustment_lines__weight
 msgid "Weight"
 msgstr "Gewicht"
-
-#. module: stock_landed_costs
-#. odoo-python
-#: code:addons/stock_landed_costs/models/stock_landed_cost.py:0
-msgid ""
-"You cannot apply landed costs on the chosen %s(s). Landed costs can only be "
-"applied for products with FIFO or average costing method."
-msgstr ""
-"Sie können keine Einstandskosten auf %s anwenden. Einstandskosten können nur "
-"für Produkte mit FIFO- oder Durchschnittskostenmethode angewendet werden."
 
 #. module: stock_landed_costs
 #. odoo-python

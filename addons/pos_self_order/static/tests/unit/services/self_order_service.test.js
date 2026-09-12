@@ -1,20 +1,19 @@
-import { test, describe, expect, beforeEach } from "@odoo/hoot";
-import {
-    setupSelfPosEnv,
-    getFilledSelfOrder,
-    addComboProduct,
-    mockLNAPermissionCheck,
-} from "../utils";
-import { mockDate } from "@odoo/hoot-mock";
+import { beforeEach, describe, expect, mockDate, test } from "@odoo/hoot";
+import { MockServer, onRpc, patchWithCleanup } from "@web/../tests/web_test_helpers";
+import { location } from "@web/core/browser/browser";
 import { registry } from "@web/core/registry";
-import { browser } from "@web/core/browser/browser";
 import { definePosSelfModels } from "../data/generate_model_definitions";
-import { patchWithCleanup, onRpc, MockServer } from "@web/../tests/web_test_helpers";
+import {
+    addComboProduct,
+    getFilledSelfOrder,
+    mockLNAPermissionCheck,
+    setupSelfPosEnv,
+} from "../utils";
 
 definePosSelfModels();
 
 const setOrderIdentifier = (token) => {
-    const url = new URL(browser.location.href);
+    const url = new URL(location.href);
     url.searchParams.set("order_identifier", token);
     history.replaceState({}, "", url);
 };
@@ -699,12 +698,12 @@ test("getProductPriceInfo", async () => {
     order.setPreset(outPreset);
     expect(store.getProductPriceInfo(product5).pricelist_price).toBe(10);
 
-    const savedPercentPrice = pricelist.item_ids[0].percent_price;
-    pricelist.item_ids[0].percent_price = 80;
+    const savedPriceDiscount = pricelist.item_ids[0].price_discount;
+    pricelist.item_ids[0].price_discount = 80;
     inPreset.pricelist_id = pricelist;
     order.setPreset(inPreset);
     expect(store.getProductPriceInfo(product5).pricelist_price).toBe(20);
-    pricelist.item_ids[0].percent_price = savedPercentPrice;
+    pricelist.item_ids[0].price_discount = savedPriceDiscount;
 
     // Fiscal position on the order (via setPreset) must change display price.
     store.config.pricelist_id = false;

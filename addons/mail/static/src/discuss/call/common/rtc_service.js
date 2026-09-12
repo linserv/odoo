@@ -371,7 +371,7 @@ export class Rtc extends Record {
     viewToRestore = VIEW_TO_RESTORE.NONE;
     /** @type {RtcLog} */
     logs = {};
-    /** @type {Map<any, {id: any, position: "bottom"|"top", text: string}>} call notifications by id */
+    /** @type {Map<any, {id: any, position: "bottom"|"top", text: TranslatedString}>} call notifications by id */
     notifications = proxy(new Map());
     /** @type {Map<string, number>} timeoutId by notificationId for call notifications */
     timeouts = new Map();
@@ -426,12 +426,6 @@ export class Rtc extends Record {
                 return this.localChannel;
             }
             return this._remotelyHostedChannelId;
-        },
-        onUpdate() {
-            if (!this.channel) {
-                return;
-            }
-            this.store["discuss.channel"].getOrFetch(this.channel.id);
         },
     });
     /**
@@ -499,45 +493,16 @@ export class Rtc extends Record {
         return !this.selfSession?.isMute && this.isMicAudioTrackMuted;
     }
 
-    /** @type {CallAction[]} */
-    callActions = fields.Attr([], {
-        /** @this {import("models").Rtc} */
-        compute() {
-            const transformedActions = registry
-                .category("discuss.call/actions")
-                .getEntries()
-                .map(([id, definition]) => new CallAction({ owner: this, id, definition }));
-            for (const action of transformedActions) {
-                action.setup();
-                void action.isActive;
-            }
-            return transformedActions;
-        },
-        /** @this {import("models").Rtc} */
-        onUpdate() {
-            for (const action of this.callActions) {
-                if (action.isActive === this.lastActions[action.id]) {
-                    continue;
-                }
-                if (!action.tags.includes(ACTION_TAGS.CALL_ACTION_TRACKED)) {
-                    continue;
-                }
-                if (action.isActive) {
-                    if (!this.actionsStack.includes(action.id)) {
-                        this.actionsStack.unshift(action.id);
-                    }
-                } else {
-                    const index = this.actionsStack.indexOf(action.id);
-                    if (index !== -1) {
-                        this.actionsStack.splice(index, 1);
-                    }
-                }
-            }
-            this.lastSelfCallAction = this.actionsStack[0];
-            this.lastActions = Object.fromEntries(
-                this.callActions.map((action) => [action.id, action.isActive])
-            );
-        },
+    callActions = this.computed(() => {
+        const transformedActions = registry
+            .category("discuss.call/actions")
+            .getEntries()
+            .map(([id, definition]) => new CallAction({ owner: this, id, definition }));
+        for (const action of transformedActions) {
+            action.setup();
+            void action.isActive;
+        }
+        return transformedActions;
     });
 
     setup() {
@@ -577,6 +542,43 @@ export class Rtc extends Record {
             this._postToTabs({ type: CROSS_TAB_CLIENT_MESSAGE.INIT });
         }
         this.p2pService = services["discuss.p2p"];
+        this.onChange(
+            () => [this.channel],
+            function onChangeChannel(channel) {
+                if (channel) {
+                    this.store["discuss.channel"].getOrFetch(channel.id);
+                }
+            },
+            { immediate: true }
+        );
+        this.onChange(
+            () => [this.callActions],
+            function onChangeCallActions(callActions) {
+                for (const action of callActions) {
+                    if (action.isActive === this.lastActions[action.id]) {
+                        continue;
+                    }
+                    if (!action.tags.includes(ACTION_TAGS.CALL_ACTION_TRACKED)) {
+                        continue;
+                    }
+                    if (action.isActive) {
+                        if (!this.actionsStack.includes(action.id)) {
+                            this.actionsStack.unshift(action.id);
+                        }
+                    } else {
+                        const index = this.actionsStack.indexOf(action.id);
+                        if (index !== -1) {
+                            this.actionsStack.splice(index, 1);
+                        }
+                    }
+                }
+                this.lastSelfCallAction = this.actionsStack[0];
+                this.lastActions = Object.fromEntries(
+                    callActions.map((action) => [action.id, action.isActive])
+                );
+            },
+            { immediate: true }
+        );
         this.onChange(
             () => [this.store.settings.useBlur],
             function onChangeUseBlur(useBlur) {
@@ -782,7 +784,7 @@ export class Rtc extends Record {
     /**
      * @param {Object} param0
      * @param {any} param0.id
-     * @param {string} param0.text
+     * @param {TranslatedString} param0.text
      * @param {number} [param0.delay]
      * @param {"bottom"|"top"} [param0.position="bottom"] Corner of the call view the notification is anchored to.
      */
@@ -939,10 +941,10 @@ export class Rtc extends Record {
      *
      * @param {Object} [options]
      * @param {string} [options.confirmIcon] Icon displayed on the confirm button.
-     * @param {string} [options.confirmLabel] Label of the confirm button.
-     * @param {string} [options.description] Secondary text describing the consequences of switching.
-     * @param {string} [options.message] Message displayed in the dialog.
-     * @param {string} [options.title] Title of the dialog.
+     * @param {TranslatedString} [options.confirmLabel] Label of the confirm button.
+     * @param {TranslatedString} [options.description] Secondary text describing the consequences of switching.
+     * @param {TranslatedString} [options.message] Message displayed in the dialog.
+     * @param {TranslatedString} [options.title] Title of the dialog.
      * @returns {Promise<boolean>} Whether the user confirmed the action.
      */
     async askCallSwitchConfirmation({
@@ -1230,7 +1232,9 @@ export class Rtc extends Record {
     async _loadSfu() {
         const load = async () => {
             await loadSfuAssets();
-            const sfuModule = odoo.loader.modules.get("@mail/../lib/odoo_sfu/odoo_sfu");
+            const sfuModule =
+                odoo.loader.modules.get("@_custom/mail/../lib/odoo_sfu/odoo_sfu") ??
+                odoo.loader.modules.get("@mail/../lib/odoo_sfu/odoo_sfu");
             this.SFU_CLIENT_STATE = sfuModule.SFU_CLIENT_STATE;
             this.sfuClient = new sfuModule.SfuClient();
         };
@@ -1483,7 +1487,7 @@ export class Rtc extends Record {
 
     /**
      * @param {import("models").RtcSession} session
-     * @param {String} entry
+     * @param {TranslatedString} entry
      * @param {Object} [param2]
      * @param {Error} [param2.error]
      * @param {String} [param2.step] current step of the flow

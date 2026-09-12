@@ -7,6 +7,7 @@ import { normalize } from "@web/core/l10n/utils";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { highlightText } from "@web/core/utils/html";
+import { useEnv } from "@web/owl2/utils";
 
 const commandSetupRegistry = registry.category("command_setup");
 const commandProviderRegistry = registry.category("command_provider");
@@ -226,7 +227,9 @@ export class DiscussCommandPalette {
                     imgUrl: channel.parent_channel_id?.avatarUrl ?? channel.avatarUrl,
                     channel: channel.channel_type !== "chat" ? channel : undefined,
                     persona:
-                        channel.channel_type === "chat" ? channel.correspondent.persona : undefined,
+                        channel.channel_type === "chat"
+                            ? channel.correspondent?.persona
+                            : undefined,
                     counter: channel.importantCounter,
                 },
             };
@@ -278,7 +281,8 @@ export class DiscussCommandPalette {
 
 commandProviderRegistry.add("find_or_start_conversation", {
     namespace: "@",
-    async provide(env, options) {
+    async provide(options) {
+        const env = useEnv();
         const palette = new DiscussCommandPalette(env, options);
         await palette.fetch();
         palette.buildResults();

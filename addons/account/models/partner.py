@@ -348,6 +348,12 @@ class ResPartner(models.Model):
     fiscal_country_group_codes = fields.Json(compute='_compute_fiscal_country_group_codes')
     partner_vat_placeholder = fields.Char(compute='_compute_partner_vat_placeholder')
     duplicate_bank_partner_ids = fields.Many2many('res.partner', compute='_compute_duplicate_bank_partner_ids')
+    qr_code_method = fields.Selection(
+        selection=lambda self: self.env['res.partner.bank'].get_available_qr_methods_in_sequence(),
+        string="Payment QR-code",
+        company_dependent=True,
+        copy=False,
+    )
 
     @api.depends('company_id', 'country_code')
     @api.depends_context('allowed_company_ids')
@@ -702,7 +708,7 @@ class ResPartner(models.Model):
                 partner = partner.parent_id
 
     @api.depends_context('company')
-    @api.depends('country_code')
+    @api.depends('country_code', 'commercial_partner_id.invoice_edi_format_store')
     def _compute_invoice_edi_format(self):
         for partner in self:
             if not partner.commercial_partner_id or partner.commercial_partner_id.invoice_edi_format_store == 'none':
@@ -712,12 +718,14 @@ class ResPartner(models.Model):
 
     def _inverse_invoice_edi_format(self):
         for partner in self:
-            if partner.invoice_edi_format == partner._get_suggested_invoice_edi_format():
-                partner.invoice_edi_format_store = False
+            if partner.invoice_edi_format == partner.commercial_partner_id._get_suggested_invoice_edi_format():
+                val_to_store = False
             elif not partner.invoice_edi_format:
-                partner.invoice_edi_format_store = 'none'
+                val_to_store = 'none'
             else:
-                partner.invoice_edi_format_store = partner.invoice_edi_format
+                val_to_store = partner.invoice_edi_format
+
+            partner.commercial_partner_id.invoice_edi_format_store = val_to_store
 
     @api.depends_context('company')
     def _compute_use_partner_credit_limit(self):
@@ -1172,16 +1180,6 @@ class ResPartner(models.Model):
             customer_values_list=[customer_values],
         )
         return customer_values.get('customer') or self.env['res.partner']
-
-    def _merge_method(self, destination, source):
-        """
-        Prevent merging partners that are linked to already hashed journal items.
-        """
-        if self.env['account.move.line'].sudo().search_count([('move_id.inalterable_hash', '!=', False), ('partner_id', 'in', source.ids)], limit=1):
-            return {
-                'error': self.env._('Partners that are used in hashed entries cannot be merged.')
-            }
-        return super()._merge_method(destination, source)
 
     @api.depends('country_id')
     def _compute_partner_vat_placeholder(self):

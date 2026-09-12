@@ -14,17 +14,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-21 14:43+0000\n"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 18:21+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Uzbek <https://translate.odoo.com/projects/odoo-master/"
+"Language-Team: Uzbek <https://translate.odoo.com/projects/odoo-s19-4/"
 "website_event/uz/>\n"
 "Language: uz\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: website_event
 #: model:ir.model.fields,field_description:website_event.field_website_visitor__event_registration_count
@@ -783,6 +783,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:website_event.field_website_event_menu__display_name
 #: model:ir.model.fields,field_description:website_event.field_website_menu__display_name
 #: model:ir.model.fields,field_description:website_event.field_website_snippet_filter__display_name
+#: model:ir.model.fields,field_description:website_event.field_website_track__display_name
 #: model:ir.model.fields,field_description:website_event.field_website_visitor__display_name
 #, fuzzy
 msgid "Display Name"
@@ -833,6 +834,11 @@ msgid "Drag blocks here to add them on all events"
 msgstr ""
 
 #. module: website_event
+#: model_terms:ir.ui.view,arch_db:website_event.snippets
+msgid "Dynamic Carousel"
+msgstr ""
+
+#. module: website_event
 #: model_terms:ir.ui.view,arch_db:website_event.s_event_upcoming_snippet_card_preview_data
 #, fuzzy
 msgid "Enhance your architectural business and improve professional skills."
@@ -842,6 +848,7 @@ msgstr ""
 #. module: website_event
 #: model:ir.model,name:website_event.model_event_event
 #: model:ir.model.fields,field_description:website_event.field_website_event_menu__event_id
+#: model:ir.model.fields,field_description:website_event.field_website_track__event_id
 #: model_terms:ir.ui.view,arch_db:website_event.snippets
 #, fuzzy
 msgid "Event"
@@ -934,7 +941,7 @@ msgstr "Tadbir teg turkumi"
 
 #. module: website_event
 #. odoo-javascript
-#: code:addons/website_event/static/src/website_builder/dynamic_snippet_events_option.xml:0
+#: code:addons/website_event/static/src/website_builder/dynamic_snippet_events_shared_option.xml:0
 #, fuzzy
 msgid "Event Tags"
 msgstr "Tadbir teglari"
@@ -950,6 +957,17 @@ msgstr "Tadbir shabloni"
 #, fuzzy
 msgid "Event Title"
 msgstr "Tadbir nomi"
+
+#. module: website_event
+#: model:ir.model.fields,field_description:website_event.field_website_visitor__visitor_event_count
+#: model_terms:ir.ui.view,arch_db:website_event.website_visitor_view_form
+msgid "Event Views"
+msgstr ""
+
+#. module: website_event
+#: model:ir.actions.act_window,name:website_event.website_event_visitor_event_action
+msgid "Event Views History"
+msgstr ""
 
 #. module: website_event
 #: model:mail.message.subtype,description:website_event.mt_event_published
@@ -985,11 +1003,13 @@ msgstr ""
 #: code:addons/website_event/models/website.py:0
 #: code:addons/website_event/static/src/website_builder/dynamic_snippet_events_option.xml:0
 #: code:addons/website_event/static/src/website_builder/event_searchbar_option.xml:0
+#: model:ir.model.fields,field_description:website_event.field_website_visitor__event_ids
 #: model:ir.module.module,shortdesc:base.module_website_event
 #: model:ir.ui.menu,name:website_event.menu_event_pages
 #: model:website.menu,name:website_event.menu_events
 #: model_terms:ir.ui.view,arch_db:website_event.index_topbar
 #: model_terms:ir.ui.view,arch_db:website_event.snippets
+#: model_terms:ir.ui.view,arch_db:website_event.website_event_visitor_page_view_search
 #, fuzzy
 msgid "Events"
 msgstr "Tadbirlar"
@@ -1177,6 +1197,7 @@ msgstr "Bu tadbir haqida qanday xabar topdingiz?"
 #: model:ir.model.fields,field_description:website_event.field_website_event_menu__id
 #: model:ir.model.fields,field_description:website_event.field_website_menu__id
 #: model:ir.model.fields,field_description:website_event.field_website_snippet_filter__id
+#: model:ir.model.fields,field_description:website_event.field_website_track__id
 #: model:ir.model.fields,field_description:website_event.field_website_visitor__id
 #, fuzzy
 msgid "ID"
@@ -1417,6 +1438,11 @@ msgstr "Veb-sayt menyusida hali hech narsa yo‘q!"
 #, fuzzy
 msgid "No event matching your search criteria could be found."
 msgstr "Qidiruv mezonlaringizga mos keladigan tadbir topilmadi."
+
+#. module: website_event
+#: model_terms:ir.actions.act_window,help:website_event.website_event_visitor_event_action
+msgid "No event views yet for this visitor"
+msgstr ""
 
 #. module: website_event
 #: model_terms:ir.ui.view,arch_db:website_event.events_list
@@ -1982,7 +2008,7 @@ msgstr ""
 
 #. module: website_event
 #. odoo-javascript
-#: code:addons/website_event/static/src/website_builder/dynamic_snippet_events_option.xml:0
+#: code:addons/website_event/static/src/website_builder/dynamic_snippet_events_shared_option.xml:0
 #, fuzzy
 msgid "Show location"
 msgstr "Joylashuvni ko‘rsatish"
@@ -1996,7 +2022,7 @@ msgstr "Veb-saytda ko‘rsatish"
 
 #. module: website_event
 #. odoo-javascript
-#: code:addons/website_event/static/src/website_builder/dynamic_snippet_events_option.xml:0
+#: code:addons/website_event/static/src/website_builder/dynamic_snippet_events_shared_option.xml:0
 #, fuzzy
 msgid "Show time"
 msgstr "Vaqtni ko‘rsatish"
@@ -2154,6 +2180,11 @@ msgid "Top Bar Filter"
 msgstr "Yuqori panel filtri"
 
 #. module: website_event
+#: model:ir.model.fields,help:website_event.field_website_visitor__visitor_event_count
+msgid "Total number of views on events"
+msgstr ""
+
+#. module: website_event
 #: model_terms:ir.ui.view,arch_db:website_event.event_event_view_form
 msgid "Unschedule"
 msgstr ""
@@ -2251,10 +2282,20 @@ msgid "Visible on current website"
 msgstr "Joriy veb-saytda ko‘rinadi"
 
 #. module: website_event
+#: model:ir.model,name:website_event.model_website_track
+msgid "Visited Page"
+msgstr ""
+
+#. module: website_event
 #: model:ir.model.fields,field_description:website_event.field_event_registration__visitor_id
 #, fuzzy
 msgid "Visitor"
 msgstr "Tashrif buyuruvchi"
+
+#. module: website_event
+#: model_terms:ir.ui.view,arch_db:website_event.website_event_visitor_page_view_tree
+msgid "Visitor Event Views History"
+msgstr ""
 
 #. module: website_event
 #: model_terms:ir.ui.view,arch_db:website_event.events_list
@@ -2465,158 +2506,12 @@ msgid "w-100 py-sm-3 mt-sm-2"
 msgstr "w-100 py-sm-3 mt-sm-2"
 
 #, fuzzy
-#~ msgid "<i class=\"fa fa-ban me-2\"/>Sold Out"
-#~ msgstr ""
-#~ "<em>Bu yerga ishtirokchilaringizdan birining iqtibosini yozing. Bu "
-#~ "tadbirlaringizga ishonch uyg‘otadi.</em>"
-
-#, fuzzy
-#~ msgid "<i class=\"fa fa-caret-left me-2\"/><small>Previous</small>"
-#~ msgstr ""
-#~ "<i class=\"fa fa-calendar me-2\" role=\"presentation\"/>2025-yil 23-avgust"
-
-#, fuzzy
-#~ msgid "<i class=\"fa fa-check me-2\" role=\"img\"/>Registered"
-#~ msgstr "<i class=\"fa fa-caret-left me-2\"/><small>Oldingi</small>"
-
-#, fuzzy
-#~ msgid "<i class=\"fa fa-check me-2\"/>Registered"
-#~ msgstr "<i class=\"fa fa-check me-2\" role=\"img\"/>Ro‘yxatdan o‘tgan"
-
-#, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-gear me-1\" role=\"img\" aria-label=\"Configure\" "
-#~ "title=\"Configure event tickets\"/><em>Configure Tickets</em>"
-#~ msgstr ""
-#~ "<i class=\"fa fa-facebook text-facebook\" aria-label=\"Facebook\" "
-#~ "title=\"Facebook\"/>"
-
-#, fuzzy
-#~ msgid "<i class=\"fa fa-globe me-1\" title=\"Website\"/>"
-#~ msgstr ""
-#~ "<i class=\"fa fa-github text-github\" aria-label=\"Github\" "
-#~ "title=\"Github\"/>"
-
-#, fuzzy
-#~ msgid "<i class=\"fa fa-map-marker me-2 text-muted\" title=\"Location\"/>"
-#~ msgstr ""
-#~ "<i class=\"fa fa-linkedin text-linkedin\" aria-label=\"LinkedIn\" "
-#~ "title=\"LinkedIn\"/>"
-
-#, fuzzy
-#~ msgid "<i class=\"fa fa-map-marker\" title=\"Location\"/> Online event"
-#~ msgstr ""
-#~ "<i class=\"fa fa-map-marker me-2\" role=\"presentation\"/>Los-Anjeles, "
-#~ "Kaliforniya, AQSH"
-
-#, fuzzy
-#~ msgid ""
-#~ "<i class=\"oi oi-chevron-left\"/>\n"
-#~ "                <span>All Events</span>"
-#~ msgstr ""
-#~ "<i class=\"fa fa-youtube-play text-youtube\" aria-label=\"Youtube\" "
-#~ "title=\"Youtube\"/>"
-
-#, fuzzy
-#~ msgid "<small>Next</small><i class=\"fa fa-caret-right ms-2\"/>"
-#~ msgstr "<small class=\"text-muted\">Taqvimga qo‘shish:</small>"
-
-#, fuzzy
-#~ msgid "<span class=\"fa fa-plus me-1\"/> Create an Event"
-#~ msgstr "<span class=\"fa fa-plus me-1\"/> Tadbir yaratish"
-
-#, fuzzy
-#~ msgid "Event Info <i class=\"fa fa-chevron-right\"/>"
-#~ msgstr "Tadbir ma'lumotlari <i class=\"fa fa-chevron-right\"/>"
-
-#, fuzzy
-#~ msgid "Get Tickets <i class=\"fa fa-chevron-right\"/>"
-#~ msgstr "Chiptalarni olish <i class=\"fa fa-chevron-right\"/>"
-
-#, fuzzy
-#~ msgid "Join online <i class=\"ms-1 fa fa-globe\"/>"
-#~ msgstr "Onlayn qo‘shiling <i class=\"ms-1 fa fa-globe\"/>"
-
-#, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-calendar me-2\" role=\"presentation\"/>August 23, 2025"
-#~ msgstr "<i class=\"fa fa-ban me-2\"/>E'lon qilinmagan"
-
-#, fuzzy
-#~ msgid "<i class=\"fa fa-clock-o me-2\" role=\"presentation\"/>8:15 PM"
-#~ msgstr "<i class=\"fa fa-check me-2\"/>Ro‘yxatdan o‘tgan"
-
-#, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-map-marker me-2\" role=\"presentation\"/>Los Los "
-#~ "Angeles, CA, United States"
-#~ msgstr "<i class=\"fa fa-map-marker me-2 text-muted\" title=\"Joylashuv\"/>"
-
-#, fuzzy
-#~ msgid ""
-#~ "<span class=\"fs-5\"><i class=\"fa fa-map-marker me-2\" "
-#~ "role=\"presentation\"/>Los Angeles, CA, United States</span>"
-#~ msgstr ""
-#~ "<span class=\"fs-5\"><i class=\"fa fa-map-marker me-2\" "
-#~ "role=\"presentation\"/>Los-Anjeles, Kaliforniya, AQSh</span>"
-
-#, fuzzy
-#~ msgid ""
-#~ "<span class=\"text-primary text-nowrap\">Register Now <i class=\"fa fa-"
-#~ "long-arrow-right\"/></span>"
-#~ msgstr ""
-#~ "<span class=\"text-primary text-nowrap\">Hoziroq ro‘yxatdan o‘ting <i "
-#~ "class=\"fa fa-long-arrow-right\"/></span>"
-
-#, fuzzy
-#~ msgid ""
-#~ "<span><i class=\"fa fa-calendar me-2\" role=\"presentation\"/>August 23, "
-#~ "2025 at 8:15 PM</span>"
-#~ msgstr ""
-#~ "<span><i class=\"fa fa-calendar me-2\" role=\"presentation\"/>2025-yil 23-"
-#~ "avgust, soat 20:15</span>"
-
-#, fuzzy
-#~ msgid ""
-#~ "<span><i class=\"fa fa-clock-o me-2\" role=\"presentation\"/>8:15 PM</"
-#~ "span>"
-#~ msgstr ""
-#~ "<span><i class=\"fa fa-clock-o me-2\" role=\"presentation\"/>20:15</span>"
-
-#, fuzzy
-#~ msgid ""
-#~ "<span><i class=\"fa fa-map-marker me-2\" role=\"presentation\"/>Los "
-#~ "Angeles, CA, United States</span>"
-#~ msgstr ""
-#~ "<span><i class=\"fa fa-map-marker me-2\" role=\"presentation\"/>Los-"
-#~ "Anjeles, Kaliforniya, AQSh</span>"
-
-#, fuzzy
-#~ msgid ""
-#~ "Register Now <i class=\"fa fa-long-arrow-right\" role=\"presentation\"/>"
-#~ msgstr ""
-#~ "Hoziroq ro‘yxatdan o‘ting <i class=\"fa fa-long-arrow-right\" "
-#~ "role=\"presentation\"/>"
-
-#, fuzzy
-#~ msgid "Register<i class=\"fa fa-long-arrow-right ms-2\" role=\"img\"/>"
-#~ msgstr ""
-#~ "Ro‘yxatdan o‘tish<i class=\"fa fa-long-arrow-right ms-2\" role=\"img\"/>"
-
-#, fuzzy
-#~ msgid ""
-#~ "Register<i class=\"fa fa-long-arrow-right ms-2\" role=\"presentation\"/>"
-#~ msgstr ""
-#~ "Ro‘yxatdan o‘tish<i class=\"fa fa-long-arrow-right ms-2\" "
-#~ "role=\"presentation\"/>"
-
-#, fuzzy
-#~ msgid ""
-#~ "<span itemprop=\"availability\" content=\"http://schema.org/SoldOut\" "
-#~ "class=\"text-danger\">\n"
-#~ "                                        <i class=\"fa fa-ban me-2\"/>Sold "
-#~ "Out\n"
-#~ "                                    </span>"
-#~ msgstr ""
-#~ "<span itemprop=\"availability\" content=\"http://schema.org/SoldOut\" "
-#~ "class=\"text-danger\"> <i class=\"fa fa-ban me-2\"/>Sotildi</span>"
+msgid ""
+"<span itemprop=\"availability\" content=\"http://schema.org/SoldOut\" "
+"class=\"text-danger\">\n"
+"                                        <i class=\"fa fa-ban me-2\"/>Sold "
+"Out\n"
+"                                    </span>"
+msgstr ""
+"<span itemprop=\"availability\" content=\"http://schema.org/SoldOut\" "
+"class=\"text-danger\"> <i class=\"fa fa-ban me-2\"/>Sotildi</span>"

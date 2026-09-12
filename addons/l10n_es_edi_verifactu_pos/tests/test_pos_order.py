@@ -1,7 +1,6 @@
 import datetime
 
 from contextlib import contextmanager, nullcontext
-from freezegun import freeze_time
 from unittest import mock
 
 from odoo.addons.point_of_sale.models.pos_order import PosOrder
@@ -26,9 +25,7 @@ class TestL10nEsEdiVerifactuPosOrder(TestL10nEsEdiVerifactuPosCommon):
         # Ensure the date of all orders is in the past.
         # Else the associated move does not get posted (since it will be in the future / on the order date).
         cls.fakenow = datetime.datetime(2025, 1, 1)
-        cls.startClassPatcher(freeze_time(cls.fakenow))
-        # `freeze_time` does not change the `create_date`
-        cls.startClassPatcher(cls._mock_create_date(cls, '2025-01-01'))
+        cls.enterClassContext(cls.mock_datetime_and_now(cls.fakenow))
 
     @contextmanager
     def with_pos_session(self):
@@ -142,7 +139,7 @@ class TestL10nEsEdiVerifactuPosOrder(TestL10nEsEdiVerifactuPosCommon):
                     'amount': refund.amount_total,
                     'payment_method_id': self.bank_pm1.id,
                 })
-                refund.l10n_es_edi_verifactu_refund_reason = 'R5'
+                refund.l10n_es_invoice_type = 'R5'
                 refund_payment.with_context(**payment_context).check()
                 self.pos_session.close_session_from_ui()
 
@@ -205,7 +202,7 @@ class TestL10nEsEdiVerifactuPosOrder(TestL10nEsEdiVerifactuPosCommon):
         self.assertTrue(invoice)
         self.assertRecordValues(invoice, [{
             'partner_id': self.partner_b.id,
-            'l10n_es_is_simplified': False,
+            'l10n_es_invoice_type': 'F1',
         }])
 
         # The Veri*Factu document was created for the invoice and not the document

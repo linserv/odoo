@@ -1,7 +1,7 @@
 import { useLayoutEffect } from "@web/owl2/utils";
 import { Component, useProps, proxy, signal, t } from "@odoo/owl";
 import { useBus, useService } from "@web/core/utils/hooks";
-import { browser } from "@web/core/browser/browser";
+import { location } from "@web/core/browser/browser";
 import { usePosition } from "@web/core/position/position_hook";
 import { _t } from "@web/core/l10n/translation";
 import { usePopover } from "@web/core/popover/popover_hook";
@@ -69,15 +69,15 @@ export const pointerState = proxy({
 });
 
 class TourPointerPopover extends Component {
-    static props = {
-        content: { type: String },
-        close: { type: Function },
-        onClick: { type: Function, optional: true },
-        closeContent: { type: Function, optional: true },
-        openContent: { type: Function, optional: true },
-    };
-
     static template = "web_tour.TourPointer.Content";
+
+    props = useProps({
+        content: t.string(),
+        close: t.function(),
+        onClick: t.function().optional(),
+        closeContent: t.function().optional(),
+        openContent: t.function().optional(),
+    });
 
     setup() {
         this.orm = useService("orm");
@@ -85,7 +85,7 @@ class TourPointerPopover extends Component {
 
     async onStopClicked() {
         await this.orm.call("res.users", "switch_tour_enabled", [false]);
-        browser.location.reload();
+        location.reload();
     }
 }
 

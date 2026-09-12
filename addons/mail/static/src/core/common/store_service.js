@@ -8,7 +8,7 @@ import {
 
 import { proxy } from "@odoo/owl";
 
-import { browser } from "@web/core/browser/browser";
+import { location } from "@web/core/browser/browser";
 import { cookie } from "@web/core/browser/cookie";
 import { isMobileOS } from "@web/core/browser/feature_detection";
 import { _t } from "@web/core/l10n/translation";
@@ -46,6 +46,17 @@ export class Store extends BaseStore {
     get self() {
         return this.self_user?.partner_id || this.self_guest;
     }
+    /** @type {{self: import("models").ResPartner | import("models").MailGuest, sequence: number}[]} */
+    selvesBySequence = this.computed(() => {
+        const result = [];
+        if (this.self_user?.partner_id) {
+            result.push({ self: this.self_user.partner_id, sequence: 10 });
+        }
+        if (this.self_guest) {
+            result.push({ self: this.self_guest, sequence: 30 });
+        }
+        return result.sort((a, b) => a.sequence - b.sequence);
+    });
     /** @type {boolean} */
     hasCannedResponses;
     hasGifPickerFeature = false;
@@ -75,19 +86,17 @@ export class Store extends BaseStore {
     menu = { counter: 0 };
     chatHub = this.computed(() => this.ChatHub.insert({}));
     failures = fields.Many("Failure");
-    sortedFailures = fields.Many("Failure", {
-        compute() {
-            return [...this.failures].sort((f1, f2) => {
-                if (f1.lastMessage?.id && !f2.lastMessage?.id) {
-                    return -1;
-                }
-                if (!f1.lastMessage?.id && f2.lastMessage?.id) {
-                    return 1;
-                }
-                return f2.lastMessage?.id - f1.lastMessage?.id || f2.id - f1.id;
-            });
-        },
-    });
+    sortedFailures = this.computed(() =>
+        [...this.failures].sort((f1, f2) => {
+            if (f1.lastMessage?.id && !f2.lastMessage?.id) {
+                return -1;
+            }
+            if (!f1.lastMessage?.id && f2.lastMessage?.id) {
+                return 1;
+            }
+            return f2.lastMessage?.id - f1.lastMessage?.id || f2.id - f1.id;
+        })
+    );
     /** local settings of the current device (not stored server side) */
     settings = this.computed(() => this.Settings.insert({}));
 
@@ -104,7 +113,6 @@ export class Store extends BaseStore {
 
     /**
      * @param {string} [tz]
-     * @returns {string|null}
      */
     localTimeIn(tz) {
         const partnerTz = resolveTimeZoneName(tz);
@@ -179,7 +187,7 @@ export class Store extends BaseStore {
     discussDropdownMenuClass(ctx) {
         const simulateDarkTheme = this.shouldSimulateDarkTheme(ctx);
         return attClassObjectToString({
-            "o-discuss-dropdownMenu d-flex flex-column border-secondary px-1": true,
+            "o-discuss-dropdownMenu d-flex flex-column px-1": true,
             "o-simulateDarkTheme": simulateDarkTheme,
         });
     }
@@ -197,8 +205,13 @@ export class Store extends BaseStore {
                 if (!tmpMessage) {
                     throw err;
                 }
+
+                tmpMessage.postFailMessage = err.data?.message
+                    ? _t("Failed to post the message (%s). Click to retry", err.data?.message)
+                    : _t("Failed to post the message. Click to retry");
                 tmpMessage.postFailRedo = () => {
                     tmpMessage.postFailRedo = undefined;
+                    tmpMessage.postFailMessage = undefined;
                     tmpMessage.thread.messages.delete(tmpMessage);
                     tmpMessage.thread.messages.add(tmpMessage);
                     this.doMessagePost(params, tmpMessage);
@@ -494,10 +507,7 @@ export class Store extends BaseStore {
                 // Ignore invalid URLs
                 return false;
             }
-            if (
-                browser.location.host === url.host &&
-                browser.location.pathname.startsWith("/odoo")
-            ) {
+            if (location.host === url.host && location.pathname.startsWith("/odoo")) {
                 this.ChatWindow.get({ channel: thread.channel })?.fold();
             }
         }
@@ -599,15 +609,31 @@ export class Store extends BaseStore {
                   (a) => a.textContent
               )
             : [body];
-        validMentions.partners = mentionedPartners.filter((partner) =>
-            segments.some((segment) => {
-                const name = thread?.getPersonaName(partner) ?? partner.displayName;
-                return Boolean(
-                    (name && segment.includes(`@${name}`)) ||
-                        (partner.email && segment.includes(`@${partner.email}`))
-                );
-            })
+        // Longest mention text first, so e.g. "@John" inside "@John Doe" isn't kept.
+        const mentionTexts = (partner) => {
+            const name = thread?.getPersonaName(partner) ?? partner.displayName;
+            return [name && `@${name}`, partner.email && `@${partner.email}`].filter(Boolean);
+        };
+        const remaining = [...segments];
+        const kept = new Set(
+            [...mentionedPartners]
+                .sort(
+                    (p1, p2) =>
+                        Math.max(0, ...mentionTexts(p2).map((text) => text.length)) -
+                        Math.max(0, ...mentionTexts(p1).map((text) => text.length))
+                )
+                .filter((partner) =>
+                    mentionTexts(partner).some((text) => {
+                        const i = remaining.findIndex((segment) => segment.includes(text));
+                        if (i === -1) {
+                            return false;
+                        }
+                        remaining[i] = remaining[i].replace(text, " ".repeat(text.length));
+                        return true;
+                    })
+                )
         );
+        validMentions.partners = mentionedPartners.filter((partner) => kept.has(partner));
         validMentions.roles = mentionedRoles.filter((role) =>
             segments.some((segment) => segment.includes(`@${role.name}`))
         );

@@ -3,14 +3,14 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { useRecordObserver } from "@web/model/relational_model/utils";
 import { formatFloatTime } from "@web/views/fields/formatters";
-import { Component, onWillStart, proxy } from "@odoo/owl";
+import { Component, onWillStart, proxy, useProps } from "@odoo/owl";
 import { standardWidgetProps } from "@web/views/widgets/standard_widget_props";
 import { _t } from "@web/core/l10n/translation";
 const { DateTime } = luxon;
 
 export class LeaveStatsComponent extends Component {
     static template = "hr_holidays.LeaveStatsComponent";
-    static props = { ...standardWidgetProps };
+    props = useProps(standardWidgetProps);
 
     setup() {
         this.orm = useService("orm");
@@ -134,7 +134,10 @@ export class LeaveStatsComponent extends Component {
             "hr.work.entry.type",
             "get_allocation_data_request",
             [this.state.date_from],
-            { context: { employee_id: employee.id } }
+            { context: { employee_id: employee.id }, same_year_only: true }
+        );
+        this.state.rawAllocationData = Object.fromEntries(
+            allocation_data.map(([, vals, , id]) => [id, vals])
         );
         this.state.leaves = allocation_data
             .filter(([, vals]) => vals.leaves_approved > 0)

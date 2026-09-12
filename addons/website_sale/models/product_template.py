@@ -82,6 +82,7 @@ class ProductTemplate(models.Model):
         sanitize_overridable=True,
         sanitize_attributes=False,
         sanitize_form=False,
+        index="trigram",
     )
     dropzone_above_price = fields.Html(
         string="Drop Zone Above Price", translate=html_translate, sanitize_overridable=True
@@ -202,6 +203,9 @@ class ProductTemplate(models.Model):
     )
     _description_sale_gist_idx = models.Index(
         lambda registry: get_translated_field_gist_index(registry, "description_sale")
+    )
+    _description_ecommerce_gist_idx = models.Index(
+        lambda registry: get_translated_field_gist_index(registry, "description_ecommerce")
     )
     _default_code_gist_idx = models.Index(
         lambda registry: (
@@ -363,6 +367,17 @@ class ProductTemplate(models.Model):
 
         return res
 
+    def copy(self, default=None):
+        template_copies = super().copy(default)
+        for template, template_copy in zip(self, template_copies, strict=True):
+            # If the copy has more extra images than the original, it means that the main image was
+            # duplicated in the extra images, so we need to remove it.
+            if len(template.product_template_image_ids) < len(
+                template_copy.product_template_image_ids
+            ):
+                template_copy.product_template_image_ids[0].unlink()
+        return template_copies
+
     @api.ondelete(at_uninstall=False)
     def _unlink_if_not_donation_product(self):
         if self.filtered(lambda p: p._is_donation()):
@@ -370,6 +385,8 @@ class ProductTemplate(models.Model):
 
     def _is_donation(self):
         """Return whether this product is the donation product used by the donation snippet."""
+        if not self:
+            return False
         self.ensure_one()
         return self.id == self.env["ir.model.data"]._xmlid_to_res_id(
             "website_sale.product_donation"
@@ -745,10 +762,7 @@ class ProductTemplate(models.Model):
         comparison_prices_enabled = self.env["res.groups"]._is_feature_enabled(
             "website_sale.group_product_price_comparison"
         )
-        uom_price_enabled = self.env["res.groups"]._is_feature_enabled(
-            "product.group_show_uom_price"
-        )
-
+        uom_price_enabled = website.show_product_reference_price
         res = {}
         for template in self:
             pricelist_price, pricelist_rule_id = pricelist_prices[template.id]
@@ -792,10 +806,8 @@ class ProductTemplate(models.Model):
 
             if uom_price_enabled:
                 template_price_vals["base_unit_price"] = (
-                    template.product_variant_id._get_base_unit_price(
-                        template_price_vals["price_reduce"]
-                    )
-                )
+                    template.product_variant_id or template
+                )._get_base_unit_price(template_price_vals["price_reduce"])
 
             res[template.id] = template_price_vals
 
@@ -878,7 +890,7 @@ class ProductTemplate(models.Model):
         uom = self.env["uom.uom"].browse(uom_id) or self._get_main_uom()
 
         if not product_id and not combination and not only_template:
-            combination = self._get_first_possible_combination()
+            combination = self._get_first_available_combination()
 
         if only_template:
             product = self.env["product.product"]
@@ -1016,7 +1028,7 @@ class ProductTemplate(models.Model):
             "taxes": taxes,  # taxes after fpos mapping
         })
 
-        if self.env["res.groups"]._is_feature_enabled("product.group_show_uom_price"):
+        if website.show_product_reference_price:
             price_per_product_uom = uom._compute_price(
                 price=combination_info["price"], to_unit=self.uom_id
             )
@@ -1114,11 +1126,18 @@ class ProductTemplate(models.Model):
                 "has_stock_notification": has_stock_notification,
                 "stock_notification_email": stock_notification_email,
                 "is_in_wishlist": product_sudo._is_in_wishlist(),
+                "is_sold_out": (
+                    not product_sudo.allow_out_of_stock_order and (free_qty - cart_quantity) < 1
+                ),
             })
             if self.env["res.groups"]._is_feature_enabled("uom.group_uom"):
                 combination_info["uom_name"] = uom.name
         else:
-            combination_info.update({"free_qty": 0, "cart_qty": 0})
+            combination_info.update({
+                "free_qty": 0,
+                "cart_qty": 0,
+                "is_sold_out": not product_or_template.allow_out_of_stock_order,
+            })
 
         return combination_info
 
@@ -1361,7 +1380,7 @@ class ProductTemplate(models.Model):
         :return: List of service_tracking values that are allowed to have zero price.
         :rtype: list
         """
-        return []
+        return ["subcontract"]  # added from sale_purchase as there is no bridge for website
 
     # ---------------------------------------------------------
     # Rating Mixin API
@@ -1398,10 +1417,16 @@ class ProductTemplate(models.Model):
         search_fields = [
             "name",
             "variants_default_code",
+            "barcode",
+            "product_variant_ids.barcode",
         ]
         if search_in_description:
             search_fields.append("description_ecommerce")
-        search_fields.extend(("attribute_line_ids.value_ids.name", "product_tag_ids.name"))
+        search_fields.extend((
+            "attribute_line_ids.value_ids.name",
+            "product_tag_ids.name",
+            "public_categ_ids.name",
+        ))
         if search_in_description:
             search_fields.append("description_sale")
         return search_fields
@@ -1436,7 +1461,9 @@ class ProductTemplate(models.Model):
             domains.append([("list_price", "<=", max_price)])
         if attribute_value_dict:
             domains.extend(self._get_attribute_value_domain(attribute_value_dict))
-        search_fields = self._get_website_sale_search_fields(options.get("displayDescription", True))
+        search_fields = self._get_website_sale_search_fields(
+            options.get("displayDescription", True)
+        )
         fetch_fields = ["id", "name", "website_url", "description_ecommerce", "description_sale"]
         mapping = {
             "name": {"name": "name", "type": "text", "match": True},
@@ -1453,13 +1480,7 @@ class ProductTemplate(models.Model):
                 "html": True,
                 "match": True,
             },
-            "tags": {"name": "product_tag_ids", "type": "tags", "match": True},
-            "attribute_value_ids": {
-                "name": "attribute_value_ids",
-                "type": "tags",
-                "match": True,
-                "force_show": True,
-            },
+            "tags": {"name": "badges", "type": "tags", "match": True},
             "description_sale": {
                 "name": "description_sale",
                 "type": "text",
@@ -1490,16 +1511,21 @@ class ProductTemplate(models.Model):
                 "any",
                 [("name", "ilike", search_term), ("visible_to_customers", "=", True)],
             )
+        if field == "public_categ_ids.name":
+            return Domain(
+                "public_categ_ids",
+                "any",
+                Domain("name", "ilike", search_term) & self.env.website.website_domain(),
+            )
         return super()._search_get_field_domain(field, search_term)
 
     def _search_render_results(self, fetch_fields, mapping, icon, limit):
         results_data = super()._search_render_results(fetch_fields, mapping, icon, limit)
         search_term = self.env.context.get("search_term", "")
-        search_words = search_term.lower().split() if search_term else []
 
         for product, data in zip(self, results_data):
             combination_info = product._get_combination_info(only_template=True)
-            values = product.mapped("attribute_line_ids.value_ids")
+            values = product.attribute_line_ids.value_ids
             data["attribute_value_ids"] = values.read(["id", "name"])
             data["product_tag_ids"] = product.product_tag_ids.filtered(
                 "visible_to_customers"
@@ -1509,17 +1535,38 @@ class ProductTemplate(models.Model):
                 data["price"] = price
             data["image_url"] = "/web/image/product.template/%s/image_128" % data["id"]
 
-            if search_words and values:
-                matched_values = values.filtered(
-                    lambda attribute_value: any(
-                        word in (attribute_value.name or "").lower() for word in search_words
-                    )
-                )
-                if matched_values:
-                    data["website_url"] = product._get_product_url(
-                        grouped_attributes_values=matched_values.grouped("attribute_id")
-                    )
+            if search_term:
+                data["website_url"] = product._get_product_url(query_params={"search": search_term})
         return results_data
+
+    def _get_attribute_values_from_search_term(self, search_term):
+        """Return attribute values to preselect the matching product variant.
+
+        If the search term matches a variant barcode, return that variant's
+        attribute values. Otherwise, return the template's attribute values whose
+        names match the search term.
+        """
+        self.ensure_one()
+
+        # If the search term is a variant barcode, return the attribute values
+        # defining that variant so it is preselected on the product page.
+        matched_variant = (
+            self
+            .env["product.product"]
+            .sudo()
+            .search([("product_tmpl_id", "=", self.id), ("barcode", "=", search_term)], limit=1)
+        )
+        if matched_variant:
+            return matched_variant.product_template_attribute_value_ids.product_attribute_value_id
+
+        # Fall back to matching attribute values by name.
+        search_words = search_term.lower().split()
+        values = self.attribute_line_ids.value_ids
+        return values.filtered(
+            lambda attribute_value: any(
+                word in (attribute_value.name or "").lower() for word in search_words
+            )
+        )
 
     def _search_render_results_prices(self, mapping, combination_info):
         if combination_info.get("hide_price"):
@@ -1533,7 +1580,7 @@ class ProductTemplate(models.Model):
     def _get_google_analytics_data(self, product, combination_info):
         self.ensure_one()
         tracking_data = {
-            "item_id": str(product.barcode or product.product_tmpl_id.id),
+            "item_id": str(product.default_code or product.product_tmpl_id.id),
             "item_name": self.with_context(display_default_code=False).display_name,
             "item_category": self.categ_id.name,
             "price": combination_info["price"],
@@ -1573,7 +1620,7 @@ class ProductTemplate(models.Model):
             price = price_vals.get("price_reduce", template.list_price)
             list_price = price_vals.get("base_price", price)
             tracking_data = {
-                "item_id": str(template.barcode or template.id),
+                "item_id": str(template.default_code or template.id),
                 "item_name": template.with_context(display_default_code=False).display_name,
                 "item_category": template.categ_id.name,
                 "item_list_name": item_list_name,
@@ -1748,8 +1795,7 @@ class ProductTemplate(models.Model):
         :returns: the ribbon to display, if there is one.
         :rtype: `product.ribbon` recordset
         """
-        variant = variant or self.product_variant_id
-        ribbon = variant.sudo().variant_ribbon_id or self.sudo().website_ribbon_id
+        ribbon = (variant and variant.sudo().variant_ribbon_id) or self.sudo().website_ribbon_id
         if not ribbon:
             # The None check ensures that we do not recompute the ribbons when no ribbons were
             # previously found.
@@ -1758,6 +1804,11 @@ class ProductTemplate(models.Model):
                 auto_assign_ribbons = self.env["product.ribbon"].search_fetch([
                     ("assign", "!=", "manual")
                 ])
+
+            if auto_assign_ribbons:
+                variant = variant or self._get_variant_for_combination(
+                    self._get_first_available_combination()
+                )
             for rb in auto_assign_ribbons:
                 if rb._is_applicable_for(variant, price_vals):
                     return rb
@@ -1871,20 +1922,37 @@ class ProductTemplate(models.Model):
             return self._get_available_uoms()[:1] or self.uom_id
         return super()._get_main_uom()
 
+    def _get_first_available_combination(self, necessary_values=None):
+        """Override of `product` to return the first combination that has stock."""
+        res = super()._get_first_available_combination(necessary_values)
+        if not self.env.context.get("website_id"):
+            return res
+
+        for combination in self._get_possible_combinations(necessary_values):
+            try:
+                variant = self._get_variant_for_combination(combination)
+            except ValueError:
+                continue
+            if variant and not variant._is_sold_out():
+                return combination
+        return res
+
     def _is_sold_out(self):
         """Return whether the product is sold out (no available quantity).
 
         If a product inventory is not tracked, or if it's allowed to be sold regardless
         of availabilities, the product is never considered sold out.
 
-        Note: only checks the availability of the first variant of the template.
+        Note: checks the availability of all variants of the template.
 
         :return: whether the product can still be sold
         :rtype: bool
         """
         if not self.is_storable or self.allow_out_of_stock_order:
             return False
-        return not self.product_variant_id or self.product_variant_id._is_sold_out()
+        return not self.product_variant_ids or all(
+            variant._is_sold_out() for variant in self.product_variant_ids
+        )
 
     @api.model
     def _get_additional_configurator_data(
@@ -1931,19 +1999,18 @@ class ProductTemplate(models.Model):
         for template in self.env["product.template"].search([("image_1920", "!=", False)]):
             template_image = template.image_1920
             first_extra_image = template.product_template_image_ids.sorted("sequence")[:1]
-            if template_image.content == first_extra_image.image_1920.content:
-                continue
-
-            image_vals.append({
-                "name": template.display_name,
-                "product_tmpl_id": template.id,
-                "image_1920": template_image,
-                "sequence": first_extra_image.sequence - 1,
-            })
+            add_template_main_image = template_image.content != first_extra_image.image_1920.content
+            template_main_image_ptavs = self.env["product.template.attribute.value"]
 
             for product in template.product_variant_ids:
                 variant_image = product.image_variant_1920
                 first_extra_image_product = product.variant_image_ids.sorted("sequence")[:1]
+                if (
+                    add_template_main_image
+                    and not variant_image
+                    and template_image.content == product.image_1920.content
+                ):
+                    template_main_image_ptavs |= product.product_template_attribute_value_ids
                 if (
                     not variant_image
                     or variant_image.content == first_extra_image_product.image_1920.content
@@ -1959,5 +2026,18 @@ class ProductTemplate(models.Model):
                     "image_1920": variant_image,
                     "sequence": first_extra_image_product.sequence - 1,
                 })
+
+            if add_template_main_image:
+                image_vals = [
+                    {
+                        "name": template.display_name,
+                        "product_tmpl_id": template.id,
+                        "attribute_value_ids": [Command.set(template_main_image_ptavs.ids)]
+                        if template_main_image_ptavs and len(template.product_variant_ids) > 1
+                        else False,
+                        "image_1920": template_image,
+                        "sequence": first_extra_image.sequence - 1,
+                    }
+                ] + image_vals  # Make sure the template image is created before the variant images.
 
         self.env["product.image"].with_context(skip_update_main_image=True).create(image_vals)

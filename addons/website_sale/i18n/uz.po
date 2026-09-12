@@ -14,17 +14,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 19.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-21 17:25+0000\n"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 14:10+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Uzbek <https://translate.odoo.com/projects/odoo-master/"
+"Language-Team: Uzbek <https://translate.odoo.com/projects/odoo-s19-4/"
 "website_sale/uz/>\n"
 "Language: uz\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.products
@@ -1426,12 +1426,6 @@ msgid "Accept Terms"
 msgstr "Shartlarni qabul qilish"
 
 #. module: website_sale
-#: model_terms:ir.ui.view,arch_db:website_sale.product_image_view_kanban
-#, fuzzy
-msgid "Acceptable file size"
-msgstr "Ruxsat etilgan fayl hajmi"
-
-#. module: website_sale
 #: model:ir.model.fields,field_description:website_sale.field_product_feed__access_token
 #, fuzzy
 msgid "Access Token"
@@ -1660,6 +1654,8 @@ msgid "Alignment"
 msgstr "Tekislash"
 
 #. module: website_sale
+#. odoo-javascript
+#: code:addons/website_sale/static/src/js/product_image/attribute_value_selector/attribute_value_selector.js:0
 #: model_terms:ir.ui.view,arch_db:website_sale.filter_select_attributes
 #: model_terms:ir.ui.view,arch_db:website_sale.product_template_form_view
 #, fuzzy
@@ -1771,6 +1767,12 @@ msgid "Amount of Abandoned Carts"
 msgstr "Tark etilgan savatlar miqdori"
 
 #. module: website_sale
+#. odoo-javascript
+#: code:addons/website_sale/static/src/js/product_image/attribute_value_selector/attribute_value_selector.xml:0
+msgid "And"
+msgstr ""
+
+#. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.shop_page_empty_screen
 msgid ""
 "Animation showing how to create a new product: Click 'New' in the top-right "
@@ -1811,6 +1813,12 @@ msgstr ""
 
 #. module: website_sale
 #. odoo-javascript
+#: code:addons/website_sale/static/src/js/product_image/attribute_value_selector/attribute_value_selector.xml:0
+msgid "Apply to attributes"
+msgstr ""
+
+#. module: website_sale
+#. odoo-javascript
 #: code:addons/website_sale/static/src/website_builder/dynamic_snippet_category_options.xml:0
 #, fuzzy
 msgid "Arrows"
@@ -1839,6 +1847,11 @@ msgstr "Ilovalar soni"
 #: model:ir.actions.act_window,name:website_sale.product_attribute_category_action
 #: model:ir.ui.menu,name:website_sale.menu_attribute_category_action
 msgid "Attribute Categories"
+msgstr ""
+
+#. module: website_sale
+#: model:ir.model.fields,field_description:website_sale.field_product_image__attribute_value_ids
+msgid "Attribute Value"
 msgstr ""
 
 #. module: website_sale
@@ -3456,6 +3469,11 @@ msgid "Duration"
 msgstr ""
 
 #. module: website_sale
+#: model_terms:ir.ui.view,arch_db:website_sale.snippets
+msgid "Dynamic Carousel"
+msgstr ""
+
+#. module: website_sale
 #: model:ir.model.fields,field_description:website_sale.field_website__shop_extra_field_ids
 #, fuzzy
 msgid "E-Commerce Extra Fields"
@@ -3622,18 +3640,6 @@ msgstr "Qo‘shimcha qadam"
 #: model:ir.model.fields,field_description:website_sale.field_website__extra_step_category_ids
 msgid "Extra Step Categories"
 msgstr ""
-
-#. module: website_sale
-#: model:ir.model.fields,field_description:website_sale.field_product_product__product_variant_image_ids
-#, fuzzy
-msgid "Extra Variant Images"
-msgstr "Qo‘shimcha variant rasmlari"
-
-#. module: website_sale
-#: model_terms:ir.ui.view,arch_db:website_sale.product_normal_form_view
-#, fuzzy
-msgid "Extra Variant Media"
-msgstr "Qo‘shimcha variant medialari"
 
 #. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.extra_info
@@ -4021,6 +4027,11 @@ msgid "Handle your wishlist from the menu icon."
 msgstr ""
 
 #. module: website_sale
+#: model:ir.model.fields,field_description:website_sale.field_product_image__has_attribute_value
+msgid "Has Attribute Value"
+msgstr ""
+
+#. module: website_sale
 #: model:ir.model.fields,field_description:website_sale.field_product_feed__has_message
 #: model:ir.model.fields,field_description:website_sale.field_product_template__has_message
 #, fuzzy
@@ -4101,14 +4112,6 @@ msgstr "Sichqoncha bilan ustiga borganda paydo bo‘ladigan effekt"
 #, fuzzy
 msgid "Href"
 msgstr "Href"
-
-#. module: website_sale
-#: model_terms:ir.ui.view,arch_db:website_sale.product_image_view_kanban
-#, fuzzy
-msgid "Huge file size. The image should be optimized/reduced."
-msgstr ""
-"Fayl hajmi juda katta. Rasmni optimallashtirish yoki hajmini kamaytirish "
-"kerak."
 
 #. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.accept_terms_and_conditions
@@ -4773,6 +4776,7 @@ msgstr ""
 #: code:addons/website_sale/static/src/website_builder/product_image_option.xml:0
 #: code:addons/website_sale/static/src/website_builder/product_tag_image_option.xml:0
 #: code:addons/website_sale/static/src/website_builder/product_variant_option.xml:0
+#: model_terms:ir.ui.view,arch_db:website_sale.product_normal_form_view
 #: model_terms:ir.ui.view,arch_db:website_sale.product_template_form_view
 #, fuzzy
 msgid "Media"
@@ -5495,16 +5499,6 @@ msgid "Open Source eCommerce"
 msgstr "Ochiq kodli elektron tijorat"
 
 #. module: website_sale
-#: model_terms:ir.ui.view,arch_db:website_sale.product_image_view_kanban
-#, fuzzy
-msgid ""
-"Optimization required! Reduce the image size or increase your compression "
-"settings."
-msgstr ""
-"Optimallashtirishni talab qiladi! Rasm hajmini kichraytiring yoki siqish "
-"sozlamalarini oshiring."
-
-#. module: website_sale
 #: model:ir.model.fields.selection,name:website_sale.selection__res_config_settings__account_on_checkout__optional
 #: model:ir.model.fields.selection,name:website_sale.selection__website__account_on_checkout__optional
 #, fuzzy
@@ -6202,7 +6196,6 @@ msgstr "Mahsulot shabloni"
 
 #. module: website_sale
 #: model:ir.model,name:website_sale.model_product_product
-#: model:ir.model.fields,field_description:website_sale.field_product_image__product_variant_id
 #, fuzzy
 msgid "Product Variant"
 msgstr "Mahsulot varianti"
@@ -7474,6 +7467,14 @@ msgid "Some products don't meet the minimum quantity required to be purchased."
 msgstr ""
 
 #. module: website_sale
+#. odoo-python
+#: code:addons/website_sale/models/sale_order.py:0
+msgid ""
+"Some products in your cart are not available for purchase in your country. "
+"Please remove them or contact us."
+msgstr ""
+
+#. module: website_sale
 #: model_terms:ir.ui.view,arch_db:website_sale.sort
 #, fuzzy
 msgid "Sort By"
@@ -8043,6 +8044,12 @@ msgstr ""
 
 #. module: website_sale
 #. odoo-python
+#: code:addons/website_sale/models/sale_order.py:0
+msgid "This product is not available for purchase in your country."
+msgstr ""
+
+#. module: website_sale
+#. odoo-python
 #: code:addons/website_sale/controllers/wishlist.py:0
 msgid "This product is not eligible for stock notifications."
 msgstr ""
@@ -8342,6 +8349,11 @@ msgstr ""
 #, fuzzy
 msgid "Variant"
 msgstr "Variant"
+
+#. module: website_sale
+#: model:ir.model.fields,field_description:website_sale.field_product_product__variant_image_ids
+msgid "Variant Extra Images"
+msgstr ""
 
 #. module: website_sale
 #: model:ir.model.fields,field_description:website_sale.field_product_product__variant_ribbon_id
@@ -8835,10 +8847,16 @@ msgstr ""
 
 #. module: website_sale
 #. odoo-python
-#: code:addons/website_sale/controllers/main.py:0
+#: code:addons/website_sale/models/product_product.py:0
 #, fuzzy
 msgid "You can't use a video as the product's main image."
 msgstr "Mahsulotning asosiy tasviri sifatida videodan foydalanish mumkin emas."
+
+#. module: website_sale
+#. odoo-python
+#: code:addons/website_sale/models/product_template.py:0
+msgid "You can't use a video as the template's main image."
+msgstr ""
 
 #. module: website_sale
 #: model_terms:ir.actions.act_window,help:website_sale.sale_report_action_carts
@@ -9237,381 +9255,102 @@ msgid "{{ object.name or 'Product' }} is back in stock"
 msgstr ""
 
 #, fuzzy
-#~ msgid "<b>Communication: </b>"
-#~ msgstr "<b>Muloqot: </b>"
+msgid "<strong>Warning!</strong>"
+msgstr "<strong>Diqqat!</strong>"
 
 #, fuzzy
-#~ msgid ""
-#~ "<i class=\"d-md-none fa fa-shopping-cart\" role=\"presentation\"/>\n"
-#~ "                                    <span class=\"d-none d-md-"
-#~ "inline\">Add to cart</span>"
-#~ msgstr ""
-#~ "<i class=\"d-md-none fa fa-shopping-cart\" role=\"presentation\"/> <span "
-#~ "class=\"d-none d-md-inline\">Savatga qo‘shish</span>"
+msgid "Address Autocomplete"
+msgstr "Manzilni avtomatik to‘ldirish"
 
 #, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-angle-left me-2 fw-light\"/>\n"
-#~ "                    Continue shopping"
-#~ msgstr ""
-#~ "<i class=\"fa fa-angle-left me-2 fw-light\"/> Xarid qilishni davom "
-#~ "ettirish"
+msgid "Delivery Methods"
+msgstr "Yetkazib berish usullari"
 
 #, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-bolt me-2\"/>\n"
-#~ "                Buy now"
-#~ msgstr "<i class=\"fa fa-bolt me-2\"/> Hoziroq sotib olish"
+msgid "Embed Code"
+msgstr "Joylashtirish kodi"
 
 #, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-fw fa-shopping-cart o_not-animable\" "
-#~ "role=\"presentation\"/>\n"
-#~ "                    <span class=\"o_label small ms-1\">Add to Cart</span>"
-#~ msgstr ""
-#~ "<i class=\"fa fa-fw fa-shopping-cart o_not-animable\" "
-#~ "role=\"presentation\"/> <span class=\"o_label small ms-1\">Savatga "
-#~ "qo‘shish</span>"
+msgid "Go to cart"
+msgstr "Savatga o‘tish"
 
 #, fuzzy
-#~ msgid "<i class=\"fa fa-long-arrow-right\"/> All Products"
-#~ msgstr "<i class=\"fa fa-long-arrow-right\"/> Barcha mahsulotlar"
+msgid "Google Address Validation"
+msgstr "Google manzilni tasdiqlash"
 
 #, fuzzy
-#~ msgid "<i class=\"fa fa-pencil me-1\"/>Edit"
-#~ msgstr "<i class=\"fa fa-pencil me-1\"/>Tahrirlash"
+msgid "Payment Methods"
+msgstr "To‘lov usullari"
 
 #, fuzzy
-#~ msgid "<i class=\"fa fa-pencil me-1\"/>Want an invoice?"
-#~ msgstr "<i class=\"fa fa-pencil me-1\"/>Hisob-faktura kerakmi?"
+msgid "Payment Providers"
+msgstr "To‘lov provayderlari"
 
 #, fuzzy
-#~ msgid "<i class=\"fa fa-rotate-left me-2\"/>Quick reorder"
-#~ msgstr "<i class=\"fa fa-rotate-left me-2\"/>Tezkor qayta buyurtma"
+msgid "Payment Tokens"
+msgstr "To‘lov belgilari"
 
 #, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-rotate-right me-1\"/>\n"
-#~ "                    Order Again"
-#~ msgstr "<i class=\"fa fa-rotate-right me-1\"/> Yana buyurtma berish"
+msgid "Payment Transactions"
+msgstr "To‘lov operatsiyalari"
 
 #, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-shopping-cart me-2\"/>\n"
-#~ "                    Add to cart"
-#~ msgstr "<i class=\"fa fa-shopping-cart me-2\"/> Savatga qo‘shish"
+msgid "Sorry, we are unable to ship your order."
+msgstr "Kechirasiz, buyurtmangizni yetkazib bera olmaymiz."
 
 #, fuzzy
-#~ msgid ""
-#~ "<i class=\"oi oi-chevron-left oe_unmovable border bg-white text-900\" "
-#~ "role=\"img\" aria-label=\"Previous\" title=\"Previous\"/>"
-#~ msgstr ""
-#~ "<i class=\"oi oi-chevron-left oe_unmovable border bg-white text-900\" "
-#~ "role=\"img\" aria-label=\"Oldingi\" title=\"Oldingi\"/>"
+msgid "Use Google Places API to validate addresses"
+msgstr "Manzillarni tasdiqlash uchun Google Places API-dan foydalaning"
 
 #, fuzzy
-#~ msgid ""
-#~ "<i class=\"oi oi-chevron-right oe_unmovable border bg-white text-900\" "
-#~ "role=\"img\" aria-label=\"Next\" title=\"Next\"/>"
-#~ msgstr ""
-#~ "<i class=\"oi oi-chevron-right oe_unmovable border bg-white text-900\" "
-#~ "role=\"img\" aria-label=\"Keyingi\" title=\"Keyingi\"/>"
+msgid "Warning"
+msgstr "Ogohlantirish"
 
 #, fuzzy
-#~ msgid "<i class=\"oi oi-plus me-2\"/>Add Address"
-#~ msgstr "<i class=\"oi oi-plus me-2\"/>Manzil qo‘shish"
+msgid "Website Messages"
+msgstr "Veb-sayt xabarlari"
 
 #, fuzzy
-#~ msgid ""
-#~ "<small class=\"mx-auto\"><b>Clear Filters</b></small>\n"
-#~ "                                        <i class=\"oi oi-close\" "
-#~ "role=\"presentation\"/>"
-#~ msgstr ""
-#~ "<small class=\"mx-auto\"><b>Filtrlarni tozalash</b></small> <i class=\"oi "
-#~ "oi-close\" role=\"presentation\"/>"
+msgid "Website communication history"
+msgstr "Veb-saytdagi muloqot tarixi"
 
 #, fuzzy
-#~ msgid ""
-#~ "<span class=\"s_badge badge text-bg-primary o_animable\" data-"
-#~ "name=\"Badge\">\n"
-#~ "                                    <i class=\"fa fa-dollar fa-fw o_not-"
-#~ "animable\"/> Low Prices\n"
-#~ "                                </span>\n"
-#~ "                                <span class=\"s_badge badge text-bg-"
-#~ "primary o_animable\" data-name=\"Badge\">\n"
-#~ "                                    <i class=\"fa fa-shopping-basket fa-"
-#~ "fw o_not-animable\"/>\n"
-#~ "                                    Easy Returns\n"
-#~ "                                </span>\n"
-#~ "                                <span class=\"s_badge badge text-bg-"
-#~ "primary o_animable\" data-name=\"Badge\">\n"
-#~ "                                    <i class=\"fa fa-truck fa-fw o_not-"
-#~ "animable\"/> Fast Shipping\n"
-#~ "                                </span>"
-#~ msgstr ""
-#~ "<span class=\"s_badge badge text-bg-primary o_animable\" data-"
-#~ "name=\"Badge\"> <i class=\"fa fa-dollar fa-fw o_not-animable\"/> Arzon "
-#~ "narxlar </span> <span class=\"s_badge badge text-bg-primary o_animable\" "
-#~ "data-name=\"Badge\"> <i class=\"fa fa-shopping-basket fa-fw o_not-"
-#~ "animable\"/> Oson qaytarish </span> <span class=\"s_badge badge text-bg-"
-#~ "primary o_animable\" data-name=\"Badge\"> <i class=\"fa fa-truck fa-fw "
-#~ "o_not-animable\"/> Tez yetkazib berish </span>"
+msgid "Your cart is not ready to be paid, please verify previous steps."
+msgstr ""
+"Savatchangiz to‘lovga tayyor emas, iltimos, oldingi bosqichlarni tekshiring."
 
 #, fuzzy
-#~ msgid "Abandoned Email"
-#~ msgstr "Tark etilgan xabar"
+msgid "Invalid category."
+msgstr "Noto‘g‘ri turkum."
 
 #, fuzzy
-#~ msgid "Automate abandoned checkout emails"
-#~ msgstr "Tark etilgan to‘lov xatlarini avtomatlashtirish"
+msgid "Presets"
+msgstr "Oldindan belgilangan sozlamalar"
 
 #, fuzzy
-#~ msgid "Blocks Design"
-#~ msgstr "Bloklar dizayni"
+msgid "Add To Cart Action"
+msgstr "Savatga qo‘shish harakati"
 
 #, fuzzy
-#~ msgid ""
-#~ "Created in 2021, the company is young and dynamic. Discover the "
-#~ "composition of the team and their skills."
-#~ msgstr ""
-#~ "2021-yilda tashkil etilgan kompaniya yosh va serharakat. Jamoa tarkibi va "
-#~ "ularning mahoratini bilib oling"
+msgid "Stay on Product Page"
+msgstr "Mahsulot sahifasida qolish"
 
 #, fuzzy
-#~ msgid "Customize Abandoned Email Template"
-#~ msgstr "Tark etilgan xatni moslashtirish andozasi"
+msgid "What should be done on \"Add to Cart\"?"
+msgstr "\"Savatga qo‘shish\" tugmasi bosilganda nima bo‘lishi kerak?"
 
 #, fuzzy
-#~ msgid "Darken overlay"
-#~ msgstr "Qoramtir qoplama"
+msgid "list_price asc"
+msgstr "narx_ro‘yxati_o‘sish"
 
 #, fuzzy
-#~ msgid "Discover our team"
-#~ msgstr "Jamoamiz bilan tanishing"
+msgid "list_price desc"
+msgstr "narx_ro‘yxati_kamayish"
 
 #, fuzzy
-#~ msgid "Dynamic Content"
-#~ msgstr "Dinamik tarkib"
+msgid "name asc"
+msgstr "nom_o‘sish"
 
 #, fuzzy
-#~ msgid "Furnitures"
-#~ msgstr "Mebellar"
-
-#, fuzzy
-#~ msgid "Global options for all inner blocks."
-#~ msgstr "Barcha ichki bloklar uchun global parametrlar."
-
-#, fuzzy
-#~ msgid "Mega menu default image"
-#~ msgstr "Mega menyu standart rasmi"
-
-#, fuzzy
-#~ msgid "No product defined"
-#~ msgstr "Mahsulot aniqlanmagan"
-
-#, fuzzy
-#~ msgid "No product defined in this category."
-#~ msgstr "Ushbu toifada hech qanday mahsulot aniqlanmagan."
-
-#, fuzzy
-#~ msgid "Or scan me with your banking app."
-#~ msgstr "Yoki bank ilovangiz orqali meni skanerlang"
-
-#, fuzzy
-#~ msgid "Recovery Email Sent"
-#~ msgstr "Tiklash xati yuborildi"
-
-#, fuzzy
-#~ msgid "Recovery Email to Send"
-#~ msgstr "Yuborish uchun tiklash xati"
-
-#, fuzzy
-#~ msgid "Send email to customers who abandoned their cart."
-#~ msgstr "Savatini tashlab ketgan mijozlarga elektron xat yuboring."
-
-#, fuzzy
-#~ msgid "Show B2B Fields"
-#~ msgstr "B2B maydonlarini ko‘rsatish"
-
-#, fuzzy
-#~ msgid "Spring collection has arrived!"
-#~ msgstr "Bahor kolleksiyasi keldi!"
-
-#, fuzzy
-#~ msgid "Suggested Accessories"
-#~ msgstr "Tavsiya etilgan aksessuarlar"
-
-#, fuzzy
-#~ msgid "Terms and Conditions"
-#~ msgstr "Shartlar va qoidalar"
-
-#, fuzzy
-#~ msgid "The team"
-#~ msgstr "Jamoa"
-
-#, fuzzy
-#~ msgid "Time when the 'Send abandoned cart email' feature was activated."
-#~ msgstr ""
-#~ "\"Tashlab ketilgan savat haqida xabar yuborish\" funksiyasi "
-#~ "faollashtirilgan vaqt"
-
-#, fuzzy
-#~ msgid "hours."
-#~ msgstr "soat."
-
-#, fuzzy
-#~ msgid "Add More"
-#~ msgstr "Yana qo‘shish"
-
-#, fuzzy
-#~ msgid "Customer Reviews"
-#~ msgstr "Mijoz sharhlari"
-
-#, fuzzy
-#~ msgid "Extra Media"
-#~ msgstr "Qo‘shimcha media"
-
-#, fuzzy
-#~ msgid "Main Image"
-#~ msgstr "Asosiy rasm"
-
-#, fuzzy
-#~ msgid "<i class=\"fa fa-cart-plus me-2\"/>Add to Cart"
-#~ msgstr "<i class=\"fa fa-cart-plus me-2\"/>Savatga qo‘shish"
-
-#, fuzzy
-#~ msgid ""
-#~ "<i class=\"fa fa-shopping-cart fa-fw\" role=\"presentation\"/><span "
-#~ "class=\"o_label small ms-1\">Add to Cart</span>"
-#~ msgstr ""
-#~ "<i class=\"fa fa-shopping-cart fa-fw\" role=\"presentation\"/><span "
-#~ "class=\"o_label small ms-1\">Savatga qo‘shish</span>"
-
-#, fuzzy
-#~ msgid "<span>Publish on website</span>"
-#~ msgstr "<span>Veb-saytda e'lon qilish</span>"
-
-#, fuzzy
-#~ msgid "<strong>Documents</strong>"
-#~ msgstr "<strong>Hujjatlar</strong>"
-
-#, fuzzy
-#~ msgid ""
-#~ "Documents shown on product page cannot be restricted to a specific variant"
-#~ msgstr ""
-#~ "Mahsulot sahifasida ko‘rsatiladigan hujjatlarni muayyan variantga cheklab "
-#~ "bo‘lmaydi"
-
-#, fuzzy
-#~ msgid "E-commerce"
-#~ msgstr "Elektron tijorat"
-
-#, fuzzy
-#~ msgid "Publish on website"
-#~ msgstr "Veb-saytda e'lon qilish"
-
-#, fuzzy
-#~ msgid "This is your current cart."
-#~ msgstr "Bu sizning joriy savatingiz"
-
-#, fuzzy
-#~ msgid "<strong>Warning!</strong>"
-#~ msgstr "<strong>Diqqat!</strong>"
-
-#, fuzzy
-#~ msgid "Address Autocomplete"
-#~ msgstr "Manzilni avtomatik to‘ldirish"
-
-#, fuzzy
-#~ msgid "Delivery Methods"
-#~ msgstr "Yetkazib berish usullari"
-
-#, fuzzy
-#~ msgid "Embed Code"
-#~ msgstr "Joylashtirish kodi"
-
-#, fuzzy
-#~ msgid "Go to cart"
-#~ msgstr "Savatga o‘tish"
-
-#, fuzzy
-#~ msgid "Google Address Validation"
-#~ msgstr "Google manzilni tasdiqlash"
-
-#, fuzzy
-#~ msgid "Payment Methods"
-#~ msgstr "To‘lov usullari"
-
-#, fuzzy
-#~ msgid "Payment Providers"
-#~ msgstr "To‘lov provayderlari"
-
-#, fuzzy
-#~ msgid "Payment Tokens"
-#~ msgstr "To‘lov belgilari"
-
-#, fuzzy
-#~ msgid "Payment Transactions"
-#~ msgstr "To‘lov operatsiyalari"
-
-#, fuzzy
-#~ msgid "Sorry, we are unable to ship your order."
-#~ msgstr "Kechirasiz, buyurtmangizni yetkazib bera olmaymiz."
-
-#, fuzzy
-#~ msgid "Use Google Places API to validate addresses"
-#~ msgstr "Manzillarni tasdiqlash uchun Google Places API-dan foydalaning"
-
-#, fuzzy
-#~ msgid "Warning"
-#~ msgstr "Ogohlantirish"
-
-#, fuzzy
-#~ msgid "Website Messages"
-#~ msgstr "Veb-sayt xabarlari"
-
-#, fuzzy
-#~ msgid "Website communication history"
-#~ msgstr "Veb-saytdagi muloqot tarixi"
-
-#, fuzzy
-#~ msgid "Your cart is not ready to be paid, please verify previous steps."
-#~ msgstr ""
-#~ "Savatchangiz to‘lovga tayyor emas, iltimos, oldingi bosqichlarni "
-#~ "tekshiring."
-
-#, fuzzy
-#~ msgid "Invalid category."
-#~ msgstr "Noto‘g‘ri turkum."
-
-#, fuzzy
-#~ msgid "Presets"
-#~ msgstr "Oldindan belgilangan sozlamalar"
-
-#, fuzzy
-#~ msgid "Add To Cart Action"
-#~ msgstr "Savatga qo‘shish harakati"
-
-#, fuzzy
-#~ msgid "Stay on Product Page"
-#~ msgstr "Mahsulot sahifasida qolish"
-
-#, fuzzy
-#~ msgid "What should be done on \"Add to Cart\"?"
-#~ msgstr "\"Savatga qo‘shish\" tugmasi bosilganda nima bo‘lishi kerak?"
-
-#, fuzzy
-#~ msgid "list_price asc"
-#~ msgstr "narx_ro‘yxati_o‘sish"
-
-#, fuzzy
-#~ msgid "list_price desc"
-#~ msgstr "narx_ro‘yxati_kamayish"
-
-#, fuzzy
-#~ msgid "name asc"
-#~ msgstr "nom_o‘sish"
-
-#, fuzzy
-#~ msgid "publish_date desc"
-#~ msgstr "nashr_sanasi_kamayish"
+msgid "publish_date desc"
+msgstr "nashr_sanasi_kamayish"

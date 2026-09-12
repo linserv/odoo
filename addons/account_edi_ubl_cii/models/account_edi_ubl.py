@@ -384,8 +384,8 @@ class AccountEdiUBL(models.AbstractModel):
         line_name = name = base_line.get('name', '')  # Regular business line.
         description = None
         if product := base_line['product_id']:
-            name = product.display_name
-            description = line_name.replace(name, '').strip()  # Remove the redundant product's name from the description.
+            name = product.name
+            description = line_name
         elif base_line.get('_removed_tax_data'):
             # Emptying tax extra line.
             name = base_line['_removed_tax_data']['tax'].name
@@ -718,17 +718,6 @@ class AccountEdiUBL(models.AbstractModel):
             'currencyID': currency.name,
         }
 
-    def _ubl_add_line_period_nodes(self, vals):
-        nodes = vals['line_node']['cac:InvoicePeriod'] = []
-
-        if self._is_document(vals, 'invoice', 'credit_note', 'self_invoice', 'self_credit_note'):
-            base_line = vals['line_vals']['base_line']
-            if base_line.get('deferred_start_date') or base_line.get('deferred_end_date'):
-                nodes.append({
-                    'cbc:StartDate': {'_text': base_line['deferred_start_date']},
-                    'cbc:EndDate': {'_text': base_line['deferred_end_date']},
-                })
-
     def _ubl_add_line_pricing_reference_node(self, vals):
         vals['line_node']['cac:PricingReference'] = {}
 
@@ -1054,7 +1043,6 @@ class AccountEdiUBL(models.AbstractModel):
         self._ubl_add_line_invoiced_quantity_node(vals)
         self._ubl_add_line_allowance_charge_nodes(vals)
         self._ubl_add_line_extension_amount_node(vals)
-        self._ubl_add_line_period_nodes(vals)
         self._ubl_add_line_pricing_reference_node(vals)
         self._ubl_add_line_tax_totals_nodes(vals)
         self._ubl_add_line_item_node(vals)
@@ -1072,7 +1060,6 @@ class AccountEdiUBL(models.AbstractModel):
         self._ubl_add_line_credited_quantity_node(vals)
         self._ubl_add_line_allowance_charge_nodes(vals)
         self._ubl_add_line_extension_amount_node(vals)
-        self._ubl_add_line_period_nodes(vals)
         self._ubl_add_line_pricing_reference_node(vals)
         self._ubl_add_line_tax_totals_nodes(vals)
         self._ubl_add_line_item_node(vals)
@@ -1090,7 +1077,6 @@ class AccountEdiUBL(models.AbstractModel):
         self._ubl_add_line_debited_quantity_node(vals)
         self._ubl_add_line_allowance_charge_nodes(vals)
         self._ubl_add_line_extension_amount_node(vals)
-        self._ubl_add_line_period_nodes(vals)
         self._ubl_add_line_pricing_reference_node(vals)
         self._ubl_add_line_tax_totals_nodes(vals)
         self._ubl_add_line_item_node(vals)
@@ -2291,23 +2277,20 @@ class AccountEdiUBL(models.AbstractModel):
         An item may contain multiple Description elements
         """
         line_tree = collected_values['line_tree']
-        item_ref = line_tree.findtext('.//{*}Item/{*}SellersItemIdentification/{*}ID')
-        name = line_tree.findtext('.//{*}Item/{*}Name')
-        if item_ref and name and f'[{item_ref}]' not in name:
-            name = f"[{item_ref}] {name}"
-        collected_values['name'] = name
+        collected_values['name'] = name = line_tree.findtext('.//{*}Item/{*}Name')
+        description_parts = [
+            description_elem.text
+            for description_elem in line_tree.iterfind('.//{*}Item/{*}Description')
+            if description_elem.text
+        ]
+        description = '\n'.join(description_parts)
+        # Preserve both the item name and descriptions in case when no matching product is found,
+        # so that importing the UBL document does not result in any information loss.
+        # If a matching product is found, the product name part will be removed.
+        # See _import_ubl_invoice_retrieve_products.
+        name_to_write = '\n'.join(filter(None, [name, description]))
 
-        description = ''
-        for description_elem in line_tree.iterfind('.//{*}Item/{*}Description'):
-            if description_elem.text:
-                description += description_elem.text + '\n'
-
-        if name and description:
-            collected_values['to_write']['name'] = f'{name}\n{description.strip()}'
-        elif name:
-            collected_values['to_write']['name'] = name
-        elif description:
-            collected_values['to_write']['name'] = description.strip()
+        collected_values['to_write']['name'] = name_to_write
 
     def _import_ubl_invoice_line_add_allowance_charges_values(self, collected_values):
         line_tree = collected_values['line_tree']
@@ -2607,20 +2590,6 @@ class AccountEdiUBL(models.AbstractModel):
     def _import_ubl_invoice_line_add_account_values(self, collected_values):
         collected_values['account_values'] = {}
 
-    def _import_ubl_invoice_line_add_deferred_dates(self, collected_values):
-        if not self.module_installed('account_accountant'):
-            return
-
-        line_tree = collected_values['line_tree']
-        start_date_str = line_tree.findtext('./{*}InvoicePeriod/{*}StartDate')
-        end_date_str = line_tree.findtext('./{*}InvoicePeriod/{*}EndDate')
-        if start_date_str and end_date_str:
-            to_write = collected_values['to_write']
-            if "deferred_start_date" in self.env["account.move.line"]._fields:
-                # only checking the existence of the first of the enterprise fields
-                to_write['deferred_start_date'] = fields.Date.from_string(start_date_str)
-                to_write['deferred_end_date'] = fields.Date.from_string(end_date_str)
-
     def _import_ubl_invoice_line_prepare_classified_tax_category_tax_values(self, collected_values, tax_category_tree):
         percentage = tax_category_tree.findtext('./{*}Percent')
         category_code = tax_category_tree.findtext('./{*}ID')
@@ -2723,10 +2692,9 @@ class AccountEdiUBL(models.AbstractModel):
                 # Extract information about allowance / charges.
                 self._import_ubl_invoice_line_add_allowance_charges_values(line_collected_values)
 
-                # name / quantity / price_unit / discount / deferred_start_date / deferred_end_date
+                # name / quantity / price_unit / discount
                 self._import_ubl_invoice_line_add_name(line_collected_values)
                 self._import_ubl_invoice_line_add_price_unit_quantity_discount(line_collected_values)
-                self._import_ubl_invoice_line_add_deferred_dates(line_collected_values)
 
                 # vehicle
 

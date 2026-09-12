@@ -3,23 +3,23 @@
 # * spreadsheet
 #
 # "Dylan Kiss (dyki)" <dyki@odoo.com>, 2025.
-# Weblate <noreply-mt-weblate@weblate.org>, 2025, 2026.
+# Weblate <noreply-mt-weblate@weblate.org>, 2025.
 # Odoo Translation Bot <c3p@odoo.com>, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0+e\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:43+0000\n"
-"PO-Revision-Date: 2026-06-18 23:18+0000\n"
-"Last-Translator: Weblate <noreply-mt-weblate@weblate.org>\n"
-"Language-Team: Greek <https://translate.odoo.com/projects/odoo-master/"
+"POT-Creation-Date: 2026-09-04 17:46+0000\n"
+"PO-Revision-Date: 2026-08-31 19:21+0000\n"
+"Last-Translator: Anonymous <noreply@weblate.org>\n"
+"Language-Team: Greek <https://translate.odoo.com/projects/odoo-s19-4/"
 "spreadsheet/el/>\n"
 "Language: el\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -84,7 +84,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "%(count)s matches in %(sheetName)s"
+msgid "%(count)s matches in '%(sheetName)s'"
 msgstr ""
 
 #. module: spreadsheet
@@ -96,7 +96,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "%(count)s matches in range %(range)s of %(sheetName)s"
+msgid "%(count)s matches in range %(range)s of '%(sheetName)s'"
 msgstr ""
 
 #. module: spreadsheet
@@ -225,9 +225,8 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/list/plugins/list_ui_plugin.js:0
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "%s (copy)"
-msgstr "%s (αντίγραφο)"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -448,7 +447,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "1 match in %(sheetName)s"
+msgid "1 match in '%(sheetName)s'"
 msgstr ""
 
 #. module: spreadsheet
@@ -460,7 +459,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "1 match in range %(range)s of %(sheetName)s"
+msgid "1 match in range %(range)s of '%(sheetName)s'"
 msgstr ""
 
 #. module: spreadsheet
@@ -804,9 +803,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/actions/spreadsheet_download_action.js:0
-#, fuzzy
 msgid "Access Error"
-msgstr "Σφάλμα Πρόσβασης"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -819,9 +817,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Accounting"
-msgstr "Λογιστική"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -990,9 +987,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "All"
-msgstr "Όλα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1226,9 +1222,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Anonymous"
-msgstr "Ανώνυμος"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1447,9 +1442,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Automatic"
-msgstr "Αυτόματα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1649,16 +1643,14 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Black"
-msgstr "Μαύρο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Blue"
-msgstr "Μπλε"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1757,18 +1749,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "By %(header)s"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "By Category"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "By Name"
 msgstr ""
 
 #. module: spreadsheet
@@ -1917,9 +1897,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Calendar"
-msgstr "Ημερολόγιο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -1930,9 +1909,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Cancel"
-msgstr "Ακύρωση"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2084,12 +2062,6 @@ msgstr "Κατηγορία"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Category Comparison"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "Category color"
 msgstr ""
 
@@ -2114,9 +2086,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Center"
-msgstr "Κέντρο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2493,9 +2464,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Columns"
-msgstr "Στήλες"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2518,9 +2488,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Comma"
-msgstr "Κόμμα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2659,9 +2628,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Configuration"
-msgstr "Διαμόρφωση"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2777,9 +2745,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Copy"
-msgstr "Αντιγραφή"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -2803,12 +2770,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "Copy of %s"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Correlation"
 msgstr ""
 
 #. module: spreadsheet
@@ -3101,9 +3062,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Data"
-msgstr "Δεδομένα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3196,16 +3156,14 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Database"
-msgstr "Βάση Δεδομένων"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Date"
-msgstr "Ημερομηνία"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3348,23 +3306,20 @@ msgstr "Ημερομηνία:"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Day"
-msgstr "Ημέρα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Day of Month"
-msgstr "Ημέρα του Μήνα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Day of Week"
-msgstr "Ημέρα της εβδομάδας"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3599,9 +3554,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Design"
-msgstr "Σχεδίαση"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3959,9 +3913,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Duplicate"
-msgstr "Δημιουργία Αντίγραφου"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -3972,9 +3925,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Duration"
-msgstr "Διάρκεια"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4217,9 +4169,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Expand all"
-msgstr "Ανάπτυξη όλων"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4336,9 +4287,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "File"
-msgstr "Αρχείο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4525,9 +4475,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Force"
-msgstr "Παράβλεψη και Συνέχεια"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4618,9 +4567,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Frequency"
-msgstr "Συχνότητα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4654,9 +4602,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Full Screen"
-msgstr "Πλήρης οθόνη"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4667,9 +4614,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Function"
-msgstr "Λειτουργία"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -4990,9 +4936,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Green"
-msgstr "Πράσινο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5016,9 +4961,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Group"
-msgstr "Ομάδα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5388,9 +5332,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Image"
-msgstr "Εικόνα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5499,16 +5442,14 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Info"
-msgstr "Πληροφορίες"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Information"
-msgstr "Πληροφορία"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5627,9 +5568,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Integer"
-msgstr "Ακέραιος"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -5933,12 +5873,6 @@ msgstr "Ιούνιος"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "KPI Overview"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "KURT requires at least 4 values."
 msgstr ""
 
@@ -5968,12 +5902,6 @@ msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Label"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
 msgid "Labels"
 msgstr "Ετικέτες"
@@ -5987,15 +5915,13 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Landscape"
-msgstr "Οριζόντιος"
+msgstr ""
 
 #. module: spreadsheet
 #: model:ir.model,name:spreadsheet.model_res_lang
-#, fuzzy
 msgid "Language"
-msgstr "Γλώσσα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6187,9 +6113,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Load more..."
-msgstr "Φόρτωσε περισσότερα..."
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6370,9 +6295,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Max"
-msgstr "Μέγιστο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6439,9 +6363,8 @@ msgstr "Μάιος"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Measure"
-msgstr "Μέτρηση"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6452,9 +6375,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Measures"
-msgstr "Μετρήσεις"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6477,9 +6399,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Medium"
-msgstr "Μέσο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6549,9 +6470,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Min"
-msgstr "Ελάχιστο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6636,9 +6556,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Miscellaneous"
-msgstr "Διάφορα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6666,9 +6585,8 @@ msgstr ""
 
 #. module: spreadsheet
 #: model:ir.model,name:spreadsheet.model_ir_model
-#, fuzzy
 msgid "Model"
-msgstr "Μοντέλο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6764,13 +6682,7 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Multi-series"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Multi-series over Time"
+msgid "Multi-series By %(categoryHeader)s"
 msgstr ""
 
 #. module: spreadsheet
@@ -6783,9 +6695,8 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Name"
-msgstr "Περιγραφή"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6868,9 +6779,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Next"
-msgstr "Επόμενο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6881,9 +6791,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/hooks.js:0
-#, fuzzy
 msgid "No"
-msgstr "Όχι"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -6912,7 +6821,10 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-msgid "No chart suggestions available for the selected data."
+msgid ""
+"No chart suggestions available for the selected data. Note that the order of "
+"selected\n"
+"        columns can impact chart suggestions."
 msgstr ""
 
 #. module: spreadsheet
@@ -7369,9 +7281,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Operator"
-msgstr "Χειριστής"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7400,21 +7311,13 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Orientation"
-msgstr "Προσανατολισμός"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Others"
-msgstr "Άλλοι"
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Over Time"
 msgstr ""
 
 #. module: spreadsheet
@@ -7500,9 +7403,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Percent"
-msgstr "Ποσοστό"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7531,9 +7433,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Performance"
-msgstr "Επίδοση"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7580,9 +7481,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Pivot"
-msgstr "Συγκεντρωτικό"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7697,9 +7597,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Portrait"
-msgstr "Κατακόρυφος"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7734,9 +7633,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Power"
-msgstr "Δύναμη"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7789,9 +7687,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Print"
-msgstr "Εκτύπωση"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7815,12 +7712,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "Product of values from a table-like range."
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Profile Comparison"
 msgstr ""
 
 #. module: spreadsheet
@@ -7856,9 +7747,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Purple"
-msgstr "Μωβ"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -7925,9 +7815,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Quarterly"
-msgstr "Τριμηνιαίος"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8015,24 +7904,6 @@ msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Rate"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Rate over Time"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Rates by Category"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
 msgid "Re-analyze"
 msgstr ""
@@ -8064,16 +7935,14 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Red"
-msgstr "Κόκκινο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Redo"
-msgstr "Ακύρωση αναίρεσης"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8217,9 +8086,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Reset"
-msgstr "Επαναφορά"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8695,9 +8563,8 @@ msgstr "Αποθήκευση"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Scale"
-msgstr "Κλίμακα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8726,9 +8593,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Scientific"
-msgstr "Επιστήμονες"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8797,9 +8663,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Second"
-msgstr "Δευτερόλεπτο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8879,9 +8744,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Semicolon"
-msgstr "Άνω Τελεία"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8922,9 +8786,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Settings"
-msgstr "Ρυθμίσεις"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8953,9 +8816,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/components/share_button/share_button.xml:0
-#, fuzzy
 msgid "Share"
-msgstr "Κοινοποίηση"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -8978,9 +8840,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Sheet"
-msgstr "Φύλλο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-python
@@ -9344,9 +9205,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Space"
-msgstr "Κενό"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -9371,9 +9231,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Speed"
-msgstr "Ταχύτητα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -9629,9 +9488,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Subtotal"
-msgstr "Μερικό σύνολο"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -9753,9 +9611,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Table"
-msgstr "Πίνακας"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -13786,9 +13643,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Time"
-msgstr "Χρόνος"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -13968,12 +13824,6 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-msgid "Two-level hierarchy"
-msgstr ""
-
-#. module: spreadsheet
-#. odoo-javascript
-#: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
 msgid "Two-level hierarchy weighted by value."
 msgstr ""
 
@@ -14032,9 +13882,8 @@ msgstr "Υπογράμμιση"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Undo"
-msgstr "Αναίρεση"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14195,9 +14044,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.xml:0
-#, fuzzy
 msgid "Update"
-msgstr "Ενημέρωση"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14614,9 +14462,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "View"
-msgstr "Προβολή"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14627,9 +14474,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Volume"
-msgstr "Όγκος"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14684,9 +14530,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Web"
-msgstr "Web"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14709,9 +14554,8 @@ msgstr ""
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Week"
-msgstr "Εβδομάδα"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -14742,9 +14586,8 @@ msgstr "Εβδομάδες"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/o_spreadsheet/o_spreadsheet.js:0
-#, fuzzy
 msgid "Weight"
-msgstr "Βάρος"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -15058,9 +14901,8 @@ msgstr "Έτη"
 #. module: spreadsheet
 #. odoo-javascript
 #: code:addons/spreadsheet/static/src/hooks.js:0
-#, fuzzy
 msgid "Yes"
-msgstr "Ναι"
+msgstr ""
 
 #. module: spreadsheet
 #. odoo-javascript
@@ -15522,5 +15364,5 @@ msgstr ""
 msgid "yesterday"
 msgstr ""
 
-#~ msgid "Filters"
-#~ msgstr "Φίλτρα"
+msgid "Filters"
+msgstr "Φίλτρα"

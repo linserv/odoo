@@ -22,21 +22,22 @@
 # "Tiffany Chang (tic)" <tic@odoo.com>, 2025.
 # Weblate <noreply-mt-weblate@weblate.org>, 2025.
 # Odoo Translation Bot <c3p@odoo.com>, 2026.
+# Martin Dinovski <martin.dinovski@industria.tech>, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 16.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-21 10:58+0000\n"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 19:56+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Bulgarian <https://translate.odoo.com/projects/odoo-master/"
+"Language-Team: Bulgarian <https://translate.odoo.com/projects/odoo-s19-4/"
 "mail/bg/>\n"
 "Language: bg\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: mail
 #: model:ir.module.module,description:base.module_mail
@@ -474,13 +475,6 @@ msgstr ""
 #: code:addons/mail/models/ir_mail_server.py:0
 msgid "%s (Email Template)"
 msgstr ""
-
-#. module: mail
-#. odoo-python
-#: code:addons/mail/models/mail_activity_plan.py:0
-#: code:addons/mail/models/mail_canned_response.py:0
-msgid "%s (copy)"
-msgstr "%s (копие)"
 
 #. module: mail
 #. odoo-python
@@ -960,6 +954,8 @@ msgid ""
 "<span style=\"font-weight: bold\">\n"
 "                    Location:</span>"
 msgstr ""
+"<span style=\"font-weight: bold\">\n"
+"                    Местоположение:</span>"
 
 #. module: mail
 #: model_terms:ir.ui.view,arch_db:mail.account_security_alert
@@ -1634,6 +1630,8 @@ msgid "Adjust the slider to set the voice detection sensitivity."
 msgstr ""
 
 #. module: mail
+#. odoo-javascript
+#: code:addons/mail/static/src/discuss/core/common/channel_member.xml:0
 #: model:ir.model.fields.selection,name:mail.selection__discuss_channel_member__channel_role__admin
 msgid "Admin"
 msgstr ""
@@ -2597,6 +2595,9 @@ msgid ""
 "Bounce/Catchall '%(matching_alias_name)s' is already used by %"
 "(document_name)s. Choose another alias or change it on the other document."
 msgstr ""
+"Пренасочването/универсалният псевдоним „%(matching_alias_name)s“ вече се "
+"използва от „%(document_name)s“. Изберете друг псевдоним или го променете в "
+"другия документ."
 
 #. module: mail
 #. odoo-python
@@ -2605,6 +2606,8 @@ msgid ""
 "Bounce/Catchall '%(matching_alias_name)s' is already used. Choose another "
 "alias or change it on the linked model."
 msgstr ""
+"Пренасочването/универсалният псевдоним „%(matching_alias_name)s“ вече се "
+"използва. Изберете друг псевдоним или го променете във свързания модел."
 
 #. module: mail
 #. odoo-javascript
@@ -3128,12 +3131,6 @@ msgid "Channel Actions"
 msgstr ""
 
 #. module: mail
-#. odoo-javascript
-#: code:addons/mail/static/src/discuss/core/common/channel_member.xml:0
-msgid "Channel Admin"
-msgstr ""
-
-#. module: mail
 #: model:ir.model,name:mail.model_discuss_channel_member
 #: model:ir.model.fields,field_description:mail.field_discuss_channel_rtc_session__channel_member_id
 #: model:ir.model.fields,field_description:mail.field_res_partner__channel_member_ids
@@ -3158,12 +3155,6 @@ msgstr ""
 #: code:addons/mail/static/src/discuss/core/common/discuss_notification_settings.xml:0
 #: model:ir.model.fields,field_description:mail.field_res_users_settings__channel_notifications
 msgid "Channel Notifications"
-msgstr ""
-
-#. module: mail
-#. odoo-javascript
-#: code:addons/mail/static/src/discuss/core/common/channel_member.xml:0
-msgid "Channel Owner"
 msgstr ""
 
 #. module: mail
@@ -9941,6 +9932,8 @@ msgid "Own Activities"
 msgstr ""
 
 #. module: mail
+#. odoo-javascript
+#: code:addons/mail/static/src/discuss/core/common/channel_member.xml:0
 #: model:ir.model.fields,field_description:mail.field_ir_mail_server__owner_user_id
 #: model:ir.model.fields,field_description:mail.field_mail_template__user_id
 #: model:ir.model.fields.selection,name:mail.selection__discuss_channel_member__channel_role__owner
@@ -10140,6 +10133,7 @@ msgid "Permissions Lady - Lady pushing a giant toggle button"
 msgstr ""
 
 #. module: mail
+#: model:ir.model.fields,field_description:mail.field_mail_activity__phone
 #: model:ir.model.fields,field_description:mail.field_res_partner__phone
 #: model:ir.model.fields,field_description:mail.field_res_users__phone
 msgid "Phone"
@@ -10952,12 +10946,6 @@ msgid "Remove"
 msgstr "Премахнете"
 
 #. module: mail
-#. odoo-javascript
-#: code:addons/mail/static/src/discuss/core/common/channel_member_actions.js:0
-msgid "Remove Admin"
-msgstr ""
-
-#. module: mail
 #: model_terms:ir.ui.view,arch_db:mail.email_template_form
 msgid "Remove Context Action"
 msgstr ""
@@ -10977,12 +10965,6 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/mail/static/src/discuss/core/common/channel_member_actions.js:0
 msgid "Remove Member"
-msgstr ""
-
-#. module: mail
-#. odoo-javascript
-#: code:addons/mail/static/src/discuss/core/common/channel_member_actions.js:0
-msgid "Remove Owner"
 msgstr ""
 
 #. module: mail
@@ -12069,6 +12051,12 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/mail/static/src/core/web/recipients_input_tags_list_popover.xml:0
 msgid "Set Email"
+msgstr ""
+
+#. module: mail
+#. odoo-javascript
+#: code:addons/mail/static/src/discuss/core/common/channel_member_actions.js:0
+msgid "Set Member"
 msgstr ""
 
 #. module: mail
@@ -16072,98 +16060,49 @@ msgstr ""
 msgid "🔒 Private"
 msgstr ""
 
-#~ msgid "Deadline:"
-#~ msgstr "Краен срок:"
+msgid "Unassigned"
+msgstr "Неназначени"
 
-#~ msgid "Followers to add"
-#~ msgstr "Последователи за добавяне"
+msgid ""
+"<p><b>Write a message</b> to the members of the channel here.</p> <p>You can "
+"notify someone with <i>'@'</i> or link another channel with <i>'#'</i>. "
+"Start your message with <i>'/'</i> to get the list of possible commands.</p>"
+msgstr ""
+"<p><b>Напишете съобщение</b> до членовете на канала тук.</p> <p>Можете да "
+"упоменете някого с <i>'@'</i> или да свържете друг канал с <i>'#'</i>. "
+"Започнете съобщението си с <i>'/'</i>, за да получите списък с възможни "
+"команди.</p>"
 
-#~ msgid "Followers to remove"
-#~ msgstr "Последователи за премахване"
+msgid "Activity type"
+msgstr "Вид дейност"
 
-#~ msgid "Font awesome icon e.g. fa-tasks"
-#~ msgstr "Икона, примерно fa-tasks"
+msgid "Comma-separated ids of recipient partners"
+msgstr "Разделен от запетаи ИН на получател-контрагент"
 
-#~ msgid "Leave Channel"
-#~ msgstr "Канал на живо"
+msgid ""
+"Comma-separated ids of recipient partners (placeholders may be used here)"
+msgstr ""
+"Разделен от запетаи ИН на получател-контрагент (тук могат да се използват "
+"заместители)"
 
-#~ msgid "Leave this channel"
-#~ msgstr "Напуснете този канал"
+msgid "Copy Link"
+msgstr "Копирайте линка"
 
-#~ msgid "List users in the current channel"
-#~ msgstr "Изгответе списък с потребителите в настоящия канал"
+msgid "Created"
+msgstr "Създаден"
 
-#~ msgid "Summary:"
-#~ msgstr "Обобщение:"
+msgid "Feedback:"
+msgstr "Обратна връзка"
 
-#~ msgid ""
-#~ "<p>Channels make it easy to organize information across different topics "
-#~ "and groups.</p> <p>Try to <b>create your first channel</b> (e.g. sales, "
-#~ "marketing, product XYZ, after work party, etc).</p>"
-#~ msgstr ""
-#~ "<p>Каналите улесняват организирането на информацията в различни теми и "
-#~ "групи.</p> <p>Опитайте се да <b>създадете първия си канал</b> (напр. "
-#~ "продажби, маркетинг, продукт XYZ, банкет след работа и т.н.).</p>"
+msgid "Next Activity"
+msgstr "Следваща дейност"
 
-#~ msgid "History"
-#~ msgstr "История"
+msgid ""
+"You cannot delete those groups, as the Whole Company group is required by "
+"other modules."
+msgstr ""
+"Не можете да изтриете тези групи, тъй като цялата група на компанията е "
+"необходима на други модули."
 
-#~ msgid "Install"
-#~ msgstr "Инсталирайте"
-
-#~ msgid ""
-#~ "The Tax Identification Number. Values here will be validated based on the "
-#~ "country format. You can use '/' to indicate that the partner is not "
-#~ "subject to tax."
-#~ msgstr ""
-#~ "ДДС номер. Стойностите тук ще бъдат валидирани въз основа на формата за "
-#~ "съответната държава. Можете да използвате '/' за да посочите, че "
-#~ "партньорът не подлежи на данък."
-
-#~ msgid "Unassigned"
-#~ msgstr "Неназначени"
-
-#~ msgid ""
-#~ "<p><b>Write a message</b> to the members of the channel here.</p> <p>You "
-#~ "can notify someone with <i>'@'</i> or link another channel with <i>'#'</"
-#~ "i>. Start your message with <i>'/'</i> to get the list of possible "
-#~ "commands.</p>"
-#~ msgstr ""
-#~ "<p><b>Напишете съобщение</b> до членовете на канала тук.</p> <p>Можете да "
-#~ "упоменете някого с <i>'@'</i> или да свържете друг канал с <i>'#'</i>. "
-#~ "Започнете съобщението си с <i>'/'</i>, за да получите списък с възможни "
-#~ "команди.</p>"
-
-#~ msgid "Activity type"
-#~ msgstr "Вид дейност"
-
-#~ msgid "Comma-separated ids of recipient partners"
-#~ msgstr "Разделен от запетаи ИН на получател-контрагент"
-
-#~ msgid ""
-#~ "Comma-separated ids of recipient partners (placeholders may be used here)"
-#~ msgstr ""
-#~ "Разделен от запетаи ИН на получател-контрагент (тук могат да се използват "
-#~ "заместители)"
-
-#~ msgid "Copy Link"
-#~ msgstr "Копирайте линка"
-
-#~ msgid "Created"
-#~ msgstr "Създаден"
-
-#~ msgid "Feedback:"
-#~ msgstr "Обратна връзка"
-
-#~ msgid "Next Activity"
-#~ msgstr "Следваща дейност"
-
-#~ msgid ""
-#~ "You cannot delete those groups, as the Whole Company group is required by "
-#~ "other modules."
-#~ msgstr ""
-#~ "Не можете да изтриете тези групи, тъй като цялата група на компанията е "
-#~ "необходима на други модули."
-
-#~ msgid "Edit subscription"
-#~ msgstr "Редактирайте абонамент"
+msgid "Edit subscription"
+msgstr "Редактирайте абонамент"

@@ -1192,11 +1192,7 @@ class PosOrder(models.Model):
         return body
 
     def _set_product_qty_available(self):
-        if not self._should_update_quantity_on_product():
-            return
-        for line in self.lines:
-            if line.product_id.is_storable:
-                line.product_id.sudo().qty_available -= line.qty
+        pass
 
     @api.model
     def _should_update_quantity_on_product(self):
@@ -1221,8 +1217,7 @@ class PosOrder(models.Model):
         name = base_line['account_id'].name
         product_id = product.id if product else False
         if product:
-            desc = product.description_sale
-            name = f"{product.display_name} {desc}" if desc else product.display_name
+            name = product.description_sale
 
         if self.config_id._is_quantities_set():
             quantity = base_line['_aggregated_quantity']
@@ -1291,11 +1286,7 @@ class PosOrder(models.Model):
             return []
 
         to_create = []
-        is_percentage = self.pricelist_id and any(
-            self.pricelist_id.item_ids.filtered(
-                lambda rule: rule.compute_price == "percentage",
-            ),
-        )
+        is_percentage = bool(self.pricelist_id.item_ids.filtered('is_plain_discount'))
 
         for base_line in base_lines:
             line = base_line['record']
@@ -1314,11 +1305,9 @@ class PosOrder(models.Model):
                     },
                 })
             elif line.product_id.type != 'combo':
-                desc = product.description_sale
-                name = f"{product.display_name} {desc}" if desc else product.display_name
                 to_create.append({
                     'account.move.line': {
-                        'name': name,
+                        'name': product.description_sale,
                         'display_type': 'product',
                         'quantity': base_line['quantity'],
                         'discount': base_line['discount'],

@@ -29,6 +29,7 @@ class TestAccrualAllocationsAttendance(TestHrHolidaysCommon):
         with freeze_time("2017-12-05"):
             accrual_plan = self.env['hr.leave.accrual.plan'].create({
                 'is_based_on_worked_time': True,
+                'work_entry_type_id': self.work_entry_type.id,
                 'can_be_carryover': True,
                 'level_ids': [(0, 0, {
                     'milestone_date': 'after',
@@ -73,6 +74,7 @@ class TestAccrualAllocationsAttendance(TestHrHolidaysCommon):
     def test_accrual_allocation_based_on_attendance(self):
         accrual_plan = self.env['hr.leave.accrual.plan'].create({
             'name': 'Accrual Plan For Test',
+            'work_entry_type_id': self.work_entry_type.id,
             'is_based_on_worked_time': False,
             'accrued_gain_time': 'end',
             'can_be_carryover': True,
@@ -106,14 +108,15 @@ class TestAccrualAllocationsAttendance(TestHrHolidaysCommon):
             allocation_form.work_entry_type_id = self.work_entry_type
             allocation_form.date_from = datetime.date(2024, 3, 20)
             allocation_form.name = 'Accrual allocation for employee'
-            self.assertEqual(allocation_form.number_of_hours_display, 8.0)
+            self.assertEqual(allocation_form.number_of_hours, 8.0)
             allocation_form.date_from = datetime.date(2024, 3, 25)
             allocation_form.name = 'Accrual allocation for employee'
-            self.assertEqual(allocation_form.number_of_hours_display, 8.0)
+            self.assertEqual(allocation_form.number_of_hours, 8.0)
 
     def test_accrual_allocation_with_overlapping_attendance(self):
         accrual_plan = self.env['hr.leave.accrual.plan'].create({
             'name': 'Accrual Plan For Test',
+            'work_entry_type_id': self.work_entry_type.id,
             'is_based_on_worked_time': True,
             'accrued_gain_time': 'end',
             'carryover_date': 'year_start',
@@ -156,6 +159,7 @@ class TestAccrualAllocationsAttendance(TestHrHolidaysCommon):
         self.employee_emp.tz = 'Asia/Tokyo'
         accrual_plan = self.env['hr.leave.accrual.plan'].create({
             'name': 'Accrual Plan For Test',
+            'work_entry_type_id': self.work_entry_type.id,
             'is_based_on_worked_time': True,
             'accrued_gain_time': 'end',
             'carryover_date': 'year_start',

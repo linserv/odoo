@@ -38,19 +38,47 @@ import { _t } from "@web/core/l10n/translation";
 /**
  * Defines a messaging menu tab with:
  * - `actions`: buttons shown near the search bar
- * - `filters`: options to narrow the content
+ * - `filters`: chip options to narrow the content, rendered next to the search bar
  * - content: tab records loaded lazily through `counter`/`loadMore`
+ *
+ * Content can also be narrowed by any number of plugin filters (`pluginFilters`), that
+ * can be provided by any addon under its own key (`setPluginFilter`). Display is up to
+ * the addon. Every active plugin filter and the chip filter is ANDed together and goes
+ * through the same `loadMore` flow.
  *
  * Content is always filtered server-side using the tab `id` in `MessagingMenuController`.
  *
  * To configure a tab:
  * - Add its `id` to `_get_menu_tab_domain` to define which records it contains.
- * - Add `(tab id, filter id)` to `_get_menu_tab_filter_domain` to define filter results.
+ * - Add `(tab id, filter id)` to `_get_menu_tab_filter_domain` to define filter (chip or
+ *   plugin) results.
  * - Add its `id` to `_get_menu_tab_priority_domain` to load specific records first.
  *
- * Tabs or filters without matching server-side cases receive no data.
+ * Tabs or filters without matching server-side cases raise a `BadRequest.
  */
 export class MessagingMenuTab extends Record {
+    setup() {
+        super.setup(...arguments);
+        this.onChange(
+            () => [this.messagingMenuAsTab],
+            function onChangeMessagingMenuAsTab(messagingMenuAsTab) {
+                if (
+                    !messagingMenuAsTab ||
+                    messagingMenuAsTab.initializeCountersFetcher.status === "not_fetched"
+                ) {
+                    return;
+                }
+                // Dynamic tab missed `initializeCountersFetcher`, catch-up now.
+                this.store.fetchStoreData("/mail/messaging_menu/initialize_counters", {
+                    filter_id_by_tab_id_by_record_type: {
+                        [this.recordType]: { [this.id]: this.defaultFilter?.id ?? null },
+                    },
+                });
+            },
+            { immediate: true }
+        );
+    }
+
     static id = "id";
     static LOAD_MORE_LIMIT = 20;
 
@@ -77,7 +105,7 @@ export class MessagingMenuTab extends Record {
      * Drives what is displayed when a tab is empty.
      *
      * @type {{
-     *  title?: string,
+     *  title?: TranslatedString,
      *  subtitle?: string,
      *  component?: typeof import("@odoo/owl").Component,
      *  action?: { text: string, onClick: () => void }
@@ -105,6 +133,13 @@ export class MessagingMenuTab extends Record {
      * @type {MessagingMenuTabFilter}
      */
     filters = [];
+    /**
+     * Whether this tab is part of the app wide messaging menu: listed in the messaging
+     * menu dropdown/discuss sidebar and counted in `globalCounter`. `false` for a tab
+     * scoped to a specific context (displayed through its own dedicated UI). Context
+     * specific tabs still benefit from lazy-load and counter.
+     */
+    appWide = true;
     /** Hide the tab from the devtools if really bothered. */
     hidden = this.localStorage(false);
     hideWhenZeroCounter = false;
@@ -137,12 +172,11 @@ export class MessagingMenuTab extends Record {
         compute() {
             return this.store.messagingMenu;
         },
-        eager: true,
     });
     messagingMenuAsVisibleTabs = fields.One("MessagingMenu", {
         inverse: "visibleTabs",
         compute() {
-            if (!this.isShown) {
+            if (!this.appWide || !this.canBeShown) {
                 return;
             }
             return this.store.messagingMenu;
@@ -150,13 +184,11 @@ export class MessagingMenuTab extends Record {
         eager: true,
     });
     messages = fields.Many("mail.message", { inverse: "messagingMenuTabsAsMessages" });
-    sortedMessages = fields.Many("mail.message", {
-        compute() {
-            return [...this.messages].sort(
-                (m1, m2) => compareDatetime(m2.create_date, m1.create_date) || m2.id - m1.id
-            );
-        },
-    });
+    sortedMessages = this.computed(() =>
+        [...this.messages].sort(
+            (m1, m2) => compareDatetime(m2.create_date, m1.create_date) || m2.id - m1.id
+        )
+    );
     /** @type {"mail.message"|"discuss.channel"} */
     recordType;
     sequence = 0;
@@ -178,7 +210,8 @@ export class MessagingMenuTab extends Record {
         return this.messages.map((m) => m.id);
     }
 
-    get isShown() {
+    /** Whether `hidden`/`hideWhenZeroCounter` allow this tab to be shown. */
+    get canBeShown() {
         return !this.hidden && (!this.hideWhenZeroCounter || this.counter > 0);
     }
 
@@ -188,41 +221,57 @@ export class MessagingMenuTab extends Record {
     }
 
     /** Filters in the order they are shown, right after the "All" one. */
-    get sortedFilters() {
-        return [...this.filters].sort((f1, f2) => (f1.sequence ?? 0) - (f2.sequence ?? 0));
+    sortedFilters = this.computed(() =>
+        [...this.filters].sort((f1, f2) => (f1.sequence ?? 0) - (f2.sequence ?? 0))
+    );
+
+    /**
+     * Deterministic key for a given combination of active filters: the chip filter, if
+     * any and every currently active plugin filter.
+     *
+     * @param {MessagingMenuTabFilter} [filter] The active chip filter, if any.
+     * @param {MessagingMenuTabFilter[]} [pluginFilters=[]] The active plugin filters.
+     * @returns {string}
+     */
+    _filterKey(filter, pluginFilters = []) {
+        const ids = [filter?.id, ...pluginFilters.map((f) => f.id)].filter(Boolean).sort();
+        return ids.length ? ids.join("__") : "_base";
     }
 
     /**
-     * @param {object} [filter] the active filter, if any
+     * @param {MessagingMenuTabFilter} [filter] The active chip filter, if any.
+     * @param {MessagingMenuTabFilter[]} [pluginFilters=[]] The active plugin filters.
      * @returns {"new"|"idle"|"loading"|"loaded"}
      */
-    getLoadStatus(filter) {
+    getLoadStatus(filter, pluginFilters = []) {
         if (this.loadStatusByFilterId["_base"] === "loaded") {
             return "loaded";
         }
-        return this.loadStatusByFilterId[filter?.id ?? "_base"] ?? "new";
+        return this.loadStatusByFilterId[this._filterKey(filter, pluginFilters)] ?? "new";
     }
 
     /**
-     * Fetch the next page of records for this tab, optionally scoped to a filter and/or a
-     * search term.
+     * Fetch the next page of records for this tab, optionally scoped to a chip filter, any
+     * number of plugin filters, and/or a search term. All active filters are ANDed together
+     * server-side (see `MessagingMenuController._get_menu_tab_full_domain`).
      *
      * @param {object} [options]
      * @param {MessagingMenuTabFilter} [options.filter]
+     * @param {MessagingMenuTabFilter[]} [options.pluginFilters]
      * @param {string} [options.searchTerm]
      */
-    async loadMore({ filter, searchTerm } = {}) {
-        if (!["new", "idle"].includes(this.getLoadStatus(filter))) {
+    async loadMore({ filter, pluginFilters = [], searchTerm } = {}) {
+        if (!["new", "idle"].includes(this.getLoadStatus(filter, pluginFilters))) {
             return;
         }
-        const key = filter?.id ?? "_base";
+        const key = this._filterKey(filter, pluginFilters);
         this.loadStatusByFilterId[key] = "loading";
         try {
             const result = await this.store.fetchStoreData(
                 `/mail/messaging_menu/${this.recordType}/load_more`,
                 {
                     tab_id: this.id,
-                    filter_id: filter?.id,
+                    filter_ids: [filter?.id, ...pluginFilters.map((f) => f.id)].filter(Boolean),
                     exclude_ids: this.loadMoreExcludeIds,
                     limit: MessagingMenuTab.LOAD_MORE_LIMIT,
                     search_term: searchTerm,

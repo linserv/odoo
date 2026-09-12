@@ -1623,6 +1623,7 @@ class ResPartner(models.Model):
         winner_key, winner_value, winner_meta = candidates[0]
         return {'key': winner_key, 'value': winner_value, **winner_meta}
 
+    @api.depends_context('company')
     @api.depends('country_id')
     def _compute_available_additional_identifiers_metadata(self):
         for partner in self:
@@ -2397,3 +2398,6 @@ class ResPartnerIndustry(models.Model):
     name = fields.Char('Name', translate=True)
     full_name = fields.Char('Full Name', translate=True)
     active = fields.Boolean('Active', default=True)
+
+
+ResPartner._update_address.__override__ = False  # whitelist super()

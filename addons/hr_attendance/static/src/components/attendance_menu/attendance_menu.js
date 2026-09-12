@@ -6,6 +6,7 @@ import { deserializeDateTime } from "@web/core/l10n/dates";
 import { rpc, ConnectionLostError } from "@web/core/network/rpc";
 import { registry } from "@web/core/registry";
 import { formatFloatTime, formatDateTime } from "@web/views/fields/formatters";
+import { getPropertyFieldInfo } from "@web/views/fields/field";
 import { useService } from "@web/core/utils/hooks";
 import { _t } from "@web/core/l10n/translation";
 import { Record } from "@web/model/record";
@@ -16,9 +17,18 @@ import { AttendanceVideoStream } from "@hr_attendance/components/attendance_vide
 
 const { DateTime } = luxon;
 
+const ATTENDANCE_FIELD_NAMES = [
+    "id",
+    "check_in",
+    "check_out",
+    "break_duration",
+    "can_edit",
+    "in_location",
+    "out_location",
+];
+
 export class ActivityMenu extends Component {
     static components = { Dropdown, Record, AttendanceInlineForm, AttendanceVideoStream };
-    static props = [];
     static template = "hr_attendance.attendance_menu";
 
     setup() {
@@ -49,7 +59,7 @@ export class ActivityMenu extends Component {
             breakManagementEnabled: false,
             streamAvailable: null,
             activeAttendance: null,
-            attendanceReviewExpanded: true,
+            attendanceReviewExpanded: false,
             editingAttendanceId: null,
         });
 
@@ -115,6 +125,7 @@ export class ActivityMenu extends Component {
             return null;
         }
         let totalDisplayMinutes = 0;
+        let totalBreakMinutes = 0;
         const sessions = this.state.attendances.map((att) => {
             const checkInDate = deserializeDateTime(att.check_in);
             const checkOutDate = att.check_out ? deserializeDateTime(att.check_out) : null;
@@ -123,6 +134,7 @@ export class ActivityMenu extends Component {
                 : this.state.employee.last_attendance_worked_hours;
             const displayMinutes = Math.round(duration * 60);
             totalDisplayMinutes += displayMinutes;
+            totalBreakMinutes += Math.round((att.break_duration || 0) * 60);
             return {
                 id: att.id,
                 selected:
@@ -147,7 +159,9 @@ export class ActivityMenu extends Component {
             breakDurationLabel: attendance.break_duration
                 ? formatFloatTime(attendance.break_duration, { numeric: true })
                 : false,
-            breakDisplay: formatFloatTime(this.state.employee.break_today, { numeric: true }),
+            breakDisplay:
+                totalBreakMinutes > 0 &&
+                formatFloatTime(totalBreakMinutes, { numeric: true, unit: "minutes" }),
             totalDisplay: formatFloatTime(totalDisplayMinutes, {
                 numeric: true,
                 unit: "minutes",
@@ -204,11 +218,13 @@ export class ActivityMenu extends Component {
         const latestAttendance = this.state.attendances.at(-1);
         if (latestAttendance) {
             this.state.activeAttendance = latestAttendance;
-            this.state.attendanceReviewExpanded = true;
-            if (latestAttendance.can_edit) {
-                this.startInlineEdit(latestAttendance);
-            }
         }
+        this._foldAttendanceReview();
+    }
+
+    _foldAttendanceReview() {
+        this._stopInlineEdit();
+        this.state.attendanceReviewExpanded = false;
     }
 
     _formatAttendanceTime(dateTime) {
@@ -224,8 +240,7 @@ export class ActivityMenu extends Component {
             return;
         }
         if (attendance.id === this.state.activeAttendance?.id && this.state.attendanceReviewExpanded) {
-            this._stopInlineEdit();
-            this.state.attendanceReviewExpanded = false;
+            this._foldAttendanceReview();
             return;
         }
         if (attendance.can_edit) {
@@ -253,17 +268,22 @@ export class ActivityMenu extends Component {
     }
 
     get attendanceRecordProps() {
+        const activeFields = Object.fromEntries(
+            ATTENDANCE_FIELD_NAMES.map((fieldName) => [fieldName, {}])
+        );
+        activeFields.check_in = {
+            ...getPropertyFieldInfo({
+                name: "check_in",
+                string: _t("Check In"),
+                type: "datetime",
+            }),
+            options: { show_seconds: false, rounding: 1 },
+            required: "1",
+        };
         return {
             resModel: "hr.attendance",
-            fieldNames: [
-                "id",
-                "check_in",
-                "check_out",
-                "break_duration",
-                "can_edit",
-                "in_location",
-                "out_location",
-            ],
+            fieldNames: ATTENDANCE_FIELD_NAMES,
+            activeFields,
             resId: this.state.editingAttendanceId,
             mode: "edit",
             values: this.attendanceRecord
@@ -296,7 +316,6 @@ export class ActivityMenu extends Component {
             await this.searchReadEmployee();
         } catch {
             this.notification.add(_t("Attendance saved, but the display could not be refreshed."), {
-                title: _t("Attendance Error"),
                 type: "warning",
             });
         }
@@ -309,6 +328,17 @@ export class ActivityMenu extends Component {
         }
     }
 
+    async saveReviewedAttendance(record) {
+        if (await this.saveAttendanceRecord(record)) {
+            this._foldAttendanceReview();
+        }
+    }
+
+    async discardReviewedAttendance(record) {
+        await this.discardAttendanceRecord(record);
+        this._foldAttendanceReview();
+    }
+
     onFormKeydown(ev) {
         if (ev.key === "Tab") {
             ev.stopPropagation();
@@ -318,10 +348,7 @@ export class ActivityMenu extends Component {
     _notifyAttendanceError(error) {
         this.notification.add(
             error?.data?.message || error?.message || _t("Could not update this attendance."),
-            {
-                title: _t("Attendance Error"),
-                type: "danger",
-            }
+            { type: "danger" }
         );
     }
 
@@ -333,11 +360,7 @@ export class ActivityMenu extends Component {
                 check_in_image: checkInImage,
             });
             this._searchReadEmployeeFill(employee);
-            this._stopInlineEdit();
-            const latestAttendance = this.state.attendances.at(-1);
-            if (this.dropdown.isOpen && latestAttendance?.can_edit) {
-                this.startInlineEdit(latestAttendance);
-            }
+            this._foldAttendanceReview();
             if (employee?.notification?.message) {
                 this.notification.add(employee.notification.message, {
                     type: employee.notification.type,

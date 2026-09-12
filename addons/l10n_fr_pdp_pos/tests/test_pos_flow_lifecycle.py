@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 from lxml import etree
 from unittest.mock import patch
 
@@ -105,19 +104,8 @@ class TestPdpPosFlowLifecycle(TestPoSCommon):
         super().setUp()
         self.config = self.basic_config
 
-    @contextmanager
-    def _patch_pos_date(self, date):
-        date = fields.Date.to_date(date)
-        datetime_value = fields.Datetime.to_datetime(f'{date} 12:00:00')
-        with (
-            patch('odoo.fields.Date.context_today', return_value=date),
-            patch('odoo.fields.Date.today', return_value=date),
-            patch('odoo.fields.Datetime.now', return_value=datetime_value),
-        ):
-            yield
-
     def _create_closed_pos_session(self, orders, date='2025-09-03'):
-        with self._patch_pos_date(date):
+        with self.mock_datetime_and_now(date + ' 12:00:00'):
             session = self.open_new_session()
             self.env['pos.order'].sync_from_ui([
                 self.create_ui_order_data(**order_vals)
@@ -147,7 +135,7 @@ class TestPdpPosFlowLifecycle(TestPoSCommon):
 
     def _run_send_cron(self, date, identifier='POS-FLOW-TEST-001'):
         with (
-            patch('odoo.fields.Date.today', return_value=fields.Date.to_date(date)),
+            self.mock_datetime_and_now(fields.Date.to_date(date)),
             patch(
                 'odoo.addons.l10n_fr_pdp.models.pdp_flow.PdpFlow._send_to_proxy',
                 return_value=self._proxy_success_response(identifier),
@@ -342,3 +330,29 @@ class TestPdpPosFlowLifecycle(TestPoSCommon):
             'l10n_fr_pdp_flow_10_report_type': False,
             'l10n_fr_pdp_status': 'out_of_scope',
         }])
+
+    def test_ubl_21_fr_pro_forma_with_error(self):
+        """
+        Tests that requesting an invoice for a client with ubl_21_fr set but
+        incomplete e-invoicing information still produces a regular invoice PDF
+        instead of falling back to a Pro-Forma one.
+        """
+        bad_partner = self.env['res.partner'].create({
+            'name': 'Error',
+            'country_id': self.env.ref('base.fr').id,
+            'is_company': True,
+            'invoice_edi_format': 'ubl_21_fr',
+        })
+
+        with self.mock_datetime_and_now('2025-09-03 12:00:00'):
+            session = self.open_new_session()
+            order_data = self.create_ui_order_data([(self.pos_product, 1)])
+            order_data['partner_id'] = bad_partner.id
+            order_data['to_invoice'] = True
+            self.env['pos.order'].sync_from_ui([order_data])
+            session.close_session_from_ui()
+
+        order = self.env['pos.order'].search([('session_id', '=', session.id)], limit=1)
+        self.assertFalse(order.account_move._need_ubl_cii_xml('ubl_21_fr'))
+        self.env['account.move.send']._generate_and_send_invoices(order.account_move, allow_fallback_pdf=True)
+        self.assertTrue(order.account_move.invoice_pdf_report_id)

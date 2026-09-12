@@ -83,7 +83,7 @@ class TestSaleCouponProgramRules(TestSaleCouponCommon):
         delivery_wizard = Form(
             self.env["choose.delivery.carrier"].with_context({
                 "default_order_id": order.id,
-                "default_carrier_id": self.env["delivery.carrier"].search([])[1],
+                "default_carrier_id": self.carrier.id,
             })
         )
         choose_delivery_carrier = delivery_wizard.save()
@@ -187,13 +187,13 @@ class TestSaleCouponProgramRules(TestSaleCouponCommon):
             0,
         )
         self.assertEqual(order.amount_total, 960 * 0.9)
-        order.carrier_id = self.env["delivery.carrier"].search([])[1]
+        order.carrier_id = self.carrier.id
 
         # I add delivery cost in Sales order
         delivery_wizard = Form(
             self.env["choose.delivery.carrier"].with_context({
                 "default_order_id": order.id,
-                "default_carrier_id": self.env["delivery.carrier"].search([])[1],
+                "default_carrier_id": self.carrier.id,
             })
         )
         choose_delivery_carrier = delivery_wizard.save()
@@ -210,7 +210,7 @@ class TestSaleCouponProgramRules(TestSaleCouponCommon):
         delivery_wizard = Form(
             self.env["choose.delivery.carrier"].with_context({
                 "default_order_id": order.id,
-                "default_carrier_id": self.env["delivery.carrier"].search([])[1],
+                "default_carrier_id": self.carrier.id,
             })
         )
         choose_delivery_carrier = delivery_wizard.save()
@@ -338,11 +338,11 @@ class TestSaleCouponProgramRules(TestSaleCouponCommon):
             "reward_ids": [Command.create({"reward_type": "shipping", "required_points": 100})],
         })
         # Add points to a partner to trigger the promotion
-        self.env["loyalty.card"].create({
+        card = self.env["loyalty.card"].create({
             "program_id": loyalty_program.id,
             "partner_id": self.partner.id,
-            "points": 250,
         })
+        card._adjust_points(250, "Initial balance")
         order = self._create_so(order_line=[])
         # Check if we can claim the free shipping reward
         order._update_programs_and_rewards()
@@ -516,11 +516,8 @@ class TestSaleCouponProgramRules(TestSaleCouponCommon):
             ],
         })
 
-        coupon = self.env["loyalty.card"].create({
-            "program_id": program.id,
-            "points": 20,
-            "code": "GIFT_CARD",
-        })
+        coupon = self.env["loyalty.card"].create({"program_id": program.id, "code": "GIFT_CARD"})
+        coupon._adjust_points(20, "Initial balance")
 
         order = self.env["sale.order"].create({
             "partner_id": self.partner.id,

@@ -74,10 +74,11 @@ def initialize(cr: Cursor) -> None:
         with odoo.tools.misc.file_open('base/data/base_data_test.sql') as base_sql_file:
             cr.execute(base_sql_file.read())  # pylint: disable=sql-injection
 
+    categories_memo = {}
     for info in odoo.modules.Manifest.all_addon_manifests():
         module_name = info.name
         categories = info['category'].split('/')
-        category_id = create_categories(cr, categories)
+        category_id = create_categories(cr, categories, categories_memo)
 
         if info['installable']:
             state = 'uninstalled'
@@ -153,7 +154,7 @@ def initialize(cr: Cursor) -> None:
         cr.execute("""UPDATE ir_module_module SET state='to install' WHERE name in %s""", (tuple(to_auto_install),))
 
 
-def create_categories(cr: Cursor, categories: list[str]) -> int | None:
+def create_categories(cr: Cursor, categories: list[str], memo: dict | None = None) -> int | None:
     """ Create the ir_module_category entries for some categories.
 
     categories is a list of strings forming a single category with its
@@ -163,19 +164,23 @@ def create_categories(cr: Cursor, categories: list[str]) -> int | None:
 
     """
     p_id = None
-    category = []
-    while categories:
-        category.append(categories[0])
-        xml_id = 'module_category_' + ('_'.join(x.lower() for x in category)).replace('&', 'and').replace(' ', '_')
+    xml_id = 'module_category'
+    if memo is None:
+        memo = {}
+    for category in categories:
+        xml_id += '_' + category.lower().replace('&', 'and').replace(' ', '_')
+        if category_id := memo.get(xml_id):
+            p_id = category_id
+            continue
+
         # search via xml_id (because some categories are renamed)
         cr.execute("SELECT res_id FROM ir_model_data WHERE name=%s AND module=%s AND model=%s",
                    (xml_id, "base", "ir.module.category"))
-
         row = cr.fetchone()
         if not row:
             cr.execute('INSERT INTO ir_module_category \
                     (name, parent_id) \
-                    VALUES (%s, %s) RETURNING id', (Json({'en_US': categories[0]}), p_id))
+                    VALUES (%s, %s) RETURNING id', (Json({'en_US': category}), p_id))
             row = cr.fetchone()
             assert row is not None  # for typing
             p_id = row[0]
@@ -184,7 +189,7 @@ def create_categories(cr: Cursor, categories: list[str]) -> int | None:
         else:
             p_id = row[0]
         assert isinstance(p_id, int)
-        categories = categories[1:]
+        memo[xml_id] = p_id
     return p_id
 
 
@@ -486,13 +491,16 @@ def duplicate(
             quoted_identifier(cr, db_original_name),
         ))
 
+    if neutralize_database:
+        # Neutralize the database before it becomes visible to the cron workers
+        with odoo.sql_db.db_connect(db_name).cursor() as cr:
+            odoo.modules.neutralize.neutralize_database(cr)
+
     registry = odoo.modules.registry.Registry.new(db_name)
     with registry.cursor() as cr:
         # force generation of a new dbuuid
         env = odoo.api.Environment(cr, odoo.api.SUPERUSER_ID, {})
         env['ir.config_parameter'].init(force=True)
-        if neutralize_database:
-            odoo.modules.neutralize.neutralize_database(cr)
 
     from_fs = odoo.tools.config.filestore(db_original_name)
     to_fs = odoo.tools.config.filestore(db_name)
@@ -642,14 +650,17 @@ def restore(
             check=True,
         )
 
+        if neutralize_database:
+            # Neutralize the database before it becomes visible to the cron workers
+            with odoo.sql_db.db_connect(db_name).cursor() as cr:
+                odoo.modules.neutralize.neutralize_database(cr)
+
         registry = odoo.modules.registry.Registry.new(db_name)
         with registry.cursor() as cr:
             env = odoo.api.Environment(cr, odoo.api.SUPERUSER_ID, {})
             if copy:
                 # if it's a copy of a database, force generation of a new dbuuid
                 env['ir.config_parameter'].init(force=True)
-            if neutralize_database:
-                odoo.modules.neutralize.neutralize_database(cr)
 
             if filestore_path:
                 filestore_dest = env['ir.attachment']._filestore()

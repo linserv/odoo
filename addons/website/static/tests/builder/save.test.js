@@ -28,7 +28,7 @@ import {
     waitForEndOfOperation,
     wrapExample,
 } from "@html_builder/../tests/helpers";
-import { Component, xml, useProps } from "@odoo/owl";
+import { Component, xml } from "@odoo/owl";
 import { BuilderAction } from "@html_builder/core/builder_action";
 import { Plugin } from "@html_editor/plugin";
 import { registry } from "@web/core/registry";
@@ -471,7 +471,6 @@ function setupSaveAndReloadIframe() {
 test("'Switch Theme' after a mutation should only ask one confirmation", async () => {
     class MockSwitchThemeAction extends Component {
         static template = xml`<div class="mock-switch-theme"></div>`;
-        props = useProps();
     }
     defineActions([
         {
@@ -487,7 +486,7 @@ test("'Switch Theme' after a mutation should only ask one confirmation", async (
     await modifyText(getEditor(), getEditableContent());
     await contains(`.o-snippets-tabs button[data-name="theme"]`).click();
     await contains(`.o_theme_tab button[data-action-id="switchTheme"]`).click();
-    expect(".modal main").toHaveText(/Changing theme/);
+    expect(".modal main").toHaveText(/Changing the theme/);
     await contains(`.modal button:contains(Ok)`).click();
     expect(".modal").toHaveCount(0, {
         message: "There should not be the modal telling changes will be lost",

@@ -23,8 +23,11 @@ class SaleReport(models.Model):
     def _selection_target_model(self):
         return [
             (model.model, model.name)
-            for model in self.env["ir.model"].sudo().search([])
-            if not self.env[model.model].is_transient()
+            for model
+            in self.env['ir.model'].sudo().search_fetch(
+                [('transient', '=', False)], ['model', 'name']
+            )
+            if model.model in self.env
         ]
 
     # sale.order fields
@@ -109,7 +112,7 @@ class SaleReport(models.Model):
 
     weight = fields.Float(string="Gross Weight", readonly=True)
     volume = fields.Float(string="Volume", readonly=True)
-    price_unit = fields.Float(string="Unit Price", aggregator="avg", readonly=True)
+    price_unit = fields.Monetary(string="Unit Price", aggregator="avg", readonly=True)
     discount = fields.Float(string="Discount %", readonly=True, aggregator="avg")
     discount_amount = fields.Monetary(string="Discount Amount", readonly=True)
 

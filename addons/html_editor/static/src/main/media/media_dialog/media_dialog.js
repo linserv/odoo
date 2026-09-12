@@ -100,6 +100,7 @@ export class MediaDialog extends Component {
                 ...tab.props,
                 ...additionalProps,
                 id: tab.id,
+                document: this.props.document,
                 resModel: this.props.resModel,
                 resId: this.props.resId,
                 media: this.props.media,
@@ -192,15 +193,18 @@ export class MediaDialog extends Component {
         }
     }
 
+    async preProcessSave() {}
+
     async save() {
         const tab = this.activeTab();
-        const selectedMedia = this.selectedMedia[tab];
         if (this.errorMessages[tab]) {
             this.notificationService.add(this.errorMessages[tab], {
                 type: "danger",
             });
             return;
         }
+        await this.preProcessSave();
+        const selectedMedia = this.selectedMedia[tab];
         // TODO In master: clean the save method so it performs the specific
         // adaptation before saving from the active media selector and find a
         // way to simply close the dialog if the media element remains the same.

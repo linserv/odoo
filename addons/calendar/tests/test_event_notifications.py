@@ -1,11 +1,12 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from unittest.mock import patch
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from freezegun import freeze_time
+from markupsafe import Markup
 
 from odoo import fields
+from odoo.tools import format_time
 from odoo.tests import Form, tagged
 from odoo.tests.common import new_test_user
 from odoo.addons.base.tests.test_ir_cron import CronMixinCase
@@ -300,7 +301,7 @@ class TestEventNotifications(CalendarMailCommon):
             'interval': 'minutes',
             'duration': 30,
         })
-        now = fields.Datetime.now()
+        now = datetime(2019, 10, 25, 8, 0)
 
         def notifications():
             return [
@@ -312,7 +313,10 @@ class TestEventNotifications(CalendarMailCommon):
                             "alarm_id": alarm.id,
                             "event_id": self.event.id,
                             "title": "Doom's day",
-                            "message": self.event.display_time,
+                            "message": Markup("<br/>%s - %s<br/>Online<br/>") % (
+                                format_time(self.env, self.event.start, time_format="short"),
+                                format_time(self.env, self.event.stop, time_format="short")
+                            ),
                             "timer": 20 * 60,
                             "notify_at": fields.Datetime.to_string(now + relativedelta(minutes=20)),
                         },
@@ -320,7 +324,7 @@ class TestEventNotifications(CalendarMailCommon):
                 ),
             ]
 
-        with patch.object(fields.Datetime, 'now', lambda: now):
+        with self.mock_datetime_and_now(now):
             with self.assertBus(notifications):
                 self.event.with_context(no_mail_to_attendees=True).write({
                     'start': now + relativedelta(minutes=50),
@@ -337,7 +341,7 @@ class TestEventNotifications(CalendarMailCommon):
             'interval': "minutes",
             'duration': 30,
         })
-        now = fields.Datetime.now()
+        now = datetime(2019, 10, 25, 8, 0)
         admin_partner = self.user_admin.partner_id
         event = self.env['calendar.event'].with_user(self.user_admin).with_context(no_mail_to_attendees=True).create({
             'name': "Admin Meeting",
@@ -358,7 +362,10 @@ class TestEventNotifications(CalendarMailCommon):
                             "alarm_id": alarm.id,
                             "event_id": event.id,
                             "title": "Admin Meeting",
-                            "message": event.display_time,
+                            "message": Markup("<br/>%s - %s<br/>Online<br/>") % (
+                                format_time(self.env, event.start, time_format="short"),
+                                format_time(self.env, event.stop, time_format="short")
+                            ),
                             "timer": 20 * 60,
                             "notify_at": fields.Datetime.to_string(now + relativedelta(minutes=20)),
                         },
@@ -366,7 +373,7 @@ class TestEventNotifications(CalendarMailCommon):
                 ),
             ]
 
-        with freeze_time(now):
+        with self.mock_datetime_and_now(now):
             with self.assertBus(notifications):
                 event.with_context(no_mail_to_attendees=True).write({
                     'alarm_ids': [fields.Command.set([alarm.id])],
@@ -392,7 +399,7 @@ class TestEventNotifications(CalendarMailCommon):
 
         self.assertEqual(len(capt.records), 1)
         self.assertLessEqual(capt.records.call_at, now)
-        with patch.object(fields.Datetime, 'now', lambda: now):
+        with self.mock_datetime_and_now(now):
             self.env['calendar.alarm_manager'].with_context(lastcall=now - relativedelta(minutes=25))._send_reminder()
             self.env.flush_all()
             new_messages = self.env['mail.message'].search([('model', '=', 'calendar.event'), ('res_id', '=', self.event.id), ('subject', '=', 'test event - Reminder')])
@@ -652,7 +659,7 @@ class TestEventNotifications(CalendarMailCommon):
             'count': 2,
         })
 
-        now = fields.Datetime.now()
+        now = datetime(2019, 10, 25, 8, 0)
 
         def notifications():
             return [
@@ -664,7 +671,10 @@ class TestEventNotifications(CalendarMailCommon):
                             "alarm_id": alarm.id,
                             "event_id": self.event.id,
                             "title": "Doom's day",
-                            "message": self.event.display_time,
+                            "message": Markup("<br/>%s - %s<br/>Online<br/>") % (
+                                format_time(self.env, self.event.start, time_format="short"),
+                                format_time(self.env, self.event.stop, time_format="short")
+                            ),
                             "timer": 20 * 60,
                             "notify_at": fields.Datetime.to_string(now + relativedelta(minutes=20)),
                         },
@@ -672,7 +682,7 @@ class TestEventNotifications(CalendarMailCommon):
                 ),
             ]
 
-        with patch.object(fields.Datetime, 'now', lambda: now):
+        with self.mock_datetime_and_now(now):
             with self.assertBus(notifications):
                 self.event.with_context(no_mail_to_attendees=True).write({
                     'start': now + relativedelta(minutes=50),

@@ -11,18 +11,19 @@ from odoo.addons.hr_holidays.tests.common import TestHrHolidaysCommon
 class TestAccrualAllocations(TestHrHolidaysCommon):
     @classmethod
     def setUpClass(cls):
-        super(TestAccrualAllocations, cls).setUpClass()
+        super().setUpClass()
         cls.work_entry_type = cls.env['hr.work.entry.type'].create({
             'name': 'Accrual Time Off',
             'code': 'Accrual Time Off',
             'count_as': 'absence',
             'requires_allocation': True,
-            'allocation_validation_type': 'no',
+            'allocation_validation_type': 'no_validation',
             'request_unit': 'day',
             'unit_of_measure': 'day',
         })
         cls.accrual_plan = cls.env['hr.leave.accrual.plan'].create({
             'name': 'Test Seniority Plan',
+            'work_entry_type_id': cls.work_entry_type.id,
             'level_ids': [
                 (0, 0, {
                     'milestone_date': 'after',
@@ -59,7 +60,7 @@ class TestAccrualAllocations(TestHrHolidaysCommon):
 
     def _test_past_accrual(self):
         with freeze_time("2023-12-01"):
-            allocation = self.env['hr.leave.allocation'].create({
+            allocation = self.env['hr.leave.allocation'].with_context(tracking_disable=True).create({
                 'employee_id': self.employee_emp_id,
                 'accrual_plan_id': self.accrual_plan.id,
                 'work_entry_type_id': self.work_entry_type.id,
@@ -67,6 +68,5 @@ class TestAccrualAllocations(TestHrHolidaysCommon):
                 'number_of_days': 0,
             })
 
-            allocation._process_accrual_plans()
-
+            allocation._update_accrual()
             self.assertEqual(allocation.number_of_days, 0)

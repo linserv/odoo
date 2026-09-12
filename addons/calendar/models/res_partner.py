@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from odoo import _, api, fields, models
+from odoo.fields import Domain
 from odoo.tools import SQL
 
 
@@ -13,6 +14,8 @@ class ResPartner(models.Model):
     meeting_count = fields.Integer("# Meetings", compute='_compute_meeting_count')
     meeting_ids = fields.Many2many('calendar.event', 'calendar_event_res_partner_rel', 'res_partner_id',
                                    'calendar_event_id', string='Meetings', copy=False)
+    meeting_next_date = fields.Date(string="Next Meeting", compute="_compute_meeting_display")
+    meeting_display_label = fields.Char(compute="_compute_meeting_display")
 
     calendar_last_notif_ack = fields.Datetime(
         'Last notification marked as read from base Calendar', default=fields.Datetime.now)
@@ -22,6 +25,27 @@ class ResPartner(models.Model):
         for p in self:
             p.meeting_count = len(result.get(p.id, []))
 
+    @api.depends('meeting_count', 'meeting_ids', 'meeting_ids.start')
+    def _compute_meeting_display(self):
+        upcoming_meeting_per_partner = dict(self.env['calendar.event']._read_group(
+            domain=Domain.AND([
+                self.env['calendar.event']._get_valid_event_domain(),
+                Domain('start', '>=', fields.Datetime.now()),
+            ]),
+            groupby=['partner_ids'],
+            aggregates=['start:min'],
+        ))
+        for partner in self:
+            if next_meeting_start := upcoming_meeting_per_partner.get(partner):
+                partner.meeting_display_label = _('Next Meeting')
+                partner.meeting_next_date = fields.Datetime.context_timestamp(partner, next_meeting_start).date()
+            elif partner.meeting_count:
+                partner.meeting_display_label = _('Meetings')
+                partner.meeting_next_date = False
+            else:
+                partner.meeting_display_label = _('No Meetings')
+                partner.meeting_next_date = False
+
     def _compute_meeting(self):
         if self.ids:
             # prefetch 'parent_id'
@@ -29,7 +53,7 @@ class ResPartner(models.Model):
                 [('id', 'child_of', self.ids)], ['parent_id'],
             )
 
-            query = self.env['calendar.event']._search([])  # ir.rules will be applied
+            query = self.env['calendar.event']._search(self.env['calendar.event']._get_valid_event_domain())  # ir.rules will be applied
             meeting_data = self.env.execute_query(SQL("""
                 SELECT res_partner_id, calendar_event_id, count(1)
                   FROM calendar_event_res_partner_rel
@@ -91,7 +115,7 @@ class ResPartner(models.Model):
         partner = self.env['res.users'].browse(self.env.context.get('uid', self.env.uid)).partner_id
         partner.write({'calendar_last_notif_ack': datetime.now()})
 
-    def schedule_meeting(self):
+    def action_schedule_meeting(self):
         self.ensure_one()
         partner_ids = self.ids
         partner_ids.append(self.env.user.partner_id.id)
@@ -100,14 +124,22 @@ class ResPartner(models.Model):
             'default_partner_ids': partner_ids,
             'calendar_include_user_events': True,
         }
-        action['domain'] = ['|', ('id', 'in', self._compute_meeting()[self.id]), ('partner_ids', 'in', self.ids)]
+        if not self.meeting_next_date and self.meeting_count:
+            action['views'] = sorted(action['views'], key=lambda view: view[1] != 'list')
+        action['domain'] = Domain.AND([
+            self.env['calendar.event']._get_valid_event_domain(),
+            Domain(['|', ('id', 'in', self._compute_meeting()[self.id]), ('partner_ids', 'in', self.ids)]),
+        ])
         return action
 
     def _get_busy_calendar_events(self, start_datetime, end_datetime):
         """Get a mapping from partner id to attended events intersecting with the time interval.
+        The events are retrieved as sudo-ed recordsets to ensure we can read the private 'partner_ids' field.
 
         :rtype: dict[int, <calendar.event>]
         """
+        # Sudo is used to ensure that we get the 'partner_ids' field even on private events, otherwise
+        # they would be ignored in the loop below.
         events = self.env['calendar.event'].search([
             ('stop', '>=', start_datetime.replace(tzinfo=None)),
             ('start', '<=', end_datetime.replace(tzinfo=None)),
@@ -116,7 +148,7 @@ class ResPartner(models.Model):
         ])
 
         event_by_partner_id = defaultdict(lambda: self.env['calendar.event'])
-        for event in events:
+        for event in events.sudo():
             for partner in event.partner_ids:
                 event_by_partner_id[partner.id] |= event
         return dict(event_by_partner_id)

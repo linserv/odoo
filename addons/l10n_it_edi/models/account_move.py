@@ -128,6 +128,10 @@ class AccountMove(models.Model):
         copy=False,
         init_storage=lambda model: None,  # avoid timeout on large databases
     )
+    l10n_it_available_document_type_ids = fields.Many2many(
+        comodel_name='l10n_it.document.type',
+        compute='_compute_l10n_it_available_document_type_ids',
+    )
 
     l10n_it_convention_code = fields.Char(
         string="Order/Convention Code",
@@ -145,32 +149,20 @@ class AccountMove(models.Model):
     # Computes
     # -------------------------------------------------------------------------
 
-    @api.depends('line_ids.matching_number', 'payment_state', 'matched_payment_ids')
+    @api.depends('partner_id', 'preferred_payment_method_line_id', 'country_code')
     def _compute_l10n_it_payment_method(self):
-        if self.env.company.account_fiscal_country_id.code != 'IT':
-            return
+        italian_moves = self.filtered(lambda move: move.country_code == 'IT')
 
-        move_lines_per_matching_number = self.env['account.move.line'].search([
-            ('matching_number', 'in', self.line_ids.filtered('matching_number').mapped('matching_number')),
-            ('company_id', '=', self.env.company.id),
-        ]).grouped('matching_number')
+        sale_documents = italian_moves.filtered(lambda move: move.is_sale_document())
+        (italian_moves - sale_documents).l10n_it_payment_method = 'MP05'
 
-        for move in self:
-            matching_numbers = move.line_ids.filtered('matching_number').mapped('matching_number')
-            if matching_numbers:
-                # We use matching_numbers[0] directly, assuming there's a valid key in the dictionary.
-                matching_lines = move_lines_per_matching_number.get(matching_numbers[0])
-                if matching_lines and matching_lines.payment_id:
-                    payment_method_line = matching_lines.payment_id.payment_method_line_id[0]
-                    if payment_method_line:
-                        move.l10n_it_payment_method = payment_method_line.l10n_it_payment_method
-                        continue  # Skip to the next move
-            if linked_payment := move.matched_payment_ids.filtered(lambda p: p.state != 'draft')[:1]:
-                move.l10n_it_payment_method = linked_payment.payment_method_line_id.l10n_it_payment_method
-                continue
-
-            # Default handling if no valid matching lines found or if conditions don't match
-            move.l10n_it_payment_method = move.origin_payment_id.payment_method_line_id.l10n_it_payment_method or move.l10n_it_payment_method or 'MP05'
+        for move in sale_documents:
+            move.l10n_it_payment_method = (
+                move.preferred_payment_method_line_id.l10n_it_payment_method
+                # Fallback to partner's configured details if they manually cleared preferred_payment_method_line_id
+                or move.partner_id.property_inbound_payment_method_line_id.l10n_it_payment_method
+                or 'MP05'
+            )
 
     @api.depends('state')
     def _compute_l10n_it_document_type(self):
@@ -180,6 +172,20 @@ class AccountMove(models.Model):
                 continue
 
             move.l10n_it_document_type = document_type.get(move._l10n_it_edi_get_document_type())
+
+    @api.depends('move_type', 'debit_origin_id')
+    def _compute_l10n_it_available_document_type_ids(self):
+        document_types = self.env['l10n_it.document.type'].search([])
+        for move in self:
+            if move.debit_origin_id:
+                if move.is_sale_document(include_receipts=True):
+                    move_type = 'sale_debit_note'
+                else:
+                    move_type = 'purchase_debit_note'
+            else:
+                move_type = move.move_type
+            available_document_type_ids = document_types.filtered(lambda doc_type: move_type in doc_type.move_types or [])
+            move.l10n_it_available_document_type_ids = available_document_type_ids or document_types
 
     @api.depends('commercial_partner_id.l10n_it_pa_index', 'company_id')
     def _compute_l10n_it_partner_pa(self):
@@ -497,7 +503,7 @@ class AccountMove(models.Model):
             # Down payment lines:
             # If there was a down paid amount that has been deducted from this move,
             # we need to put a reference to the down payment invoice in the DatiFattureCollegate tag
-            description = line.name
+            description = (line.with_context(display_default_code=False).label or '').replace('\n', ' ')
             if not is_downpayment and price_subtotal < 0:
                 downpayment_moves = line._get_downpayment_lines().move_id
                 if downpayment_moves:
@@ -506,7 +512,7 @@ class AccountMove(models.Model):
                     description = f"{description}{sep}{downpayment_moves_description}"
             # Workaround: remove line breaks due to Tax Agency portal bug.
             # This deviates from Odoo's standard behavior and must be reviewed if the issue gets fixed.
-            description = description and description.replace('\n', ' ').strip() or "NO NAME"
+            description = (description and description.strip()) or "NO NAME"
 
             # Price unit.
             if quantity:
@@ -660,22 +666,6 @@ class AccountMove(models.Model):
         )
         return not skip
 
-    def _prepare_product_base_line_for_taxes_computation(self, product_line):
-        """
-            Prepares tax base line. Rounding lines must appear in the XML,
-            so they are converted to regular lines with tax exemption code ('N2.2').
-        """
-        base_line = super()._prepare_product_base_line_for_taxes_computation(product_line)
-
-        if product_line.display_type == 'rounding':
-            base_line.update({
-                'quantity': 1,
-                'price_unit': -product_line.amount_currency,
-                'tax_ids': self._l10n_it_edi_search_tax_for_import(self.company_id, 0.0, l10n_it_exempt_reason='N2.2'),
-            })
-
-        return base_line
-
     def _l10n_it_edi_get_oss_line_values(self, aml, base_line, vat_tax, n7_tax, n22_tax):
         base_line['tax_ids'] = n7_tax
         tax_amount = (base_line['price_unit'] * (1 - (base_line['discount'] / 100.0))) * (vat_tax.amount / 100.0)
@@ -744,7 +734,7 @@ class AccountMove(models.Model):
         convert_to_euros = self.currency_id.name != 'EUR'
 
         # Base lines.
-        base_amls = self.line_ids.filtered(lambda x: x.display_type == 'product' or x.display_type == 'rounding')
+        base_amls = self.line_ids.filtered(lambda x: x.display_type == 'product')
 
         n7_tax = self.env['account.chart.template'].ref('00ex7', raise_if_not_found=False)
         n22_tax = self.env['account.chart.template'].ref('00ex', raise_if_not_found=False)
@@ -757,6 +747,14 @@ class AccountMove(models.Model):
                 base_lines += self._l10n_it_edi_get_oss_line_values(aml, base_line, vat_tax, n7_tax, n22_tax)
             else:
                 base_lines.append(base_line)
+
+        cash_rounding_tax_exempt = self._l10n_it_edi_search_tax_for_import(self.company_id, 0.0, l10n_it_exempt_reason='N2.2')
+        for aml in self.line_ids.filtered(lambda x: x.display_type == 'rounding'):
+            base_line = self._prepare_cash_rounding_base_line_for_taxes_computation(aml)
+            if cash_rounding_tax_exempt:
+                base_line['tax_ids'] |= cash_rounding_tax_exempt
+            base_lines.append(base_line)
+
         tax_amls = self.line_ids.filtered('tax_repartition_line_id')
         tax_lines = [self._prepare_tax_line_for_taxes_computation(x) for x in tax_amls]
 
@@ -1824,12 +1822,17 @@ class AccountMove(models.Model):
 
             # Invoice lines ---------------------------------------
             tag_name = './/DettaglioLinee' if not extra_info['simplified'] else './/DatiBeniServizi'
+            invoice_line_vals = []
             for element in tree.xpath(tag_name):
-                move_line = self.invoice_line_ids.create({
+                # Use `new` to avoid intermediary write calls to the database
+                move_line = self.invoice_line_ids.new({
                     'move_id': self.id,
                     'tax_ids': [fields.Command.clear()]})
                 if move_line:
                     message_to_log += self._l10n_it_edi_import_line(element, move_line, extra_info)
+                    invoice_line_vals.append(move_line._convert_to_write(move_line._cache))
+
+            self.invoice_line_ids.create(invoice_line_vals)
 
             attachment_vals = []
             for element in tree.xpath('.//Allegati'):
@@ -1875,12 +1878,24 @@ class AccountMove(models.Model):
 
     @api.model
     def _is_prediction_enabled(self):
-        return self.env['ir.module.module'].search([('name', '=', 'account_accountant'), ('state', '=', 'installed')])
+        return 'account_accountant' in self.env['ir.module.module']._installed()
+
+    def _get_prediction_cache_value(self, key, predict_function):
+        self.ensure_one()
+        if not callable(predict_function):
+            return
+
+        predict_cache = self.env.cr.cache.setdefault(f'_l10n_it_edi_predict_cache_{self.id}', {})
+        if key in predict_cache:
+            return predict_cache[key]
+        predict_cache[key] = predict_function()
+        return predict_cache[key]
 
     def _l10n_it_edi_import_line(self, element, move_line, extra_info=None):
         extra_info = extra_info or {}
         company = move_line.company_id
         partner = move_line.partner_id
+        type_tax_use_domain = extra_info.get('type_tax_use_domain', [('type_tax_use', '=', 'purchase')])
         message_to_log = []
         predict_enabled = self._is_prediction_enabled()
 
@@ -1888,9 +1903,6 @@ class AccountMove(models.Model):
         line_elements = element.xpath('.//NumeroLinea')
         if line_elements:
             move_line.sequence = int(line_elements[0].text)
-
-        # Name.
-        move_line.name = " ".join(get_text(element, './/Descrizione').split())
 
         # Product.
         company_domain = self.env['res.company']._check_company_domain(company)
@@ -1919,8 +1931,15 @@ class AccountMove(models.Model):
                         move_line.product_id = product
                         break
 
+        # Extract description for prediction.
+        description = get_text(element, './/Descrizione')
+
         # If no product is found, try to find a product that may be fitting
-        predicted_values = self.env['account.move.line']._get_predicted_values(move_line.name, self) if predict_enabled else {}
+        prediction_key = (company.id, partner.id, description)
+        predicted_values = self._get_prediction_cache_value(
+            prediction_key,
+            lambda: self.env['account.move.line']._get_predicted_values(description, self),
+        ) if predict_enabled else {}
         if predict_enabled and not move_line.product_id:
             fitting_product = predicted_values.get('product_id')
             if fitting_product:
@@ -1933,6 +1952,18 @@ class AccountMove(models.Model):
             fitting_account = predicted_values.get('account_id')
             if fitting_account:
                 move_line.account_id = fitting_account
+
+        # Name.
+        if not move_line.name:
+            prefix = (
+                f'{move_line.product_id.with_context(display_default_code=False).display_name} '
+                if move_line.product_id
+                else None
+            )
+            if prefix and description.startswith(prefix):
+                move_line.name = description.removeprefix(prefix)
+            else:
+                move_line.name = description
 
         # Quantity.
         move_line.quantity = float(get_text(element, './/Quantita') or '1')
@@ -1968,7 +1999,7 @@ class AccountMove(models.Model):
         move_line.tax_ids = [Command.clear()]
         if percentage is not None:
             l10n_it_exempt_reason = get_text(element, './/Natura').upper() or False
-            extra_domain = extra_info.get('type_tax_use_domain', [('type_tax_use', '=', 'purchase')])
+            extra_domain = type_tax_use_domain
             if move_line.product_id:
                 extra_domain = list(extra_domain)
                 tax_scope = 'service' if move_line.product_id.type == 'service' else 'consu'

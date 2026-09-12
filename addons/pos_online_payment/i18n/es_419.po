@@ -9,17 +9,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 18.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:42+0000\n"
-"PO-Revision-Date: 2026-06-21 11:50+0000\n"
-"Last-Translator: Anonymous <noreply@weblate.org>\n"
+"POT-Creation-Date: 2026-09-04 17:45+0000\n"
+"PO-Revision-Date: 2026-08-31 19:09+0000\n"
+"Last-Translator: \"Fernanda Alvarez (mfar)\" <mfar@odoo.com>\n"
 "Language-Team: Spanish (Latin America) <https://translate.odoo.com/projects/"
-"odoo-master/pos_online_payment/es_419/>\n"
+"odoo-s19-4/pos_online_payment/es_419/>\n"
 "Language: es_419\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: pos_online_payment
 #: model_terms:ir.ui.view,arch_db:pos_online_payment.pos_payment_status
@@ -177,6 +177,15 @@ msgstr "Pagos en línea no válidos"
 #: code:addons/pos_online_payment/static/src/app/utils/order_payment_validation.js:0
 msgid "Invoice could not be generated"
 msgstr "No se pudo generar la factura"
+
+#. module: pos_online_payment
+#. odoo-python
+#: code:addons/pos_online_payment/controllers/payment_portal.py:0
+msgid ""
+"It looks like a payment for this order is already being processed — maybe "
+"from this device, maybe from another. If you continue, you risk to pay the "
+"order twice. Only continue if you're sure the earlier attempt was abandoned."
+msgstr ""
 
 #. module: pos_online_payment
 #: model:ir.model.fields,field_description:pos_online_payment.field_pos_order__next_online_payment_amount
@@ -485,8 +494,7 @@ msgid ""
 "be retrieved. Are you sure there is no online payment for this order ?"
 msgstr ""
 "Hay un problema con el servidor. No podemos recuperar el estado del pago de "
-"la orden en línea. ¿Está seguro de que no hay un pago en línea para esta "
-"orden?"
+"la orden en línea. ¿De verdad no hay ningún pago en línea para esta orden?"
 
 #. module: pos_online_payment
 #. odoo-python
@@ -593,16 +601,3 @@ msgstr "proveedor de pago"
 #: model_terms:ir.ui.view,arch_db:pos_online_payment.pos_payment_method_view_form_inherit_pos_online_payment
 msgid "to allow online payments."
 msgstr "para permitir pagos en línea."
-
-#~ msgid "<span class=\"visually-hidden\">Loading...</span>"
-#~ msgstr "<span class=\"visually-hidden\">Cargando...</span>"
-
-#~ msgid ""
-#~ "You should receive an email confirming your payment within a few minutes."
-#~ "<br/>\n"
-#~ "                            Don't hesitate to contact us if you don't "
-#~ "receive it."
-#~ msgstr ""
-#~ "Deberías recibir un correo electrónico que confirme tu pago en unos "
-#~ "minutos.<br/>\n"
-#~ "                        No dudes en contactarnos si no lo recibes."

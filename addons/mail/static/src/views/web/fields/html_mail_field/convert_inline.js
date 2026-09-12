@@ -705,15 +705,10 @@ export function classToStyle(element, cssRules) {
             }
         }
 
-        // Find styles to remove if they are from a blacklisted class and match
-        // existing styles.
-        const stylesToRemove = Object.fromEntries(
-            Object.entries(css).filter(([key, value]) => blacklistedStyles[key] === value)
-        );
         // Remove style from blacklisted classes.
         writes.push(() => {
-            for (const [key] of Object.entries(stylesToRemove)) {
-                if (node.style[key]) {
+            for (const [key, value] of Object.entries(blacklistedStyles)) {
+                if (node.style.getPropertyValue(key) === value) {
                     node.style.removeProperty(key);
                 }
             }
@@ -1068,14 +1063,9 @@ function fontToImg(element) {
     for (const font of element.querySelectorAll(".oi")) {
         const beforeStyle = getComputedStyle(font, "::before");
         const content = beforeStyle["content"].trim().replace(/['"]/g, "");
-        let icon = content;
-        let fill = 0;
-        if (font.matches("[data-icon^='oi_']")) {
-            icon = content.codePointAt(0);
-        } else {
-            icon = content.replace(/_f$/, "");
-            fill = isIconFilled(beforeStyle, content) ? 1 : 0;
-        }
+        const icon = content.replace(/_f$/, "");
+        const fill = isIconFilled(beforeStyle, content) ? 1 : 0;
+
         if (icon) {
             const color =
                 convertCSSColorToPILRgba(_getStylePropertyValue(font, "color")) || "000000ff";

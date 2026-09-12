@@ -770,11 +770,15 @@ class BaseModel(metaclass=MetaModel):
 
                 fnames_by_path = dict(groupby(
                     [path for path in field_paths if path and path[0] not in ('id', '.id')],
-                    lambda path: path[0],
+                    # strip the language part of translated paths ('name@fr_FR')
+                    lambda path: path[0].split('@')[0],
                 ))
 
                 # Fetch needed fields (remove '.property_name' part)
                 fnames = list(unique(fname.split('.')[0] for fname in fnames_by_path))
+                if translated_fnames := [fname for fname in fnames if records._fields[fname].translate]:
+                    # fetch all the languages at once instead of one query each
+                    records.with_context(prefetch_langs=True).fetch(translated_fnames)
                 records.fetch(fnames)
                 # Fill the cache of the properties field
                 for fname in fnames:
@@ -828,15 +832,22 @@ class BaseModel(metaclass=MetaModel):
                     current[i] = (record._name, record.id)
                 else:
                     prop_name = None
-                    if '.' in name:  # Properties field
-                        fname, prop_name = name.split('.')
+                    fname, __, lang = name.partition('@')
+                    if '.' in fname:  # Properties field
+                        fname, prop_name = fname.split('.')
                         field = record._fields[fname]
                         field_type, cache_value = cache_properties[field].get(prop_name, ('char', None))
                         value = cache_value.get(record.id, '') if cache_value else ''
                     else:  # Normal field
-                        field = record._fields[name]
+                        field = record._fields[fname]
                         field_type = field.type
-                        value = record[name]
+                        if field.translate:
+                            # 'check_translations' skips the delayed translations,
+                            # which are not reimportable next to their source
+                            translated = record.with_context(check_translations=True)
+                            value = (translated.with_context(lang=lang) if lang else translated)[fname]
+                        else:
+                            value = record[fname]
 
                     # this part could be simpler, but it has to be done this way
                     # in order to reproduce the former behavior
@@ -914,6 +925,10 @@ class BaseModel(metaclass=MetaModel):
         """ Export fields for selected objects
 
         This method is used when exporting data via client menu
+
+        A field path may be suffixed with ``@`` and a language code (e.g.
+        ``name@fr_FR``) to export the translation of a translated field in
+        that language, using the same convention as the import.
 
         :param list fields_to_export: list of fields
         :returns: dictionary with a *datas* matrix
@@ -3455,6 +3470,7 @@ class BaseModel(metaclass=MetaModel):
             return True
 
         origin = self._origin
+        # check the records for read access
         if operation == 'read' and origin:
             access = self.env._access_cache[self._name]
             if all(map(access.get, origin._ids)):
@@ -3463,13 +3479,23 @@ class BaseModel(metaclass=MetaModel):
             origin.__check_access_fill_cache(access, domain)
             return all(map(access.__getitem__, origin._ids))
 
-        domain = self._access_domain(operation)
         # resolve the 'access' operator if just checking model access
         # so that a rule `('order_id', 'access', 'read')` may become false
         if not origin:
+            if operation == 'read':
+                access = self.env._access_cache[self._name]
+                if isinstance(result := access.get(0), bool):
+                    return result
+            domain = self._access_domain(operation)
             domain = domain.map_conditions(
                 lambda cond: cond.optimize_dynamic(self.sudo()) if cond.operator == 'access' else cond)
-            return not domain.is_false()
+            result = not domain.is_false()
+            if operation == 'read':
+                access[0] = result
+            return result
+
+        # check the records for other access
+        domain = self._access_domain(operation)
         if domain.is_false():
             return False
         if domain.is_true():
@@ -4313,7 +4339,8 @@ class BaseModel(metaclass=MetaModel):
                     # computed stored fields with a column
                     # have to be computed before create
                     # s.t. required and constraints can be applied on those fields.
-                    vals[fname] = field.convert_to_write(record[fname], self)
+                    field_value = record.sudo()[fname] if field.compute_sudo else record[fname]
+                    vals[fname] = field.convert_to_write(field_value, self)
                     precomputed.add(field)
 
     @api.model
@@ -4507,19 +4534,25 @@ class BaseModel(metaclass=MetaModel):
                         ir_model.name,
                     ))
 
-            # update parent_path of all records and their descendants
+            # update parent_path of all records and their descendants. The
+            # descendants were matched with
+            #     AND child.parent_path LIKE concat(node.parent_path, '%')
+            # whose pattern comes from a column, so PostgreSQL gets no index
+            # bounds and scans the table. The range below selects the same rows
+            # from the index: parent_path ends with '/' and '0' is the next
+            # character, so left(parent_path, -1) || '0' closes the range.
             updated = dict(self.env.execute_query(SQL(
                 """ UPDATE %(table)s child
                     SET parent_path = concat(%(prefix)s, substr(child.parent_path,
                             length(node.parent_path) - length(node.id || '/') + 1))
                     FROM %(table)s node
                     WHERE node.id IN %(ids)s
-                    AND child.parent_path LIKE concat(node.parent_path, %(wildcard)s)
+                    AND child.parent_path >= node.parent_path
+                    AND child.parent_path < left(node.parent_path, -1) || '0'
                     RETURNING child.id, child.parent_path """,
                 table=SQL.identifier(self._table),
                 prefix=prefix,
                 ids=tuple(records.ids),
-                wildcard='%',
             )))
 
             # update the cache of updated nodes, and determine what to recompute
@@ -4848,7 +4881,8 @@ class BaseModel(metaclass=MetaModel):
         else:
             sec_domain = self._access_domain('read')
             if sec_domain.is_false():
-                raise self._make_access_error_message('read', sec_domain)
+                self.browse().check_access('read')
+                domain = Domain.FALSE
 
         domain = Domain(domain)
         # inactive records unless they were explicitly asked for

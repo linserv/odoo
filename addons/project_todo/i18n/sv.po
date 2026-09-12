@@ -9,17 +9,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server saas~18.4\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-19 00:40+0000\n"
-"Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Swedish <https://translate.odoo.com/projects/odoo-master/"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-08-31 16:56+0000\n"
+"Last-Translator: Hanna Kharraziha <hakha@odoo.com>\n"
+"Language-Team: Swedish <https://translate.odoo.com/projects/odoo-s19-4/"
 "project_todo/sv/>\n"
 "Language: sv\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.todo_user_onboarding
@@ -420,9 +420,8 @@ msgstr "Lägg till information om dina att göra..."
 
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_form
-#: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 msgid "Archived"
-msgstr "Arkiverad"
+msgstr "Arkiverade"
 
 #. module: project_todo
 #. odoo-javascript
@@ -437,19 +436,13 @@ msgstr "Tilldelad till"
 
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_form
-#: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 msgid "Assignees"
-msgstr "Tilldelad"
+msgstr "Ansvariga"
 
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 msgid "By assigned tags"
 msgstr "Genom tilldelade taggar"
-
-#. module: project_todo
-#: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
-msgid "By personal stages"
-msgstr "Genom personliga steg"
 
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_conversion_form
@@ -459,12 +452,12 @@ msgstr "Välj taggar från det valda projektet"
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 msgid "Closed"
-msgstr "Stängd"
+msgstr "Avslutade"
 
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 msgid "Closed On"
-msgstr "Stängt på"
+msgstr "Avslutades"
 
 #. module: project_todo
 #. odoo-javascript
@@ -507,7 +500,7 @@ msgstr "Skapad den"
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 msgid "Deadline"
-msgstr "Tidsfrist"
+msgstr "Tidsgräns"
 
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_kanban
@@ -585,7 +578,7 @@ msgstr ""
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 msgid "My Activities"
-msgstr "Mina aktivieteter"
+msgstr "Mina aktiviteter"
 
 #. module: project_todo
 #: model_terms:ir.actions.act_window,help:project_todo.project_task_action_todo
@@ -600,7 +593,7 @@ msgstr "Anteckning"
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 msgid "Open"
-msgstr "Öppna"
+msgstr "Pågående"
 
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.todo_user_onboarding
@@ -654,7 +647,6 @@ msgid "Show all records whose next activity date is past"
 msgstr ""
 
 #. module: project_todo
-#: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_tree
 msgid "Stage"
 msgstr "Läge"
@@ -667,7 +659,7 @@ msgstr "Sammanfattning"
 #. module: project_todo
 #: model_terms:ir.ui.view,arch_db:project_todo.project_task_view_todo_search
 msgid "Tags"
-msgstr "Etiketter"
+msgstr "Taggar"
 
 #. module: project_todo
 #: model:ir.model,name:project_todo.model_project_task

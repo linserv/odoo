@@ -187,11 +187,24 @@ class AccountMove(models.Model):
 
     def button_draft(self):
         # OVERRIDE
-        if any(move.country_code == "SA" and move.l10n_sa_chain_index and move.company_id.l10n_sa_edi_is_production for move in self):
+        sa_moves = self.filtered(lambda move: move.country_code == "SA")
+        sa_documents = sa_moves.l10n_sa_edi_document_id
+
+        # Batch sending runs in a cron, so the user can reset a move while it is still being sent to ZATCA.
+        # ZATCA never cancels an acceptance, if the reset applies after the send ends, the move becomes a
+        # draft with an accepted document, and the user can send it twice. Refuse the reset instead.
+        # Lock both, the send hook starts from the move, the other senders only use the document.
+        self.env['res.company']._with_locked_records(sa_moves)
+        self.env['res.company']._with_locked_records(sa_documents)
+
+        # Read the index again, a send that finished after this transaction started is not visible yet.
+        sa_documents.invalidate_recordset(['l10n_sa_chain_index'])
+
+        if any(document.l10n_sa_chain_index and document.company_id.l10n_sa_edi_is_production for document in sa_documents):
             raise UserError(self.env._("The Invoice(s) are linked to a validated EDI document and cannot be modified according to ZATCA rules"))
 
         res = super().button_draft()
-        self.filtered(lambda move: move.country_code == "SA").l10n_sa_edi_document_id.write({
+        sa_documents.write({
             'state': 'to_send',
             'l10n_sa_chain_index': False,
         })
@@ -207,7 +220,7 @@ class AccountMove(models.Model):
         self.ensure_one()
         # Build the dict of values to be used for generating the Invoice XML content
         # Set Invoice field values required for generating the XML content, hash and signature
-        self.l10n_sa_uuid = uuid.uuid4()
+        self.l10n_sa_uuid = self.l10n_sa_uuid or str(uuid.uuid4())
         # We generate the XML content
         xml_content = self._l10n_sa_generate_zatca_template()
         # Once the required values are generated, we hash the invoice, then use it to generate a Signature
@@ -285,13 +298,6 @@ class AccountMove(models.Model):
         for transaction_type in TRANSACTION_TYPES:
             code += '1' if transaction_type in active_transaction_types else '0'
         return code
-
-    def action_open_chain_head(self):
-        """
-        Action to show the chain head of the invoice
-        """
-        self.ensure_one()
-        return self.l10n_sa_edi_document_id.l10n_sa_edi_chain_head_id._get_records_action(name=self.env._("Chain Head"))
 
     def _l10n_sa_generate_zatca_template(self):
         """Render the ZATCA UBL file"""

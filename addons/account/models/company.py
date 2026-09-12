@@ -1,6 +1,8 @@
 from collections import defaultdict
-from datetime import timedelta, datetime, date
+from datetime import date, datetime, time, timedelta
 import calendar
+
+from dateutil.relativedelta import relativedelta
 
 from odoo import fields, models, api, _, Command
 from odoo.exceptions import LockError, ValidationError, UserError, RedirectWarning
@@ -172,7 +174,7 @@ class ResCompany(models.Model):
     #Fields of the setup step for opening move
     account_opening_move_id = fields.Many2one(string='Opening Journal Entry', comodel_name='account.move', help="The journal entry containing the initial balance of all this company's accounts.")
     account_opening_journal_id = fields.Many2one(string='Opening Journal', comodel_name='account.journal', related='account_opening_move_id.journal_id', help="Journal where the opening entry of this company's accounting has been posted.", readonly=False)
-    account_opening_date = fields.Date(string='Opening Entry', help="That is the date of the opening entry.")
+    account_opening_date = fields.Date(string='Opening Entry', help="That is the date of the opening entry.", default=lambda self: fields.Date.today())
 
     invoice_terms = fields.Html(string='Default Terms and Conditions', translate=True)
     terms_type = fields.Selection([('plain', 'Add a Note'), ('html', 'Add a link to a Web Page')],
@@ -221,6 +223,16 @@ class ResCompany(models.Model):
         compute='_compute_account_enabled_tax_country_ids',
         help="Technical field containing the countries for which this company is using tax-related features"
              "(hence the ones for which l10n modules need to show tax-related fields).")
+    vat_disabled = fields.Boolean(
+        string="Not Subject to VAT",
+        compute='_compute_vat_disabled',
+        inverse='_inverse_vat_disabled',
+        store=True,
+    )
+    vat_disabled_available = fields.Boolean(
+        string="'Not Subject to VAT' Available",
+        compute='_compute_vat_disabled_available',
+    )
 
     # Cash basis taxes
     tax_exigibility = fields.Boolean(string='Use Cash Basis')
@@ -321,6 +333,46 @@ class ResCompany(models.Model):
         string="Price Difference Account",
         domain=ACCOUNT_DOMAIN,
         help="During perpetual valuation, this account will hold the price difference between the standard price and the bill price.",
+    )
+    account_stock_valuation_id = fields.Many2one(
+        'account.account',
+        string='Stock Valuation Account',
+        **company_default_for('account_stock_valuation_id', 'product.category', 'property_stock_valuation_account_id'),
+        check_company=True,
+    )
+    inventory_valuation = fields.Selection(
+        string='Valuation',
+        selection=[
+            ('periodic', 'Periodic (at closing)'),
+            ('real_time', 'Perpetual (at invoicing)'),
+        ],
+        **company_default_for('inventory_valuation', 'product.category', 'property_valuation'),
+        default='periodic',
+    )
+    account_stock_journal_id = fields.Many2one(
+        'account.journal',
+        string='Stock Journal',
+        **company_default_for('account_stock_journal_id', 'product.category', 'property_stock_journal'),
+        check_company=True,
+    )
+    inventory_period = fields.Selection(
+        string='Inventory Period',
+        selection=[
+            ('manual', 'Manual'),
+            ('daily', 'Daily'),
+            ('monthly', 'Monthly'),
+        ],
+        default='manual',
+        required=True)
+    cost_method = fields.Selection(
+        string="Cost Method",
+        selection=[
+            ('standard', "Standard Price"),
+            ('average', "Average Cost (AVCO)"),
+        ],
+        **company_default_for('cost_method', 'product.category', 'property_cost_method'),
+        default='standard',
+        required=True,
     )
 
     # Cash Rounding default accounts
@@ -435,6 +487,46 @@ class ResCompany(models.Model):
             ])
             record.account_enabled_tax_country_ids = foreign_vat_fpos.country_id + record.account_fiscal_country_id
 
+    @api.depends('country_id')
+    def _compute_vat_disabled_available(self):
+        for company in self:
+            company.vat_disabled_available = 'EU' in company.account_fiscal_country_group_codes or company.country_code == 'CH'
+
+    @api.depends('parent_id')
+    def _compute_vat_disabled(self):
+        for company in self:
+            if company.parent_id:
+                company.vat_disabled = company.parent_id.vat_disabled
+
+    def _inverse_vat_disabled(self):
+        """
+        This function does two things:
+        1. Enables or disables Sales Tax when VAT applicability is changed.
+        2. Changes the default sale tax of the company to a tax specified in the localisation.
+        Can be overridden by localisations to perform specific actions when VAT is disabled.
+        """
+        for company in self:
+            if company.parent_id or not company.vat_disabled_available or not company.chart_template:
+                continue
+            ChartTemplate = self.env['account.chart.template'].with_company(self)
+            chart_template_data = ChartTemplate._get_chart_template_data(company.chart_template)
+
+            tax_data = chart_template_data['account.tax']
+            default_inactive_tax_ids = {ChartTemplate.ref(key).id for key, values in tax_data.items() if not values.get('active', True)}
+
+            taxes_to_toggle = self.env['account.tax'].with_context(active_test=False).search([
+                *self.env['account.tax']._check_company_domain(company),
+                ('type_tax_use', '=', 'sale'),
+                ('id', 'not in', default_inactive_tax_ids),
+            ])
+            company_data = chart_template_data['res.company'][company.id]
+            default_sale_tax = ChartTemplate.ref(company_data['account_sale_tax_id'], raise_if_not_found=None)
+            no_vat_tax = self._get_default_vat_disabled_tax()
+
+            taxes_to_toggle.write({'active': not company.vat_disabled})
+            company.account_sale_tax_id = no_vat_tax if company.vat_disabled else default_sale_tax
+            no_vat_tax.active = company.vat_disabled
+
     @api.depends('terms_type')
     def _compute_invoice_terms_html(self):
         for company in self.filtered(lambda company: is_html_empty(company.invoice_terms_html) and company.terms_type == 'html'):
@@ -499,9 +591,14 @@ class ResCompany(models.Model):
             limit=1,
         ))
 
+    def _get_default_vat_disabled_tax(self):
+        """Return the default tax to be used as sale tax when the company is `vat_disabled`. Needs to be overridden by localisations."""
+        return self.env['account.tax']
+
     def _initiate_account_onboardings(self):
         account_onboarding_routes = [
             'account_dashboard',
+            'account_return_dashboard',
         ]
         onboardings = self.env['onboarding.onboarding'].sudo().search([('route_name', 'in', account_onboarding_routes)])
         for company in self:
@@ -1033,7 +1130,8 @@ class ResCompany(models.Model):
     def _existing_accounting(self) -> bool:
         """Return True iff some accounting entries have already been made for the current company."""
         self.ensure_one()
-        return bool(self.env['account.move.line'].sudo().search_count([('company_id', 'child_of', self.id)], limit=1))
+        child_company_ids = self.sudo().with_context(active_test=False).search([('id', 'child_of', self.id)]).ids
+        return bool(self.env['account.move.line'].sudo().search_count([('company_id', 'in', child_company_ids)], limit=1))
 
     def _chart_template_selection(self):
         return self.env['account.chart.template']._select_chart_template(self.country_id)
@@ -1172,3 +1270,354 @@ class ResCompany(models.Model):
                 )
 
             company.company_vat_placeholder = self.env._(expected_vat or '')  # pylint: disable=E8502
+
+    def action_close_stock_valuation(self, at_date=None, auto_post=False, raise_error_if_closed=True, include_accruals=False):
+        self.ensure_one()
+        at_date = fields.Date.to_date(at_date) or fields.Date.context_today(self)
+        last_closing_date = self._get_last_closing_date()
+        if last_closing_date and at_date < fields.Date.to_date(last_closing_date):
+            raise UserError(self.env._('It exists closing entries after the selected date. Cancel them before generate an entry prior to them'))
+
+        accrual_moves = self.env['account.move']
+        if include_accruals and self.use_stock_account():
+            # Real/physical stock valuation available: Ending Stock is independent of GL
+            # postings, so post the accrual *before* the closing entry is computed — the
+            # closing entry's Stock Variation then reflects its impact already, instead of
+            # double-correcting the same gap. Same rule as the report.
+            accrual_moves = self._create_accrual_moves(date=at_date)
+
+        aml_vals_list = self.with_context(allowed_company_ids=self.ids)._action_close_stock_valuation(at_date=at_date)
+
+        if include_accruals and not self.use_stock_account():
+            # No independent stock valuation: post the accrual *after* computing the closing
+            # entry instead, so its real GL impact isn't silently absorbed into Stock
+            # Variation — matching the report, which doesn't net the accrual against it either.
+            accrual_moves = self._create_accrual_moves(date=at_date)
+
+        if not aml_vals_list and not accrual_moves:
+            # if we come from cron there might be no move to create for this company, but some for other companies
+            if not raise_error_if_closed:
+                return
+            raise UserError(_("Everything is correctly closed"))
+
+        closing_move = self.env['account.move']
+        if aml_vals_list:
+            if not self.account_stock_journal_id:
+                raise UserError(self.env._("Please set the Journal for Inventory Valuation in the settings."))
+            if not self.account_stock_valuation_id:
+                raise UserError(self.env._("Please set the Valuation Account for Inventory Valuation in the settings."))
+
+            moves_vals = {
+                'journal_id': self.account_stock_journal_id.id,
+                'date': at_date,
+                'ref': _('Stock Closing'),
+                'inventory_closing': True,
+                'line_ids': [Command.create(aml_vals) for aml_vals in aml_vals_list],
+                'company_id': self.id,
+                **self._get_closing_move_extra_vals(at_date),
+            }
+            closing_move = self.env['account.move'].create(moves_vals)
+            if auto_post:
+                closing_move._post()
+
+        if not include_accruals:
+            return closing_move._get_records_action(name=_("Journal Items"))
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("Journal Items"),
+            'res_model': 'account.move',
+            'views': [(False, 'list'), (False, 'form')],
+            'domain': [('id', 'in', (closing_move | accrual_moves).ids)],
+        }
+
+    def _get_accrual_candidate_lines(self, date=False):
+        """ Hook overridden by purchase / sale.
+
+        :return: a dict mapping each accrual section ('bills_to_receive', 'billed_not_received',
+                 'invoices_to_issue', 'invoiced_not_delivered' — see `accrual_labels` in
+                 `account.stock.valuation.report._compute_accrual_data`) to its candidate order lines.
+        """
+        return {}
+
+    def _create_accrual_moves(self, date=False):
+        """ Create and post the accrual entries (and their automatic reversal) for every
+        accrual section with something to accrue as of `date` (see
+        `_get_accrual_candidate_lines`).
+        """
+        self.ensure_one()
+        accrual_entry_date = date or fields.Date.context_today(self)
+        moves = self.env['account.move']
+        for candidate_lines in self._get_accrual_candidate_lines(date=date).values():
+            if not candidate_lines:
+                continue
+            wizard = self.env['account.accrued.orders.wizard'].with_context(
+                active_model=candidate_lines._name,
+                active_ids=candidate_lines.ids,
+                accrual_entry_date=fields.Date.to_string(accrual_entry_date),
+                accrual_allow_mixed_currencies=True,
+            ).new({
+                'company_id': self.id,
+                'date': accrual_entry_date,
+            })
+            move_vals, __, __ = wizard._compute_move_vals()
+            # Skip empty moves, and lines whose accrual account isn't
+            # configured (no account to post them on).
+            if not move_vals['line_ids'] or any(
+                not vals.get('account_id') for _, __, vals in move_vals['line_ids']
+            ):
+                continue
+            action = wizard.create_entries(auto_post=True)
+            moves |= self.env['account.move'].search(action['domain'])
+        return moves
+
+    def get_inventory_value(self, at_date=None):
+        """ Current inventory value, i.e. what the products physically on hand are worth.
+
+        Simple approximation used when the stock module isn't installed: quantity on hand
+        times current (moving average) cost. When `at_date` is given, the quantity is
+        reconstructed by undoing, from the current `qty_available`, the effect of every
+        posted invoice/bill line dated after `at_date`.
+        Overridden by `stock_account` to use the real valuation computed from stock moves/quants.
+        """
+        self.ensure_one()
+        accounts_by_product = self.with_context(prefetch_fields=False)._get_accounts_by_product(at_date)
+
+        qty_variation_by_product = defaultdict(float)
+        if at_date:
+            base_domain = [
+                ('product_id', 'in', [product.id for product in accounts_by_product]),
+                ('display_type', '=', 'product'),
+                ('parent_state', '=', 'posted'),
+                ('company_id', '=', self.id),
+                ('date', '>', at_date),
+            ]
+            for move_types, sign in (
+                (('out_invoice', 'in_refund'), -1),
+                (('in_invoice', 'out_refund'), 1),
+            ):
+                groups = self.env['account.move.line']._read_group(
+                    base_domain + [('move_type', 'in', move_types)],
+                    ['product_id', 'product_uom_id'],
+                    ['quantity:sum'],
+                )
+                for product, uom, quantity in groups:
+                    qty = quantity if uom == product.uom_id else uom._compute_quantity(quantity, product.uom_id)
+                    qty_variation_by_product[product] += sign * qty
+
+        value_by_account = defaultdict(float)
+        for product, accounts in accounts_by_product.items():
+            account = accounts['valuation']
+            if not account:
+                continue
+            qty = product.qty_available - qty_variation_by_product[product]
+            value_by_account[account] += qty * product.standard_price
+        return value_by_account
+
+    def get_inventory_accounting_value(self, at_date=None):
+        self.ensure_one()
+        accounts_by_product = self._get_accounts_by_product(at_date)
+        stock_valuation_accounts_ids = {accounts['valuation'].id for accounts in accounts_by_product.values() if accounts['valuation']}
+        stock_valuation_accounts = self.env['account.account'].browse(stock_valuation_accounts_ids)
+        domain = Domain([
+            ('account_id', 'in', stock_valuation_accounts.ids),
+            ('company_id', '=', self.id),
+            ('parent_state', '=', 'posted'),
+        ])
+        if at_date:
+            domain = domain & Domain([('date', '<=', at_date)])
+        return dict(self.env['account.move.line']._read_group(domain, ['account_id'], ['balance:sum']))
+
+    def _action_close_stock_valuation(self, at_date=None):
+        aml_vals_list = self._get_extra_closing_aml_vals(at_date)
+
+        vals_list = self._get_stock_valuation_account_vals(at_date, aml_vals_list)
+        if vals_list:
+            aml_vals_list += vals_list
+
+        vals_list = self._get_continental_realtime_variation_vals(at_date, aml_vals_list)
+        if vals_list:
+            aml_vals_list += vals_list
+        return aml_vals_list
+
+    @api.model
+    def _cron_post_stock_valuation(self):
+        periods = ['daily']
+        if fields.Date.today() == fields.Date.today() + relativedelta(day=31):
+            periods.append('monthly')
+        companies = self.env['res.company'].search([
+            ('inventory_period', 'in', periods),
+            ('inventory_valuation', '!=', 'real_time'),
+        ])
+        for company in companies:
+            company.action_close_stock_valuation(auto_post=True, raise_error_if_closed=False)
+
+    def _get_inventory_valuation_products_domain(self):
+        return [('is_storable', '=', True)]
+
+    def _get_inventory_valuation_products(self, date):
+        """ Products holding inventory value, to include in the valuation report."""
+        self.ensure_one()
+        return self.env['product.product'].sudo().with_company(self).search(
+            self._get_inventory_valuation_products_domain()
+        )
+
+    def _get_accounts_by_product(self, at_date=None):
+        products = self._get_inventory_valuation_products(at_date)
+
+        accounts_by_product = {}
+        for product in products:
+            accounts = product._get_product_accounts()
+            accounts_by_product[product] = {
+                'valuation': accounts['stock_valuation'],
+                'variation': accounts.get('stock_variation'),
+                'expense': accounts['expense'],
+            }
+        return accounts_by_product
+
+    def _get_extra_balance(self, vals_list=None):
+        extra_balance = defaultdict(float)
+        if not vals_list:
+            return extra_balance
+        for vals in vals_list:
+            extra_balance[vals['account_id']] += vals['balance']
+        return extra_balance
+
+    def _get_stock_valuation_account_vals(self, at_date=None, extra_aml_vals_list=None):
+        extra_balance = self._get_extra_balance(extra_aml_vals_list)
+
+        if 'inventory_data' in self.env.context:
+            inventory_data = self.env.context.get('inventory_data')
+        else:
+            inventory_data = self.get_inventory_value(at_date)
+        accounting_data = self.get_inventory_accounting_value(at_date)
+
+        amls_vals_list = []
+        accounts = inventory_data.keys() | accounting_data.keys()
+        for account in accounts:
+            account_variation = account.account_stock_variation_id
+            if not account_variation:
+                account_variation = self.expense_account_id
+            if not account_variation:
+                continue
+            balance = inventory_data.get(account, 0) - accounting_data.get(account, 0)
+            balance -= extra_balance.get(account.id, 0)
+
+            if self.currency_id.is_zero(balance):
+                continue
+
+            amls_vals = self._prepare_inventory_aml_vals(
+                account,
+                account_variation,
+                balance,
+                _('Closing: Stock Variation Global for company [%(company)s]', company=self.display_name),
+            )
+            amls_vals_list += amls_vals
+
+        return amls_vals_list
+
+    def _get_continental_realtime_variation_vals(self, at_date=None, extra_aml_vals_list=None):
+        """ In continental perpetual the inventory variation is never posted.
+        This method compute the variation for a period and post it.
+        """
+        extra_balance = self._get_extra_balance(extra_aml_vals_list)
+
+        fiscal_year_date_from = self.compute_fiscalyear_dates(fields.Date.context_today(self))['date_from']
+
+        amls_vals_list = []
+        accounting_data_today = self.get_inventory_accounting_value()
+        accounting_data_last_period = self.get_inventory_accounting_value(at_date=fiscal_year_date_from)
+
+        accounts = [
+            account for account in accounting_data_today.keys() | accounting_data_last_period.keys()
+            if account.account_stock_variation_id and account.account_stock_expense_id
+        ]
+        variation_accounts = self.env['account.account'].union([account.account_stock_variation_id for account in accounts])
+
+        current_balance_domain = Domain([
+            ('account_id', 'in', variation_accounts.ids),
+            ('company_id', '=', self.id),
+            ('parent_state', '=', 'posted'),
+        ])
+        if at_date:
+            current_balance_domain &= Domain([('date', '<=', at_date)])
+        existing_balance_by_account = dict(self.env['account.move.line']._read_group(
+            current_balance_domain, ['account_id'], ['balance:sum'],
+        ))
+
+        for account in accounts:
+            variation_acc = account.account_stock_variation_id
+            expense_acc = account.account_stock_expense_id
+
+            balance_today = accounting_data_today.get(account, 0) - extra_balance.get(account.id, 0)
+            balance_last_period = accounting_data_last_period.get(account, 0)
+            balance_over_period = balance_today - balance_last_period
+            balance_over_period += existing_balance_by_account.get(variation_acc, 0)
+
+            if self.currency_id.is_zero(balance_over_period):
+                continue
+
+            amls_vals = self._prepare_inventory_aml_vals(
+                expense_acc,
+                variation_acc,
+                balance_over_period,
+                _('Closing: Stock Variation Over Period'),
+            )
+            amls_vals_list += amls_vals
+
+        return amls_vals_list
+
+    def _prepare_inventory_aml_vals(self, debit_acc, credit_acc, balance, ref, product_id=False):
+        return [{
+            'account_id': credit_acc.id,
+            'name': ref,
+            'balance': -balance,
+            'product_id': product_id,
+        }, {
+            'account_id': debit_acc.id,
+            'name': ref,
+            'balance': balance,
+            'product_id': product_id,
+        }]
+
+    def use_stock_account(self):
+        """ Whether real/physical stock valuation is available (independent of the accounting
+        data). Not applicable without the stock module. Overridden by `stock_account`.
+        """
+        return False
+
+    def _get_extra_closing_aml_vals(self, at_date):
+        """ Extra debit/credit vals already accounted for elsewhere, to pass along to the stock
+        variation computations so they aren't double-counted (e.g. location-to-location
+        reclassification entries). Not applicable without the stock module. Overridden by
+        `stock_account`. """
+        return []
+
+    def _get_closing_move_extra_vals(self, at_date):
+        """ Extra values for the closing move. Not applicable without the stock module. Overridden
+        by `stock_account`. """
+        return {}
+
+    def _get_closing_date_field(self):
+        """ Name of the field on the closing move holding its date. Overridden by
+        `stock_account`, which needs the exact instant (`closing_datetime`) rather than
+        just the day (`date`). """
+        return 'date'
+
+    def _get_last_closing_move(self):
+        self.ensure_one()
+        date_field = self._get_closing_date_field()
+        return self.env['account.move'].search_fetch([
+            ('inventory_closing', '=', True),
+            ('state', '=', 'posted'),
+            ('company_id', '=', self.id),
+        ], [date_field], limit=1, order=f'{date_field} desc, id desc')
+
+    def _get_last_closing_date(self):
+        # Approximated to the last moment of the day: comparing dates is enough here.
+        closing = self._get_last_closing_move()
+        if not closing:
+            return False
+        value = closing[self._get_closing_date_field()]
+        if isinstance(value, datetime):
+            return value
+        return datetime.combine(value, time.max)

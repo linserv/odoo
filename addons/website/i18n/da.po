@@ -20,17 +20,17 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server 16.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-28 17:41+0000\n"
-"PO-Revision-Date: 2026-06-19 03:57+0000\n"
-"Last-Translator: Anonymous <noreply@weblate.org>\n"
-"Language-Team: Danish <https://translate.odoo.com/projects/odoo-master/"
+"POT-Creation-Date: 2026-09-04 17:44+0000\n"
+"PO-Revision-Date: 2026-09-03 12:13+0000\n"
+"Last-Translator: \"Kira Petersen François (peti)\" <peti@odoo.com>\n"
+"Language-Team: Danish <https://translate.odoo.com/projects/odoo-s19-4/"
 "website/da/>\n"
 "Language: da\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2026.6.1\n"
+"X-Generator: Weblate 2026.8.1\n"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_quotes_carousel_compact
@@ -920,6 +920,34 @@ msgid ""
 msgstr ""
 
 #. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_table_of_content
+msgid ""
+"<a href=\"#table_of_content_heading_1_1\" class=\"o_translate_inline "
+"table_of_content_link list-group-item list-group-item-action py-2 border-0 "
+"rounded-0 table_of_content_link_depth_0 active\">Intuitive system</a>\n"
+"                        <a href=\"#table_of_content_heading_1_2\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 table_of_content_link_depth_1\">What you "
+"see is what you get</a>\n"
+"                        <a href=\"#table_of_content_heading_1_3\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 "
+"table_of_content_link_depth_1\">Customization tool</a>\n"
+"                        <a href=\"#table_of_content_heading_1_4\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 table_of_content_link_depth_0\">Design "
+"features</a>\n"
+"                        <a href=\"#table_of_content_heading_1_5\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 table_of_content_link_depth_1\">Building "
+"blocks system</a>\n"
+"                        <a href=\"#table_of_content_heading_1_6\" "
+"class=\"o_translate_inline table_of_content_link list-group-item list-group-"
+"item-action py-2 border-0 rounded-0 "
+"table_of_content_link_depth_1\">Bootstrap-Based Templates</a>"
+msgstr ""
+
+#. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_carousel
 msgid ""
 "<a href=\"/\" class=\"btn btn-primary o_translate_inline\">Start your "
@@ -1355,12 +1383,6 @@ msgstr ""
 msgid ""
 "<i class=\"oi text-success\" data-icon=\"check\" role=\"img\"/>  Unlimited "
 "customization"
-msgstr ""
-
-#. module: website
-#: model_terms:ir.ui.view,arch_db:website.s_countdown_inline_default_template
-#: model_terms:ir.ui.view,arch_db:website.s_countdown_inline_text_template
-msgid "<i class=\"oi\" data-icon=\"schedule\"/> Sale ends in"
 msgstr ""
 
 #. module: website
@@ -1951,6 +1973,20 @@ msgid "<span class=\"me-1\">On:</span>"
 msgstr "<span class=\"me-1\">Den:</span>"
 
 #. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_dynamic_snippet_carousel_preview_data
+msgid ""
+"<span class=\"o_carousel_arrow oi p-3\" data-icon=\"chevron_backward\"/>\n"
+"                    <span class=\"visually-hidden\">Previous</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_dynamic_snippet_carousel_preview_data
+msgid ""
+"<span class=\"o_carousel_arrow oi p-3\" data-icon=\"chevron_forward\"/>\n"
+"                    <span class=\"visually-hidden\">Next</span>"
+msgstr ""
+
+#. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_carousel_cards
 #: model_terms:ir.ui.view,arch_db:website.s_carousel_intro
 #: model_terms:ir.ui.view,arch_db:website.s_image_gallery
@@ -1969,6 +2005,35 @@ msgid ""
 "<span class=\"o_carousel_pause_icon oi oi-filled\" data-icon=\"pause\" aria-"
 "hidden=\"true\"/>\n"
 "                <span class=\"visually-hidden\">Pause slides</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+msgid "<span class=\"o_count_item_nbs d-inline-flex fw-bold\">00</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+msgid "<span class=\"o_count_item_nbs fs-3 fw-bold\">00</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
+msgid ""
+"<span class=\"o_count_item_nbs o_colored_item d-flex justify-content-center "
+"align-items-center rounded p-2\">00</span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+msgid ""
+"<span class=\"o_count_item_nbs o_count_item_nbs_split d-inline-flex\">\n"
+"                            <span class=\"o_count_item_nb o_colored_item "
+"position-relative rounded py-1 px-2 fs-4 fw-bold\">0</span>\n"
+"                            <span class=\"o_count_item_nb o_colored_item "
+"position-relative rounded py-1 px-2 fs-4 fw-bold\">0</span>\n"
+"                        </span>"
 msgstr ""
 
 #. module: website
@@ -2470,6 +2535,15 @@ msgid ""
 "                            <font class=\"bg-o-color-1\">A PUNCHY</font> "
 "HEADLINE\n"
 "                        </span>"
+msgstr ""
+
+#. module: website
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+msgid ""
+"<span>\n"
+"                <i class=\"oi\" data-icon=\"schedule\"/> Sale ends in\n"
+"            </span>"
 msgstr ""
 
 #. module: website
@@ -4212,6 +4286,12 @@ msgid "At The End"
 msgstr "Til sidst"
 
 #. module: website
+#. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/form/form_field_option.js:0
+msgid "At least one of these words should match"
+msgstr ""
+
+#. module: website
 #: model:ir.model,name:website.model_ir_attachment
 msgid "Attachment"
 msgstr "Vedhæftning"
@@ -4268,12 +4348,6 @@ msgstr "Autoriserede grupper"
 #: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
 msgid "Auto"
 msgstr "Automatisk"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
-msgid "Auto means it will inherit the parent value"
-msgstr ""
 
 #. module: website
 #: model:ir.model.fields,field_description:website.field_res_partner__publish_on
@@ -4385,6 +4459,7 @@ msgstr "Baggrund"
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/base_visibility_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/chart_option.xml:0
+#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/cover_properties_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/footer_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/header/header_icon_background_option.xml:0
@@ -4803,6 +4878,12 @@ msgstr "Lille grænseradius"
 
 #. module: website
 #. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
+msgid "Bordered Text"
+msgstr ""
+
+#. module: website
+#. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/timeline_option.xml:0
 msgid "Both"
 msgstr ""
@@ -4854,12 +4935,6 @@ msgstr "Boks til handlingsopfordring"
 #: code:addons/website/static/src/builder/plugins/theme/theme_tab.xml:0
 msgid "Boxed"
 msgstr "Afgrænset"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Boxes"
-msgstr "Kasser"
 
 #. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_services_pack
@@ -5665,12 +5740,6 @@ msgid "Clay"
 msgstr ""
 
 #. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Clean"
-msgstr "Rens"
-
-#. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_bento_features
 msgid "Clear objectives"
 msgstr ""
@@ -6237,6 +6306,12 @@ msgstr "Controller-side"
 
 #. module: website
 #. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
+msgid "Controls the text's font weight. \"Auto\" inherits the parent value"
+msgstr ""
+
+#. module: website
+#. odoo-javascript
 #: code:addons/website/static/src/xml/website.cookies_bar.xml:0
 #: model_terms:ir.ui.view,arch_db:website.cookie_policy
 msgid "Cookie Policy"
@@ -6619,7 +6694,7 @@ msgstr "Brugerdefineret forhold"
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/form/form_option_plugin.js:0
 msgid "Custom Text"
-msgstr "Brugerdefineret tekst"
+msgstr ""
 
 #. module: website
 #. odoo-javascript
@@ -6719,22 +6794,10 @@ msgid "D - H - M - S"
 msgstr "D - H - M - S"
 
 #. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Danger"
-msgstr "Fare"
-
-#. module: website
 #: model_terms:ir.ui.view,arch_db:website.s_company_team_detail
 msgid "Daniel ensures efficient daily operations and process optimization."
 msgstr ""
 "Daniel er ansvarlig for den daglige drift og løbende optimering af processer."
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Dark"
-msgstr ""
 
 #. module: website
 #. odoo-javascript
@@ -6785,7 +6848,12 @@ msgstr "Dato og klokkeslæt"
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_countdown/countdown.js:0
-#: model_terms:ir.ui.view,arch_db:website.s_countdown
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_circle_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
 msgid "Days"
 msgstr "Dage"
 
@@ -7509,9 +7577,10 @@ msgstr "Vis indeni"
 #: model:ir.model.fields,field_description:website.field_website_structured_data_mixin__display_name
 #: model:ir.model.fields,field_description:website.field_website_technical_page__display_name
 #: model:ir.model.fields,field_description:website.field_website_track__display_name
+#: model:ir.model.fields,field_description:website.field_website_trackable_mixin__display_name
 #: model:ir.model.fields,field_description:website.field_website_visitor__display_name
 msgid "Display Name"
-msgstr "Vis navn"
+msgstr "Visningsnavn"
 
 #. module: website
 #: model:ir.model.fields,help:website.field_res_config_settings__website_cookies_bar
@@ -7870,7 +7939,6 @@ msgstr "Miljøvenlige løsninger"
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/blockquote_option.xml:0
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 msgid "Edge Spacing"
 msgstr "Kantafstand"
 
@@ -10259,7 +10327,12 @@ msgstr ""
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_countdown/countdown.js:0
-#: model_terms:ir.ui.view,arch_db:website.s_countdown
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_circle_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
 msgid "Hours"
 msgstr "Timer"
 
@@ -10399,6 +10472,7 @@ msgstr ""
 #: model:ir.model.fields,field_description:website.field_website_structured_data_mixin__id
 #: model:ir.model.fields,field_description:website.field_website_technical_page__id
 #: model:ir.model.fields,field_description:website.field_website_track__id
+#: model:ir.model.fields,field_description:website.field_website_trackable_mixin__id
 #: model:ir.model.fields,field_description:website.field_website_visitor__id
 msgid "ID"
 msgstr "ID"
@@ -10848,7 +10922,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 msgid "Info"
 msgstr "Information"
@@ -12013,18 +12086,6 @@ msgid "Layout"
 msgstr "Layout"
 
 #. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Layout Background"
-msgstr "Layoutbaggrund"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Layout Background Color"
-msgstr "Layoutbaggrundsfarve"
-
-#. module: website
 #: model_terms:ir.ui.view,arch_db:website.bs_debug_view
 msgid "Lead text"
 msgstr "Hovedtekst"
@@ -12158,7 +12219,6 @@ msgstr "Bibliotek"
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/searchbar_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_tab_plugin.js:0
@@ -12929,7 +12989,12 @@ msgstr ""
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_countdown/countdown.js:0
-#: model_terms:ir.ui.view,arch_db:website.s_countdown
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_circle_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
 msgid "Minutes"
 msgstr "Minutter"
 
@@ -13405,6 +13470,7 @@ msgstr "SMS-notifikationer til nyhedsbrev"
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_dynamic_snippet_carousel/000.xml:0
 #: model_terms:ir.ui.view,arch_db:website.bs_debug_view
+#: model_terms:ir.ui.view,arch_db:website.s_dynamic_snippet_carousel_preview_data
 msgid "Next"
 msgstr "Næste"
 
@@ -15216,6 +15282,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_dynamic_snippet_carousel/000.xml:0
 #: model_terms:ir.ui.view,arch_db:website.bs_debug_view
+#: model_terms:ir.ui.view,arch_db:website.s_dynamic_snippet_carousel_preview_data
 msgid "Previous"
 msgstr "Forrige"
 
@@ -15267,7 +15334,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/header/header_font_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 msgid "Primary"
@@ -15363,20 +15429,8 @@ msgstr "Statuslinje"
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Progress Bar Color"
-msgstr "Statuslinjefarve"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 msgid "Progress Bar Style"
 msgstr "Statuslinjestil"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Progress Bar Weight"
-msgstr "Statuslinjevægt"
 
 #. module: website
 #. odoo-javascript
@@ -16426,7 +16480,7 @@ msgstr ""
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: model_terms:ir.ui.view,arch_db:website.s_countdown
-msgid "Sales begins in:"
+msgid "Sale begins in:"
 msgstr ""
 
 #. module: website
@@ -16672,6 +16726,11 @@ msgid "Search within"
 msgstr "Søg indenfor"
 
 #. module: website
+#: model_terms:ir.ui.view,arch_db:website.website_search_box_input
+msgid "Search..."
+msgstr ""
+
+#. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/client_actions/configurator/configurator.js:0
 msgid "Searching your images..."
@@ -16720,7 +16779,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/header/header_font_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 msgid "Secondary"
@@ -16746,7 +16804,12 @@ msgstr "Sekundær stil"
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/snippets/s_countdown/countdown.js:0
-#: model_terms:ir.ui.view,arch_db:website.s_countdown
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_big_numbers_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_bordered_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_circle_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_dominoes_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_text_template
+#: model_terms:ir.ui.view,arch_db:website.s_countdown_wrapped_numbers_template
 msgid "Seconds"
 msgstr "Sekunder"
 
@@ -18011,13 +18074,6 @@ msgstr "Subtil"
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Subtle colors"
-msgstr ""
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 #: code:addons/website/static/src/xml/website_form.xml:0
 #: code:addons/website/static/src/xml/website_form_editor.xml:0
@@ -18247,7 +18303,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/dynamic_snippet_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/footer_option.xml:0
 #: code:addons/website/static/src/builder/plugins/options/header/header_template_option.xml:0
@@ -18367,12 +18422,6 @@ msgstr ""
 #: model_terms:ir.ui.view,arch_db:website.snippets
 msgid "Text Highlight"
 msgstr "Fremhæv tekst"
-
-#. module: website
-#. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
-msgid "Text Inline"
-msgstr "Indbygget tekst"
 
 #. module: website
 #. odoo-javascript
@@ -18817,6 +18866,7 @@ msgstr "Tyk"
 #. module: website
 #. odoo-javascript
 #: code:addons/website/static/src/builder/plugins/highlight/highlight_configurator.xml:0
+#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 msgid "Thickness"
 msgstr "Tykkelse"
 
@@ -20456,7 +20506,6 @@ msgstr ""
 
 #. module: website
 #. odoo-javascript
-#: code:addons/website/static/src/builder/plugins/options/countdown_option.xml:0
 #: code:addons/website/static/src/builder/plugins/theme/theme_colors_option.xml:0
 msgid "Warning"
 msgstr "Advarsel"
@@ -21103,6 +21152,11 @@ msgid "Website Theme Page"
 msgstr "Hjemmesidens temaside"
 
 #. module: website
+#: model:ir.model,name:website.model_website_trackable_mixin
+msgid "Website Trackable Mixin"
+msgstr ""
+
+#. module: website
 #: model:ir.model.fields,field_description:website.field_res_partner__website_url
 #: model:ir.model.fields,field_description:website.field_res_users__website_url
 #: model:ir.model.fields,field_description:website.field_website_controller_page__website_url
@@ -21229,6 +21283,22 @@ msgstr "Hjemmesider"
 #: model:ir.model.fields,field_description:website.field_base_language_install__website_ids
 msgid "Websites to translate"
 msgstr "Hjemmesider, som skal oversættes"
+
+#. module: website
+#. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.js:0
+msgid ""
+"Weight for \"Bold\" in the text toolbar. Unless Font Weight is \"Auto\", "
+"only equal or heavier values are available."
+msgstr ""
+
+#. module: website
+#. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/theme/theme_font_weight_option.xml:0
+msgid ""
+"Weight for \"Light\" in the text toolbar. Unless Font Weight is \"Auto\", "
+"only equal or lighter values are available."
+msgstr ""
 
 #. module: website
 #. odoo-javascript
@@ -21580,6 +21650,12 @@ msgstr ""
 #: code:addons/website/static/src/builder/plugins/form/form_option_plugin.js:0
 msgid "You cannot duplicate this field."
 msgstr "Du kan ikke duplikere dette felt."
+
+#. module: website
+#. odoo-javascript
+#: code:addons/website/static/src/builder/plugins/options/card_image_option_plugin.js:0
+msgid "You cannot duplicate this image."
+msgstr ""
 
 #. module: website
 #. odoo-javascript
@@ -23376,714 +23452,3 @@ msgstr "✽  Pizzaer"
 #: model_terms:ir.ui.view,arch_db:website.s_key_benefits
 msgid "✽  What We Offer"
 msgstr "✽  Hvad vi tilbyder"
-
-#~ msgid "Accounts are usable across all your multiple websites"
-#~ msgstr "Konti kan bruges på tværs af alle dine hjemmesider"
-
-#~ msgid "CTA, button, btn, action, engagement, link, offer, appeal"
-#~ msgstr ""
-#~ "Handlingsopfordring, knap, btn, handling, engagement, link, tilbud, appel"
-
-#~ msgid ""
-#~ "CTA, button, btn, action, engagement, link, offer, appeal, call to "
-#~ "action, prompt, interact, trigger"
-#~ msgstr ""
-#~ "Handlingsopfordring, knap, btn, engagement, link, tilbud, appel, "
-#~ "opfordring til handling, prompt, interagere, udløser"
-
-#~ msgid ""
-#~ "CTA, button, btn, action, engagement, link, offer, appeal, call to "
-#~ "action, prompt, interact, trigger, items, checklists, entries, sequences, "
-#~ "bullets, points, list, group, benefits, features, advantages"
-#~ msgstr ""
-#~ "Handlingsopfordring, knap, btn, handling, engagement, link, tilbud, "
-#~ "appel, opfordring til handling, prompt, interagere, udløser, emner, "
-#~ "tjeklister, poster, sekvenser, punkttegn, punkter, liste, gruppe, "
-#~ "fordele, funktioner, fordele"
-
-#~ msgid ""
-#~ "CTA, button, btn, action, engagement, link, offer, appeal, call to "
-#~ "action, prompt, interact, trigger, mockup"
-#~ msgstr ""
-#~ "Handlingsopfordring, knap, btn, handling, engagement, link, tilbud, "
-#~ "appel, opfordring til handling, prompt, interagere, udløser, eksempel"
-
-#~ msgid ""
-#~ "CTA, button, btn, action, engagement, link, offer, appeal, call to "
-#~ "action, prompt, interact, trigger, mockups"
-#~ msgstr ""
-#~ "Handlingsopfordring, knap, btn, handling, engagement, link, tilbud, "
-#~ "appel, opfordring til handling, prompt, interagere, udløser, eksempler"
-
-#~ msgid "Catalog"
-#~ msgstr "Katalog"
-
-#~ msgid ""
-#~ "Elevate your living space with furniture that blends modern aesthetics "
-#~ "and classic charm, crafted to bring both comfort and style to your home.\n"
-#~ "                        <br/><br/><br/><br/><br/><br/><br/><br/><br/><br/"
-#~ "><br/><br/><br/><br/><br/>"
-#~ msgstr ""
-#~ "Giv dit hjem et løft med møbler, der kombinerer moderne æstetik og tidløs "
-#~ "elegance, med fokus på komfort og stil.\n"
-#~ "                        <br/><br/><br/><br/><br/><br/><br/><br/><br/><br/"
-#~ "><br/><br/><br/><br/><br/>"
-
-#~ msgid "Full-Width"
-#~ msgstr "Fuld bredde"
-
-#~ msgid "Narrow"
-#~ msgstr "Snæver"
-
-#~ msgid "Places API"
-#~ msgstr "Places API"
-
-#~ msgid "TIP:"
-#~ msgstr "TIP:"
-
-#~ msgid "This is a small title related to the current image"
-#~ msgstr "Dette er en lille titel, der henviser til det nuværende billede"
-
-#~ msgid "Why Our Product is the Future of Innovation"
-#~ msgstr "Derfor er vores produkter innovationens fremtid"
-
-#~ msgid "block, blog, post, catalog, feed, items, entries, entry, collection"
-#~ msgstr ""
-#~ "blok, blog, opslag, katalog, feed, artikler, indlæg, indtastning, "
-#~ "kollektion"
-
-#~ msgid ""
-#~ "cite, slogan, tagline, mantra, catchphrase, statements, sayings, "
-#~ "comments, mission, citations, maxim, quotes, principle, ethos, values"
-#~ msgstr ""
-#~ "citat, slogan, slaglinje, mantra, slagord, udsagn, ordsprog, kommentarer, "
-#~ "mission, citater, maksimal, principper, etos, værdier"
-
-#~ msgid ""
-#~ "cite, testimonials, endorsements, reviews, feedback, statements, "
-#~ "references, sayings, comments, appreciations, citations, carousel"
-#~ msgstr ""
-#~ "citater, udtalelser, anbefalinger, anmeldelser, feedback, udsagn, "
-#~ "referencer, ordsprog, kommentarer, påskønnelser, citater, karrusel"
-
-#~ msgid ""
-#~ "columns, gallery, pictures, photos, media, text, content, album, "
-#~ "showcase, visuals, portfolio, arrangement, collection, visual-grid, "
-#~ "split, alignment, added value"
-#~ msgstr ""
-#~ "kolonner, galleri, billeder, fotos, medier, tekst, indhold, album, "
-#~ "fremvisning, visuelle elementer, portefølje, arrangement, kollektion, "
-#~ "visuelt gitter, opdeling, justering, merværdi"
-
-#~ msgid ""
-#~ "common answers, common questions, faq, QA, collapse, expandable, toggle, "
-#~ "collapsible, hide-show, movement, information, image, picture, photo, "
-#~ "illustration, media, visual"
-#~ msgstr ""
-#~ "almindelige svar, almindelige spørgsmål, faq, QA, sammenklappelig, "
-#~ "udvidelig, skifte, sammenklappelig, skjule-vise, bevægelse, information, "
-#~ "figur, billede, foto, illustration, medie, visuelt"
-
-#~ msgid ""
-#~ "comparison, price, pricing, engage, call to action, cta, box, shop, "
-#~ "table, cart, product, cost, charges, fees, tariffs, prices, expenses"
-#~ msgstr ""
-#~ "sammenligning, pris, prisfastsættelse, engagere, opfordring til handling, "
-#~ "handlingsopfordring, boks, butik, tabel, indkøbskurv, produkt, "
-#~ "omkostninger, gebyrer, takster, priser, udgifter"
-
-#~ msgid ""
-#~ "contact, collect, submission, input, fields, questionnaire, survey, "
-#~ "registration, request"
-#~ msgstr ""
-#~ "kontakt, indsamling, indsendelse, input, felter, spørgeskema, "
-#~ "undersøgelse, registrering, anmodning"
-
-#~ msgid ""
-#~ "contact, collect, submission, input, fields, questionnaire, survey, "
-#~ "registration, request, image, picture, photo, illustration, media, visual"
-#~ msgstr ""
-#~ "kontakt, indsamling, indsendelse, input, felter, spørgeskema, "
-#~ "undersøgelse, registrering, anmodning, figur, billede, foto, "
-#~ "illustration, medier, visuelt"
-
-#~ msgid ""
-#~ "contact, collect, submission, input, fields, questionnaire, survey, "
-#~ "registration, request, image, picture, photo, illustration, media, "
-#~ "visual, company, organization, address, phone, email, location, get-in-"
-#~ "touch"
-#~ msgstr ""
-#~ "kontakt, indsamling, indsendelse, input, felter, spørgeskema, "
-#~ "undersøgelse, registrering, anmodning, figur, billede, foto, "
-#~ "illustration, medier, visuelt, virksomhed, organisation, adresse, "
-#~ "telefon, e-mail, placering, kontaktoplysninger"
-
-#~ msgid ""
-#~ "contact, collect, submission, input, fields, questionnaire, survey, "
-#~ "registration, request, image, picture, photo, illustration, media, "
-#~ "visual, get-in-touch"
-#~ msgstr ""
-#~ "kontakt, indsamling, indsendelse, input, felter, spørgeskema, "
-#~ "undersøgelse, registrering, anmodning, figur, billede, foto, "
-#~ "illustration, medier, visuelt, kontaktoplysninger"
-
-#~ msgid "content, paragraph, article, body, description, information"
-#~ msgstr "indhold, afsnit, artikel, brødtekst, beskrivelse, oplysninger"
-
-#~ msgid ""
-#~ "content, picture, photo, connection, cover, shape, background, image, "
-#~ "headings, hero, light, experience, parallax"
-#~ msgstr ""
-#~ "indhold, billede, foto, forbindelse, forside, form, baggrund, billede, "
-#~ "overskrifter, hero, lys, erfaring, parallaks"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, artikel, historie, "
-#~ "kombination"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, engage, call to action, cta, box, showcase"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, artikel, historie, "
-#~ "kombination, engagement, opfordring til handling, handlingsopfordring, "
-#~ "boks, fremvisning"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, heading, headline"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, artikel, historie, "
-#~ "kombination, overskrift, titel"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, more, hexagon, geometric"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, artikel, historie, "
-#~ "kombination, mere, sekskant, geometrisk"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, network, relationships, interactions, connectivity, "
-#~ "collaborations"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, artikel, historie, "
-#~ "kombination, netværk, relationer, interaktioner, tilslutning, samarbejde"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, trendy, pattern, design"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, artikel, historie, "
-#~ "kombination, trendy, mønster, design"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, trendy, pattern, design, shape, geometric, patterned"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, artikel, historie, "
-#~ "kombination, trendy, mønster, design, form, geometrisk, mønstret"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, trendy, pattern, design, shape, geometric, patterned, "
-#~ "contrast"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, artikel, historie, "
-#~ "kombination, trendy, mønster, design, form, geometrisk, mønstret, kontrast"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, article, story, "
-#~ "combination, trendy, pattern, design, shape, geometric, patterned, "
-#~ "contrast, collage, arrangement, gallery, creative, mosaic"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, artikel, historie, "
-#~ "kombination, trendy, mønster, design, form, geometrisk, mønstret, "
-#~ "kontrast, collage, arrangement, galleri, kreativt, mosaik"
-
-#~ msgid ""
-#~ "content, picture, photo, illustration, media, visual, focus, in-depth, "
-#~ "analysis, more, contact, detailed, mockup, explore, insight"
-#~ msgstr ""
-#~ "indhold, billede, foto, illustration, medier, visuelt, fokus, "
-#~ "dybdegående, analyse, mere, kontakt, detaljeret, eksempel, udforske, "
-#~ "indsigt"
-
-#~ msgid ""
-#~ "description, containers, layouts, structures, multi-columns, modules, "
-#~ "boxes"
-#~ msgstr ""
-#~ "beskrivelse, beholdere, layouts, strukturer, flere kolonner, moduler, "
-#~ "bokse"
-
-#~ msgid ""
-#~ "description, containers, layouts, structures, multi-columns, modules, "
-#~ "boxes, content, picture, photo, illustration, media, visual, article, "
-#~ "story, combination, showcase, announcement, reveal"
-#~ msgstr ""
-#~ "beskrivelse, beholdere, layouts, strukturer, flere kolonner, moduler, "
-#~ "bokse, indhold, billede, foto, illustration, medier, visuelt, artikel, "
-#~ "historie, kombination, fremvisning, meddelelse, afsløring"
-
-#~ msgid ""
-#~ "description, containers, layouts, structures, multi-columns, modules, "
-#~ "boxes, content, picture, photo, illustration, media, visual, article, "
-#~ "story, combination, showcase, announcement, reveal, trendy, design, "
-#~ "shape, geometric, engage, call to action, cta, button"
-#~ msgstr ""
-#~ "beskrivelse, beholdere, layouts, strukturer, flere kolonner, moduler, "
-#~ "bokse, indhold, billede, foto, illustration, medier, visuelt, artikel, "
-#~ "historie, kombination, fremvisning, meddelelse, afsløring, trendy, "
-#~ "design, form, geometrisk, engagere, opfordring til handling, "
-#~ "handlingsopfordring, knap"
-
-#~ msgid ""
-#~ "four sections, column, grid, division, split, segments, pictures, "
-#~ "illustration, media, photos, tiles, arrangement, gallery, images-grid, "
-#~ "mixed, collection, stacking, visual-grid, showcase, visuals, portfolio, "
-#~ "thumbnails, engage, call to action, cta, showcase"
-#~ msgstr ""
-#~ "fire sektioner, kolonne, gitter, opdeling, split, segmenter, billeder, "
-#~ "illustration, medier, fotos, fliser, arrangement, galleri, billedgitter, "
-#~ "blandet, kollektion, stabling, visuelt gitter, fremvisning, visuelle "
-#~ "elementer, portefølje, miniaturer, interagere, opfordring til handling, "
-#~ "handlingsopfordring, fremvise"
-
-#~ msgid ""
-#~ "gallery, carousel, pictures, photos, album, showcase, visuals, portfolio, "
-#~ "thumbnails, slideshow"
-#~ msgstr ""
-#~ "galleri, karrusel, billeder, fotos, album, fremvisning, visuelle "
-#~ "elementer, portefølje, miniaturer, lysbilledshow"
-
-#~ msgid ""
-#~ "gallery, carousel, slider, slideshow, picture, photo, image-slider, "
-#~ "rotating, swipe, transition, media-carousel, movement"
-#~ msgstr ""
-#~ "galleri, karrusel, skyder, lysbilledshow, billede, foto, billedskyder, "
-#~ "roterende, swipe, overgang, mediekarrusel, bevægelse"
-
-#~ msgid ""
-#~ "gallery, carousel, slider, slideshow, picture, photo, image-slider, "
-#~ "rotating, swipe, transition, media-carousel, movement, cta, engagement, "
-#~ "call to action"
-#~ msgstr ""
-#~ "galleri, karrusel, skyder, lysbilledshow, billede, foto, billedskyder, "
-#~ "roterende, swipe, overgang, mediekarrusel, bevægelse, "
-#~ "handlingsopfordring, engagement, opfordring til handling"
-
-#~ msgid ""
-#~ "graph, table, diagram, pie, plot, bar, metrics, figures, data-"
-#~ "visualization, statistics, stats, analytics, infographic, skills, report"
-#~ msgstr ""
-#~ "graf, tabel, diagram, cirkeldiagram, plot, søjlediagram, målinger, tal, "
-#~ "datavisualisering, statistikker, statistik, analyse, infografik, "
-#~ "færdigheder, rapport"
-
-#~ msgid ""
-#~ "grid, gallery, pictures, photos, album, showcase, visuals, portfolio, "
-#~ "mosaic, collage, arrangement, collection, visual-grid"
-#~ msgstr ""
-#~ "gitter, galleri, billeder, fotos, album, fremvisning, visuelle elementer, "
-#~ "portefølje, mosaik, collage, arrangement, kollektion, visuelt gitter"
-
-#~ msgid ""
-#~ "grid, gallery, pictures, photos, media, text, content, album, showcase, "
-#~ "visuals, portfolio, mosaic, collage, arrangement, collection, visual-"
-#~ "grid, split, alignment"
-#~ msgstr ""
-#~ "gitter, galleri, billeder, fotos, medier, tekst, indhold, album, "
-#~ "fremvisning, visuelle elementer, portefølje, mosaik, collage, "
-#~ "arrangement, kollektion, visuelt gitter, opdeling, justering"
-
-#~ msgid ""
-#~ "header, introduction, home, content, introduction, overview, spotlight, "
-#~ "presentation, welcome, context, description, primary, highlight, lead"
-#~ msgstr ""
-#~ "overskrift, introduktion, startside, indhold, introduktion, oversigt, "
-#~ "spotlight, præsentation, velkomst, kontekst, beskrivelse, primær, "
-#~ "fremhævet, lead"
-
-#~ msgid ""
-#~ "heading, h1, headline, header, main, top, caption, introductory, "
-#~ "principal, key"
-#~ msgstr ""
-#~ "overskrift, h1, titel, header, hoved, top, billedtekst, indledende, "
-#~ "hovedsagelig, nøgle"
-
-#~ msgid ""
-#~ "headline, header, content, picture, photo, illustration, media, visual, "
-#~ "article, combination, trendy, pattern, design, bold, impactful, vibrant, "
-#~ "standout"
-#~ msgstr ""
-#~ "overskrift, header, indhold, billede, foto, illustration, medier, "
-#~ "visuelt, artikel, kombination, trendy, mønster, design, fed, effektfuld, "
-#~ "levende, iøjnefaldende"
-
-#~ msgid ""
-#~ "headline, header, content, picture, photo, illustration, media, visual, "
-#~ "combination"
-#~ msgstr ""
-#~ "overskrift, header, indhold, billede, foto, illustration, medier, "
-#~ "visuelt, kombination"
-
-#~ msgid ""
-#~ "hero, animation, animated, cards, float, stacked, promo, categories, "
-#~ "ecommerce, shop"
-#~ msgstr ""
-#~ "helt, animation, animeret, kort, flydende, stablet, reklame, kategorier, "
-#~ "e-handel, butik"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, branding, intro, home, showcase, "
-#~ "spotlight, lead, welcome, announcement, splash, top, main"
-#~ msgstr ""
-#~ "helt, jumbotron, overskrift, header, branding, intro, hjem, fremvisning, "
-#~ "spotlight, lead, velkomst, meddelelse, splash, top, hoved"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, branding, intro, home, showcase, "
-#~ "spotlight, main, landing, presentation, top, splash, parallax"
-#~ msgstr ""
-#~ "helt, jumbotron, overskrift, header, branding, intro, hjem, fremvisning, "
-#~ "spotlight, hoved, landing, præsentation, top, splash, parallaks"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, intro, home, content, description, "
-#~ "primary, highlight, lead"
-#~ msgstr ""
-#~ "helt, jumbotron, overskrift, header, intro, hjem, indhold, beskrivelse, "
-#~ "primær, highligt, lead"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, "
-#~ "introduction, overview, spotlight, presentation, welcome, context, "
-#~ "description, primary, highlight, lead"
-#~ msgstr ""
-#~ "helt, jumbotron, overskrift, header, introduktion, hjem, indhold, "
-#~ "introduktion, oversigt, spotlight, præsentation, velkomst, kontekst, "
-#~ "beskrivelse, primær, fremhævet, lead"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, "
-#~ "introduction, overview, spotlight, presentation, welcome, context, "
-#~ "description, primary, highlight, lead, CTA, promote, promotion"
-#~ msgstr ""
-#~ "helt, jumbotron, overskrift, header, introduktion, hjem, indhold, "
-#~ "introduktion, oversigt, spotlight, præsentation, velkomst, kontekst, "
-#~ "beskrivelse, primær, fremhævelse, lead, handlingsopfordring, promovering, "
-#~ "kampagne"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, "
-#~ "introduction, overview, spotlight, presentation, welcome, context, "
-#~ "description, primary, highlight, lead, discover, exploration, reveal"
-#~ msgstr ""
-#~ "helt, jumbotron, overskrift, header, introduktion, hjem, indhold, "
-#~ "introduktion, oversigt, spotlight, præsentation, velkomst, kontekst, "
-#~ "beskrivelse, primær, highlight, lead, opdagelse, udforskning, afsløring"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, "
-#~ "introduction, overview, spotlight, presentation, welcome, context, "
-#~ "description, primary, highlight, lead, journey, skills, expertises, "
-#~ "experts, accomplishments, knowledge"
-#~ msgstr ""
-#~ "helt, jumbotron, overskrift, header, introduktion, hjem, indhold, "
-#~ "introduktion, oversigt, spotlight, præsentation, velkomst, kontekst, "
-#~ "beskrivelse, primær, highlight, lead, rejse, kompetencer, ekspertise, "
-#~ "eksperter, præstationer, viden"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, picture, "
-#~ "photo, illustration, media, visual, article, combination, trendy, "
-#~ "pattern, design"
-#~ msgstr ""
-#~ "helt, jumbotron, overskrift, header, introduktion, hjem, indhold, "
-#~ "billede, foto, illustration, medier, visuelt, artikel, kombination, "
-#~ "trendy, mønster, design"
-
-#~ msgid ""
-#~ "hero, jumbotron, headline, header, introduction, home, content, picture, "
-#~ "photo, illustration, media, visual, article, combination, trendy, "
-#~ "pattern, design, centered"
-#~ msgstr ""
-#~ "helt, jumbotron, overskrift, header, introduktion, hjem, indhold, "
-#~ "billede, foto, illustration, medier, visuelt, artikel, kombination, "
-#~ "trendy, mønster, design, centreret"
-
-#~ msgid ""
-#~ "history, story, events, milestones, chronology, sequence, progression, "
-#~ "achievements"
-#~ msgstr ""
-#~ "historie, fortælling, begivenheder, milepæle, kronologi, rækkefølge, "
-#~ "udvikling, resultater"
-
-#~ msgid ""
-#~ "history, story, events, milestones, chronology, sequence, progression, "
-#~ "achievements, changelog, updates, announcements, recent, latest"
-#~ msgstr ""
-#~ "historie, fortælling, begivenheder, milepæle, kronologi, rækkefølge, "
-#~ "udvikling, resultater, ændringslog, opdateringer, meddelelser, seneste, "
-#~ "nyeste"
-
-#~ msgid ""
-#~ "history, story, events, milestones, chronology, sequence, progression, "
-#~ "achievements, changelog, updates, announcements, recent, latest, picture, "
-#~ "photo, illustration, media, visual"
-#~ msgstr ""
-#~ "historie, fortælling, begivenheder, milepæle, kronologi, rækkefølge, "
-#~ "udvikling, resultater, ændringslog, opdateringer, meddelelser, seneste, "
-#~ "nyeste, billede, foto, illustration, medier, visuelt"
-
-#~ msgid ""
-#~ "journey, exploration, travel, outdoor, excitement, quest, start, "
-#~ "onboarding, discovery, thrill"
-#~ msgstr ""
-#~ "rejse, udforskning, rejse, udendørs, begejstring, søgen, start, "
-#~ "onboarding, opdagelse, spænding"
-
-#~ msgid ""
-#~ "masonry, grid, column, pictures, photos, album, showcase, visuals, "
-#~ "portfolio, mosaic, collage, arrangement, collection, visual-grid"
-#~ msgstr ""
-#~ "murværk, gitter, kolonne, billeder, fotos, album, fremvisning, visuelle "
-#~ "elementer, portefølje, mosaik, collage, arrangement, kollektion, visuelt "
-#~ "gitter"
-
-#~ msgid ""
-#~ "menu, pricing, shop, table, cart, product, cost, charges, fees, rates, "
-#~ "prices, expenses"
-#~ msgstr ""
-#~ "menu, priser, butik, bord, indkøbsvogn, produkt, omkostninger, gebyrer, "
-#~ "satser, priser, udgifter"
-
-#~ msgid ""
-#~ "menu, pricing, shop, table, cart, product, cost, charges, fees, rates, "
-#~ "prices, expenses, columns"
-#~ msgstr ""
-#~ "menu, priser, butik, tabel, indkøbskurv, produkt, omkostninger, gebyrer, "
-#~ "satser, priser, udgifter, kolonner"
-
-#~ msgid "navigation, index, outline, chapters, sections, overview, menu, tab"
-#~ msgstr ""
-#~ "navigation, indeks, oversigt, kapitler, afsnit, oversigt, menu, fane"
-
-#~ msgid ""
-#~ "organization, company, people, column, members, staffs, profiles, bios, "
-#~ "roles, personnel, crew"
-#~ msgstr ""
-#~ "organisation, virksomhed, medarbejdere, kolonne, medlemmer, personale, "
-#~ "profiler, biografier, roller, personale, besætning"
-
-#~ msgid ""
-#~ "organization, company, people, members, staffs, profiles, bios, roles, "
-#~ "personnel, crew, patterned"
-#~ msgstr ""
-#~ "organisation, virksomhed, mennesker, medlemmer, medarbejdere, profiler, "
-#~ "biografier, roller, personale, besætning, mønstret"
-
-#~ msgid ""
-#~ "organization, company, people, members, staffs, profiles, bios, roles, "
-#~ "personnel, crew, patterned, trendy"
-#~ msgstr ""
-#~ "organisation, virksomhed, mennesker, medlemmer, medarbejdere, profiler, "
-#~ "biografier, roller, personale, besætning, mønstret, trendy"
-
-#~ msgid ""
-#~ "organization, company, people, members, staffs, profiles, bios, roles, "
-#~ "personnel, crew, patterned, trendy, social"
-#~ msgstr ""
-#~ "organisation, virksomhed, mennesker, medlemmer, medarbejdere, profiler, "
-#~ "biografier, roller, personale, besætning, mønstret, trendy, sociale medier"
-
-#~ msgid ""
-#~ "organization, structure, people, team, name, role, position, image, "
-#~ "portrait, photo, employees, shapes"
-#~ msgstr ""
-#~ "organisation, struktur, mennesker, team, navn, rolle, position, billede, "
-#~ "portræt, foto, medarbejdere, former"
-
-#~ msgid ""
-#~ "picture, photo, illustration, media, visual, start, launch, commencement, "
-#~ "initiation, opening, kick-off, kickoff, beginning, events, parallax"
-#~ msgstr ""
-#~ "billede, foto, illustration, medier, visuelt, start, lancering, "
-#~ "begyndelse, indvielse, åbning, optakt, kickoff, begyndelse, begivenheder, "
-#~ "parallaks"
-
-#~ msgid ""
-#~ "pricing, promotion, price, feature-comparison, side-by-side, evaluation, "
-#~ "competitive, overview"
-#~ msgstr ""
-#~ "prissætning, markedsføring, pris, sammenligning af funktioner, side om "
-#~ "side, evaluering, konkurrencedygtig, oversigt"
-
-#~ msgid ""
-#~ "process, progression, guide, workflow, sequence, instructions, stages, "
-#~ "procedure, roadmap"
-#~ msgstr ""
-#~ "proces, fremskridt, vejledning, arbejdsgang, rækkefølge, instruktioner, "
-#~ "faser, procedure, oversigt"
-
-#~ msgid ""
-#~ "promotion, characteristic, quality, highlights, specs, advantages, "
-#~ "functionalities, exhibit, details, capabilities, attributes, promotion"
-#~ msgstr ""
-#~ "promovering, egenskaber, kvalitet, højdepunkter, specifikationer, "
-#~ "fordele, funktioner, udstilling, detaljer, muligheder, attributter, "
-#~ "promovering"
-
-#~ msgid ""
-#~ "promotion, characteristic, quality, highlights, specs, advantages, "
-#~ "functionalities, exhibit, details, capabilities, attributes, promotion, "
-#~ "headline, content, overview, spotlight"
-#~ msgstr ""
-#~ "promovering, egenskaber, kvalitet, højdepunkter, specifikationer, "
-#~ "fordele, funktioner, udstilling, detaljer, muligheder, attributter, "
-#~ "promovering, overskrift, indhold, oversigt, spotlight"
-
-#~ msgid ""
-#~ "promotion, characteristic, quality, highlights, specs, advantages, "
-#~ "functionalities, exhibit, details, capabilities, attributes, promotion, "
-#~ "presentation, demo, feature"
-#~ msgstr ""
-#~ "promovering, egenskab, kvalitet, højdepunkter, specifikationer, fordele, "
-#~ "funktioner, udstilling, detaljer, muligheder, attributter, promovering, "
-#~ "præsentation, demo, funktion"
-
-#~ msgid ""
-#~ "promotion, characteristic, quality, highlights, specs, advantages, "
-#~ "functionalities, features, exhibit, details, capabilities, attributes, "
-#~ "promotion, headline, content, overview, spotlight"
-#~ msgstr ""
-#~ "promovering, egenskab, kvalitet, højdepunkter, specifikationer, fordele, "
-#~ "funktioner, udstilling, detaljer, muligheder, attributter, promovering, "
-#~ "overskrift, indhold, oversigt, spotlight"
-
-#~ msgid ""
-#~ "questions, answers, common answers, common questions, faq, help, support, "
-#~ "information, knowledge, guide, troubleshooting, assistance, QA, terms of "
-#~ "services"
-#~ msgstr ""
-#~ "spørgsmål, svar, almindelige svar, almindelige spørgsmål, faq, hjælp, "
-#~ "support, information, viden, vejledning, fejlfinding, assistance, QA, "
-#~ "servicevilkår"
-
-#~ msgid ""
-#~ "questions, answers, common answers, common questions, faq, help, support, "
-#~ "information, knowledge, guide, troubleshooting, assistance, columns, QA"
-#~ msgstr ""
-#~ "spørgsmål, svar, almindelige svar, almindelige spørgsmål, faq, hjælp, "
-#~ "support, information, viden, vejledning, fejlfinding, assistance, "
-#~ "kolonner, QA"
-
-#~ msgid ""
-#~ "reveal, showcase, launch, presentation, announcement, content, picture, "
-#~ "photo, illustration, media, visual, article, combination"
-#~ msgstr ""
-#~ "afsløring, fremvisning, lancering, præsentation, meddelelse, indhold, "
-#~ "billede, foto, illustration, medier, visuelt, artikel, kombination"
-
-#~ msgid ""
-#~ "reveal, showcase, launch, presentation, announcement, content, picture, "
-#~ "photo, illustration, media, visual, combination"
-#~ msgstr ""
-#~ "afsløring, fremvisning, lancering, præsentation, meddelelse, indhold, "
-#~ "billede, foto, illustration, medier, visuelt, kombination"
-
-#~ msgid ""
-#~ "scrolling, depth, effect, background, layer, visual, movement, parallax"
-#~ msgstr ""
-#~ "scrolle, dybde, effekt, baggrund, lag, visuelt, bevægelse, parallaks"
-
-#~ msgid ""
-#~ "services, icons, features, characteristic, specs, advantages, "
-#~ "functionalities, exhibit, details, capabilities, attributes, promotion, "
-#~ "overview, specifications"
-#~ msgstr ""
-#~ "tjenester, ikoner, funktioner, egenskaber, specifikationer, fordele, "
-#~ "funktionaliteter, udstilling, detaljer, kapaciteter, attributter, "
-#~ "promovering, oversigt, specifikationer"
-
-#~ msgid ""
-#~ "shop, group, list, card, cart, products, inventory, catalog, merchandise, "
-#~ "goods"
-#~ msgstr ""
-#~ "butik, gruppe, liste, kort, indkøbskurv, produkter, lagerbeholdning, "
-#~ "katalog, handelsvarer, varer"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, performance, achievements, benchmarks, milestones, indicators, "
-#~ "data, measurements, reports, trends, results"
-#~ msgstr ""
-#~ "statistikker, statistik, KPI, målinger, dashboard, analyser, "
-#~ "højdepunkter, tal, præstationer, resultater, benchmarks, milepæle, "
-#~ "indikatorer, data, målinger, rapporter, tendenser, resultater"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, performance, achievements, benchmarks, milestones, indicators, "
-#~ "data, measurements, reports, trends, results, analytics, summaries, "
-#~ "summary"
-#~ msgstr ""
-#~ "statistikker, KPI, målinger, dashboard, analyser, højdepunkter, tal, "
-#~ "præstationer, resultater, benchmarks, milepæle, indikatorer, data, "
-#~ "målinger, rapporter, tendenser, resultater, analyser, oversigter, "
-#~ "sammendrag, resumé"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, skills, achievements, benchmarks, milestones, indicators, data, "
-#~ "measurements, reports, trends, results"
-#~ msgstr ""
-#~ "statistikker, statistik, KPI, målinger, dashboard, analyser, "
-#~ "højdepunkter, tal, færdigheder, resultater, benchmarks, milepæle, "
-#~ "indikatorer, data, målinger, rapporter, tendenser, resultater"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, skills, achievements, benchmarks, milestones, indicators, data, "
-#~ "measurements, reports, trends, results, analytics, cta, call to action, "
-#~ "button"
-#~ msgstr ""
-#~ "statistikker, statistik, KPI, målinger, dashboard, analyser, "
-#~ "højdepunkter, tal, færdigheder, resultater, benchmarks, milepæle, "
-#~ "indikatorer, data, målinger, rapporter, tendenser, resultater, analyser, "
-#~ "handlingsopfordring, opfordring til handling, knap"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, skills, achievements, benchmarks, milestones, indicators, data, "
-#~ "measurements, reports, trends, results, analytics, summaries, summary"
-#~ msgstr ""
-#~ "statistikker, statistik, KPI, målinger, dashboard, analyser, "
-#~ "højdepunkter, tal, færdigheder, resultater, benchmarks, milepæle, "
-#~ "indikatorer, data, målinger, rapporter, tendenser, resultater, analyser, "
-#~ "sammendrag, resumé"
-
-#~ msgid ""
-#~ "statistics, stats, KPI, metrics, dashboard, analytics, highlights, "
-#~ "figures, skills, achievements, benchmarks, milestones, indicators, data, "
-#~ "measurements, reports, trends, results, analytics, summaries, summary, "
-#~ "large-figures, prominent, standout"
-#~ msgstr ""
-#~ "statistikker, statistik, KPI, målinger, dashboard, analyser, "
-#~ "højdepunkter, tal, kompetencer, resultater, benchmarks, milepæle, "
-#~ "indikatorer, data, målinger, rapporter, tendenser, resultater, analyser, "
-#~ "sammendrag, resumé, store tal, fremtrædende, betydningsfuld"
-
-#~ msgid ""
-#~ "stores, button, engagement, appeal, mockup, text, content, picture, "
-#~ "photo, illustration, media, visual, article, story"
-#~ msgstr ""
-#~ "butikker, knap, engagement, appel, eksempel, tekst, indhold, billede, "
-#~ "foto, illustration, medier, visuelt, artikel, historie"
-
-#~ msgid "⌙ Style"
-#~ msgstr "⌙ Stil"

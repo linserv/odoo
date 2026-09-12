@@ -9,7 +9,6 @@ from . import (
     digest,
     ir_http,
     ir_module_module,
-    payment_token,
     payment_transaction,
     product_attribute,
     product_attribute_category,
@@ -45,3 +44,5 @@ from . import (
     website_visitor,
     withdrawal_request,
 )
+
+from . import res_groups

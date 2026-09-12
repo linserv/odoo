@@ -7,8 +7,6 @@ import operator as py_operator
 from collections import defaultdict
 from datetime import date, datetime, time, UTC
 
-from dateutil.relativedelta import relativedelta
-
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Domain
@@ -487,7 +485,7 @@ been taken for this time off type. Changing it now would affect existing employe
         ], limit=1))
 
     @api.model
-    def get_allocation_data_request(self, target_date=None, hidden_allocations=True):
+    def get_allocation_data_request(self, target_date=None, hidden_allocations=True, same_year_only=False):
         employee = self.env["hr.employee"]._get_contextual_employee()
         if not employee:
             return defaultdict(list)
@@ -495,7 +493,7 @@ been taken for this time off type. Changing it now would affect existing employe
         if not hidden_allocations:
             domain.append(('hide_on_dashboard', '=', False))
         work_entry_types = self.search(domain, order='id')
-        employee_work_entry_type_infos = work_entry_types.get_allocation_data(employee, target_date)[
+        employee_work_entry_type_infos = work_entry_types.get_allocation_data(employee, target_date, same_year_only=same_year_only)[
             employee
         ]
         # We only need to filter allocation_data for the dashboard
@@ -508,7 +506,7 @@ been taken for this time off type. Changing it now would affect existing employe
         ]
         return filtered_employee_work_entry_type_infos
 
-    def get_allocation_data(self, employees, target_date=None):
+    def get_allocation_data(self, employees, target_date=None, same_year_only=False):
         allocation_data = defaultdict(list)
         if target_date and isinstance(target_date, str):
             target_date = datetime.fromisoformat(target_date).date()
@@ -519,7 +517,7 @@ been taken for this time off type. Changing it now would affect existing employe
 
         allocations_leaves_consumed, extra_data = employees.with_context(
             ignored_leave_ids=self.env.context.get('ignored_leave_ids')
-        )._get_consumed_leaves(self, target_date)
+        )._get_consumed_leaves(self, target_date, same_year_only=same_year_only)
 
         today = fields.Date.context_today(self)
         for employee in employees:
@@ -570,6 +568,7 @@ been taken for this time off type. Changing it now would affect existing employe
                 allocations_now = self.env['hr.leave.allocation']
                 allocations_date = self.env['hr.leave.allocation']
                 allocations_with_remaining_leaves = self.env['hr.leave.allocation']
+                primary_unit = 'hours' if work_entry_type.unit_of_measure == 'hour' else 'days'
                 for allocation, data in allocations_leaves_consumed[employee][work_entry_type].items():
                     # We only need the allocation that are valid at the given date
                     if allocation:
@@ -585,20 +584,23 @@ been taken for this time off type. Changing it now would affect existing employe
                             continue
                         if allocation.date_to and allocation.date_to < target_date:
                             continue
-                    lt_info[1]['remaining_leaves'] += data['remaining_leaves']
-                    lt_info[1]['virtual_remaining_leaves'] += data['virtual_remaining_leaves']
-                    lt_info[1]['max_leaves'] += data['max_leaves']
-                    lt_info[1]['accrual_bonus'] += data['accrual_bonus']
-                    lt_info[1]['leaves_taken'] += data['leaves_taken']
-                    lt_info[1]['virtual_leaves_taken'] += data['virtual_leaves_taken']
-                    lt_info[1]['leaves_requested'] += data['virtual_leaves_taken'] - data['leaves_taken']
-                    lt_info[1]['leaves_approved'] += data['leaves_taken']
-                    if data['virtual_remaining_leaves'] > 0:
+                        if same_year_only and allocation.date_from.year != target_date.year:
+                            continue
+                    lt_info[1]['remaining_leaves'] += data[f'{primary_unit}_remaining_leaves']
+                    lt_info[1]['virtual_remaining_leaves'] += data[f'{primary_unit}_virtual_remaining_leaves']
+                    lt_info[1]['max_leaves'] += data[f'{primary_unit}_max_leaves']
+                    lt_info[1]['accrual_bonus'] += data[f'{primary_unit}_accrual_bonus']
+                    lt_info[1]['leaves_taken'] += data[f'{primary_unit}_leaves_taken']
+                    lt_info[1]['virtual_leaves_taken'] += data[f'{primary_unit}_virtual_leaves_taken']
+                    lt_info[1]['leaves_requested'] += data[f'{primary_unit}_virtual_leaves_taken'] - data[f'{primary_unit}_leaves_taken']
+                    lt_info[1]['leaves_approved'] += data[f'{primary_unit}_leaves_taken']
+                    if data[f'{primary_unit}_virtual_remaining_leaves'] > 0:
                         allocations_with_remaining_leaves |= allocation
                 closest_expiration_date, closest_allocation_remaining = self._get_closest_expiring_leaves_date_and_count(
                                                                             allocations_with_remaining_leaves,
                                                                             allocations_leaves_consumed[employee][work_entry_type],
-                                                                            target_date
+                                                                            target_date,
+                                                                            primary_unit,
                                                                         )
                 if closest_expiration_date:
                     closest_allocation_expire = format_date(self.env, closest_expiration_date)
@@ -640,34 +642,29 @@ been taken for this time off type. Changing it now would affect existing employe
                 allocation_data[employee].append(lt_info)
         return allocation_data
 
-    def _get_closest_expiring_leaves_date_and_count(self, allocations, remaining_leaves, target_date):
+    def _get_closest_expiring_leaves_date_and_count(self, allocations, remaining_leaves, target_date, primary_unit):
         # Get the expiration date and carryover date of all allocations and compute the closest expiration date
-        expiration_dates_per_allocation = defaultdict(lambda: {'expiration_date': fields.Date(), 'carryover_date': fields.Date(), 'carried_over_days_expiration_date': fields.Date()})
+        expiration_dates_per_allocation = {}
         expiration_dates = list()
         carried_over_days_expiration_data = self._get_carried_over_days_expiration_data(allocations, target_date)
         for allocation in allocations:
             expiration_date = allocation.date_to
 
-            accrual_plan_level = allocation.sudo()._get_current_accrual_plan_level_id(target_date)[0]
-            carryover_date = False
-            if accrual_plan_level and (accrual_plan_level.action_with_unused_accruals == 'lost'
-            or accrual_plan_level.carryover_options == 'limited'):
-                carryover_date = allocation.sudo()._get_carryover_date(target_date)
-                # If carry over date == target date, then add 1 year to carry over date.
-                # Rational: for example if carry over date = 01/01 this year and target date = 01/01 this year,
-                # then any accrued days on 01/01 this year will have their carry over date 01/01 next year
-                # and not 01/01 this year.
-                if carryover_date == target_date:
-                    carryover_date += relativedelta(years=1)
+            current_lvl, _ = allocation.sudo()._get_current_accrual_plan_level_idx(target_date)
+            carryover_date = None
+            if current_lvl and (current_lvl.action_with_unused_accruals == 'lost' or current_lvl.carryover_options == 'limited'):
+                carryover_date = allocation.sudo()._get_next_carryover_date(target_date, date_from_included=False)
 
             carried_over_days_expiration_date = carried_over_days_expiration_data[allocation]['expiration_date']
 
             expiration_dates.extend([expiration_date, carryover_date, carried_over_days_expiration_date])
-            expiration_dates_per_allocation[allocation]['expiration_date'] = expiration_date
-            expiration_dates_per_allocation[allocation]['carryover_date'] = carryover_date
-            expiration_dates_per_allocation[allocation]['carried_over_days_expiration_date'] = carried_over_days_expiration_date
+            expiration_dates_per_allocation[allocation] = {
+                'expiration_date': expiration_date,
+                'carryover_date': carryover_date,
+                'carried_over_days_expiration_date': carried_over_days_expiration_date,
+            }
 
-        expiration_dates = list(filter(lambda date: date is not False, expiration_dates))
+        expiration_dates = list(filter(bool, expiration_dates))
         expiration_dates.sort()
         # Compute the number of expiring leaves
         for closest_expiration_date in expiration_dates:
@@ -678,10 +675,12 @@ been taken for this time off type. Changing it now would affect existing employe
                 carried_over_days_expiration_date = expiration_dates_per_allocation[allocation]['carried_over_days_expiration_date']
 
                 if expiration_date and expiration_date == closest_expiration_date:
-                    expiring_leaves_count += remaining_leaves[allocation]['virtual_remaining_leaves']
+                    expiring_leaves_count += remaining_leaves[allocation][f'{primary_unit}_virtual_remaining_leaves']
                 elif carryover_date and carryover_date == closest_expiration_date:
-                    accrual_plan_level = allocation.sudo()._get_current_accrual_plan_level_id(target_date)[0]
-                    expiring_leaves_count += max(0, remaining_leaves[allocation]['virtual_remaining_leaves'] - accrual_plan_level.postpone_max_days)
+                    current_lvl = allocation.sudo()._get_current_accrual_plan_level_idx(target_date)[0]
+                    max_carried_over_duration = allocation._convert_from_type_request_unit(
+                        current_lvl.max_carriedover_duration, allocation.work_entry_type_id.unit_of_measure)
+                    expiring_leaves_count += max(0, remaining_leaves[allocation][f'{primary_unit}_virtual_remaining_leaves'] - max_carried_over_duration)
                 elif carried_over_days_expiration_date and carried_over_days_expiration_date == closest_expiration_date:
                     expiring_leaves_count += carried_over_days_expiration_data[allocation]['no_expiring_days']
 
@@ -689,20 +688,25 @@ been taken for this time off type. Changing it now would affect existing employe
                 return closest_expiration_date, expiring_leaves_count
 
         # No leaves will expire
-        return False, 0
+        return None, 0
 
     def _get_carried_over_days_expiration_data(self, allocations, target_date):
-        fake_allocations = self.env['hr.leave.allocation']
+        updated_alloc_data = allocations.sudo()._process_accrual_plans(target_date)
+        carried_over_days_expiration_data = {}
         for allocation in allocations:
-            fake_allocations |= self.env['hr.leave.allocation'].new(origin=allocation)
-        fake_allocations.sudo()._process_accrual_plans(target_date, log=False)
-        carried_over_days_expiration_data = {
-            fake_allocation._origin:
-            {
-                'expiration_date': fake_allocation.carried_over_days_expiration_date,
-                'no_expiring_days': max(0, fake_allocation.expiring_carryover_days - fake_allocation.leaves_taken)
+            if not allocation.accrual_plan_id:
+                carried_over_days_expiration_data[allocation] = {
+                    'expiration_date': None,
+                    'no_expiring_days': 0,
+                }
+                continue
+            allocation_data = updated_alloc_data[allocation]
+            prev_carryover_allocated_duration = allocation._convert_from_type_request_unit(
+                allocation_data['previous_carryover_allocated_duration'], allocation.work_entry_type_id.unit_of_measure, allocation_data)
+            leaves_taken = allocation_data['leaves_taken']
+            carried_over_days_expiration_data[allocation] = {
+                'expiration_date': allocation_data['carried_over_days_expiration_date'],
+                'no_expiring_days':
+                    max(0, prev_carryover_allocated_duration - leaves_taken),
             }
-            for fake_allocation in fake_allocations
-        }
-        fake_allocations._discard_fake_allocation()
         return carried_over_days_expiration_data

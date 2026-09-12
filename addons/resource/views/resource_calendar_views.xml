@@ -52,6 +52,13 @@
                             <field name="company_id" options="{'no_create': 1, 'no_quick_create': 1}"
                                    placeholder="Visible to all" domain="[('id', 'in', allowed_company_ids)]"/>
                         </group>
+                        <group name="resource_working_hours">
+                            <field name="reference_calendar_id" placeholder="from company"/>
+                            <label for="work_time_rate" string="Work Time Rate" groups="base.group_no_one"/>
+                            <div groups="base.group_no_one">
+                                <field name="work_time_rate" nolabel="1" style="width: 6ch; " widget="percentage"/>
+                            </div>
+                        </group>
                     </group>
                     <group name="resource_details">
                         <group style="grid-template-columns: fit-content(50%) minmax(0, 1fr);" col="2">
@@ -83,6 +90,7 @@
         <field name="arch" type="xml">
             <list string="Working Time">
                 <field name="name" string="Working Time"/>
+                <field name="attendance_ids" string="Preview" widget="resource_calendar_hours_by_day"/>
                 <field name="hours_per_week" string="Schedule Total Time" optional="hide"/>
                 <field name="work_time_rate" widget="percentage"/>
                 <field name="full_time_required_hours" widget="float_time" optional="hide"/>

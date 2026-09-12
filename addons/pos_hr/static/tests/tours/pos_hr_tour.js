@@ -78,7 +78,7 @@ registry.category("web_tour.tours").add("PosHrTour", {
             TicketScreen.nthRowContains(2, "Pos Employee1", false),
 
             // Cash in/out should be accessible for all users.
-            Chrome.clickMenuOption("Cash In/Out"),
+            Chrome.doCashMove("50", "Test cash out"),
             Dialog.discard(),
 
             // order for admin
@@ -138,19 +138,24 @@ registry.category("web_tour.tours").add("CashierCannotClose", {
             CashierSelectionPopup.has("Test Employee 3", { run: "click" }),
             Dialog.confirm("Open Register"),
             Chrome.clickMenuButton(),
+            Chrome.waitForMenuOptionsToOpen(),
             {
-                trigger: negate(`span.dropdown-item:contains("Close Register")`),
+                trigger: negate(
+                    `.o_pos_burger_menu_buttons > button.btn:contains("Close Register")`
+                ),
             },
+            Chrome.closeBurgerMenu(),
             PosHr.clickCashierName(),
             CashierSelectionPopup.has("Mitchell Admin", { run: "click" }),
             Chrome.clickMenuButton(),
+            Chrome.waitForMenuOptionsToOpen(),
             {
-                trigger: `span.dropdown-item:contains("Close Register")`,
+                trigger: `.o_pos_burger_menu_buttons > button.btn:contains("Close Register")`,
             },
         ].flat(),
 });
 
-registry.category("web_tour.tours").add("test_basic_user_can_change_price", {
+registry.category("web_tour.tours").add("test_cashier_user_can_change_price", {
     steps: () =>
         [
             Chrome.clickBtn("Open Register"),
@@ -193,13 +198,13 @@ registry.category("web_tour.tours").add("test_change_on_rights_reflected_directl
         ].flat(),
 });
 
-registry.category("web_tour.tours").add("test_minimal_employee_refund", {
+registry.category("web_tour.tours").add("test_restrictive_employee_refund", {
     steps: () =>
         [
             Chrome.clickBtn("Unlock Register"),
             PosHr.loginScreenIsShown(),
             PosHr.clickLoginButton(),
-            CashierSelectionPopup.has("Minimal Employee", { run: "click" }),
+            CashierSelectionPopup.has("Restrictive Employee", { run: "click" }),
             Chrome.clickOrders(),
             TicketScreen.selectFilter("Paid"),
             TicketScreen.selectOrder("001"),
@@ -323,7 +328,7 @@ registry.category("web_tour.tours").add("pos_hr_go_backend_opened_registered", {
             CashierSelectionPopup.has("Mitchell Admin", { run: "click" }),
             Chrome.clickBtn("Open Register"),
             Chrome.existMenuOption("Close Register"),
-            Chrome.notExistMenuOption("Backend"),
+            Chrome.existMenuOption("Backend"),
 
             // Employee with user --> 403
             PosHr.clickCashierName(),
@@ -344,7 +349,7 @@ registry.category("web_tour.tours").add("pos_hr_go_backend_opened_registered", {
             CashierSelectionPopup.has("Test Manager 2", { run: "click" }),
             PosHr.enterPin("5652"),
             Chrome.existMenuOption("Close Register"),
-            Chrome.notExistMenuOption("Backend"),
+            Chrome.existMenuOption("Backend"),
 
             // Manager that opened the session --> access granted
             PosHr.clickCashierName(),
@@ -367,13 +372,13 @@ registry
                 // Employee, connected user
                 CashierSelectionPopup.has("Pos Employee1", { run: "click" }),
                 PosHr.enterPin("2580"),
-                Chrome.existMenuOption("Backend"),
+                Chrome.notExistMenuOption("Backend"),
 
                 // Manager that opened the session, not connected user
                 PosHr.clickCashierName(),
                 CashierSelectionPopup.has("Test Manager 1", { run: "click" }),
                 PosHr.enterPin("5651"),
-                Chrome.notExistMenuOption("Backend"),
+                Chrome.existMenuOption("Backend"),
             ].flat(),
     });
 
