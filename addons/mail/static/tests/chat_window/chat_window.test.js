@@ -119,7 +119,7 @@ test("chat window: basic rendering", async () => {
     // dropdown requires an extra delay before click (because handler is registered in useEffect)
     await contains("[title='Open Actions Menu']");
     await click("[title='Open Actions Menu']");
-    await contains(".o-dropdown-item", { count: 13 });
+    await contains(".o-dropdown-item", { count: 14 });
     await contains(".o-dropdown-item:text('Open in Discuss')");
     await contains(".o-dropdown-item:text('Attachments')");
     await contains(".o-dropdown-item:text('Pinned Messages')");
@@ -131,6 +131,7 @@ test("chat window: basic rendering", async () => {
     await contains(".o-dropdown-item:text('Notification Settings')");
     await contains(".o-dropdown-item:text('Add to Favorites')");
     await contains(".o-dropdown-item:text('Voice & Video Settings')");
+    await contains(".o-dropdown-item:text('View Recordings')");
     await contains(".o-dropdown-item:text('Hide Until New Message')");
     await contains(".o-dropdown-item:text('Leave Conversation')");
 });
@@ -1203,6 +1204,7 @@ test("preserve link formatting in chat bubble message preview", async () => {
     await start();
     await hover(".o-mail-ChatBubble[name='General']");
     await contains(`.o-mail-ChatBubble-preview a[href="https://odoo.com/"]`);
+    expect(".o-mail-ChatBubble-preview a").toHaveStyle({ pointerEvents: "none" }); // links in preview should not be clickable
 });
 
 test("decorate emojis in chat bubble message preview", async () => {

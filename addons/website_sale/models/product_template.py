@@ -805,9 +805,13 @@ class ProductTemplate(models.Model):
                 )
 
             if uom_price_enabled:
-                template_price_vals["base_unit_price"] = (
-                    template.product_variant_id or template
-                )._get_base_unit_price(template_price_vals["price_reduce"])
+                product_or_template = template.product_variant_id or template
+                price_per_base_uom = product_or_template._get_main_uom()._compute_price(
+                    price=template_price_vals["price_reduce"], to_unit=product_or_template.uom_id
+                )
+                template_price_vals["base_unit_price"] = product_or_template._get_base_unit_price(
+                    price_per_base_uom
+                )
 
             res[template.id] = template_price_vals
 
@@ -941,7 +945,7 @@ class ProductTemplate(models.Model):
 
         if (
             self.type == "combo"
-            and website.show_line_subtotals_tax_selection == "tax_included"
+            and website.tax_display == "tax_included"
             and not all(
                 tax.price_include
                 for tax in self.sudo().combo_ids.combo_item_ids.product_id.taxes_id
@@ -1225,7 +1229,7 @@ class ProductTemplate(models.Model):
         )
 
         if not tax_display:
-            show_tax = (website or self.env.website).show_line_subtotals_tax_selection
+            show_tax = (website or self.env.website).tax_display
             tax_display = "total_excluded" if show_tax == "tax_excluded" else "total_included"
 
         return tax_details[tax_display]
@@ -1988,9 +1992,10 @@ class ProductTemplate(models.Model):
         if (
             message_operation == "create"
             and not self.env.user._is_internal()
-            and not self.env["website"].is_view_active("website_sale.product_comment")
         ):
-            return [(Domain.TRUE, "write")]
+            website = self.env.website or self.env['website'].browse(self.env.context.get('host_id'))
+            if not website.with_context(website_id=website.id).is_view_active('website_sale.product_comment'):
+                return [(Domain.TRUE, 'write')]
         return super()._mail_get_operation_for_mail_message_operation(message_operation)
 
     @api.model

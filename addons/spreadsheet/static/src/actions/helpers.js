@@ -1,5 +1,5 @@
 /**
- * @typedef {import("@web/webclient/actions/action_service").ActionOptions} ActionOptions
+ * @typedef {import("@web/webclient/actions/action_plugin").ActionOptions} ActionOptions
  */
 
 /**
@@ -53,10 +53,6 @@ export async function navigateTo(env, actionXmlId, actionDescription, options) {
             view_mode,
         };
     } finally {
-        await actionService.doAction(
-            // clear empty keys
-            JSON.parse(JSON.stringify(navigateActionDescription)),
-            options
-        );
+        await actionService.doAction(navigateActionDescription, options);
     }
 }

@@ -266,6 +266,7 @@ class HrExpense(models.Model):
     existing_bill_id = fields.Many2one(
         string="Existing Bill",
         comodel_name='account.move',
+        index='btree_not_null',
         domain="""[
             ('company_id', '=', company_id),
             ('move_type', '=', 'in_invoice'),
@@ -423,13 +424,12 @@ class HrExpense(models.Model):
 
             managers = (
                 expense.manager_id
-                | employee.expense_manager_id
-                | employee.sudo().department_id.manager_id.user_id.sudo(self.env.su)
+                | employee._get_expense_managers()
             )
             if is_all_approver:
                 managers |= self.env.user
             if expense.employee_id.id in expenses_employee_ids_under_user_ones:
-                    managers |= self.env.user
+                managers |= self.env.user
             if not expense.is_own_expense and self.env.user in managers:
                 # If Approver-level or designated manager, can edit other people expense
                 expense.is_editable = True
@@ -515,7 +515,7 @@ class HrExpense(models.Model):
         for expense in self:
             expense.product_uom_id = expense.product_id.uom_id
 
-    @api.depends('amount_residual', 'account_move_id.state', 'account_move_id.payment_state', 'approval_state')
+    @api.depends('amount_residual', 'account_move_id.state', 'account_move_id.payment_state', 'account_move_id.origin_payment_id.state', 'approval_state')
     def _compute_state(self):
         """
         Compute the states of the expense as such (priority is given to the last matching state of the list):
@@ -539,6 +539,8 @@ class HrExpense(models.Model):
                     expense.state = 'paid'
                 elif move.state == 'draft':
                     expense.state = 'approved'
+                elif expense.existing_bill_id:
+                    expense.state = 'paid' if move.origin_payment_id.state == 'reconciled' else self.env['account.move']._get_invoice_in_payment_state()
                 elif move.payment_state == 'not_paid':
                     expense.state = 'posted'
                 elif (
@@ -1318,6 +1320,21 @@ class HrExpense(models.Model):
         return super().get_empty_list_help((help_message or '') + self._get_empty_list_mail_alias())
 
     @api.model
+    def get_views(self, views, options=None):
+        res = super().get_views(views, options)
+        if (
+            (form_toolbar := res['views'].get('form', {}).get('toolbar'))
+            and form_toolbar.get('print')
+            and (report := self.env.ref('hr_expense.action_report_hr_expense', raise_if_not_found=False))
+        ):
+            form_toolbar['print'] = [
+                dict(action, name=self.env._("Print"))
+                if action['id'] == report.id else action
+                for action in form_toolbar['print']
+            ]
+        return res
+
+    @api.model
     def message_new(self, msg_dict, custom_values=None):
         email_address = email_normalize(msg_dict.get('email_from'))
         employee = self._get_employee_from_email(email_address)
@@ -1655,9 +1672,8 @@ class HrExpense(models.Model):
 
             elif not is_hr_admin:
                 current_managers = (
-                        expense_employee.expense_manager_id
-                        | expense_employee.sudo().department_id.manager_id.user_id.sudo(self.env.su)
-                        | expense.manager_id
+                    expense_employee._get_expense_managers()
+                    | expense.manager_id
                 )
                 if expense_employee.id in expenses_employee_ids_under_user_ones:
                     current_managers |= self.env.user
@@ -1688,7 +1704,7 @@ class HrExpense(models.Model):
         if False in self.mapped('payment_mode'):
             raise UserError(self.env._("Please specify if the expenses were paid by the company, reimbursed to the employee directly, or in a payslip."))
 
-    def _do_approve(self, check=True):
+    def _do_approve(self):
         expenses_to_approve = self.filtered(lambda s: s.state in {'submitted', 'draft'})
         for expense in expenses_to_approve:
             expense.write({
@@ -1762,16 +1778,21 @@ class HrExpense(models.Model):
 
         if employee_expenses:
             # Creation of the account moves for the employee paid expenses.
-            journal = employee_expenses[0]._get_default_journal()
-            today = fields.Date.context_today(self)
-            expense_receipt_vals_list = [{
-                **new_receipt_vals,
-                'journal_id': journal.id,
-                'invoice_date': today,
-            } for new_receipt_vals in employee_expenses._prepare_receipts_vals()]
-            moves_sudo = self.with_context(clean_context(self.env.context)).env['account.move'].sudo().create(expense_receipt_vals_list)  # clean_context to remove default_*
-            for move_sudo in moves_sudo:
-                move_sudo._message_set_main_attachment_id(move_sudo.attachment_ids, force=True, filter_xml=False)
+            existing_bill_expenses = employee_expenses.filtered('existing_bill_id')
+            existing_bill_expenses._create_entry_for_expense_with_linked_bill()
+
+            no_bill_expenses = employee_expenses - existing_bill_expenses
+            if no_bill_expenses:
+                journal = no_bill_expenses[0]._get_default_journal()
+                today = fields.Date.context_today(self)
+                expense_receipt_vals_list = [{
+                    **new_receipt_vals,
+                    'journal_id': journal.id,
+                    'invoice_date': today,
+                } for new_receipt_vals in no_bill_expenses._prepare_receipts_vals()]
+                moves_sudo = self.with_context(clean_context(self.env.context)).env['account.move'].sudo().create(expense_receipt_vals_list)  # clean_context to remove default_*
+                for move_sudo in moves_sudo:
+                    move_sudo._message_set_main_attachment_id(move_sudo.attachment_ids, force=True, filter_xml=False)
 
     def _do_reset_approval(self):
         self.sudo().write({'approval_state': False, 'approval_date': False, 'last_notification_date': False, 'account_move_id': False})
@@ -2012,6 +2033,139 @@ class HrExpense(models.Model):
         }
 
         return move_vals, payment_vals
+
+    def _create_entry_for_expense_with_linked_bill(self):
+        """
+        Create different entries to:
+        - mark the existing bill as paid
+        - transfer the debt from the vendor to the employee
+        - prepare the payment to the employee
+        """
+        for expense in self:
+            payment_move_vals, payment_vals, debt_transfer_move_vals = expense._prepare_linked_bill_paid_by_employee_payment_vals()
+            payment_move_sudo, debt_transfer_move_sudo = self.env['account.move'].sudo().create([payment_move_vals, debt_transfer_move_vals])
+            payment_vals['move_id'] = payment_move_sudo.id
+            payment_sudo = self.env['account.payment'].sudo().create(payment_vals)
+            payment_move_sudo.update({
+                'origin_payment_id': payment_sudo.id,
+                'journal_id': payment_move_sudo.journal_id.id,
+            })
+            debt_transfer_move_sudo.action_post()
+
+            # reconcile payment move with debt transfer entry move
+            payment_move_payable_lines = payment_move_sudo.line_ids.filtered(lambda l: l.account_type == 'liability_payable')
+            transfer_move_payable_lines = debt_transfer_move_sudo.line_ids.filtered(
+                lambda l: l.account_type == 'liability_payable' and l.partner_id == expense.employee_id.user_id.partner_id
+            )
+            if payment_move_payable_lines and transfer_move_payable_lines:
+                (payment_move_payable_lines + transfer_move_payable_lines).reconcile()
+
+            # reconcile debt transfer entry with existing bill
+            transfer_move_payable_lines = debt_transfer_move_sudo.line_ids.filtered(
+                lambda l: l.account_type == 'liability_payable' and l.partner_id == expense.vendor_id
+            )
+            existing_bill_payable_lines = expense.existing_bill_id.line_ids.filtered(lambda l: l.account_type == 'liability_payable')
+            if transfer_move_payable_lines and existing_bill_payable_lines:
+                (transfer_move_payable_lines + existing_bill_payable_lines).reconcile()
+
+    def _prepare_linked_bill_paid_by_employee_payment_vals(self):
+        """
+        Prepare the values of the different entries and payment needed for an expense paid by employee
+        - 1 move for the payment -> PNBK (expense employee payment)
+        - 1 payment (to set the origin_payment_id later)
+        - 1 move for the debt transfer -> MISC (Debt transfer entry)
+        """
+        self.ensure_one()
+        employee_partner = self.employee_id.user_id.partner_id
+
+        # DEBT TRANSFER ENTRY LINES
+        move_lines = [
+            # Debit: The payable account (neutralizing the debt of the original bill)
+            {
+                'name': self._get_move_line_name(),
+                'account_id': self.account_id.id,
+                'expense_id': self.id,
+                'amount_currency': self.total_amount_currency,
+                'balance': self.total_amount,
+                'currency_id': self.currency_id.id,
+                'partner_id': self.vendor_id.id,
+            },
+            # Credit: The payable account (transfering debt to employee entry)
+            {
+                'name': self._get_move_line_name(),
+                'account_id': self.account_id.id,
+                'expense_id': self.id,
+                'amount_currency': -self.total_amount_currency,
+                'balance': -self.total_amount,
+                'currency_id': self.currency_id.id,
+                'partner_id': employee_partner.id,
+            },
+        ]
+
+        # DEBT TRANSFER ENTRY
+        debt_transfer_move_vals = {
+            'date': self.date or fields.Date.context_today(self),
+            'ref': self.name,
+            'move_type': 'entry',
+            'currency_id': self.currency_id.id,
+            'company_id': self.company_id.id,
+            'line_ids': [Command.create(line) for line in move_lines],
+        }
+
+        # PAYMENT
+        payment_vals = {
+            'date': self.date,
+            'memo': self.name,
+            'amount': self.total_amount_currency,
+            'payment_type': 'outbound',
+            'partner_type': 'supplier',
+            'partner_id': employee_partner.id,
+            'currency_id': self.currency_id.id,
+            'payment_method_line_id': self.payment_method_line_id.id,
+            'company_id': self.company_id.id,
+        }
+
+        # PAYMENT MOVE LINES
+        payment_move_lines = [
+            # Debit: the payable account
+            {
+                'name': self._get_move_line_name(),
+                'account_id': self.account_id.id,
+                'expense_id': self.id,
+                'amount_currency': self.total_amount_currency,
+                'balance': self.total_amount,
+                'currency_id': self.currency_id.id,
+                'partner_id': employee_partner.id,
+            },
+            # Credit: the outstanding payment account, to pay the employee
+            {
+                'name': self._get_move_line_name(),
+                'account_id': self._get_outstanding_account_id().id,
+                'amount_currency': -self.total_amount_currency,
+                'balance': -self.total_amount,
+                'currency_id': self.currency_id.id,
+                'partner_id': employee_partner.id,
+            }
+        ]
+
+        # PAYMENT MOVE
+        payment_move_vals = {
+            **self._prepare_move_vals(),
+            'date': self.date or fields.Date.context_today(self),
+            'ref': self.name,
+            'move_type': 'entry',
+            'partner_id': employee_partner.id,
+            'journal_id': self.env['account.journal'].search(
+                [('type', '=', 'bank'), ('company_id', '=', self.env.company.id)], limit=1).id,
+            'commercial_partner_id': employee_partner.id,
+            'currency_id': self.currency_id.id,
+            'company_id': self.company_id.id,
+            'line_ids': [Command.create(line) for line in payment_move_lines],
+            'partner_bank_id': self.employee_id.sudo().primary_bank_account_id.id,
+            'attachment_ids': False,
+        }
+
+        return payment_move_vals, payment_vals, debt_transfer_move_vals
 
     def _prepare_move_vals(self):
         return {

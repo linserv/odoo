@@ -1,4 +1,5 @@
-import { App, EventBus } from "@odoo/owl";
+// eslint-disable-next-line no-unused-vars
+import { App } from "@odoo/owl";
 import { isMacOS } from "@web/core/browser/feature_detection";
 import { appTranslateFn } from "@web/core/l10n/translation";
 import { services } from "@web/core/services";
@@ -6,10 +7,22 @@ import { getTemplate } from "@web/core/templates";
 import { session } from "@web/session";
 
 /**
- * @typedef {{
- *  bus: EventBus;
- * }} OdooEnv
+ * @typedef {{}} OdooEnv
  */
+
+// Keys that used to be on the env and are now provided elsewhere. Reading one
+// of them would evaluate to `undefined` and silently take the wrong branch, so
+// it throws instead, with the replacement in the message.
+const REMOVED_KEYS = {
+    debug:
+        `"env.debug" was removed when the debug mode became DebugModePlugin. Use ` +
+        `usePlugin(DebugModePlugin) in a component or a plugin, and odoo.debug ` +
+        `outside of one.`,
+    isSmall:
+        `"env.isSmall" was removed when the ui service became UIPlugin. Use ` +
+        `useService("ui").isSmall in a component, env.services.ui.isSmall ` +
+        `with a plain env, or UIPlugin's isSmall() signal in a plugin.`,
+};
 
 /**
  * Return a value Odoo Env object
@@ -17,10 +30,18 @@ import { session } from "@web/session";
  * @returns {OdooEnv}
  */
 export function makeEnv() {
-    const bus = new EventBus();
-    return {
-        bus,
-    };
+    // `bus` is set by `EnvBusBridgePlugin` once the app's plugins start.
+    const env = {};
+    // A Proxy rather than a throwing getter: a getter is an own property, so
+    // `"isSmall" in env` would answer true and o-spreadsheet probes exactly that.
+    return new Proxy(env, {
+        get(target, key, receiver) {
+            if (!(key in target) && Object.hasOwn(REMOVED_KEYS, key)) {
+                throw new Error(REMOVED_KEYS[key]);
+            }
+            return Reflect.get(target, key, receiver);
+        },
+    });
 }
 
 export const customDirectives = {

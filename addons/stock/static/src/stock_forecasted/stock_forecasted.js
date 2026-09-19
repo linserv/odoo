@@ -8,8 +8,8 @@ import { ForecastedButtons } from "./forecasted_buttons";
 import { ForecastedDetails } from "./forecasted_details";
 import { ForecastedHeader } from "./forecasted_header";
 import { ForecastedWarehouseFilter } from "./forecasted_warehouse_filter";
-import { Component, onWillStart, proxy } from "@odoo/owl";
-import { standardActionServiceProps } from "@web/webclient/actions/action_service";
+import { Component, onWillStart, proxy, useProps } from "@odoo/owl";
+import { standardActionServiceProps } from "@web/webclient/actions/action_plugin";
 
 export class StockForecasted extends Component {
     static template = "stock.Forecasted";
@@ -21,7 +21,7 @@ export class StockForecasted extends Component {
         View,
         ForecastedDetails,
     };
-    static props = { ...standardActionServiceProps };
+    props = useProps(standardActionServiceProps);
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");

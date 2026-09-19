@@ -70,7 +70,6 @@ calculate
 calendar_add_on
 calendar_clock
 calendar_today
-call
 call_merge
 campaign
 cancel
@@ -300,6 +299,7 @@ notifications_off
 open_in_browser
 open_in_new
 open_with
+package_2
 padding
 palette
 pan_tool_alt
@@ -346,6 +346,7 @@ reorder
 repeat
 reply
 reply_all
+resize
 restaurant
 road
 rocket

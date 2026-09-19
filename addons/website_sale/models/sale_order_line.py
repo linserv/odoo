@@ -18,16 +18,19 @@ class SaleOrderLine(models.Model):
 
     # === COMPUTE METHODS ===#
 
-    @api.depends("product_id.display_name")
+    @api.depends("name", "product_id.display_name")
     def _compute_name_short(self):
         """Compute a short name for this sale order line, to be used on the website where we don't
         have much space. To keep it short, instead of using the first line of the description,
         we take the product name without the internal reference.
         """
         for record in self:
-            record.name_short = record.product_id.with_context(
-                display_default_code=False
-            ).display_name
+            if record.product_id:
+                record.name_short = record.product_id.with_context(
+                    display_default_code=False
+                ).display_name
+            else:
+                record.name_short = record.name.splitlines()[0]
 
     # === BUSINESS METHODS ===#
 
@@ -52,7 +55,7 @@ class SaleOrderLine(models.Model):
         return super()._get_order_date()
 
     def _get_displayed_unit_price(self):
-        show_tax = self.order_id.website_id.show_line_subtotals_tax_selection
+        show_tax = self.order_id.website_id.tax_display
         tax_display = "total_excluded" if show_tax == "tax_excluded" else "total_included"
         is_combo = self.product_type == "combo"
         unit_price = self._get_display_price_ignore_combo() if is_combo else self.price_unit
@@ -99,7 +102,7 @@ class SaleOrderLine(models.Model):
         self.ensure_one()
         price_type = (
             "price_subtotal"
-            if self.order_id.website_id.show_line_subtotals_tax_selection == "tax_excluded"
+            if self.order_id.website_id.tax_display == "tax_excluded"
             else "price_total"
         )
         return sum(self._get_lines_with_price().mapped(price_type))

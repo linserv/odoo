@@ -13,8 +13,8 @@ export const CARD_COLORS_MAPPING = {
 
 export const CARD_FILTERS_MAPPING = {
     to_confirm: ["to_confirm"],
-    to_fulfill: ["to_fulfill", "sales"],
-    to_invoice: ["to_invoice", "sales"],
+    to_fulfill: ["to_fulfill"],
+    to_invoice: ["to_invoice"],
     to_upsell: ["to_upsell", "sales"],
 };
 
@@ -22,7 +22,6 @@ export const DEFAULT_FILTERS = ["sales"];
 
 export class Dashboard extends Component {
     static template = "sale.Dashboard";
-    static props = {};
     static components = { DateFilterButton };
 
     get cardFiltersMapping() {

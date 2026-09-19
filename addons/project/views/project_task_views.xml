@@ -480,7 +480,7 @@
                         <field name="task_properties" columns="2"/>
                     <notebook>
                         <page name="description_page" string="Description">
-                            <field name="description" type="html" options="{'collaborative': true, 'resizable': false}" placeholder="Add details about this task..."/>
+                            <field name="description" type="html" options="{'collaborative': true, 'resizable': false, 'allowWhiteboard': true}" placeholder="Add details about this task..."/>
                         </page>
                         <page name="sub_tasks_page" string="Sub-tasks" invisible="not project_id and not is_template">
                             <field name="child_ids"
@@ -735,6 +735,7 @@
                                         <field name="rotting_days" widget="rotting_days" class="ms-1 d-flex"/>
                                     </div>
                                     <div class="d-flex ms-auto">
+                                        <field name="project_sharing_portal_user_ids" invisible="1"/>
                                         <field name="user_ids" widget="many2many_avatar_user"/>
                                         <field name="state" class="ms-1" widget="project_task_state_selection" options="{'is_toggle_mode': false}"/>
                                     </div>

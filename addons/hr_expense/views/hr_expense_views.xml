@@ -144,19 +144,29 @@
                 <div class="alert alert-warning" role="alert" name="warning_expense_job_position_limit"
                     invisible="state not in ('draft', 'submitted') or not is_own_expense or not is_expense_exceeding_job_position_limit">
                     Your job position has a limit of
-                    <field name="expense_job_position_limit_amount_currency"
+                    <field name="expense_job_position_limit_amount"
+                           widget="monetary"
+                           options="{'currency_field': 'company_currency_id'}"
+                           class="oe_inline"/>
+                    <span invisible="not is_multiple_currency">(<field name="expense_job_position_limit_amount_currency"
                            widget="monetary"
                            options="{'currency_field': 'currency_id'}"
-                           class="oe_inline"/>
+                           class="oe_inline"/>)
+                    </span>
                     for this expense. You may not be fully reimbursed!
                 </div>
                 <div class="alert alert-warning" role="alert" name="warning_manager_expense_job_position_limit"
                     invisible="state not in ('draft', 'submitted') or not can_approve or is_own_expense or not is_expense_exceeding_job_position_limit">
                     This expense exceeds the limit of
-                    <field name="expense_job_position_limit_amount_currency"
+                    <field name="expense_job_position_limit_amount"
+                           widget="monetary"
+                           options="{'currency_field': 'company_currency_id'}"
+                           class="oe_inline"/>
+                    <span invisible="not is_multiple_currency">(<field name="expense_job_position_limit_amount_currency"
                            widget="monetary"
                            options="{'currency_field': 'currency_id'}"
-                           class="oe_inline"/>
+                           class="oe_inline"/>)
+                    </span>
                     defined for this job position.
                     <div class="mt-1">
                         <button name="action_cap_reimbursement_to_policy"
@@ -191,7 +201,7 @@
                             class="oe_stat_button"
                             icon="menu"
                             type="object"
-                            invisible="not account_move_id or payment_mode == 'own_account'"
+                            invisible="not account_move_id or (payment_mode != 'company_account' and not (existing_bill_id or has_existing_bill))"
                             groups="account.group_account_invoice">
                             <div class="o_stat_info">
                                 <span class="o_stat_text">Payment</span>
@@ -296,14 +306,13 @@
                             <field name="manager_id" widget="many2one_avatar_user" readonly="state != 'draft'" placeholder="Auto-validation"/>
                             <field name="department_id" invisible="1" readonly="not is_editable"
                                    context="{'default_company_id': company_id}"/>
-                            <field name="vendor_id" invisible="payment_mode != 'company_account'" readonly="not is_editable"/>
+                            <field name="vendor_id" readonly="not is_editable"/>
 
-                            <label for="has_existing_bill" invisible="payment_mode != 'company_account'"/>
-                            <div class="d-flex flex-column flex-lg-row" invisible="payment_mode != 'company_account'">
+                            <label for="has_existing_bill"/>
+                            <div class="d-flex flex-column flex-lg-row">
                                 <field name="has_existing_bill"
                                        string="Existing Bill"
                                        widget="boolean_radio"
-                                       invisible="payment_mode != 'company_account'"
                                        options="{'no_label_element_id': 'direct_expense', 'yes_label_element_id': 'match_bill', 'first_element': false}"
                                        readonly="not is_editable"
                                        style="width: 60%"
@@ -339,7 +348,6 @@
                                    context="{'default_company_id': company_id}"/>
                             <field name="payment_method_line_id"
                                    options="{'no_open': True, 'no_create': True}"
-                                   invisible="payment_mode != 'company_account'"
                                    readonly="not is_editable"
                                    required="payment_mode == 'company_account'"/>
                             <field name="analytic_distribution"

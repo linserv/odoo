@@ -3,7 +3,7 @@ import { mountWithCleanup, onRpc, patchWithCleanup } from "@web/../tests/web_tes
 import { click, animationFrame } from "@odoo/hoot-dom";
 import { advanceTime } from "@odoo/hoot-mock";
 import { session } from "@web/session";
-import { barcodeService } from "@barcodes/barcode_service";
+import { BarcodePlugin } from "@barcodes/barcode_plugin";
 import { setupPosEnv, makeOrder, getFilledOrder } from "@point_of_sale/../tests/unit/utils";
 import { TicketScreen } from "@point_of_sale/app/screens/ticket_screen/ticket_screen";
 import { definePosModels } from "@point_of_sale/../tests/unit/data/generate_model_definitions";
@@ -542,8 +542,28 @@ test("scanning a barcode on the ticket screen does not feed the refund quantity"
         window.dispatchEvent(new KeyboardEvent("keyup", { key: char }));
         await advanceTime(10);
     }
-    await advanceTime(barcodeService.maxTimeBetweenKeysInMs);
+    await advanceTime(BarcodePlugin.maxTimeBetweenKeysInMs);
 
     expect(comp.getToRefundDetail(line).qty).toBe(0);
     expect(dialogTitles).toEqual([]);
+});
+
+test("searching by customer keeps the orders of a nameless address contact", async () => {
+    const store = await setupPosEnv();
+    const company = store.models["res.partner"].get(3);
+    const address = store.models["res.partner"].create({
+        name: false,
+        parent_name: company.name,
+    });
+    const companyOrder = store.addNewOrder({ partner_id: company });
+    const addressOrder = store.addNewOrder({ partner_id: address });
+    expect(addressOrder.getPartnerName()).toBe(company.name);
+
+    const comp = await mountWithCleanup(TicketScreen, {
+        props: { stateOverride: { search: { fieldName: "PARTNER", searchTerm: company.name } } },
+    });
+    expect(comp.getFilteredOrderList().map((order) => order.id)).toEqual(
+        [companyOrder.id, addressOrder.id],
+        { message: "the address contact is searched by its company name" }
+    );
 });

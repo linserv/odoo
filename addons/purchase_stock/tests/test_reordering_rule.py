@@ -33,7 +33,6 @@ class TestReorderingRule(TransactionCase):
         cls.product_01 = cls.env['product.product'].create({
             'name': 'Product A',
             'is_storable': True,
-            'tracking': 'none',
             'description': 'Internal Notes',
             'seller_ids': [
                 Command.create({'partner_id': cls.partner.id})
@@ -377,7 +376,6 @@ class TestReorderingRule(TransactionCase):
             {
                 'name': 'Simple Product',
                 'is_storable': True,
-                'tracking': 'none',
                 'seller_ids': [
                     Command.create({'partner_id': partner.id})
                 ],
@@ -385,7 +383,6 @@ class TestReorderingRule(TransactionCase):
             {
                 'name': 'Product BUY + MTO',
                 'is_storable': True,
-                'tracking': 'none',
                 'route_ids': [
                     Command.link(route_buy.id),
                     Command.link(route_mto.id),
@@ -483,14 +480,13 @@ class TestReorderingRule(TransactionCase):
                 {
                     "name": "Simple Product",
                     "is_storable": True,
-                    "tracking": "none",
                     "seller_ids": [
                         Command.create({"partner_id": partner.id})
                     ],
                 },
                 {
                     "name": "Product BUY + MTO",
-                    "tracking": "none",
+                    "is_storable": True,
                     "route_ids": [
                         Command.link(route_buy.id),
                         Command.link(route_mto.id),

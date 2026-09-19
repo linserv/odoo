@@ -6,7 +6,7 @@ declare module "models" {
         edit: () => Promise<void>;
         isNoteEmpty: boolean;
         markAsDone: (attachmentIds: number[]) => Promise<void>;
-        markAsDoneAndScheduleNext: () => Promise<import("@web/webclient/actions/action_service").ActionDescription>;
+        markAsDoneAndScheduleNext: () => Promise<import("@web/webclient/actions/action_plugin").ActionDescription>;
         remove: (param0: { broadcast: boolean }) => void;
     }
     export interface Message {
@@ -27,7 +27,6 @@ declare module "models" {
         onUpdateActivityGroups: () => void;
         removeAllBookmarks: () => Promise<void>;
         scheduleActivity: (resModel: string, resIds: number[], defaultActivityTypeId: number|undefined) => Promise<void>;
-        showPushPermissionRequest: boolean;
         updateAppBadge: () => void;
     }
     export interface Thread {

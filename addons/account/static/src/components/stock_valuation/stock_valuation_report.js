@@ -4,27 +4,29 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { ControlPanel } from "@web/search/control_panel/control_panel";
 import { formatMonetary } from "@web/views/fields/formatters";
-import { standardActionServiceProps } from "@web/webclient/actions/action_service";
+import { standardActionServiceProps } from "@web/webclient/actions/action_plugin";
 import { serializeDate } from "@web/core/l10n/dates";
-const { DateTime } = luxon;
 
-import { Component, onWillStart, proxy } from "@odoo/owl";
+import { Component, onWillStart, proxy, useProps } from "@odoo/owl";
 
 import { StockValuationReportButtonsBar } from "./buttons_bar/buttons_bar"
 import { StockValuationReportController } from "./controller"
 import { StockValuationReportFilters } from "./filters/filters"
 import { StockValuationReportLine } from "./line/line"
 
+const { DateTime } = luxon;
+
 
 export class StockValuationReport extends Component {
     static template = "account.StockValuationReport";
-    static props = { ...standardActionServiceProps };
     static components = {
         ControlPanel,
         StockValuationReportButtonsBar,
         StockValuationReportFilters,
         StockValuationReportLine,
     };
+
+    props = useProps(standardActionServiceProps);
 
     setup() {
         this.controller = proxy(new StockValuationReportController(this.props.action));

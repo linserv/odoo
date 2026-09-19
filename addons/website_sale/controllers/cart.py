@@ -119,6 +119,7 @@ class Cart(PaymentPortal):
         :rtype: dict
         """
         order_sudo = request.cart or self.env.website._create_cart()
+        order_sudo._check_not_partially_paid()  # Prevent modifying the cart if it's partially paid
         # Do not allow float values in ecommerce by default
         quantity = (quantity and int(quantity)) or 1
 
@@ -326,6 +327,7 @@ class Cart(PaymentPortal):
         :params dict kwargs: additional parameters given to _cart_update_line_quantity calls.
         """
         order_sudo = request.cart
+        order_sudo._check_not_partially_paid()  # Prevent modifying the cart if it's partially paid
         quantity = int(quantity)  # Do not allow float values in ecommerce by default
 
         # This method must be only called from the cart page BUT in some advanced logic
@@ -492,7 +494,7 @@ class Cart(PaymentPortal):
         if not lines:
             return {}
 
-        show_tax = order.website_id.show_line_subtotals_tax_selection == "tax_included"
+        show_tax = order.website_id.tax_display == "tax_included"
         return {
             "currency_id": order.currency_id.id,
             "lines": [

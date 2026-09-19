@@ -345,6 +345,7 @@ class TestHrEmployee(TestHrCommon):
         # Try to set the user with existing employee in the company, on a new employee form
         employee_form = Form(self.env['hr.employee'].with_user(self.res_users_hr_officer).with_company(company=test_company.id))
         employee_form.name = "Second employee"
+        employee_form.work_location_id = self.work_location
         employee_form.user_id = self.res_users_hr_officer
         with mute_logger('odoo.sql_db'), self.assertRaises(UniqueViolation), self.assertRaises(ValidationError):
             employee_form.save()
@@ -352,6 +353,7 @@ class TestHrEmployee(TestHrCommon):
         employee_2 = self.env['hr.employee'].create({
             'name': 'Hr 2 - employee',
             'company_id': test_company.id,
+            'work_location_id': self.work_location.id,
         })
 
         # Try to set the user with existing employee in the company, on another existing employee
@@ -386,6 +388,7 @@ class TestHrEmployee(TestHrCommon):
             'user_id': test_user.id,
             'company_id': test_company.id,
             'bank_account_ids': [Command.link(bank_account.id)],
+            'work_location_id': self.work_location.id
         })
         # change user -> bank account change company
         with Form(test_employee) as employee_form:
@@ -499,7 +502,7 @@ class TestHrEmployee(TestHrCommon):
     def test_badge_validation(self):
         # check employee's barcode should be a sequence of digits and alphabets
         employee = self.env['hr.employee'].create({
-            'name': 'Badge Employee'
+            'name': 'Badge Employee',
         })
 
         employee_form = Form(employee)
@@ -537,19 +540,23 @@ class TestHrEmployee(TestHrCommon):
             'tz': 'Asia/Tokyo',
         })
         self.assertTrue(employee.resource_calendar_id)
-        self.assertFalse(employee.is_flexible)
-        self.assertFalse(employee.is_fully_flexible)
+        self.assertFalse(employee._is_flexible())
+        self.assertFalse(employee._is_fully_flexible())
 
-        employee.resource_calendar_id = False
-        employee.hours_per_week = 40
-        employee.hours_per_day = 8
-        self.assertTrue(employee.is_flexible)
-        self.assertFalse(employee.is_fully_flexible)
+        flexible_calendar = self.env['resource.calendar'].create({
+            'name': 'Flexible Calendar',
+            'calendar_type': 'undefined',
+            'attendance_ids': [],
+            'hours_per_week': 40,
+            'hours_per_day': 8,
+        })
+        employee.resource_calendar_id = flexible_calendar
+        self.assertTrue(employee._is_flexible())
+        self.assertFalse(employee._is_fully_flexible())
 
-        employee.hours_per_week = 0
-        employee.hours_per_day = 0
-        self.assertTrue(employee.is_flexible)
-        self.assertTrue(employee.is_fully_flexible)
+        flexible_calendar.write({'hours_per_week': 0, 'hours_per_day': 0})
+        self.assertTrue(employee._is_flexible())
+        self.assertTrue(employee._is_fully_flexible())
 
     def test_resource_calendar_sync_with_employee_one(self):
         calendar = self.env['resource.calendar'].create({
@@ -614,9 +621,14 @@ class TestHrEmployee(TestHrCommon):
         self.assertTrue(days['2025-01-04'])
 
         # Assigning flexible work hours to employeeA
-        employeeA.current_version_id.write({
-            'resource_calendar_id': False,
+        flexible_calendar = self.env['resource.calendar'].create({
+            'name': 'Flexible Calendar',
+            'company_id': employeeA.company_id.id,
+            'calendar_type': 'undefined',
             'hours_per_week': 40,
+        })
+        employeeA.current_version_id.write({
+            'resource_calendar_id': flexible_calendar.id,
         })
         days = employeeA._get_unusual_days(str(datetime(2025, 1, 1)), str(datetime(2025, 12, 31)))
         self.assertTrue(days)
@@ -785,6 +797,7 @@ class TestHrEmployee(TestHrCommon):
         employee = self.env['hr.employee'].create({
             'name': 'Phone Employee',
             'company_id': company.id,
+            'work_location_id': self.work_location.id,
         })
         with Form(employee) as form:
             form.emergency_phone = '0456998877'

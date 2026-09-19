@@ -164,14 +164,7 @@
                                         when the string is deleted. -->
                                     <field name="alias_contact" class="oe_inline" string="Accept Emails From"
                                            invisible="not alias_email"/>
-                                    <field name="privacy_visibility" widget="radio"/>
                                     <field name="company_id" groups="base.group_multi_company" options="{'no_create': True}" placeholder="Visible to all"/>
-                                    <span colspan="2" class="text-muted o_row ps-1" invisible="access_instruction_message == ''">
-                                        <i class="oi pe-2" data-icon="lightbulb" title="Info"/><field class="d-inline" name="access_instruction_message" nolabel="1"/>
-                                    </span>
-                                    <span colspan="2" class="text-muted o_row ps-1" invisible="privacy_visibility_warning == ''">
-                                        <i class="oi pe-2" data-icon="warning" title="Warning"/><field class="d-inline" name="privacy_visibility_warning" nolabel="1"/>
-                                    </span>
                                 </group>
                                 <div class="o_col">
                                     <group name="other_section">
@@ -183,6 +176,33 @@
                                 </div>
                             </group>
                             <group>
+                                <group name="visibility" string="Visibility">
+                                    <field name="privacy_visibility" widget="radio"/>
+                                    <div colspan="2" 
+                                        class="d-flex align-items-start mt-2" 
+                                        invisible="privacy_visibility not in ['followers', 'invited_users']">
+                                        <label for="allowed_internal_user_ids" 
+                                            class="o_form_label text-900 text-nowrap w-25 mb-0 fw-bold" 
+                                            string="Team Members"/>
+                                        <field name="allowed_internal_user_ids"
+                                            widget="many2many_avatar_user"
+                                            placeholder="Select who can access"
+                                            options="{'no_create': True}"
+                                            nolabel="1"
+                                            class="w-75"/>
+                                    </div>
+                                    <button name="%(project.project_share_wizard_action)d"
+                                            type="action"
+                                            string="Invite Portal Users"
+                                            class="btn btn-link p-0 mt-2"
+                                            colspan="2"
+                                            icon="east"
+                                            invisible="privacy_visibility not in ['portal', 'invited_users']"/>
+                                    <div colspan="2" class="text-muted mt-2" invisible="access_instruction_message == ''">
+                                        <i class="oi pe-2" data-icon="lightbulb" title="Info"/>
+                                        <field class="d-inline" name="access_instruction_message" nolabel="1"/>
+                                    </div>
+                                </group>
                                 <group name="group_tasks_managment" string="Tasks Management" class="row o_settings_container my-0">
                                     <setting class="col-lg-12" id="recurring_tasks_setting" help="Auto-generate tasks for regular activities">
                                         <field name="allow_recurring_tasks"/>
@@ -194,7 +214,8 @@
                                         <field name="allow_milestones"/>
                                     </setting>
                                 </group>
-
+                            </group>
+                            <group>
                                 <group name="group_time_managment" string="Time Management" class="row o_settings_container my-0" invisible="1"/>
                             </group>
                         </page>
@@ -431,6 +452,7 @@
             <field name="view_mode">form</field>
             <field name="view_id" ref="project_project_view_form_simplified_footer"/>
             <field name="target">new</field>
+            <field name="context">{"default_type_ids": []}</field>
         </record>
 
         <record id="open_create_project_template" model="ir.actions.act_window">
@@ -439,7 +461,7 @@
             <field name="view_mode">form</field>
             <field name="view_id" ref="project_project_view_form_simplified_footer"/>
             <field name="target">new</field>
-            <field name="context">{"default_allow_billable": 0}</field>
+            <field name="context">{"default_allow_billable": 0, "default_type_ids": []}</field>
         </record>
 
         <record model="ir.ui.view" id="view_project_card">
@@ -474,16 +496,16 @@
                                         <h5 role="menuitem" class="o_kanban_card_manage_title" groups="project.group_project_user">
                                             <span>Reporting</span>
                                         </h5>
-                                        <div class="d-inline-block" role="menuitem" groups="project.group_project_manager" name="task_analysis">
+                                        <div class="d-inline-block w-100" role="menuitem" groups="project.group_project_manager" name="task_analysis">
                                             <a name="action_view_tasks_analysis" type="object">Tasks Analysis</a>
                                         </div>
-                                        <div class="d-inline-block" role="menuitem" name="project_burndown_menu" groups="project.group_project_user">
+                                        <div class="d-inline-block w-100" role="menuitem" name="project_burndown_menu" groups="project.group_project_user">
                                             <a name="action_project_task_burndown_chart_report" type="object">Burndown Chart</a>
                                         </div>
-                                        <div class="d-inline-block" role="menuitem" name="project_time_by_stage_menu" groups="project.group_project_manager">
+                                        <div class="d-inline-block w-100" role="menuitem" name="project_time_by_stage_menu" groups="project.group_project_manager">
                                             <a name="action_project_time_by_stage_report" type="object">Time by Stage</a>
                                         </div>
-                                        <div class="d-inline-block" t-if="record.show_ratings.raw_value" role="menuitem" name="project_customer_rating_menu" groups="project.group_project_manager">
+                                        <div class="d-inline-block w-100" t-if="record.show_ratings.raw_value" role="menuitem" name="project_customer_rating_menu" groups="project.group_project_manager">
                                             <a name="action_view_all_rating" type="object">Customer Ratings</a>
                                         </div>
                                     </div>

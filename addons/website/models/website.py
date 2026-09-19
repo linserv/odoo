@@ -1770,6 +1770,10 @@ class Website(models.CachedModel):
         homepage_url = self.homepage_url
         pages = self._get_website_pages(domain)
 
+        # Only fetch the fields needed below: lazily reading a view field would
+        # prefetch arch_db arch_prev for every page and may end in a out-of-memory error.
+        pages.view_id.fetch(['name', 'priority', 'write_date'])
+
         for page in pages:
             if ignore_custom_homepage and homepage_url == page['url']:
                 continue
@@ -2643,7 +2647,7 @@ class Website(models.CachedModel):
     def _should_remove_third_party_trackers(self):
         return (self.cookies_bar
             and self.block_third_party_domains
-            and not self.env['ir.http']._is_allowed_cookie('optional')
+            and not self.env.context.get('cookies_allowed')
             and not self.env.user.has_group('website.group_website_restricted_editor'))
 
     def _remove_third_party_trackers(self, tagName, atts, cookies_watchlist):

@@ -1,5 +1,13 @@
 import { Registry } from "@odoo/o-spreadsheet";
-import { Component, computed, onWillStart, proxy, useEffect, useListener } from "@odoo/owl";
+import {
+    Component,
+    computed,
+    onWillStart,
+    proxy,
+    useEffect,
+    useListener,
+    useProps,
+} from "@odoo/owl";
 import { SpreadsheetComponent } from "@spreadsheet/actions/spreadsheet_component";
 import { SpreadsheetShareButton } from "@spreadsheet/components/share_button/share_button";
 import { _t } from "@web/core/l10n/translation";
@@ -9,7 +17,7 @@ import { render } from "@web/owl2/utils";
 import { useSetupAction } from "@web/search/action_hook";
 import { ControlPanel } from "@web/search/control_panel/control_panel";
 import { useSearchBarToggler } from "@web/search/search_bar/search_bar_toggler";
-import { standardActionServiceProps } from "@web/webclient/actions/action_service";
+import { standardActionServiceProps } from "@web/webclient/actions/action_plugin";
 import { Status } from "./dashboard_loader_service";
 import { DashboardSearchBar } from "./dashboard_search_bar/dashboard_search_bar";
 import { MobileFigureContainer } from "./mobile_figure_container/mobile_figure_container";
@@ -28,8 +36,9 @@ export class SpreadsheetDashboardAction extends Component {
         SpreadsheetShareButton,
         DashboardSearchBar,
     };
-    static props = { ...standardActionServiceProps };
     static displayName = _t("Dashboards");
+
+    props = useProps(standardActionServiceProps);
 
     activeDashboardId = computed(() => this.loader.activeDashboardId);
     dashboard = computed(() => {

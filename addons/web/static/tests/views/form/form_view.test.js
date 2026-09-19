@@ -3432,7 +3432,7 @@ test(`buttons should be in .o_statusbar_buttons in form view header on mobile`, 
     });
 
     expect(`.o_statusbar_buttons > button:eq(0)`).toHaveAttribute("name", "0");
-    await contains(".o_statusbar_buttons .dropdown-toggle:has([data-icon='more_vert'])").click();
+    await contains(".o_statusbar_buttons button.dropdown-toggle-split").click();
     expect(`.o-dropdown--menu div.o_field_widget`).toHaveAttribute("name", "foo");
 });
 
@@ -10051,7 +10051,7 @@ test("support header button as widgets in submenu on form statusbar on mobile", 
         </header></form>`,
     });
 
-    await contains(".o_statusbar_buttons button:has([data-icon='more_vert'])").click();
+    await contains(".o_statusbar_buttons button.dropdown-toggle-split").click();
     expect(".o-dropdown--menu button:contains(Upload Test)").toHaveCount(1);
     await contains(".o-dropdown--menu button:contains(Upload Test)").click();
     expect(".o-dropdown--menu button:contains(Upload Test)").toHaveCount(1);
@@ -11633,6 +11633,27 @@ test(`status indicator: discard dirty state`, async () => {
     expect(`.o_field_widget input`).toHaveValue("yop");
 });
 
+test(`status indicator: discard dirty state after retyping same value with different text`, async () => {
+    await mountView({
+        resModel: "partner",
+        type: "form",
+        arch: `<form><field name="float_field"/></form>`,
+        resId: 1,
+    });
+    expect(`.o_form_status_indicator_buttons.invisible`).toHaveCount(1);
+
+    await contains(`.o_field_widget input`).edit("1.2");
+    expect(`.o_form_status_indicator_buttons.invisible`).toHaveCount(0);
+
+    // retype a different text that parses to the same value as what was
+    // just committed: the field should no longer be considered dirty
+    await contains(`.o_field_widget input`).edit("1.200");
+
+    await contains(`.o_form_button_cancel`).click();
+    expect(`.o_form_status_indicator_buttons.invisible`).toHaveCount(1);
+    expect(`.o_field_widget input`).toHaveValue("0.44");
+});
+
 test(`status indicator: invalid state`, async () => {
     onRpc("web_save", () => {
         expect.step("save"); // not called
@@ -13012,7 +13033,7 @@ test(`statusbar buttons are correctly rendered in mobile`, async () => {
 
     expect(".o_statusbar_buttons button:eq(0)").toHaveText("Confirm");
     // open the dropdown
-    await contains(".o_statusbar_buttons button:has([data-icon='more_vert'])").click();
+    await contains(".o_statusbar_buttons button.dropdown-toggle-split").click();
     await animationFrame();
     expect(".o-dropdown--menu:visible").toHaveCount(1, { message: "dropdown should be visible" });
     expect(".o-dropdown--menu button").toHaveCount(1, {
@@ -13043,11 +13064,11 @@ test(`statusbar widgets should appear in the CogMenu dropdown`, async () => {
 
     expect(".o_statusbar_buttons button:eq(0)").toHaveText("Attach document");
     // Now there should an action dropdown, because there are two visible buttons
-    expect(".o_statusbar_buttons button:has([data-icon='more_vert'])").toHaveCount(1, {
+    expect(".o_statusbar_buttons button.dropdown-toggle-split").toHaveCount(1, {
         message: "should have 'More' dropdown",
     });
 
-    await contains(".o_statusbar_buttons button:has([data-icon='more_vert'])").click();
+    await contains(".o_statusbar_buttons button.dropdown-toggle-split").click();
     expect(".o-dropdown--menu button").toHaveCount(1, {
         message: "should have 1 button in the dropdown",
     });
@@ -13055,7 +13076,7 @@ test(`statusbar widgets should appear in the CogMenu dropdown`, async () => {
     // change display_name to update buttons modifiers and make one button visible
     await contains(".o_field_widget[name=name] input").edit("first record");
     expect(".o_statusbar_buttons button:eq(0)").toHaveText("Attach document");
-    expect(".o_statusbar_buttons button:has([data-icon='more_vert'])").toHaveCount(0, {
+    expect(".o_statusbar_buttons button.dropdown-toggle-split").toHaveCount(0, {
         message: "shouldn't have 'More' dropdown",
     });
 });
@@ -13273,7 +13294,7 @@ test("attach_document widget also works inside a dropdown", async () => {
         `,
     });
 
-    await contains(".o_statusbar_buttons button:has([data-icon='more_vert'])").click();
+    await contains(".o_statusbar_buttons button.dropdown-toggle-split").click();
     await contains(".o_attach_document").click();
     await manuallyDispatchProgrammaticEvent(fileInput, "change");
     await animationFrame();

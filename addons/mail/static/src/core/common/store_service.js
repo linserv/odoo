@@ -6,11 +6,12 @@ import {
     prettifyMessageText,
 } from "@mail/utils/common/format";
 
-import { proxy } from "@odoo/owl";
+import { proxy, usePlugin } from "@odoo/owl";
 
 import { location } from "@web/core/browser/browser";
 import { cookie } from "@web/core/browser/cookie";
 import { isMobileOS } from "@web/core/browser/feature_detection";
+import { DebugModePlugin } from "@web/core/debug_mode_plugin";
 import { _t } from "@web/core/l10n/translation";
 import { rpc } from "@web/core/network/rpc";
 import { registry } from "@web/core/registry";
@@ -173,6 +174,9 @@ export class Store extends BaseStore {
 
     messagePostMutex = new Mutex();
 
+    /** @type {DebugModePlugin} */
+    debugMode;
+
     shouldSimulateDarkTheme(ctx) {
         return (
             (ctx?.env?.inDiscussCallView ||
@@ -187,7 +191,7 @@ export class Store extends BaseStore {
     discussDropdownMenuClass(ctx) {
         const simulateDarkTheme = this.shouldSimulateDarkTheme(ctx);
         return attClassObjectToString({
-            "o-discuss-dropdownMenu d-flex flex-column px-1": true,
+            "o-discuss-dropdownMenu d-flex flex-column": true,
             "o-simulateDarkTheme": simulateDarkTheme,
         });
     }
@@ -869,6 +873,8 @@ export const storeService = {
          * crashes, the actual value being filled at livechat init when it is necessary.
          */
         store.self_guest ??= { id: -1 };
+        const debugMode = usePlugin(DebugModePlugin);
+        store.debugMode = debugMode;
         store.onStarted();
         return store;
     },

@@ -360,6 +360,12 @@ export class DiscussChannel extends Record {
     get hasAttachmentPanel() {
         return true;
     }
+    /**
+     * Retrieve the first message of the channel at or after `from_message_id`
+     * (the unread separator by default). The result is always a message the
+     * thread renders, as every caller needs its element, so a hidden
+     * notification is skipped.
+     */
     getFirstNewerMessage({ from_message_id = this.self_member_id?.new_message_separator_ui } = {}) {
         if (!this.self_member_id) {
             return null;
@@ -375,7 +381,12 @@ export class DiscussChannel extends Record {
         }
         // try to find a perfect match according to the member's separator
         let message = this.store["mail.message"].get({ id: separator });
-        if (!message || message.is_transient || this.notEq(message.channel_id)) {
+        if (
+            !message ||
+            message.is_transient ||
+            this.notEq(message.channel_id) ||
+            message.notificationHidden
+        ) {
             message = nearestGreaterThanOrEqual(messages, separator, (msg) => msg.id);
         }
         return message;
@@ -752,6 +763,16 @@ export class DiscussChannel extends Record {
         this.self_member_id.new_message_separator = message.id + 1;
         this.self_member_id.new_message_separator_ui = this.self_member_id.new_message_separator;
         this.markedAsUnread = false;
+    }
+
+    joinRpc() {
+        const params = { channel_id: this.id };
+        if (this.store.self_user) {
+            params.user_ids = [this.store.self_user.id];
+        } else {
+            params.guest_ids = [this.store.self_guest.id];
+        }
+        return this.store.fetchStoreData("/discuss/channel/add_members", params);
     }
 
     /** @returns {boolean} true if the channel was opened, false otherwise */

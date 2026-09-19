@@ -2795,16 +2795,16 @@ test("context menu should not open on right-click when editing a message", async
             expect.step("Message.onContextMenu");
             super.onContextMenu(...arguments);
         },
-        showRightClickMessageActions() {
-            expect.step("Message.showRightClickMessageActions");
-            super.showRightClickMessageActions(...arguments);
+        onOpenRightClickMenu() {
+            expect.step("Message.onOpenRightClickMenu");
+            super.onOpenRightClickMenu(...arguments);
         },
     });
     await start();
     await openDiscuss(channelId);
     await contains(".o-mail-Message");
     await rightClick(".o-mail-Message");
-    await expect.waitForSteps(["Message.onContextMenu", "Message.showRightClickMessageActions"]);
+    await expect.waitForSteps(["Message.onContextMenu", "Message.onOpenRightClickMenu"]);
     await click(".o-dropdown-item:contains('Edit')");
     await contains(".o-mail-Message.o-editing .o-mail-Composer-input", { value: "Batman" });
     await rightClick(".o-mail-Message");
@@ -2861,6 +2861,32 @@ test("(edited) label is not included in editor when editing an already-edited me
     await click(".o-mail-Message button:text('save')");
     // New text should be the only content; "(edited)" must be at the very end
     await contains(".o-mail-Message-content:text('a (edited)')");
+});
+
+test("Do not call server on save if body only differs by HTML comments", async () => {
+    const pyEnv = await startServer();
+    // Body has MSO conditional comments, stripped by the editor on parse.
+    pyEnv["mail.message"].create({
+        author_id: serverState.partnerId,
+        body: '<div>Hello world<img src="/web/image/1" alt="img"><!--<![endif]--></div>',
+        model: "res.partner",
+        res_id: serverState.partnerId,
+        message_type: "comment",
+    });
+    onRpcBefore("/mail/message/update_content", (args) => {
+        expect.step(`update_content:${args.update_data.body}`);
+    });
+    await start();
+    await openFormView("res.partner", serverState.partnerId);
+    await click(".o-mail-Message [title='Expand']");
+    await click(".o-dropdown-item:text('Edit')");
+    await click(".o-mail-Message button:text('save')");
+    // Real edit next, so the final step also proves the earlier save was a no-op.
+    await click(".o-mail-Message [title='Expand']");
+    await click(".o-dropdown-item:text('Edit')");
+    await insertText(".o-mail-Message .o-mail-Composer-input", " edited");
+    await click(".o-mail-Message button:text('save')");
+    await expect.waitForSteps([`update_content:Hello world edited`]);
 });
 
 test("show actions of 'tracking' in message header", async () => {

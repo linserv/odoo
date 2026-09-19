@@ -40,7 +40,7 @@ class StockMove(models.Model):
     product_id = fields.Many2one(
         'product.product', 'Product',
         check_company=True,
-        domain="[('type', '=', 'consu')]", index=True, required=True)
+        domain="[('type', '=', 'consu')]", index=True, required=True, ondelete='cascade')
     product_category_id = fields.Many2one(
         'product.category', 'Product Category',
         related='product_id.categ_id')
@@ -232,7 +232,6 @@ class StockMove(models.Model):
     @api.depends('picking_id.location_dest_id', 'is_scrap')
     def _compute_location_dest_id(self):
         customer_loc, __ = self.env['stock.warehouse']._get_partner_locations()
-        inter_comp_location = self.env.ref('stock.stock_location_inter_company', raise_if_not_found=False)
         for move in self:
             location_dest = False
             if move.is_scrap:
@@ -253,13 +252,13 @@ class StockMove(models.Model):
                 location_dest = move.rule_id.location_dest_id
             elif move.picking_type_id:
                 location_dest = move.picking_type_id.default_location_dest_id
-            is_move_to_interco_transit = False
+            is_move_to_transit = False
             if location_dest:
-                is_move_to_interco_transit = location_dest._child_of(customer_loc) and move.forecasted_location_id == inter_comp_location
-            if location_dest and move.forecasted_location_id and (move.forecasted_location_id._child_of(location_dest) or is_move_to_interco_transit):
+                is_move_to_transit = location_dest._child_of(customer_loc) and move.forecasted_location_id.usage == 'transit'
+            if location_dest and move.forecasted_location_id and (move.forecasted_location_id._child_of(location_dest) or is_move_to_transit):
                 # Force the location_final as dest in the following cases:
                 # - The location_final is a sublocation of destination -> Means we reached the end
-                # - The location dest is an out location (i.e. Customers) but the final dest is different (e.g. Inter-Company transfers)
+                # - The location dest is an out location (i.e. Customers) but the final dest is different (e.g. Inter-Company/Warehouse transfers)
                 location_dest = move.forecasted_location_id
             move.location_dest_id = location_dest
 
@@ -646,7 +645,7 @@ Please change the quantity done or the rounding precision in your settings.""",
            remaining demand and the available quantity of the lot if none is available.
         """
         for move in self:
-            if move.product_id.tracking == 'none':
+            if not move.product_id.tracking:
                 continue
             if move.state == 'assigned' and all(ml.lot_id in move.lot_ids for ml in move.move_line_ids) and move.move_line_ids.lot_id == move.lot_ids:
                 continue
@@ -743,7 +742,9 @@ Please change the quantity done or the rounding precision in your settings.""",
                     new_ml_quantity = product.uom_id._compute_quantity(quantity_to_reserve, move_line.uom_id)
                     move_lines_commands.append(Command.create(move_line.copy_data({'quantity': new_ml_quantity, 'picked': move_line.picked})[0]))
                     extra_uom_qty -= quantity_to_reserve
+            existing_move_lines = move.move_line_ids
             move.write({'move_line_ids': move_lines_commands})
+            (move.move_line_ids - existing_move_lines)._apply_putaway_strategy()
             # When `quantity` is written in the same call as `lot_ids`, the
             # user-set value is kept and the recompute triggered by this
             # inverse rewriting `move_line_ids` does not override it. Force
@@ -1275,7 +1276,7 @@ Please change the quantity done or the rounding precision in your settings.""",
 
         for move in self:
             warehouse_id = move.warehouse_id or move.picking_id.picking_type_id.warehouse_id
-            if not move.location_dest_id.company_id:
+            if not move.location_dest_id.warehouse_id:
                 warehouse_id = False
 
             # Multi companies check
@@ -1324,7 +1325,7 @@ Please change the quantity done or the rounding precision in your settings.""",
         for move in moves_auto:
             move.write({'location_dest_id': move.move_line_ids[0].location_dest_id})
 
-        new_moves = new_moves._action_confirm()
+        new_moves = new_moves.sudo()._action_confirm()
         return new_moves
 
     def _merge_moves_fields(self):
@@ -1520,7 +1521,7 @@ Please change the quantity done or the rounding precision in your settings.""",
         Updates the quantity of the move to match the quantity resulting from the `_set_lot_ids`.
         """
         product = self.product_id
-        if product.tracking == 'none':
+        if not product.tracking:
             return
 
         assigned_quantity = 0
@@ -2117,6 +2118,13 @@ Please change the quantity done or the rounding precision in your settings.""",
         grouped_move_lines_in = self._get_available_move_lines_in()
         grouped_move_lines_out = self._get_available_move_lines_out(assigned_moves_ids, partially_available_moves_ids)
         available_move_lines = {key: grouped_move_lines_in[key] - grouped_move_lines_out.get(key, 0) for key in grouped_move_lines_in}
+        # remove what this move already reserved
+        for move_line in self.move_line_ids:
+            if self.product_id.uom_id.is_zero(move_line.quantity_product_uom):
+                continue
+            key = (move_line.location_id, move_line.lot_id, move_line.package_id, move_line.owner_id)
+            if key in available_move_lines:
+                available_move_lines[key] -= move_line.quantity_product_uom
         # pop key if the quantity available amount to 0
         return {k: v for k, v in available_move_lines.items() if self.product_id.uom_id.compare(v, 0) > 0}
 
@@ -2220,10 +2228,6 @@ Please change the quantity done or the rounding precision in your settings.""",
                     available_move_lines = move._get_available_move_lines(assigned_moves_ids, partially_available_moves_ids)
                     if not available_move_lines:
                         continue
-                    for move_line in move.move_line_ids.filtered(lambda m: m.quantity_product_uom):
-                        if available_move_lines.get((move_line.location_id, move_line.lot_id, move_line.package_id, move_line.owner_id)):
-                            available_move_lines[(move_line.location_id, move_line.lot_id, move_line.package_id, move_line.owner_id)] -= move_line.quantity_product_uom
-
                     taken_quantities = {}
                     all_move_line_vals = []
                     for (location_id, lot_id, package_id, owner_id), quantity in available_move_lines.items():
@@ -2290,8 +2294,9 @@ Please change the quantity done or the rounding precision in your settings.""",
                         move.move_orig_ids.sudo().filtered(lambda m: m.state != 'done')._action_cancel()
             else:
                 if all(state in ('done', 'cancel') for state in siblings_states):
+                    # Need sudo() as removing the `move_orig_ids` link will revoke the extra access, but would still trigger a recompute_state on the move.
                     move_dest_ids = move.move_dest_ids
-                    move_dest_ids.write({
+                    move_dest_ids.sudo().write({
                         'procure_method': 'make_to_stock',
                         'move_orig_ids': [Command.unlink(move.id)]
                     })

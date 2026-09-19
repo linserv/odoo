@@ -196,6 +196,11 @@ class StockPicking(models.Model):
         'unique(name, company_id)',
         'Reference must be unique per company!',
     )
+    validate_button_style = fields.Selection([
+        ('primary', 'Primary'),
+        ('secondary', 'Secondary'),
+        ('invisible', 'Invisible'),
+    ], compute='_compute_validate_button_style')
 
     @api.depends('partner_id')
     @api.depends_context('display_name_partner', 'formatted_display_name')
@@ -316,7 +321,7 @@ class StockPicking(models.Model):
                 'delay_alert_date': format_datetime(self.env, picking.delay_alert_date, dt_format=False),
                 'late_elements': [{
                     'id': late_move.id,
-                    'name': late_move.display_name,
+                    'name': late_move.sudo().display_name,  # sudo need for cross company transfers
                     'model': late_move._name,
                 } for late_move in picking.move_ids.filtered(lambda m: m.delay_alert_date).move_orig_ids._delay_alert_get_documents()
                 ]
@@ -551,6 +556,16 @@ class StockPicking(models.Model):
     @api.depends('move_ids.move_dest_ids')
     def _compute_show_next_pickings(self):
         self.show_next_pickings = len(self._get_next_transfers()) != 0
+
+    @api.depends('state')
+    def _compute_validate_button_style(self):
+        for picking in self:
+            if picking.state in ('done', 'cancel'):
+                picking.validate_button_style = 'invisible'
+            elif picking.state in ('waiting', 'assigned'):
+                picking.validate_button_style = 'primary'
+            else:
+                picking.validate_button_style = 'secondary'
 
     def _search_products_availability_state(self, operator, value):
         if operator != 'in':
@@ -1888,18 +1903,18 @@ class StockPicking(models.Model):
 
         pickings_print_product_label = self.filtered(lambda p: p.picking_type_id.auto_print_product_labels)
         pickings_by_print_formats = pickings_print_product_label.grouped(lambda p: p.picking_type_id.product_label_format)
-        for print_format in pickings_print_product_label.picking_type_id.mapped("product_label_format"):
-            pickings = pickings_by_print_formats.get(print_format)
+        for product_label_format in pickings_print_product_label.picking_type_id.mapped("product_label_format"):
+            pickings = pickings_by_print_formats.get(product_label_format)
+            label_options = self.env['stock.picking.type']._get_product_label_format_options(product_label_format)
             wizard = self.env['product.label.layout'].create({
                 'product_ids': pickings.move_ids.product_id.ids,
                 'move_ids': pickings.move_ids.ids,
                 'move_quantity': 'move',
-                'print_format': pickings.picking_type_id.product_label_format,
+                **label_options,
             })
             action = wizard.process()
             if action:
-                clean_action(action, self.env)
-                report_actions.append(action)
+                report_actions.append(clean_action(action, self.env))
         if self.env.user.has_group('stock.group_production_lot'):
             pickings_print_lot_label = self.filtered(lambda p: p.picking_type_id.auto_print_lot_labels and p.move_line_ids.lot_id)
             pickings_by_print_formats = pickings_print_lot_label.grouped(lambda p: p.picking_type_id.lot_label_format)
@@ -2084,4 +2099,4 @@ class StockPicking(models.Model):
             moves_count = len(set(self.move_ids.ids + picking.move_ids.ids))
             if moves_count > self.picking_type_id.batch_max_lines:
                 return False
-        return not self.picking_type_id.batch_max_pickings or self.picking_type_id.batch_max_pickings > 1
+        return True

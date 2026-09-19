@@ -16,6 +16,9 @@
                 <BuilderCheckbox actionParam="{views: ['website_blog.opt_blog_cover_post_fullwidth_design']}"/>
             </BuilderRow>
         </t>
+        <BuilderRow t-else="" label.translate="Show Title" tooltip.translate="Display the title on the 'All blogs' page">
+            <BuilderCheckbox actionParam="{views: ['website_blog.opt_blog_page_title']}"/>
+        </BuilderRow>
 
         <BuilderRow label.translate="Style">
             <BuilderSelect>
@@ -168,6 +171,10 @@
             title="Blogs Page"
             groups='["website.group_website_designer"]'
             editableOnly="false"/>
+    </xpath>
+
+    <xpath expr="//button_style_option" position="attributes">
+        <attribute name="exclude" add=".o_wblog_category a.btn" separator=", "/>
     </xpath>
 </t>
 

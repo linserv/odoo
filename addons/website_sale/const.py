@@ -141,7 +141,7 @@ SHOP_PAGE_STYLE_MAPPING = {
         "img_src": "/website_sale/static/src/img/configurator/shop/condensed_list.webp",
         "views": {
             "enable": [
-                "website_sale.filmstrip_categories_images",  # Category style
+                "website_sale.filmstrip_categories_images"  # Category style
             ],
             "disable": [],
         },
@@ -310,7 +310,7 @@ PRODUCT_PAGE_STYLE_MAPPING = {
 }
 
 _COMMON_PRODUCT_SNIPPET = {
-    "filter_xmlid": "website_sale.dynamic_filter_newest_products",
+    "filter_xmlid": "website_sale.dynamic_filter_newest_arrivals",
     "template_key": "website_sale.dynamic_filter_template_product_product_products_item",
     "data_attributes": {
         "product-category-id": "all",
@@ -409,3 +409,5 @@ SHOP_PATH = "/shop"
 DIRECT_MAPPED_ATTRIBUTE_IDENTIFIERS = {"color", "size", "material", "brand", "pattern"}
 
 MAX_EXPANDED_FILTER_SECTIONS = 4
+
+TAX_EXCLUDED_COUNTRIES = {"CA", "US"}

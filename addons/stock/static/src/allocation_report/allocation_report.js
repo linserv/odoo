@@ -1,9 +1,9 @@
-import { computed, signal, Component, onWillStart } from "@odoo/owl";
+import { Component, computed, onWillStart, signal, useProps } from "@odoo/owl";
 import { CheckBox } from "@web/core/checkbox/checkbox";
 import { registry } from "@web/core/registry";
 import { Mutex } from "@web/core/utils/concurrency";
 import { useBus, useService } from "@web/core/utils/hooks";
-import { standardActionServiceProps } from "@web/webclient/actions/action_service";
+import { standardActionServiceProps } from "@web/webclient/actions/action_plugin";
 
 import { ProductLine } from "./product_line/product_line";
 
@@ -13,7 +13,7 @@ export class AllocationReport extends Component {
         CheckBox,
         ProductLine,
     }
-    static props = { ...standardActionServiceProps }
+    props = useProps(standardActionServiceProps);
 
     canPrintLabels = computed(() => {
         for (const productLine of this.productLines || []) {

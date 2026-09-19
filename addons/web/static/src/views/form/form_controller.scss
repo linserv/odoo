@@ -165,24 +165,6 @@
         }
     }
 
-    &, & .o_form_editable {
-        // FIXME: those specific rules shouldn't be necessary but require a more
-        // global cleanup of the fields + .o_row styling to be removed in master.
-        .o_field_reference .o_row > * {
-            flex: 1 1 auto;
-            width: auto !important;
-        }
-
-        .o_field_reference .o_row {
-            select.o_input, .o_many2one {
-                flex: 1;
-            }
-            select.o_input {
-                padding-right: 1rem;
-            }
-        }
-    }
-
     .o_form_view_container {
         display: flex;
         flex-flow: column nowrap;
@@ -243,7 +225,7 @@
         margin-right: auto; // Always align to the left
 
         &:not(:has(.o_form_statusbar)) {
-            padding-top: map-get($spacers, 2);
+            padding-top: var(--formView-sheetBg-padding-top, #{map-get($spacers, 2)});
         }
     }
 
@@ -300,6 +282,7 @@
         z-index: 0;
         margin-inline: calc(-1 * var(--formView-sheetBg-padding-x)) calc(-1 * var(--formView-sheetBg-padding-right, --formView-sheetBg-padding-x));
         padding-inline: var(--formView-sheetBg-padding-x) var(--formView-sheetBg-padding-right, --formView-sheetBg-padding-x);
+        padding-top: var(--formView-statusbar-padding-top, #{map-get($spacers, 2)});
 
         @include media-breakpoint-up(md) {
             position: sticky;
@@ -308,6 +291,8 @@
             background-color: $body-bg;
 
             .modal & {
+                --formView-statusbar-padding-top: #{map-get($spacers, 2)};
+
                 background-color: $o-view-background-color;
             }
         }

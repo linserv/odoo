@@ -1,11 +1,11 @@
-import { Component, onWillStart, proxy } from "@odoo/owl";
+import { Component, onWillStart, proxy, useProps } from "@odoo/owl";
 import { download } from "@web/core/network/download";
 import { registry } from "@web/core/registry";
 import { user } from "@web/core/user";
 import { useService } from "@web/core/utils/hooks";
 import { useSetupAction } from "@web/search/action_hook";
 import { Layout } from "@web/search/layout";
-import { standardActionServiceProps } from "@web/webclient/actions/action_service";
+import { standardActionServiceProps } from "@web/webclient/actions/action_plugin";
 
 function processLine(line, lines=[], keepFolded=true) {
     return { ...line, lines: lines, isFolded: keepFolded };
@@ -42,7 +42,7 @@ function extractPrintData(lines) {
 export class TraceabilityReport extends Component {
     static template = "stock.TraceabilityReport";
     static components = { Layout };
-    static props = { ...standardActionServiceProps };
+    props = useProps(standardActionServiceProps);
 
     setup() {
         this.actionService = useService("action");

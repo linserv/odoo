@@ -1,4 +1,3 @@
-import { ACTION_TAGS } from "@mail/core/common/action";
 import { registerThreadAction } from "@mail/core/common/thread_actions";
 
 import { _t } from "@web/core/l10n/translation";
@@ -6,21 +5,6 @@ import { _t } from "@web/core/l10n/translation";
 export const expandDiscussSequenceGroup = 5;
 export const expandDiscussSequenceQuick = 0;
 
-export const joinChannelAction = {
-    condition: ({ channel }) =>
-        channel && !channel.self_member_id && !["chat", "group"].includes(channel.channel_type),
-    onSelected: ({ channel, store }) =>
-        store.fetchStoreData("/discuss/channel/add_members", {
-            channel_id: channel.id,
-            user_ids: [store.self_user.id],
-        }),
-    icon: "login",
-    name: _t("Join Channel"),
-    sequence: 20,
-    sequenceGroup: ({ owner }) => (owner.isDiscussContent ? undefined : 5),
-    tags: [ACTION_TAGS.PRIMARY],
-};
-registerThreadAction("join-channel", joinChannelAction);
 registerThreadAction("expand-discuss", {
     condition: ({ channel, owner, store }) =>
         channel &&
@@ -62,5 +46,22 @@ registerThreadAction("advanced-settings", {
     iconClass: "oi-filled",
     name: _t("Advanced Settings"),
     sequence: 20,
+    sequenceGroup: 30,
+});
+registerThreadAction("view-recordings", {
+    condition: ({ channel, owner }) => channel && !owner.isDiscussContent,
+    async onSelected({ channel, store }) {
+        const action = await store.env.services.orm.call(
+            "discuss.channel",
+            "action_view_recordings",
+            [[channel.id]]
+        );
+        if (action) {
+            await store.env.services.action.doAction(action);
+        }
+    },
+    icon: "movie",
+    name: _t("View Recordings"),
+    sequence: 15,
     sequenceGroup: 30,
 });

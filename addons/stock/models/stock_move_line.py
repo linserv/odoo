@@ -579,6 +579,10 @@ class StockMoveLine(models.Model):
         self.ensure_one()
         return self.move_id.picking_type_id or self.is_inventory or self.lot_id or self.move_id.is_scrap
 
+    def _get_lot_partner(self):
+        self.ensure_one()
+        return self.move_id.picking_id.partner_id
+
     def _action_done(self):
         """ This method is called during a move's `action_done`. It'll actually move a quant from
         the source location to the destination location, and unreserve if needed in the source
@@ -694,6 +698,10 @@ class StockMoveLine(models.Model):
                 if moves_to_check:
                     moves_to_check_pack.update(moves_to_check)
             ml_ids_to_ignore.add(ml.id)
+
+            if ml.lot_id and ml.move_id.picking_id.picking_type_id.code == 'outgoing':
+                if partner := ml._get_lot_partner():
+                    ml.lot_id.partner_ids |= partner
 
         if not self.env.context.get('ignore_dest_packages'):
             mls_todo.result_package_id._apply_dest_to_package()
@@ -1130,14 +1138,12 @@ class StockMoveLine(models.Model):
 
     def _post_put_in_pack_hook(self, package):
         if package and self.picking_type_id.auto_print_package_label:
-            if self.picking_type_id.package_label_to_print == 'pdf':
-                action = self.env.ref("stock.action_report_package_barcode_small").report_action(package.id, config=False)
-            elif self.picking_type_id.package_label_to_print == 'zpl':
-                action = self.env.ref("stock.label_package_template").report_action(package.id, config=False)
-            if action:
-                action.update({'close_on_report_download': True})
-                clean_action(action, self.env)
-                return action
+            print_format = self.picking_type_id.package_label_to_print
+            if print_format in ('pdf', 'zpl'):
+                action = self.env['stock.package.label.layout']._process_package_labels(package, print_format)
+                if action:
+                    clean_action(action, self.env)
+                    return action
         return package
 
     def action_put_in_pack(self, *, package_id=False, package_type_id=False, package_name=False, package_capacity=None):

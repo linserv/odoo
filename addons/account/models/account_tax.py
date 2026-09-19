@@ -32,23 +32,6 @@ class AccountTaxGroup(models.Model):
     name = fields.Char(required=True, translate=True)
     sequence = fields.Integer(default=10)
     company_id = fields.Many2one('res.company', required=True, default=lambda self: self.env.company)
-    tax_payable_account_id = fields.Many2one(
-        comodel_name='account.account',
-        check_company=True,
-        domain="[('account_type', '=', 'liability_payable'), ('non_trade', '=', True)]",
-        string='Tax Payable Account',
-        help="Tax current account used as a counterpart to the Tax Closing Entry when in favor of the authorities.")
-    tax_receivable_account_id = fields.Many2one(
-        comodel_name='account.account',
-        check_company=True,
-        domain="[('account_type', '=', 'asset_receivable'), ('non_trade', '=', True)]",
-        string='Tax Receivable Account',
-        help="Tax current account used as a counterpart to the Tax Closing Entry when in favor of the company.")
-    advance_tax_payment_account_id = fields.Many2one(
-        comodel_name='account.account',
-        check_company=True,
-        string='Tax Advance Account',
-        help="Downpayments posted on this account will be considered by the Tax Closing Entry.")
     country_id = fields.Many2one(
         string="Country",
         comodel_name='res.country',
@@ -63,19 +46,6 @@ class AccountTaxGroup(models.Model):
         translate=True,
     )
     pos_receipt_label = fields.Char(string='PoS receipt label')
-
-    @api.constrains('tax_payable_account_id', 'tax_receivable_account_id')
-    def _constrains_payable_receivable_account(self):
-        for tax_group in self:
-            if tax_group.tax_payable_account_id and tax_group.tax_payable_account_id.account_type != 'liability_payable':
-                raise UserError(self.env._("You must select a payable account for 'Tax Payable Account'."))
-            if tax_group.tax_receivable_account_id and tax_group.tax_receivable_account_id.account_type != 'asset_receivable':
-                raise UserError(self.env._("You must select a receivable account for 'Tax Receivable Account'."))
-            if (
-                (tax_group.tax_payable_account_id and not tax_group.tax_payable_account_id.non_trade)
-                or (tax_group.tax_receivable_account_id and not tax_group.tax_receivable_account_id.non_trade)
-            ):
-                raise UserError(self.env._("You must use non-trade accounts for tax groups."))
 
     @api.depends('company_id')
     def _compute_country_id(self):
@@ -5096,17 +5066,20 @@ class AccountTax(models.Model):
             tax_domain = (
                Domain('amount_type', '=', tax_values['amount_type'])
                & Domain('type_tax_use', '=', tax_values['type_tax_use'])
-               & Domain('amount', '=', tax_values['amount'])
             )
+            ubl_cii_tax_category_code = 'ubl_cii_tax_category_code' in self._fields and tax_values.get('ubl_cii_tax_category_code')
+            if tax_values['amount'] or ubl_cii_tax_category_code != 'AE':
+                tax_domain &= Domain('amount', '=', tax_values['amount'])
+            else:
+                # Reverse charge taxes can be reported as 0% in the document even though the
+                # tax itself isn't, so ignore the amount and rely on the category code instead.
+                tax_domain &= Domain('ubl_cii_tax_category_code', '=', 'AE')
             orders = ['sequence', 'id']
             if name := tax_values.get('name'):
                 tax_domain &= Domain('name', '=', name)
             if tax_exigibility := tax_values.get('tax_exigibility'):
                 tax_domain &= Domain('tax_exigibility', '=', tax_exigibility)
-            if (
-                (ubl_cii_tax_category_code := tax_values.get('ubl_cii_tax_category_code'))
-                and 'ubl_cii_tax_category_code' in self._fields
-            ):
+            if ubl_cii_tax_category_code:
                 allowed_tax_category_codes = [ubl_cii_tax_category_code, False]
                 if company.vat_disabled and ubl_cii_tax_category_code != 'O':
                     allowed_tax_category_codes.append('O')

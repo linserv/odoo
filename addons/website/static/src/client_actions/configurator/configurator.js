@@ -18,6 +18,7 @@ import { mixCssColors } from "@web/core/utils/colors";
 import { router } from "@web/core/browser/router";
 import {
     Component,
+    computed,
     onMounted,
     onWillStart,
     proxy,
@@ -28,7 +29,7 @@ import {
     usePlugin,
     useProps,
 } from "@odoo/owl";
-import { standardActionServiceProps } from "@web/webclient/actions/action_service";
+import { standardActionServiceProps } from "@web/webclient/actions/action_plugin";
 import { fuzzyLevenshteinLookup } from "@web/core/utils/search";
 import { isBrowserSafari } from "@web/core/browser/feature_detection";
 
@@ -264,6 +265,7 @@ export class DescriptionScreen extends Component {
     setup() {
         this.bootstrap = usePlugin(BootstrapInstance);
         this.state = useStore();
+        this.previewImages = computed(() => this.computePreviewImages());
         this.orm = useService("orm");
         useAutofocus({ ref: this.autofocusRef });
 
@@ -405,7 +407,7 @@ Return ONLY a JSON object with:
         this.state.positioningsLoading = false;
     }
 
-    get previewImages() {
+    computePreviewImages() {
         const images = this.state.images || {};
         const fallbackImageUrls = [];
         const previewImageUrls = [];

@@ -192,7 +192,11 @@ class HrVersion(models.Model):
             return
         leave.resource_calendar_id = first_contract.resource_calendar_id
         if leave.work_entry_type_request_unit != 'hour':
-            leave.with_context(leave_skip_date_check=True, leave_skip_state_check=True)._compute_date_from_to()
+            leave.with_context(
+                leave_fast_create=True,
+                leave_skip_date_check=True,
+                leave_skip_state_check=True,
+            )._compute_date_from_to()
             if leave.state == 'validate':
                 leave._validate_leave_request()
 
@@ -300,6 +304,9 @@ class HrVersion(models.Model):
         res = super()._generate_work_entries_postprocess_adapt_to_calendar(vals)
         if 'work_entry_type_id' not in vals or not vals.get('leave_ids'):
             return res
+        # time rule output leaves already carry the correct WET and span; skip calendar adaptation
+        if vals['leave_ids'].source_leave_id:
+            return False
         work_entry_type = vals['work_entry_type_id']
         return res or (work_entry_type.count_as == 'absence' or work_entry_type.request_unit != 'hour')
 

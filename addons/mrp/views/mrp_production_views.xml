@@ -138,6 +138,15 @@
             </field>
         </record>
 
+        <record id="action_production_order_confirm" model="ir.actions.server">
+            <field name="name">Confirm</field>
+            <field name="model_id" ref="mrp.model_mrp_production"/>
+            <field name="binding_model_id" ref="mrp.model_mrp_production"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">records.filtered(lambda mo: mo.state == 'draft').action_confirm()</field>
+        </record>
+
         <record id="action_production_order_split" model="ir.actions.server">
             <field name="name">Split</field>
             <field name="model_id" ref="mrp.model_mrp_production"/>
@@ -157,6 +166,32 @@
             <field name="code">
             if records:
                 action = records.action_open_label_type()
+            </field>
+        </record>
+
+        <record id="action_print_finished_product_pdf" model="ir.actions.server">
+            <field name="name">Finished Product Label (PDF)</field>
+            <field name="model_id" ref="mrp.model_mrp_production"/>
+            <field name="binding_model_id" ref="mrp.model_mrp_production"/>
+            <field name="binding_view_types">list,kanban,form</field>
+            <field name="binding_type">report</field>
+            <field name="state">code</field>
+            <field name="code">
+            if records:
+                action = env['mrp.finished.product.label.layout']._process_finished_product_labels(records, 'pdf')
+            </field>
+        </record>
+
+        <record id="action_print_finished_product_zpl" model="ir.actions.server">
+            <field name="name">Finished Product Label (ZPL)</field>
+            <field name="model_id" ref="mrp.model_mrp_production"/>
+            <field name="binding_model_id" ref="mrp.model_mrp_production"/>
+            <field name="binding_view_types">list,kanban,form</field>
+            <field name="binding_type">report</field>
+            <field name="state">code</field>
+            <field name="code">
+            if records:
+                action = env['mrp.finished.product.label.layout']._process_finished_product_labels(records, 'zpl')
             </field>
         </record>
 
@@ -239,11 +274,16 @@
                 <form string="Manufacturing Orders">
                 <header>
                     <field name="show_lock" invisible="1"/>
-                    <button name="button_mark_done" type="object" string="Produce" class="oe_highlight"
-                            invisible="not move_raw_ids or state not in ('confirmed', 'progress', 'to_close')" data-hotkey="g"/>
-                    <button name="button_mark_done" type="object" string="Produce" class="oe_highlight"
-                            invisible="move_raw_ids or state not in ('confirmed', 'progress', 'to_close')"
-                            confirm="There are no components to consume. Are you still sure you want to continue?" data-hotkey="g"/>
+                    <button name="button_mark_done" type="object" string="Produce" class="oe_highlight" data-hotkey="g"
+                            invisible="not move_raw_ids or validate_button_style != 'primary'"/>
+                    <button name="button_mark_done" type="object" string="Produce" class="btn-secondary" data-hotkey="g"
+                            invisible="not move_raw_ids or validate_button_style != 'secondary'"/>
+                    <button name="button_mark_done" type="object" string="Produce" class="oe_highlight" data-hotkey="g"
+                            invisible="move_raw_ids or validate_button_style != 'primary'"
+                            confirm="There are no components to consume. Are you still sure you want to continue?"/>
+                    <button name="button_mark_done" type="object" string="Produce" class="btn-secondary" data-hotkey="g"
+                            invisible="move_raw_ids or validate_button_style != 'secondary'"
+                            confirm="There are no components to consume. Are you still sure you want to continue?"/>
                     <button name="action_confirm" invisible="state != 'draft'" string="Confirm" type="object" class="oe_highlight" data-hotkey="q"/>
                     <button name="button_plan" type="object" string="Plan" class="oe_highlight" invisible="state in ('cancel', 'done') or is_planned or not workorder_ids" groups="mrp.group_mrp_routings" data-hotkey="z"/>
                     <button name="button_unplan" type="object" string="Unplan" invisible="not is_planned or state in ['cancel', 'done']" groups="mrp.group_mrp_routings" data-hotkey="z"/>
@@ -397,14 +437,14 @@
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="area_chart" invisible="forecasted_issue"/>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="area_chart" invisible="not forecasted_issue" class="text-danger"/>
                             </div>
-                            <label for="lot_producing_ids" invisible="state in ('draft', 'cancel') or product_tracking in ('none', False) or (state == 'done' and product_tracking == 'serial' and product_qty > 1)"/>
-                            <div class="o_row" invisible="state in ('draft', 'cancel') or product_tracking in ('none', False) or (state == 'done' and product_tracking == 'serial' and product_qty > 1)">
+                            <label for="lot_producing_ids" invisible="state in ('draft', 'cancel') or not product_tracking or (state == 'done' and product_tracking == 'serial' and product_qty > 1)"/>
+                            <div class="o_row" invisible="state in ('draft', 'cancel') or not product_tracking or (state == 'done' and product_tracking == 'serial' and product_qty > 1)">
                                 <field name="lot_producing_ids" widget="many2many_tags" options="{'on_tag_click': 'open_form'}"
-                                    invisible="product_tracking in ('none', False) or (product_tracking == 'serial' and (product_qty > 1 or serial_numbers_count > 1))"
+                                    invisible="not product_tracking or (product_tracking == 'serial' and (product_qty > 1 or serial_numbers_count > 1))"
                                     readonly="lot_producing_ids" force_save="1" context="{'default_product_id': product_id}"/>
-                                <button name="action_generate_serial" type="object" class="btn btn-primary o_right_alignment" string="Generate Serial Numbers" aria-label="Creates new serial numbers" role="img" invisible="product_tracking in ('none', 'lot', False) or lot_producing_ids"/>
-                                <button name="action_generate_serial" type="object" class="btn btn-secondary o_right_alignment" string="Edit Serial Numbers" aria-label="Edit generated serial numbers" role="img" invisible="state == 'done' or product_tracking in ('none', 'lot', False) or not lot_producing_ids or (serial_numbers_count &lt;= 1 and product_qty &lt;= 1)"/>
-                                <button name="action_generate_serial" type="object" class="btn btn-primary o_right_alignment" string="Generate Lot Number" aria-label="Creates a new lot number" role="img" invisible="product_tracking in ('none', 'serial', False) or lot_producing_ids"/>
+                                <button name="action_generate_serial" type="object" class="btn btn-primary o_right_alignment" string="Generate Serial Numbers" aria-label="Creates new serial numbers" role="img" invisible="product_tracking != 'serial' or lot_producing_ids"/>
+                                <button name="action_generate_serial" type="object" class="btn btn-secondary o_right_alignment" string="Edit Serial Numbers" aria-label="Edit generated serial numbers" role="img" invisible="state == 'done' or product_tracking != 'serial' or not lot_producing_ids or (serial_numbers_count &lt;= 1 and product_qty &lt;= 1)"/>
+                                <button name="action_generate_serial" type="object" class="btn btn-primary o_right_alignment" string="Generate Lot Number" aria-label="Creates a new lot number" role="img" invisible="product_tracking != 'lot' or lot_producing_ids"/>
                                 <button name="action_clear_lot_producing_ids" type="object" class="btn btn-secondary o_right_alignment" string="Clear" aria-label="Clears the selected lot/serial number" role="img" invisible="state == 'done' or (product_tracking == 'serial' and (product_qty > 1 or serial_numbers_count > 1)) or not lot_producing_ids"/>
                             </div>
                         </group>
@@ -643,10 +683,16 @@
                     <field name="workorder_ids"/>
                     <templates>
                         <t t-name="card">
-                            <div class="d-flex mb-1">
+                            <div class="d-flex mb-1 align-items-center justify-content-between">
                                 <field name="name" class="fw-bolder fs-6 ms-1"/>
                                 <field name="product_default_code" class="fs-6 ms-1"/>
-                                <span t-attf-class="ms-auto badge rounded-pill #{['text-bg-light', 'text-bg-info', 'text-bg-warning', 'text-bg-success', 'text-bg-success', 'text-bg-danger'][['draft', 'confirmed', 'progress', 'to_close', 'done', 'cancel'].indexOf(record.state.raw_value)]}"><field name="state"/></span>
+                                <field name="state"
+                                    decoration-success="state in ('done', 'to_close')"
+                                    decoration-warning="state == 'progress'"
+                                    decoration-info="state == 'confirmed'"
+                                    decoration-danger="state == 'cancel'"
+                                    decoration-muted="state == 'draft'"
+                                    optional="show" widget="badge" class="text-dark fs-5"/>
                             </div>
                             <div class="d-flex mb-1">
                                 <field name="product_name" class="ms-1"/>
@@ -661,17 +707,17 @@
                                     <field name="priority" widget="priority"/>
                                     <field name="activity_ids" widget="kanban_activity"/>
                                     <field name="json_popover" widget="stock_rescheduling_popover" invisible="not json_popover"/>
-                                    <div t-if="record.date_deadline.raw_value" class="d-flex">
+                                    <div t-if="record.date_deadline.raw_value &amp;&amp; !['done', 'cancel'].includes(record.state.raw_value)" class="d-flex">
                                         <i class="oi mx-1 mt-1" data-icon="calendar_today" role="img" title="Deadline"/>
                                         <field name="date_deadline" widget="datetime" options="{'show_time': false}" decoration-danger="is_delayed" decoration-warning="is_due_today"/>
                                     </div>
-                                    <div t-if="record.workorder_ids.raw_value.length" class="d-flex text-nowrap overflow-hidden text-overflow-ellipsis">
+                                    <div t-if="record.workorder_ids.raw_value.length &amp;&amp; !['done', 'cancel'].includes(record.state.raw_value)" class="d-flex text-nowrap overflow-hidden text-overflow-ellipsis">
                                         <i class="oi mx-1 mt-1" data-icon="hourglass_bottom" role="img" title="Remaining Time"/>
                                         <field name="remaining_time" widget="float_time" options="{'unit': 'minutes'}"/>
                                     </div>
                                     <div t-if="['confirmed', 'progress'].includes(record.state.raw_value)" class="d-flex text-nowrap overflow-hidden text-overflow-ellipsis"
                                         t-att-class="{'text-success': record.reservation_state.raw_value == 'assigned' || record.components_availability_state.raw_value == 'available', 'text-warning': record.reservation_state.raw_value != 'assigned' &amp;&amp; ['expected', 'available'].includes(record.components_availability_state.raw_value), 'text-danger': record.reservation_state.raw_value != 'assigned' &amp;&amp; ['late', 'unavailable'].includes(record.components_availability_state.raw_value)}">
-                                        <i class="oi mx-1 mt-1" data-icon="inventory_2" role="img" title="Components Availability"/>
+                                        <i class="oi mx-1 mt-1" data-icon="package_2" role="img" title="Components Availability"/>
                                         <field name="components_availability"/>
                                     </div>
                                     <div t-if="record.mrp_production_all_child_count.raw_value &gt; 0" class="d-flex text-nowrap overflow-hidden text-overflow-ellipsis">
@@ -770,7 +816,7 @@
                     <filter string="Cancelled" name="filter_cancel" domain="[('state', '=', 'cancel')]"/>
                     <separator/>
                     <filter string="Starred" name="starred" domain="[('priority', '=', '1')]"/>
-                    <filter string="To Plan" name="filter_to_plan" domain="[('state', '=', 'confirmed'), ('is_planned', '=', False), ('workorder_ids', '!=', False)]" groups="mrp.group_mrp_routings"/>
+                    <filter string="To Plan" name="filter_to_plan" domain="[('is_planned', '=', False), ('workorder_ids', '!=', False)]" groups="mrp.group_mrp_routings"/>
                     <separator/>
                     <filter string="Draft" name="filter_draft" domain="[('state', '=', 'draft')]"/>
                     <filter string="Confirmed" name="filter_confirmed" domain="[('state', '=', 'confirmed')]"/>

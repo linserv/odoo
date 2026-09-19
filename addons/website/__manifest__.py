@@ -38,8 +38,10 @@
         'data/digest_data.xml',
         'views/website_technical_views.xml',
         'views/website_templates.xml',
+        'views/theme_colors_preview.xml',
         'views/snippets/snippets.xml',
         'views/snippets/s_announcement_scroll.xml',
+        'views/snippets/s_animated_number.xml',
         'views/snippets/s_framed_intro.xml',
         'views/snippets/s_title.xml',
         'views/snippets/s_cover.xml',
@@ -309,9 +311,6 @@
             'website/static/src/js/content/compatibility.js',
             'website/static/src/js/user_custom_javascript.js',
             'website/static/src/js/http_cookie.js',
-            'website/static/src/xml/website.xml',
-            'website/static/src/xml/website.background.video.xml',
-            'website/static/src/xml/website.cookies_warning.xml',
             'website/static/src/js/text_processing.js',
             'website/static/src/js/highlight_utils.js',
             'website/static/src/client_actions/website_preview/website_builder_action.editor.scss',
@@ -337,6 +336,8 @@
         ],
         'website.assets_inside_builder_iframe': [
             ('include', 'html_builder.assets_inside_builder_iframe'),
+            'portal/static/src/scss/portal.edit.*',
+            'google_recaptcha/static/src/xml/recaptcha.xml',
             'website/static/src/**/*.edit.*',
             'website/static/src/core/website_edit_service.js',
         ],
@@ -407,15 +408,8 @@
             'website/static/src/js/utils.js',
             'web/static/src/core/autocomplete/*',
             'website/static/src/components/autocomplete_with_pages/*',
-            'website/static/src/xml/website.xml',
             'website/static/src/scss/website_controller_page_kanban.scss',
             'website/static/src/mail/core/common/**/*',
-
-            'website/static/src/xml/website_form_editor.xml',
-            # TODO when moving options to website: load this from website
-            # directly. This file is loaded in assets_wysiwyg in website, but we
-            # need to load it here for html_builder.
-            'website/static/src/xml/website.cookies_bar.xml',
         ],
         "web.assets_web_dark": [
             'website/static/src/components/dialog/*.dark.scss',
@@ -448,7 +442,6 @@
             'website/static/src/interactions/**/*',
             'website/static/src/snippets/**/*.js',
             'website/static/src/snippets/**/*.xml',
-            'website/static/src/xml/**/*.xml',
             'website/static/src/snippets/s_table_of_content/000.scss',
             'google_recaptcha/static/src/js/recaptcha.js',
             'website/static/src/js/content/generate_video_iframe.js',
@@ -482,10 +475,12 @@
             'website/static/src/scss/website.edit_mode.scss',
             'website/static/src/components/googleplaces_autocomplete/*',
             'website/static/src/js/send_mail_form.js',
-            'website/static/src/xml/website_form.xml',
-            'website/static/src/xml/website_form_editor.xml',
-            'website/static/src/xml/website.cookies_bar.xml',
             'website/static/src/mail/core/common/**/*',
+        ],
+        'website.assets_theme_colors_preview': [
+            ('include', 'web._assets_helpers'),
+            'html_builder/static/src/core/operation.edit.scss',
+            'website/static/src/scss/theme_colors_preview.scss',
         ],
         'html_editor.assets_media_dialog': [
             'website/static/src/components/media_dialog/*',
