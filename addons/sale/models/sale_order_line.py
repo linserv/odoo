@@ -365,14 +365,14 @@ class SaleOrderLine(models.Model):
         string="Amount", compute="_compute_amount_to_invoice_at_date"
     )
     accrual_move_ids = fields.Many2many(
-        comodel_name='account.move',
-        relation='sale_order_line_accrual_move_rel',
-        column1='order_line_id',
-        column2='move_id',
+        comodel_name="account.move",
+        relation="sale_order_line_accrual_move_rel",
+        column1="order_line_id",
+        column2="move_id",
         string="Accrual Entries",
         copy=False,
         help="Accrual entries generated for this line, so it isn't accrued again while one is "
-             "still standing (posted, not yet reversed or cancelled).",
+        "still standing (posted, not yet reversed or cancelled).",
     )
 
     # Same than `qty_delivered` and `qty_invoiced` but non-stored and depending of the context.
@@ -478,7 +478,12 @@ class SaleOrderLine(models.Model):
             line.product_template_id = line.product_id.product_tmpl_id
 
     def _search_product_template_id(self, operator, value):
-        return [("product_id.product_tmpl_id", operator, value)]
+        if operator in Domain.NEGATIVE_OPERATORS:
+            return NotImplemented
+        domain = Domain("product_id.product_tmpl_id", operator, value)
+        if operator == 'in' and False in value:  # relation may be falsy
+            domain |= Domain('product_id', '=', False)
+        return domain
 
     @api.depends("product_id")
     def _compute_is_product_archived(self):
@@ -1550,17 +1555,13 @@ class SaleOrderLine(models.Model):
             line.untaxed_amount_to_invoice = amount_to_invoice
 
     @api.depends(
-        "discount", "price_total", "product_uom_qty", "qty_delivered", "qty_invoiced_posted"
+        "discount", "price_total", "product_uom_qty", "qty_invoiced_posted"
     )
     def _compute_amount_to_invoice(self):
         for line in self:
             if line.product_uom_qty:
-                uom_qty_to_consider = (
-                    line.qty_delivered
-                    if line.product_id.invoice_policy == "delivery"
-                    else line.product_uom_qty
-                )
-                qty_to_invoice = uom_qty_to_consider - line.qty_invoiced_posted
+                # The ordered quantity is what the customer committed to, delivered or not.
+                qty_to_invoice = line.product_uom_qty - line.qty_invoiced_posted
                 unit_price_total = line.price_total / line.product_uom_qty
                 line.amount_to_invoice = unit_price_total * qty_to_invoice
             else:
@@ -1575,7 +1576,7 @@ class SaleOrderLine(models.Model):
             ) * line.price_unit
 
     def _get_accrual_domain(self, date=False):
-        """ Reused by account.accrued.orders.wizard and stock_account's Stock Valuation report.
+        """Reused by account.accrued.orders.wizard and stock_account's Stock Valuation report.
         When `date` is given, also restrict to lines that need an accrual entry as of it: the
         ones currently out of sync, or that were out of sync as of `date` but have since been
         settled (nothing left to accrue today). Extended by `sale_stock`, which can also detect
@@ -1588,7 +1589,11 @@ class SaleOrderLine(models.Model):
             ("product_id.type", "!=", "combo"),
             # Lines with an accrual entry that's still standing (posted, not yet reversed or
             # cancelled) already have their accrual accounted for: excluded until it isn't.
-            ("accrual_move_ids", "not any", [("state", "=", "posted"), ("reversal_move_ids", "=", False)]),
+            (
+                "accrual_move_ids",
+                "not any",
+                [("state", "=", "posted"), ("reversal_move_ids", "=", False)],
+            ),
         ])
         if date:
             domain &= Domain.OR([
@@ -1613,14 +1618,14 @@ class SaleOrderLine(models.Model):
 
     @api.model
     def _get_accrual_line_ids(self, mode=False, date=False, extra_domain=None):
-        """ Order lines whose invoiced and delivered quantities are out of sync, i.e. that need
+        """Order lines whose invoiced and delivered quantities are out of sync, i.e. that need
         an accrual entry as of `date` (today if not given). `mode` splits the result by the
         direction of the mismatch: 'deferred' (invoiced ahead of delivery) or 'invoice_issued'
         (delivered ahead of invoicing). Reused by the `deferred_revenue`/`invoice_to_be_issued`
         filters and by `res.company._get_accrual_candidate_lines`.
         """
         if not date:
-            date = fields.Date.to_date(self.env.context.get('accrual_entry_date'))
+            date = fields.Date.to_date(self.env.context.get("accrual_entry_date"))
         accrual_entry_date = date or fields.Date.context_today(self)
         domain = self._get_accrual_domain(accrual_entry_date)
         if extra_domain:
@@ -1628,7 +1633,9 @@ class SaleOrderLine(models.Model):
         order_lines = self.env["sale.order.line"].search(domain)
         # Applied after the search: flushing pending computations with this
         # context would corrupt the stored quantities with at-date values.
-        order_lines = order_lines.with_context(accrual_entry_date=fields.Date.to_string(accrual_entry_date))
+        order_lines = order_lines.with_context(
+            accrual_entry_date=fields.Date.to_string(accrual_entry_date)
+        )
         if mode == "deferred":
             order_lines = order_lines.filtered(lambda l: l.amount_to_invoice_at_date < 0)
         elif mode == "invoice_issued":
@@ -1735,9 +1742,16 @@ class SaleOrderLine(models.Model):
 
     # === ONCHANGE METHODS ===#
 
+    def onchange(self, values, field_names, fields_spec):
+        self_with_context = self
+        if not field_names:
+            # Some onchange methods should not apply to first onchange
+            self_with_context = self.with_context(sale_onchange_first_call=True)
+        return super(SaleOrderLine, self_with_context).onchange(values, field_names, fields_spec)
+
     @api.onchange("product_id")
     def _onchange_product_id(self):
-        if self._is_product_line():
+        if self._is_product_line() and not self.env.context.get("sale_onchange_first_call"):
             if not self.product_id:
                 self.name = ""
                 return
@@ -1745,7 +1759,7 @@ class SaleOrderLine(models.Model):
 
     @api.onchange("product_template_id")
     def _onchange_product_template_id(self):
-        if self._is_product_line():
+        if self._is_product_line() and not self.env.context.get("sale_onchange_first_call"):
             if not self.product_template_id:
                 self.product_id = False
                 self.name = ""
@@ -1783,7 +1797,11 @@ class SaleOrderLine(models.Model):
             return lines
 
         for line in lines:
-            if not line.display_type and line.state == "sale" and not self.env.context.get('skip_intercompany_sync'):
+            if (
+                not line.display_type
+                and line.state == "sale"
+                and not self.env.context.get("skip_intercompany_sync")
+            ):
                 msg = self.env._("Extra line with %s", line.product_id.display_name or line.name)
                 line.order_id.message_post(body=msg)
 
@@ -1818,7 +1836,7 @@ class SaleOrderLine(models.Model):
         ):
             raise UserError(self.env._("You cannot modify the product of this order line."))
 
-        if "product_uom_qty" in values and not self.env.context.get('skip_intercompany_sync'):
+        if "product_uom_qty" in values and not self.env.context.get("skip_intercompany_sync"):
             precision = self.env["decimal.precision"].precision_get("Product Unit")
             self.filtered(
                 lambda r: (
@@ -2288,6 +2306,7 @@ class SaleOrderLine(models.Model):
             self.order_id._can_be_edited_on_portal()
             and not self.combo_item_id
             and not self._is_discount_line()
+            and not self._is_analytic_reinvoice_line()
         )
 
     def _is_analytic_reinvoice_line(self):

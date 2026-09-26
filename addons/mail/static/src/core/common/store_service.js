@@ -287,13 +287,10 @@ export class Store extends BaseStore {
                 } catch {
                     // assumes tab not focused: parent.document from iframe triggers CORS error
                 }
-                // Prevent duplicate inbox push notifications since they're already handled by
-                // `mail.message/notification` bus notifications, and the `modelsHandleByPush` heuristic
-                // in `out_of_focus_service.js` isn't reliable enough to detect these cases.
-                const isInbox =
-                    this.store.self.main_user_id?.notification_type === "inbox" &&
-                    model !== "discuss.channel";
-                if ((isTabFocused && thread?.channel?.isDisplayed) || isInbox) {
+                if (
+                    this.self_user?.im_status === "busy" ||
+                    (isTabFocused && thread?.channel?.isDisplayed)
+                ) {
                     navigator.serviceWorker.controller?.postMessage({
                         type: "notification-display-response",
                         payload: { correlationId },
@@ -428,10 +425,7 @@ export class Store extends BaseStore {
         });
         await this.chatHub.initPromise;
         channel.chatWindow?.update({ autofocus: 0 });
-        await this.env.services["discuss.rtc"].toggleCall(channel, {
-            camera: true,
-            fullscreen: true,
-        });
+        await this.env.services["discuss.rtc"].startMeetingCall(channel, { fullscreen: true });
     }
 
     /**
@@ -832,15 +826,15 @@ export class Store extends BaseStore {
      * @param {string} searchTerm
      * @param {Thread} thread
      * @param {number} before
-     * @param {true|false|undefined} is_notification
+     * @param {string|undefined} search_filter
      */
-    async searchMessagesInThread(searchTerm, thread, before, is_notification) {
+    async searchMessagesInThread(searchTerm, thread, before, search_filter) {
         const { count, messages } = await this.fetchStoreData(
             thread.getFetchRoute(),
             {
                 ...thread.getFetchParams(),
                 fetch_params: {
-                    is_notification,
+                    search_filter,
                     search_term: (await prettifyMessageText(searchTerm)).replaceAll(nbsp, " "), // formatted like message_post
                     before,
                 },

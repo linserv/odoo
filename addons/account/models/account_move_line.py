@@ -1249,7 +1249,7 @@ class AccountMoveLine(models.Model):
         for line in self:
             line.sequence = seq_map.get(line.display_type, 100)
 
-    @api.depends('quantity', 'discount', 'price_unit', 'tax_ids', 'currency_id', 'document_tax_mode')
+    @api.depends('quantity', 'discount', 'price_unit', 'tax_ids', 'currency_id', 'document_tax_mode', 'extra_tax_data')
     def _compute_totals(self):
         """ Compute 'price_subtotal' / 'price_total' outside of `_sync_tax_lines` because those values must be visible for the
         user on the UI with draft moves and the dynamic lines are synchronized only when saving the record.
@@ -2594,7 +2594,9 @@ class AccountMoveLine(models.Model):
             other_aml_values=debit_values,
         )
 
-        if debit_currency != company_currency \
+        if self.env.context.get('no_exchange_difference'):
+            recon_currency = company_currency
+        elif debit_currency != company_currency \
             and debit_currency in debit_available_residual_amounts \
             and debit_currency in credit_available_residual_amounts:
             recon_currency = debit_currency
