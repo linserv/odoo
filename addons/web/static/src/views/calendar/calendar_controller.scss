@@ -1,13 +1,11 @@
-// Variables
-$o-cw-filter-avatar-size: 20px;
-
-// Animations
+/* Variables */
+/* Animations */
 @keyframes backgroundfade {
     from {
-        background-color: rgba($info, 0.5);
+        background-color: color-mix(in srgb, var(--info) 50%, transparent);
     }
     to {
-        background-color: rgba($info, 0.1);
+        background-color: color-mix(in srgb, var(--info) 10%, transparent);
     }
 }
 
@@ -25,7 +23,7 @@ $o-cw-filter-avatar-size: 20px;
         &:has(.fc-popover) {
             overflow: auto !important;
 
-            @include media-breakpoint-down(md) {
+            @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
                 .o_actionswiper_overflow_container {
                     overflow: visible !important;
                 }
@@ -46,39 +44,40 @@ $o-cw-filter-avatar-size: 20px;
 }
 
 .o_calendar_sidepanel_container {
-    --Avatar-size: #{$o-cw-filter-avatar-size};
+    --o-cw-filter-avatar-size: 20px;
+    --Avatar-size: var(--o-cw-filter-avatar-size);
 
     flex: 0 0 auto;
 
     .o_calendar_unschedule_zone {
-        width: $o-datetime-picker-reduced-width;
+        width: var(--o-datetime-picker-reduced-width);
         height: stretch;
-        min-height: 200px; // Fallback for firefox < 146
-        border: 1px solid rgba($o-enterprise-action-color, 0.4);
-        background-color: mix($o-enterprise-action-color, $o-view-background-color, 10%);
+        min-height: 200px; /* Fallback for firefox < 146 */
+        border: 1px solid color-mix(in srgb, var(--o-enterprise-action-color) 40%, transparent);
+        background-color: color-mix(in srgb, var(--o-enterprise-action-color) 10%, var(--o-view-background-color));
     }
 
     .o_calendar_sidepanel {
-        width: $o-datetime-picker-reduced-width;
+        width: var(--o-datetime-picker-reduced-width);
 
-        // Inlined in the panel: it spans the full width, the panel handles the
-        // horizontal spacing.
+        /* Inlined in the panel: it spans the full width, the panel handles the */
+        /* horizontal spacing. */
         > .o_datetime_picker {
-            --DateTimePicker-padding: #{map-get($spacers, 2)} 0;
+            --DateTimePicker-padding: var(--o-bs-spacer-2) 0;
         }
 
         .o_time_picker input {
             field-sizing: content;
         }
 
-        // sync buttons are only displayed on calendar.event views
+        /* sync buttons are only displayed on calendar.event views */
         .o_calendar_sync {
             padding-bottom: 0.5em;
         }
 
         .o_event_to_schedule_draggable {
-            // This is necessary because it lets fullcalendar override the display
-            // style when needed (unlike with bootstrap's d-flex)
+            /* This is necessary because it lets fullcalendar override the display */
+            /* style when needed (unlike with bootstrap's d-flex) */
             display: flex;
             max-width: fit-content;
             .o_event_to_schedule_handle {
@@ -100,7 +99,7 @@ $o-cw-filter-avatar-size: 20px;
     text-orientation: mixed;
 }
 
-//  Print
+/* Print */
 @include media-only(print) {
     html:has(.o_action_manager .o_calendar_view.o_view_controller.o_action) {
         @extend %o-html-layout-fill;

@@ -14,14 +14,15 @@
         ],
     'assets': {
         'web.assets_backend': [
-            'google_calendar/static/src/scss/google_calendar.scss',
+            'google_calendar/static/src/scss/google_calendar.css',
             'google_calendar/static/src/views/**/*',
         ],
         'web.assets_unit_tests': [
             'google_calendar/static/tests/**/*',
         ],
     },
-    'uninstall_hook': "remove_unimported_calendars",
+    'post_init_hook': 'enable_primary_calendar_sync',
+    'uninstall_hook': 'remove_unimported_calendars',
     'author': 'Odoo S.A.',
     'license': 'LGPL-3',
 }

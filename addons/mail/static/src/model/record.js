@@ -313,10 +313,14 @@ export class Record {
      *
      * @template T
      * @param {() => T} compute
+     * @param {Object} [options={}]
+     * @param {(a: T, b: T) => boolean} [options.equals] compares the new
+     *  value to the previous one; a computed that returns an equal value
+     *  keeps its previous reference instead of notifying its readers.
      * @returns {T}
      */
-    computed(compute) {
-        return { [COMPUTED_SYM]: true, compute };
+    computed(compute, options) {
+        return { [COMPUTED_SYM]: true, compute, equals: options?.equals };
     }
 
     /**
@@ -329,10 +333,12 @@ export class Record {
      * @template T
      * @param {() => T} compute
      * @param {(value: T) => number|void} msUntilStale
+     * @param {Object} [options={}]
+     * @param {(a: T, b: T) => boolean} [options.equals]
      * @returns {T}
      */
-    computedUntilStale(compute, msUntilStale) {
-        return { ...this.computed(compute), msUntilStale };
+    computedUntilStale(compute, msUntilStale, options) {
+        return { ...this.computed(compute, options), msUntilStale };
     }
 
     /**
@@ -450,14 +456,13 @@ export class Record {
             // the dummy record collecting the field declarations has no internals
             return;
         }
-        const deps = record._.ensureScope().run(() =>
-            computed(dependencies.bind(record), { equals: shallowEqual })
-        );
+        const scope = record._.ensureScope();
+        const deps = scope.run(() => computed(dependencies.bind(record), { equals: shallowEqual }));
         const boundCallback = (...values) => callback.apply(record._proxy, values);
         let firstRun = true;
         let firstValues;
         let cleanup;
-        record._registerDisposeFn(
+        scope.onDestroy(
             immediateEffect(function onChangeAfterConstructing() {
                 if (untrack(() => record._.isConstructing())) {
                     // deps and initial run wait for a complete record
@@ -492,7 +497,7 @@ export class Record {
                         });
                     })
                 );
-                record._registerDisposeFn(() => {
+                scope.onDestroy(() => {
                     disposeFn();
                     untrack(() => cleanup?.());
                     cleanup = undefined;
@@ -523,31 +528,6 @@ export class Record {
 
     _cleanupData(data) {
         technicalKeysOnRecords.forEach((field) => delete data[field]);
-    }
-
-    /** @param {Function} disposeFn */
-    _registerDisposeFn(disposeFn) {
-        this._.disposeFns.add(disposeFn);
-        if (!this[STORE_SYM]) {
-            this.store._.disposeFns.add(disposeFn);
-        }
-    }
-
-    /** @param {Function} f */
-    _runDisposeFn(f) {
-        f();
-        this._.disposeFns.delete(f);
-        if (!this[STORE_SYM]) {
-            this.store._.disposeFns.delete(f);
-        }
-    }
-
-    _runDisposeFns() {
-        for (const f of this._.disposeFns) {
-            this._runDisposeFn(f);
-        }
-        // after the effects, so that none of them recomputes a disposed computed
-        this._.scope?.destroy();
     }
 
     /**

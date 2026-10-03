@@ -19,6 +19,7 @@ import {
     Component,
     computed,
     proxy,
+    shallowEqual,
     signal,
     status,
     t,
@@ -47,7 +48,7 @@ import {
     useLongPress,
     useRightClickMenu,
 } from "@mail/utils/common/hooks";
-import { ActionList } from "@mail/core/common/action_list";
+import { ActionList, CircleInlineAction } from "@mail/core/common/action_list";
 import { loadCssFromBundle } from "@mail/utils/common/misc";
 import { MessageContextMenu } from "@mail/core/common/message_context_menu";
 import { Priority } from "@mail/core/common/priority";
@@ -253,6 +254,10 @@ export class Message extends Component {
         );
     }
 
+    get actionComponent() {
+        return CircleInlineAction;
+    }
+
     get messageActionsParams() {
         return {
             message: () => this.message,
@@ -263,22 +268,28 @@ export class Message extends Component {
 
     // components have no getter memoization: explicit computeds, so each
     // piece re-runs only when its deps change and keeps a stable identity
-    quickActions = computed(() => {
-        const allActions = this.messageActions.actions;
-        return allActions.slice(
-            0,
-            allActions.length > this.quickActionCount
-                ? this.quickActionCount - 1
-                : this.quickActionCount
-        );
-    });
+    quickActions = computed(
+        () => {
+            const allActions = this.messageActions.actions;
+            return allActions.slice(
+                0,
+                allActions.length > this.quickActionCount
+                    ? this.quickActionCount - 1
+                    : this.quickActionCount
+            );
+        },
+        { equals: shallowEqual }
+    );
 
-    moreMenuActions = computed(() => {
-        const allActions = this.messageActions.actions;
-        return allActions.length > this.quickActionCount
-            ? allActions.slice(this.quickActionCount - 1)
-            : false;
-    });
+    moreMenuActions = computed(
+        () => {
+            const allActions = this.messageActions.actions;
+            return allActions.length > this.quickActionCount
+                ? allActions.slice(this.quickActionCount - 1)
+                : false;
+        },
+        { equals: shallowEqual }
+    );
 
     moreAction = computed(() => {
         const moreActions = this.moreMenuActions();
@@ -299,16 +310,19 @@ export class Message extends Component {
             : undefined;
     });
 
-    actions = computed(() => {
-        const moreAction = this.moreAction();
-        const actions = moreAction
-            ? [...this.quickActions(), moreAction]
-            : [...this.quickActions()];
-        if (this.isAlignedRight) {
-            actions.reverse();
-        }
-        return actions;
-    });
+    actions = computed(
+        () => {
+            const moreAction = this.moreAction();
+            const actions = moreAction
+                ? [...this.quickActions(), moreAction]
+                : [...this.quickActions()];
+            if (this.isAlignedRight) {
+                actions.reverse();
+            }
+            return actions;
+        },
+        { equals: shallowEqual }
+    );
 
     get attClass() {
         return {
@@ -501,7 +515,7 @@ export class Message extends Component {
             // Mobile OS long press is handled with useLongPress()
             return;
         }
-        if (ev.composedPath()[0].closest("a") || !this.props.hasActions || this.isEditing) {
+        if (!this.hasActions || ev.composedPath()[0].closest("a")) {
             return;
         }
         if (!this.rightClickMenu.open(ev)) {
@@ -645,6 +659,10 @@ export class Message extends Component {
             !this.message.isSubjectSimilarToThreadName &&
             !this.message.isSubjectDefault
         );
+    }
+
+    get hasActions() {
+        return this.props.hasActions && this.message.hasActions && !this.isEditing;
     }
 }
 

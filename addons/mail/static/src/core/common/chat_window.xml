@@ -51,7 +51,7 @@
             </div>
             <div class="ms-1 flex-grow-1"/>
             <div class="d-flex flex-shrink-0 me-1">
-                <ActionList actions="this.quickActionsList" inline="true"/>
+                <ActionList actions="this.quickActionsList" inline="true" actionComponent.bind="this.getActionComponent"/>
             </div>
             <t t-if="this.store.inPublicPage and !this.store.self_user">
                 <button class="btn ps-1" t-if="!this.state.editingGuestName">
@@ -75,7 +75,7 @@
                     <Thread autofocus="this.autofocusThread" thread="this.channel.thread" t-key="this.channel.thread.localId" jumpPresent="this.state.jumpThreadPresent" jumpToNewMessage="this.props.chatWindow.jumpToNewMessage"/>
                     <t t-call="mail.ChatWindow.memberTyping"/>
                     <Composer t-if="!this.channel.composerHidden" composer="this.channel.composer" autofocus="this.autofocusComposer" mode="'compact'" onPostCallback.bind="() => this.state.jumpThreadPresent++" dropzoneRef="this.chatWindowContentRef" disabled="this.channel.composerDisabled"/>
-                    <div t-elif="this.channel.composerHiddenText" class="bg-200 py-1 text-center d-flex fst-italic fw-bold text-muted" t-ref="this.composerHiddenContainerRef">
+                    <div t-elif="this.channel.composerHiddenText" class="bg-200 py-1 text-center d-flex fst-italic fw-bold text-muted border-top" t-ref="this.composerHiddenContainerRef">
                         <span t-if="this.showBlankBeforeComposerHiddenText" class="flex-grow-1"/>
                         <span t-out="this.channel.composerHiddenText"/>
                         <span class="flex-grow-1"/>

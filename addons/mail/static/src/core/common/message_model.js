@@ -18,7 +18,6 @@ import {
     removeHtmlComments,
 } from "@mail/utils/common/html";
 
-import { browser } from "@web/core/browser/browser";
 import { router } from "@web/core/browser/router";
 import { deserializeDateTime } from "@web/core/l10n/dates";
 import { _t } from "@web/core/l10n/translation";
@@ -32,7 +31,7 @@ import {
 import { renderToElement } from "@web/core/utils/render";
 import { url } from "@web/core/utils/urls";
 
-import { markup } from "@odoo/owl";
+import { markup, shallowEqual } from "@odoo/owl";
 import { emojiLoader } from "@web/core/emoji_picker/emoji_loader";
 import { discussComponentRegistry } from "./discuss_component_registry";
 
@@ -84,13 +83,16 @@ export class Message extends Record {
         return editedDate ? deserializeDateTime(editedDate) : undefined;
     });
     /** attachments not already clearly visible in the body, unlike inlined images */
-    extra_body_attachment_ids = this.computed(() => {
-        const inlinedImageAttachmentIds = [
-            ...(this.bodyEl?.querySelectorAll("img[data-attachment-id]") ?? []),
-        ].map((img) => parseInt(img.dataset.attachmentId));
+    extra_body_attachment_ids = this.computed(
+        () => {
+            const inlinedImageAttachmentIds = [
+                ...(this.bodyEl?.querySelectorAll("img[data-attachment-id]") ?? []),
+            ].map((img) => parseInt(img.dataset.attachmentId));
 
-        return this.attachment_ids.filter((a) => !inlinedImageAttachmentIds.includes(a.id));
-    });
+            return this.attachment_ids.filter((a) => !inlinedImageAttachmentIds.includes(a.id));
+        },
+        { equals: shallowEqual }
+    );
     hasLink = this.computed(() => {
         if (this.isBodyEmpty) {
             return false;
@@ -128,8 +130,9 @@ export class Message extends Record {
     /** @type {string|undefined} */
     postFailMessage = undefined;
     reactions = fields.Many("MessageReactions", { inverse: "message" });
-    sortedReactions = this.computed(() =>
-        [...this.reactions].sort((r1, r2) => r1.sequence - r2.sequence)
+    sortedReactions = this.computed(
+        () => [...this.reactions].sort((r1, r2) => r1.sequence - r2.sequence),
+        { equals: shallowEqual }
     );
     notification_ids = fields.Many("mail.notification", { inverse: "mail_message_id" });
     self_notification = this.computed(() =>
@@ -202,6 +205,14 @@ export class Message extends Record {
             return channelId ? Number(channelId) : undefined;
         },
         inverse: "threadCreationMessages",
+    });
+    /** @type {number|undefined} */
+    pinnedMessageId = this.computed(() => {
+        if (this.notificationType !== "pin") {
+            return undefined;
+        }
+        const messageId = this.bodyEl?.querySelector(".o_mail_notification")?.dataset.oeId;
+        return messageId ? Number(messageId) : undefined;
     });
     /** @type {string} display name of the record the message is posted on */
     record_name;
@@ -471,6 +482,9 @@ export class Message extends Record {
                 })
             );
         }
+        if (this.notificationType === "pin") {
+            return _t("%(user)s pinned a message to this channel.", { user: this.authorName });
+        }
         if (this.isEmpty) {
             return _t("This message has been removed");
         }
@@ -491,8 +505,9 @@ export class Message extends Record {
         return null;
     }
 
-    failureNotifications = this.computed(() =>
-        this.notification_ids.filter((notification) => notification.isFailure)
+    failureNotifications = this.computed(
+        () => this.notification_ids.filter((notification) => notification.isFailure),
+        { equals: shallowEqual }
     );
 
     get scheduledDateSimple() {
@@ -626,7 +641,7 @@ export class Message extends Record {
         let notification = _t("Message Link Copied");
         let type = "success";
         try {
-            await browser.navigator.clipboard.writeText(url(`/mail/message/${this.id}`));
+            await window.navigator.clipboard.writeText(url(`/mail/message/${this.id}`));
         } catch {
             notification = _t("Message Link Copy Failed (Permission denied?)");
             type = "danger";
@@ -641,7 +656,7 @@ export class Message extends Record {
     async copyMessageText() {
         const messageBody = convertBrToLineBreak(this.body);
         try {
-            await browser.navigator.clipboard.writeText(messageBody);
+            await window.navigator.clipboard.writeText(messageBody);
         } catch {
             this.store.env.services.notification.add(_t("Text Copy Failed (Permission denied?)"), {
                 type: "danger",

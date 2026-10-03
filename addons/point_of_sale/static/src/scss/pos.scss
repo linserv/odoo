@@ -10,22 +10,22 @@ button {
 }
 
 select > option {
-    background: $light;
+    background: var(--light);
 }
 
 .btn-light {
     --btn-border-color: #cccccc;
-    --btn-active-bg: #{$o-gray-300};
-    --btn-color: #{$o-gray-900};
+    --btn-active-bg: var(--o-gray-300);
+    --btn-color: var(--o-gray-900);
     --btn-active-border-color: var(--btn-border-color);
 }
 
 .btn-secondary {
     --btn-bg: #F4F4F4;
     --btn-border-color: #cccccc;
-    --btn-color: #{$o-gray-900};
+    --btn-color: var(--o-gray-900);
     --btn-disabled-bg: var(--btn-bg);
-    --btn-disabled-color: #{$o-gray-700};
+    --btn-disabled-color: var(--o-gray-700);
     --btn-disabled-border-color: var(--btn-border-color);
     &:disabled, &.disabled {
         filter: saturate(0);
@@ -43,7 +43,7 @@ select > option {
 }
 
 .form-select {
-    background-color: $body-bg;
+    background-color: var(--body-bg);
 }
 
 .text-large {
@@ -66,7 +66,7 @@ select > option {
     width: $pos-left-pane-width;
     max-width: $pos-left-pane-width;
 
-    @include media-breakpoint-down(xl) {
+    @media (max-width: 1199.98px) {
         width: $pos-left-pane-width-tablet;
         max-width: $pos-left-pane-width-tablet;
     }
@@ -110,7 +110,7 @@ select > option {
     height: 40px;
 }
 .pos.big-scrollbars *::-webkit-scrollbar-track{
-    background: $gray-200;
+    background: var(--gray-200);
     border-left: none;
 }
 .pos.big-scrollbars *::-webkit-scrollbar-thumb{
@@ -169,7 +169,7 @@ select > option {
     height: calc(var(--btn-height-size) * 2);
 }
 
-// Set all the colors but the "no-color" one
+/* Set all the colors but the "no-color" one */
 @for $size from 2 through length($o-colors) {
     .o_colorlist_item_color_transparent_#{$size - 1} {
         $-border-color: adjust-color(nth($o-colors, $size), $lightness: 15%, $saturation: 5%);
@@ -206,12 +206,12 @@ select > option {
     }
 }
 
-// this is to override the property in `web/static/src/webclient/webclient_layout.scss'
+/* this is to override the property in `web/static/src/webclient/webclient_layout.scss' */
 body.modal-open {
     position: initial !important;
 }
 
-// External CSS to wrap long notes coming from another component (TagsList)
+/* External CSS to wrap long notes coming from another component (TagsList) */
 .pos .internal-note-container span {
     text-align: start;
 }

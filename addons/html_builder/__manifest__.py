@@ -28,22 +28,25 @@
             'web/static/lib/bootstrap/scss/_maps.scss',
             'web/static/fonts/fonts.scss',
             'html_builder/static/src/**/*',
+            ('remove', 'html_builder/static/src/scss/css_variables.scss'),
             ('remove', 'html_builder/static/src/**/*.edit.*'),
             ('remove', 'html_builder/static/src/**/*.dark.scss'),
+            ('remove', 'html_builder/static/src/**/*.dark.css'),
         ],
         'web.assets_frontend': [
             'html_builder/static/src/scss/background.scss'
         ],
         'web.assets_web_dark': [
             'html_builder/static/src/**/*.dark.scss',
+            'html_builder/static/src/**/*.dark.css',
         ],
         'html_builder.assets_inside_builder_iframe': [
             ('include', 'web._assets_helpers'),
 
             'web/static/src/scss/bootstrap_overridden.scss',
             'html_builder/static/src/**/*.edit.*',
-            'html_editor/static/src/main/translate/translate_plugin.scss',
-            'html_editor/static/src/main/link/link.scss',
+            'html_editor/static/src/main/translate/translate_plugin.css',
+            'html_editor/static/src/main/link/link.css',
         ],
         'html_builder.iframe_add_dialog': [
             ('include', 'web._assets_helpers'),
@@ -57,6 +60,9 @@
         'web.assets_unit_tests': [
             'html_builder/static/tests/**/*',
             ('include', 'html_builder.assets'),
+        ],
+        'web._assets_bootstrap_backend': [
+            'html_builder/static/src/scss/css_variables.scss',
         ],
     },
     'license': 'LGPL-3',

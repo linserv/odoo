@@ -9,7 +9,6 @@ account_invoice_send_batch_rule_see_all,All Invoice Send and Print (batch mode),
 access_sale_account_journal,account.journal sale order.user,account.journal,sales_team.group_sale_salesman,r,
 account_invoice_rule_see_personal,Personal Invoices,account.move,sales_team.group_sale_salesman,r,"[('move_type', 'in', ('out_invoice', 'out_refund')), '|', ('invoice_user_id', '=', user.id), ('invoice_user_id', '=', False)]"
 account_invoice_rule_see_all,All Invoices,account.move,sales_team.group_sale_salesman_all_leads,r,"[('move_type', 'in', ('out_invoice', 'out_refund'))]"
-base_user_account_move_line_rule,Normal User Account Move Line,account.move.line,sales_team.group_sale_salesman,r,"[('move_id', 'access', 'read')]"
 access_account_partial_reconcile_salesman,account_partial_reconcile salesman,account.partial.reconcile,sales_team.group_sale_salesman,r,
 access_account_payment_term_salesman,account_payment_term salesman,account.payment.term,sales_team.group_sale_salesman,r,
 access_account_tax_user,account.tax.user,account.tax,sales_team.group_sale_salesman,r,
@@ -33,8 +32,7 @@ sale_order_personal_rule,Personal Orders,sale.order,sales_team.group_sale_salesm
 sale_order_see_all,All Orders,sale.order,sales_team.group_sale_salesman_all_leads,cru,
 sale_order_see_all_1,All Orders,sale.order,sales_team.group_sale_manager,crud,
 sale_order_comp_rule,Sales Order multi-company,sale.order,,crud,"[('company_id', 'in', company_ids)]"
-sale_order_line_rule_portal,Portal Sales Orders Line,sale.order.line,base.group_portal,r,"[('order_id', 'access', 'read')]"
-sale_order_line_account_readonly_rule,Account Readonly Order Lines,sale.order.line,account.group_account_readonly,r,
+sale_order_line_read_rule,Read Sales Orders Line,sale.order.line,base.group_everyone,r,"[('order_id', 'access', 'read')]"
 sale_order_line_invoicing_rule,Account Invoicing Order Lines,sale.order.line,account.group_account_invoice,ru,
 sale_order_line_personal_rule,Personal Order Lines,sale.order.line,sales_team.group_sale_salesman,crud,"['|',('salesman_id','=',user.id),('salesman_id','=',False)]"
 sale_order_line_see_all,All Orders Lines,sale.order.line,sales_team.group_sale_salesman_all_leads,crud,

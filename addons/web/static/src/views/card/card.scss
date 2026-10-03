@@ -3,16 +3,16 @@
     --Card-min-width: 240px;
     --Card-padding-v: 0;
     --Card-padding-h: 0;
-    --Card__image-width: #{$o-kanban-image-width};
-    --Card__image--fill-width: #{$o-kanban-image-fill-width};
+    --Card__image-width: var(--o-kanban-image-width);
+    --Card__image--fill-width: var(--o-kanban-image-fill-width);
 
 }
 
-// TODO AAB: clean this (a lot of references to kanban)
+/* TODO AAB: clean this (a lot of references to kanban) */
 .o_card_record {
     --fieldWidget-display: block;
     --Tag-max-width: 100%;
-    --Tag-font-size: #{$o-font-size-base-smaller};
+    --Tag-font-size: var(--o-font-size-base-smaller);
     --Tags-margin: calc(1em - var(--Tag-font-size, .75rem)) 0;
 
     position: relative;
@@ -29,7 +29,7 @@
         min-height: var(--Ribbon-wrapper-width);
     }
 
-    // do not break wrap inside buttons
+    /* do not break wrap inside buttons */
     button {
         word-wrap: normal;
         word-break: normal;
@@ -40,10 +40,10 @@
     }
 
     padding: var(--Card-padding-v) var(--Card-padding-h);
-    border-width: var(--Card-border-width, #{$border-width});
+    border-width: var(--Card-border-width, var(--border-width));
     border-radius: var(--Card-border-radius);
     border-style: solid;
-    border-color: var(--Card-border-color, #{$border-color});
+    border-color: var(--Card-border-color, var(--border-color));
 
     @include media-only(print) {
         .o_field_background_image {
@@ -114,7 +114,7 @@
             }
 
             > * {
-                @include media-breakpoint-up(md) {
+                @media screen and (min-width: 768px), print and (min-width: 188mm) {
                     height: calc(100% + var(--Card-padding-v)* 2);
                     margin-top: calc(var(--Card-padding-v)* -1);
                     margin-bottom: calc(var(--Card-padding-v)* -1);
@@ -131,6 +131,6 @@
     .o_attachment_image > img {
         width: 100%;
         height: auto;
-        border-radius: var(--Attachment-Image-border-radius, #{$border-radius});
+        border-radius: var(--Attachment-Image-border-radius, var(--border-radius));
     }
 }

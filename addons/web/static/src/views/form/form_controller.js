@@ -144,6 +144,7 @@ export const formControllerProps = {
     onDiscard: t.function().optional(),
     onSave: t.function().optional(() => () => {}),
     offlineId: t.string().optional(),
+    createRecord: t.function().optional(() => () => {}),
     updateActionState: t.function().optional(() => () => {}),
 };
 
@@ -293,6 +294,7 @@ export class FormController extends Component {
                 modelState: this.model.exportState(),
                 resId: this.model.root.resId,
             }),
+            getGlobalState: () => this.getGlobalState(),
         });
         useDebugCategory("form", { component: this });
 
@@ -569,6 +571,8 @@ export class FormController extends Component {
                 });
                 if (!saved) {
                     this.disableSaveOnVisibilityChange = true;
+                } else {
+                    this.env.config.setDisplayName(this.displayName());
                 }
             }
         }
@@ -596,6 +600,13 @@ export class FormController extends Component {
             ev.preventDefault();
             ev.returnValue = "Unsaved changes";
         }
+    }
+
+    /**
+     * State to keep when leaving the action, given back as `globalState` prop when coming back.
+     */
+    getGlobalState() {
+        return {};
     }
 
     getStaticActionMenuItems() {
@@ -745,7 +756,10 @@ export class FormController extends Component {
 
     async afterExecuteActionButton(clickParams) {}
 
-    async create() {
+    async create(_ev, newWindow) {
+        if (newWindow) {
+            return this.props.createRecord(newWindow);
+        }
         const dirty = await this.model.root.isDirty();
         const onError = (error, options) => this.onSaveError(error, options, true);
         const canProceed = !dirty || (await this.model.root.save({ onError }));

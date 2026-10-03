@@ -74,7 +74,7 @@
             'project/static/src/components/**/*',
             'project/static/src/views/**/*',
             'project/static/src/js/tours/project.js',
-            'project/static/src/scss/project_dashboard.scss',
+            'project/static/src/scss/project_dashboard.css',
             'project/static/src/scss/project_form.scss',
             'project/static/src/scss/project_widgets.scss',
             'project/static/src/xml/**/*',
@@ -196,7 +196,7 @@
 
             'web/static/src/env.js',
 
-            'base/static/src/scss/res_partner.scss',
+            'base/static/src/scss/res_partner.css',
 
             # Form style should be computed before
             'web/static/src/views/form/button_box/*.scss',

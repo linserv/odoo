@@ -64,12 +64,13 @@
             "google_address_autocomplete/static/src/google_places_session.js",
             "google_address_autocomplete/static/src/address_autocomplete/google_address_autocomplete.js",
             "google_address_autocomplete/static/src/address_autocomplete/google_address_autocomplete.xml",
-            "google_address_autocomplete/static/src/address_autocomplete/google_address_autocomplete.scss",
+            "google_address_autocomplete/static/src/address_autocomplete/google_address_autocomplete.css",
             "web/static/src/core/autocomplete/*",
             "web/static/src/views/fields/char/*",
             "web/static/src/views/fields/translation/*",
             "web/static/src/views/fields/dynamic_placeholder_hook.js",
             "web/static/src/views/fields/dynamic_placeholder_popover.*",
+            "web/static/src/views/fields/allowed_qweb_expressions_plugin.js",
             "web/static/src/views/fields/formatters.js",
             "web/static/src/views/fields/standard_field_props.js",
             "web/static/src/views/fields/input_field_hook.js",
@@ -137,6 +138,7 @@
             "point_of_sale/static/src/app/utils/debug-formatter.js",
 
             ('include', 'point_of_sale.payment_terminals'),
+            ('after', 'pos_self_order/static/src/app/primary_variables.scss', 'pos_self_order/static/src/scss/css_variables.scss'),
         ],
         # Assets tests
         "pos_self_order.assets_tests": [

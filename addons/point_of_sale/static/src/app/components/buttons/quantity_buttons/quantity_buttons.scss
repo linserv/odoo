@@ -1,16 +1,16 @@
 input[name="pos_quantity"] {
     padding: 0;
 
-    @include media-breakpoint-down(md) {
+    @media (max-width: 767.98px) {
         max-width: 3rem;
     }
 
-    @include media-breakpoint-up(md) {
+    @media (min-width: 768px) {
         max-width: 4rem;
     }
 
-    // removing input field=number arrows as their size might
-    // change depending on browser default styling and shift input's position
+    /* removing input field=number arrows as their size might */
+    /* change depending on browser default styling and shift input's position */
     &::-webkit-outer-spin-button,
     &::-webkit-inner-spin-button {
         -webkit-appearance: none;

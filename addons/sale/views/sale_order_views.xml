@@ -460,17 +460,17 @@
                     <group name="partner_details">
                         <field name="partner_id"
                                widget="res_partner_many2one"
-                               context="{'res_partner_search_mode': 'customer', 'show_address': 1, 'show_vat': True}"
+                               context="{'res_partner_search_mode': 'customer', 'show_address': 1, 'show_identifier': True}"
                                placeholder="Type to find a customer..." readonly="state in ['cancel', 'sale']"/>
                         <field name="partner_invoice_id"
                               groups="account.group_delivery_invoice_address"
                               options="{'no_quick_create': True}"
-                              context="{'default_type': 'invoice', 'show_address': False, 'show_vat': False, 'default_parent_id': partner_id}"
+                              context="{'default_type': 'invoice', 'show_address': False, 'show_identifier': False, 'default_parent_id': partner_id}"
                               readonly="state == 'cancel' or locked"/>
                         <field name="partner_shipping_id"
                               groups="account.group_delivery_invoice_address"
                               options="{'no_quick_create': True}"
-                              context="{'default_type': 'delivery', 'show_address': False, 'show_vat': False, 'default_parent_id': partner_id}"
+                              context="{'default_type': 'delivery', 'show_address': False, 'show_identifier': False, 'default_parent_id': partner_id}"
                               readonly="state == 'cancel' or locked"/>
                     </group>
                     <group name="order_details">
@@ -502,6 +502,20 @@
                                 name="pricelist_id"
                                 options="{'no_open': True, 'no_create': True}"
                                 readonly="state in ['cancel', 'sale']"/>
+                        </div>
+                        <label
+                            for="currency_id"
+                            groups="base.group_multi_currency,!product.group_product_pricelist"
+                        />
+                        <div
+                            class="o_row"
+                            groups="base.group_multi_currency,!product.group_product_pricelist"
+                        >
+                            <field
+                                name="currency_id"
+                                options="{'no_open': True, 'no_create': True}"
+                                readonly="state in ['cancel', 'sale']"
+                            />
                         </div>
                         <field name="currency_id" invisible="1"/>
                         <field
@@ -984,7 +998,7 @@
                             </kanban>
                         </field>
                         <div
-                            class="d-flex flex-fill d-print-none gap-1 mb-2"
+                            class="float-md-end d-flex flex-fill d-print-none gap-1 mb-2"
                             name="so_button_below_order_lines"
                         >
                             <button

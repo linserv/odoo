@@ -1,8 +1,8 @@
-// KANBAN VIEW
+/* KANBAN VIEW */
 .o_survey_view_kanban_view .o_kanban_renderer {
     .o_survey_kanban_card {
         .o_survey_certification_icon {
-            color: $o-main-favorite-color;
+            color: var(--o-main-favorite-color);
         }
 
         .o_progressbar {
@@ -10,7 +10,7 @@
         }
     }
 
-    // Grouped / Ungrouped sections hidding
+    /* Grouped / Ungrouped sections hidding */
     &.o_kanban_grouped {
         .row > div {
             flex: 1 1 100% !important;
@@ -21,7 +21,7 @@
                 max-width: 50% !important;
             }
             &.d-none {
-                display: none !important; //forcing the d-none to override the d-lg or d-sm classes for grouped view
+                display: none !important; /* forcing the d-none to override the d-lg or d-sm classes for grouped view */
             }
         }
 
@@ -32,14 +32,14 @@
         }
     }
 
-    // Ungrouped display: whole length (kanban-list)
+    /* Ungrouped display: whole length (kanban-list) */
     &.o_kanban_ungrouped {
         .o_survey_kanban_card {
-            --#{$prefix}gap: #{map-get($spacers, 3)} #{map-get($spacers, 2)};
+            --gap: var(--o-bs-spacer-3) var(--o-bs-spacer-2);
 
             .btn-link-inline {
-                --#{$prefix}btn-padding-x: #{$btn-padding-x};
-                --#{$prefix}btn-padding-y: #{$btn-padding-y};
+                --btn-padding-x: var(--o-bs-btn-padding-x);
+                --btn-padding-y: var(--o-bs-btn-padding-y);
             }
 
             .o_progressbar {
@@ -48,7 +48,7 @@
 
                 flex-direction: row-reverse;
 
-                @include media-breakpoint-down(lg) {
+                @media screen and (max-width: 991.98px), print and (max-width: 189.98mm) {
                     .progress {
                         display: none;
                     }
@@ -56,48 +56,48 @@
             }
 
             .o_progressbar_value > div {
-                // Keep the correct size based on the percentage value.
+                /* Keep the correct size based on the percentage value. */
                 width: 5ch;
                 font-variant-numeric: tabular-nums;
             }
         }
     }
 
-    // Grouped specific
+    /* Grouped specific */
     &.o_kanban_grouped {
         .o_survey_kanban_card {
-            --#{$prefix}columns: 2;
+            --columns: 2;
         }
     }
 
-    // Ungrouped specific
+    /* Ungrouped specific */
     &.o_kanban_ungrouped {
-        // Set a minimal height otherwise display may have different card sized
+        /* Set a minimal height otherwise display may have different card sized */
         .o_survey_kanban_card > div.row {
                 min-height: 60px;
         }
 
-        // Left semi-trophy icon for certifications: tweak display for list view
+        /* Left semi-trophy icon for certifications: tweak display for list view */
         .o_survey_kanban_card_certification {
             background-position: center left -35px;
             background-size: auto 75%;
         }
     }
 
-    // RIBBON: Kanban specific
-    // Ungrouped specific
+    /* RIBBON: Kanban specific */
+    /* Ungrouped specific */
     .o_survey_kanban_card {
         .ribbon {
             --Ribbon-wrapper-width: 6rem;
 
-            @include media-breakpoint-down(md) {
+            @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
                 --Ribbon-wrapper-width: 6.5rem;
             }
         }
     }
 }
 
-// FORM view
+/* FORM view */
 .o_survey_form table.o_section_list_view tr.o_data_row.o_is_section {
     font-weight: bold;
     background-color: var(--SurveyForm__section-background-color, #DDD);
@@ -125,7 +125,7 @@
     }
 }
 
-// TOOLS
+/* TOOLS */
 .icon_rotates {
     transform: rotate(180deg);
 }
@@ -134,11 +134,11 @@
 
 .o_survey_sample_card {
     &:hover {
-        background: var(--SurveySampleCard-background--hover, #{$o-gray-200});
+        background: var(--SurveySampleCard-background--hover, var(--o-gray-200));
     }
 
     &:focus-visible {
-        box-shadow: 0 0 0 #{$btn-focus-width} RGBA(#{$btn-link-focus-shadow-rgb}, .5);
+        box-shadow: 0 0 0 var(--o-bs-btn-focus-width) RGBA(#{$btn-link-focus-shadow-rgb}, .5);
         outline: none;
     }
 }
@@ -151,11 +151,11 @@
 .o_nocontent_help:has(.o_survey_load_sample) {
     max-width: unset;
 
-    @include media-breakpoint-up(sm) {
+    @media screen and (min-width: 576px), print and (min-width: 100mm) {
         max-width: 90%;
     }
 
-    @include media-breakpoint-up(lg) {
+    @media screen and (min-width: 992px), print and (min-width: 190mm) {
         max-width: 80%;
     }
 }

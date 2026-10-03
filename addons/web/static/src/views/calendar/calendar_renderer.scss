@@ -1,15 +1,15 @@
 .o_calendar_renderer {
-    --o-circle-padding: calc(#{map-get($spacers, 1 )} / 2);
-    --o-cw-border-color: #{$border-color};
+    --o-circle-padding: calc(var(--o-bs-spacer-1) / 2);
+    --o-cw-border-color: var(--border-color);
 
-    background-color: $o-view-background-color;
+    background-color: var(--o-view-background-color);
 
-    @include media-breakpoint-down(lg) {
+    @media screen and (max-width: 991.98px), print and (max-width: 189.98mm) {
         border-top: 1px solid var(--o-cw-border-color);
     }
 
-    // Simulate the old UI (FC v4)
-    // the resizer on the bottom of the event styled with a = icon when hovered
+    /* Simulate the old UI (FC v4) */
+    /* the resizer on the bottom of the event styled with a = icon when hovered */
     .fc-timegrid-event .fc-event-resizer {
         color: #fff;
         text-align: center;
@@ -23,19 +23,19 @@
     }
 
     .fc-event {
-        // `web/lib/fullcalendar/core/main.css` gives events with links and draggable events a hand mouse pointer,
-        // but doesn't take into account that events have popovers.
+        /* `web/lib/fullcalendar/core/main.css` gives events with links and draggable events a hand mouse pointer, */
+        /* but doesn't take into account that events have popovers. */
         cursor: pointer;
-        --fc-event-text-color: #{$body-color};
-        --fc-event-bg-color: #{$o-view-background-color};
+        --fc-event-text-color: var(--body-color);
+        --fc-event-bg-color: var(--o-view-background-color);
         overflow: hidden;
 
-        @include media-breakpoint-down(md) {
+        @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
             line-height: 1.2;
         }
 
         &:hover {
-            color: $body-color;
+            color: var(--body-color);
 
             &:not(.o_event_dot) .fc-bg {
                 --o-bg-opacity: .35;
@@ -44,28 +44,29 @@
 
         &.fc-event-mirror, &.fc-dragging {
             --o-bg-opacity: .25;
-            border-color: rgba($o-action, .5);
+            border-color: color-mix(in srgb, var(--o-action) 50%, transparent);
 
             .fc-bg {
-                background-color: rgba($o-action, var(--o-bg-opacity));
+                background-color: color-mix(in srgb, var(--o-action) calc(var(--o-bg-opacity) * 100%), transparent);
             }
         }
 
         &.fc-event-mirror {
-            background-color: rgba($o-action, var(--o-bg-opacity));
+            background-color: color-mix(in srgb, var(--o-action) calc(var(--o-bg-opacity) * 100%), transparent);
         }
 
         &.o_past_event::after {
             content: '';
-            @include o-position-absolute(0, 0, 0, 0);
+            position: absolute;
+            inset: 0;
             display: block;
             z-index: 3;
-            background-color: rgba($o-view-background-color, var(--o-overlay-opacity));
+            background-color: color-mix(in srgb, var(--o-view-background-color) calc(var(--o-overlay-opacity) * 100%), transparent);
         }
 
         &:not(.o_event_dot):not(.fc-dragging).o_cw_custom_highlight {
             box-shadow: 0px 8px 8px -7px rgba(0, 0, 0, 0.2);
-            z-index: 2; // for the shadow to go over the events below
+            z-index: 2; /* for the shadow to go over the events below */
         }
 
         .fc-bg {
@@ -74,12 +75,12 @@
             left: 0;
             right: 0;
             bottom: 0;
-            transition: $transition-base;
+            transition: var(--o-bs-transition-base);
         }
 
         .fc-event-main {
             > .o_event_title {
-                @include media-breakpoint-down(lg) {
+                @media screen and (max-width: 991.98px), print and (max-width: 189.98mm) {
                     text-overflow: unset;
                     white-space: break-spaces;
 
@@ -103,7 +104,7 @@
 
             display: flex;
             align-items: center;
-            gap: map-get($spacers, 1);
+            gap: var(--o-bs-spacer-1);
             border: none;
 
             &:before {
@@ -125,28 +126,28 @@
         }
     }
 
-    // Reset all link (A tag) the normal color (to override Bootstrap rule)
-    // And also override WebEditor rules
+    /* Reset all link (A tag) the normal color (to override Bootstrap rule) */
+    /* And also override WebEditor rules */
     div.fc a {
         color: inherit;
     }
 
     .o_calendar_widget {
-        // Remove background today color
+        /* Remove background today color */
         .fc-day-today:not(.o_calendar_disabled) {
             --fc-today-bg-color: none;
         }
 
-        // Remove time indicator arrow
+        /* Remove time indicator arrow */
         .fc-timegrid-now-indicator-arrow {
             display: none;
         }
 
-        // ===  Adapt calendar table borders and general layout ===
-        // ========================================================
-        --fc-page-bg-color: #{$o-view-background-color};
+        /* ===  Adapt calendar table borders and general layout === */
+        /* ======================================================== */
+        --fc-page-bg-color: var(--o-view-background-color);
         --fc-border-color: var(--o-cw-border-color);
-        --fc-non-business-color: #{rgba($o-gray-300, .5)};
+        --fc-non-business-color: color-mix(in srgb, var(--o-gray-300) 50%, transparent);
 
         .fc-body > tr > .fc-widget-content {
             border-top: 0;
@@ -190,7 +191,7 @@
         }
 
         .o_calendar_disabled:not(.fc-more-popover) {
-            background-color: var(--o-calendar-disabled-bg, rgba($gray-200, .5));
+            background-color: var(--o-calendar-disabled-bg, color-mix(in srgb, var(--gray-200) 50%, transparent));
         }
 
         .fc-daygrid-day-bottom {
@@ -198,7 +199,7 @@
             justify-content: center;
 
             .fc-more-link {
-                color: $link-color;
+                color: var(--link-color);
                 cursor: pointer;
 
                 &:hover {
@@ -207,28 +208,28 @@
             }
         }
 
-        // ======  Specific agenda types ======
-        // ====================================
+        /* ======  Specific agenda types ====== */
+        /* ==================================== */
 
-        // ====== Day only
+        /* ====== Day only */
         .fc-timeGridDay-view {
             .fc-col-header-cell {
                 text-align: left;
                 vertical-align: middle;
 
                 a {
-                    gap: map-get($spacers, 1);
-                    margin-left: map-get($spacers, 1);
+                    gap: var(--o-bs-spacer-1);
+                    margin-left: var(--o-bs-spacer-1);
                 }
                 .o_cw_day_number {
-                    padding: map-get($spacers, 1);
+                    padding: var(--o-bs-spacer-1);
                     place-content: center;
                     line-height: 1;
                 }
             }
         }
 
-        // ====== Week only
+        /* ====== Week only */
 
         .fc-timeGridWeek-view {
             .fc-col-header-cell {
@@ -239,24 +240,24 @@
                 }
 
                 .o_cw_day_number {
-                    padding: map-get($spacers, 1);
+                    padding: var(--o-bs-spacer-1);
 
-                    @include media-breakpoint-up(lg) {
+                    @media screen and (min-width: 992px), print and (min-width: 190mm) {
                         font-size: 1.25rem;
                     }
                 }
             }
         }
 
-        // ====== Both Day and Week agenda
+        /* ====== Both Day and Week agenda */
         .fc-timeGridDay-view,
         .fc-timeGridWeek-view {
-            --o-cw-bg: #{$o-calendar-today-background-color};
-            --o-cw-color: #{$o-calendar-today-color};
+            --o-cw-bg: var(--o-calendar-today-background-color);
+            --o-cw-color: var(--o-calendar-today-color);
 
             .fc-scrollgrid-section-body {
                 &:not(.fc-scrollgrid-section-liquid) .fc-scroller-harness {
-                    background-color: $o-view-background-color;
+                    background-color: var(--o-view-background-color);
                 }
 
                 &:first-child td {
@@ -283,24 +284,24 @@
                 }
             }
 
-            // Remove dotted borders (half-hours)
+            /* Remove dotted borders (half-hours) */
             .fc-timegrid-slot-minor {
                 border-top-style: none;
             }
 
-            // Align labels and timelines
+            /* Align labels and timelines */
             .fc-timegrid-slot {
                 font-size: .6rem;
                 height: 2em;
 
-                @include media-breakpoint-up(md) {
+                @media screen and (min-width: 768px), print and (min-width: 188mm) {
                     font-size: .75rem;
                 }
 
                 &.fc-timegrid-slot-label {
                     border-width: 0;
 
-                    // Center the time label (vertical align to the center of the line)
+                    /* Center the time label (vertical align to the center of the line) */
                     .fc-timegrid-slot-label-cushion {
                         margin-top: -18px;
                         position: relative;
@@ -309,19 +310,23 @@
                 }
             }
 
-            // Add a small gap on top to show the first time label (0:00)
+            /* Add a small gap on top to show the first time label (0:00) */
             .fc-scroller.fc-scroller-liquid-absolute {
                 padding-top: 15px;
             }
 
-            // Row containing "all day" events
+            /* Row containing "all day" events */
             .fc-timegrid-divider.fc-cell-shaded {
                 position: relative;
                 padding: 0;
 
                 @include media-only(screen) {
                     &:after {
-                        @include o-position-absolute($border-width, 0, calc(-1 * var(--fc-timegrid-divider-size, 15px)), 0);
+                        position: absolute;
+                        top: var(--border-width);
+                        left: 0;
+                        bottom: calc(-1 * var(--fc-timegrid-divider-size, 15px));
+                        right: 0;
                         background: var(--fc-timegrid-divider-background,linear-gradient(0deg, rgba($o-shadow-color, 0), rgba($o-shadow-color, 0.16)));
                         pointer-events: none;
                         content: "";
@@ -329,7 +334,7 @@
                 }
             }
 
-            @include media-breakpoint-down(md) {
+            @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
                 .fc-daygrid-day .fc-daygrid-event {
                     margin: 1px;
 
@@ -342,8 +347,8 @@
             }
 
 
-            // Create a 'pseudo-border' for the first row. The actual border
-            // is hidden because of border-collapse settings.
+            /* Create a 'pseudo-border' for the first row. The actual border */
+            /* is hidden because of border-collapse settings. */
             .fc-scrollgrid-section-liquid tr:first-child .fc-timegrid-slot.fc-timegrid-slot-lane:last-child {
                 box-shadow: inset 0 1px 0 var(--o-cw-border-color);
             }
@@ -351,22 +356,22 @@
             .fc-event {
                 --o-bg-opacity: .25;
 
-                // Prevent events with similar color to visually overlap each other
+                /* Prevent events with similar color to visually overlap each other */
                 &:not(.o_event_allday):not(.o_homework_event) {
-                    box-shadow: 0 0 0 1px $o-view-background-color;
+                    box-shadow: 0 0 0 1px var(--o-view-background-color);
                 }
 
                 .fc-event-main {
-                    margin: map-get($spacers, 1);
+                    margin: var(--o-bs-spacer-1);
 
-                    @include media-breakpoint-up(md) {
+                    @media screen and (min-width: 768px), print and (min-width: 188mm) {
                         margin-top: 0;
                         margin-bottom: 0;
                     }
                 }
             }
 
-            // Avoid pointer event on the "Now Indicator" (red line)
+            /* Avoid pointer event on the "Now Indicator" (red line) */
             .fc-timegrid-now-indicator-line {
                 pointer-events: none;
             }
@@ -378,9 +383,9 @@
             border: none;
         }
 
-        // ====== Week only
+        /* ====== Week only */
         .fc-timeGridWeek-view {
-            // Reset position to keep the "nowIndicator" line visible
+            /* Reset position to keep the "nowIndicator" line visible */
             @for $i from 1 through 7 {
                 .fc-timegrid-col:not(.fc-timegrid-axis):nth-child(#{$i + 1}) .o_calendar_time_indicator_now {
                     $left: ($i - 1) * -100;
@@ -394,30 +399,30 @@
                     transform: translateY(-100%);
                 }
 
-                // Add a dot shape at the start of the "Now Indicator" line
+                /* Add a dot shape at the start of the "Now Indicator" line */
                 .fc-timegrid-now-indicator-line::before {
                     content: "";
                     position: absolute;
                     height: .75rem;
                     width: .75rem;
-                    border: $border-width solid $o-view-background-color;
-                    border-radius: $border-radius-pill;
+                    border: var(--border-width) solid var(--o-view-background-color);
+                    border-radius: var(--border-radius-pill);
                     background-color: var(--o-cw-bg);
                     transform: translate(-50%, -50%);
                 }
             }
         }
 
-        // ====== Both Week and Month agenda
+        /* ====== Both Week and Month agenda */
 
         .fc-timeGridWeek-view, .fc-dayGridMonth-view {
             .fc-col-header-cell a {
                 text-transform: uppercase;
-                font-size: $o-font-size-base-smaller;
+                font-size: var(--o-font-size-base-smaller);
             }
         }
 
-        // ====== Both Month and Months in Year agenda
+        /* ====== Both Month and Months in Year agenda */
 
         .fc-dayGridMonth-view {
             .o-fc-week-header {
@@ -425,10 +430,10 @@
             }
 
             .o-fc-week, .o-fc-week-header {
-                line-height: $line-height-sm;
-                font-size: $o-font-size-base-smaller;
+                line-height: var(--o-bs-line-height-sm);
+                font-size: var(--o-font-size-base-smaller);
                 opacity: .5;
-                @include media-breakpoint-down(md) {
+                @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
                     width: 3ch;
                 }
             }
@@ -439,18 +444,18 @@
 
             .fc-daygrid-body tr {
                 .fc-daygrid-week-number {
-                    line-height: $line-height-sm;
-                    font-size: $o-font-size-base-smaller;
+                    line-height: var(--o-bs-line-height-sm);
+                    font-size: var(--o-font-size-base-smaller);
                     opacity: .8;
 
-                    @include media-breakpoint-down(lg) {
+                    @media screen and (max-width: 991.98px), print and (max-width: 189.98mm) {
                         > a {
                             font-size: .5rem;
                         }
                     }
 
-                    @include media-breakpoint-up(lg) {
-                        padding: map-get($spacers, 1);
+                    @media screen and (min-width: 992px), print and (min-width: 190mm) {
+                        padding: var(--o-bs-spacer-1);
                     }
                 }
                 .fc-day {
@@ -464,9 +469,9 @@
                         }
                     }
                     .fc-daygrid-week-number {
-                        // only in Month view
-                        @include media-breakpoint-down(lg) {
-                            background-color: $gray-100;
+                        /* only in Month view */
+                        @media screen and (max-width: 991.98px), print and (max-width: 189.98mm) {
+                            background-color: var(--gray-100);
                         }
                     }
 
@@ -489,8 +494,8 @@
                     }
 
                     &.fc-day-today {
-                        --o-cw-color: #{$o-calendar-today-color};
-                        --o-cw-bg: #{$o-calendar-today-background-color};
+                        --o-cw-color: var(--o-calendar-today-color);
+                        --o-cw-bg: var(--o-calendar-today-background-color);
 
                     }
                 }
@@ -505,7 +510,7 @@
             }
 
             .fc-event {
-                padding: 0 map-get($spacers, 1);
+                padding: 0 var(--o-bs-spacer-1);
 
                 .fc-event-main:not(.o_homework_single):not(.o_homework_multi) {
                     display: flex;
@@ -516,12 +521,12 @@
             }
         }
 
-        // ====== Year only
+        /* ====== Year only */
         .fc-dayGridYear-view {
             --fc-neutral-bg-color: none;
             flex-direction: row;
             .fc-scroller {
-                overflow: hidden !important; // FC set its own rules inline
+                overflow: hidden !important; /* FC set its own rules inline */
             }
 
             table,
@@ -560,7 +565,7 @@
             }
 
             > .fc-month-container {
-                @include media-breakpoint-down(md) {
+                @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
                     width: 100%;
                 }
 
@@ -568,10 +573,10 @@
                     width: 21rem;
                     margin: auto;
 
-                    // On mobile year view, make months take the full screen width.
-                    // Using "vw" instead of "%" to keep each month weekday columns aligned.
-                    @include media-breakpoint-down(md) {
-                        width: calc(100vw - #{map-get($spacers, 5)});
+                    /* On mobile year view, make months take the full screen width. */
+                    /* Using "vw" instead of "%" to keep each month weekday columns aligned. */
+                    @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
+                        width: calc(100vw - var(--o-bs-spacer-5));
                     }
 
                     > .fc-toolbar.fc-header-toolbar {
@@ -580,7 +585,7 @@
                         justify-content: start;
 
                         h2 {
-                            font-size: $font-size-base;
+                            font-size: var(--o-bs-font-size-base);
                         }
                     }
 
@@ -602,7 +607,7 @@
                         }
 
                         .fc-day-header {
-                            font-size: $o-font-size-base-smaller;
+                            font-size: var(--o-font-size-base-smaller);
                         }
                     }
 
@@ -635,7 +640,7 @@
                 }
             }
         }
-        // ====== RTL layout(s)
+        /* ====== RTL layout(s) */
         &.fc-rtl {
             .fc-timeGrid-view .fc-event {
                 border-width: 0 3px 0 0;
@@ -664,7 +669,7 @@
                 }
             }
         }
-        // To avoid some overlapping we set the FullCalendar More popover to a lower value
+        /* To avoid some overlapping we set the FullCalendar More popover to a lower value */
         .fc-more-popover {
             z-index: $zindex-modal-backdrop - 1;
         }
@@ -675,13 +680,13 @@
     .fc-event:not(.o_event_dot):not(.fc-dragging) {
         &.o_cw_custom_highlight, &.o_calendar_popover_open {
             box-shadow: 0px 8px 2px -7px rgba(0, 0, 0, 0.5);
-            z-index: 2; // for the shadow to go over the events below
+            z-index: 2; /* for the shadow to go over the events below */
         }
     }
 }
 
 
-// ===============  Generate color classes ===============
+/* ===============  Generate color classes =============== */
 @for $i from 1 through length($o-colors-complete) {
     $color: nth($o-colors-complete, $i);
     $color-subtle: mix($o-white, $color, 55%);
@@ -697,7 +702,7 @@
             }
 
             &.o_event_hatched:has(.fc-bg), &.o_attendee_status_tentative:has(.fc-bg) {
-                --fc-event-bg-color: #{$o-view-background-color};
+                --fc-event-bg-color: var(--o-view-background-color);
             }
             &.o_event_hatched:not(.o_event_dot):not(.fc-daygrid-event):not(.fc-timegrid-event), &.o_event_hatched .fc-bg, &.o_attendee_status_tentative:not(.o_event_dot) .fc-bg {
                 background: repeating-linear-gradient(
@@ -725,7 +730,7 @@
                 background-color: rgba(var(--o-event-bg--subtle-rgb), var(--o-bg-opacity));
 
                 &:before {
-                    color: var(--o-event-bg, #{$info});
+                    color: var(--o-event-bg, var(--info));
                 }
             }
         }

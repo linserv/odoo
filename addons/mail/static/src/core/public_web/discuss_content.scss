@@ -15,7 +15,7 @@
 
 .o-mail-DiscussContent-headerBox,
 .o-mail-DiscussContent-panelContainer {
-    background-color: $o-view-background-color;
+    background-color: var(--o-view-background-color);
 }
 
 .o-mail-DiscussContent-selfAvatar {
@@ -36,7 +36,7 @@
         }
 
         &:hover {
-            background-color: rgba($black, 0.5);
+            background-color: color-mix(in srgb, var(--o-bs-black) 50%, transparent);
             i {
                 opacity: 1;
             }
@@ -45,12 +45,12 @@
 }
 
 .o-mail-DiscussContent-threadDescription:not(:focus) {
-    color: $text-muted;
+    color: var(--o-bs-text-muted);
 }
 
 .o-mail-DiscussContent-headerInfo {
-    // headerBox can't be the reference for the width below. Its own width depends on the
-    // name's size, which would be circular.
+    /* headerBox can't be the reference for the width below. Its own width depends on the */
+    /* name's size, which would be circular. */
     container-type: inline-size;
 }
 

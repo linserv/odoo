@@ -311,8 +311,10 @@ class StockMove(models.Model):
                 move.picked = False
 
     def _inverse_picked(self):
-        for move in self:
-            move.move_line_ids.picked = move.picked
+        picked_moves = self.filtered('picked')
+        not_picked_moves = self - picked_moves
+        picked_moves.move_line_ids.picked = True
+        not_picked_moves.move_line_ids.picked = False
 
     @api.depends('picking_id.priority')
     def _compute_priority(self):
@@ -786,7 +788,8 @@ Please change the quantity done or the rounding precision in your settings.""",
     def _compute_show_info(self):
         for move in self:
             move.show_quant = move.picking_code != 'incoming'\
-                           and move.product_id.is_storable
+                           and move.product_id.is_storable\
+                           and not (move.product_id.tracking in ['lot', 'serial'] and move.picking_type_id.use_create_lots and not move.picking_type_id.use_existing_lots)
             move.show_lots_text = move.product_id.tracking in ['lot', 'serial']\
                 and move.picking_type_id.use_create_lots\
                 and not move.picking_type_id.use_existing_lots\

@@ -1,13 +1,12 @@
-import { Reactive } from "@web/core/utils/reactive";
 import { Mutex } from "@web/core/utils/concurrency";
 import { ConnectionLostError, RPCError, rpc } from "@web/core/network/rpc";
 import { _t } from "@web/core/l10n/translation";
 import { formatCurrency as webFormatCurrency } from "@web/core/currency";
-import { markup, usePlugin } from "@odoo/owl";
+import { markup, proxy, usePlugin } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 import { registry } from "@web/core/registry";
 import { cookie } from "@web/core/browser/cookie";
-import { formatDateTime, serializeDateTime } from "@web/core/l10n/dates";
+import { serializeDateTime } from "@web/core/l10n/dates";
 import { TimeoutPopup } from "@pos_self_order/app/components/timeout_popup/timeout_popup";
 import { NetworkConnectionLostPopup } from "@pos_self_order/app/components/network_connectionLost_popup/network_connectionLost_popup";
 import { UnavailableProductsDialog } from "@pos_self_order/app/components/unavailable_product_dialog/unavailable_product_dialog";
@@ -20,7 +19,6 @@ import {
 } from "@point_of_sale/utils";
 import { getOrderLineValues } from "./card_utils";
 import { initLNA } from "@point_of_sale/app/utils/init_lna";
-import { GeneratePrinterData } from "@point_of_sale/app/utils/printer/generate_printer_data";
 import { SnoozeTracker } from "@point_of_sale/app/models/utils/snooze_tracker";
 import { InfoPopup } from "@pos_self_order/app/components/info_popup/info_popup";
 import { ComboSuggestion } from "@point_of_sale/app/models/utils/combo_suggestion";
@@ -30,12 +28,13 @@ import { PosTicketPrinterPlugin } from "@point_of_sale/app/plugins/pos_ticket_pr
 
 const { DateTime } = luxon;
 
-export class SelfOrder extends Reactive {
+export class SelfOrder {
     static serviceDependencies = ["notification", "router", "barcode", "bus_service", "dialog"];
 
     constructor(...args) {
-        super();
-        this.ready = this.setup(...args).then(() => this);
+        const self = proxy(this);
+        self.ready = self.setup(...args).then(() => self);
+        return self;
     }
 
     async setup(env, { notification, router, barcode, bus_service, dialog }) {
@@ -338,6 +337,7 @@ export class SelfOrder extends Reactive {
                 options.categories[date].subCategories[slot.periode].options.push({
                     id: slot.datetime.toFormat("yyyy-MM-dd HH:mm:ss"),
                     name: this.getTime(slot.datetime),
+                    disabled: slot.isFull,
                 });
             }
         }
@@ -358,7 +358,7 @@ export class SelfOrder extends Reactive {
         try {
             const presetAvailabilities = await rpc(`/pos-self-order/get-slots`, {
                 access_token: this.access_token,
-                preset_id: this.currentOrder?.preset_id?.id,
+                preset_id: preset.id,
             });
             const localUsage = orderUsageUTCtoLocalUtil(presetAvailabilities.usage_utc);
             preset.computeAvailabilities(localUsage);
@@ -1179,20 +1179,13 @@ export class SelfOrder extends Reactive {
         return this.config.self_ordering_mode === "mobile" && order.state === "paid";
     }
     async downloadReceipt(order) {
+        if (!order.id || typeof order.id !== "number") {
+            return;
+        }
+
+        const safeToken = encodeURIComponent(order.access_token);
         const link = document.createElement("a");
-        const currentDate = formatDateTime(luxon.DateTime.now(), {
-            format: "MM_dd_yyyy-HH_mm_ss",
-        });
-        const companyName = this.company.name.replaceAll(" ", "_");
-        link.download = `${companyName}-${currentDate}.png`;
-
-        const template = "point_of_sale.pos_order_receipt";
-        const generator = new GeneratePrinterData({ models: this.data.models, order });
-        const data = generator.generateReceiptData();
-        const iframe = await this.ticketPrinter.generateIframe(template, data);
-        const image = await this.ticketPrinter.generateImage(iframe);
-
-        link.href = image.toDataURL().replace("data:image/jpeg;base64,", "");
+        link.href = `/pos-self-order/receipt/${order.id}?access_token=${safeToken}`;
         link.click();
     }
 

@@ -5,15 +5,15 @@
         flex: 0 1 50%;
         position: relative;
 
-        @include media-breakpoint-up(md) {
+        @media screen and (min-width: 768px), print and (min-width: 188mm) {
             flex: 0 0 percentage(1/3);
         }
 
-        @include media-breakpoint-up(lg) {
+        @media screen and (min-width: 992px), print and (min-width: 190mm) {
             flex: 0 0 percentage(1/5);
         }
 
-        @include media-breakpoint-up(xl) {
+        @media screen and (min-width: 1200px), print and (min-width: 220mm) {
             flex: 0 0 percentage(1/6);
         }
 
@@ -46,7 +46,11 @@
         @include o-we-preview-box($text-muted);
         .o_invalid_warning {
             width: 90%;
-            @include o-position-absolute($top: 50%, $left: 50%);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            bottom: auto;
+            right: auto;
             transform: translate(-50%, -50%);
         }
     }

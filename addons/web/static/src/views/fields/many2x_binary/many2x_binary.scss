@@ -1,20 +1,19 @@
-// Attachment Icons (common for the many2x_binary widgets and chat thread and chat composer)
-// ------------------------------------------------------------------
-$o-attachment-image-size: 45px;
-$o-attachment-margin: 5px;
-
+/* Attachment Icons (common for the many2x_binary widgets and chat thread and chat composer) */
+/* ------------------------------------------------------------------ */
 .o_attachment {
+    --o-attachment-image-size: 45px;
+    --o-attachment-margin: 5px;
     position: relative;
     width: 100%;
-    padding: $o-attachment-margin;
+    padding: var(--o-attachment-margin);
 
     .o_attachment_wrap {
         overflow: hidden;
         position: relative;
-        border-bottom: 1px solid rgba(black, 0.1);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         border-radius: 2px;
-        padding: 4px $o-attachment-image-size 0 4px;
-        background-color: rgba($o-black, 0.05);
+        padding: 4px var(--o-attachment-image-size) 0 4px;
+        background-color: color-mix(in srgb, var(--o-black) 5%, transparent);
 
         .o_attachment_delete_cross {
             float: right;
@@ -23,9 +22,9 @@ $o-attachment-margin: 5px;
     }
 
     .o_preview_image {
-        width: $o-attachment-image-size;
-        height: $o-attachment-image-size;
-        image-orientation: from-image; // Only supported in Firefox
+        width: var(--o-attachment-image-size);
+        height: var(--o-attachment-image-size);
+        image-orientation: from-image; /* Only supported in Firefox */
         &.o_hover {
             @include o-hover-opacity($default-opacity: 1, $hover-opacity: 0.7);
         }
@@ -36,7 +35,6 @@ $o-attachment-margin: 5px;
     }
 
     .caption {
-        @include o-text-overflow(block);
 
         a {
             @include o-hover-text-color($default-color: $o-main-text-color, $hover-color: $headings-color);
@@ -48,7 +46,11 @@ $o-attachment-margin: 5px;
     }
 
     .o_attachment_uploaded, .o_attachment_delete {
-        @include o-position-absolute(0, 0, 0, $left: auto);
+        position: absolute;
+        top: 0;
+        left: auto;
+        bottom: 0;
+        right: 0;
         display: flex;
         align-items: center;
         justify-content: center;

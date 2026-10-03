@@ -26,10 +26,6 @@
     }
 }
 
-.o_text_overflow {
-    @include o-text-overflow;
-}
-
 .dropdown-menu {
     max-height: $o-dropdown-max-height;
     overflow: auto;
@@ -184,21 +180,6 @@ span.o_force_ltr {
         --oi-color: currentColor;
     }
  }
-
-.o_button_area {
-    @include o-position-absolute(0, 0, 0, 0);
-}
-
-// Remove default user-agent styles on buttons
-.o_btn_reset {
-    appearance: none;
-    margin: unset;
-    padding: unset;
-    background: unset;
-    border: unset;
-    font-family: inherit;
-    font-size: 100%;
-}
 
 // Chess-like background
 .o_preview_alpha_background {

@@ -5,10 +5,10 @@
     top: 0px;
     width: 100%;
     height: 100%;
-    z-index: 100001; // 1 more than the debug widget...
+    z-index: 100001; /* 1 more than the debug widget... */
     text-align: center;
     font-family: Lato;
-    color: $gray-700;
+    color: var(--gray-700);
     transition: opacity 0.8s;
 
     .pos-error {
@@ -47,12 +47,12 @@
 
         :active {
             color: #222;
-            background: $gray-700;
+            background: var(--gray-700);
         }
     }
 }
 
-// loader animation
+/* loader animation */
 .lds-ellipsis {
     display: inline-block;
     position: relative;

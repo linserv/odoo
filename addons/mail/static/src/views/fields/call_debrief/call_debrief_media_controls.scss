@@ -11,7 +11,7 @@
 }
 
 .o-CallDebriefMediaControls {
-    // Media controls should always be in LTR direction, even in RTL context.
+    /* Media controls should always be in LTR direction, even in RTL context. */
     /*rtl:ignore*/
     direction: ltr;
 
@@ -21,14 +21,14 @@
     }
 
     .o-CallDebrief-control {
-        @include media-breakpoint-up(md) {
-            --#{$prefix}btn-bg: transparent;
-            --#{$prefix}btn-border-color: transparent;
-            --#{$prefix}btn-disabled-bg: transparent;
-            --#{$prefix}btn-disabled-border-color: transparent;
+        @media screen and (min-width: 768px), print and (min-width: 188mm) {
+            --btn-bg: transparent;
+            --btn-border-color: transparent;
+            --btn-disabled-bg: transparent;
+            --btn-disabled-border-color: transparent;
 
             &.o-CallDebrief-hotkeyFeedback {
-                --btn-bg: #{$o-component-active-bg};
+                --btn-bg: var(--o-component-active-bg);
 
                 animation: o-CallDebrief-mediaControlsFeedbackPop .2s ease-out;
             }
@@ -37,7 +37,7 @@
 
     .o-CallDebrief-select {
         background-image: none;
-        // Center selected value on Safari
+        /* Center selected value on Safari */
         text-align-last: center;
     }
 
@@ -52,18 +52,18 @@
     }
 
     .o-CallDebriefMediaControls-playbackRate {
-        --#{$prefix}box-shadow-inset: none;
+        --box-shadow-inset: none;
 
-        @include media-breakpoint-up(md) {
-            --#{$prefix}bg-opacity: 0;
+        @media screen and (min-width: 768px), print and (min-width: 188mm) {
+            --bg-opacity: 0;
         }
 
         &:hover, &:focus {
-            --#{$prefix}bg-opacity: 1;
+            --bg-opacity: 1;
         }
 
         &:focus-visible {
-            box-shadow: $focus-ring-box-shadow;
+            box-shadow: var(--o-bs-focus-ring-box-shadow);
         }
     }
 
@@ -81,7 +81,7 @@
         direction: ltr;
         /*rtl:end:ignore*/
         display: var(--CallDebriefMediaControls__volumeRange-display, none);
-        width: map-get($spacers, 5) * 2;
+        width: calc(var(--o-bs-spacer-5) * 2);
     }
 
     .o-CallDebrief-playbackRateLabel {

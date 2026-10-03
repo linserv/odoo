@@ -13,7 +13,7 @@ from odoo.fields import Domain
 from odoo.http import request
 from odoo.modules.db import FunctionStatus
 from odoo.tools import float_round, is_html_empty, lazy
-from odoo.tools.sql import SQL
+from odoo.tools.sql import SQL, column_exists
 from odoo.tools.translate import adapt_translated_field_value, html_translate
 
 from odoo.addons.website.tools import text_from_html
@@ -58,12 +58,16 @@ class ProductTemplate(models.Model):
         As we don't resequence the whole tree (as `sequence` does), this field
         might have negative value.
         """
+        start_sequence = 10000
+        # Schema initialization may evaluate the default before adding the column.
+        if self.env.context.get('module') and not column_exists(self.env.cr, self._table, 'website_sequence'):
+            return start_sequence
         self.env.cr.execute(
             SQL("SELECT MAX(website_sequence) FROM %s", SQL.identifier(self._table))
         )
         max_sequence = self.env.cr.fetchone()[0]
         if max_sequence is None:
-            return 10000
+            return start_sequence
         return max_sequence + 5
 
     # === FIELDS ===#
@@ -376,6 +380,24 @@ class ProductTemplate(models.Model):
                 template_copy.product_template_image_ids
             ):
                 template_copy.product_template_image_ids[0].unlink()
+
+            # Set the image attribute values to the corresponding PTAVs of the copied template.
+            copied_ptavs = {
+                ptav.product_attribute_value_id.id: ptav.id
+                for ptav in template_copy.attribute_line_ids.product_template_value_ids
+            }
+
+            for original_image, copied_image in zip(
+                template.product_template_image_ids,
+                template_copy.product_template_image_ids,
+                strict=True,
+            ):
+                copied_image.with_context(skip_update_main_image=True).attribute_value_ids = [
+                    Command.set([
+                        copied_ptavs[ptav.product_attribute_value_id.id]
+                        for ptav in original_image.attribute_value_ids
+                    ])
+                ]
         return template_copies
 
     @api.ondelete(at_uninstall=False)
@@ -1418,12 +1440,7 @@ class ProductTemplate(models.Model):
 
     @api.model
     def _get_website_sale_search_fields(self, search_in_description=True):
-        search_fields = [
-            "name",
-            "variants_default_code",
-            "barcode",
-            "product_variant_ids.barcode",
-        ]
+        search_fields = ["name", "variants_default_code", "barcode", "product_variant_ids.barcode"]
         if search_in_description:
             search_fields.append("description_ecommerce")
         search_fields.extend((
@@ -1526,14 +1543,14 @@ class ProductTemplate(models.Model):
     def _search_render_results(self, fetch_fields, mapping, icon, limit):
         results_data = super()._search_render_results(fetch_fields, mapping, icon, limit)
         search_term = self.env.context.get("search_term", "")
+        website_domain = self.env.website.website_domain()
 
         for product, data in zip(self, results_data):
             combination_info = product._get_combination_info(only_template=True)
             values = product.attribute_line_ids.value_ids
-            data["attribute_value_ids"] = values.read(["id", "name"])
-            data["product_tag_ids"] = product.product_tag_ids.filtered(
-                "visible_to_customers"
-            ).read(["name"])
+            tags = product.product_tag_ids.filtered("visible_to_customers").read(["name"])
+            categories = product.public_categ_ids.filtered_domain(website_domain).read(["name"])
+            data["badges"] = tags + categories + values.read(["name"])
             price = self._search_render_results_prices(mapping, combination_info)
             if price:
                 data["price"] = price
@@ -1809,12 +1826,8 @@ class ProductTemplate(models.Model):
                     ("assign", "!=", "manual")
                 ])
 
-            if auto_assign_ribbons:
-                variant = variant or self._get_variant_for_combination(
-                    self._get_first_available_combination()
-                )
             for rb in auto_assign_ribbons:
-                if rb._is_applicable_for(variant, price_vals):
+                if rb._is_applicable_for(variant or self, price_vals):
                     return rb
 
         return ribbon
@@ -1929,7 +1942,11 @@ class ProductTemplate(models.Model):
     def _get_first_available_combination(self, necessary_values=None):
         """Override of `product` to return the first combination that has stock."""
         res = super()._get_first_available_combination(necessary_values)
-        if not self.env.context.get("website_id"):
+        if (
+            not self.is_storable
+            or self.allow_out_of_stock_order
+            or not self.env.context.get("website_id")
+        ):
             return res
 
         for combination in self._get_possible_combinations(necessary_values):
@@ -1989,13 +2006,14 @@ class ProductTemplate(models.Model):
         return data
 
     def _mail_get_operation_for_mail_message_operation(self, message_operation):
-        if (
-            message_operation == "create"
-            and not self.env.user._is_internal()
-        ):
-            website = self.env.website or self.env['website'].browse(self.env.context.get('host_id'))
-            if not website.with_context(website_id=website.id).is_view_active('website_sale.product_comment'):
-                return [(Domain.TRUE, 'write')]
+        if message_operation == "create" and not self.env.user._is_internal():
+            website = self.env.website or self.env["website"].browse(
+                self.env.context.get("host_id")
+            )
+            if not website.with_context(website_id=website.id).is_view_active(
+                "website_sale.product_comment"
+            ):
+                return [(Domain.TRUE, "write")]
         return super()._mail_get_operation_for_mail_message_operation(message_operation)
 
     @api.model

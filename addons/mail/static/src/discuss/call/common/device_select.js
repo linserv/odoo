@@ -1,6 +1,5 @@
 import { Component, computed, onWillDestroy, onWillStart, signal, t, useProps } from "@odoo/owl";
 
-import { browser } from "@web/core/browser/browser";
 import { Dropdown } from "@web/core/dropdown/dropdown";
 import { DropdownItem } from "@web/core/dropdown/dropdown_item";
 import { _t } from "@web/core/l10n/translation";
@@ -29,7 +28,6 @@ export class DeviceSelect extends Component {
                 .optional(),
         });
         this.store = useService("mail.store");
-        this.notification = useService("notification");
         /** @type {import("@odoo/owl").Signal<Element>} */
         this.rootRef = signal();
         this.userDevices = signal.Array([], { type: t.instanceOf(MediaDeviceInfo) });
@@ -41,15 +39,6 @@ export class DeviceSelect extends Component {
         this.abortController = new AbortController();
         this.isBrowserChrome = isBrowserChrome();
         onWillStart(() => {
-            if (!browser.navigator.mediaDevices) {
-                // zxing-js: isMediaDevicesSuported or canEnumerateDevices is false.
-                this.notification.add(
-                    _t("Media devices unobtainable. SSL might not be set up properly."),
-                    { type: "warning" }
-                );
-                console.warn("Media devices unobtainable. SSL might not be set up properly.");
-                return;
-            }
             this.updateDevicesList();
             this.setupEventListeners();
         });
@@ -63,19 +52,19 @@ export class DeviceSelect extends Component {
     }
 
     async updateDevicesList() {
-        this.userDevices.set(await browser.navigator.mediaDevices.enumerateDevices());
+        this.userDevices.set(await window.navigator.mediaDevices.enumerateDevices());
     }
 
     async setupEventListeners() {
         const boundHandler = this.updateDevicesList.bind(this);
         const signal = this.abortController.signal;
 
-        browser.navigator.mediaDevices.addEventListener("devicechange", boundHandler, { signal });
+        window.navigator.mediaDevices.addEventListener("devicechange", boundHandler, { signal });
         if (this.props.kind == "videoinput") {
-            const cameraPermission = await browser.navigator.permissions.query({ name: "camera" });
+            const cameraPermission = await window.navigator.permissions.query({ name: "camera" });
             cameraPermission.addEventListener("change", boundHandler, { signal });
         } else {
-            const microphonePermission = await browser.navigator.permissions.query({
+            const microphonePermission = await window.navigator.permissions.query({
                 name: "microphone",
             });
             microphonePermission.addEventListener("change", boundHandler, { signal });

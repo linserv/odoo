@@ -354,14 +354,14 @@ export class ListController extends Component {
      */
     async onWillSaveRecord(record) {}
 
-    async createRecord({ group } = {}) {
+    async createRecord({ group, newWindow } = {}) {
         if (!this.model.isReady() && !this.model.config.groupBy.length && this.editable) {
             // If the view isn't grouped and the list is editable, a new record row will be added,
             // in edition. In this situation, we must wait for the model to be ready.
             await this.model.whenReady.promise;
         }
         const list = (group && group.list) || this.model.root;
-        if (this.editable && !list.isGrouped) {
+        if (this.editable && !list.isGrouped && !newWindow) {
             if (!(list instanceof DynamicRecordList)) {
                 throw new Error("List should be a DynamicRecordList");
             }
@@ -371,7 +371,7 @@ export class ListController extends Component {
             }
             render(this);
         } else {
-            await this.props.createRecord();
+            await this.props.createRecord(newWindow);
         }
     }
 
@@ -403,8 +403,8 @@ export class ListController extends Component {
         }
     }
 
-    async onClickCreate() {
-        return executeButtonCallback(this.rootRef(), () => this.createRecord());
+    async onClickCreate(_ev, newWindow) {
+        return executeButtonCallback(this.rootRef(), () => this.createRecord({ newWindow }));
     }
 
     async onClickDiscard() {
@@ -454,7 +454,7 @@ export class ListController extends Component {
             export: {
                 isAvailable: () => this.isExportEnable,
                 sequence: 10,
-                icon: "upload",
+                icon: "download",
                 description: _t("Export"),
                 callback: () => this.exportRecords(),
             },
@@ -498,8 +498,8 @@ export class ListController extends Component {
     get actionMenuItems() {
         const { actionMenus } = this.props.info;
         const staticActionItems = Object.entries(this.getStaticActionMenuItems())
-            .filter(([key, item]) => item.isAvailable === undefined || item.isAvailable())
-            .sort(([k1, item1], [k2, item2]) => (item1.sequence || 0) - (item2.sequence || 0))
+            .filter(([, item]) => item.isAvailable === undefined || item.isAvailable())
+            .sort(([, item1], [, item2]) => (item1.sequence || 0) - (item2.sequence || 0))
             .map(([key, item]) =>
                 Object.assign(
                     { key, groupNumber: STATIC_ACTIONS_GROUP_NUMBER },

@@ -1,16 +1,25 @@
-import { Component, computed, proxy, signal, types, useOnChange, useProps } from "@odoo/owl";
+import {
+    Component,
+    computed,
+    proxy,
+    shallowEqual,
+    signal,
+    types,
+    useOnChange,
+    useProps,
+} from "@odoo/owl";
 
 import { useThreadActions } from "@mail/core/common/thread_actions";
 import { AutoresizeInput } from "@mail/core/common/autoresize_input";
 import { ActionList } from "@mail/core/common/action_list";
 import { DiscussAvatar } from "@mail/core/common/discuss_avatar";
 import { Thread } from "@mail/core/common/thread";
-import { ThreadIcon } from "@mail/core/common/thread_icon";
 import { Composer } from "@mail/core/common/composer";
 import { attClassObjectToString } from "@mail/utils/common/format";
 
 import { FileUploader } from "@web/views/fields/file_handler";
 import { useService } from "@web/core/utils/hooks";
+import { propSignal } from "@mail/utils/common/hooks";
 
 export class DiscussContent extends Component {
     static components = {
@@ -18,7 +27,6 @@ export class DiscussContent extends Component {
         AutoresizeInput,
         DiscussAvatar,
         Thread,
-        ThreadIcon,
         Composer,
         FileUploader,
     };
@@ -27,18 +35,23 @@ export class DiscussContent extends Component {
     setup() {
         super.setup();
         this.store = useService("mail.store");
-        this.props = useProps({
-            thread: types.instanceOf(this.store["mail.thread"]).optional(),
+        // `this.props` is read by thread actions (e.g. `owner.props.chatWindow`).
+        this.props = useProps({});
+        this.channel = propSignal("channel", types.instanceOf(this.store["discuss.channel"]), {
+            optional: true,
         });
         this.ui = useService("ui");
         this.notification = useService("notification");
         this.rootRef = signal.ref(HTMLDivElement);
         this.threadAvatarRef = signal.ref(HTMLDivElement);
         this.threadActions = useThreadActions({ rootRef: this.rootRef, thread: () => this.thread });
-        this.headerActionsList = computed(() => {
-            const partition = this.threadActions.partition;
-            return [partition.quick, partition.other, ...partition.group.slice().reverse()];
-        });
+        this.headerActionsList = computed(
+            () => {
+                const partition = this.threadActions.partition;
+                return [partition.quick, partition.other, ...partition.group.slice().reverse()];
+            },
+            { equals: shallowEqual }
+        );
         this.state = proxy({ jumpThreadPresent: 0 });
         this.isDiscussContent = true;
         this.attClassObjectToString = attClassObjectToString;
@@ -61,8 +74,11 @@ export class DiscussContent extends Component {
         }
     }
 
+    /** @type {import("@mail/core/common/action_list").GetActionComponent} */
+    getActionComponent() {}
+
     get thread() {
-        return this.props.thread || this.store.discuss.thread;
+        return this.channel?.()?.thread || this.store.discuss.thread;
     }
 
     get isNotificationTabActive() {

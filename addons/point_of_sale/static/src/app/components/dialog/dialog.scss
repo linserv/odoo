@@ -60,19 +60,19 @@
     }
 
     .o_modal_design_minimal {
-        @include media-breakpoint-up(sm) {
+        @media (min-width: 576px) {
             .modal-content .modal-header .btn-close.position-sm-absolute {
                     margin-right: 0 !important;
             }
         }
     }
 
-    // We want all the buttons in POS to be large
+    /* We want all the buttons in POS to be large */
     .o_dialog .modal-footer .btn {
-        --btn-padding-y: #{$btn-padding-y-lg};
-        --btn-padding-x: #{$btn-padding-x-lg};
-        --btn-font-size: #{$btn-font-size-lg};
-        --btn-border-radius: #{$btn-border-radius-lg};
+        --btn-padding-y: var(--o-bs-btn-padding-y-lg);
+        --btn-padding-x: var(--o-bs-btn-padding-x-lg);
+        --btn-font-size: var(--o-bs-btn-font-size-lg);
+        --btn-border-radius: var(--o-bs-btn-border-radius-lg);
 
         line-height: 2 !important;
     }
@@ -87,5 +87,9 @@
 
     .o_modal_no_body_padding .modal-body {
         padding: 0;
+    }
+
+    .modal-body:focus-visible {
+        outline: none;
     }
 }

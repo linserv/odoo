@@ -2,7 +2,7 @@
   width: $pos-left-pane-width;
   min-width: $pos-left-pane-width;
 
-  @include media-breakpoint-down(xl) {
+  @media (max-width: 1199.98px) {
       width: $pos-left-pane-width-tablet;
       min-width: $pos-left-pane-width-tablet;
   }
@@ -25,7 +25,7 @@
     max-height: 50px;
     vertical-align: middle;
 
-    @include media-breakpoint-down(sm) {
+    @media (max-width: 575.98px) {
       max-width: 32px;
       max-height: 32px;
     }
@@ -35,18 +35,18 @@
   font-size: clamp(24px, 3vw, 64px);
 }
 
-@include media-breakpoint-down(md) {
+@media (max-width: 767.98px) {
     .paymentlines-empty .message {
-        padding-bottom: map-get($spacers, 3);
+        padding-bottom: var(--o-bs-spacer-3);
     }
 }
 
 .paymentline {
-  border: $border-width solid $border-color;
+  border: var(--border-width) solid var(--border-color);
   &.selected {
-    background: $o-component-active-bg;
-    border-color: $o-component-active-border;
-    color: $o-component-active-color;
+    background: var(--o-component-active-bg);
+    border-color: var(--o-component-active-border);
+    color: var(--o-component-active-color);
   }
 }
 

@@ -5,9 +5,10 @@ import { useService } from "@web/core/utils/hooks";
 import { useCallActions } from "@mail/discuss/call/common/call_actions";
 import { usePopover } from "@web/core/popover/popover_hook";
 import { Tooltip } from "@web/core/tooltip/tooltip";
-import { ActionList } from "@mail/core/common/action_list";
+import { ActionList, CircleInlineAction, InlineAction } from "@mail/core/common/action_list";
 import { ACTION_TAGS } from "@mail/core/common/action";
 import { attClassObjectToString } from "@mail/utils/common/format";
+import { nestedShallowEqual } from "@mail/utils/common/signal";
 
 /**
  * What a small screen keeps in its bar; everything else goes into "More". "deafen" is there
@@ -20,6 +21,83 @@ const SMALL_SCREEN_BAR_ACTION_IDS = [
     "quick-video-settings",
     "quick-voice-settings",
 ];
+
+/** Button to join or leave a call as a pill, which shows its name next to its icon. */
+export class PillCallInlineAction extends InlineAction {
+    get classObj() {
+        return { ...super.classObj, "text-nowrap pe-2 mx-1": true };
+    }
+
+    get roundnessClass() {
+        return { "rounded-pill": true };
+    }
+
+    get showLabel() {
+        return true;
+    }
+}
+
+/** Button to join the call again, with the camera as last time, which its icon tells. */
+export class JoinBackInlineAction extends PillCallInlineAction {
+    get label() {
+        return _t("Join");
+    }
+}
+
+/**
+ * Picks the component of the inline buttons to join or leave a call: circles, except the button
+ * to join the call again, and the button to reject next to it, which are pills.
+ *
+ * @type {import("@mail/core/common/action_list").GetActionComponent}
+ */
+export function getCallActionComponent({ action, actions, inline }) {
+    if (!inline || !action.tags.includes(ACTION_TAGS.JOIN_LEAVE_CALL)) {
+        return undefined;
+    }
+    if (action.id === "join-back") {
+        return JoinBackInlineAction;
+    }
+    if (action.id === "reject" && actions?.actions.some(({ id }) => id === "join-back")) {
+        return PillCallInlineAction;
+    }
+    return CircleInlineAction;
+}
+
+/** Buttons of the bar of a meeting, which get bigger while it is fullscreen. */
+const meetingAction = (Base) =>
+    class extends Base {
+        get isFullscreen() {
+            return this.store.rtc.isFullscreen;
+        }
+
+        get paddingClass() {
+            return { ...super.paddingClass, "px-1 py-2": this.isFullscreen };
+        }
+
+        get iconClass() {
+            return {
+                ...super.iconClass,
+                "oi-lg": this.isFullscreen,
+                "py-1": this.isFullscreen && !this.isCircle,
+            };
+        }
+    };
+
+/** Meeting variant of each component, made once so that its buttons are not remounted. */
+const meetingActions = new WeakMap();
+
+/**
+ * @param {typeof InlineAction} Base
+ * @returns {typeof InlineAction}
+ */
+function getMeetingAction(Base) {
+    if (!meetingActions.has(Base)) {
+        meetingActions.set(Base, meetingAction(Base));
+    }
+    return meetingActions.get(Base);
+}
+
+export const MeetingInlineAction = getMeetingAction(InlineAction);
 
 export class CallActionList extends Component {
     static components = { ActionList };
@@ -46,81 +124,86 @@ export class CallActionList extends Component {
         this.popover = usePopover(Tooltip, {
             position: "top-middle",
         });
-        this.actions = computed(() => {
-            const partition = toRaw(this.callActions).partition;
-            if (this.ui.isSmall) {
-                return this.smallScreenActions(partition);
-            }
-            const other = partition.other.filter((a) => !a.tags.includes(ACTION_TAGS.CALL_LAYOUT));
-            const group2 = [];
-            let disconnectGroupIndex = -1;
-            for (const groupActions of partition.group) {
-                const filtered = groupActions.filter(
+        this.actions = computed(
+            () => {
+                const partition = toRaw(this.callActions).partition;
+                if (this.ui.isSmall) {
+                    return this.smallScreenActions(partition);
+                }
+                const other = partition.other.filter(
                     (a) => !a.tags.includes(ACTION_TAGS.CALL_LAYOUT)
                 );
-                const sequenceGroup = filtered[0].sequenceGroup;
-                const hasPipActions = sequenceGroup === 200 && this.props.pipExtraActions;
-                const pipActions = hasPipActions ? this.props.pipExtraActions : [];
-                const maxQuickActions = pipActions.length > 0 ? 1 : 4;
-                const quickActions = filtered.slice(0, maxQuickActions);
-                const moreActions = [...pipActions, ...filtered.slice(maxQuickActions)];
-                const newGroup = moreActions?.length
-                    ? [
-                          ...quickActions,
-                          this.callActions.more(
-                              this.callActionsParams,
-                              {
-                                  actions: moreActions,
-                                  dropdownMenuClass: attClassObjectToString({
-                                      "m-0 mb-1 overflow-x-hidden": true,
-                                      "o-discuss-CallActionList-menu": Boolean(
-                                          this.env.inMeetingView
-                                      ),
-                                  }),
-                                  dropdownPosition: "top-end",
-                                  name: this.MORE,
-                              },
-                              sequenceGroup
-                          ),
-                      ]
-                    : quickActions;
-                if (sequenceGroup >= 300 && disconnectGroupIndex === -1) {
-                    disconnectGroupIndex = group2.length;
+                const group2 = [];
+                let disconnectGroupIndex = -1;
+                for (const groupActions of partition.group) {
+                    const filtered = groupActions.filter(
+                        (a) => !a.tags.includes(ACTION_TAGS.CALL_LAYOUT)
+                    );
+                    const sequenceGroup = filtered[0].sequenceGroup;
+                    const hasPipActions = sequenceGroup === 200 && this.props.pipExtraActions;
+                    const pipActions = hasPipActions ? this.props.pipExtraActions : [];
+                    const maxQuickActions = pipActions.length > 0 ? 1 : 4;
+                    const quickActions = filtered.slice(0, maxQuickActions);
+                    const moreActions = [...pipActions, ...filtered.slice(maxQuickActions)];
+                    const newGroup = moreActions?.length
+                        ? [
+                              ...quickActions,
+                              this.callActions.more(
+                                  this.callActionsParams,
+                                  {
+                                      actions: moreActions,
+                                      dropdownMenuClass: attClassObjectToString({
+                                          "m-0 mb-1 overflow-x-hidden": true,
+                                          "o-discuss-CallActionList-menu": Boolean(
+                                              this.env.inMeetingView
+                                          ),
+                                      }),
+                                      dropdownPosition: "top-end",
+                                      name: this.MORE,
+                                  },
+                                  sequenceGroup
+                              ),
+                          ]
+                        : quickActions;
+                    if (sequenceGroup >= 300 && disconnectGroupIndex === -1) {
+                        disconnectGroupIndex = group2.length;
+                    }
+                    group2.push(newGroup);
                 }
-                group2.push(newGroup);
-            }
-            // Gather the layout actions (Fullscreen, Adjust view, Picture in Picture) into a "More"
-            // menu placed between Raise Hand and the end-call button.
-            const layoutActions = toRaw(this.callActions).actions.filter((a) =>
-                a.tags.includes(ACTION_TAGS.CALL_LAYOUT)
-            );
-            if (layoutActions.length) {
-                const layoutGroup = [
-                    this.callActions.more(
-                        this.callActionsParams,
-                        {
-                            actions: [layoutActions],
-                            dropdownMenuClass: attClassObjectToString({
-                                "o-discuss-CallActionList-callLayout m-0 mb-1 overflow-x-hidden": true,
-                                "o-discuss-CallActionList-menu o-inMeetingView": Boolean(
-                                    this.env.inMeetingView
-                                ),
-                            }),
-                            dropdownPosition: "top-end",
-                            id: "call-layout",
-                            name: this.MORE,
-                        },
-                        "call-layout"
-                    ),
-                ];
-                group2.splice(
-                    disconnectGroupIndex === -1 ? group2.length : disconnectGroupIndex,
-                    0,
-                    layoutGroup
+                // Gather the layout actions (Fullscreen, Adjust view, Picture in Picture) into a "More"
+                // menu placed between Raise Hand and the end-call button.
+                const layoutActions = toRaw(this.callActions).actions.filter((a) =>
+                    a.tags.includes(ACTION_TAGS.CALL_LAYOUT)
                 );
-            }
-            return [...group2, other];
-        });
+                if (layoutActions.length) {
+                    const layoutGroup = [
+                        this.callActions.more(
+                            this.callActionsParams,
+                            {
+                                actions: [layoutActions],
+                                dropdownMenuClass: attClassObjectToString({
+                                    "o-discuss-CallActionList-callLayout m-0 mb-1 overflow-x-hidden": true,
+                                    "o-discuss-CallActionList-menu o-inMeetingView": Boolean(
+                                        this.env.inMeetingView
+                                    ),
+                                }),
+                                dropdownPosition: "top-end",
+                                id: "call-layout",
+                                name: this.MORE,
+                            },
+                            "call-layout"
+                        ),
+                    ];
+                    group2.splice(
+                        disconnectGroupIndex === -1 ? group2.length : disconnectGroupIndex,
+                        0,
+                        layoutGroup
+                    );
+                }
+                return [...group2, other];
+            },
+            { equals: nestedShallowEqual }
+        );
     }
 
     /**
@@ -180,6 +263,18 @@ export class CallActionList extends Component {
               ]
             : [];
         return [...barGroups, moreGroup, joinLeave].filter((group) => group.length);
+    }
+
+    /** @type {import("@mail/core/common/action_list").GetActionComponent} */
+    getActionComponent(params) {
+        if (!params.inline) {
+            return undefined;
+        }
+        const callActionComponent = getCallActionComponent(params);
+        if (this.env.inMeetingView) {
+            return getMeetingAction(callActionComponent ?? InlineAction);
+        }
+        return callActionComponent;
     }
 
     get callActionsParams() {

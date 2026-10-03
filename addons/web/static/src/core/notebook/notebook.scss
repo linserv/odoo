@@ -12,7 +12,7 @@
         overflow-x: auto;
         overflow-y: hidden;
 
-        @include media-breakpoint-down(md) {
+        @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
             &::-webkit-scrollbar {
                 display: none;
             }
@@ -89,7 +89,7 @@
 
         .nav {
             max-width: var(--Notebook-sidebar-size);
-            border-bottom-color: transparent; // removing the width has weird side effect due to the negative margin
+            border-bottom-color: transparent; /* removing the width has weird side effect due to the negative margin */
         }
 
         .nav-item {
@@ -119,9 +119,10 @@
         }
     }
 
-    @include media-breakpoint-down(lg) {
+    @media screen and (max-width: 991.98px), print and (max-width: 189.98mm) {
         .o_notebook_content .oe-toolbar {
-            @include o-position-sticky($top: 0px);
+            position: sticky;
+            inset: 0px auto auto;
             margin-left: var(--Notebook-margin-x, $o-horizontal-padding);
             margin-right: var(--Notebook-margin-x, $o-horizontal-padding);
             width: auto;

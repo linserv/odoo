@@ -22,14 +22,14 @@
     }
 }
 
-// ----- View specific
+/* ----- View specific */
 .fc-timeGridDay-view {
     .o_worklocation_btn {
         margin-top: 0px;
     }
 }
 
-@include media-breakpoint-down(md) {
+@media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
 
     .location_xs_hide {
         display: none !important;

@@ -1552,7 +1552,7 @@ export class PosStore extends WithLazyGetterTrap {
     }
     setNextOrderRefs(order) {
         const deviceIdentifier = this.device.identifier;
-        this.device.removeUsedNumbers(this.models["pos.order"].filter((o) => !o.isSynced));
+        this.device.removeUsedNumbers(this.models["pos.order"].getAll());
         const number = `${this.device.useNext()}`.padStart(6, "0");
         const configId = this.config.id;
         const year2Digits = DateTime.now().year.toString().slice(-2);
@@ -1748,6 +1748,7 @@ export class PosStore extends WithLazyGetterTrap {
                     }
                 }
 
+                this.device.removeUsedNumbers(newData["pos.order"]);
                 await this.postSyncAllOrders(newData["pos.order"]);
                 this.removePendingOrder(order);
                 syncedOrders.push(...newData["pos.order"]);
@@ -2769,7 +2770,7 @@ export class PosStore extends WithLazyGetterTrap {
                 paymentLines[0].payment_method_id.type === "pay_later" &&
                 this.currency.isNegative(paymentLines[0].amount))
         ) {
-            opts.fastPaymentMethod = this.config.payment_method_ids[0];
+            opts.fastPaymentMethod = this.config.paymentMethods[0];
         }
         return opts;
     }

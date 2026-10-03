@@ -1350,6 +1350,36 @@ class TestSaleProject(TestSaleProjectCommon):
             "The project of `so1` should be set to the project that was generated at SO confirmation."
         )
 
+    def test_so_confirmation_batch_task_template(self):
+        """
+        Sales order lines from different sales orders should generate 1 task
+        by task template for every sale order when they are confirmed in batch.
+        """
+        product = self.env['product.product'].create({
+            'name': 'Test product with task template',
+            'type': 'service',
+            'service_tracking': 'task_global_project',
+            'project_id': self.project_global.id,
+            'task_template_id': self.task_template.id,
+            'service_policy': 'ordered_prepaid',
+        })
+        so_1, so_2 = self.env['sale.order'].create([
+            {
+                'partner_id': self.partner.id,
+                'order_line': [Command.create({'product_id': product.id, 'product_uom_qty': 1})],
+            },
+            {
+                'partner_id': self.partner.id,
+                'order_line': [
+                    Command.create({'product_id': product.id, 'product_uom_qty': 1}),
+                    Command.create({'product_id': product.id, 'product_uom_qty': 1}),
+                ],
+            },
+        ])
+        (so_1 | so_2).action_confirm()
+        self.assertEqual(len(so_1.tasks_ids), 1)
+        self.assertEqual(len(so_2.tasks_ids), 1, "Only 1 task should be created if multiple SOLs share the same task template")
+
     def test_group_expand_sales_order(self):
         """
         1. Create a sale order "Test Order" and a linked project task "Test Task."
@@ -2184,3 +2214,30 @@ class TestSaleProject(TestSaleProjectCommon):
             'product_uom_qty': 1,
         })
         self.assertFalse(sale_order.project_required, "Project should not be required on SO if product in orderline already has project")
+
+    def test_so_with_create_on_order_nothing_milestone_products(self):
+        """
+        Check whether a milestone is linked with the sale order.
+        Steps:
+          - Create a sale order
+          - Use a delivered milestone product
+          - Confirm the sale order
+          - Check the milestone is created and linked
+        """
+        sale_order = self.env['sale.order'].create({
+            'partner_id': self.partner.id,
+            'project_id': self.project_global.id,
+            'order_line': [
+                Command.create({
+                    'product_id': self.product_service_delivered_milestone.id,
+                    'product_uom_qty': 1,
+                }),
+            ],
+        })
+
+        sale_order.action_confirm()
+
+        self.assertEqual(
+            sale_order.milestone_count, 1,
+            "There should be a milestone linked to the sale order line."
+        )

@@ -37,12 +37,12 @@ export class DiscussChannel extends models.ServerModel {
         relation: "discuss.channel.member",
         compute: "_compute_channel_name_member_ids",
     });
-    channel_type = fields.Generic({ default: "channel" });
+    channel_type = fields.Selection({ default: "channel" });
     discuss_category_id = fields.Many2one({
         relation: "discuss.category",
         string: "Discuss Category",
     });
-    group_public_id = fields.Generic({
+    group_public_id = fields.Many2one({
         default: () => serverState.groupId,
     });
     invited_member_ids = fields.One2many({
@@ -55,7 +55,7 @@ export class DiscussChannel extends models.ServerModel {
         relation: "discuss.channel.member",
         compute: "_compute_self_member_id",
     });
-    uuid = fields.Generic({
+    uuid = fields.Char({
         default: () => uniqueId("discuss.channel_uuid-"),
     });
     last_interest_dt = fields.Datetime({ string: "Last Interest" });
@@ -885,11 +885,7 @@ export class DiscussChannel extends models.ServerModel {
 
         MailThread.set_message_pin.call(this, id, message_id, pinned);
         const [partner] = ResPartner.read(this.env.user.partner_id);
-        const notification = `<div data-oe-type="pin" class="o_mail_notification">
-                ${partner.display_name} pinned a
-                <a href="#" data-oe-type="highlight" data-oe-id='${message_id}'>message</a> to this channel.
-                <a href="#" data-oe-type="pin-menu">See all pinned messages</a>
-            </div>`;
+        const notification = `<div class="o_mail_notification" data-oe-type="pin" data-oe-id="${message_id}">${partner.display_name} pinned a message to this channel.</div>`;
         this.message_post(
             id,
             makeKwArgs({

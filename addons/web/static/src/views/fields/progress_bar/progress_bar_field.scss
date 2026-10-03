@@ -4,10 +4,10 @@
     --ProgressBarField-height: #{map-get($spacers, 2)};
 
     padding-inline: var(--ProgressBarField-padding-x, #{map-get($spacers, 2)});
-    color: var(--ProgressBarField-color, #{$body-color});
+    color: var(--ProgressBarField-color, var(--body-color));
 
     .progress {
-        --#{$prefix}progress-height: var(--ProgressBarField-height);
+        --progress-height: var(--ProgressBarField-height);
 
         flex-basis: var(--ProgressBarField-width);
         min-width: var(--ProgressBarField-min-width);

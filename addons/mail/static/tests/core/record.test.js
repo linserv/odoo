@@ -4,17 +4,17 @@ import { after, afterEach, beforeEach, describe, expect, test, tick } from "@odo
 import { advanceTime, animationFrame } from "@odoo/hoot-mock";
 import { Component, immediateEffect, markup, proxy, toRaw, xml } from "@odoo/owl";
 import {
+    destroyApp,
     getService,
     mockService,
     mountWithCleanup,
-    patchWithCleanup,
 } from "@web/../tests/web_test_helpers";
+import { patch } from "@web/core/utils/patch";
 
 import { Record, Store, makeStore } from "@mail/model/export";
 import { AND, fields, makeRecordFieldLocalId, normalizeManyCommands } from "@mail/model/misc";
 import { serializeDateTime } from "@web/core/l10n/dates";
 import { registry } from "@web/core/registry";
-import { browser } from "@web/core/browser/browser";
 
 const Markup = markup().constructor;
 
@@ -56,7 +56,6 @@ async function start() {
     await start2();
     /** @type {Store} */
     const store = getService("store");
-    after(() => store._runDisposeFns());
     return store;
 }
 
@@ -1520,7 +1519,7 @@ test("Fields updated from the local storage do not trigger another storage event
     }
     Message.register(localRegistry);
     const bodyLocalId = makeRecordFieldLocalId(Message.localId(1), "body");
-    patchWithCleanup(browser.localStorage, {
+    patch(window.localStorage, {
         setItem(key, value) {
             if (key === bodyLocalId) {
                 expect.step(`setItem ${JSON.parse(value).value}`);
@@ -1536,7 +1535,7 @@ test("Fields updated from the local storage do not trigger another storage event
     message.body = "2";
     expect(message.body).toBe("2");
     await expect.waitForSteps(["setItem 2"]);
-    browser.dispatchEvent(
+    window.dispatchEvent(
         new StorageEvent("storage", { key: bodyLocalId, newValue: toRawValue("3") })
     );
     await tick();
@@ -1731,7 +1730,7 @@ test("a patch cannot redeclare a computed", async () => {
         label = this.computed(() => "base");
     };
     Thread.register(localRegistry);
-    patchWithCleanup(Thread.prototype, {
+    patch(Thread.prototype, {
         setup() {
             super.setup();
             this.label = this.computed(() => "patched");
@@ -1777,7 +1776,7 @@ test("a computed does not recompute once its record is deleted", async () => {
 });
 
 test("writing on a computed is warned + ignored", async () => {
-    patchWithCleanup(console, { warn: (msg) => expect.step(msg) });
+    patch(console, { warn: (msg) => expect.step(msg) });
     (class Thread extends Record {
         static id = "name";
         name;
@@ -2136,4 +2135,20 @@ describe("RecordList read methods", () => {
         expect(messages.length).toBe(0);
         expect(ids).toEqual([1, 2, 3]);
     });
+});
+
+test("destroying the app disposes the records of the store", async () => {
+    (class Thread extends Record {
+        static id = "name";
+        name;
+    }).register(localRegistry);
+    const store = await start();
+    const thread = store.Thread.insert("General");
+    thread.onChange(
+        () => [],
+        () => () => expect.step("record disposed")
+    );
+    await expect.waitForSteps([]);
+    destroyApp();
+    await expect.waitForSteps(["record disposed"]);
 });

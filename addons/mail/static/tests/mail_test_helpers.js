@@ -38,7 +38,6 @@ import { click, contains, TIMEOUT } from "./mail_test_helpers_contains";
 
 import { closeStream, mailGlobal } from "@mail/utils/common/misc";
 import { Component, onMounted, onPatched } from "@odoo/owl";
-import { browser } from "@web/core/browser/browser";
 import { emojiLoader } from "@web/core/emoji_picker/emoji_loader";
 import { registry } from "@web/core/registry";
 import { MEDIAS_BREAKPOINTS, utils as uiUtils } from "@web/core/ui/ui_utils";
@@ -51,7 +50,7 @@ import { WebClient } from "@web/webclient/webclient";
 export { SIZES } from "@web/core/ui/ui_utils";
 
 import { SoundEffectsPlugin } from "@mail/core/common/sound_effects_plugin";
-import { Store as StoreService } from "@mail/core/common/store_service";
+import { Store as StoreService } from "@mail/core/common/store_plugin";
 import { UPDATE_EVENT } from "@mail/discuss/call/common/peer_to_peer";
 import { Network, Rtc } from "@mail/discuss/call/common/rtc_service";
 import { authenticateGuest, DISCUSS_ACTION_ID } from "./mock_server/mail_mock_server";
@@ -617,7 +616,7 @@ export function mockBrowserFullscreen({ grant = true } = {}) {
 
 /**
  * Simulate the popout window used for picture-in-picture by backing it with an in-DOM iframe.
- * Forces the non-native popout path (`documentPictureInPicture` disabled) and makes `browser.open`
+ * Forces the non-native popout path (`documentPictureInPicture` disabled) and makes `window.open`
  * return a fake window whose document is the iframe's, so the PiP content can be queried in tests
  * through the returned `popoutIframe.contentDocument`.
  *
@@ -653,7 +652,7 @@ export function mockPipWindow() {
         },
     };
     patch(window, { documentPictureInPicture: false });
-    patch(browser, {
+    patch(window, {
         open: () => {
             popoutWindow.closed = false;
             outsideArea.append(popoutIframe);
@@ -1107,7 +1106,7 @@ class MockMediaStreamAudioSourceNode {
 let currentAudioProcessor = null;
 
 export function patchVoiceMessageAudio() {
-    patch(browser, {
+    patch(window, {
         AnalyserNode: MockAnalyserNode,
         AudioBufferSourceNode: MockAudioBufferSourceNode,
         AudioContext: MockAudioContext,

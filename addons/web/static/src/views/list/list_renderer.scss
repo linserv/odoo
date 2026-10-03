@@ -1,24 +1,25 @@
-// ------- List renderer -------
+/* ------- List renderer ------- */
 .o_list_renderer {
-    --ListRenderer-table-padding-x: #{$table-cell-padding-x-sm};
+    --ListRenderer-table-padding-x: var(--o-bs-table-cell-padding-x-sm);
     --ListRenderer-thead-padding-y: #{map-get($spacers, 4)};
-    --ListRenderer-thead-bg-color: linear-gradient(to bottom, #{$o-webclient-background-color}, #{rgba($o-webclient-background-color, .75)} );
-    --ListRendererGrouped__th-bg-color: #{rgba($o-view-background-color, .5)};
-    --ListRenderer-thead-border-end-color: #{$border-color};
-    --ListRenderer-tfoot-bg-color: #{$o-list-footer-bg-color};
+    --ListRenderer-thead-bg-color: linear-gradient(to bottom, #{$o-webclient-background-color}, color-mix(in srgb, var(--o-webclient-background-color) 75%, transparent) );
+    --ListRendererGrouped__th-bg-color: color-mix(in srgb, var(--o-view-background-color) 50%, transparent);
+    --ListRenderer-thead-border-end-color: var(--border-color);
+    --ListRenderer-tfoot-bg-color: var(--o-list-footer-bg-color);
     --sticky-header-zindex: 1;
     --o-view-nocontent-zindex: calc(var(--sticky-header-zindex) + 1);
 
     margin-left: var(--ListRenderer-margin-x, unset);
     margin-right: var(--ListRenderer-margin-x, unset);
 
-    // sticky header on desktop
+    /* sticky header on desktop */
     @include media-only(screen) {
-        @include media-breakpoint-up(md) {
+        @media screen and (min-width: 768px), print and (min-width: 188mm) {
             height: 100%;
 
             .o_list_table thead {
-                @include o-position-sticky(0);
+                position: sticky;
+                inset: 0 auto auto;
                 z-index: var(--sticky-header-zindex);
             }
         }
@@ -29,31 +30,31 @@
     }
 
     th, td {
-        // This fixes a bug that was hidding part of cell borders on Firefox.
+        /* This fixes a bug that was hidding part of cell borders on Firefox. */
         background-clip: padding-box;
     }
 
     .o_search_panel_resize + &,
     .o_search_panel_sidebar + & {
-        border-left: $border-width solid $border-color;
+        border-left: var(--border-width) solid var(--border-color);
     }
 
     .o_list_view & {
-        --ListRenderer-thead-padding-y: #{$table-cell-padding-y-sm};
-        --ListRenderer-table-padding-x: #{$o-horizontal-padding};
+        --ListRenderer-thead-padding-y: var(--o-bs-table-cell-padding-y-sm);
+        --ListRenderer-table-padding-x: var(--o-horizontal-padding);
 
         @include media-only(print) {
             --ListRenderer-table-padding-x: 0;
 
-            --Tag-font-size: #{$font-size-sm};
+            --Tag-font-size: var(--o-bs-font-size-sm);
         }
     }
 
     .o_list_table {
-        --table-bg: #{$o-view-background-color};
+        --table-bg: var(--o-view-background-color);
 
-        // We need this to be collapse because we want to add a border on the rows
-        // for sale order/invoice lines of type section.
+        /* We need this to be collapse because we want to add a border on the rows */
+        /* for sale order/invoice lines of type section. */
         border-collapse: collapse;
         font-variant-numeric: tabular-nums;
 
@@ -63,13 +64,13 @@
             border-spacing: 0;
 
             &.o_list_table_grouped .o_group_header {
-                --table-bg: #{$gray-200};
-                color: color-contrast($gray-200);
+                --table-bg: var(--gray-200);
+                color: var(--o-bs-gray-200-contrast);
             }
 
             &.o_list_table_ungrouped {
-                --table-striped-bg: #{$gray-100};
-                --table-striped-color: #{color-contrast($gray-100)};
+                --table-striped-bg: var(--gray-100);
+                --table-striped-color: var(--o-bs-gray-100-contrast);
             }
         }
 
@@ -89,18 +90,18 @@
             th {
                 padding-top: var(--ListRenderer-thead-padding-y);
                 background: var(--ListRenderer-thead-bg-color);
-                color: $headings-color;
+                color: var(--o-bs-headings-color);
 
-                // Currently sticky thead > th elements have a border bottom that doens't follow when scrolling.
-                // Temporary workaround: We replace the border with a box-shadow to simulate the border bottom so it keeps visible when scrolling.
+                /* Currently sticky thead > th elements have a border bottom that doens't follow when scrolling. */
+                /* Temporary workaround: We replace the border with a box-shadow to simulate the border bottom so it keeps visible when scrolling. */
                 border-bottom: 0;
                 box-shadow: inset 0px -1px 0 0px var(--ListRenderer-thead-border-end-color);
 
-                // Define backdrop blur here to ensure it will applied on all th
+                /* Define backdrop blur here to ensure it will applied on all th */
                 backdrop-filter: var(--o-backdrop-blur-sm);
 
                 @include media-only(print) {
-                    font-weight: $font-weight-bold;
+                    font-weight: var(--o-bs-font-weight-bold);
                 }
             }
 
@@ -129,17 +130,19 @@
             }
         }
 
-        // Override BS default
+        /* Override BS default */
         > :not(:first-child) {
             border-top-width: 0;
         }
 
         tbody > tr > td:not(.o_list_record_selector) {
             &:not(.o_handle_cell):not(.o_list_button):not(.o_list_record_remove):not(.o_list_record_open_form_view) {
-                --fieldWidget-display: block; // Will affect inner components (see fields.scss)
+                --fieldWidget-display: block; /* Will affect inner components (see fields.scss) */
 
                 display: table-cell;
-                @include text-truncate();
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
 
                 &.o_list_text {
                     white-space: pre-wrap;
@@ -172,16 +175,16 @@
                 }
             }
 
-            // ------- Decrease table's inner content "visual depth" -------
+            /* ------- Decrease table's inner content "visual depth" ------- */
             &:first-of-type > tr:first-child:not(.o_group_header) {
-                box-shadow: inset 0px 5px 10px -4px rgba(black, 0.15);
+                box-shadow: inset 0px 5px 10px -4px rgba(0, 0, 0, 0.15);
             }
         }
         &.o_list_computing_widths {
             > tbody > tr > td {
-                &.o_list_text, // text field, className on the td
+                &.o_list_text, /* text field, className on the td */
                 > .o_field_text {
-                    // text field with widget, className inside the td
+                    /* text field with widget, className inside the td */
                     white-space: pre !important;
                 }
                 &.o_list_button > div {
@@ -201,10 +204,15 @@
                 max-width: 300px;
             }
             > tr > td {
-                color: $o-list-footer-color;
-                background-color: $o-list-footer-bg-color;
-                font-weight: $o-list-footer-font-weight;
-                @include o-text-overflow(table-cell);
+                color: var(--o-list-footer-color);
+                background-color: var(--o-list-footer-bg-color);
+                font-weight: var(--o-list-footer-font-weight);
+                display: table-cell;
+                max-width: 100%;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                vertical-align: top;
                 vertical-align: baseline;
             }
 
@@ -223,11 +231,11 @@
         }
 
         .o_column_sortable:not(.o_handle_cell) {
-            user-select: none;  // Prevent unwanted selection while sorting
+            user-select: none;  /* Prevent unwanted selection while sorting */
         }
 
         .o_list_record_selector {
-            width: 40px;  // Don't force to keep o_group_name width dynamic
+            width: 40px;  /* Don't force to keep o_group_name width dynamic */
             vertical-align: middle;
 
             @include media-only(print) {
@@ -236,7 +244,7 @@
         }
 
         .o_list_record_remove, .o_handle_cell, .o_list_record_open_form_view {
-            width: 1px;  // to prevent the column to expand
+            width: 1px;  /* to prevent the column to expand */
         }
 
 
@@ -257,22 +265,22 @@
         .o_keyboard_navigation {
             th:focus-within, td:focus-within {
                 --table-accent-bg: none;
-                background-color: $o-form-lightsecondary;
+                background-color: var(--o-form-lightsecondary);
                 outline: none;
             }
         }
 
-        // It's important that this appears after the keyboard navigation.
-        // Otherwise, o_keyboard_navigation will override the background color
-        // of the focused cell.
+        /* It's important that this appears after the keyboard navigation. */
+        /* Otherwise, o_keyboard_navigation will override the background color */
+        /* of the focused cell. */
         .o_selected_row {
             th:focus-within, td:focus-within {
                 --table-accent-bg: none;
-                background-color: $o-view-background-color;
+                background-color: var(--o-view-background-color);
             }
         }
 
-        // Grouped list views
+        /* Grouped list views */
         tbody > tr.o_group_header {
             --table-bg: var(--ListRendererGrouped__th-bg-color);
             --table-color: var(--ListRenderer-thead-bg-color);
@@ -288,7 +296,12 @@
                 padding-bottom: 5px;
             }
             .o_group_name {
-                @include o-text-overflow(table-cell);
+                display: table-cell;
+                max-width: 100%;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                vertical-align: top;
             }
             .o_group_buttons {
                 display: inline-block;
@@ -317,7 +330,7 @@
                     display: flex;
                     align-items: center;
                     &:hover {
-                        background-color: $o-brand-lightsecondary;
+                        background-color: var(--o-brand-lightsecondary);
                     }
                     i {
                         font-size: 10px;
@@ -343,22 +356,26 @@
             }
         }
         tbody + tbody {
-            border-top: none; // Override bootstrap for grouped list views
+            border-top: none; /* Override bootstrap for grouped list views */
         }
 
 
         .o_data_cell.o_text_overflow,
         .o_data_cell.o_invisible_modifier {
-            // Override display: none to keep table cells aligned. Note: cannot use
-            // 'initial' as it will force them to 'inline', not 'table-cell'.
+            /* Override display: none to keep table cells aligned. Note: cannot use */
+            /* 'initial' as it will force them to 'inline', not 'table-cell'. */
             display: table-cell !important;
         }
 
         tbody .o_column_resizing {
             position: relative;
             &:after {
-                @include o-position-absolute($top: 0, $bottom: 0, $right: 0);
-                background-color: #{$border-color};
+                position: absolute;
+                top: 0;
+                left: auto;
+                bottom: 0;
+                right: 0;
+                background-color: var(--border-color);
                 width: 4px;
                 content: '';
             }
@@ -393,12 +410,12 @@
         }
 
         .o_data_row:not(.o_selected_row) .o_data_cell {
-            // Boolean fields in non-selected rows completely disabled.
+            /* Boolean fields in non-selected rows completely disabled. */
             .form-check {
                 pointer-events: none;
             }
 
-            // Fields with the additional class o_boolean_interactive enable their checkbox if there is no readonly modifier
+            /* Fields with the additional class o_boolean_interactive enable their checkbox if there is no readonly modifier */
             > .o_field_widget.o_boolean_interactive:not(.o_readonly_modifier) .form-check {
                 pointer-events: auto;
             }
@@ -413,13 +430,28 @@
                 .o_field_widget:not(.o_row_handle):not(.o_field_handle):not(.o_field_badge) {
                     display: inline;
                     &.o_field_percent_pie{
-                        @include o-text-overflow(inline-flex);
+                        display: inline-flex;
+                        max-width: 100%;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        vertical-align: top;
                         span.o_pie_text{
-                            @include o-text-overflow(none);
+                            display: none;
+                            max-width: 100%;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                            vertical-align: top;
                         }
                     }
                     span:not(.o_m2o_avatar) {
-                        @include o-text-overflow(inline);
+                        display: inline;
+                        max-width: 100%;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        vertical-align: top;
                     }
                 }
             }
@@ -450,16 +482,20 @@
                     display: flex;
                 }
                 &.o_field_badge {
-                    width: auto; // override width: 100% to keep the optimal badge width
+                    width: auto; /* override width: 100% to keep the optimal badge width */
                 }
                 .o_input_dropdown,
                 .o_datepicker {
                     > .o_input {
-                        padding-right: 15px; // to prevent caret overlapping
+                        padding-right: 15px; /* to prevent caret overlapping */
                     }
                     > .o_dropdown_button,
                     .o_datepicker_button {
-                        @include o-position-absolute(0, 0);
+                        position: absolute;
+                        top: 0;
+                        left: auto;
+                        bottom: auto;
+                        right: 0;
                     }
                 }
                 .form-check {
@@ -491,7 +527,7 @@
             a:active,
             button:focus,
             button:active {
-                color: $link-hover-color;
+                color: var(--link-hover-color);
                 outline: none;
             }
 
@@ -506,13 +542,13 @@
     .o_data_row.o_selected_row > .o_data_cell:not(.o_readonly_modifier) {
         &.o_required_modifier,
         > .o_column_group_field.o_required_modifier:not(.o_readonly_modifier) {
-            border-bottom: 1px solid $o-input-border-required;
+            border-bottom: 1px solid var(--o-input-border-required);
         }
 
         &.o_invalid_cell:not(:focus-within),
         > .o_column_group_field.o_invalid_cell:not(.o_readonly_modifier):not(:focus-within) {
-            border-bottom: 1px solid $danger;
-            background-color: $o-input-invalid-bg;
+            border-bottom: 1px solid var(--danger);
+            background-color: var(--o-input-invalid-bg);
         }
     }
 
@@ -530,23 +566,23 @@
 
         So we apply some rules to have the style wanted:
         */
-        // 1. we set the global separator (gray line) of the table on the row (bottom) and not on the cell (bottom)
+        /* 1. we set the global separator (gray line) of the table on the row (bottom) and not on the cell (bottom) */
         .o_data_row {
             border-bottom-width: var(--ListRenderer-data-row-border-bottom-width, 1px);
 
             &:not(.o_selected_row):not(.o_data_row_selected):focus-within > * {
-                $-focus-bg: rgba(var(--#{$variable-prefix}emphasis-color-rgb), #{$table-hover-bg-factor * 2});
+                $-focus-bg: rgba(var(--emphasis-color-rgb), #{$table-hover-bg-factor * 2});
 
-                --#{$variable-prefix}table-accent-bg: #{$-focus-bg};
-                --#{$variable-prefix}table-striped-bg: var(--ListRenderer-data-row-focused-striped-bg, #{$-focus-bg});
+                --table-accent-bg: #{$-focus-bg};
+                --table-striped-bg: var(--ListRenderer-data-row-focused-striped-bg, #{$-focus-bg});
             }
         }
 
-        // 2. we remove the bottom border (added by BS5) on all cells (this force to show the top border of selected cell)
+        /* 2. we remove the bottom border (added by BS5) on all cells (this force to show the top border of selected cell) */
         .o_data_row > td {
             border-bottom-width: 0;
         }
-        // 3. we add only a bottom border to selected cells (this force to show the bottom border of the selected cell)
+        /* 3. we add only a bottom border to selected cells (this force to show the bottom border of the selected cell) */
         .o_data_row.o_data_row_selected > td {
             border-bottom-width: 1px;
         }
@@ -566,10 +602,10 @@
 
     .o_data_row.o_dragged {
         display: flex;
-        // no previous row to close the top edge
+        /* no previous row to close the top edge */
         border-top-width: 1px;
 
-        // no border collapsing: cells would double the row's bottom border
+        /* no border collapsing: cells would double the row's bottom border */
         > td {
             border-bottom-width: 0;
         }
@@ -582,7 +618,7 @@
 
         .o_invalid_optional_columns_button {
             color: o-text-color('danger');
-            background-color: #{$o-input-invalid-bg};
+            background-color: var(--o-input-invalid-bg);
         }
     }
 }
@@ -597,16 +633,16 @@
     }
 }
 
-@include media-breakpoint-down(md) {
+@media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
     .o_data_row_selected {
-        user-select: none; // Prevent text selection when editing
+        user-select: none; /* Prevent text selection when editing */
     }
 
     .o_web_client.o_touch_device .o_content table.o_list_table.table tr > {
         .o_list_record_selector:first-child {
             display: none;
 
-            // first-child will be hidden so add left padding to second child
+            /* first-child will be hidden so add left padding to second child */
             & + * {
                 padding-left: var(--ListRenderer-table-padding-x);
             }
@@ -614,7 +650,7 @@
     }
 }
 
-// ------- Sample mode -------
+/* ------- Sample mode ------- */
 .o_list_view .o_view_sample_data {
     .o_list_table {
         cursor: default !important;

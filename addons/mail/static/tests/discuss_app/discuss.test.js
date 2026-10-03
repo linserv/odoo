@@ -41,7 +41,6 @@ import {
 } from "@odoo/hoot-dom";
 import { mockDate } from "@odoo/hoot-mock";
 
-import { browser } from "@web/core/browser/browser";
 import { rpc } from "@web/core/network/rpc";
 import {
     Command,
@@ -49,10 +48,10 @@ import {
     makeServerError,
     mockService,
     onRpc,
-    patchWithCleanup,
     serverState,
     withUser,
 } from "@web/../tests/web_test_helpers";
+import { patch } from "@web/core/utils/patch";
 import { makeRecordFieldLocalId } from "@mail/model/misc";
 import { Settings } from "@mail/core/common/settings_model";
 import { toRawValue } from "@mail/utils/common/local_storage";
@@ -574,7 +573,7 @@ test("last discuss conversation is remembered", async () => {
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({ name: "General" });
     const LAST_DISCUSS_ACTIVE_ID_LS = makeRecordFieldLocalId(DiscussApp.localId(), "lastActiveId");
-    browser.localStorage.setItem(
+    window.localStorage.setItem(
         LAST_DISCUSS_ACTIVE_ID_LS,
         toRawValue(`${"discuss.channel_" + channelId}`)
     );
@@ -698,7 +697,7 @@ test("Can right-click on message to opens message actions dropdown", async () =>
         { name: "test" },
     ]);
     let lastOnContextMenuEv;
-    patchWithCleanup(Message.prototype, {
+    patch(Message.prototype, {
         onContextMenu(ev) {
             lastOnContextMenuEv = ev;
             expect.step("Message.onContextMenu");
@@ -1150,7 +1149,7 @@ test("auto-focus composer on opening thread", async () => {
 test("no out-of-focus notification on receiving self messages in chat", async () => {
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({ channel_type: "chat" });
-    patchWithCleanup(document, {
+    patch(document, {
         set title(value) {
             const match = value.match(/^\((\d+)\) .*/);
             if (match) {
@@ -1189,7 +1188,7 @@ test("out-of-focus notif on needaction message in channel", async () => {
         ],
         channel_type: "channel",
     });
-    patchWithCleanup(document, {
+    patch(document, {
         set title(value) {
             const match = value.match(/^\((\d+)\) .*/);
             if (match) {
@@ -1230,7 +1229,7 @@ test("receive new chat message: out of odoo focus (notification, chat)", async (
         ],
         channel_type: "chat",
     });
-    patchWithCleanup(document, {
+    patch(document, {
         set title(value) {
             const match = value.match(/^\((\d+)\) .*/);
             if (match) {
@@ -1269,7 +1268,7 @@ test("no out-of-focus notif on non-needaction message in channel", async () => {
         ],
         channel_type: "channel",
     });
-    patchWithCleanup(document, {
+    patch(document, {
         set title(value) {
             const match = value.match(/^\((\d+)\) .*/);
             if (match) {
@@ -1317,7 +1316,7 @@ test("receive new chat messages: out of odoo focus (tab title)", async () => {
             ],
         },
     ]);
-    patchWithCleanup(document, {
+    patch(document, {
         set title(value) {
             const match = value.match(/^\((\d+)\) .*/);
             if (match) {
@@ -1370,7 +1369,7 @@ test("receive new chat messages: out of odoo focus (tab title)", async () => {
 
 test("new message in tab title has precedence over action name", async () => {
     const pyEnv = await startServer();
-    patchWithCleanup(document, {
+    patch(document, {
         set title(newTitle) {
             if (newTitle?.includes("General")) {
                 expect.step(newTitle);
@@ -1406,7 +1405,7 @@ test("new message in tab title has precedence over action name", async () => {
 
 test("out-of-focus notif takes new inbox messages into account", async () => {
     const pyEnv = await startServer();
-    patchWithCleanup(document, {
+    patch(document, {
         set title(newTitle) {
             if (newTitle === "(1) Odoo") {
                 expect.step(newTitle);
@@ -1442,7 +1441,7 @@ test("out-of-focus notif respects push subscription eligibility", async () => {
     pyEnv["res.users"].write(serverState.userId, { notification_type: "inbox" });
     const partnerId = pyEnv["res.partner"].create({ name: "Hagrid" });
     const userId = pyEnv["res.users"].create({ partner_id: partnerId });
-    patchWithCleanup(OutOfFocusService.prototype, {
+    patch(OutOfFocusService.prototype, {
         async notify() {
             expect.step("notification handled");
             await super.notify(...arguments);
@@ -1480,7 +1479,7 @@ test("out-of-focus notif respects push subscription eligibility", async () => {
 
 test("out-of-focus notif on needaction message in group chat contributes only once", async () => {
     const pyEnv = await startServer();
-    patchWithCleanup(document, {
+    patch(document, {
         set title(newTitle) {
             if (newTitle === "(1) Odoo") {
                 expect.step(newTitle);
@@ -1524,7 +1523,7 @@ test("inbox notifs shouldn't play sound nor open chat bubble", async () => {
     const partnerId = pyEnv["res.partner"].create({ name: "Dumbledore" });
     const userId = pyEnv["res.users"].create({ partner_id: partnerId });
     pyEnv["discuss.channel"].create({ name: "general", channel_type: "channel" });
-    patchWithCleanup(OutOfFocusService.prototype, {
+    patch(OutOfFocusService.prototype, {
         _playSound() {
             expect.step("play_sound");
         },
@@ -1628,7 +1627,7 @@ test("message sound on receiving new message based on user preferences", async (
     await expect.waitForSteps(["sound:new-message"]);
     // simulate message sound settings turned off
     const MESSAGE_SOUND_LS = makeRecordFieldLocalId(Settings.localId(), "messageSound");
-    browser.localStorage.setItem(MESSAGE_SOUND_LS, toRawValue(false));
+    window.localStorage.setItem(MESSAGE_SOUND_LS, toRawValue(false));
     await animationFrame();
     await withUser(userId, () =>
         rpc("/mail/message/post", {
@@ -1643,7 +1642,7 @@ test("message sound on receiving new message based on user preferences", async (
     await waitFor(".o-mail-ChatBubble .badge:contains(2)", { timeout: 3000 });
     expect.verifySteps([]);
     // simulate message sound settings turned on
-    browser.localStorage.removeItem(MESSAGE_SOUND_LS);
+    window.localStorage.removeItem(MESSAGE_SOUND_LS);
     await withUser(userId, () =>
         rpc("/mail/message/post", {
             post_data: {
@@ -2655,7 +2654,7 @@ test("Read-only channel member has bottom banner instead of composer", async () 
         is_readonly: true,
         channel_member_ids: [
             Command.create({ partner_id: serverState.partnerId, channel_role: "owner" }),
-            Command.create({ partner_id: memberPartnerId, channel_role: "member" }),
+            Command.create({ partner_id: memberPartnerId }),
         ],
     });
     pyEnv["mail.message"].create({
@@ -2711,7 +2710,7 @@ test("Read-only channel admin has composer", async () => {
         ["channel_id", "=", channelId],
         ["partner_id", "=", adminPartnerId],
     ])[0];
-    pyEnv["discuss.channel.member"].write([memberId], { channel_role: "member" });
+    pyEnv["discuss.channel.member"].write([memberId], { channel_role: false });
     await contains(".o-mail-DiscussContent-core span:text('This channel is read-only.')");
     await contains(".o-mail-Composer", { count: 0 });
     pyEnv["discuss.channel.member"].write([memberId], { channel_role: "admin" });
@@ -2734,7 +2733,7 @@ test("Read-only channel member cannot respond or create subthread", async () => 
         is_readonly: true,
         channel_member_ids: [
             Command.create({ partner_id: serverState.partnerId, channel_role: "owner" }),
-            Command.create({ partner_id: memberPartnerId, channel_role: "member" }),
+            Command.create({ partner_id: memberPartnerId }),
         ],
     });
     const memberId = pyEnv["discuss.channel.member"].search([
@@ -2804,7 +2803,7 @@ test("Cannot call read-only channels", async () => {
         name: "General",
         is_readonly: true,
         channel_member_ids: [
-            Command.create({ partner_id: serverState.partnerId, channel_role: "member" }),
+            Command.create({ partner_id: serverState.partnerId }),
             Command.create({ partner_id: adminPartnerId, channel_role: "owner" }),
         ],
     });

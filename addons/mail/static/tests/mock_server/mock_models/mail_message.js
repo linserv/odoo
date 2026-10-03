@@ -11,9 +11,9 @@ const { DateTime } = luxon;
 export class MailMessage extends models.ServerModel {
     _name = "mail.message";
 
-    author_id = fields.Generic({ default: () => serverState.partnerId });
+    author_id = fields.Many2one({ default: () => serverState.partnerId });
     date = fields.Datetime({ default: () => serializeDateTime(DateTime.now()) });
-    pinned_at = fields.Generic({ default: false });
+    pinned_at = fields.Datetime({ default: false });
 
     /** @type {typeof models.Model["prototype"]["create"]} */
     create(vals) {
@@ -74,10 +74,7 @@ export class MailMessage extends models.ServerModel {
         return messageIds;
     }
 
-    _store_message_fields(
-        res,
-        { format_reply = true, chatter_fields, inbox_fields = false, followers } = {}
-    ) {
+    _store_message_fields(res, { format_reply = true, inbox_fields = false } = {}) {
         /** @type {import("mock_models").MailFollowers} */
         const MailFollowers = this.env["mail.followers"];
         /** @type {import("mock_models").MailThread} */
@@ -603,12 +600,18 @@ export class MailMessage extends models.ServerModel {
         if (search_term) {
             domain = new Domain(domain || []);
             search_term = search_term.replace(" ", "%");
+            // Escape <, >, and & for body search to match html_sanitize storage
+            // Equivalent to Python's html.escape(searchTerm, quote=False)
+            const html_search_term = search_term
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
             const subtypeIds = MailMessageSubtype.search([["description", "ilike", search_term]]);
             const irAttachmentIds = IrAttachment.search([["name", "ilike", search_term]]);
             const authorIds = this.env["res.partner"].search([["name", "ilike", search_term]]);
             const guestIds = this.env["mail.guest"].search([["name", "ilike", search_term]]);
             const message_domain = Domain.or([
-                [["body", "ilike", search_term]],
+                [["body", "ilike", html_search_term]],
                 [["attachment_ids", "in", irAttachmentIds]],
                 [["author_id", "in", authorIds]],
                 [["author_guest_id", "in", guestIds]],
@@ -645,43 +648,6 @@ export class MailMessage extends models.ServerModel {
         messages.length = Math.min(messages.length, limit);
         res.messages = messages;
         return res;
-    }
-
-    _get_tracking_values_domain(search_term) {
-        let numeric_term = false;
-        const epsilon = 1e-9;
-        numeric_term = parseFloat(search_term);
-        const field_names = [
-            "old_value_char",
-            "new_value_char",
-            "old_value_text",
-            "new_value_text",
-            "old_value_datetime",
-            "new_value_datetime",
-        ];
-        let domain = Domain.or(
-            field_names.map((field_name) => new Domain([[field_name, "ilike", search_term]]))
-        );
-        if (numeric_term) {
-            const float_domain = Domain.or(
-                ["old_value_float", "new_value_float"].map(
-                    (fieldName) =>
-                        new Domain([
-                            [fieldName, ">=", numeric_term - epsilon],
-                            [fieldName, "<=", numeric_term + epsilon],
-                        ])
-                )
-            );
-            domain = Domain.or([domain, float_domain]);
-        }
-        if (Number.isInteger(numeric_term)) {
-            domain = Domain.or([
-                domain,
-                new Domain([["old_value_integer", "=", numeric_term]]),
-                new Domain([["new_value_integer", "=", numeric_term]]),
-            ]);
-        }
-        return domain;
     }
 
     _linked_message_ids(message) {

@@ -4,13 +4,12 @@
 }
 
 .o_icon_employee_absent {
-    color: $warning;
+    color: var(--warning);
 }
 
 .o_hr_employee_form_view .o_form_renderer {
-    .o_statusbar_buttons {
-        flex-grow: 1 !important;
-        padding-right: 0.25rem;
+    .o_field_employee_user_status {
+        margin-left: auto;
     }
     .o_form_sheet_bg {
         max-width: unset;
@@ -68,7 +67,7 @@
     }
 }
 
-@include media-breakpoint-up(lg) {
+@media screen and (min-width: 992px), print and (min-width: 190mm) {
     .o_hr_column {
         padding: 0 calc(var(--gutter-x) * 1)!important;
 
@@ -93,9 +92,9 @@
     margin-right: 0 !important;
 }
 
-// The presence badge overlaps the top-right corner of the employee picture.
-// Scoped to `.o_employee_avatar` on purpose: the same widget is rendered inline
-// in the kanban and hierarchy cards, where it must stay in the text flow.
+/* The presence badge overlaps the top-right corner of the employee picture. */
+/* Scoped to `.o_employee_avatar` on purpose: the same widget is rendered inline */
+/* in the kanban and hierarchy cards, where it must stay in the text flow. */
 .o_employee_avatar {
     position: relative;
     width: fit-content;
@@ -104,9 +103,13 @@
     align-items: flex-start;
 
     .o_field_hr_presence_status, .o_field_hr_presence_status_private {
-        --o-hr-presence-badge-size: #{$spacer};
+        --o-hr-presence-badge-size: var(--o-bs-spacer);
 
-        @include o-position-absolute($top: 0, $right: 0);
+        position: absolute;
+        top: 0;
+        left: auto;
+        bottom: auto;
+        right: 0;
         z-index: 1;
         display: flex;
         align-items: center;
@@ -115,7 +118,7 @@
         width: var(--o-hr-presence-badge-size);
         height: var(--o-hr-presence-badge-size);
         border-radius: 50%;
-        background-color: $o-view-background-color;
+        background-color: var(--o-view-background-color);
 
         span {
             width: var(--o-hr-presence-badge-size);

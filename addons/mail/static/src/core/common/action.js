@@ -1,9 +1,9 @@
 import { isRecord, STORE_SYM } from "@mail/model/misc";
-import { Component, computed, proxy, signal, useScope } from "@odoo/owl";
+import { nestedShallowEqual } from "@mail/utils/common/signal";
+import { Component, computed, proxy, shallowEqual, signal, useScope } from "@odoo/owl";
 import { DropdownState } from "@web/core/dropdown/dropdown_hooks";
 import { useService } from "@web/core/utils/hooks";
 import { markEventHandled } from "@web/core/utils/misc";
-import { Reactive } from "@web/core/utils/reactive";
 
 export const ACTION_TAGS = Object.freeze({
     DANGER: "DANGER",
@@ -101,7 +101,6 @@ function toArray(val) {
  * @property {string|(params: ActionParams_T) => string} [hotkey]
  * @property {string|(params: ActionParams_T) => string} [icon]
  * @property {string|(params: ActionParams_T) => string} [iconClass]
- * @property {boolean|TranslatedString|((params: ActionParams_T) => boolean|TranslatedString)} [inlineName=false]
  * @property {boolean|(params: ActionParams_T) => boolean} [isActive]
  * @property {TranslatedString|((params: ActionParams_T) => TranslatedString)} [name]
  * @property {string|(params: ActionParams_T) => string} [nameClass]
@@ -245,6 +244,10 @@ export class Action {
     actionPanelOpen({ keepPrevious } = {}) {
         if (this.actions) {
             if (this.actions.activeAction) {
+                if (this.actions.activeAction.id === this.id) {
+                    // Panel already open, do nothing.
+                    return;
+                }
                 if (keepPrevious) {
                     this.actions.actionStack.push(this.actions.activeAction);
                 } else {
@@ -560,19 +563,6 @@ export class Action {
             : this.definition.iconClass;
     }
 
-    /** @param {Action} action @returns {string|undefined} */
-    _inlineName(action) {}
-    /** If set, when action is used in inline, shows action name in addition to icon. */
-    get inlineName() {
-        return (
-            this._inlineName(this.params) ??
-            (typeof this.definition.inlineName === "function"
-                ? this.definition.inlineName.call(this, this.params)
-                : this.definition.inlineName) ??
-            false
-        );
-    }
-
     /** @param {Action} action @returns {boolean|undefined} */
     _isActive(action) {}
     /** States whether this action is currently active. */
@@ -702,7 +692,7 @@ export class Action {
  * @template ActionParams_T
  * @template Action_T
  */
-export class UseActions extends Reactive {
+export class UseActions {
     /** @type {Action_T} */
     ActionClass = Action;
     /** @type {Component} */
@@ -726,7 +716,7 @@ export class UseActions extends Reactive {
      * @param {Action_T[]} transformedActions
      */
     constructor(component, store, transformedActions) {
-        super();
+        const self = proxy(this);
         this.component = component;
         this.store = store;
         this.transformedActions = transformedActions;
@@ -734,8 +724,11 @@ export class UseActions extends Reactive {
         // only re-run when the visible set or order actually changes, and
         // otherwise keep a stable array identity so consumers do not
         // re-render for unrelated changes.
-        this.actionsComputed = computed(() => this._computeActions());
-        this.partitionComputed = computed(() => this._computePartition());
+        this.actionsComputed = computed(() => self._computeActions(), { equals: shallowEqual });
+        this.partitionComputed = computed(() => self._computePartition(), {
+            equals: nestedShallowEqual,
+        });
+        return self;
     }
 
     /**

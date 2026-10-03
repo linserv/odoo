@@ -282,7 +282,7 @@ class TestGlobalLeaves(TestHrHolidaysCommon):
             'state': 'confirm',
             'date_from': date(2024, 12, 1),
             'date_to': date(2024, 12, 30),
-        }).action_approve()
+        })
 
         partially_covered_leave = self.env['hr.leave'].create({
             'name': 'Holiday 1 week',
@@ -291,7 +291,6 @@ class TestGlobalLeaves(TestHrHolidaysCommon):
             'request_date_from': datetime(2024, 12, 3, 7, 0),
             'request_date_to': datetime(2024, 12, 5, 18, 0),
         })
-        partially_covered_leave.action_approve()
 
         global_leave = self.env['resource.calendar.leaves'].with_user(self.env.user).create({
             'name': 'Public holiday',
@@ -495,7 +494,7 @@ class TestGlobalLeaves(TestHrHolidaysCommon):
                 'date_from': date(2026, 1, 1),
                 'date_to': date(2026, 12, 31),
             }
-        ]).action_approve()
+        ])
 
         leave = self.env['hr.leave'].create({
             'name': 'Holiday 1 week',
@@ -517,3 +516,40 @@ class TestGlobalLeaves(TestHrHolidaysCommon):
         self.assertTrue(public_holiday)
         self.assertEqual(leave.number_of_days, 19, "Number of days should be 19 as one day has been granted back to the"
                                                    "the employee for the public holiday")
+
+    def test_public_holiday_wizard_partially_existing_holidays_info_message(self):
+        """
+        Verify that:
+        1. Loading all public holidays initially displays no info message.
+        2. Deleting a subset of public holidays and reopening the wizard for the same year
+           displays an info message indicating that some holidays are already present.
+        """
+        self.company.country_id = self.env.ref('base.be')
+        self.company.tz = 'Europe/Brussels'
+
+        wizard_model = self.env['load.public.holiday.wizard'].with_context(allowed_company_ids=self.company.ids)
+
+        public_holidays_domain = [
+            ('company_id', '=', self.company.id),
+            ('resource_id', '=', False),
+            ('date_from', '>=', datetime(2025, 12, 31, 0, 0, 0)),
+            ('date_to', '<=', datetime(2027, 1, 2, 0, 0, 0)),
+        ]
+
+        # no public holidays present in the system
+        existing_holidays = self.env['resource.calendar.leaves'].search(public_holidays_domain)
+        self.assertFalse(len(existing_holidays) > 1)
+
+        # loading all the public holidays
+        wizard_initial = wizard_model.create({'year': 2026})
+        self.assertFalse(wizard_initial.info_message, "No info message should be present prior to initial creation.")
+        wizard_initial.action_add_public_holidays()
+
+        created_holidays = self.env['resource.calendar.leaves'].search(public_holidays_domain)
+        self.assertTrue(len(created_holidays) > 1, "Multiple public holidays should be created for 2026.")
+
+        # remove one holiday and re-try
+        created_holidays[0].unlink()
+        wizard_partial = wizard_model.create({'year': 2026})
+
+        self.assertTrue(wizard_partial.info_message, "An info message should appear when public holidays are partially present.")

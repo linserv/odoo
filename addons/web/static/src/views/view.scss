@@ -3,16 +3,17 @@
  * all views.
  */
 
-// Sample data global rules
+/* Sample data global rules */
 .o_view_sample_data {
     > :not(.o_search_panel) .form-check {
         pointer-events: none !important;
     }
 }
 
-// No content helper
+/* No content helper */
 .o_view_nocontent {
-    @include o-position-absolute(0, 0, 0, 0);
+    position: absolute;
+    inset: 0;
     pointer-events: none;
     z-index: var(--o-view-nocontent-zindex, 1);
     display: flex;
@@ -42,15 +43,15 @@
 
         .o_empty_custom_dashboard {
             min-height: 327px;
-            margin-left: -$grid-gutter-width/2;
-            margin-top: -$grid-gutter-width/2;
+            margin-left: calc(var(--o-bs-grid-gutter-width) * -1 / 2);
+            margin-top: calc(var(--o-bs-grid-gutter-width) * -1 / 2);
             padding: 100px 0 0 137px;
             background: transparent url(/web/static/img/graph_background.png) no-repeat 0 0;
         }
     }
 }
 
-// Naive heuristic to leave enough space for the nocontent helper in dialogs
+/* Naive heuristic to leave enough space for the nocontent helper in dialogs */
 .o_dialog {
     .o_content:has(.o_view_nocontent) {
         height: 20rem;
@@ -58,20 +59,20 @@
     }
 }
 
-// Invisible modifier (can be inside the view, the button area, ...)
+/* Invisible modifier (can be inside the view, the button area, ...) */
 .o_invisible_modifier {
     display: none!important;
 }
 
-// Status
-// This should normally be put in fields.scss but these classes are used outside
-// of `.o_field_widget` so it needs to be placed at an upper level.
+/* Status */
+/* This should normally be put in fields.scss but these classes are used outside */
+/* of `.o_field_widget` so it needs to be placed at an upper level. */
 .o_status {
     border-radius: 50%;
     background-color: map-get($grays, '200');
     height: var(--Status-size, 12px);
     width: var(--Status-size, 12px);
-    box-shadow: inset 0 0 0 1px rgba($black, .2);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--o-bs-black) 20%, transparent);
 
     &.o_status_green {
         background-color: map-get($theme-colors, "success");
@@ -88,20 +89,20 @@
 
 .state_selection_field_menu .dropdown-item {
     > .o_status, > .oi {
-        width: $o-bubble-color-size;
-        height: $o-bubble-color-size;
-        font-size: $o-bubble-color-size;
+        width: var(--o-bubble-color-size);
+        height: var(--o-bubble-color-size);
+        font-size: var(--o-bubble-color-size);
         transform: translateX(-50%);
         text-align: center;
     }
 }
 
 .o_status_changes_requested {
-    color: $warning;
+    color: var(--warning);
     &.o_status {
-        color: $white;
+        color: var(--white);
         &::before {
-            // Adjust the exclamation mark to fit the status circle
+            /* Adjust the exclamation mark to fit the status circle */
             transform: scale(0.7);
         }
     }

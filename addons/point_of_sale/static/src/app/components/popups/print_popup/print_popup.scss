@@ -11,13 +11,13 @@
     .print-popup-modal {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: map-get($spacers, 2);
+        gap: var(--o-bs-spacer-2);
 
         .print-button {
             min-height: 115px;
         }
 
-        @include media-breakpoint-down(sm) {
+        @media (max-width: 575.98px) {
             grid-template-columns: 1fr;
 
             .print-button {

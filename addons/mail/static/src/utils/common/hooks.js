@@ -14,12 +14,10 @@ import {
     useScope,
 } from "@odoo/owl";
 
-import { Reactive } from "@web/core/utils/reactive";
 import { useLayoutEffect } from "@web/owl2/utils";
 
 import { CallPermissionDeniedDialog } from "@mail/discuss/call/common/call_permission_denied_dialog";
 import { monitorAudio } from "@mail/utils/common/media_monitoring";
-import { browser } from "@web/core/browser/browser";
 import { makeDraggableHook } from "@web/core/utils/draggable_hook_builder_owl";
 import { useService } from "@web/core/utils/hooks";
 import { useDropdownState } from "@web/core/dropdown/dropdown_hooks";
@@ -337,7 +335,7 @@ export function useMessageScrolling({
     const state = proxy({
         clear() {
             if (this.highlightedMessageId) {
-                browser.clearTimeout(timeout);
+                window.clearTimeout(timeout);
                 timeout = null;
                 this.highlightedMessageId = null;
             }
@@ -374,7 +372,7 @@ export function useMessageScrolling({
             }
             state.highlightedMessageId = message.id;
             state.initiated = false;
-            timeout = browser.setTimeout(() => this.clear(), duration);
+            timeout = window.setTimeout(() => this.clear(), duration);
         },
         initiated: false,
         /**
@@ -473,7 +471,7 @@ export function useMicrophoneVolume() {
             }
             let track;
             try {
-                const audioStream = await browser.navigator.mediaDevices.getUserMedia({
+                const audioStream = await window.navigator.mediaDevices.getUserMedia({
                     audio: store.settings.audioConstraints,
                 });
                 track = audioStream.getAudioTracks()[0];
@@ -572,7 +570,7 @@ export function useSelection({ ref, model, preserveOnClickAwayPredicate = () => 
  * when the broader one had none). Resolve to anything else to disable this for
  * the current bookmark; call `reset()` to drop it (e.g. on context change).
  */
-export class SearchState extends Reactive {
+export class SearchState {
     /**
      * Backing store of {@link searchTerm}, a local signal unless the parent
      * passed one through the `searchTerm` option.
@@ -621,7 +619,7 @@ export class SearchState extends Reactive {
      *  so there is no second copy to keep in sync. Defaults to a local signal.
      */
     constructor({ initialResults = [], fetch, filter, isActive, deps, searchTerm } = {}) {
-        super();
+        const self = proxy(this);
         if (searchTerm) {
             this._searchTerm = searchTerm;
             this.ownsSearchTerm = false;
@@ -643,18 +641,19 @@ export class SearchState extends Reactive {
         this.sequential = useSequential();
         useLayoutEffect(
             () => {
-                if (!this.isActive) {
-                    this.reset();
+                if (!self.isActive) {
+                    self.reset();
                     return;
                 }
-                if (this.filter) {
-                    this.results = this.filter(this.searchTerm);
+                if (self.filter) {
+                    self.results = self.filter(self.searchTerm);
                 }
-                this.run();
+                self.run();
             },
-            () => [this.searchTerm, ...this.deps]
+            () => [self.searchTerm, ...self.deps]
         );
-        onWillUnmount(() => this.reset());
+        onWillUnmount(() => self.reset());
+        return self;
     }
 
     get searchTerm() {
