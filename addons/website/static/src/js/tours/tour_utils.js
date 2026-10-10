@@ -12,7 +12,6 @@ export function addMedia() {
 }
 export function assertCssVariable(variableName, variableValue, trigger = ":iframe body") {
     return {
-        isActive: ["auto"],
         content: `Check CSS variable ${variableName}=${variableValue}`,
         trigger: trigger,
         run() {
@@ -110,14 +109,18 @@ export function changeOptionInPopover(blockName, optionName, elementName) {
         `.o_popover .o-dropdown-item:contains(${elementName})`,
     ].join(", ");
     return [
+        {
+            content: "Wait for the popover of a previous option to be closed",
+            trigger: "body:not(:has(.o_popover .o-dropdown-item))",
+        },
         changeOption(blockName, `[data-label='${optionName}'] .dropdown-toggle`),
         {
             content: `Check if "${elementName}" option is shown. If not, search for it.`,
-            trigger: ".o_popover .o-dropdown-item",
-            async run({ waitFor, edit }) {
-                let item = await waitFor(itemSelector).catch(() => false);
+            trigger: ".o_popover .o-dropdown-item:not(.o_we_m2o_search_more)",
+            async run({ waitFor, queryFirst, edit }) {
+                let item = queryFirst(itemSelector);
                 if (!item) {
-                    const popoverInput = await waitFor(".o_popover input").catch(() => false);
+                    const popoverInput = queryFirst(".o_popover input");
                     if (popoverInput) {
                         await edit(elementName, ".o_popover input");
                     }
@@ -507,28 +510,6 @@ export function registerThemeHomepageTour(name, steps) {
             ...clickOnSave(),
         ]
     );
-}
-
-export function registerBackendAndFrontendTour(name, options, steps) {
-    if (typeof steps !== "function") {
-        throw new Error(`tour.steps has to be a function that returns TourStep[]`);
-    }
-    if (window.location.pathname === "/odoo") {
-        return registerWebsitePreviewTour(name, options, () => {
-            const newSteps = [];
-            for (const step of steps()) {
-                const newStep = Object.assign({}, step);
-                newStep.trigger = `:iframe ${step.trigger}`;
-                newSteps.push(newStep);
-            }
-            return newSteps;
-        });
-    }
-
-    return registry.category("web_tour.tours").add(name, {
-        ...options,
-        steps: () => steps(),
-    });
 }
 
 /**

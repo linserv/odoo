@@ -1792,6 +1792,14 @@ class TestBoM(TestMrpCommon):
             "There should be no difference between the MO and BoM")
         self.assertEqual(mo_1.move_byproduct_ids.product_uom_qty, bom.byproduct_ids.product_qty * 10)
 
+        # Updates the BoM again (add a component consumed in the operation).
+        bom.bom_line_ids = [Command.create({'product_id': component_2.id, 'product_qty': 1, 'operation_id': operation.id})]
+        mo_1.action_update_bom()
+        self.assertRecordValues(mo_1.move_raw_ids, [
+            {'product_id': component_1.id, 'operation_id': False, 'workorder_id': False},
+            {'product_id': component_2.id, 'operation_id': operation.id, 'workorder_id': mo_1.workorder_ids.id},
+        ])
+
         # Updates the BoM by multiplying all its quantities by 3.
         bom.product_qty *= 3
         bom.bom_line_ids[0].product_qty *= 3
@@ -2920,6 +2928,7 @@ class TestBoM(TestMrpCommon):
 
         # Delete all existing operations, the copy operations buttons shouldn't be visible if there is none.
         self.env['mrp.routing.workcenter'].search([]).unlink()
+        self.env.invalidate_all()  # no depends on show_copy_operations_button
         self.assertFalse(self.bom_1.show_copy_operations_button, "The copy operations button should be visible even if the current BoM is empty.")
 
     def test_exploded_bom_lines_hierarchy_order(self):
@@ -2992,6 +3001,18 @@ class TestBoM(TestMrpCommon):
             [p1_bom.bom_line_ids[2].id, p2_bom.bom_line_ids[1].id],
             "Filtering the exploded BoM list should return only the matching BoM line.",
         )
+
+    def test_bom_cycle_on_component_change(self):
+        """
+        Test that changing a BoM component to a product that creates a BoM cycle
+        raises a ValidationError when saving the BoM.
+        """
+        # bom_2 is already created in setUp for product_5 with product_4 as component
+        bom_form = Form(self.bom_1)
+        with self.assertRaises(exceptions.ValidationError):
+            with bom_form.bom_line_ids.edit(0) as bom_line:
+                bom_line.product_id = self.product_5
+            bom_form.save()
 
 
 class TestTourBoM(HttpCase):

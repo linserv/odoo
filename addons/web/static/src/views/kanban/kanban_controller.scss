@@ -43,7 +43,7 @@
         }
 
         .row.o_kanban_card_manage_settings {
-            padding-top: $o-kanban-dashboard-dropdown-complex-gap*3;
+            padding-top: calc(var(--o-kanban-dashboard-dropdown-complex-gap) * 3);
 
             &:not(:first-child) {
                 border-top: 1px solid $dropdown-divider-bg;
@@ -149,7 +149,7 @@
     gap: var(--Kanban-gap);
 
     @include media-only(print) {
-        --Kanban-gap: #{map-get($spacers, 2)};
+        --Kanban-gap: var(--o-bs-spacer-2);
         --KanbanGroup-padding-h: 0;
         --KanbanRecord-margin-h: 0;
     }
@@ -171,7 +171,7 @@
         border: var(--border-width) solid var(--border-color);
         border-radius: var(--border-radius-lg);
         background-color: var(--o-view-background-color);
-        margin-bottom: map-get($spacers, 3);
+        margin-bottom: var(--o-bs-spacer-3);
         /* TODO: Use variables from card.scss. */
         /* We may need to define the card variables on o_kanban_renderer parent so it's accessible from this element. */
         padding: 14px;
@@ -283,7 +283,7 @@
         }
         .o_quick_create_title {
             position: absolute;
-            inset: map-get($spacers, 4) auto auto;
+            inset: var(--o-bs-spacer-4) auto auto;
             transform-origin: left bottom 0;
             transform: rotate(90deg);
             overflow: visible;
@@ -342,7 +342,7 @@
 
             .o_column_title {
                 position: absolute;
-                inset: map-get($spacers, 3) auto auto;
+                inset: var(--o-bs-spacer-3) auto auto;
                 transform-origin: left bottom 0;
                 transform: rotate(90deg);
                 overflow: visible;
@@ -371,7 +371,7 @@
             margin: var(--KanbanRecord-margin-v) var(--KanbanRecord-margin-h);
 
             @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
-                margin: 0 0 #{-$border-width};
+                margin: 0 0 calc(var(--o-bs-border-width) * -1);
                 flex-basis: 100%;
             }
 
@@ -405,17 +405,5 @@
 .o_kanban_small_column .o_kanban_renderer.o_kanban_grouped {
     @media screen and (min-width: 768px), print and (min-width: 188mm) {
         --KanbanGroup-width: calc(var(--KanbanRecord--small-width) + (2 * var(--KanbanGroup-padding-h)));
-    }
-}
-
-/* ------- Sample mode ------- */
-.o_kanban_view .o_view_sample_data {
-    /* all records */
-    .o_kanban_record,
-    /* load more buttons */
-    .o_kanban_load_more,
-    /* progress bars and counters */
-    .o_kanban_counter {
-        @include o-sample-data-disabled;
     }
 }

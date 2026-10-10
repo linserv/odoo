@@ -116,33 +116,6 @@ export function isStrikeThrough(node) {
 }
 
 /**
- * Return true if the given node font-size is equal to `props.size`.
- *
- * @param {Object} props
- * @param {Node} props.node A node to compare the font-size against.
- * @param {String} props.size The font-size value of the node that will be
- *     checked against.
- * @returns {boolean}
- */
-export function isFontSize(node, props) {
-    const element = closestElement(node);
-    return getComputedStyle(element)["font-size"] === props.size;
-}
-
-/**
- * Return true if the given node classlist contains `props.className`.
- *
- * @param {Object} props
- * @param {Node} node A node to compare the font-size against.
- * @param {String} props.className The name of the class.
- * @returns {boolean}
- */
-export function hasClass(node, props) {
-    const element = closestElement(node);
-    return element.classList.contains(props.className);
-}
-
-/**
  * Return true if the given node appears in a different direction than that of
  * the editable ('ltr' or 'rtl').
  *
@@ -156,13 +129,6 @@ export function hasClass(node, props) {
 export function isDirectionSwitched(node, editable) {
     const defaultDirection = editable.getAttribute("dir") || "ltr";
     return getComputedStyle(closestElement(node)).direction !== defaultDirection;
-}
-
-// /**
-//  * Return true if the given node is a row element.
-//  */
-export function isRow(node) {
-    return ["TH", "TD"].includes(node.tagName);
 }
 
 export function isZWS(node) {
@@ -657,8 +623,6 @@ export function isListItemElement(node) {
     return [...listItem].includes(node.nodeName);
 }
 
-export const listItemElementSelector = [...listItem].join(",");
-
 export function isListElement(node) {
     return [...listContainers].includes(node.nodeName);
 }
@@ -923,11 +887,11 @@ export function hasSameClasses(node, node2) {
 }
 
 export function isTextNode(node) {
-    return node.nodeType === Node.TEXT_NODE;
+    return node?.nodeType === Node.TEXT_NODE;
 }
 
 export function isElement(node) {
-    return node.nodeType === Node.ELEMENT_NODE;
+    return node?.nodeType === Node.ELEMENT_NODE;
 }
 
 export function isContentEditable(node) {

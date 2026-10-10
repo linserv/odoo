@@ -31,13 +31,21 @@ import {
 import { renderToElement } from "@web/core/utils/render";
 import { url } from "@web/core/utils/urls";
 
-import { markup, shallowEqual } from "@odoo/owl";
+import { markup } from "@odoo/owl";
 import { emojiLoader } from "@web/core/emoji_picker/emoji_loader";
 import { discussComponentRegistry } from "./discuss_component_registry";
 
 const { DateTime } = luxon;
 export class Message extends Record {
     static _name = "mail.message";
+
+    setup() {
+        super.setup(...arguments);
+        this.onEnter(
+            () => [this.composer],
+            (composer) => () => composer.delete()
+        );
+    }
 
     attachment_ids = fields.Many("ir.attachment", { inverse: "message" });
     author_id = fields.One("res.partner");
@@ -63,7 +71,7 @@ export class Message extends Record {
         }
         return getInnerHtml(decorateEmojis(createElementFromContent(this.translationValue)));
     });
-    composer = fields.One("Composer", { inverse: "message", onDelete: (r) => r?.delete() });
+    composer = fields.One("Composer", { inverse: "message" });
     composerAsReplyToMessage = fields.One("Composer", { inverse: "replyToMessage" });
     date = fields.Datetime();
     /** @type {string} */
@@ -83,16 +91,13 @@ export class Message extends Record {
         return editedDate ? deserializeDateTime(editedDate) : undefined;
     });
     /** attachments not already clearly visible in the body, unlike inlined images */
-    extra_body_attachment_ids = this.computed(
-        () => {
-            const inlinedImageAttachmentIds = [
-                ...(this.bodyEl?.querySelectorAll("img[data-attachment-id]") ?? []),
-            ].map((img) => parseInt(img.dataset.attachmentId));
+    extra_body_attachment_ids = this.computedShallowEqual(() => {
+        const inlinedImageAttachmentIds = [
+            ...(this.bodyEl?.querySelectorAll("img[data-attachment-id]") ?? []),
+        ].map((img) => parseInt(img.dataset.attachmentId));
 
-            return this.attachment_ids.filter((a) => !inlinedImageAttachmentIds.includes(a.id));
-        },
-        { equals: shallowEqual }
-    );
+        return this.attachment_ids.filter((a) => !inlinedImageAttachmentIds.includes(a.id));
+    });
     hasLink = this.computed(() => {
         if (this.isBodyEmpty) {
             return false;
@@ -130,9 +135,8 @@ export class Message extends Record {
     /** @type {string|undefined} */
     postFailMessage = undefined;
     reactions = fields.Many("MessageReactions", { inverse: "message" });
-    sortedReactions = this.computed(
-        () => [...this.reactions].sort((r1, r2) => r1.sequence - r2.sequence),
-        { equals: shallowEqual }
+    sortedReactions = this.computedShallowEqual(() =>
+        [...this.reactions].sort((r1, r2) => r1.sequence - r2.sequence)
     );
     notification_ids = fields.Many("mail.notification", { inverse: "mail_message_id" });
     self_notification = this.computed(() =>
@@ -267,12 +271,12 @@ export class Message extends Record {
         return this.message_type === "comment";
     }
 
-    get dateDay() {
+    dateDay = this.computed(() => {
         if (this.datetime.hasSame(this.store.startOfToday, "day")) {
             return _t("Today");
         }
         return this.datetime.toLocaleString(DateTime.DATE_MED);
-    }
+    });
 
     get dateSimple() {
         return this.datetime
@@ -282,7 +286,7 @@ export class Message extends Record {
             .replace(" ", " "); // so that AM/PM are properly wrapped
     }
 
-    get dateSimpleWithDay() {
+    dateSimpleWithDay = this.computed(() => {
         const userLocale = { locale: user.lang };
         const startOfToday = this.store.startOfToday;
         if (this.datetime.hasSame(startOfToday, "day")) {
@@ -300,7 +304,7 @@ export class Message extends Record {
             );
         }
         return this.datetime.toLocaleString({ ...DateTime.DATETIME_MED }, userLocale);
-    }
+    });
 
     get datetime() {
         return this.date || DateTime.now();
@@ -328,15 +332,15 @@ export class Message extends Record {
         return this.selvesBySequence[0]?.self;
     }
 
-    get datetimeMedium() {
-        return this.datetime.toLocaleString({ ...DateTime.DATETIME_MED }, { locale: user.lang });
-    }
+    datetimeMedium = this.computed(() =>
+        this.datetime.toLocaleString({ ...DateTime.DATETIME_MED }, { locale: user.lang })
+    );
 
-    get isSelfMentioned() {
-        return this.partner_ids.some((partner) =>
+    isSelfMentioned = this.computed(() =>
+        this.partner_ids.some((partner) =>
             this.selvesBySequence.some(({ self }) => partner.eq(self))
-        );
-    }
+        )
+    );
 
     get isHighlightedFromMention() {
         return this.isSelfMentioned && Boolean(this.thread?.channel);
@@ -398,6 +402,7 @@ export class Message extends Record {
 
     isEmpty = this.computed(() => this.computeIsEmpty());
     isBodyEmpty = this.computed(
+        // Do not reuse `bodyEl` which is detached hence failing `getComputedDisplay`.
         () => !this.body || isEmptyBlock(createElementWithContent("div", this.body))
     );
 
@@ -418,8 +423,8 @@ export class Message extends Record {
      * - There is only one link in the message body.
      * - The link preview is of image type.
      */
-    get linkPreviewSquash() {
-        return (
+    linkPreviewSquash = this.computed(
+        () =>
             this.store.hasLinkPreviewFeature &&
             this.body &&
             this.body.startsWith("<a") &&
@@ -427,8 +432,7 @@ export class Message extends Record {
             this.body.match(/<\/a>/im)?.length === 1 &&
             this.message_link_preview_ids.length === 1 &&
             this.message_link_preview_ids[0].link_preview_id.isImage
-        );
-    }
+    );
 
     /**
      * This is the preferred way to display the name of the author of a message.
@@ -443,6 +447,8 @@ export class Message extends Record {
     get notificationHidden() {
         return false;
     }
+
+    bodyTextContentInline = this.computed(() => htmlToTextContentInline(this.body || ""));
 
     inlineBody = this.computed(() => {
         if (this.poll) {
@@ -505,9 +511,8 @@ export class Message extends Record {
         return null;
     }
 
-    failureNotifications = this.computed(
-        () => this.notification_ids.filter((notification) => notification.isFailure),
-        { equals: shallowEqual }
+    failureNotifications = this.computedShallowEqual(() =>
+        this.notification_ids.filter((notification) => notification.isFailure)
     );
 
     get scheduledDateSimple() {
@@ -559,23 +564,27 @@ export class Message extends Record {
         return markup`<i class="oi me-1" data-icon="${this.previewIcon}"></i>${messageBody}`;
     });
 
-    previewText = this.computed(() => {
-        const messageBody = this.bodyPreview;
-        if (this.isSelfAuthored) {
-            return markup`<i class="oi me-1 opacity-75" data-icon="reply"></i>${_t(
-                "You: %(message_content)s",
-                { message_content: messageBody }
-            )}`;
-        }
+    _prefixWithAuthor(body) {
         if (!this.author || this.author.notEq(this.thread?.channel?.correspondent?.persona)) {
             return _t("%(authorName)s: %(message_content)s", {
                 authorName: this.authorName,
-                message_content: messageBody,
+                message_content: body,
             });
         }
-        return messageBody;
+        return body;
+    }
+
+    previewText = this.computed(() => {
+        if (this.isSelfAuthored) {
+            return markup`<i class="oi me-1 opacity-75" data-icon="reply"></i>${_t(
+                "You: %(message_content)s",
+                { message_content: this.bodyPreview }
+            )}`;
+        }
+        return this._prefixWithAuthor(this.bodyPreview);
     });
 
+    /** Material icon name for in-app previews (chatter, discuss, systray). */
     get previewIcon() {
         const { attachment_ids: attachments } = this;
         if (!this.hasAttachments) {
@@ -591,6 +600,31 @@ export class Message extends Record {
                 return "videocam";
             default:
                 return "description";
+        }
+    }
+
+    /**
+     * Unicode symbol for OS-level browser notifications (which render plain text only).
+     * Emoji are used rather than pictographic symbols (e.g. U+1F5BB, U+1F5B9): the
+     * latter have no emoji presentation and could render as tofu on some OSes.
+     */
+    get previewSymbol() {
+        const { attachment_ids: attachments } = this;
+        if (!this.hasAttachments) {
+            return "";
+        }
+        const firstAttachment = attachments[0];
+        switch (true) {
+            case firstAttachment.voice:
+                return "🎤";
+            case firstAttachment.isImage:
+                return "📷";
+            case firstAttachment.isVideo:
+                return "🎥";
+            case firstAttachment.isAudio:
+                return "🎵";
+            default:
+                return "📄";
         }
     }
 
@@ -760,11 +794,12 @@ export class Message extends Record {
     /**
      * @param {Object} owner
      * @param {import("@odoo/owl").Signal<HTMLElement>} [rootRef]
+     * @param {Readonly<Record<string, any>>} [ancestors] named ancestors of the owner, @see useAncestors
      */
-    showDeleteConfirm(owner, rootRef) {
+    showDeleteConfirm(owner, rootRef, ancestors) {
         this.store.env.services.dialog.add(
             discussComponentRegistry.get("MessageDeleteDialog"),
-            { message: this, onConfirm: () => this.onShowDeleteConfirm(owner) },
+            { message: this, onConfirm: () => this.onShowDeleteConfirm(owner, ancestors) },
             { rootRef }
         );
     }
@@ -772,9 +807,12 @@ export class Message extends Record {
     /**
      * @param {Object} owner
      * @param {import("@web/env").OdooEnv} owner.env
+     * @param {Readonly<Record<string, any>>} [ancestors={}] named ancestors of the owner, @see useAncestors
      */
-    onShowDeleteConfirm(owner) {
-        this.remove({ removeFromThread: this.shouldHideFromMessageListOnDelete(owner.env) });
+    onShowDeleteConfirm(owner, ancestors = {}) {
+        this.remove({
+            removeFromThread: this.shouldHideFromMessageListOnDelete(owner.env, ancestors),
+        });
     }
 
     /**
@@ -885,7 +923,11 @@ export class Message extends Record {
         ]);
     }
 
-    shouldHideFromMessageListOnDelete(env) {
+    /**
+     * @param {import("@web/env").OdooEnv} env
+     * @param {Readonly<Record<string, any>>} ancestors @see useAncestors
+     */
+    shouldHideFromMessageListOnDelete(env, ancestors) {
         return false;
     }
 
@@ -893,10 +935,10 @@ export class Message extends Record {
         await this.store.fetchStoreData("add_bookmark", { message_id: this.id });
     }
 
-    /** @param {import("@web/env").OdooEnv} env */
-    async removeBookmark(env) {
+    /** @param {Readonly<Record<string, any>>} [ancestors={}] @see useAncestors */
+    async removeBookmark(ancestors = {}) {
         await this.store.fetchStoreData("remove_bookmark", { message_id: this.id });
-        if (!env.inMessagingMenu) {
+        if (!ancestors.inMessagingMenu) {
             return;
         }
         this.closeNotificationFn?.();

@@ -1,4 +1,4 @@
-import { Component, proxy, signal, status, t, usePlugin, useProps } from "@odoo/owl";
+import { Component, proxy, signal, t, usePlugin, useProps } from "@odoo/owl";
 import { hasTouch } from "@web/core/browser/feature_detection";
 import { Domain } from "@web/core/domain";
 import { useDropdownState } from "@web/core/dropdown/dropdown_hooks";
@@ -64,7 +64,10 @@ export class SearchBar extends Component {
     facetContainerRef = signal.ref();
     // The input element is either owned by the parent (`inputRef` prop, e.g. so it can
     // focus it itself once mounted) or local, like `Dropdown.menuRef`.
-    inputRef = useProps.static("inputRef", t.signal(t.ref()).optional(() => signal.ref()));
+    inputRef = useProps.static(
+        "inputRef",
+        t.signal(t.ref()).optional(() => signal.ref())
+    );
 
     setup() {
         this.dialogService = useService("dialog");
@@ -386,20 +389,6 @@ export class SearchBar extends Component {
     }
 
     /**
-     * @param {number} [index]
-     */
-    focusFacet(index) {
-        const facets = this.root().getElementsByClassName("o_searchview_facet");
-        if (facets.length) {
-            if (index === undefined) {
-                facets[facets.length - 1].focus();
-            } else {
-                facets[index].focus();
-            }
-        }
-    }
-
-    /**
      * @param {Object} facet
      */
     removeFacet(facet) {
@@ -703,12 +692,8 @@ export class SearchBar extends Component {
         }
     }
 
-    onToggleSearchBar() {
-        this.state.showSearchBar = !this.state.showSearchBar;
-    }
-
     onInputDropdownChanged(isOpen) {
-        if (!isOpen && status(this) === "mounted") {
+        if (!isOpen && this.inputRef()) {
             this.resetState({ focus: false });
         } else if (this.navigator) {
             this.navigator.items[0]?.setActive();

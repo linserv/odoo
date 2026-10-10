@@ -1,5 +1,5 @@
 import { useSubEnv } from "@web/owl2/utils";
-import { Component, onMounted, onWillUnmount, useProps, proxy, t } from "@odoo/owl";
+import { Component, useProps, proxy, t } from "@odoo/owl";
 import { Dialog } from '@web/core/dialog/dialog';
 import { _t } from "@web/core/l10n/translation";
 import { rpc } from "@web/core/network/rpc";
@@ -92,8 +92,6 @@ export class ProductConfiguratorDialog extends Component {
         }
         this._checkExclusions(this.state.products[0]);
 
-        onMounted(() => this.env.bus.trigger("FORM-CONTROLLER:FORM-IN-DIALOG:ADD"));
-        onWillUnmount(() => this.env.bus.trigger("FORM-CONTROLLER:FORM-IN-DIALOG:REMOVE"));
     }
 
     get totalMessage() {
@@ -400,19 +398,6 @@ export class ProductConfiguratorDialog extends Component {
      */
     _getCombination(product) {
         return product.attribute_lines.flatMap(ptal => ptal.selected_attribute_value_ids);
-    }
-
-    /**
-     * Return the selected PTAVs of the parent product, as a list of
-     * `product.template.attribute.value` ids.
-     *
-     * @param {Object} product - The product for which to find the parent combination.
-     * @return {Array} - The combination of the parent product.
-     */
-    _getParentsCombination(product) {
-        return product.parent_product_tmpl_id
-            ? this._getCombination(this._findProduct(product.parent_product_tmpl_id))
-            : [];
     }
 
     /**

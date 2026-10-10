@@ -2,6 +2,7 @@ import { cookie } from "@web/core/browser/cookie";
 import { usePopover } from "@web/core/popover/popover_hook";
 import { user } from "@web/core/user";
 import { formatNumber } from "@hr_holidays/views/hooks";
+import { formatDuration } from "@web/views/fields/formatters";
 import { useService } from "@web/core/utils/hooks";
 import { Component, computed, t, useProps } from "@odoo/owl";
 export class TimeOffCardPopover extends Component {
@@ -128,20 +129,9 @@ export class TimeOffCard extends Component {
 
     warning = computed(() => this.updateWarning());
 
-    // e.g.: Input: 9.5 Output: 9:30
-    formatHour(hoursFloat) {
-        const sign = hoursFloat < 0 ? "-" : "";
-        const absValue = Math.abs(hoursFloat);
-        const hours = Math.floor(absValue);
-        const minutes = Math.round((absValue - hours) * 60);
-        // Pad minutes with leading zero if needed
-        const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
-        return `${sign}${hours}:${formattedMinutes}`;
-    }
-
     formatDuration(duration) {
         if (this.props.data.unit_of_measure === "hour") {
-            return this.formatHour(duration);
+            return formatDuration({ hours: duration });
         }
         return formatNumber(this.lang, duration);
     }
@@ -191,32 +181,6 @@ export class TimeOffCard extends Component {
             : -data.exceeding_duration > 0;
     }
 
-    async navigateTimeOffType() {
-        const { employeeId, holidayStatusId, data } = this.props;
-        const isInHolidaysUserGroup = await user.hasGroup("hr_holidays.group_hr_holidays_user");
-
-        const resModel = "hr.leave";
-        const name = "My Time Off";
-        const domain = [
-            ["work_entry_type_id", "=", holidayStatusId],
-            ["company_id", "=", data.employee_company],
-            employeeId ? ["employee_id", "=", employeeId] : ["user_id", "=", user.userId],
-        ];
-        const context = isInHolidaysUserGroup
-            ? {
-                  search_default_group_date_from: true,
-                  expand_leave_list: true,
-              }
-            : {
-                  list_view_ref: "hr_holidays.hr_leave_view_tree_my",
-                  form_view_ref: "hr_holidays.hr_leave_view_form",
-                  search_default_group_date_from: true,
-                  expand_leave_list: true,
-              };
-
-        openLeaveWindow(this.actionService, resModel, name, domain, context);
-    }
-
     /**
      * Background utility matching the color configured on the time off type
      * The color picker is 0-indexed over `$o-colors`
@@ -246,8 +210,4 @@ function openLeaveWindow(actionService, resModel, name, domain, context) {
         domain: domain,
         context: context,
     });
-}
-
-export class TimeOffCardMobile extends TimeOffCard {
-    static template = "hr_holidays.TimeOffCardMobile";
 }

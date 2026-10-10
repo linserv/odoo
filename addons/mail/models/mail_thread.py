@@ -421,21 +421,17 @@ class MailThread(models.AbstractModel):
 
         return result
 
-    def unlink(self):
-        """ Override unlink to delete (scheduled) messages and followers. This cannot be
-        cascaded, because link is done through (res_model, res_id). """
-        if not self:
-            return True
+    @api.ondelete(at_uninstall=False)
+    def _delete_track_discard(self):
         # discard pending tracking
         # TDE to check: fire tracking depending on those records (e.g. _track_record) ?
         self._track_discard()
-        self.env['mail.message'].sudo().search([('model', '=', self._name), ('res_id', 'in', self.ids)]).unlink()
-        res = super(MailThread, self).unlink()
-        self.env['mail.followers'].sudo().search(
-            [('res_model', '=', self._name), ('res_id', 'in', self.ids)]
-        ).unlink()
-        self.env['mail.scheduled.message'].sudo().search([('model', '=', self._name), ('res_id', 'in', self.ids)]).unlink()
-        return res
+
+    def _delete_extra(self):
+        yield from super()._delete_extra()
+        yield self.message_follower_ids
+        yield self.env['mail.message'].search([('model', '=', self._name), ('res_id', 'in', self.ids)])
+        yield self.env['mail.scheduled.message'].search([('model', '=', self._name), ('res_id', 'in', self.ids)])
 
     @api.model
     def get_empty_list_help(self, help_message):
@@ -4242,27 +4238,25 @@ class MailThread(models.AbstractModel):
                     question=started_poll.poll_question,
                 )
             elif message.attachment_ids:
-                total_attachments = len(message.attachment_ids)
-                # sudo: ir.attachment - access voice_ids linked to an attachment, if present.
-                attachments = message.attachment_ids.sudo()
-
-                def get_attachment_label(attachment):
-                    return self.env._("Voice Message") if attachment.voice_ids else attachment.name
-
+                attachments = message.attachment_ids
+                total_attachments = len(attachments)
+                symbol, first_name = attachments[0]._get_preview_symbol_and_name()
                 if total_attachments == 1:
-                    body = get_attachment_label(attachments[0])
+                    label = first_name
                 elif total_attachments == 2:
-                    body = self.env._(
-                        "%(file1)s and %(file2)s",
-                        file1=get_attachment_label(attachments[0]),
-                        file2=get_attachment_label(attachments[1]),
+                    _, second_name = attachments[1]._get_preview_symbol_and_name()
+                    label = self.env._(
+                        "%(first_attachment)s and %(second_attachment)s",
+                        first_attachment=first_name,
+                        second_attachment=second_name,
                     )
                 else:
-                    body = self.env._(
-                        "%(file1)s and %(count)d other attachments",
-                        file1=get_attachment_label(attachments[0]),
+                    label = self.env._(
+                        "%(first_attachment)s and %(count)d other attachments",
                         count=total_attachments - 1,
+                        first_attachment=first_name,
                     )
+                body = f"{symbol}\N{NO-BREAK SPACE}\N{NO-BREAK SPACE}{label}"
 
         return {
             'title': title,
@@ -4869,6 +4863,8 @@ class MailThread(models.AbstractModel):
         adding_current = set(partner_ids) == set([self.env.user.partner_id.id])
         customer_ids = [] if adding_current else None
 
+        if adding_current and self.env.user._is_public():
+            return False
         if partner_ids and adding_current:
             try:
                 self.check_access('read')

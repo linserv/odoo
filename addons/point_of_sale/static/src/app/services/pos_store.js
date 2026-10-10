@@ -66,8 +66,6 @@ const { DateTime } = luxon;
 export const CONSOLE_COLOR = "#F5B427";
 
 export class PosStore extends WithLazyGetterTrap {
-    loadingSkipButtonIsShown = false;
-    mainScreen = { name: null, component: null };
     feedbackScreenAutoSkipDelay = 1500;
     _customerDisplayQrData = null;
     router = usePlugin(PosRouterPlugin);
@@ -432,6 +430,21 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     async reloadData(showWarning = false) {
+        try {
+            await this.syncAllOrders();
+        } catch (error) {
+            logPosMessage("Store", "reloadData", "Failed to sync orders", CONSOLE_COLOR, [error]);
+        }
+        // Reloading wipes the local orders, a paid order must never be lost that way
+        if (this.models["pos.order"].some((o) => o.isUnsyncedPaid && o.state !== "cancel")) {
+            this.dialog.add(AlertDialog, {
+                title: _t("Reload Data"),
+                body: _t(
+                    "Some paid orders have not been synced to the server yet. Closing or reloading now may cause data loss."
+                ),
+            });
+            return;
+        }
         const reloadData = async () => {
             const orders = this.models["pos.order"].getAll();
             this.device.saveUnusedNumber(orders);
@@ -917,8 +930,21 @@ export class PosStore extends WithLazyGetterTrap {
         }
     }
     async onProductInfoClick(productTemplate, productProduct = false) {
-        const info = await this.getProductInfo(productTemplate, 1, 0, productProduct);
-        this.dialog.add(ProductInfoPopup, { info: info, productTemplate: productTemplate });
+        if (this.productInfoOpened) {
+            return;
+        }
+        this.productInfoOpened = true;
+        try {
+            const info = await this.getProductInfo(productTemplate, 1, 0, productProduct);
+            this.dialog.add(
+                ProductInfoPopup,
+                { info: info, productTemplate: productTemplate },
+                { onClose: () => (this.productInfoOpened = false) }
+            );
+        } catch (error) {
+            this.productInfoOpened = false;
+            throw error;
+        }
     }
     async openConfigurator(pTemplate, opts = {}) {
         const attrById = this.models["product.attribute"].getAllBy("id");
@@ -1562,14 +1588,6 @@ export class PosStore extends WithLazyGetterTrap {
         order.tracking_number = deviceIdentifier + `${parseInt(number) % 1000}`.padStart(3, "0");
     }
 
-    selectNextOrder() {
-        const orders = this.models["pos.order"].filter((order) => !order.finalized);
-        if (orders.length > 0) {
-            this.selectedOrderUuid = orders[0].uuid;
-        } else {
-            return this.addNewOrder();
-        }
-    }
     get openOrder() {
         return this.models["pos.order"].find((o) => o.state === "draft") || this.addNewOrder();
     }

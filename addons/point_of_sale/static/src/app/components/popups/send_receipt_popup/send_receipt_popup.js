@@ -26,7 +26,7 @@ export class SendReceiptPopup extends Component {
         const email = partner?.invoice_emails || partner?.email || "";
         this.state = proxy({
             email: email,
-            phone: partner?.phone || "",
+            phone: partner?.phone_formatted || partner?.phone || "",
         });
         this.sendReceipt = useTrackedAsync(this._sendReceiptToCustomer.bind(this));
     }
@@ -115,10 +115,6 @@ export class SendReceiptPopup extends Component {
     }
 
     showPhoneInput() {
-        return false;
-    }
-
-    actionSendReceiptOnPhone() {
         return false;
     }
 }

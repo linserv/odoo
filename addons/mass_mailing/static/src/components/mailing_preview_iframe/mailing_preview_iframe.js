@@ -1,5 +1,5 @@
 import { loadIframe } from "@mail/convert_inline/iframe_utils";
-import { Component, onMounted, proxy, signal, status, useProps } from "@odoo/owl";
+import { Component, onMounted, proxy, signal, useProps, useScope } from "@odoo/owl";
 import { isBrowserSafari } from "@web/core/browser/feature_detection";
 import { registry } from "@web/core/registry";
 import { useBus, useService } from "@web/core/utils/hooks";
@@ -21,6 +21,8 @@ export class MailingPreviewIframe extends Component {
 
     iframeRef = signal.ref();
 
+    scope = useScope();
+
     setup() {
         this.state = proxy(this.env.displayState);
         this.action = useService("action");
@@ -41,6 +43,7 @@ export class MailingPreviewIframe extends Component {
                     this.iframeRef()?.contentDocument.body.replaceChildren(
                         this.renderBodyContent()
                     );
+                    this.throttledResize();
                 });
             },
             () => [this.props.record.data.preview_record_ref]
@@ -63,12 +66,20 @@ export class MailingPreviewIframe extends Component {
 
         const updateIframeSize = () => {
             const iframe = this.iframeRef();
+            const content = iframe.contentDocument.body.firstElementChild;
+            if (content) {
+                content.style.zoom = "";
+            }
             if (this.state.isMobileMode) {
                 // same styling for mobile as we have in 'mass_mailing_iframe'
                 iframe.style.width = "367px";
                 iframe.style.height = "668px";
                 iframe.style.transform = "";
                 iframe.style.backgroundColor = "white";
+                // Scale the email down to fit the screen, like a mobile mail client.
+                if (content && content.clientWidth && content.scrollWidth > content.clientWidth) {
+                    content.style.zoom = content.clientWidth / content.scrollWidth;
+                }
                 iframe.contentDocument.body.scrollTop = 0;
             } else {
                 iframe.style.width = "140%";
@@ -80,7 +91,7 @@ export class MailingPreviewIframe extends Component {
         };
 
         this.throttledResize = useThrottleForAnimation(() => {
-            if (status(this) === "destroyed") {
+            if (this.scope.isDestroyed()) {
                 return;
             }
             updateIframeSize();

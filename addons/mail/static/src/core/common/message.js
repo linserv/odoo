@@ -13,19 +13,17 @@ import { Poll } from "@mail/core/common/poll";
 import { PollResult } from "@mail/core/common/poll_result";
 import { RelativeTime } from "@mail/core/common/relative_time";
 import { groupAttachments } from "@mail/utils/common/attachments";
-import { htmlToTextContentInline } from "@mail/utils/common/format";
 
 import {
     Component,
     computed,
     proxy,
-    shallowEqual,
     signal,
-    status,
     t,
     untrack,
     useApp,
     useProps,
+    useScope,
 } from "@odoo/owl";
 import { MessageSearchState } from "@mail/core/common/message_search_hook";
 
@@ -49,12 +47,21 @@ import {
     useRightClickMenu,
 } from "@mail/utils/common/hooks";
 import { ActionList, CircleInlineAction } from "@mail/core/common/action_list";
-import { loadCssFromBundle } from "@mail/utils/common/misc";
+import { assignGetter, loadCssFromBundle } from "@mail/utils/common/misc";
 import { MessageContextMenu } from "@mail/core/common/message_context_menu";
 import { Priority } from "@mail/core/common/priority";
-import { useLayoutEffect, useSubEnv } from "@web/owl2/utils";
+import { useAncestors } from "@mail/core/common/ancestor_plugin";
+import { useLayoutEffect } from "@web/owl2/utils";
 import { isEventHandled, markEventHandled } from "@web/core/utils/misc";
 import { renderToElement } from "@web/core/utils/render";
+import { computedShallowEqual } from "@mail/utils/common/signal";
+
+/** Button of the dropdown of the actions that do not fit in the quick actions of a message. */
+class MoreMessageInlineAction extends CircleInlineAction {
+    get classObj() {
+        return { ...super.classObj, "o-mail-Message-moreAction": true };
+    }
+}
 
 export class Message extends Component {
     // This is the darken version of #71639e
@@ -82,8 +89,19 @@ export class Message extends Component {
 
     app = useApp();
 
+    scope = useScope();
+
     setup() {
         super.setup();
+        this.ancestors = useAncestors({
+            inMessage: assignGetter(
+                {},
+                {
+                    isAlignedRight: () => this.isAlignedRight,
+                    message: () => this.props.message,
+                }
+            ),
+        });
         this.nbsp = nbsp;
         this.store = useService("mail.store");
         this.props = useProps({
@@ -106,6 +124,7 @@ export class Message extends Component {
         );
         this.popover = usePopover(this.constructor.components.Popover, { position: "top" });
         this.state = proxy({
+            shouldRenderActions: false,
             isHovered: false,
             isClicked: false,
             expandOptions: false,
@@ -134,11 +153,6 @@ export class Message extends Component {
         this.openReactionMenu = this.openReactionMenu.bind(this);
         this.optionsDropdown = useDropdownState();
         this.isActive = computed(() => Boolean(this._isActive));
-        useSubEnv({
-            inMessage: true,
-            message: this.props.message,
-            alignedRight: this.isAlignedRight,
-        });
         useLayoutEffect(
             () => {
                 if (this.shadowBody()) {
@@ -254,8 +268,12 @@ export class Message extends Component {
         );
     }
 
-    get actionComponent() {
-        return CircleInlineAction;
+    /** @type {import("@mail/core/common/action_list").GetActionComponent} */
+    getActionComponent({ action, inline }) {
+        if (!inline) {
+            return undefined;
+        }
+        return action.definition.isMoreAction ? MoreMessageInlineAction : CircleInlineAction;
     }
 
     get messageActionsParams() {
@@ -268,35 +286,28 @@ export class Message extends Component {
 
     // components have no getter memoization: explicit computeds, so each
     // piece re-runs only when its deps change and keeps a stable identity
-    quickActions = computed(
-        () => {
-            const allActions = this.messageActions.actions;
-            return allActions.slice(
-                0,
-                allActions.length > this.quickActionCount
-                    ? this.quickActionCount - 1
-                    : this.quickActionCount
-            );
-        },
-        { equals: shallowEqual }
-    );
+    quickActions = computedShallowEqual(() => {
+        const allActions = this.messageActions.actions;
+        return allActions.slice(
+            0,
+            allActions.length > this.quickActionCount
+                ? this.quickActionCount - 1
+                : this.quickActionCount
+        );
+    });
 
-    moreMenuActions = computed(
-        () => {
-            const allActions = this.messageActions.actions;
-            return allActions.length > this.quickActionCount
-                ? allActions.slice(this.quickActionCount - 1)
-                : false;
-        },
-        { equals: shallowEqual }
-    );
+    moreMenuActions = computedShallowEqual(() => {
+        const allActions = this.messageActions.actions;
+        return allActions.length > this.quickActionCount
+            ? allActions.slice(this.quickActionCount - 1)
+            : false;
+    });
 
     moreAction = computed(() => {
         const moreActions = this.moreMenuActions();
         return moreActions?.length
             ? this.messageActions.more(this.messageActionsParams, {
                   actions: moreActions,
-                  btnClass: "o-mail-Message-moreAction",
                   dropdownMenuClass: "o-mail-Message-moreMenu",
                   dropdownPosition: this.isAlignedRight
                       ? this.message.threadAsNewest
@@ -310,31 +321,28 @@ export class Message extends Component {
             : undefined;
     });
 
-    actions = computed(
-        () => {
-            const moreAction = this.moreAction();
-            const actions = moreAction
-                ? [...this.quickActions(), moreAction]
-                : [...this.quickActions()];
-            if (this.isAlignedRight) {
-                actions.reverse();
-            }
-            return actions;
-        },
-        { equals: shallowEqual }
-    );
+    actions = computedShallowEqual(() => {
+        const moreAction = this.moreAction();
+        const actions = moreAction
+            ? [...this.quickActions(), moreAction]
+            : [...this.quickActions()];
+        if (this.isAlignedRight) {
+            actions.reverse();
+        }
+        return actions;
+    });
 
     get attClass() {
         return {
             "user-select-none o-disable-safari-native-long-press o-isMobileOS": isMobileOS(),
             [this.props.className]: true,
-            "o-selfAuthored": this.message.isSelfAuthored && !this.env.messageCard,
+            "o-selfAuthored": this.message.isSelfAuthored && !this.ancestors.inMessageCardList,
             "o-selected":
                 this.props.message.composerAsReplyToMessage?.thread.eq(this.props.thread) ||
                 this.props.messageSelection?.isSelected(this.props.message),
             "o-squashed": this.props.squashed,
-            "mt-2": !this.props.squashed && this.props.thread && !this.env.messageCard,
-            "px-1": this.env.inChatWindow,
+            "mt-2": !this.props.squashed && this.props.thread && !this.ancestors.inMessageCardList,
+            "px-1": this.ancestors.inChatWindow,
             "o-actionMenuMobileOpen": this.ui.isSmall && this.optionsDropdown.isOpen,
             "o-editing": this.isEditing,
         };
@@ -378,7 +386,7 @@ export class Message extends Component {
         const isNoteVisual = this.message.isNote || this.message.message_type === "notification";
         return {
             "p-1": isNoteVisual,
-            "fs-1": !this.isEditing && !this.env.inChatter && this.message.onlyEmojis,
+            "fs-1": !this.isEditing && !this.ancestors.inChatter && this.message.onlyEmojis,
             "mb-0": !isNoteVisual,
             "py-2": !isNoteVisual && !this.isEditing && this.showTextVisually,
             "pt-2 pb-1": !isNoteVisual && this.isEditing,
@@ -403,7 +411,7 @@ export class Message extends Component {
         return (
             this.message.subtype_id?.description &&
             this.message.subtype_id.description.toLowerCase() !==
-                htmlToTextContentInline(this.message.body || "").toLowerCase()
+                this.message.bodyTextContentInline.toLowerCase()
         );
     }
 
@@ -431,14 +439,15 @@ export class Message extends Component {
         return (
             this.state.isHovered ||
             this.state.isClicked ||
-            this.emojiPicker?.isOpen ||
-            Boolean(this.moreAction()?.isActive)
+            (this.state.shouldRenderActions && Boolean(this.moreAction()?.isActive))
         );
     }
 
     get isAlignedRight() {
         return Boolean(
-            this.env.inChatWindow && this.props.message.isSelfAuthored && !this.env.messageCard
+            this.ancestors.inChatWindow &&
+                this.props.message.isSelfAuthored &&
+                !this.ancestors.inMessageCardList
         );
     }
 
@@ -455,6 +464,7 @@ export class Message extends Component {
     }
 
     onMouseenter() {
+        this.state.shouldRenderActions = true;
         this.state.isHovered = true;
     }
 
@@ -467,7 +477,7 @@ export class Message extends Component {
      * @returns {boolean}
      */
     get shouldDisplayAuthorName() {
-        if (!this.env.inChatWindow || this.env.messageCard) {
+        if (!this.ancestors.inChatWindow || this.ancestors.inMessageCardList) {
             return true;
         }
         if (this.message.isSelfAuthored) {
@@ -498,6 +508,7 @@ export class Message extends Component {
             if (this.state.isClicked) {
                 this.state.isClicked = false;
             } else {
+                this.state.shouldRenderActions = true;
                 this.state.isClicked = true;
                 document.body.addEventListener(
                     "click",
@@ -580,7 +591,7 @@ export class Message extends Component {
                 this.env,
                 {
                     onBeforeComplete: () => {
-                        if (status(this) === "destroyed") {
+                        if (this.scope.isDestroyed()) {
                             return false;
                         }
                         if (!el.isConnected) {
@@ -605,7 +616,7 @@ export class Message extends Component {
     getAvatarContainerAttClass() {
         return {
             "opacity-50": this.message.isPending,
-            "o-inChatWindow": this.env.inChatWindow,
+            "o-inChatWindow": this.ancestors.inChatWindow,
         };
     }
 
@@ -616,7 +627,7 @@ export class Message extends Component {
     getSidebarAttClass() {
         return {
             "align-items-start": !this.isAlignedRight,
-            "o-inChatWindow": this.env.inChatWindow,
+            "o-inChatWindow": this.ancestors.inChatWindow,
         };
     }
 

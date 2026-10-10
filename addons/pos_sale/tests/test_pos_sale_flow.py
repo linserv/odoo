@@ -24,7 +24,7 @@ class PoSSaleSyncCommon:
         self.main_pos_config.open_ui()
         session = self.main_pos_config.current_session_id
         currency = session.currency_id
-        payment_method = payment_method or self.main_pos_config.payment_method_ids[0]
+        payment_method = payment_method or self.main_pos_config.payment_method_ids.filtered(lambda pm: pm.type == 'cash')[:1]  # pick a usable one
         order_uuid = str(uuid.uuid4())
         amount_total = 0
         amount_tax = 0
@@ -249,9 +249,10 @@ class TestPoSSale(PoSSaleSyncCommon, TestPointOfSaleHttpCommon):
         }], partner=partner_1)
         current_session = order.session_id
         payment_context = {"active_ids": order.ids, "active_id": order.id}
+        payment_method = current_session.payment_method_ids.filtered(lambda pm: pm.type == 'cash')[:1]  # pick a usable one
         order_payment = self.env['pos.make.payment'].with_context(**payment_context).create({
             'amount': order.amount_total,
-            'payment_method_id': current_session.payment_method_ids[0].id,
+            'payment_method_id': payment_method.id,
         })
         order_payment.with_context(**payment_context).check()
 
@@ -391,8 +392,8 @@ class TestPoSSale(PoSSaleSyncCommon, TestPointOfSaleHttpCommon):
         so.action_confirm()
 
         self.env['sale.advance.payment.inv'].sudo().create({
-            'advance_payment_method': 'fixed',
-            'fixed_amount': 20,
+            'advance_payment_method': 'downpayment',
+            'amount': 20,
             'sale_order_ids': so.ids,
         }).create_invoices()
         # Invoice the delivered part from the down payment
@@ -650,8 +651,8 @@ class TestPoSSale(PoSSaleSyncCommon, TestPointOfSaleHttpCommon):
             'active_id': sale_order.id,
             'default_journal_id': self.company_data['default_journal_sale'].id,
         }).create({
-            'advance_payment_method': 'fixed',
-            'fixed_amount': 100,
+            'advance_payment_method': 'downpayment',
+            'amount': 100,
         }).create_invoices()
 
         selected_groups = self.user.group_ids
@@ -1209,8 +1210,8 @@ class TestPoSSale(PoSSaleSyncCommon, TestPointOfSaleHttpCommon):
         }
 
         payment = self.env['sale.advance.payment.inv'].with_context(context).create({
-            'advance_payment_method': 'fixed',
-            'fixed_amount': 300,
+            'advance_payment_method': 'downpayment',
+            'amount': 300,
         })
         res = payment.create_invoices()
         invoice = self.env['account.move'].browse(res['res_id'])
@@ -1231,6 +1232,31 @@ class TestPoSSale(PoSSaleSyncCommon, TestPointOfSaleHttpCommon):
         invoice.action_post()
 
         self.assertEqual(sale_order.amount_unpaid, 0.0)
+
+    def test_settled_line_price_is_not_crossed_out(self):
+        """
+        The french module crosses out the price when the cashier changed it. The
+        price of a settled line comes from the sale order, so it must not be
+        crossed out.
+        """
+        if not self.env["ir.module.module"].search([("name", "=", "l10n_fr_pos_cert"), ("state", "=", "installed")]):
+            self.skipTest("l10n_fr_pos_cert module is required for this test")
+        self.main_pos_config.company_id.sudo().country_id = self.env.ref('base.fr')
+        product = self.env['product.product'].create({
+            'name': 'Test Product',
+            'available_in_pos': True,
+            'lst_price': 100.0,
+            'taxes_id': False,
+        })
+        self.env['sale.order'].create({
+            'partner_id': self.partner_a.id,
+            'order_line': [(0, 0, {
+                'product_id': product.id,
+                'product_uom_qty': 1,
+                'price_unit': product.lst_price,
+            })],
+        })
+        self.start_tour("/pos/ui?config_id=%d" % self.main_pos_config.id, 'test_settled_line_price_is_not_crossed_out', login="accountman")
 
     def test_advance_payment_with_extra_lines(self):
         so = self.env['sale.order'].sudo().create({
@@ -1366,8 +1392,8 @@ class TestPoSSalePayment(PoSSaleSyncCommon, TestPointOfSaleHttpCommon, PaymentCo
         })
         # Manual downpayment invoice
         down_payment = self.env['sale.advance.payment.inv'].sudo().create({
-            'advance_payment_method': 'fixed',
-            'fixed_amount': 50,
+            'advance_payment_method': 'downpayment',
+            'amount': 50,
             'sale_order_ids': sale_order.ids,
         })
         down_payment.create_invoices()

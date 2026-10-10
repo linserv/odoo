@@ -9,6 +9,7 @@ import {
     untrack,
     useEffect,
     useListener,
+    useOnChange,
     usePlugin,
     useProps,
     useScope,
@@ -207,6 +208,23 @@ export function useHover(refs, { onHover, onAway, stateObserver } = {}) {
 }
 
 /**
+ * Calls `onIntent` when the element is about to be left clicked, on pointer down. Useful
+ * to start loading what the click opens.
+ *
+ * @param {import("@odoo/owl").Signal<Element>} ref
+ * @param {() => void} onIntent
+ * @param {Object} [options]
+ * @param {string} [options.ignoreSelector] events from matching targets are ignored
+ */
+export function onClickIntent(ref, onIntent, { ignoreSelector } = {}) {
+    useListener(ref, "pointerdown", (ev) => {
+        if (ev.button === 0 && !(ignoreSelector && ev.target.closest?.(ignoreSelector))) {
+            onIntent();
+        }
+    });
+}
+
+/**
  * Hook returning reactive scroll state for a given scrollable element.
  *
  * @param {import("@odoo/owl").Signal<Element>} ref - The ref of the scrollable element.
@@ -309,108 +327,6 @@ export function useVisible(ref, cb, { ready = true } = {}) {
         },
         () => [getEl(), state.ready]
     );
-    return state;
-}
-
-/**
- * @typedef {Object} MessageScrolling
- * @property {function} clear
- * @property {function} highlightMessage
- * @property {number|null} highlightedMessageId
- */
-
-/**
- * @param {Object} params
- * @param {function(): import("models").Thread|null} params.thread
- * @param {function(): Object} [params.messageFetchRouteParams]
- * @param {number} [params.duration=1500]
- * @returns {MessageScrolling}
- */
-export function useMessageScrolling({
-    thread: threadFn,
-    messageFetchRouteParams = () => ({}),
-    duration = 1500,
-}) {
-    let timeout;
-    const state = proxy({
-        clear() {
-            if (this.highlightedMessageId) {
-                window.clearTimeout(timeout);
-                timeout = null;
-                this.highlightedMessageId = null;
-            }
-        },
-        /**
-         * @param {import("models").Message} message
-         */
-        async highlightMessage(message) {
-            const thread = threadFn();
-            if (!thread) {
-                return;
-            }
-            state.initiated = true;
-            let messageScrollDirection;
-            if (message.notIn(thread.messages)) {
-                messageScrollDirection = message.id < thread.messages[0]?.id ? "top" : "bottom";
-                await thread.loadAround({
-                    messageId: message.id,
-                    routeParams: messageFetchRouteParams(),
-                });
-            }
-            const lastHighlightedMessageId = state.highlightedMessageId;
-            this.clear();
-            if (lastHighlightedMessageId === message.id) {
-                // Give some time for the state to update.
-                await new Promise(setTimeout);
-            }
-            thread.scrollTop = messageScrollDirection === "top" ? "bottom" : undefined;
-            if (thread.scrollTop === "bottom") {
-                state.startupPromise = new Promise((resolve) => (state.resolveStartup = resolve));
-                await state.startupPromise;
-                state.startupPromise = null;
-                state.resolveStartup = null;
-            }
-            state.highlightedMessageId = message.id;
-            state.initiated = false;
-            timeout = window.setTimeout(() => this.clear(), duration);
-        },
-        initiated: false,
-        /**
-         * Promise during highlight startup, i.e. highlight is initiated but isn't scrolling yet
-         * Useful to set correct starting condition to initiate scroll to highlight, like scroll to bottom.
-         */
-        startupPromise: null,
-        /** @type {(value?: void) => void | null}  */
-        resolveStartup: null,
-        /** @type {?Promise<void>} Promise during scrolling to highlight */
-        scrollPromise: null,
-        /** @type {(value?: void) => void | null}  */
-        resolveScroll: null,
-        /**
-         * Scroll the element into view and expose a promise that will resolved
-         * once the scroll is done.
-         *
-         * @param {Element} el
-         */
-        scrollTo(el) {
-            state.resolveScroll?.();
-            const { promise: scrollPromise, resolve: resolveScroll } = Promise.withResolvers();
-            state.scrollPromise = scrollPromise;
-            state.resolveScroll = resolveScroll;
-            if ("onscrollend" in window) {
-                document.addEventListener("scrollend", resolveScroll, {
-                    capture: true,
-                    once: true,
-                });
-            } else {
-                // To remove when safari will support the "scrollend" event.
-                setTimeout(resolveScroll, 250);
-            }
-            el.scrollIntoView({ behavior: "smooth", block: "center" });
-            return scrollPromise;
-        },
-        highlightedMessageId: null,
-    });
     return state;
 }
 
@@ -1016,13 +932,33 @@ export function useRightClickMenu(
                 return; // onClose can be called more than once. Limiting to a single onClose to prevent race-condition in tests.
             }
             onCloseParam?.();
+            pendingPosition = undefined;
             isOngoingClose = true;
             await new Promise((resolve) => setTimeout(() => requestAnimationFrame(resolve)));
             isOngoingClose = false;
             delete rootRef()?.dataset.rightClicking;
         },
     });
+    const shouldRender = signal(false);
+    let pendingPosition;
+    const openAt = (el, { left, top }) => {
+        Object.assign(el.style, { left, top });
+        dropdownState.open();
+    };
+    useOnChange(
+        () => [anchor()],
+        (el) => {
+            if (el && pendingPosition) {
+                const position = pendingPosition;
+                pendingPosition = undefined;
+                openAt(el, position);
+            }
+        }
+    );
     const res = {
+        get shouldRender() {
+            return shouldRender();
+        },
         get menuProps() {
             return {
                 anchorRef: anchor,
@@ -1044,10 +980,13 @@ export function useRightClickMenu(
                 return false;
             }
             rootRef().dataset.rightClicking = true;
-            const el = anchor();
-            el.style.left = ev.clientX + "px";
-            el.style.top = ev.clientY + "px";
-            dropdownState.open();
+            const position = { left: ev.clientX + "px", top: ev.clientY + "px" };
+            if (anchor()) {
+                openAt(anchor(), position);
+            } else {
+                pendingPosition = position;
+                shouldRender.set(true);
+            }
             ev.preventDefault();
             return true;
         },

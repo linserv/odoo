@@ -125,6 +125,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
         upgrade_modules: Collection[str] = (),
         reinit_modules: Collection[str] = (),
         new_db_demo: bool | None = None,
+        new_db_test_data: bool | None = None,
         lock_wait: int = 15,
     ) -> Registry:
         """Create and return a new registry for the given database name.
@@ -148,6 +149,8 @@ class Registry(Mapping[str, type["BaseModel"]]):
 
         :param new_db_demo: Whether to install demo data for the new database. If set to ``None``, the value will be
           determined by the ``config['with_demo']``. Defaults to ``None``
+        :param new_db_test_data: Whether to install test data for the new database. If set to ``None``, the value will be
+                  determined by the ``config['with_test_data']``. Defaults to ``None``
         :param lock_wait: How long to wait to acquire the lock on the database (in seconds).
         """
         if (registry := cls.registries.get(db_name)) and not registry.ready:
@@ -155,6 +158,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
 
         from odoo.modules import db  # noqa: PLC0415
         from odoo.modules.loading import load_modules, reset_modules_state  # noqa: PLC0415
+        from odoo.modules.module import Manifest  # noqa: PLC0415
 
         t0 = time.time()
         registry: Registry = object.__new__(cls)
@@ -192,11 +196,18 @@ class Registry(Mapping[str, type["BaseModel"]]):
                         # lock and try to acquire the exclusive lock
                         cr.commit()  # commit after acquiring the lock to re-start the transaction
                         cr.execute("""
-                            SELECT FROM ir_module_module
+                            SELECT name, state
+                            FROM ir_module_module
                             WHERE state IN ('to upgrade', 'to install', 'to remove')
-                            LIMIT 1
+                            ORDER BY state = 'to remove' DESC
                         """)
-                        if cr.rowcount:
+                        # modules that cannot be loaded (missing or not installable) stay
+                        # in their transient state, an update would not change anything
+                        if any(
+                            state == 'to remove'
+                            or (Manifest.for_addon(name, display_warning=False) or {}).get('installable')
+                            for name, state in cr.fetchall()
+                        ):
                             _logger.info("Force module updates, some modules must be installed/uninstalled/upgraded")
                             update_module = True
                 if update_module:
@@ -212,6 +223,9 @@ class Registry(Mapping[str, type["BaseModel"]]):
                 # now load modules
                 if new_db_demo is None:
                     new_db_demo = config['with_demo']
+                if new_db_test_data is None:
+                    new_db_test_data = config['with_test_data']
+
                 if first_registry and not update_module:
                     exit_stack.enter_context(gc.disabling_gc())
                 retries = 5 if update_module else 1
@@ -228,6 +242,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
                             install_modules=install_modules,
                             reinit_modules=reinit_modules,
                             new_db_demo=new_db_demo,
+                            new_db_test_data=new_db_test_data,
                         )
                         cr.commit()
                     except Exception:
@@ -585,9 +600,43 @@ class Registry(Mapping[str, type["BaseModel"]]):
         result = Collector()
         for model_cls in self.models.values():
             for field in model_cls._fields.values():
-                if field.relational:
+                if field.relational and field._module not in self.uninstalling_modules:
                     field.setup_inverses(self, result)
         return result
+
+    @functools.cached_property
+    def many2one_targeting(self) -> dict[str, tuple[Field, ...]]:
+        """ Maps each model name to the stored many2one fields having that model
+        as comodel. """
+        result = defaultdict(list)
+        for Model in self.models.values():
+            if Model._abstract or not Model._auto:
+                continue
+
+            for field in Model._fields.values():
+                if field.type == 'many2one' and field.store and field._module not in self.uninstalling_modules:
+                    result[field.comodel_name].append(field)
+
+        return {
+            model_name: tuple(fields) for model_name, fields in result.items()
+        }
+
+    @functools.cached_property
+    def many2many_targeting(self) -> dict[str, tuple[Field, ...]]:
+        """ Maps each model name to the stored many2many fields having that model
+        as comodel. """
+        result = defaultdict(list)
+        for Model in self.models.values():
+            if Model._abstract or not Model._auto:
+                continue
+
+            for field in Model._fields.values():
+                if field.type == 'many2many' and field.store and field._module not in self.uninstalling_modules:
+                    result[field.comodel_name].append(field)
+
+        return {
+            model_name: tuple(fields) for model_name, fields in result.items()
+        }
 
     @functools.cached_property
     def field_computed(self) -> dict[Field, list[Field]]:

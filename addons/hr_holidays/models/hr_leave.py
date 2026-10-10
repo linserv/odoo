@@ -320,13 +320,18 @@ class HrLeave(models.Model):
 
     @api.depends('company_id')
     def _compute_allowed_work_entry_type_ids(self):
+        selectable_domain = (
+            Domain.TRUE
+            if self.env.user.has_group('hr_holidays.group_hr_holidays_manager')
+            else Domain('time_off_selectable', '=', True)
+        )
         for leave in self:
             country = leave.company_id.country_id
             if not country or not self.env['hr.work.entry.type'].search_count([('country_id', '=', country.id)], limit=1):
                 domain = [('country_id', '=', False)]
             else:
                 domain = [('country_id', '=', country.id)]
-            leave.allowed_work_entry_type_ids = self.env['hr.work.entry.type'].search(domain)
+            leave.allowed_work_entry_type_ids = self.env['hr.work.entry.type'].search(Domain.AND([selectable_domain, domain]))
 
     @api.onchange('request_hour_from', 'request_hour_to')
     def _onchange_hours(self):
@@ -1587,7 +1592,7 @@ class HrLeave(models.Model):
         holiday_sudo.add_follower(self.employee_id.id)
         if self.validation_type == 'manager':
             holiday_sudo.message_subscribe(partner_ids=self.employee_id.leave_manager_id.partner_id.ids)
-        if self.validation_type == 'no_validation' or self.env.user.has_group('hr_holidays.group_hr_holidays_user'):
+        if self.validation_type == 'no_validation' or (self.env.user.has_group('hr_holidays.group_hr_holidays_user') and self.employee_id != self.env.user.employee_id):
             # Automatic validation should be done in sudo, because user might not have the rights to do it by himself
             # skip_time_rules: bulk trigger below, once resource.calendar.leaves exist for all auto-approved leaves
             holiday_sudo.with_context(skip_time_rules=True).action_approve()
@@ -1799,9 +1804,12 @@ class HrLeave(models.Model):
 
     def _remove_resource_leave(self):
         """ This method will remove the corresponding entry in resource calendar time off object at the time of holidays cancel/removed """
+        self.env.flush_all()  # mimic old behaviour of unlink
+        leaves = self.env['resource.calendar.leaves'].search([('holiday_id', 'in', self.ids)])
         if self.has_access('write'):
-            return self.env['resource.calendar.leaves'].search([('holiday_id', 'in', self.ids)]).sudo().unlink()
-        return self.env['resource.calendar.leaves'].search([('holiday_id', 'in', self.ids)]).unlink()
+            leaves = leaves.sudo()
+        leaves.unlink()
+        self.env.invalidate_all()
 
     def _amend_resource_leave_dates(self):
         """

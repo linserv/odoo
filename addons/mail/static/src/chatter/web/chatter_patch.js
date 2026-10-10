@@ -14,7 +14,7 @@ import { FollowerList } from "@mail/core/web/follower_list";
 import { groupAttachments } from "@mail/utils/common/attachments";
 import { assignGetter, isDragSourceExternalFile } from "@mail/utils/common/misc";
 
-import { status, t, untrack, useEffect, useOnChange, useProps } from "@odoo/owl";
+import { t, untrack, useEffect, useOnChange, useProps, useScope } from "@odoo/owl";
 
 import { Dropdown } from "@web/core/dropdown/dropdown";
 import { useDropdownState } from "@web/core/dropdown/dropdown_hooks";
@@ -26,6 +26,7 @@ import { useService } from "@web/core/utils/hooks";
 import { patch } from "@web/core/utils/patch";
 import { Record } from "@web/model/relational_model/record";
 import { FileUploader } from "@web/views/fields/file_handler";
+import { isMobileOS } from "@web/core/browser/feature_detection";
 
 const CHATTER_PANEL = Object.freeze({
     ATTACHMENT: "ATTACHMENT",
@@ -56,6 +57,7 @@ Object.assign(Chatter.components, {
 const chatterPatch = {
     setup() {
         super.setup(...arguments);
+        this.scope = useScope();
         // bind once so the references stay stable across renders
         this.onActivityChanged = this.onActivityChanged.bind(this);
         this.reloadParentView = this.reloadParentView.bind(this);
@@ -109,6 +111,7 @@ const chatterPatch = {
         this.loadingAttachmentTimeout = null;
         /** @type {Map<string, Function>} */
         this.uploadHandlers = new Map();
+        this.isMobileOS = isMobileOS();
         useCustomDropzone(
             this.rootRef,
             MailAttachmentDropzone,
@@ -139,7 +142,7 @@ const chatterPatch = {
                 },
             },
             () =>
-                (!this.store.meetingViewOpened || this.env.inMeetingView) &&
+                (!this.store.meetingViewOpened || this.ancestors.inMeetingView) &&
                 (this.thread()?.isTransient || this.thread()?.canPostMessage) &&
                 !this.thread()?.messageInEdition?.composer?.isEditComposerVisible
         );
@@ -201,7 +204,7 @@ const chatterPatch = {
                 email = value;
             }
         }
-        if ((!partnerIds.length && !email) || mode !== "message" || status(this) === "destroyed") {
+        if ((!partnerIds.length && !email) || mode !== "message" || this.scope.isDestroyed()) {
             return;
         }
         const recipients = await this.keepLastSuggestedRecipientsUpdate.add(
@@ -212,7 +215,7 @@ const chatterPatch = {
                 main_email: email,
             })
         );
-        if (status(this) === "destroyed" && !this.state.thread) {
+        if (this.scope.isDestroyed() && !this.state.thread) {
             return;
         }
         this.state.thread.suggestedRecipients = recipients.map((result) => ({
@@ -269,10 +272,10 @@ const chatterPatch = {
         return _t("Delete %(count)s files", { count });
     },
 
-    get subEnv() {
-        const res = super.subEnv;
-        assignGetter(res.inChatter, { aside: () => this.webChatterProps.isChatterAside });
-        Object.assign(res.inChatter, { toggleComposer: this.toggleComposer.bind(this) });
+    get chatterAncestor() {
+        const res = super.chatterAncestor;
+        assignGetter(res, { aside: () => this.webChatterProps.isChatterAside });
+        Object.assign(res, { toggleComposer: this.toggleComposer.bind(this) });
         return res;
     },
 
@@ -494,10 +497,12 @@ const chatterPatch = {
     },
 
     async reloadParentView() {
-        if (status(this) === "destroyed") {
+        if (this.scope.isDestroyed()) {
             return;
         }
-        await this.webChatterProps.saveRecord?.();
+        if (this.webChatterProps.saveRecord && !(await this.webChatterProps.saveRecord())) {
+            return;
+        }
         if (this.webChatterProps.record) {
             await this.webChatterProps.record.load();
         }
@@ -562,6 +567,14 @@ const chatterPatch = {
         if (this.hasParentReloadOnAttachmentsChanged) {
             this.reloadParentView();
         }
+    },
+
+    get showsAttachmentPopout() {
+        return (
+            !this.isMobileOS &&
+            this.webChatterProps.hasAttachmentPreview &&
+            Boolean(this.state.thread.attachmentsInWebClientView.length)
+        );
     },
 
     popoutAttachment() {

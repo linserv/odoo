@@ -48,12 +48,12 @@ export function describeThreadActionGroup(id, definition) {
 }
 
 registerThreadAction("fold-chat-window", {
-    btnAttrs: { "data-available-offline": true },
-    condition: ({ owner }) => owner.props.chatWindow && !owner.isDiscussSidebarChannelActions,
+    availableOffline: true,
+    condition: ({ ancestors, owner }) =>
+        ancestors.inChatWindow && !owner.isDiscussSidebarChannelActions,
     icon: "remove",
-    name: ({ owner }) => (!owner.props.chatWindow?.isOpen ? _t("Open") : _t("Fold")),
+    name: _t("Fold"),
     onSelected: ({ owner }) => owner.toggleFold(),
-    displayActive: ({ owner }) => !owner.props.chatWindow?.isOpen,
     sequence: 99,
     sequenceQuick: 20,
 });
@@ -67,8 +67,9 @@ registerThreadAction("rename-thread", {
     setup: ({ action }) => (action.editingName = useMaybePlugin(RenameThreadPlugin)?.editingName),
 });
 registerThreadAction("close", {
-    btnAttrs: { "data-available-offline": true },
-    condition: ({ owner }) => owner.props.chatWindow && !owner.isDiscussSidebarChannelActions,
+    availableOffline: true,
+    condition: ({ ancestors, owner }) =>
+        ancestors.inChatWindow && !owner.isDiscussSidebarChannelActions,
     icon: "close_small",
     name: _t("Close Chat Window (ESC)"),
     onSelected: ({ owner }) => owner.close(),
@@ -79,10 +80,7 @@ registerThreadAction("search-messages", {
     actionPanelComponent: SearchMessagesPanel,
     actionPanelComponentProps: ({ thread }) => ({ thread }),
     actionPanelOuterClass: "o-mail-SearchMessagesPanel bg-inherit",
-    condition: ({ owner, channel }) =>
-        channel &&
-        (!owner.props.chatWindow || owner.props.chatWindow.isOpen) &&
-        !owner.isDiscussSidebarChannelActions,
+    condition: ({ owner, channel }) => channel && !owner.isDiscussSidebarChannelActions,
     hotkey: "f",
     icon: "search",
     name: ({ action }) => (action.isActive ? _t("Close Search") : _t("Search Messages")),
@@ -103,13 +101,13 @@ registerThreadAction("search-messages", {
 registerThreadAction("meeting-chat", {
     actionPanelComponent: MeetingChat,
     actionPanelOuterClass: "bg-100 border",
+    availableOffline: true,
     badge: ({ thread }) => thread.isUnread,
     badgeIcon: ({ channel }) => !channel.importantCounter && "circle",
     badgeIconClass: ({ channel }) =>
         !channel.importantCounter && "oi-filled o-text-white opacity-75",
     badgeText: ({ channel }) => channel.importantCounter || undefined,
-    btnAttrs: { "data-available-offline": true },
-    condition: ({ owner }) => owner.env.inMeetingView,
+    condition: ({ ancestors }) => ancestors.inMeetingView,
     icon: "forum",
     name: _t("Chat"),
     sequence: 30,

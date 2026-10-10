@@ -259,8 +259,8 @@ class StockMoveLine(models.Model):
         if not self.id and self.env.user.has_group('stock.group_stock_multi_locations') and self.product_id and self.quantity_product_uom \
                 and self.location_dest_id == default_dest_location:
             quantity = self.quantity_product_uom
-            self.location_dest_id = default_dest_location.with_context(exclude_sml_ids=self.ids)._get_putaway_strategy(
-                self.product_id, quantity=quantity, package=self.result_package_id)
+            self.location_dest_id = default_dest_location._get_putaway_strategy(
+                self.product_id, quantity=quantity, package=self.result_package_id, excluded_sml_ids=self.ids)
 
     def _apply_putaway_strategy(self):
         if self.env.context.get('avoid_putaway_rules'):
@@ -271,14 +271,20 @@ class StockMoveLine(models.Model):
             locations = smls.move_id.location_dest_id.child_internal_location_ids
             excluded_smls = set(smls.ids)
             if package.package_type_id:
-                best_loc = smls.move_id.location_dest_id.with_context(exclude_sml_ids=excluded_smls, products=smls.product_id, locations=locations)._get_putaway_strategy(self.env['product.product'], package=package)
+                best_loc = smls.move_id.location_dest_id._get_putaway_strategy(
+                    self.env['product.product'], package=package,
+                    package_products=smls.product_id, locations=locations, excluded_sml_ids=excluded_smls,
+                )
                 smls.location_dest_id = best_loc
             elif package:
                 used_locations = set()
                 for sml in smls:
                     if len(used_locations) > 1:
                         break
-                    putaway_loc_id = sml.move_id.location_dest_id.with_context(exclude_sml_ids=excluded_smls, locations=locations)._get_putaway_strategy(sml.product_id, quantity=sml.quantity)
+                    putaway_loc_id = sml.move_id.location_dest_id._get_putaway_strategy(
+                        sml.product_id, quantity=sml.quantity,
+                        locations=locations, excluded_sml_ids=excluded_smls,
+                    )
                     if putaway_loc_id != sml.location_dest_id:
                         sml.location_dest_id = putaway_loc_id
                     excluded_smls.discard(sml.id)
@@ -288,8 +294,9 @@ class StockMoveLine(models.Model):
                         grouped_smls.location_dest_id = move.location_dest_id
             else:
                 for sml in smls:
-                    putaway_loc_id = sml.move_id.location_dest_id.with_context(exclude_sml_ids=excluded_smls)._get_putaway_strategy(
+                    putaway_loc_id = sml.move_id.location_dest_id._get_putaway_strategy(
                         sml.product_id, quantity=sml.quantity, packaging=sml.move_id.packaging_uom_id,
+                        excluded_sml_ids=excluded_smls,
                     )
                     if putaway_loc_id != sml.location_dest_id:
                         sml.location_dest_id = putaway_loc_id
@@ -358,6 +365,9 @@ class StockMoveLine(models.Model):
                 vals.update(self._copy_quant_info(vals))
 
         mls = super().create(vals_list)
+        # A new line can break the entirety of a package it shares with lines already in the transfer.
+        if mls_not_entire_pack := (mls | mls.picking_id.move_line_ids)._get_lines_not_entire_pack():
+            mls_not_entire_pack.is_entire_pack = False
 
         created_moves = set()
 
@@ -563,8 +573,12 @@ class StockMoveLine(models.Model):
             if not float_is_zero(ml.quantity_product_uom, precision_digits=precision) and ml.move_id and not ml.move_id._should_bypass_reservation(ml.location_id):
                 self.env['stock.quant']._update_reserved_quantity(ml.product_id, ml.location_id, -ml.quantity_product_uom, lot_id=ml.lot_id, package_id=ml.package_id, owner_id=ml.owner_id, strict=True)
         moves = self.mapped('move_id')
+        pickings = self.picking_id
         packages = self.env['stock.package'].browse(self.result_package_id._get_all_package_dest_ids())
         res = super().unlink()
+        # Removing a line can break the entirety of a package it shares with the remaining lines.
+        if mls_not_entire_pack := pickings.move_line_ids._get_lines_not_entire_pack():
+            mls_not_entire_pack.is_entire_pack = False
         if moves:
             # Add with_prefetch() to set the _prefecht_ids = _ids
             # because _prefecht_ids generator look lazily on the cache of move_id
@@ -952,7 +966,7 @@ class StockMoveLine(models.Model):
                     previous_move_lines = move_line.move_id.move_line_ids.filtered(
                         lambda ml: line_key.startswith(self._get_aggregated_properties(move=ml.move_id)['line_key']) and ml.id != move_line.id
                     )
-                    qty_ordered -= sum(m.uom_id._compute_quantity(m.quantity, uom) for m in previous_move_lines)
+                    qty_ordered = uom.round(qty_ordered - sum(m.uom_id._compute_quantity(m.quantity, uom) for m in previous_move_lines))
                     packaging_qty_ordered = uom._compute_quantity(qty_ordered, move_line.move_id.packaging_uom_id)
                 aggregated_move_lines[line_key] = {
                     **aggregated_properties,
@@ -963,10 +977,10 @@ class StockMoveLine(models.Model):
                     'product': move_line.product_id,
                 }
             else:
-                aggregated_move_lines[line_key]['qty_ordered'] += quantity
-                aggregated_move_lines[line_key]['packaging_qty_ordered'] += packaging_quantity
-                aggregated_move_lines[line_key]['quantity'] += quantity
-                aggregated_move_lines[line_key]['packaging_quantity'] += packaging_quantity
+                aggregated_move_lines[line_key]['qty_ordered'] = uom.round(aggregated_move_lines[line_key]['qty_ordered'] + quantity)
+                aggregated_move_lines[line_key]['packaging_qty_ordered'] = move_line.move_id.packaging_uom_id.round(aggregated_move_lines[line_key]['packaging_qty_ordered'] + packaging_quantity)
+                aggregated_move_lines[line_key]['quantity'] = uom.round(aggregated_move_lines[line_key]['quantity'] + quantity)
+                aggregated_move_lines[line_key]['packaging_quantity'] = move_line.move_id.packaging_uom_id.round(aggregated_move_lines[line_key]['packaging_quantity'] + packaging_quantity)
 
         # Does the same for empty move line to retrieve the ordered qty. for partially done moves
         # (as they are splitted when the transfer is done and empty moves don't have move lines).
@@ -983,7 +997,7 @@ class StockMoveLine(models.Model):
                 else:
                     to_bypass = True
             aggregated_properties = self._get_aggregated_properties(move=empty_move)
-            line_key = aggregated_properties['line_key']
+            line_key, uom = aggregated_properties['line_key'], aggregated_properties['uom_id']
 
             if not any(aggregated_key.startswith(line_key) for aggregated_key in aggregated_move_lines) and not to_bypass:
                 qty_ordered = empty_move.product_uom_qty
@@ -996,11 +1010,11 @@ class StockMoveLine(models.Model):
                     'product': empty_move.product_id,
                 }
             elif line_key in aggregated_move_lines:
-                aggregated_move_lines[line_key]['qty_ordered'] += empty_move.product_uom_qty
+                aggregated_move_lines[line_key]['qty_ordered'] = uom.round(aggregated_move_lines[line_key]['qty_ordered'] + empty_move.product_uom_qty)
             else:
                 keys = list(filter(lambda key: key.startswith(line_key), aggregated_move_lines))
                 if keys:
-                    aggregated_move_lines[keys[0]]['qty_ordered'] += empty_move.product_uom_qty
+                    aggregated_move_lines[keys[0]]['qty_ordered'] = uom.round(aggregated_move_lines[keys[0]]['qty_ordered'] + empty_move.product_uom_qty)
 
         return aggregated_move_lines
 
@@ -1132,21 +1146,22 @@ class StockMoveLine(models.Model):
         self.write({'result_package_id': package.id})
         return package
 
-    def _post_put_in_pack_hook(self, package):
-        if package and self.picking_type_id.auto_print_package_label:
+    def _post_put_in_pack_hook(self, packages):
+        if packages and self.picking_type_id.auto_print_package_label:
             print_format = self.picking_type_id.package_label_to_print
             if print_format in ('pdf', 'zpl'):
-                action = self.env['stock.package.label.layout']._process_package_labels(package, print_format)
+                action = self.env['stock.package.label.layout']._process_package_labels(packages, print_format)
                 if action:
                     clean_action(action, self.env)
                     return action
-        return package
+        return packages
 
     def action_put_in_pack(self, *, package_id=False, package_type_id=False, package_name=False, package_capacity=None):
         move_lines = self
         if package_capacity and package_capacity != self.quantity:
             # Split the move line if `package_capacity` is not equal to its quantity.
-            return move_lines._split_in_chunk(package_capacity, package_type_id, package_id=package_id)
+            splitted_lines = move_lines._split_in_chunk(package_capacity, package_type_id, package_id=package_id)
+            return splitted_lines._post_put_in_pack_hook(splitted_lines.result_package_id)
 
         if self.env.context.get('all_move_line_ids'):
             move_lines = self.env['stock.move.line'].browse(self.env.context['all_move_line_ids'])
@@ -1290,7 +1305,7 @@ class StockMoveLine(models.Model):
         return define_package_type and not from_package_wizard and (not package_id and not package_type_id and not package_name)
 
     def _should_set_package(self):
-        package_type = self.picking_id.picking_type_id
+        package_type = self.picking_type_id
         return len(package_type) == 1 and package_type.set_package_type
 
     def _split(self, quantity_to_split, package_id):

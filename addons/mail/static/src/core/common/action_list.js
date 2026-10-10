@@ -1,10 +1,12 @@
 import { attClassObjectToString } from "@mail/utils/common/format";
 import { propSignal } from "@mail/utils/common/hooks";
-import { Component, computed, onWillUnmount, shallowEqual, t, useProps, xml } from "@odoo/owl";
+import { Component, onWillUnmount, t, useProps, xml } from "@odoo/owl";
 import { Dropdown } from "@web/core/dropdown/dropdown";
 import { DropdownItem } from "@web/core/dropdown/dropdown_item";
 import { Action as ActionModel, ACTION_TAGS } from "@mail/core/common/action";
+import { useAncestors } from "@mail/core/common/ancestor_plugin";
 import { useService } from "@web/core/utils/hooks";
+import { computedShallowEqual } from "@mail/utils/common/signal";
 
 /**
  * Params of an action, like in its definition, along with where it is rendered. `parentAction` is
@@ -68,6 +70,7 @@ export class BaseAction extends Component {
 
     setup() {
         super.setup();
+        this.ancestors = useAncestors();
         this.props = useProps({
             action: t.instanceOf(ActionModel),
             isFirstInGroup: t.boolean().optional(),
@@ -98,10 +101,10 @@ export class BaseAction extends Component {
             "aria-label": this.action.name,
             disabled: this.action.disabledCondition,
             name: this.action.id,
+            "data-available-offline": this.action.availableOffline,
             "data-sequence": this.action.sequence,
             "data-sequence-group": this.action.sequenceGroup,
             "data-sequence-quick": this.action.sequenceQuick,
-            ...this.action.btnAttrs,
         };
     }
 
@@ -143,14 +146,11 @@ export class BaseAction extends Component {
     }
 
     get themeClass() {
-        return { "o-discussCallTheme": this.env.inDiscussCallTheme };
+        return { "o-discussCallTheme": this.ancestors.inDiscussCallTheme };
     }
 
     get dynamicClass() {
-        return {
-            [this.action.btnClass ?? ""]: true,
-            [this.action.tagClassNames]: true,
-        };
+        return { [this.action.tagClassNames]: true };
     }
 
     get hasBtnBg() {
@@ -160,14 +160,6 @@ export class BaseAction extends Component {
     /** Whether the component of the action definition replaces the button of the action. */
     get hasDefinitionComponent() {
         return Boolean(this.action.component && this.action.componentCondition);
-    }
-
-    /**
-     * The list then adds no rounding of its own: its segmented-control shape only rounds the outer
-     * corners, which would leave the rest lopsided.
-     */
-    get hasOwnRounding() {
-        return /(^|\s)rounded(-|\s|$)/.test(this.action.btnClass ?? "");
     }
 
     get iconClass() {
@@ -221,8 +213,8 @@ export class InlineAction extends BaseAction {
 
     get roundnessClass() {
         return {
-            "rounded-start-3": !this.hasOwnRounding && this.props.isFirstInGroup,
-            "rounded-end-3": !this.hasOwnRounding && this.props.isLastInGroup,
+            "rounded-start-3": this.props.isFirstInGroup,
+            "rounded-end-3": this.props.isLastInGroup,
         };
     }
 
@@ -258,7 +250,7 @@ export class CircleInlineAction extends InlineAction {
         if (!this.isCircle) {
             return super.roundnessClass;
         }
-        return { "rounded-circle": !this.hasOwnRounding };
+        return { "rounded-circle": true };
     }
 }
 
@@ -356,17 +348,14 @@ export class ActionList extends Component {
         this.actionListProps = actionListProps;
     }
 
-    groups = computed(
-        () => {
-            const actions = this.actions();
-            let groups;
-            if (actions.find((i) => Array.isArray(i))) {
-                groups = actions;
-            } else {
-                groups = [actions];
-            }
-            return groups.filter((group) => group.length); // don't show empty groups
-        },
-        { equals: shallowEqual }
-    );
+    groups = computedShallowEqual(() => {
+        const actions = this.actions();
+        let groups;
+        if (actions.find((i) => Array.isArray(i))) {
+            groups = actions;
+        } else {
+            groups = [actions];
+        }
+        return groups.filter((group) => group.length); // don't show empty groups
+    });
 }

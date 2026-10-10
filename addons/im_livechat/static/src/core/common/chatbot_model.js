@@ -12,6 +12,19 @@ export class Chatbot extends Record {
     // completed.
     static MULTILINE_STEP_DEBOUNCE_DELAY = 10000;
 
+    setup() {
+        super.setup(...arguments);
+        this.onChange(
+            () => [this.channel_id],
+            (channel_id) => {
+                if (!channel_id) {
+                    this.delete();
+                }
+            },
+            { immediate: true, initialRun: false }
+        );
+    }
+
     /**
      * Pair identifying this chatbot for the python store index.
      *
@@ -25,12 +38,7 @@ export class Chatbot extends Record {
     script = fields.One("chatbot.script");
     currentStep = fields.One("ChatbotStep");
     steps = fields.Many("ChatbotStep");
-    channel_id = fields.One("discuss.channel", {
-        inverse: "chatbot",
-        onDelete() {
-            this.delete();
-        },
-    });
+    channel_id = fields.One("discuss.channel", { inverse: "chatbot" });
     tmpAnswer = "";
     typingMessage = this.computed(() => {
         if (this.isTyping && this.channel_id) {
@@ -182,6 +190,8 @@ export class Chatbot extends Record {
             // The latch below only guards against stale server writes: replaying a
             // step is a client-side decision, no write can bring the answer back.
             this.currentStep.selectedAnswerEver = null;
+            // Welcome steps are reused across sessions, reset their completion state.
+            this.currentStep.completed = false;
         }
     }
 

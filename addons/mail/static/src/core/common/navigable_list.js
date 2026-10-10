@@ -1,7 +1,7 @@
-import { useSubEnv } from "@web/owl2/utils";
 import { DiscussAvatar } from "@mail/core/common/discuss_avatar";
 import { optionType } from "@mail/core/common/suggestion_hook";
 import { onExternalClick } from "@mail/utils/common/hooks";
+import { useAncestors } from "@mail/core/common/ancestor_plugin";
 import { markEventHandled, isEventHandled } from "@web/core/utils/misc";
 
 import { Component, proxy, signal, t, useListener, useOnChange, useProps } from "@odoo/owl";
@@ -44,13 +44,14 @@ export class NavigableList extends Component {
             class: t.string().optional(),
             closeOnSelect: t.boolean().optional(true),
             isLoading: t.boolean().optional(false),
+            onClose: t.function([]).optional(),
             onSelect: t.function([t.instanceOf(Event), option]),
             options: t.array(option),
             optionTemplate: t.string().optional(),
             position: t.string().optional("bottom"),
             rememberPosition: t.boolean().optional(),
         });
-        useSubEnv({ inNavigableList: true });
+        useAncestors({ inNavigableList: true });
         this.state = proxy({
             activeIndex: null,
             open: false,
@@ -67,11 +68,15 @@ export class NavigableList extends Component {
             }
             this.close();
         });
-        // position and size
-        usePosition(this.rootRef, () => this.props.anchorRef?.(), {
-            position: this.props.position,
-            rememberPosition: this.props.rememberPosition,
-        });
+        // position and size, only when shown as positioning forces a layout on each render
+        usePosition(
+            () => (this.show ? this.rootRef() : null),
+            () => this.props.anchorRef?.(),
+            {
+                position: this.props.position,
+                rememberPosition: this.props.rememberPosition,
+            }
+        );
         useOnChange(
             // Open on mount and when a new set of options arrives. In particular,
             // do not re-open on unrelated re-renders after the user closed the
@@ -114,6 +119,9 @@ export class NavigableList extends Component {
         if (this.props.closeOnSelect) {
             this.state.open = false;
             this.state.activeIndex = null;
+            if (this.props.options.length) {
+                this.props.onClose?.();
+            }
         }
     }
 

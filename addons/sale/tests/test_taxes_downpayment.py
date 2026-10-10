@@ -912,8 +912,8 @@ class TestTaxesDownPaymentSale(TestTaxCommonSale, TestTaxesDownPayment):
         })
         sale_order.action_confirm()
         payment_params = {
-            "advance_payment_method": "percentage",
-            "amount": 30,
+            "advance_payment_method": "downpayment",
+            "percentage": 0.30,
             "sale_order_ids": [Command.set(sale_order.ids)],
         }
         downpayment = self.env["sale.advance.payment.inv"].create(payment_params)
@@ -931,7 +931,7 @@ class TestTaxesDownPaymentSale(TestTaxCommonSale, TestTaxesDownPayment):
             price_unit=1000.0, product_id=product, tax_ids=tax_15, product_uom_qty=0
         )
         so.order_line.write({"qty_delivered": 15.0})
-        invoice = self._create_down_payment_invoice(so, "percent", 50)
+        invoice = self._create_down_payment_invoice(so, "fixed", 8625.0)
 
         self.assertRecordValues(
             invoice, [{"amount_untaxed": 7500.0, "amount_tax": 1125.0, "amount_total": 8625.0}]
@@ -984,8 +984,8 @@ class TestTaxesDownPaymentSale(TestTaxCommonSale, TestTaxesDownPayment):
 
         # Down payment invoice (50% of the order)
         invoicing_wizard = self.env["sale.advance.payment.inv"].create({
-            "advance_payment_method": "fixed",
-            "fixed_amount": sale_order.amount_total / 2.0,
+            "advance_payment_method": "downpayment",
+            "amount": sale_order.amount_total / 2.0,
             "sale_order_ids": [Command.link(sale_order.id)],
         })
         action = invoicing_wizard.create_invoices()
@@ -1016,3 +1016,67 @@ class TestTaxesDownPaymentSale(TestTaxCommonSale, TestTaxesDownPayment):
         final_invoice = self.env["account.move"].browse(action["res_id"])
 
         self.assertEqual(final_invoice.amount_total, 50.0)
+
+    def test_downpayment_with_early_payment_discount(self):
+        """
+        Test that when making a downpayment with an early payment discount the tax amount is computed instead of
+        just taking the manual amounts for the payment lines
+        """
+        early_payment_term = self.env['account.payment.term'].create({
+            'name': '20% Early Payment',
+            'early_discount': True,
+            'early_pay_discount_computation': 'included',
+            'discount_percentage': 20.0,
+            'discount_days': 10,
+            'line_ids': [
+                Command.create({
+                    'value': 'percent',
+                    'value_amount': 100.0,
+                    'nb_days': 30,
+                })
+            ],
+        })
+
+        tax_15 = self.percent_tax(15.0)
+
+        sale_order = self.env["sale.order"].create({
+            "partner_id": self.partner_a.id,
+            "payment_term_id": early_payment_term.id,
+            "order_line": [
+                Command.create({
+                    "product_id": self.product_a.id,
+                    "product_uom_qty": 1,
+                    "price_unit": 10000,
+                    'tax_ids': [Command.set(tax_15.ids)],
+                })
+            ],
+        })
+        sale_order.action_confirm()
+
+        wizard = (
+            self.env['sale.advance.payment.inv']
+            .with_context(active_model=sale_order._name, active_ids=sale_order.ids)
+            .create({
+                'advance_payment_method': 'downpayment',
+                'percentage': 0.80,
+            })
+        )
+        action_values = wizard.create_invoices()
+        dp_invoice = self.env['account.move'].browse(action_values['res_id'])
+        dp_invoice.action_post()
+
+        pmt_wizard = self.env['account.payment.register'].with_context(
+            active_model='account.move',
+            active_ids=dp_invoice.ids,
+        ).create({
+            'journal_id': self.company_data['default_journal_bank'].id,
+            'payment_date': dp_invoice.date,
+        })
+        payment = pmt_wizard._create_payments()
+
+        self.assertRecordValues(payment.move_id.line_ids, [
+            {'balance': 7360.0},
+            {'balance': -9200.0},
+            {'balance': 1600.0},
+            {'balance': 240.0},
+        ])

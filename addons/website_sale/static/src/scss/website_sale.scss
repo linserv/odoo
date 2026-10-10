@@ -1306,6 +1306,16 @@ $-product-radius-map: (
 #o_wsale_cta_wrapper {
     &.o_wsale_cta_wrapper_boxed {
         max-width: 26rem;
+
+        .product_price {
+            label {
+                overflow-wrap: anywhere;
+            }
+
+            td > .d-flex {
+                flex-wrap: wrap;
+            }
+        }
     }
 
     &.o_wsale_cta_wrapper_large .css_quantity {
@@ -2046,10 +2056,6 @@ body.modal-open:has(.o_wsale_product_page) {
         @include o-position-absolute($top: map-get($spacers, 2), $right: var(--o-wsale-ribbon-badge-offset-x, map-get($spacers, 2)));
     }
 
-}
-
-.o_wsale_alternative_products:not(:has(.s_dynamic_snippet_row)) {
-    display: none;
 }
 
 div[name="order_confirmation"] {

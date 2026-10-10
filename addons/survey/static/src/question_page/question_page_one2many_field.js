@@ -15,7 +15,8 @@ import { QuestionPageListRenderer } from "./question_page_list_renderer";
  */
 
 class SurveySaveError extends Error {}
-function SurveySaveErrorHandler(env, error, originalError) {
+/** @type {import("registries").ErrorHandler} */
+function SurveySaveErrorHandler({ originalError }) {
     const notification = useService("notification");
     if (originalError instanceof SurveySaveError) {
         notification.add(originalError.message, {
@@ -54,12 +55,20 @@ class QuestionPageOneToManyField extends X2ManyField {
             () => this.list,
             this.isMany2Many
         );
-
         const self = this;
+        const saveListKeepOffset = async () => {
+            const offsetToRestore = self.list.offset;
+            const saved = await self.props.record.save();
+            if (!saved) {
+                return false;
+            }
+            await self.list._load({ offset: offsetToRestore });
+            return true;
+        };
         const saveRecord = async (record) => {
             await superSaveRecord(record);
             try {
-                await self.props.record.save();
+                await saveListKeepOffset();
             } catch (error) {
                 // In case of error occurring when saving.
                 // Remove erroneous question row added to the embedded list
@@ -71,7 +80,7 @@ class QuestionPageOneToManyField extends X2ManyField {
         const updateRecord = async (record) => {
             await superUpdateRecord(record);
             try {
-                await self.props.record.save();
+                await saveListKeepOffset();
             } catch (error) {
                 throw new SurveySaveError(error.data.message);
             }
@@ -87,7 +96,7 @@ class QuestionPageOneToManyField extends X2ManyField {
         });
         this._openRecord = async (params) => {
             const { record, name } = this.props;
-            if (!(await record.save())) {
+            if (!(await saveListKeepOffset())) {
                 // do not open question form as it won't be savable either.
                 return;
             }

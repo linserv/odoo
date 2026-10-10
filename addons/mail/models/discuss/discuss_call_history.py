@@ -19,8 +19,8 @@ class DiscussCallHistory(models.Model):
     has_recording = fields.Boolean(compute="_compute_recording_media")
     has_audio = fields.Boolean(compute="_compute_recording_media")
     has_video = fields.Boolean(compute="_compute_recording_media")
-    start_dt = fields.Datetime(index=True, required=True)
-    end_dt = fields.Datetime()
+    start_dt = fields.Datetime(string="Start Date", index=True, required=True)
+    end_dt = fields.Datetime(string="End Date")
     start_call_message_id = fields.Many2one("mail.message", index=True)
 
     _channel_id_not_null_constraint = models.Constraint(
@@ -34,9 +34,9 @@ class DiscussCallHistory(models.Model):
     )
     _channel_id_end_dt_idx = models.Index("(channel_id, end_dt) WHERE end_dt IS NULL")
 
-    @api.ondelete(at_uninstall=False)
-    def _unlink_cleanup_artifacts_attachments(self):
-        self.artifact_ids.unlink()
+    def _delete_extra(self):
+        yield from super()._delete_extra()
+        yield self.artifact_ids
 
     @api.depends("channel_id.display_name", "start_dt")
     @api.depends_context("lang", "tz", "uid")

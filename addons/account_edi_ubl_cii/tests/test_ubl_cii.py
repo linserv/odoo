@@ -4,6 +4,7 @@ from lxml import etree
 from zipfile import ZipFile
 from odoo import fields, Command
 from odoo.tests import HttpCase, tagged
+from odoo.tools.safe_eval import datetime
 
 from odoo.addons.account_edi_ubl_cii.tests.common import TestUblCiiCommon
 
@@ -350,6 +351,30 @@ class TestAccountEdiUblCii(TestUblCiiCommon, HttpCase):
 
         global_end_date = xml_tree.find('.//ram:ApplicableHeaderTradeSettlement/ram:BillingSpecifiedPeriod/ram:EndDateTime/udt:DateTimeString', self.namespaces)
         self.assertEqual(global_end_date.text, '20241226')
+        line_vals = [
+            {
+                'product_id': self.product_a.id,
+                'deferred_start_date': datetime.date(2024, 11, 19),
+                'deferred_end_date': datetime.date(2024, 12, 11),
+            },
+            {
+                'product_id': self.product_a.id,
+                'deferred_start_date': datetime.date(2024, 12, 1),
+                'deferred_end_date': datetime.date(2024, 12, 26),
+            },
+            {
+                'product_id': self.product_a.id,
+                'deferred_start_date': False,
+                'deferred_end_date': False,
+            },
+            {
+                'product_id': self.product_a.id,
+                'deferred_start_date': datetime.date(2024, 11, 29),
+                'deferred_end_date': datetime.date(2024, 12, 15),
+            },
+        ]
+        new_invoice = invoice.journal_id._create_document_from_attachment(xml_attachment.ids)
+        self.assertRecordValues(new_invoice.invoice_line_ids, line_vals)
 
     def test_import_bill(self):
         self.env['res.partner.bank'].sudo().create({
@@ -605,6 +630,7 @@ comment-->1000.0</TaxExclusiveAmount></xpath>"""
         """Test that Factur-X uses the foreign VAT when available, else the company VAT."""
         germany = self.env.ref("base.de")
 
+        self.company.country_id = False
         self.company.vat = '931736581'
         self.partner_a.country_id = germany.id
         self.partner_a.invoice_edi_format = 'facturx'
@@ -679,7 +705,7 @@ comment-->1000.0</TaxExclusiveAmount></xpath>"""
             "partner_id": self.partner_a.id,
             "move_type": "out_invoice",
             "invoice_line_ids": [Command.create({
-                "name": "Down payment of 40.00%",
+                "name": "Down Payment",
                 "price_unit": 100.0,
             })],
         })
@@ -690,7 +716,7 @@ comment-->1000.0</TaxExclusiveAmount></xpath>"""
         name_node = xml_tree.find(".//ram:SpecifiedTradeProduct/ram:Name", self.namespaces)
         description_node = xml_tree.find(".//ram:SpecifiedTradeProduct/ram:Description", self.namespaces)
         self.assertIsNotNone(name_node, "ram:Name must be present even when the line has no product")
-        self.assertEqual(name_node.text, "Down payment of 40.00%")
+        self.assertEqual(name_node.text, "Down Payment")
         self.assertIsNone(description_node)
 
     def test_bank_details_import(self):

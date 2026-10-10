@@ -1,9 +1,17 @@
-import { useLayoutEffect, useSubEnv } from "@web/owl2/utils";
+import { useLayoutEffect } from "@web/owl2/utils";
 import { DateSection } from "@mail/core/common/date_section";
 import { Message } from "@mail/core/common/message";
 import { NotificationMessage } from "./notification_message";
-import { useChildRefs, useMessageSelection, useVisible } from "@mail/utils/common/hooks";
+import { MessageHighlightPlugin } from "@mail/core/common/message_highlight_plugin";
+import {
+    useChildRefs,
+    useMaybePlugin,
+    useMessageSelection,
+    useVisible,
+} from "@mail/utils/common/hooks";
 import { incrementFn } from "@mail/utils/common/signal";
+import { useAncestors } from "@mail/core/common/ancestor_plugin";
+import { assignGetter } from "@mail/utils/common/misc";
 
 import {
     Component,
@@ -17,6 +25,7 @@ import {
     untrack,
     useOnChange,
     useProps,
+    useScope,
 } from "@odoo/owl";
 
 import { _t } from "@web/core/l10n/translation";
@@ -40,6 +49,7 @@ export class Thread extends Component {
     static template = "mail.Thread";
 
     isFocused = signal(false);
+    scope = useScope();
     /** @type {Promise|undefined} */
     smoothScrollingPromise;
     /** @type {number} */
@@ -48,6 +58,12 @@ export class Thread extends Component {
 
     setup() {
         super.setup();
+        this.ancestors = useAncestors({
+            inThread: assignGetter(
+                { onImageLoaded: () => this.applyScroll() },
+                { thread: () => this.props.thread }
+            ),
+        });
         this.escape = escape;
         this.applyScroll = this.applyScroll.bind(this);
         this.saveScroll = this.saveScroll.bind(this);
@@ -80,6 +96,8 @@ export class Thread extends Component {
             showJumpPresent: false,
             scrollTop: null,
         });
+        // before hooks depending on `mountedAndLoaded`, so they see it on mount
+        onMounted(() => (this.state.mountedAndLoaded = this.props.thread.isLoaded));
         /**
          * Bumped by `reset()`. Used as a dependency of the effect mirroring
          * `isLoaded` into `mountedAndLoaded` so the mirror is re-synced after a
@@ -90,14 +108,13 @@ export class Thread extends Component {
         this.lastJumpPresent = this.props.jumpPresent;
         this.orm = useService("orm");
         this.ui = useService("ui");
-        /** @type {ReturnType<import('@mail/utils/common/hooks').useMessageScrolling>|null} */
-        this.messageHighlight = this.env.messageHighlight;
+        this.messageHighlight = useMaybePlugin(MessageHighlightPlugin);
         this.scrollingToHighlight = false;
         useLayoutEffect(
             () => {
                 this.scrollToHighlighted();
             },
-            () => [this.messageHighlight?.highlightedMessageId]
+            () => [this.messageHighlight?.highlightedMessageId()]
         );
         this.present = signal.ref();
         this.jumpPresentRef = signal.ref();
@@ -194,7 +211,7 @@ export class Thread extends Component {
             () => [this.state.mountedAndLoaded]
         );
         onMounted(() => {
-            if (!this.env.inChatter) {
+            if (!this.ancestors.inChatter) {
                 this.fetchInitialMessages();
             }
         });
@@ -250,7 +267,7 @@ export class Thread extends Component {
             () => [this.props.thread],
             (thread) => {
                 this.lastJumpPresent = this.props.jumpPresent;
-                if (!this.env.inChatter) {
+                if (!this.ancestors.inChatter) {
                     thread.fetchNewMessages();
                 }
             },
@@ -264,8 +281,8 @@ export class Thread extends Component {
 
     get startMessageAvatarAttClass() {
         return {
-            "o-mail-Thread-avatarChatWindow mt-1": this.env.inChatWindow,
-            "mt-2": !this.env.inChatWindow,
+            "o-mail-Thread-avatarChatWindow mt-1": this.ancestors.inChatWindow,
+            "mt-2": !this.ancestors.inChatWindow,
         };
     }
 
@@ -281,11 +298,11 @@ export class Thread extends Component {
         const pt = parseInt(computedStyle.getPropertyValue("padding-top"));
         const pb = parseInt(computedStyle.getPropertyValue("padding-bottom"));
         this.jumpPresentRef().style.transform = `translate(${
-            this.env.inChatter ? 22 : width - ps - pe - 22
+            this.ancestors.inChatter ? 22 : width - ps - pe - 22
         }px, ${
-            this.env.inChatter && !this.env.inChatter.aside
+            this.ancestors.inChatter && !this.ancestors.inChatter.aside
                 ? -22
-                : height - pt - pb - (this.env.inChatter?.aside ? 75 : 0)
+                : height - pt - pb - (this.ancestors.inChatter?.aside ? 75 : 0)
         }px)`;
     }
 
@@ -376,10 +393,6 @@ export class Thread extends Component {
         });
         onMounted(this.applyScroll);
         onPatched(this.applyScroll);
-        useSubEnv({
-            getCurrentThread: () => this.props.thread,
-            onImageLoaded: this.applyScroll,
-        });
         const observer = new ResizeObserver(() => {
             this.computeJumpPresentPosition();
             this.applyScroll();
@@ -447,7 +460,7 @@ export class Thread extends Component {
         } else if (this.snapshot && messagesAtBottom) {
             this.setScroll(this.snapshot.scrollTop);
         } else if (
-            !this.env.messageHighlight?.highlightedMessageId &&
+            !this.messageHighlight?.highlightedMessageId() &&
             thread.scrollTop !== undefined
         ) {
             let value;
@@ -508,7 +521,7 @@ export class Thread extends Component {
     }
 
     fetchInitialMessages() {
-        this.props.thread.fetchNewMessages({ routeParams: this.messageFetchRouteParams });
+        this.props.thread.fetchInitialMessages({ routeParams: this.messageFetchRouteParams });
     }
 
     get viewportEl() {
@@ -533,7 +546,7 @@ export class Thread extends Component {
     }
 
     onClickLoadOlder() {
-        if (this.messageHighlight?.highlightedMessageId) {
+        if (this.messageHighlight?.highlightedMessageId()) {
             return;
         }
         this.props.thread.fetchMoreMessages({ routeParams: this.messageFetchRouteParams });
@@ -549,12 +562,6 @@ export class Thread extends Component {
             return;
         }
         this.onClickLoadOlder();
-    }
-
-    async onClickPreferences() {
-        const actionDescription = await this.orm.call("res.users", "action_get");
-        actionDescription.res_id = this.store.self_user?.id;
-        this.env.services.action.doAction(actionDescription);
     }
 
     onFocusin() {
@@ -580,7 +587,7 @@ export class Thread extends Component {
             return;
         }
         if (targetThread.eq(this.props.thread)) {
-            this.env.messageHighlight?.highlightMessage(parentAtRender, targetThread);
+            this.messageHighlight?.highlightMessage(parentAtRender);
         } else {
             targetThread.highlightMessage = parentAtRender;
             await targetThread.open({ focus: true });
@@ -588,7 +595,8 @@ export class Thread extends Component {
     }
 
     getMessageClassName(message) {
-        return !message.isNotification && this.messageHighlight?.highlightedMessageId === message.id
+        return !message.isNotification &&
+            this.messageHighlight?.highlightedMessageId() === message.id
             ? "o-highlighted"
             : "";
     }
@@ -628,7 +636,7 @@ export class Thread extends Component {
     }
 
     isSquashed(msg, prevMsg) {
-        if (!prevMsg || prevMsg.message_type === "notification" || this.env.inChatter) {
+        if (!prevMsg || prevMsg.message_type === "notification" || this.ancestors.inChatter) {
             return false;
         }
 
@@ -697,10 +705,10 @@ export class Thread extends Component {
     }
 
     async scrollToHighlighted() {
-        if (!this.messageHighlight?.highlightedMessageId || this.scrollingToHighlight) {
+        if (!this.messageHighlight?.highlightedMessageId() || this.scrollingToHighlight) {
             return;
         }
-        const el = this.messageRefs.get(this.messageHighlight.highlightedMessageId)?.();
+        const el = this.messageRefs.get(this.messageHighlight.highlightedMessageId())?.();
         if (el) {
             this.scrollingToHighlight = true;
             await this.messageHighlight.startupPromise;
@@ -710,10 +718,18 @@ export class Thread extends Component {
         }
     }
 
+    /** Already loaded threads (e.g. prefetched) show their messages from the first render. */
+    get showLoadedContent() {
+        if (this.scope.status === 0 /* new */) {
+            return this.props.thread.isLoaded;
+        }
+        return this.state.mountedAndLoaded;
+    }
+
     get orderedMessages() {
         // ensure rendering observes resetCount to re-trigger the effect when reset() is called
         void this.resetCount();
-        const messages = this.state.mountedAndLoaded
+        const messages = this.showLoadedContent
             ? this.props.thread.messages
             : this.props.thread.phantomMessages;
         return this.props.order === "asc" ? [...messages] : [...messages].reverse();
@@ -729,7 +745,7 @@ export class Thread extends Component {
     }
 
     get loadMoreClass() {
-        return { [this.loadMoreBtnClass]: true, "opacity-0": !this.state.mountedAndLoaded };
+        return { [this.loadMoreBtnClass]: true, "opacity-0": !this.showLoadedContent };
     }
 
     get loadOlderWrapperAttClass() {
@@ -780,7 +796,7 @@ export class Thread extends Component {
 
     get showStartMessage() {
         return (
-            this.state.mountedAndLoaded &&
+            this.showLoadedContent &&
             !this.props.thread.loadOlder &&
             this.startMessageChannelTypes.includes(this.channel?.channel_type)
         );

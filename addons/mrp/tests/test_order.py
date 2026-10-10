@@ -765,10 +765,8 @@ class TestMrpOrder(TestMrpCommon, MailCase):
         mo.button_mark_done()
         self.assertEqual(mo.state, 'done', "Production order should be in done state.")
 
-    def test_product_produce_7(self):
-        """ Plan 2 finished products, reserve and produce 3. Post the current production.
-        Simulate an unlock and edit and, on the opened moves, set the consumed quantity
-        to 5, and to 4. Check the component quantity removed from inventory is correct."""
+    def test_finished_mo_quantity_readonly(self):
+        """The produced quantity cannot be edited through the form of a done MO."""
         mo, _, _, p1, p2 = self.generate_mo(qty_final=1)
         self.assertEqual(len(mo), 1, 'MO should have been created')
 
@@ -786,14 +784,9 @@ class TestMrpOrder(TestMrpCommon, MailCase):
         mo.action_toggle_is_locked()
         self.assertFalse(mo.is_locked)
         mo_form = Form(mo)
-        mo_form.qty_producing = 5
-        mo = mo_form.save()
-        self.assertAlmostEqual(sum(mo.move_finished_ids.move_line_ids.mapped('quantity')), 5)
-
-        mo_form = Form(mo)
-        mo_form.qty_producing = 4
-        mo = mo_form.save()
-        self.assertAlmostEqual(sum(mo.move_finished_ids.move_line_ids.mapped('quantity')), 4)
+        with self.assertRaisesRegex(AssertionError, "can't write on readonly field 'qty_producing'"):
+            mo_form.qty_producing = 5
+        self.assertAlmostEqual(sum(mo.move_finished_ids.move_line_ids.mapped('quantity')), 2)
 
     def test_consumption_warning_1(self):
         """ Checks the constraints of a strict BOM without tracking when playing around
@@ -3203,6 +3196,7 @@ class TestMrpOrder(TestMrpCommon, MailCase):
 
         wo_02.action_replan()
 
+        (wo_01 + wo_02).invalidate_recordset(['has_conflicts'])  # missing dependencies on field
         self.assertFalse(wo_01.has_conflicts)
         self.assertFalse(wo_02.has_conflicts)
         self.assertEqual(wo_01.date_finished, wo_02.date_start)
@@ -3237,6 +3231,7 @@ class TestMrpOrder(TestMrpCommon, MailCase):
 
         wo_02.action_replan()
 
+        (wo_01 + wo_02).invalidate_recordset(['has_conflicts'])  # missing dependencies on field
         self.assertFalse(wo_01.has_conflicts)
         self.assertFalse(wo_02.has_conflicts)
         self.assertEqual(wo_01.date_finished, wo_02.date_start)
@@ -3607,10 +3602,8 @@ class TestMrpOrder(TestMrpCommon, MailCase):
             ('state', '=', 'draft'),
         ]))
 
-    def test_component_addition_to_finished_mo(self):
-        """Test that adding a new component move to a finished MO works as intended,
-           where the newly added component move's picked/state/date values are consistent
-           with the other component moves that are already consumed."""
+    def test_component_changes_to_finished_mo(self):
+        """Component lines cannot be added or edited through the form of a done MO."""
         with Form(self.env['mrp.production']) as mo_form:
             mo_form.product_id = self.productA
             with mo_form.move_raw_ids.new() as component:
@@ -3621,30 +3614,11 @@ class TestMrpOrder(TestMrpCommon, MailCase):
         mo.button_mark_done()
         mo.action_toggle_is_locked()
 
-        with freeze_time(mo.date_finished + timedelta(minutes=3)):
-            with Form(mo) as mo_form:
-                with mo_form.move_raw_ids.edit(0) as line:
-                    line.quantity = 1
-                with mo_form.move_raw_ids.new() as component:
-                    component.product_id = self.productC
-                    component.quantity = 1
-                mo = mo_form.save()
-
-            self.assertRecordValues(mo.move_raw_ids, [{
-                'picked': True,
-                'state': 'done',
-                'date': mo.date_finished,
-                'quantity': 1,
-                'raw_material_production_id': mo.id,
-            } for move in mo.move_raw_ids])
-
-            self.assertRecordValues(mo.move_raw_ids.move_line_ids, [{
-                'picked': True,
-                'state': 'done',
-                'date': mo.date_finished,
-                'quantity': 1,
-                'production_id': mo.id,
-            } for move in mo.move_raw_ids])
+        mo_form = Form(mo)
+        with self.assertRaisesRegex(AssertionError, "field 'move_raw_ids' is not editable"):
+            mo_form.move_raw_ids.edit(0)
+        with self.assertRaisesRegex(AssertionError, "field 'move_raw_ids' is not editable"):
+            mo_form.move_raw_ids.new()
 
     def test_compute_picking_type_id(self):
         """
@@ -4202,6 +4176,37 @@ class TestMrpOrder(TestMrpCommon, MailCase):
         self.assertEqual(mo.workorder_ids.duration_expected, 60, "Initial workorder duration should be 60 minutes.")
         mo.uom_id = self.uom_dozen
         self.assertEqual(mo.workorder_ids.duration_expected, 720, "Workorder duration should be 720 minutes after changing the MO UoM.")
+
+    def test_workorder_duration_with_bom_quantity_in_a_smaller_uom(self):
+        """Check that a work order lasts the full number of cycles when the BoM quantity
+        is expressed in a smaller unit than the order.
+        """
+        self.workcenter_2.capacity_ids.unlink()
+        mo = self.env['mrp.production'].create({
+            'bom_id': self.bom_4.id,
+            'uom_id': self.uom_dozen.id,
+            'product_qty': 2.0,
+        })
+        # 2 Dozens is 24 Units, which needs 24 cycles of 1 Unit at 60 minutes each.
+        self.assertEqual(mo.workorder_ids.duration_expected, 1440)
+
+    def test_workorder_duration_with_capacity_in_a_smaller_uom(self):
+        """Check that a work order lasts the full number of cycles when the work center
+        capacity is expressed in a smaller unit than the order.
+        """
+        self.workcenter_2.capacity_ids.unlink()
+        self.env['mrp.workcenter.capacity'].create({
+            'workcenter_id': self.workcenter_2.id,
+            'uom_id': self.uom_unit.id,
+            'capacity': 2.0,
+        })
+        mo = self.env['mrp.production'].create({
+            'bom_id': self.bom_4.id,
+            'uom_id': self.uom_dozen.id,
+            'product_qty': 10.0,
+        })
+        # 10 Dozens is 120 Units, which needs 60 cycles of 2 Units at 60 minutes each.
+        self.assertEqual(mo.workorder_ids.duration_expected, 3600)
 
     def test_multi_edit_start_date_wo(self):
         """
@@ -5624,7 +5629,7 @@ class TestMrpOrderPostInstall(TestMrpCommon):
         self.assertRecordValues(mo.lot_producing_ids.sorted('name'), [
             {'name': f"sn#0{13 + i}"} for i in range(20)
         ])
-        Form.from_action(self.env, mo.button_mark_done()).save().action_confirm()
+        mo.button_mark_done()
         self.assertRecordValues(mo.production_group_id.production_ids.sorted('state'), [
             {'state': 'confirmed', 'product_qty': 16.0, 'qty_produced': 0.0},
             {'state': 'done', 'product_qty': 20.0, 'qty_produced': 20.0},
@@ -5650,6 +5655,23 @@ class TestTourMrpOrder(HttpCase):
 
         self.start_tour(url, 'test_mrp_production_product_catalog', login='admin')
         self.assertEqual(len(mo.move_raw_ids), 1)
+
+    def test_mo_overview_no_byproducts(self):
+        """ The MO Overview must render for a production with no byproducts,
+        which is the default case since MoOverviewByproductsBlock is always
+        instantiated regardless of whether the BoM has byproduct lines. """
+        product = self.env['product.product'].create({
+            'name': 'MO Overview Test Product',
+            'is_storable': True,
+        })
+        mo = self.env['mrp.production'].create({
+            'product_id': product.id,
+            'product_uom_qty': 1.0,
+        })
+        mo.action_confirm()
+
+        url = f'/odoo/action-mrp.mrp_production_action/{mo.id}'
+        self.start_tour(url, 'mrp_mo_overview_no_byproducts_tour', login='admin')
 
     def test_manufacturing_and_byproduct_sm_to_sml_synchronization(self):
         """ Test the synchronization between stock moves and stock move lines within

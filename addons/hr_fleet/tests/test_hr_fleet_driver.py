@@ -16,11 +16,7 @@ class TestHrFleetDriver(common.TransactionCase):
             'name': 'Test Employee'
         })
 
-        cls.test_user = cls.env['res.users'].create({
-            'login': 'test',
-            'name': 'The King',
-            'email': 'noop@example.com',
-        })
+        cls.test_user = cls.env.ref('base.test_user')
 
         cls.brand = cls.env["fleet.vehicle.model.brand"].create({
             "name": "Audi",
@@ -70,7 +66,7 @@ class TestHrFleetDriver(common.TransactionCase):
         self.assertEqual(self.car2.driver_id.id, False)
 
     def test_driver_employee_multi_company(self):
-        other_company = self.env['res.company'].create({
+        other_company = self.add_company('base.test_company', {
             'name': 'Other Company'
         })
         test_employee2 = self.env['hr.employee'].with_company(other_company).create({
