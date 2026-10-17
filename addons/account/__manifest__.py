@@ -1,7 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 {
     'name': 'Invoicing',
-    'version': '1.5',
+    'version': '1.6',
     'summary': 'Invoices & Payments',
     'sequence': 10,
     'description': """
@@ -106,7 +106,7 @@ You could use this simplified accounting in case you work with an (external) acc
             'account/static/src/css/account_bank_and_cash.css',
             'account/static/src/css/account.css',
             'account/static/src/css/account_payment.css',
-            'account/static/src/scss/account.scss',
+            'account/static/src/scss/account.css',
             'account/static/src/scss/account_journal_dashboard.scss',
             'account/static/src/scss/account_searchpanel.css',
             'account/static/src/scss/account_payment_term.css',

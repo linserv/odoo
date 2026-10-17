@@ -91,7 +91,9 @@ class MailActivitySchedule(models.TransientModel):
         readonly=False, store=True, sanitize_style=True)
     activity_user_id = fields.Many2one(
         'res.users', 'Assigned to', compute='_compute_activity_user_id',
-        readonly=False, store=True)
+        readonly=False, store=True,
+        domain=lambda self: [('share', '=', False), ('role', '!=', 'light_user')],
+    )
     activity_role_id = fields.Many2one(
         'res.role', 'Role', compute='_compute_activity_role_id',
         readonly=False, store=True)
@@ -104,7 +106,6 @@ class MailActivitySchedule(models.TransientModel):
         for scheduler in self.filtered('res_model'):
             scheduler.res_model_id = self.env['ir.model']._get_id(scheduler.res_model)
 
-    @api.depends_context('active_ids')
     def _compute_res_ids(self):
         context = self.env.context
         for scheduler in self.filtered(lambda scheduler: not scheduler.res_ids):
@@ -180,7 +181,6 @@ class MailActivitySchedule(models.TransientModel):
         for scheduler in self:
             scheduler.plan_available_ids = self.env['mail.activity.plan'].search(scheduler._get_plan_available_base_domain())
 
-    @api.depends_context('plan_mode')
     @api.depends('plan_available_ids')
     def _compute_plan_id(self):
         for scheduler in self:
@@ -433,7 +433,6 @@ class MailActivitySchedule(models.TransientModel):
             return self._action_schedule_activities_personal()
         records = self._get_applied_on_records()
         is_single_call = self.activity_category == 'phonecall' and len(records) == 1
-        phone = self.phone if is_single_call else False
         activity_values = {
             'activity_type_id': self.activity_type_id.id,
             'automated': False,
@@ -445,7 +444,7 @@ class MailActivitySchedule(models.TransientModel):
             'activity_user_id_fname': self.activity_user_id_fname,
         }
         if is_single_call:
-            activity_values['phone'] = phone
+            activity_values['phone'] = self._get_phone_number_for_activity()
         return records.activity_schedule(**activity_values)
 
     def _action_schedule_activities_personal(self):
@@ -470,6 +469,11 @@ class MailActivitySchedule(models.TransientModel):
     def _get_phone_number(self, record):
         """Hook for phone modules to find the number."""
         return False
+
+    def _get_phone_number_for_activity(self):
+        """Hook for phone modules to prepare the number stored on the activity."""
+        self.ensure_one()
+        return self.phone
 
     def _evaluate_res_ids(self):
         """ Parse composer res_ids, which can be: an already valid list or

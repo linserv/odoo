@@ -121,7 +121,9 @@ class MailActivity(models.Model):
     user_id = fields.Many2one(
         'res.users', 'Assigned to',
         index=True, required=False, ondelete='cascade',
-        compute='_compute_user_id', precompute=True, store=True, readonly=False)
+        compute='_compute_user_id', precompute=True, store=True, readonly=False,
+        domain=lambda self: [('share', '=', False), ('role', '!=', 'light_user')],
+    )
     role_id = fields.Many2one(
         'res.role', 'Role',
         index='btree_not_null', required=False, ondelete='set null',
@@ -207,18 +209,22 @@ class MailActivity(models.Model):
             records = self.env[model].browse(data["record_ids"])
             for record, activity in zip(records, data["activities"]):
                 try:
-                    phone = record.phone if "phone" in record else False
+                    phone = self._get_phone_number_from_record(record)
                     if not phone:
                         recipient = next(
                             iter(record._mail_get_partners(introspect_fields=True)[record.id]),
                             self.env["res.partner"],
                         )
-                        phone = recipient.phone
+                        phone = self._get_phone_number_from_record(recipient) if recipient else False
                 # cascade-deleted records might make this crash, be defensive
                 except MissingError:
                     phone = False
                 phone_numbers_by_activity[activity] = phone
         return phone_numbers_by_activity
+
+    def _get_phone_number_from_record(self, record):
+        """Hook for phone modules to find the phone number of ``record``."""
+        return record.phone if "phone" in record else False
 
     @api.model
     def _compute_state_from_date(self, date_deadline, tz=False):
@@ -731,9 +737,9 @@ class MailActivity(models.Model):
                     activities_to_remove += activity
 
                 message_attachments = activity_attachments.get(activity.id) or self.env['ir.attachment']
-                attachment_ids = (attachment_ids or []) + message_attachments.ids
-                if attachment_ids:
-                    activity.attachment_ids = attachment_ids
+                activity_attachment_ids = (attachment_ids or []) + message_attachments.ids
+                if activity_attachment_ids:
+                    activity.attachment_ids = activity_attachment_ids
 
                 # Moving the attachments in the message
                 # TODO: Fix void res_id on attachment when you create an activity with an image

@@ -874,12 +874,12 @@ class ProductProduct(models.Model):
         return imported_product.exists() + products
 
     @api.model
-    def load(self, fields, data):
+    def load(self, fields, data, *, limit=None):
         if 'import_attribute_values' in fields and not self.env.context.get('from_template_import'):
             res = self.env['product.template'].load(fields, data)
             res['ids'] = self.search(Domain('product_tmpl_id', 'in', res['ids'])).ids
             return res
-        return super().load(fields, data)
+        return super().load(fields, data, limit=limit)
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -1166,7 +1166,8 @@ class ProductProduct(models.Model):
         products = self.browse()
         domain = Domain(domain or Domain.TRUE)
         if operator in positive_operators:
-            products = self.search_fetch(domain & Domain('default_code', operator, name), ['display_name'], limit=limit) \
+            code_operator = '=ilike' if operator == 'ilike' else '='
+            products = self.search_fetch(domain & Domain('default_code', code_operator, name), ['display_name'], limit=limit) \
                 or self.search_fetch(domain & Domain('barcode', '=', name), ['display_name'], limit=limit)
         if not products:
             if is_positive:

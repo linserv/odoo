@@ -232,6 +232,7 @@ class PosConfig(models.Model):
         string='Download Invoice',
         help="Automatically download the invoice PDF when an order is invoiced.",
     )
+    welcome_message = fields.Char(string='Customer Message', help="Set the message that will be displayed on the PoS customer display")
 
     def _get_next_order_refs(self, device_identifier='0'):
         next_number = self.order_backend_seq_id._next()
@@ -341,6 +342,7 @@ class PosConfig(models.Model):
         record['_has_cash_move_perm'] = self.env.user._has_cash_move_permission()
         record['_has_cash_delete_perm'] = self.env.user._has_cash_delete_permission()
         record["_unit_uom_id"] = self.env.ref('uom.product_uom_unit').id
+        record['_limited_partner_count'] = config._get_limited_partner_count()
 
         session = config.current_session_id
         last_opening = config._get_opening_balance() if session else 0.0
@@ -513,7 +515,7 @@ class PosConfig(models.Model):
             statistics['orders']['paid'] = {
                 'amount': total_paid,
                 'count': paid_order_count,
-                'display': f"{currency.format(total_paid)} ({paid_order_count} {'order' if paid_order_count == 1 else 'orders'})",
+                'display': f"{currency.format(total_paid)} ({paid_order_count} {self.env._('order') if paid_order_count == 1 else self.env._('orders')})",
             }
 
         if draft_orders:
@@ -522,7 +524,7 @@ class PosConfig(models.Model):
             statistics['orders']['draft'] = {
                 'amount': total_draft,
                 'count': count_draft,
-                'display': f"{currency.format(total_draft)} ({count_draft} {'order' if count_draft == 1 else 'orders'})",
+                'display': f"{currency.format(total_draft)} ({count_draft} {self.env._('order') if count_draft == 1 else self.env._('orders')})",
             }
 
         return statistics
@@ -1105,7 +1107,7 @@ class PosConfig(models.Model):
                 partner.company_id=%s OR partner.company_id IS NULL
             )
             ORDER BY  COALESCE(pm.order_count, 0) DESC,
-                      NAME limit %s offset %s;
+                      NAME, partner.id limit %s offset %s;
         """, self.company_id.id, self._get_limited_partner_count(), offset))
 
     def action_pos_config_modal_edit(self):
@@ -1147,6 +1149,7 @@ class PosConfig(models.Model):
             'access_token': self.access_token,
             'has_bg_img': bool(self.customer_display_bg_img),
             'company_id': self.company_id.id,
+            'welcome_message': self.welcome_message,
         }
 
     @api.model

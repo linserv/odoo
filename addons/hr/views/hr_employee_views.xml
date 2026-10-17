@@ -110,8 +110,6 @@
                     <header groups="hr.group_hr_user">
                         <button string="Invite" name="action_send_invitation" type="object"
                                 class="btn btn-primary align-self-center" invisible="user_id" groups="base.group_erp_manager"/>
-                        <button name="%(plan_wizard_action)d" string="Launch Plan" type="action" class="o_button_plan_wizard_action align-self-center"
-                            groups="hr.group_hr_user" invisible="not active or not id" context="{'sort_by_responsible': True}"/>
                         <field name="user_state" class="align-self-center d-none d-md-block" widget="employee_user_status"/>
                         <field name="version_id" class="align-self-center" widget="versions_timeline" context="{'version_revision': version_revision}" invisible="not id" options="{'clickable': True}" readonly="False"/>
                         <field name="version_revision" invisible="1"/>
@@ -237,7 +235,7 @@
                                                 context="{'show_address': 1}"
                                                 options='{"highlight_first_line": True}' invisible="1"/>
                                             <field name="work_location_id"
-                                                string="Usual Work Location"
+                                                string="Work Address"
                                                 context="{'default_address_id': address_id}"
                                                 placeholder="e.g. Building 2, Remote, etc."/>
                                                 <field name="monday_location_id" placeholder="Unspecified" force_save="1"/>
@@ -449,7 +447,7 @@
                                         <label for="user_id"/>
                                         <div class="o_row align-items-center">
                                             <field name="user_id" string="User" placeholder="No user linked"
-                                                domain="[('company_ids', 'in', company_id)]"
+                                                domain="[('company_ids', 'in', company_id), ('share', '=', False)]"
                                                 context="{
                                                     'default_create_employee_id': id,
                                                     'default_name': name,
@@ -457,12 +455,11 @@
                                                     'default_mobile': mobile_phone,
                                                     'default_login': work_email,
                                                     'default_partner_id': work_contact_id,
-                                                    'search_default_filter_no_share': 1,
                                                 }"
                                                 widget="many2one_avatar_user"
                                                 groups="base.group_erp_manager"/>
                                             <field name="user_id" string="User" placeholder="No user linked"
-                                                domain="[('company_ids', 'in', company_id)]"
+                                                domain="[('company_ids', 'in', company_id), ('share', '=', False)]"
                                                 context="{
                                                     'default_create_employee_id': id,
                                                     'default_name': name,
@@ -470,7 +467,6 @@
                                                     'default_mobile': mobile_phone,
                                                     'default_login': work_email,
                                                     'default_partner_id': work_contact_id,
-                                                    'search_default_filter_no_share': 1,
                                                 }"
                                                 widget="many2one_avatar_user"
                                                 groups="!base.group_erp_manager"
@@ -693,7 +689,7 @@
                                 <field name="employee_properties" widget="properties"/>
                                 <field class="hr_tags" name="category_ids" widget="many2many_tags" options="{'color_field': 'color', 'on_tag_click': 'edit_color'}" optional="hide"/>
                                 <footer class="py-0">
-                                    <div class="d-flex ms-auto">
+                                    <div class="d-flex ms-auto align-items-center">
                                         <field name="user_id" widget="many2one_avatar_user" readonly="1" class="m-1 ms-2 d-flex align-items-center justify-content-center"/>
                                         <field name="activity_ids" widget="kanban_activity" class="m-1 ms-2 d-flex align-items-center justify-content-center"/>
                                     </div>

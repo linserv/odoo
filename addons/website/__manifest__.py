@@ -264,6 +264,7 @@
         # Replaces a post_init_hook that should be run on upgrade too.
         'data/update_theme_images.xml',
         'views/website_templates_svg.xml',
+        'views/website_form_custom_log_template.xml',
         'security/ir.access.csv',
     ],
     'demo': [
@@ -307,7 +308,6 @@
             'website/static/src/js/utils.js',
             'web/static/src/core/autocomplete/*',
             'website/static/src/components/autocomplete_with_pages/*',
-            'website/static/src/js/tours/tour_utils.js',
             'website/static/src/js/content/compatibility.js',
             'website/static/src/js/user_custom_javascript.js',
             'website/static/src/js/http_cookie.js',
@@ -380,6 +380,7 @@
         ],
         'web.assets_tests': [
             'website/static/tests/tours/**/*',
+            'website/static/src/js/tours/tour_utils.js',
             'website/static/src/client_actions/website_preview/website_builder_action_test_mode.js',
             'html_builder/static/src/utils/utils_css.js',
         ],
@@ -394,6 +395,7 @@
             'website/static/src/js/tours/tour_utils.js',
             'website/static/src/js/highlight_utils.js',
             'website/static/src/client_actions/*/*',
+            ('remove', 'website/static/src/client_actions/*/*.dark.css'),
             ('remove', 'website/static/src/client_actions/website_preview/website_builder_action_test_mode.js'),
             'website/static/src/components/fields/*',
             'website/static/src/components/fullscreen_indication/fullscreen_indication.js',
@@ -411,6 +413,7 @@
         ],
         "web.assets_web_dark": [
             'website/static/src/components/dialog/*.dark.css',
+            'website/static/src/client_actions/*/*.dark.css',
             'website/static/src/scss/website.backend.dark.css',
             'website/static/src/components/website_loader/website_loader.dark.css'
         ],

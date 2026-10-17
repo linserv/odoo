@@ -17,11 +17,15 @@ import { groupAttachments } from "@mail/utils/common/attachments";
 import {
     Component,
     computed,
+    onMounted,
+    onPatched,
+    onWillUnmount,
     proxy,
+    shallowEqual,
     signal,
     t,
-    untrack,
     useApp,
+    useOnChange,
     useProps,
     useScope,
 } from "@odoo/owl";
@@ -51,10 +55,11 @@ import { assignGetter, loadCssFromBundle } from "@mail/utils/common/misc";
 import { MessageContextMenu } from "@mail/core/common/message_context_menu";
 import { Priority } from "@mail/core/common/priority";
 import { useAncestors } from "@mail/core/common/ancestor_plugin";
-import { useLayoutEffect } from "@web/owl2/utils";
 import { isEventHandled, markEventHandled } from "@web/core/utils/misc";
 import { renderToElement } from "@web/core/utils/render";
 import { computedShallowEqual } from "@mail/utils/common/signal";
+import { PANEL_CONTAINER_TYPE } from "@mail/core/common/action";
+import { QuickReactionAction } from "@mail/core/common/quick_reaction_menu";
 
 /** Button of the dropdown of the actions that do not fit in the quick actions of a message. */
 class MoreMessageInlineAction extends CircleInlineAction {
@@ -145,6 +150,7 @@ export class Message extends Component {
         useForwardRefsToParent("messageRefs", (props) => props.message.id, this.rootRef);
         this.messageBody = signal.ref(HTMLDivElement);
         this.messageContentRef = signal.ref(HTMLDivElement);
+        this.richBodyRef = signal.ref(HTMLDivElement);
         this.messageActions = useMessageActions(this.messageActionsParams);
         this.shadowBody = signal.ref(HTMLDivElement);
         this.shadowRoot = signal(null, { type: t.ref(ShadowRoot) });
@@ -153,10 +159,11 @@ export class Message extends Component {
         this.openReactionMenu = this.openReactionMenu.bind(this);
         this.optionsDropdown = useDropdownState();
         this.isActive = computed(() => Boolean(this._isActive));
-        useLayoutEffect(
-            () => {
-                if (this.shadowBody()) {
-                    this.shadowRoot.set(this.shadowBody().attachShadow({ mode: "open" }));
+        useOnChange(
+            () => [this.shadowBody()],
+            (shadowBody) => {
+                if (shadowBody) {
+                    this.shadowRoot.set(shadowBody.attachShadow({ mode: "open" }));
                     const color = this.store.isOdooWhiteTheme ? "dark" : "white";
                     loadCssFromBundle(this.shadowRoot(), "mail.assets_message_email");
                     const shadowStyle = document.createElement("style");
@@ -215,12 +222,18 @@ export class Message extends Component {
                 `;
                     this.shadowRoot().appendChild(ellipsisStyle);
                 }
-            },
-            () => [untrack(this.shadowBody)]
+            }
         );
-        useLayoutEffect(
-            () => {
-                const shadowRoot = this.shadowRoot();
+        useOnChange(
+            () => [
+                this.shadowRoot(),
+                this.message.showTranslation,
+                this.message.richTranslationValue,
+                this.props.messageSearch?.searchTerm,
+                this.message.richBody,
+                this.isEditing,
+            ],
+            (shadowRoot) => {
                 if (shadowRoot) {
                     const bodyEl = createElementWithContent(
                         "span",
@@ -238,34 +251,34 @@ export class Message extends Component {
                         shadowRoot.removeChild(bodyEl);
                     };
                 }
-            },
-            () => [
-                this.shadowRoot(),
-                this.message.showTranslation,
-                this.message.richTranslationValue,
-                this.props.messageSearch?.searchTerm,
-                this.message.richBody,
-                this.isEditing,
-            ]
+            }
         );
-        useLayoutEffect(
-            () => {
-                const roots = this.isEditing
-                    ? []
-                    : this.prepareMessageBody(this.messageBody()) ?? [];
-                return () => {
-                    for (const root of roots) {
-                        root.destroy();
-                    }
-                };
-            },
-            () => [
-                this.isEditing,
-                this.message.richBody,
-                this.props.messageSearch?.searchTerm,
-                untrack(this.messageBody),
-            ]
-        );
+        // prepared on the patched body: it renders the content these dependencies describe
+        let preparedFor;
+        let bodyRoots = [];
+        const destroyBodyRoots = () => {
+            for (const root of bodyRoots) {
+                root.destroy();
+            }
+            bodyRoots = [];
+        };
+        const prepareRenderedBody = () => {
+            const current = {
+                isEditing: this.isEditing,
+                richBody: this.message.richBody,
+                searchTerm: this.props.messageSearch?.searchTerm,
+                bodyEl: this.messageBody(),
+            };
+            if (shallowEqual(current, preparedFor)) {
+                return;
+            }
+            preparedFor = current;
+            destroyBodyRoots();
+            bodyRoots = this.isEditing ? [] : this.prepareMessageBody(this.messageBody()) ?? [];
+        };
+        onMounted(prepareRenderedBody);
+        onPatched(prepareRenderedBody);
+        onWillUnmount(destroyBodyRoots);
     }
 
     /** @type {import("@mail/core/common/action_list").GetActionComponent} */
@@ -273,7 +286,24 @@ export class Message extends Component {
         if (!inline) {
             return undefined;
         }
+        if (action.id === "reaction" && !isMobileOS()) {
+            return QuickReactionAction;
+        }
         return action.definition.isMoreAction ? MoreMessageInlineAction : CircleInlineAction;
+    }
+
+    /**
+     * The menu of "Expand" opens beside the message, away from its side.
+     *
+     * @type {import("@mail/core/common/action").PanelContainer}
+     */
+    get actionPanelContainer() {
+        const side = this.isAlignedRight ? "left" : "right";
+        return {
+            type: PANEL_CONTAINER_TYPE.DROPDOWN,
+            menuClass: "o-mail-Message-moreMenu",
+            position: `${side}-${this.message.threadAsNewest ? "end" : "start"}`,
+        };
     }
 
     get messageActionsParams() {
@@ -308,14 +338,6 @@ export class Message extends Component {
         return moreActions?.length
             ? this.messageActions.more(this.messageActionsParams, {
                   actions: moreActions,
-                  dropdownMenuClass: "o-mail-Message-moreMenu",
-                  dropdownPosition: this.isAlignedRight
-                      ? this.message.threadAsNewest
-                          ? "left-end"
-                          : "left-start"
-                      : this.message.threadAsNewest
-                      ? "right-end"
-                      : "right-start",
                   name: _t("Expand"),
               })
             : undefined;
@@ -396,6 +418,56 @@ export class Message extends Component {
                 !this.isEditing && !isNoteVisual && !this.props.squashed,
             "flex-grow-1": this.isEditing,
             o_track: this.message.message_type === "tracking",
+        };
+    }
+
+    get richBodyAttClass() {
+        return {};
+    }
+
+    get headerAttClass() {
+        return { "mb-1": !this.message.isNote };
+    }
+
+    get contentContainerAttClass() {
+        return { "flex-row-reverse": this.isAlignedRight };
+    }
+
+    get textContentAttClass() {
+        return { "w-100": this.isEditing };
+    }
+
+    get bubbleColorAttClass() {
+        return {
+            "o-blue": this.message.bubbleColor === "blue",
+            "o-green": this.message.bubbleColor === "green",
+            "o-orange": this.message.bubbleColor === "orange",
+        };
+    }
+
+    get bubbleTailAttClass() {
+        return this.bubbleColorAttClass;
+    }
+
+    get bubbleAttClass() {
+        return {
+            "o-rounded-bubble": this.props.squashed,
+            "o-rounded-bottom-bubble": !this.props.squashed,
+            "o-rounded-start-bubble": !this.props.squashed && this.isAlignedRight,
+            "o-rounded-end-bubble": !this.props.squashed && !this.isAlignedRight,
+            ...this.bubbleColorAttClass,
+        };
+    }
+
+    get actionsAttClass() {
+        return {
+            "start-0": this.isAlignedRight,
+            "o-mt-0_5": this.message.bubbleColor && !this.isMobileOS,
+            "my-n2": !this.message.bubbleColor && !this.isMobileOS,
+            "gap-1": this.isMobileOS,
+            "mx-1": !this.isMobileOS,
+            invisible: !this.isActive() && !this.isMobileOS,
+            "o-expanded": this.optionsDropdown.isOpen,
         };
     }
 

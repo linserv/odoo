@@ -1,4 +1,3 @@
-import { escapeTextNodes } from "@html_builder/utils/escaping";
 import { Plugin } from "@html_editor/plugin";
 import { withSequence } from "@html_editor/utils/resource";
 import { markup } from "@odoo/owl";
@@ -47,33 +46,12 @@ export class SaveSnippetPlugin extends Plugin {
 
         return [
             {
-                class: "oi oi-fw oe_snippet_save o_we_hover_warning btn o-hb-btn btn-global-color-hover",
+                class: "oi oi-fw oe_snippet_save o_we_hover_warning btn o_hb_btn btn-global-color-hover",
                 icon: "save",
                 title: _t("Save this block to use it elsewhere"),
                 handler: this.saveSnippet.bind(this),
             },
         ];
-    }
-
-    /**
-     * Execute the `on_will_save_handlers` on {@link snippetEl},
-     * then execute {@link callback}, and finally execute the
-     * `on_saved_handlers` on {@link snippetEl}.
-     * This is used, for example, to stop the interactions before cloning a
-     * snippet, and restarting them after cloning it.
-     *
-     * @param {HTMLElement} snippetEl
-     * @param {Function} callback
-     */
-    async wrapWithBeforeAfterSaveHandlers(snippetEl, callback) {
-        await Promise.all(this.trigger("on_will_save_handlers", snippetEl));
-        let node;
-        try {
-            node = callback();
-        } finally {
-            this.trigger("on_saved_handlers", snippetEl);
-        }
-        return node;
     }
 
     async saveSnippet(el) {
@@ -84,18 +62,15 @@ export class SaveSnippetPlugin extends Plugin {
                 el = childBlockquote;
             }
         }
-        const cleanForSaveProcessors = [
-            ...this.getResource("clean_for_save_processors"),
-            (root) => {
-                escapeTextNodes(root);
-                return root;
-            },
-        ];
-        const savedName = await this.config.saveSnippet(
-            el,
-            cleanForSaveProcessors,
-            this.wrapWithBeforeAfterSaveHandlers.bind(this)
-        );
+        const savedName = await this.config.saveSnippet(el, async (el) => {
+            await Promise.all(this.trigger("on_will_save_handlers", el));
+            const cloneEl = el.cloneNode(true);
+            const cleanedEl = this.processThrough("clean_for_save_processors", cloneEl, {
+                saveSnippet: true,
+            });
+            this.trigger("on_saved_handlers", el);
+            return cleanedEl;
+        });
         this.dependencies.disableSnippets.disableUndroppableSnippets();
         if (savedName) {
             if (this.delegateTo("custom_snippets_notification_overrides", savedName)) {

@@ -1756,8 +1756,8 @@ $-o-carousel-controllers-size: var(--CarouselControllers-size, #{map-get($spacer
             }
             .active.carousel-item-end + .carousel-item-prev.carousel-item-end,
             .carousel-item-prev.carousel-item-end ~ .carousel-item {
-                right: var(--o-carousel-item-width-percentage);
-                transform: translateX(100%);
+                right: calc(var(--o-carousel-item-width-percentage) + var(--o-carousel-gap));
+                transform: translateX(calc(100% + var(--o-carousel-gap)));
                 display: block;
                 margin-right: 0;
             }
@@ -1766,7 +1766,7 @@ $-o-carousel-controllers-size: var(--CarouselControllers-size, #{map-get($spacer
             .carousel-item-start.active,
             .carousel-item-start:not(.active),
             .carousel-item-start:not(.active) ~ .carousel-item {
-                transform: translateX(-100%);
+                transform: translateX(calc(-100% - var(--o-carousel-gap)));
             }
             .carousel-item.active:not(.carousel-item-start):not(.carousel-item-end),
             .carousel-item.active:not(.carousel-item-start):not(.carousel-item-end) ~ .carousel-item {
@@ -3800,6 +3800,10 @@ img.o_image_popup {
     }
 }
 
+.carousel-item > a.slide-link {
+    z-index: $zindex-dropdown - 1;
+}
+
 /*
 The modal title has the fs-3 class, which results
 in a huge font size since it isn’t redefined for the frontend.
@@ -3808,10 +3812,16 @@ in a huge font size since it isn’t redefined for the frontend.
     font-size: 1.35rem !important;
 }
 
-*:has(> .stretched-link:focus-visible) {
-    outline: auto;
-    outline-color: black;
-    outline-offset: 2px;
+.stretched-link:focus-visible::after,
+.slide-link:focus-visible {
+    box-shadow:
+        inset 0 0 0 2px white,
+        inset 0 0 0 4px black;
+
+    @media (forced-colors: active) {
+        outline: 2px solid transparent;
+        outline-offset: -2px;
+    }
 }
 
 // Specific styles for the BottomSheet component when it is used in the frontend

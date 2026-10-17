@@ -122,14 +122,9 @@
 
     .o_form_uri {
         display: inline-block;
-        @include o-hover-text-color($link-color, $link-hover-color);
 
-        > span {
-            @include o-hover-text-color($o-main-text-color, $o-main-text-color);
-        }
-
-        > span:first-child {
-            @include o-hover-text-color($link-color, $link-hover-color);
+        &:focus {
+            color: var(--link-hover-color);
         }
     }
 
@@ -176,18 +171,6 @@
         --o-input-border-color: transparent;
     }
 
-    .o_datepicker {
-        .o_datepicker_button {
-            visibility: hidden;
-        }
-
-        &:hover, &:focus-within {
-            .o_datepicker_button {
-                visibility: visible;
-            }
-        }
-    }
-
     .o_form_renderer {
         max-width: var(--o-form-renderer-max-width);
     }
@@ -214,7 +197,7 @@
 
     /* Sheet BG */
     .o_form_sheet_bg {
-        @include media-only(screen) {
+        @media screen {
             --formView-sheetBg-padding-x: var(--o-bs-spacer-3);
         }
 
@@ -553,14 +536,14 @@
                     /* Full width on first x2many or on second x2many if first is invisible */
                     &:not(.o_group), &.o_invisible_modifier {
                         .o_field_x2many.o_field_x2many_list .o_list_renderer {
-                            @include media-only(screen) {
+                            @media screen {
                                 --ListRenderer-margin-x: var(--Notebook-margin-x);
                                 --ListRenderer-table-padding-x: var(--Notebook-padding-x);
 
                                 margin-top: calc(var(--o-horizontal-padding) * -1);
                             }
 
-                            @include media-only(print) {
+                            @media print {
                                 --ListRenderer-margin-x: 0;
                                 --ListRenderer-table-padding-x: var(--Notebook-padding-x);
 
@@ -590,7 +573,7 @@
         font-weight: var(--o-bs-font-weight-bold);
 
         @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
-            font-size: $o-font-size-base-touch;
+            font-size: var(--o-font-size-base-touch);
         }
 
         &.o_form_label_empty, &.o_form_label_false, &.o_form_label_readonly {
@@ -1037,7 +1020,7 @@
 .o_form_view.o_xxs_form_view {
     .o_group {
         .o_form_label {
-            font-size: $o-label-font-size-factor * $o-font-size-base-touch;
+            font-size: calc(var(--o-label-font-size-factor) * var(--o-font-size-base-touch));
             font-weight: var(--o-bs-font-weight-normal);
         }
     }

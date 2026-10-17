@@ -628,27 +628,12 @@ class HrEmployee(models.Model):
         if not self.env.su and not self.env.user.has_group("hr.group_hr_user"):
             raise AccessError(self.env._("Only HR users can access first version date on an employee."))
 
-        def has_work_hours_between_versions(version_from, version_to):
-            # we consider two versions to be consecutive if no work hours are
-            # in the period between the two versions
-            tz = ZoneInfo(version_from._get_tz())
-            date_from = datetime.combine(version_from.date_end, time.max, tz) if version_from.date_end else date.max
-            date_to = datetime.combine(version_to.date_start, time.min, tz)
-            calendar_id = version_from.resource_calendar_id
-            if not calendar_id:
-                return False
-            elif version_from.date_end and version_from.date_end + relativedelta(days=1) == version_to.date_start:
-                # fast path: back-to-back versions cannot have work hours between them.
-                # We can bypass the expensive calendar lookup
-                return False
-            return bool(calendar_id.get_work_hours_count(date_from, date_to, compute_leaves=False))
-
         versions = self._get_first_versions(date_limit).sorted('date_start')
         # index of the earliest consecutive version
         first_version_index = len(versions) - 1
 
         while first_version_index > 0:
-            if has_work_hours_between_versions(versions[first_version_index - 1], versions[first_version_index]):
+            if versions[first_version_index - 1]._has_work_hours_between_versions(versions[first_version_index]):
                 break  # version_before is not consecutive with first_version
             first_version_index -= 1
         return versions[first_version_index:]
@@ -906,10 +891,12 @@ class HrEmployee(models.Model):
         return self._get_contract_dates(date) != (False, False)
 
     def _is_flexible(self, date=fields.Date.today()):
-        return self._get_version(date).resource_calendar_id._is_flexible()
+        calendar = self._get_version(date).resource_calendar_id
+        return bool(calendar) and calendar._is_flexible()
 
     def _is_fully_flexible(self, date=fields.Date.today()):
-        return self._get_version(date).resource_calendar_id._is_fully_flexible()
+        calendar = self._get_version(date).resource_calendar_id
+        return bool(calendar) and calendar._is_fully_flexible()
 
     def _get_contracts(self, date_start=None, date_end=None, use_latest_version=True, domain=None):
         """
@@ -1619,6 +1606,20 @@ class HrEmployee(models.Model):
         self.update(self._sync_user(self.user_id, (bool(self.image_1920))))
         if not self.name:
             self.name = self.user_id.name
+
+    @api.onchange('work_email')
+    def _onchange_work_email_link_user(self):
+        # link the internal (light or regular) user of that email, unless it is already an employee of the company
+        emails = tools.mail.email_normalize_all(self.work_email)
+        if self.user_id or not emails:
+            return
+        user = self.env['res.users'].search([
+            ('share', '=', False),
+            ('company_ids', 'in', self.company_id.ids),
+            '|', ('login', '=', emails[0]), ('email_normalized', '=', emails[0]),
+        ], limit=1)
+        if user and not user.employee_ids.filtered(lambda employee: employee.company_id == self.company_id):
+            self.update(self._sync_user(user, bool(self.image_1920)))
 
     @api.onchange('company_id')
     def _onchange_timezone(self):
@@ -2438,7 +2439,11 @@ class HrEmployee(models.Model):
 
     def action_new_departure(self):
         self.ensure_one()
-        if not self.is_in_contract:
+        latest_version = self.employee_id.version_ids.sorted("date_version", reverse=True)[0]
+        if self.version_id != latest_version:
+            raise UserError(self.env._("You can only end the collaboration from the latest version of the employee."))
+        today = fields.Date.context_today(self)
+        if latest_version.contract_date_end and latest_version.contract_date_end < today:
             raise UserError(self.env._("You can't end the collaboration of an employee without contract, archive it instead."))
         if self.departure_id:
             if self.departure_id.apply_date:

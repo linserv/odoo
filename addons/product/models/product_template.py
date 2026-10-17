@@ -765,7 +765,7 @@ class ProductTemplate(models.Model):
             template.base_unit_name = template.base_unit_id.name or template.uom_name
 
     @api.model
-    def load(self, fields, data):
+    def load(self, fields, data, *, limit=None):
         """
         Data import for products depends on the presence of variants.
         If 'import_attribute_values' is present, then the product.template files
@@ -793,7 +793,7 @@ class ProductTemplate(models.Model):
         if data_list_templates:
             template_fields = list(fields)
             template_fields.pop(column_no)
-            result = super().load(template_fields, data_list_templates)
+            result = super().load(template_fields, data_list_templates, limit=limit)
             if any(message['type'] == 'error' for message in result['messages']):
                 return result
         else:
@@ -801,7 +801,7 @@ class ProductTemplate(models.Model):
 
         if data_list_products:
             ProductProduct = self.env['product.product'].with_context(from_template_import=True)
-            result_product = ProductProduct.load(fields, data_list_products)
+            result_product = ProductProduct.load(fields, data_list_products, limit=limit)
             if any(message['type'] == 'error' for message in result_product['messages']):
                 return result_product
 
@@ -836,7 +836,7 @@ class ProductTemplate(models.Model):
     def write(self, vals):
         if 'uom_id' in vals:
             products = self.filtered(lambda template: template.uom_id.id != vals['uom_id']).product_variant_ids
-            products.with_context(skip_uom_conversion=True)._update_uom(vals['uom_id'])
+            products.sudo().with_context(skip_uom_conversion=True)._update_uom(vals['uom_id'])
         res = super().write(vals)
         if (self.env.context.get("create_product_product", True) and 'attribute_line_ids' in vals) or (vals.get('active') and len(self.product_variant_ids) == 0):
             self._create_variant_ids()

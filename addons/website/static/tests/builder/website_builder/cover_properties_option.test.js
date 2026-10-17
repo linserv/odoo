@@ -27,12 +27,8 @@ const websiteServiceWithUserModelName = {
     },
     // Minimal context to avoid crashes.
     context: {},
-    websites: [
-        {
-            id: 1,
-            metadata: {},
-        },
-    ],
+    websites: [{ id: 1, metadata: {} }],
+    currentWebsite: { id: 1, metadata: {} },
 };
 
 test("Add image as cover", async () => {
@@ -106,7 +102,7 @@ test("Add image as cover", async () => {
         return true;
     });
 
-    await contains(".o-snippets-top-actions button[data-action='save']").click();
+    await contains(".o_hb_snippets_top_actions button[data-action='save']").click();
     expect.verifySteps(["save attachment", "save cover"]);
 });
 

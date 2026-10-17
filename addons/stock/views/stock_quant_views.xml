@@ -243,7 +243,7 @@ No Stock On Hand. This analysis gives you an overview of the current stock level
         <field name="model">stock.quant</field>
         <field name="arch" type="xml">
             <form string="Create Stock">
-                <div class="alert alert-warning" role="alert" invisible="context.get('readonly_form')">
+                <div class="alert alert-warning" role="alert">
                 You are going to pick products that are not referenced
 in this location. That leads to a negative stock.
                 </div>
@@ -253,11 +253,11 @@ in this location. That leads to a negative stock.
                         <field name="product_id" invisible="1"/> <!-- holds default_product_id from context, used by lot_id domain/context -->
                         <field name="product_id" force_save="1" invisible="1"/> <!-- persisted via force_save so product_id is saved though never shown editable -->
                         <field name="lot_id" domain="[('product_id', '=', product_id)]"
-                            groups="stock.group_production_lot" readonly="context.get('readonly_form')"
+                            groups="stock.group_production_lot" invisible="tracking not in ('serial', 'lot')"
                             context="{'default_product_id': product_id, 'active_picking_id': context.get('active_picking_id')}"/>
-                        <field name="location_id" groups="stock.group_stock_multi_locations" readonly="context.get('readonly_form')"/>
-                        <field name="package_id" groups="stock.group_tracking_lot" invisible="context.get('readonly_form')"/>
-                        <field name="owner_id" groups="stock.group_tracking_owner" invisible="context.get('readonly_form')"/>
+                        <field name="location_id" groups="stock.group_stock_multi_locations"/>
+                        <field name="package_id" groups="stock.group_tracking_lot"/>
+                        <field name="owner_id" groups="stock.group_tracking_owner"/>
                     </group>
                 </group>
             </form>
@@ -306,7 +306,7 @@ in this location. That leads to a negative stock.
                 <field name="uom_id" groups="uom.group_uom"/>
                 <field name='company_id' groups="base.group_multi_company" optional="hide"/>
                 <field name="lot_properties" optional="hide"/>
-                <button name="action_inventory_history" type="object" class="btn btn-link text-info" icon="history" string="History"/>
+                <button name="action_inventory_history" type="object" class="btn btn-hover-info" icon="history" string="History"/>
                 <button name="action_apply_inventory" type="object" string="Apply" class="btn btn-link" icon="save" invisible="not inventory_quantity_set"/>
                 <button name="action_clear_inventory_quantity" type="object" string="Clear" class="btn text-warning" icon="close" invisible="not inventory_quantity_set"/>
             </list>

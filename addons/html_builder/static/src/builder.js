@@ -197,12 +197,8 @@ export class Builder extends Component {
                 key: this.props.localOverlayContainerKey,
                 ref: this.overlayRef,
             },
-            saveSnippet: (snippetEl, cleanForSaveProcessors, wrapWithSaveSnippetHandlers) =>
-                this.snippetModel.saveSnippet(
-                    snippetEl,
-                    cleanForSaveProcessors,
-                    wrapWithSaveSnippetHandlers
-                ),
+            saveSnippet: (snippetEl, cloneAndPrepareForSave) =>
+                this.snippetModel.saveSnippet(snippetEl, cloneAndPrepareForSave),
             snippetModel: this.snippetModel,
             updateInvisibleElementsPanel: () => this.updateInvisibleEls(),
             hideStylingInLinkPopover: true,
@@ -217,6 +213,7 @@ export class Builder extends Component {
             direction: "ltr",
             maxFontSize: 400,
             responsiveFontSizeFallback: true,
+            saveScrollableTables: true,
         };
         this.editor = useEditor(config);
         this.props.onEditorLoad?.(this.editor);
@@ -353,7 +350,7 @@ export class Builder extends Component {
             this.state.pendingTab = tab;
             clearTimeout(this.tabTransitionFallbackTimeout);
             // Set a timeout to ensure the tab switch even when transitions
-            // are disabled on .o-tab-content
+            // are disabled on .o_hb_tab_content
             this.tabTransitionFallbackTimeout = setTimeout(
                 () => this.completeTabSwitch(),
                 TAB_TRANSITION_FALLBACK_DELAY

@@ -25,7 +25,7 @@
     <BuilderRow t-if="this.canChangeFieldsLayout" label.translate="Labels Position">
         <BuilderButtonGroup action="'selectLabelsPosition'">
             <BuilderButton title.translate="Hide" actionValue="'none'" id="'label_position_hide_opt'">
-                <i class="oi" data-icon="visibility_off"/>
+                <i class="oi" data-icon="visibility_off" role="img" aria-hidden="true"/>
             </BuilderButton>
             <BuilderButton title.translate="Top" actionValue="'top'" iconImg="'/website/static/src/img/snippets_options/pos_top.svg'" id="'label_position_top_opt'"/>
             <BuilderButton ltrRtlMapping="'left-right'" title.translate="Left" actionValue="'left'" iconImg="'/website/static/src/img/snippets_options/pos_left.svg'"/>
@@ -99,7 +99,7 @@
 <t t-name="website.s_website_form_field_option">
     <BuilderRow label.translate="Type">
         <BuilderSearchSelect t-if="!this.domState.elClassList.includes('s_website_form_model_required')"
-            groups="this.state.fieldTypeItems" preview="false"/>
+            groups="this.fieldOptionData().fieldTypeItems" preview="false"/>
     </BuilderRow>
     <BuilderRow label.translate="Input Type">
         <BuilderSelect t-if="!this.domState.elClassList.includes('s_website_form_custom') and ['char', 'email', 'tel', 'url'].includes(this.domState.elDataset.type) and !this.domState.elClassList.includes('s_website_form_model_required')"
@@ -111,8 +111,9 @@
             <BuilderSelectItem actionValue="'url'">Url</BuilderSelectItem>
         </BuilderSelect>
     </BuilderRow>
+    <t t-set="valueList" t-value="this.loadedFieldOptionData()?.valueList"/>
     <BuilderRow label.translate="Selection type">
-        <BuilderSelect t-if="this.isExistingFieldSelectType and this.state.valueList"
+        <BuilderSelect t-if="this.isExistingFieldSelectType and valueList"
             id="'existing_field_select_type_opt'" preview="false" action="'existingFieldSelectType'"
         >
             <BuilderSelectItem actionValue="'many2many'" t-if="this.isExistingFieldSelectTypeMultiple">Checkbox</BuilderSelectItem>
@@ -206,20 +207,20 @@
             applyWithUnit="false"
         />
     </BuilderRow>
-    <BuilderRow t-if="this.state.valueList and (!(this.domState.fieldName === 'state_id' and this.isActiveItem('link_state_to_country_opt')))">
+    <BuilderRow t-if="valueList and (!(this.domState.fieldName === 'state_id' and this.isActiveItem('link_state_to_country_opt')))">
         <div class="d-flex flex-column w-100">
-            <p class="hb-row-label mb-0 flex-grow-0 flex-shrink-0 flex-basis-auto">
-                <t t-out="this.state.valueList.title" />
+            <p class="o_hb_row_label mb-0 flex-grow-0 flex-shrink-0 flex-basis-auto">
+                <t t-out="valueList.title" />
             </p>
             <BuilderList
                 t-key="this.getFieldKey"
                 action="'setFormCustomFieldValueList'"
-                addItemTitle="this.state.valueList.addItemTitle"
-                itemShape="{ display_name: 'text', selected: this.state.valueList.checkType }"
-                default="{ display_name: this.state.valueList.defaultItemName, selected: false }"
-                defaultNewValue="{ id: this.state.valueList.defaultItemName }"
+                addItemTitle="valueList.addItemTitle"
+                itemShape="{ display_name: 'text', selected: valueList.checkType }"
+                default="{ display_name: valueList.defaultItemName, selected: false }"
+                defaultNewValue="{ id: valueList.defaultItemName }"
                 forbidLastItemRemoval="true"
-                records="this.state.valueList.availableRecords"/>
+                records="valueList.availableRecords"/>
         </div>
     </BuilderRow>
     <BuilderRow label.translate="Add Other" t-if="this.isOtherOptionSupported" tooltip.translate="Allow people to add their own option">
@@ -247,7 +248,7 @@
                     max="this.domStateCurrentFieldInput.maxLength"
                     applyTo="`input, textarea`"
                 />
-            </BuilderRow>   
+            </BuilderRow>
             <BuilderRow label.translate="Max Characters" level="1">
                 <BuilderNumberInput
                     title.translate="The maximum number of characters allowed."
@@ -360,10 +361,10 @@
     </BuilderRow>
     <BuilderRow t-if="this.isMultipleTextConditionForRequirementOptionVisible">
         <div class="d-flex flex-column w-100">
-            <p class="hb-row-label mb-0 flex-basis-auto"
+            <p class="o_hb_row_label mb-0 flex-basis-auto"
                 t-att-data-tooltip="this.multiTextRequirementConfig.tooltip">
                 <t t-out="this.multiTextRequirementConfig.title"/>
-                <i class="oi icon-sup" data-icon="question_mark"/>
+                <i class="oi o_hb_icon_sup" data-icon="question_mark" role="img" aria-hidden="true"/>
             </p>
             <BuilderList
                 dataAttributeAction="'requirementCondition'"
@@ -385,10 +386,10 @@
         </BuilderSelect>
     </BuilderRow>
     <t t-if="this.isActiveItem('hidden_if_opt')">
-        <div class="d-flex position-relative p-1 px-2 ps-3 hb-row">
+        <div class="d-flex position-relative p-1 px-2 ps-3 o_hb_row">
             <BuilderSelect id="'hidden_condition_opt'" preview="false">
                 <!-- Load every existing form input -->
-                <BuilderSelectItem t-foreach="this.state.conditionInputs" t-as="input" t-key="input.name"
+                <BuilderSelectItem t-foreach="this.fieldOptionData().conditionInputs" t-as="input" t-key="input.name"
                     action="'setVisibilityDependency'" actionValue="input.name"
                     t-out="input.textContent"
                 />
@@ -456,12 +457,12 @@
                 <BuilderSelectItem dataAttributeActionValue="'!selected'">Is not equal to</BuilderSelectItem>
             </BuilderSelect>
         </div>
-        <div class="d-flex position-relative p-1 px-2 ps-3 hb-row" data-name="hidden_condition_additional_text">
+        <div class="d-flex position-relative p-1 px-2 ps-3 o_hb_row" data-name="hidden_condition_additional_text">
             <BuilderSelect t-if="!this.isMultiSelectVisible"
                 id="'hidden_condition_no_text_opt'" preview="false" dataAttributeAction="'visibilityCondition'"
             >
                 <!-- checkbox, select, radio possible values -->
-                <BuilderSelectItem t-foreach="this.state.conditionValueList" t-as="record" t-key="record.value"
+                <BuilderSelectItem t-foreach="this.loadedFieldOptionData()?.conditionValueList or []" t-as="record" t-key="record.value"
                     dataAttributeActionValue="record.value"
                     t-out="record.textContent"
                 />

@@ -1307,6 +1307,7 @@ class Website(Home):
                 mapping = record['_mapping']
                 mapped = {
                     '_icon': record.get('_icon'),
+                    'group_name': group_name,
                 }
                 skip_matching_area = False
                 for mapped_name, field_meta in mapping.items():
@@ -1923,6 +1924,7 @@ class Website(Home):
         """
         return {
             'web.assets_frontend': request.env['ir.qweb']._get_asset_link_urls('web.assets_frontend', request.session.debug),
+            'font_urls': self.env.website._get_font_urls(),
         }
 
     @http.route(['/website/update_footer_template'], type='jsonrpc', auth='user', website=True)

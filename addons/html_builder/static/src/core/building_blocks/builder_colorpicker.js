@@ -48,9 +48,9 @@ function useColorPickerBuilderComponent(props) {
         //     // TODO try to remove it. We need to move hook in BuilderComponent
         //     return {};
         // }
-        const actionWithGetValue = getAllActions().find(
-            ({ actionId }) => getAction(actionId).getValue
-        );
+        const actionWithGetValue =
+            getAllActions().find(({ actionId }) => getAction(actionId).has("getValue")) ??
+            getAllActions()[0];
         const { actionId, actionParam } = actionWithGetValue;
         const actionValue = getAction(actionId).getValue({ editingElement, params: actionParam });
         return {
@@ -177,8 +177,8 @@ export class BuilderColorPicker extends Component {
         selectedTab: t.string().optional("theme"),
         defaultColor: t.string().optional("#FFFFFF00"),
         defaultOpacity: t.number().optional(),
-        colorPickerClassName: t.string().optional("o-hb-colorpicker"),
-        colorPickerPopoverClassName: t.string().optional("o-hb-colorpicker-popover"),
+        colorPickerClassName: t.string().optional("o_hb_colorpicker"),
+        colorPickerPopoverClassName: t.string().optional("o_hb_colorpicker_popover"),
     });
 
     setup() {

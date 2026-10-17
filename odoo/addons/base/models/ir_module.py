@@ -15,16 +15,18 @@ from docutils.transforms import Transform, writer_aux
 from docutils.writers.html4css1 import Writer
 from markupsafe import Markup
 
-import odoo
 from odoo import _, api, fields, models, modules, tools
 from odoo.exceptions import AccessDenied, UserError, ValidationError
 from odoo.fields import Domain
 from odoo.http import request
+from odoo.modules.loading import _FORCED_MODULES
 from odoo.modules.module import Manifest, MissingDependency
+from odoo.modules.registry import Registry
 from odoo.tools import SQL, BinaryBytes, config
 from odoo.tools.business_data import get_flag
 from odoo.tools.misc import file_open, topological_sort
 from odoo.tools.parse_version import parse_version
+from odoo.tools.sql import column_exists
 from odoo.tools.translate import (
     TranslationImporter,
     get_datafile_translation_path,
@@ -609,33 +611,37 @@ class IrModuleModule(models.Model):
                 "for help."
             )
 
-        self.env.cr.execute("SET LOCAL lock_timeout = '3s'")
-
         try:
             # raise error if database is updating for module operations
-            # acquire the shared-lock for the current transaction only
-            self.env.cr.execute("SELECT pg_advisory_xact_lock_shared(hashtext('registry_loading')) NOWAIT")
+            self.env.cr.execute("SET LOCAL lock_timeout = '10s'")
+            # acquire the exclusive-lock for the current transaction only
+            self.env.cr.execute("SELECT pg_advisory_xact_lock(hashtext('registry_loading'))")
             # raise error if another transaction is trying to schedule module operations concurrently
             self.env.cr.execute("LOCK ir_module_module IN EXCLUSIVE MODE")
         except psycopg2.OperationalError:
             self.env.cr.rollback()
-            raise UserError(_("Odoo is currently processing another module operation.\n"
-                               "Please try again later or contact your system administrator."))
+            # find which crons are running
+            crons = self.env['ir.cron'].sudo().search([])
+            crons -= crons.try_lock_for_update(allow_referencing=True)
+            if crons:
+                actions = crons[:3].mapped('name')
+                if len(crons) > 3:
+                    actions.append('...')
+                raise UserError(self.env._(
+                    "Odoo is currently processing another module or scheduled action.\n"
+                    "Running scheduled actions: %(actions)s\n"
+                    "Please try again later or contact your system administrator.",
+                    actions=str(actions),
+                ))
+            raise UserError(self.env._(
+                "Odoo is currently processing another module.\n"
+                "Please try again later or contact your system administrator."
+            ))
 
-        try:
-            # This is done because the installation/uninstallation/upgrade can modify a currently
-            # running cron job and prevent it from finishing, and since the ir_cron table is locked
-            # during execution, the lock won't be released until timeout.
-            self.env.cr.execute("SELECT FROM ir_cron FOR UPDATE")
-        except psycopg2.OperationalError:
-            self.env.cr.rollback()
-            raise UserError(_("Odoo is currently processing a scheduled action.\n"
-                              "Module operations are not possible at this time, "
-                              "please try again later or contact your system administrator."))
         function(self)
 
         self.env.cr.commit()
-        modules.registry.Registry.new(self.env.cr.dbname, update_module=True)
+        Registry.new(self.env.cr.dbname, update_module=True)
         self.env.cr.rollback()
         assert (self.env.transaction.default_env or self.env).registry is self.env.transaction.registry, "env is bound correctly to the transaction's registry"
         if request:
@@ -667,7 +673,7 @@ class IrModuleModule(models.Model):
     @assert_log_admin_access
     def button_uninstall(self):
         un_installable_modules = set(self.mapped('name')) & (
-            set(tools.config['server_wide_modules']) | set(odoo.modules.loading._FORCED_MODULES)
+            set(tools.config['server_wide_modules']) | set(_FORCED_MODULES)
         )
         if un_installable_modules:
             raise UserError(_("Those modules cannot be uninstalled: %s", ', '.join(un_installable_modules)))
@@ -734,10 +740,20 @@ class IrModuleModule(models.Model):
                 ):
                     todo.append(dep.module_id)
 
-        self.browse(module.id for module in todo).write({'state': 'to upgrade'})
+        to_upgrade_modules = self.browse(module.id for module in todo)
+        # skip imported modules since they cannot be upgraded;
+        # the column 'imported' is defined in base_import_module, hence the SQL
+        if column_exists(self.env.cr, 'ir_module_module', 'imported'):
+            rows = self.env.execute_query(SQL("""
+                SELECT id
+                  FROM ir_module_module
+                 WHERE imported IS NOT TRUE AND id IN %s
+            """, tuple(to_upgrade_modules.ids)))
+            to_upgrade_modules = self.browse(id_ for id_, in rows)
+        to_upgrade_modules.state = 'to upgrade'
 
         to_install = []
-        for module in todo:
+        for module in to_upgrade_modules:
             if not self.get_module_info(module.name).get("installable", True):
                 continue
             for dep in module.dependencies_id:
@@ -1010,6 +1026,11 @@ class IrModuleModule(models.Model):
             translations_by_field = manifest.get_translations(langs)
             if not translations_by_field:
                 continue
+            # the manifest also holds the en_US terms: writing only the translations
+            # would let the ORM fill en_US from one of them when en_US is inactive
+            source_terms = self.get_values_from_terp(manifest)
+            for field_name, translations in translations_by_field.items():
+                translations['en_US'] = source_terms[field_name]
             module.write(translations_by_field)
 
     @api.model

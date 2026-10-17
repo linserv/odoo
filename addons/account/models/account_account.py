@@ -26,7 +26,7 @@ class AccountAccount(models.Model):
     _name = 'account.account'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = "Account"
-    _order = "code_path, account_type, name_path"
+    _order = "code_path, account_type, name_path, id"
     _parent_store = True
     _check_company_auto = True
     _check_company_domain = models.check_companies_domain_parent_of
@@ -904,7 +904,9 @@ class AccountAccount(models.Model):
 
     @api.onchange('code')
     def _onchange_code(self):
-        self.env.add_to_compute(self._fields['account_type'], self)
+        to_update = self.filtered(lambda a: not a.id or not a.account_type)
+        self.env.add_to_compute(self._fields['account_type'], to_update)
+        to_update.modified(['account_type'])
 
     @api.depends_context('company', 'formatted_display_name', 'from_bill')
     @api.depends('code')
@@ -1078,8 +1080,8 @@ class AccountAccount(models.Model):
         return res
 
     @api.model
-    def load(self, fields, data):
-        load_data = super(AccountAccount, self.with_context(defer_account_code_checks=True)).load(fields, data)
+    def load(self, fields, data, *, limit=None):
+        load_data = super(AccountAccount, self.with_context(defer_account_code_checks=True)).load(fields, data, limit=limit)
         if {'company_ids', 'code', 'code_mapping_ids/code', 'code_mapping_ids/company_id'} & set(fields):
             self.browse(load_data['ids'])._ensure_code_is_unique()
         return load_data

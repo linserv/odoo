@@ -12,6 +12,7 @@ import {
     getColorScheme,
 } from "@point_of_sale/utils";
 import { ConnectionLostError, RPCError } from "@web/core/network/rpc";
+import { location } from "@web/core/browser/browser";
 import { _t } from "@web/core/l10n/translation";
 import { OpeningControlPopup } from "@point_of_sale/app/components/popups/opening_control_popup/opening_control_popup";
 import { OrderDetailsDialog } from "@point_of_sale/app/screens/ticket_screen/order_details_dialog/order_details_dialog";
@@ -61,6 +62,7 @@ import { PosTicketPrinterPlugin } from "../plugins/pos_ticket_printer_plugin";
 import { PosAlertPlugin } from "../plugins/pos_alert_plugin";
 import { PosNumberBufferPlugin } from "@point_of_sale/app/plugins/pos_number_buffer_plugin";
 import { DebugModePlugin } from "@web/core/debug_mode_plugin";
+import { clearLocalStorage } from "../utils/devices_identifier_sequence";
 
 const { DateTime } = luxon;
 export const CONSOLE_COLOR = "#F5B427";
@@ -450,7 +452,7 @@ export class PosStore extends WithLazyGetterTrap {
             this.device.saveUnusedNumber(orders);
             await this.data.resetIndexedDB();
             sessionStorage.clear();
-            localStorage.clear();
+            clearLocalStorage();
             window.location.reload();
         };
         if (showWarning) {
@@ -582,7 +584,7 @@ export class PosStore extends WithLazyGetterTrap {
         this.currency = this.config.currency_id;
         this.models = this.data.models;
         this.screenState.partnerList.offsetBySearch = {
-            "": this.models["res.partner"].length,
+            "": this.config._limited_partner_count,
         };
 
         const models = Object.keys(this.models);
@@ -780,7 +782,11 @@ export class PosStore extends WithLazyGetterTrap {
     }
     async afterOrderDeletion() {
         if (!this.config.module_pos_restaurant) {
-            this.setOrder(this.getOpenOrders().at(-1) || this.addNewOrder());
+            const newOrder = this.getOpenOrders().at(-1) || this.addNewOrder();
+            this.setOrder(newOrder);
+            if (this.router.currentScreen() === "ProductScreen") {
+                this.navigate("ProductScreen", { orderUuid: newOrder.uuid });
+            }
         }
     }
 
@@ -2770,6 +2776,17 @@ export class PosStore extends WithLazyGetterTrap {
         );
     }
 
+    async reloadIfSessionDeleted(error) {
+        if (
+            error instanceof RPCError &&
+            error.data.name === "odoo.exceptions.MissingError" &&
+            (await this.isSessionDeleted())
+        ) {
+            return location.reload();
+        }
+        throw error;
+    }
+
     // -------- Order Validation -------- //
     getValidationOrderOptions(args = {}) {
         const { order = this.getOrder() } = args;
@@ -2824,7 +2841,9 @@ export class PosStore extends WithLazyGetterTrap {
     clickSaveOrder() {
         this.syncAllOrders({ orders: [this.getOrder()] });
         this.notification.add(_t("Order saved for later"), { type: "success" });
-        this.setOrder(this.getEmptyOrder());
+        const newOrder = this.getEmptyOrder();
+        this.setOrder(newOrder);
+        this.navigate("ProductScreen", { orderUuid: newOrder.uuid });
         this.mobile_pane = "right";
     }
 

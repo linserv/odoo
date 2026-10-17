@@ -139,6 +139,10 @@ class IrHttp(models.AbstractModel):
             'bundle_params': {
                 'lang': request.session.context['lang'],
             },
+            'translation_hash': self._get_cached_web_translations_hash(
+                self._get_web_translations_modules(),
+                self._get_web_translations_lang(user_context.get('lang')),
+            ),
             'test_mode': config['test_enable'],
             'view_info': self.env['ir.ui.view'].get_view_info(),
             'groups': {
@@ -210,3 +214,8 @@ class IrHttp(models.AbstractModel):
         if request.session.debug:
             session_info['bundle_params']['debug'] = request.session.debug
         return session_info
+
+    @classmethod
+    def _get_translation_frontend_modules_name(cls) -> list[str]:
+        """ Return a list of module names whose JavaScript translations should be included in the frontend."""
+        return ['web']
