@@ -10,6 +10,7 @@ import {
     queryAll,
     queryAllTexts,
     queryOne,
+    setInputFiles,
     waitFor,
     waitForNone,
 } from "@odoo/hoot-dom";
@@ -28,6 +29,7 @@ import {
     contains as mailContains,
     defineMailModels,
     mailModels,
+    onRpcBefore,
     openFormView,
     openView,
     registerArchs,
@@ -210,17 +212,17 @@ describe("Remove attachments", () => {
         await openFormView("res.partner", serverState.partnerId);
         await click("button:text('Log note')");
         await click("button[title='Open Full Composer']");
-        await waitFor(".odoo-editor-editable");
-        const anchorNode = queryOne(".odoo-editor-editable div.o-paragraph");
+        await waitFor(".modal .odoo-editor-editable");
+        const anchorNode = queryOne(".modal .odoo-editor-editable div.o-paragraph");
         setSelection({ anchorNode, anchorOffset: 0 });
         await insertText(htmlEditor, "/file");
         await press("Enter");
         await expect.waitForSteps(["File Uploaded"]);
         await waitFor("[name='attachment_ids'] a:contains('file.txt')");
-        await waitFor(".odoo-editor-editable .o_file_box:has(a:contains('file.txt'))");
+        await waitFor(".modal .odoo-editor-editable .o_file_box:has(a:contains('file.txt'))");
         await click("[name='attachment_ids'] button:has(i[data-icon='close'])");
         await waitForNone("[name='attachment_ids'] a:contains('file.txt')");
-        await waitForNone(".odoo-editor-editable .o_file_box:has(a:contains('file.txt'))");
+        await waitForNone(".modal .odoo-editor-editable .o_file_box:has(a:contains('file.txt'))");
     });
 
     test("should remove image from html editor if removed from attachment list", async () => {
@@ -255,8 +257,8 @@ describe("Remove attachments", () => {
         await openFormView("res.partner", serverState.partnerId);
         await click("button:text('Log note')");
         await click("button[title='Open Full Composer']");
-        await waitFor(".odoo-editor-editable");
-        const anchorNode = queryOne(".odoo-editor-editable div.o-paragraph");
+        await waitFor(".modal .odoo-editor-editable");
+        const anchorNode = queryOne(".modal .odoo-editor-editable div.o-paragraph");
         setSelection({ anchorNode, anchorOffset: 0 });
         await insertText(htmlEditor, "/image");
         await press("Enter");
@@ -268,9 +270,60 @@ describe("Remove attachments", () => {
         manuallyDispatchProgrammaticEvent(fileInput, "change");
         await expect.waitForSteps(["Image Uploaded"]);
         await waitFor("[name='attachment_ids'] a:contains('test.jpg')");
-        await waitFor(".odoo-editor-editable img[data-attachment-id='1']");
+        await waitFor(".modal .odoo-editor-editable img[data-attachment-id='1']");
         await click("[name='attachment_ids'] button:has(i[data-icon='close'])");
         await waitForNone("[name='attachment_ids'] a:contains('test.jpg')");
-        await waitForNone(".odoo-editor-editable img[data-attachment-id='1']");
+        await waitForNone(".modal .odoo-editor-editable img[data-attachment-id='1']");
     });
+});
+
+test("wait for attachments to be uploaded before sending message", async function () {
+    const uploadRelease = Promise.withResolvers();
+    const mailSent = Promise.withResolvers();
+    onRpcBefore("/mail/attachment/upload", async () => {
+        expect.step("upload");
+        await uploadRelease.promise;
+    });
+    onRpc("mail.compose.message", "web_save", ({ args }) => {
+        expect.step("web_save");
+        expect(args[1].attachment_ids).toHaveLength(1);
+    });
+    onRpc("action_send_mail", () => {
+        expect.step("action_send_mail");
+        mailSent.resolve();
+        return { type: "ir.actions.act_window_close" };
+    });
+
+    const pyEnv = await startServer();
+    const resId = pyEnv["mail.compose.message"].create({
+        display_name: "Some Composer",
+        body: "Hello World!",
+        attachment_ids: [],
+        model: "res.partner",
+        res_ids: JSON.stringify([serverState.partnerId]),
+    });
+    const arch = `
+        <form>
+            <field name="model" invisible="1"/>
+            <field name="res_ids" invisible="1"/>
+            <field name="body" type="html"/>
+            <button string="Send" name="action_send_mail" type="object" class="o_mail_send"/>
+            <field name="attachment_ids" widget="mail_composer_attachment_selector"/>
+        </form>
+    `;
+    await start();
+    await openFormView("mail.compose.message", resId, { arch });
+
+    const file = new File(["test"], "fake_file.txt", { type: "text/plain" });
+    await click(".o_field_mail_composer_attachment_selector button");
+    await setInputFiles([file]);
+    await expect.waitForSteps(["upload"]);
+
+    await click(".o_mail_send");
+    await animationFrame();
+    expect.verifySteps([]);
+
+    uploadRelease.resolve();
+    await mailSent.promise;
+    expect.verifySteps(["web_save", "action_send_mail"]);
 });

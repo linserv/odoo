@@ -1532,7 +1532,7 @@ class AccountMoveLine(models.Model):
                 ]
                 for base_line in aggregated_base_lines:
                     invoice_line = base_line['_invoice_line']
-                    result_per_invoice_line[invoice_line] = {
+                    result_per_invoice_line[invoice_line._origin or invoice_line] = {
                         grouping_key_line: {
                             'name': _("Early Payment Discount (%s)", discount_percentage_name),
                             'amount_currency': 0.0,
@@ -1560,7 +1560,7 @@ class AccountMoveLine(models.Model):
                 )
                 for target_factor, amount_to_distribute in zip(target_factors, amounts_to_distribute):
                     invoice_line = target_factor['base_line']['_invoice_line']
-                    epd_needed = result_per_invoice_line[invoice_line]
+                    epd_needed = result_per_invoice_line[invoice_line._origin or invoice_line]
                     epd_needed[grouping_key_line]['amount_currency'] -= amount_to_distribute
                     epd_needed[grouping_key_counterpart]['amount_currency'] += amount_to_distribute
 
@@ -1571,12 +1571,12 @@ class AccountMoveLine(models.Model):
                 )
                 for target_factor, amount_to_distribute in zip(target_factors, amounts_to_distribute):
                     invoice_line = target_factor['base_line']['_invoice_line']
-                    epd_needed = result_per_invoice_line[invoice_line]
+                    epd_needed = result_per_invoice_line[invoice_line._origin or invoice_line]
                     epd_needed[grouping_key_line]['balance'] -= amount_to_distribute
                     epd_needed[grouping_key_counterpart]['balance'] += amount_to_distribute
 
         for invoice_line in candidate_invoice_lines:
-            epd_needed = result_per_invoice_line[invoice_line]
+            epd_needed = result_per_invoice_line[invoice_line._origin or invoice_line]
             invoice_line.epd_needed = list(epd_needed.items())
 
     @api.depends('move_id.move_type', 'balance', 'tax_repartition_line_id', 'tax_ids')
@@ -1950,8 +1950,7 @@ class AccountMoveLine(models.Model):
             return taxes.mapped(repartition_field)
 
         for aml in self:
-            caba_taxes = aml.tax_ids.filtered(lambda x: x.tax_exigibility == 'on_payment')
-            non_caba_taxes = aml.tax_ids - caba_taxes
+            caba_taxes, non_caba_taxes = aml.tax_ids.partitioned(lambda x: x.tax_exigibility == 'on_payment')
 
             caba_base_tags = get_base_repartition(aml, caba_taxes).filtered(lambda x: x.repartition_type == 'base').tag_ids
             non_caba_base_tags = get_base_repartition(aml, non_caba_taxes).filtered(lambda x: x.repartition_type == 'base').tag_ids

@@ -311,8 +311,7 @@ class StockMove(models.Model):
                 move.picked = False
 
     def _inverse_picked(self):
-        picked_moves = self.filtered('picked')
-        not_picked_moves = self - picked_moves
+        picked_moves, not_picked_moves = self.partitioned('picked')
         picked_moves.move_line_ids.picked = True
         not_picked_moves.move_line_ids.picked = False
 
@@ -535,11 +534,9 @@ Please change the quantity done or the rounding precision in your settings.""",
         # Prefetch product info to avoid fetching all product fields
         self.product_id.fetch(['type', 'uom_id'])
 
-        not_product_moves = self.filtered(lambda move: not move.product_id.is_storable)
+        not_product_moves, product_moves = self.partitioned(lambda move: not move.product_id.is_storable)
         for move in not_product_moves:
             move.forecast_availability = move.product_qty
-
-        product_moves = (self - not_product_moves)
 
         outgoing_unreserved_moves_per_warehouse = defaultdict(set)
         now = fields.Datetime.now()
@@ -557,11 +554,8 @@ Please change the quantity done or the rounding precision in your settings.""",
             elif move.picking_type_id.code == 'incoming':
                 prefetch_virtual_available[key_virtual_available(move, incoming=True)].add(move.product_id.id)
         for key_context, product_ids in prefetch_virtual_available.items():
-            read_res = self.env['product.product'].browse(product_ids).with_context(warehouse_id=key_context[0], to_date=key_context[1]).read([
-                'virtual_available',
-                'free_qty',
-            ])
-            virtual_available_dict[key_context] = {res['id']: (res['virtual_available'], res['free_qty']) for res in read_res}
+            products = self.env['product.product'].browse(product_ids).with_context(warehouse_id=key_context[0], to_date=key_context[1])
+            virtual_available_dict[key_context] = {res.id: (res.virtual_available, res.free_qty) for res in products}
 
         for move in product_moves:
             if key_virtual_available(move) in virtual_available_dict and move.product_id.id in virtual_available_dict[key_virtual_available(move)]:
@@ -1548,7 +1542,7 @@ Please change the quantity done or the rounding precision in your settings.""",
             self.update({'quantity': quantity})
             return
         base_location = self.picking_id.location_id or self.location_id
-        extra_lot_ids = {rec['id'] for rec in self.env['stock.lot'].sudo().search_read([('product_id', '=', self.product_id.id), ('name', 'in', extra_lot_names)], ['id'])}
+        extra_lot_ids = {rec.id for rec in self.env['stock.lot'].sudo().search_fetch([('product_id', '=', self.product_id.id), ('name', 'in', extra_lot_names)], ['id'])}
         quant_domain = Domain([
             ('product_id', '=', self.product_id.id),
             ('lot_id', 'in', extra_lot_ids),
@@ -1611,7 +1605,7 @@ Please change the quantity done or the rounding precision in your settings.""",
             ('state', 'in', ['draft', 'confirmed', 'waiting', 'partially_available', 'assigned']),
         ])
         if self.partner_id:
-            picking_partner_id = self.env.context.get('move_picking_partner_id', self.partner_id).id
+            picking_partner_id = self._get_picking_partner().id
             domain = Domain.AND([domain, [('partner_id', '=', picking_partner_id)]])
         if self.env.user.has_group('stock.group_stock_picking_batch'):
             domain = Domain.AND([
@@ -1734,6 +1728,10 @@ Please change the quantity done or the rounding precision in your settings.""",
 
     def _get_formating_options(self, strings):
         return {}
+
+    def _get_picking_partner(self):
+        self.ensure_one()
+        return self.picking_id.partner_id or self.env.context.get('move_picking_partner_id') or self.partner_id
 
     def _get_new_picking_values(self):
         """ return create values for new picking that will be linked with group
@@ -2532,23 +2530,17 @@ Please change the quantity done or the rounding precision in your settings.""",
     def _recompute_state(self):
         if self.env.context.get('preserve_state'):
             return
-        moves_state_to_write = defaultdict(set)
-        for move in self:
-            if move.state in ('cancel', 'done') or (move.state == 'draft' and not move.quantity):
-                continue
-            elif move.uom_id.compare(move.quantity, move.product_uom_qty) >= 0:
-                moves_state_to_write['assigned'].add(move.id)
-            elif move.quantity and move.uom_id.compare(move.quantity, move.product_uom_qty) <= 0:
-                moves_state_to_write['partially_available'].add(move.id)
-            elif (move.procure_method == 'make_to_order' and not move.move_orig_ids) or\
-                 (move.move_orig_ids and any(orig.uom_id.compare(orig.product_uom_qty, 0) > 0
-                                             and orig.state not in ('done', 'cancel') for orig in move.move_orig_ids)):
-                # In the process of merging a negative move, we may still have a negative move in the move_orig_ids at that point.
-                moves_state_to_write['waiting'].add(move.id)
-            else:
-                moves_state_to_write['confirmed'].add(move.id)
-        for state, moves_ids in moves_state_to_write.items():
-            self.browse(moves_ids).filtered(lambda m: m.state != state).state = state
+        _skipped_moves, *moves_per_state = self.partitioned(
+            lambda move: move.state in ('cancel', 'done') or (move.state == 'draft' and not move.quantity),
+            lambda move: move.uom_id.compare(move.quantity, move.product_uom_qty) >= 0,
+            lambda move: move.quantity and move.uom_id.compare(move.quantity, move.product_uom_qty) <= 0,
+            # In the process of merging a negative move, we may still have a negative move in the move_orig_ids at that point.
+            lambda move: (move.procure_method == 'make_to_order' and not move.move_orig_ids) or (
+                move.move_orig_ids and any(orig.uom_id.compare(orig.product_uom_qty, 0) > 0
+                                           and orig.state not in ('done', 'cancel') for orig in move.move_orig_ids)),
+        )
+        for state, moves in zip(('assigned', 'partially_available', 'waiting', 'confirmed'), moves_per_state):
+            moves.filtered(lambda m: m.state != state).state = state
 
     def _is_consuming(self):
         self.ensure_one()

@@ -15,10 +15,24 @@
                         invisible="not employees_count"
                         class="btn-link"/>
                     <field name="company_id" groups="hr.group_hr_user" optional="hide"/>
-                    <field name="code" column_invisible="1"/>
+                    <field name="code" column_invisible="1"/> <!-- xpath anchor of the payroll localisations which make this column visible -->
                 </list>
             </field>
         </record>
+
+    <record id="hr_contract_type_view_search" model="ir.ui.view">
+        <field name="name">hr.employee.type.view.search</field>
+        <field name="model">hr.employee.type</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <group>
+                    <filter string="Country" name="groupby_country" context="{'group_by':'country_id'}" />
+                    <filter string="Company" name="groupby_company" context="{'group_by':'company_id'}" />
+                </group>
+            </search>
+        </field>
+    </record>
 
         <record id="hr_contract_type_view_form" model="ir.ui.view">
             <field name="model">hr.employee.type</field>
@@ -28,7 +42,7 @@
                         <group>
                             <group>
                                 <field name="name"/>
-                                <field name="code" invisible="1"/>
+                                <field name="code" invisible="1"/> <!-- xpath anchor of the payroll localisations which make this field visible -->
                                 <field name="country_id"/>
                                 <field name="company_id" groups="base.group_multi_company"/>
                             </group>

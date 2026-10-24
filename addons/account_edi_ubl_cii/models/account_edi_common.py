@@ -669,10 +669,9 @@ class AccountEdiCommon(models.AbstractModel):
             attachment_data = document.find('{*}Attachment/{*}EmbeddedDocumentBinaryObject')
             if attachment_name is not None and attachment_data is not None:
                 mimetype = attachment_data.attrib.get('mimeCode')
-                if not (extension := SUPPORTED_FILE_TYPES.get(mimetype)):
-                    continue
                 # Strip internal newlines/spaces to prevent 'raw' field validation failure on create
-                text = ''.join((attachment_data.text or '').split())
+                if not (extension := SUPPORTED_FILE_TYPES.get(mimetype)) or not (text := ''.join((attachment_data.text or '').split())):
+                    continue
                 # Normalize the name of the file : some e-fff emitters put the full path of the file
                 # (Windows or Linux style) and/or the name of the xml instead of the pdf.
                 # Get only the filename with the right extension.
@@ -926,10 +925,10 @@ class AccountEdiCommon(models.AbstractModel):
             if start_date_node is not None and end_date_node is not None:  # there is a constraint forcing none or the two to be set
                 start_date = datetime.strptime(start_date_node.text.strip(), xpath_dict['date_format'])
                 end_date = datetime.strptime(end_date_node.text.strip(), xpath_dict['date_format'])
-        deferred_values = {
-            'deferred_start_date': start_date,
-            'deferred_end_date': end_date,
-        }
+                deferred_values = {
+                    'deferred_start_date': start_date,
+                    'deferred_end_date': end_date,
+                }
         line_vals = self._retrieve_line_vals(record, tree, document_type, qty_factor)
         if not line_vals.get('price_subtotal'):
             return None
@@ -1685,9 +1684,6 @@ class AccountEdiCommon(models.AbstractModel):
                 for tax_values in line_collected_values['taxes_values']:
                     tax_values['account'] = account
             line_tax_values_list = line_collected_values['taxes_values']
-            for charge in line_collected_values['charges']:
-                if tax_values := charge.get('attempt_tax_values'):
-                    line_tax_values_list.append(tax_values)
             if predicted_tax_ids := line_collected_values.get('predicted_vals', {}).get('tax_ids'):
                 for line_tax_values in line_tax_values_list:
                     line_tax_values['predicted_tax_ids'] = predicted_tax_ids

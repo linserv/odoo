@@ -492,7 +492,8 @@ class MailMessage(models.Model):
         if not isinstance(domain, Domain):
             domain = Domain.TRUE
         # Non-employee see only messages with a subtype and not internal
-        domain = self._get_search_domain_share() & domain
+        share_domain = self._get_search_domain_share()
+        domain = share_domain & domain
         self = self.sudo(False)  # noqa: PLW0642
 
         # searching for all messages or a subset of models
@@ -506,6 +507,9 @@ class MailMessage(models.Model):
         # search by model and res_id
         model_codomains = Domain.FALSE  # (model = a & res_id in ...) | (model = b & ...)
         env = self.with_context(active_test=False).env
+        inverse_field = self.env.context.get('search_from_field')
+        if self._fields['res_id'] not in self.env.registry.field_inverses.get(inverse_field, ()):
+            inverse_field = None
         for res_model_name in res_model_names:
             if res_model_name not in env:
                 continue
@@ -523,6 +527,7 @@ class MailMessage(models.Model):
             # (because the rules are applied with sudo permissions) and search.
             comodel_domain = Domain.FALSE
             comodel_domain_remaining = Domain.TRUE
+            only_read = bool(inverse_field)
             for domain_operation, doc_operation in comodel._mail_get_operation_for_mail_message_operation(operation):
                 domain_operation, comodel_domain_remaining = (
                     comodel_domain_remaining & domain_operation,
@@ -530,13 +535,20 @@ class MailMessage(models.Model):
                 )
                 comodel_rule = comodel._access_domain(doc_operation)
                 if comodel_rule.is_false():
+                    only_read = False
                     continue
                 if doc_operation == 'read':
                     comodel_rule = Domain.TRUE  # covered by the search below
+                else:
+                    only_read = False
                 comodel_domain |= (domain_operation & comodel_rule)
             if comodel_res_ids is not None:
                 comodel_domain &= Domain('id', 'in', comodel_res_ids)
-            comodel_domain = comodel_domain.optimize_full(comodel.sudo())
+            if not (only_read and inverse_field.model_name == res_model_name):
+                # if we only read and we have access
+                comodel_domain &= comodel._access_domain('read')
+            comodel = comodel.sudo()
+            comodel_domain = comodel_domain.optimize_full(comodel)
             query = comodel._search(comodel_domain)
             if query.is_empty():
                 continue
@@ -545,7 +557,10 @@ class MailMessage(models.Model):
             model_codomains |= codomain
 
         partner = self.env.user.partner_id
-        domain &= Domain.OR((
+        # The search domain is only used above to restrict the models and ids
+        # to check: the caller already filters on it, repeating it here would
+        # only duplicate its conditions in the final query.
+        return share_domain & Domain.OR((
             Domain('author_id', '=', partner.id),
             Domain('create_uid', '=', self.env.uid),
             # force an IN condition with a list of values
@@ -557,8 +572,6 @@ class MailMessage(models.Model):
             # complete from records-based domain).
             model_codomains & Domain('message_type', '!=', 'user_notification'),
         ))
-
-        return domain
 
     def _get_search_domain_share(self):
         if self.env.user._is_internal():

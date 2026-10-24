@@ -59,6 +59,7 @@ import { escapeRegExp } from "@web/core/utils/strings";
 import { formatFloat } from "@web/core/utils/numbers";
 import { PosDataPlugin } from "../plugins/pos_data_plugin";
 import { PosTicketPrinterPlugin } from "../plugins/pos_ticket_printer_plugin";
+import { PosPaymentMethodPlugin } from "../plugins/pos_payment_method_plugin";
 import { PosAlertPlugin } from "../plugins/pos_alert_plugin";
 import { PosNumberBufferPlugin } from "@point_of_sale/app/plugins/pos_number_buffer_plugin";
 import { DebugModePlugin } from "@web/core/debug_mode_plugin";
@@ -113,6 +114,7 @@ export class PosStore extends WithLazyGetterTrap {
         this.alert = usePlugin(PosAlertPlugin);
         this.ticketPrinter = usePlugin(PosTicketPrinterPlugin);
         this.ticketPrinter.init(env);
+        this.paymentMethods = usePlugin(PosPaymentMethodPlugin);
         const debugMode = usePlugin(DebugModePlugin);
 
         this.env = env;
@@ -601,12 +603,7 @@ export class PosStore extends WithLazyGetterTrap {
         this.checkPreviousLoggedCashier();
 
         // Add Payment Interface to Payment Method
-        for (const pm of this.config.payment_method_ids) {
-            const PaymentInterface = registry
-                .category("pos_payment_providers")
-                .get(pm.payment_provider, null);
-            pm.payment_interface = PaymentInterface ? new PaymentInterface(this, pm) : null;
-        }
+        this.paymentMethods.init(this);
 
         // Add Scale
         for (const ScaleInterface of registry.category("electronic_scales").getAll()) {
@@ -646,6 +643,7 @@ export class PosStore extends WithLazyGetterTrap {
         );
         await this.initSnoozedProducts();
     }
+
     async cashMove() {
         await this.openCashbox(_t("Cash in / out"));
         return makeAwaitable(this.dialog, CashMovePopup);
@@ -2760,16 +2758,6 @@ export class PosStore extends WithLazyGetterTrap {
         return getTimeUtil(date);
     }
 
-    orderDone(order) {
-        order.setScreenData({ name: "" });
-        this.searchProductWord = "";
-        const { page, params } = this.defaultPage;
-        this.navigate(
-            page,
-            page === "ProductScreen" ? { orderUuid: this.getEmptyOrder().uuid } : params
-        );
-    }
-
     async isSessionDeleted() {
         return (
             (await this.data.orm.searchCount("pos.session", [["id", "=", this.session.id]])) === 0
@@ -2830,11 +2818,26 @@ export class PosStore extends WithLazyGetterTrap {
     }
 
     async validateOrderFast(paymentMethod) {
+        const order = this.getOrder();
         const validation = new OrderPaymentValidation({
             pos: this,
-            orderUuid: this.getOrder().uuid,
+            orderUuid: order.uuid,
             fastPaymentMethod: paymentMethod,
         });
+        if (paymentMethod.payment_method_type === "bank_qr_code") {
+            const qrPaymentLines = order.payment_ids.filter(
+                (l) => l.payment_method_id.id === paymentMethod.id
+            );
+            if (!qrPaymentLines.length) {
+                return;
+            }
+            const line = qrPaymentLines[qrPaymentLines.length - 1];
+            const resp = await this.showQR(line);
+            if (!line.handlePaymentResponse(resp)) {
+                order.removePaymentline(line);
+                return;
+            }
+        }
         await validation.validateOrder(false);
     }
 

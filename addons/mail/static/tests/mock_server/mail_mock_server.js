@@ -198,7 +198,10 @@ async function load_attachments(request) {
     return {
         count: attachmentIds.length,
         store_data: new Store()
-            .add(IrAttachment.browse(attachmentIds), "_store_attachment_fields")
+            .add(IrAttachment.browse(attachmentIds), (r) => {
+                r.from_method("_store_attachment_fields");
+                r.from_method("_store_thread_message_fields");
+            })
             .as_dict(),
     };
 }
@@ -811,6 +814,36 @@ async function read_subscription_data(request) {
             .as_dict(),
         subtype_ids: subtypes, // Not sorted for simplicity.
     };
+}
+
+registerRoute("/mail/rtc/session/notify_call_members", session_call_notify);
+/** @type {RouteCallback} */
+async function session_call_notify(request) {
+    /** @type {import("mock_models").DiscussChannelRtcSession} */
+    const DiscussChannelRtcSession = this.env["discuss.channel.rtc.session"];
+    /** @type {import("mock_models").ResPartner} */
+    const ResPartner = this.env["res.partner"];
+
+    const { peer_notifications } = await parseRequestParams(request);
+    const [partner, guest] = ResPartner._get_current_persona();
+    const notificationsBySessionId = new Map();
+    for (const [senderSessionId, targetSessionIds, content] of peer_notifications) {
+        const [session] = DiscussChannelRtcSession.browse(senderSessionId);
+        if (
+            !session ||
+            (session.guest_id && session.guest_id !== guest?.id) ||
+            (session.partner_id && session.partner_id !== partner?.id)
+        ) {
+            continue;
+        }
+        if (!notificationsBySessionId.has(session.id)) {
+            notificationsBySessionId.set(session.id, []);
+        }
+        notificationsBySessionId.get(session.id).push([targetSessionIds, content]);
+    }
+    for (const [sessionId, notifications] of notificationsBySessionId) {
+        DiscussChannelRtcSession._notify_peers(sessionId, notifications);
+    }
 }
 
 registerRoute("/mail/rtc/session/update_and_broadcast", session_update_and_broadcast);

@@ -566,7 +566,7 @@ class TestProjectSharing(TestProjectSharingCommon):
         """
         self.task_cow.write({'user_ids': [Command.link(self.user_projectmanager.id)]})
         with self.assertRaises(AccessError, msg="Should not accept the portal user to access to a task he does not follow it and its project."):
-            self.task_cow.with_user(self.user_portal).read(['portal_user_names'])
+            self.task_cow.with_user(self.user_portal).fetch(['portal_user_names'])
         self.assertEqual(len(self.task_cow.user_ids), 2, '2 users should be assigned in this task.')
 
         project_share_wizard = self.env['project.share.wizard'].create({
@@ -646,7 +646,7 @@ class TestProjectSharing(TestProjectSharingCommon):
             'name': 'Test Project Milestone',
             'project_id': self.project_portal.id,
         })
-        project_milestone.with_user(self.user_portal).read(['name'])
+        project_milestone.with_user(self.user_portal).fetch(['name'])
         with self.assertRaises(AccessError, msg="Should not accept the portal user to update a milestone."):
             project_milestone.with_user(self.user_portal).write({'name': 'test_milestone'})
         with self.assertRaises(AccessError, msg="Should not accept the portal user to delete a milestone."):
@@ -660,7 +660,7 @@ class TestProjectSharing(TestProjectSharingCommon):
         self.project_portal.collaborator_ids.filtered(lambda c: c.partner_id == self.user_portal.partner_id).unlink()
 
         with self.assertRaises(AccessError, msg="Should not accept the portal user to access to a milestone if he's not a collaborator of its project."):
-            project_milestone.with_user(self.user_portal).read(['name'])
+            project_milestone.with_user(self.user_portal).fetch(['name'])
 
     def test_add_followers_from_share_edit_wizard(self):
         """
@@ -735,8 +735,8 @@ class TestProjectSharing(TestProjectSharingCommon):
         self.assertEqual(wizard.res_id, self.task.id, "res_id should be set from context")
         self.assertEqual(wizard.res_model, "project.task", "res_model should be set from context")
         self.assertEqual(
-            wizard.task_id.id, self.task.id,
-            "task_id default must match active_id"
+            wizard.resource_ref.id, self.task.id,
+            "resource_ref must match the active task",
         )
 
     def test_portal_user_with_edit_rights_can_close_recurring_task(self):
@@ -848,3 +848,33 @@ class TestProjectSharing(TestProjectSharingCommon):
             subtask.parent_id, portal_task,
             "Subtask should be linked to the correct parent task."
         )
+
+    def test_project_sharing_toggle_is_follower_security(self):
+        """
+        project_sharing_toggle_is_follower enforces read access checks,
+        preventing access from unrelated users.
+        """
+
+        with self.assertRaises(AccessError, msg="Unrelated portal user should not be able to toggle follower status"):
+            self.task_no_collabo.with_user(self.user_portal).project_sharing_toggle_is_follower()
+        with self.assertRaises(AccessError, msg="Unrelated internal user should not be able to toggle follower status"):
+            self.task_no_collabo.with_user(self.user_projectuser).project_sharing_toggle_is_follower()
+        self.assertNotIn(self.user_portal.partner_id, self.task_no_collabo.message_partner_ids)
+        self.assertNotIn(self.user_projectuser.partner_id, self.task_no_collabo.message_partner_ids)
+        self.project_cows.write({
+            'collaborator_ids': [Command.create({
+                'partner_id': self.user_portal.partner_id.id,
+                'access_mode': 'view'
+            })]
+        })
+        task_as_collab = self.task_cow.with_user(self.user_portal)
+        self.assertFalse(task_as_collab.message_is_follower)
+        task_as_collab.project_sharing_toggle_is_follower()
+        self.assertTrue(task_as_collab.message_is_follower)
+        task_as_collab.project_sharing_toggle_is_follower()
+        self.assertFalse(task_as_collab.message_is_follower)
+        with self.assertRaises(AccessError, msg="Unrelated internal user should not be able to toggle follower status"):
+            self.task_no_collabo.with_user(self.user_projectuser).project_sharing_toggle_is_follower()
+        self.assertNotIn(self.user_projectuser.partner_id, self.task_no_collabo.message_partner_ids)
+        with self.assertRaises(AccessError, msg="The failed exploit should not have granted write access"):
+            self.task_no_collabo.with_user(self.user_projectuser).write({'name': 'Hacked Name'})

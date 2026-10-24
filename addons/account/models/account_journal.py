@@ -404,8 +404,7 @@ class AccountJournal(models.Model):
         method_information_mapping = results['method_information_mapping']
         providers_per_code = results['providers_per_code']
 
-        journal_bank_cash = self.filtered(lambda j: j.type in ('bank', 'cash', 'credit'))
-        journal_other = self - journal_bank_cash
+        journal_bank_cash, journal_other = self.partitioned(lambda j: j.type in ('bank', 'cash', 'credit'))
         journal_other.available_payment_method_ids = False
 
         # Compute the candidates for each bank/cash journal.
@@ -767,6 +766,7 @@ class AccountJournal(models.Model):
                 # Should never happen, but put there just in case.
                 raise UserError(_("Could not compute any code for the copy automatically. Please create it manually."))
 
+            all_journal_codes.add(copy_code)
             vals.update(
                 code=copy_code,
             )

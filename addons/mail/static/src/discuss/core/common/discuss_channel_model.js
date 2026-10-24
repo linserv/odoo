@@ -597,7 +597,7 @@ export class DiscussChannel extends Record {
     }
 
     async copyInvitationLink({ clipboard = navigator.clipboard } = {}) {
-        const notification = this.store.env.services.notification;
+        const notification = this.store.notification;
         try {
             await clipboard.writeText(this.invitationLink);
             notification.add(_t("Invitation link copied"), { type: "success" });
@@ -611,12 +611,7 @@ export class DiscussChannel extends Record {
     async executeCommand(command, body = "") {
         await command.onExecute?.(this);
         if (command.methodName) {
-            await this.store.env.services.orm.call(
-                "discuss.channel",
-                command.methodName,
-                [[this.id]],
-                { body }
-            );
+            await this.store.orm.call("discuss.channel", command.methodName, [[this.id]], { body });
         }
     }
 
@@ -706,9 +701,7 @@ export class DiscussChannel extends Record {
     }
 
     async leaveChannelRpc() {
-        await this.store.env.services.orm.silent.call("discuss.channel", "action_unfollow", [
-            this.id,
-        ]);
+        await this.store.orm.silent.call("discuss.channel", "action_unfollow", [this.id]);
     }
 
     /**
@@ -801,12 +794,9 @@ export class DiscussChannel extends Record {
             (newName || this.channel_type === "group")
         ) {
             this.name = newName;
-            await this.store.env.services.orm.call(
-                "discuss.channel",
-                "channel_rename",
-                [[this.id]],
-                { name: newName }
-            );
+            await this.store.orm.call("discuss.channel", "channel_rename", [[this.id]], {
+                name: newName,
+            });
         }
     }
 
@@ -825,19 +815,19 @@ export class DiscussChannel extends Record {
         }
         await this._unpinRegisterUndos(undos.get(this));
         if (!this.exists()) {
-            this.store.env.services.notification.add(_t("The conversation was deleted."));
+            this.store.notification.add(_t("The conversation was deleted."));
             return;
         }
         await this._unpinExecute();
         if (!this.exists()) {
-            this.store.env.services.notification.add(_t("The conversation was deleted."));
+            this.store.notification.add(_t("The conversation was deleted."));
             return;
         }
         this.isLocallyPinned = false;
         if (!notify) {
             return;
         }
-        const closeFn = this.store.env.services.notification.add(
+        const closeFn = this.store.notification.add(
             this.isHideUntilNewMessageSupported
                 ? _t("Conversation hidden until new messages arrive.")
                 : _t("Conversation hidden."),
@@ -852,7 +842,7 @@ export class DiscussChannel extends Record {
                                         fn();
                                     }
                                 } else {
-                                    this.store.env.services.notification.add(
+                                    this.store.notification.add(
                                         _t("Cannot undo; the conversation was deleted."),
                                         { type: "danger" }
                                     );

@@ -330,11 +330,9 @@ class HrExpense(models.Model):
     # Constraints
     # --------------------------------------------
 
-    # case where an expense has an existing bill, but it's not filled in. We cannot add this condition
-    # in can_approve as can_approve is used at submission (see action_submit)
-    _check_existing_bill_set = models.Constraint(
-        "check(has_existing_bill IS NOT TRUE OR state IN ('draft', 'submitted', 'refused') OR existing_bill_id IS NOT NULL)",
-        "The existing bill must be set."
+    _check_date_not_draft = models.Constraint(
+        "CHECK(state = 'draft' OR date IS NOT NULL)",
+        "You cannot submit or process an expense without a date. Please set a date first.",
     )
 
     @api.constrains('state', 'name', 'product_id', 'total_amount', 'total_amount_currency')
@@ -1439,8 +1437,7 @@ class HrExpense(models.Model):
         self._check_can_reset_approval()
         self = self.with_context(clean_context(self.env.context))
         moves_sudo = self.sudo().account_move_id
-        draft_moves_sudo = moves_sudo.filtered(lambda m: m.state == 'draft')
-        non_draft_moves_sudo = moves_sudo - draft_moves_sudo
+        draft_moves_sudo, non_draft_moves_sudo = moves_sudo.partitioned(lambda m: m.state == 'draft')
         non_draft_moves_sudo._reverse_moves(
             default_values_list=[{'invoice_date': fields.Date.context_today(move_sudo)} for move_sudo in non_draft_moves_sudo],
             cancel=True
@@ -1736,8 +1733,7 @@ class HrExpense(models.Model):
     def _create_move(self):
         self._check_can_create_move()
 
-        company_expenses = self.filtered(lambda expense: expense.payment_mode == 'company_account')
-        employee_expenses = self - company_expenses
+        company_expenses, employee_expenses = self.partitioned(lambda expense: expense.payment_mode == 'company_account')
         if len(employee_expenses.company_id) > 1:
             raise UserError(self.env._("You can't create move for employee-paid expenses belonging to different companies at the same time"))
 
@@ -1789,10 +1785,9 @@ class HrExpense(models.Model):
 
         if employee_expenses:
             # Creation of the account moves for the employee paid expenses.
-            existing_bill_expenses = employee_expenses.filtered('existing_bill_id')
+            existing_bill_expenses, no_bill_expenses = employee_expenses.partitioned('existing_bill_id')
             existing_bill_expenses._create_entry_for_expense_with_linked_bill()
 
-            no_bill_expenses = employee_expenses - existing_bill_expenses
             if no_bill_expenses:
                 journal = no_bill_expenses[0]._get_default_journal()
                 today = fields.Date.context_today(self)

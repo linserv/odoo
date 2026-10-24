@@ -105,7 +105,7 @@ async function fetchInternalMetaData(url) {
     }
 
     const result = await keepLastPromise
-        .add(fetch(urlParsed))
+        .add(fetch(urlParsed, { headers: { "Odoo-Link-Preview": "True" } }))
         .then((response) => ({
             contentPromise: response.text(),
             type: response.headers.get("content-type"),
@@ -149,10 +149,12 @@ async function fetchInternalMetaData(url) {
 async function fetchAttachmentMetaData(url, ormService) {
     try {
         const urlParsed = new URL(url, window.location.origin);
-        const attachementId = parseInt(urlParsed.pathname.split("/").pop());
-        const result = (
-            await ormService.read("ir.attachment", [attachementId], ["name", "mimetype", "type"])
-        )[0];
+        const match = urlParsed.pathname.match(/^\/web\/content\/(\d+)(?:\/|$)/);
+        if (!match) {
+            return { name: url, type: "url" };
+        }
+        const attachmentId = parseInt(match[1]);
+        const [result] = await ormService.read("ir.attachment", [attachmentId], ["name", "mimetype", "type"]);
         return result || { name: url, type: "url" };
     } catch {
         return { name: url, type: "url" };

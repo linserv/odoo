@@ -102,13 +102,18 @@ class StockWarehouse(models.Model):
         group_user = self.env.ref('base.group_user')
         group_stock_multi_warehouses = self.env.ref('stock.group_stock_multi_warehouses')
         group_stock_multi_location = self.env.ref('stock.group_stock_multi_locations')
-        if group_stock_multi_warehouses not in group_user.implied_ids and group_stock_multi_location not in group_user.implied_ids:
+        if (
+            group_stock_multi_warehouses not in group_user.implied_ids
+            and group_stock_multi_location not in group_user.implied_ids
+            and self.with_company(self.company_id).search_count([('company_id', '=', self.company_id.id)], limit=1)
+        ):
             return {
                 'warning': {
-                    'title': _('Warning'),
-                    'message': _('Creating a new warehouse will automatically activate the Storage Locations setting')
-                }
+                    'title': self.env._('Warning'),
+                    'message': self.env._('Creating a new warehouse will automatically activate the Storage Locations setting'),
+                },
             }
+        return None
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -336,7 +341,7 @@ class StockWarehouse(models.Model):
         PickingType = self.env['stock.picking.type']
 
         # choose the next available color for the operation types of this warehouse
-        all_used_colors = [res['color'] for res in PickingType.search_read([('warehouse_id', '!=', False), ('color', '!=', False)], ['color'], order='color')]
+        all_used_colors = {r[0] for r in PickingType._read_group([('warehouse_id', '!=', False), ('color', '!=', False)], ['color'])}
         available_colors = [zef for zef in range(0, 12) if zef not in all_used_colors]
         color = available_colors[0] if available_colors else 0
 

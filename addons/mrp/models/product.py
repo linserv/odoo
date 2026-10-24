@@ -41,8 +41,8 @@ class ProductTemplate(models.Model):
     @api.depends_context('company')
     def _compute_is_kits(self):
         domain = [('product_tmpl_id', 'in', self.ids), ('type', '=', 'phantom'), '|', ('company_id', '=', False), ('company_id', '=', self.env.company.id)]
-        bom_mapping = self.env['mrp.bom'].sudo().search_read(domain, ['product_tmpl_id'])
-        kits_ids = set(b['product_tmpl_id'][0] for b in bom_mapping)
+        bom_mapping = self.env['mrp.bom'].sudo().search_fetch(domain, ['product_tmpl_id'])
+        kits_ids = set(bom_mapping.product_tmpl_id.ids)
         for template in self:
             template.is_kits = (template.id in kits_ids)
 
@@ -248,8 +248,7 @@ class ProductProduct(models.Model):
         with 'phantom' as BoM type.
         """
         bom_kits = self.env['mrp.bom'].sudo()._bom_find(self, bom_type='phantom', company_id=self.env.company.id)
-        kits = self.filtered(lambda p: bom_kits.get(p))
-        regular_products = self - kits
+        _kits, regular_products = self.partitioned(bom_kits.get)
         res = (
             super(ProductProduct, regular_products)._compute_quantities_dict(lot_id, owner_id, package_id, from_date=from_date, to_date=to_date)
             if regular_products

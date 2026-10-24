@@ -64,6 +64,8 @@ async function testSocialSnippetOptions(snippetName, containerTitle, iconName) {
             color: inherit !important;
         }`,
     });
+    const snippetEl = core.getEditableContent().querySelector(`.${snippetName}`);
+    await core.getEditor().shared.socialMediaOptionPlugin.prefillSocialMediaLinks(snippetEl);
 
     expect(snippetSelector).toHaveCount(1);
     await click(`${snippetSelector} i:first-child`);
@@ -148,7 +150,7 @@ test("reorder social medias", async () => {
     await click(":iframe h4");
 
     await contains("button[data-action-id='addSocialMediaLink']").click();
-    await contains("tr:nth-child(9) input").fill("/first");
+    await contains("tr:nth-child(9) input").edit("https://www.example.com/first");
     await contains("button[data-action-id='addSocialMediaLink']").click();
 
     expect("tr:nth-child(1) input").toHaveValue("https://fb.com/odoo");
@@ -281,4 +283,32 @@ test("Share snippet options are correct", async () => {
     expect(":iframe .s_share a:first-of-type").toHaveClass("s_share_twitter");
     await contains(".o_we_table_wrapper tr:nth-of-type(1) .o-checkbox input").click();
     expect(":iframe .s_share .s_share_twitter.d-none").toHaveCount(1);
+});
+
+test("Social Media snippets have title attribute", async () => {
+    onRpc("/website/get_suggested_links", () => ({ matching_pages: [], others: [] }));
+    await setupSocialMediaSnippet();
+
+    await click(":iframe h4");
+
+    await animationFrame();
+    expect(":iframe a[href='https://www.facebook.com/your-page']").toHaveAttribute(
+        "title",
+        "facebook.com/your-page"
+    );
+
+    await contains("button[data-action-id='addSocialMediaLink']").click();
+    await contains("tr:last-child input[type=text]").edit("ftp://localhost/test");
+    await contains("button[data-action-id='addSocialMediaLink']").click();
+    expect(":iframe a[href='ftp://localhost/test']").toHaveAttribute(
+        "title",
+        "ftp://localhost/test"
+    );
+
+    await contains("tr:last-child input[type=text]").edit("http://unsecuresite.com");
+    await contains("button[data-action-id='addSocialMediaLink']").click();
+    expect(":iframe a[href='http://unsecuresite.com']").toHaveAttribute(
+        "title",
+        "http://unsecuresite.com"
+    );
 });

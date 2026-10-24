@@ -11,11 +11,10 @@ import {
     useAction,
     UseActions,
 } from "@mail/core/common/action";
-import { SUGGESTION_DELIMITERS } from "@mail/core/common/suggestion_hook";
+import { SUGGESTION_DELIMITERS } from "@mail/core/common/plugin/suggestion_plugin";
 import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
-import { markEventHandled } from "@web/core/utils/misc";
 
 export const composerActionsRegistry = registry.category("mail.composer/actions");
 
@@ -56,8 +55,7 @@ export function pickerGetAnchor({ action, owner }) {
 
 registerComposerAction("send-message", {
     condition: ({ ancestors, composer, store }) =>
-        (store.env.services.ui.isSmall && composer.message) ||
-        (!ancestors.inChatter && !composer.message),
+        (store.ui.isSmall() && composer.message) || (!ancestors.inChatter && !composer.message),
     disabledCondition: ({ owner }) => owner.isSendButtonDisabled,
     hasBtnBg: true,
     icon: "send",
@@ -78,9 +76,6 @@ registerComposerAction("add-emoji", {
     disabledCondition: ({ owner }) => owner.areAllActionsDisabled,
     icon: "sentiment_satisfied",
     name: _t("Add Emojis"),
-    onSelected(params, ev) {
-        markEventHandled(ev, "Composer.onClickAddEmoji");
-    },
     panel: {
         component: EmojiPicker,
         name: _t("Emoji"),
@@ -91,7 +86,7 @@ registerComposerAction("add-emoji", {
         }),
     },
     setup({ store }) {
-        if (!store.env.services.ui.isSmall) {
+        if (!store.ui.isSmall()) {
             this.emojiStoreScroll = useEmojiPickerStoreScroll();
         }
     },
@@ -102,9 +97,8 @@ registerComposerAction("upload-files", {
     condition: ({ owner }) => owner.allowUpload,
     icon: "attach_file",
     name: _t("Attach Files"),
-    onSelected: ({ composer, owner }, ev) => {
+    onSelected: ({ composer, owner }) => {
         owner.fileUploaderRef()?.click();
-        markEventHandled(ev, "composer.clickOnAddAttachment");
         composer.autofocus++;
     },
     setup: ({ owner }) => (owner.fileUploaderRef = signal.ref()),

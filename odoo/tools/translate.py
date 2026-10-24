@@ -1074,7 +1074,10 @@ def _get_uid(frame) -> int | None:
     if 'uid' in frame.f_locals:
         return frame.f_locals['uid']
     if 'user' in frame.f_locals:
-        return int(frame.f_locals['user'])      # user may be a record
+        from odoo.models import BaseModel  # noqa: PLC0415
+        user = frame.f_locals['user']           # user may be a record
+        if isinstance(user, int) or (isinstance(user, BaseModel) and user._name == 'res.users'):
+            return int(user)
     if (local_self := frame.f_locals.get('self')) is not None:
         if hasattr(local_self, 'env') and (uid := local_self.env.uid):
             return uid
@@ -1957,8 +1960,8 @@ class TranslationModuleReader(TranslationReader):
         import odoo.addons  # noqa: PLC0415
         self._path_list = [(path, True) for path in odoo.addons.__path__]
         self._installed_modules = [
-            m['name']
-            for m in self.env['ir.module.module'].search_read([('state', '=', 'installed')], fields=['name'])
+            m.name
+            for m in self.env['ir.module.module'].search_fetch([('state', '=', 'installed')], field_names=['name'])
         ]
 
         self._export_translatable_records()

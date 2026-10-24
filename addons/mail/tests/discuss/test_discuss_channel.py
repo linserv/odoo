@@ -130,7 +130,7 @@ class TestChannelInternals(MailCommon, HttpCase):
                                     "author_guest_id": False,
                                     "body": [
                                         "markup",
-                                        f'<div class="o_mail_notification" data-oe-type="channel-joined">invited <a href="#" data-oe-model="res.partner" data-oe-id="{self.test_partner.id}" class="o_mail_redirect">@Test Partner</a> to the channel</div>',
+                                        f'<div class="o_mail_notification" data-oe-type="channel-joined">invited <a href="/mail/view?model=res.partner&amp;res_id={self.test_partner.id}" data-oe-model="res.partner" data-oe-id="{self.test_partner.id}" class="o_mail_redirect">@Test Partner</a> to the channel</div>',
                                     ],
                                     "create_date": fields.Datetime.to_string(
                                         message.create_date,
@@ -339,6 +339,16 @@ class TestChannelInternals(MailCommon, HttpCase):
         with self.mock_datetime_and_now(post_time):
             chat.message_post(body="Test", message_type='comment', subtype_xmlid='mail.mt_comment')
         self.assertEqual(chat.last_interest_dt, post_time)
+
+    @users("employee")
+    def test_channel_message_count(self):
+        channel_1 = self.env["discuss.channel"]._create_channel(name="Channel 1", group_id=None)
+        channel_2 = self.env["discuss.channel"]._create_channel(name="Channel 2", group_id=None)
+        channel_1.message_post(body="Hello", message_type="comment")
+        channel_1.message_post(body="Some notification", message_type="notification")
+        channel_2.message_post(body="Hello", message_type="comment")
+        channel_2.message_post(body="Hello again", message_type="comment")
+        self.assertEqual((channel_1 + channel_2).mapped("message_count"), [1, 2])
 
     @users('employee')
     @mute_logger('odoo.addons.mail.models.mail_mail', 'odoo.models.unlink')
@@ -1251,8 +1261,8 @@ class TestChannelInternals(MailCommon, HttpCase):
                                     (
                                         "<span class='o_mail_notification'>"
                                         "You are in a private conversation with "
-                                        f"<a href=# data-oe-model='res.partner' data-oe-id='{test_user.partner_id.id}' class=o_mail_redirect>@Mario</a> "
-                                        f"and <a href=# data-oe-model='res.partner' data-oe-id='{self.partner_employee_nomail.id}' class=o_mail_redirect>@&lt;strong&gt;Evita Employee NoEmail&lt;/strong&gt;</a>."
+                                        f"<a href='/mail/view?model=res.partner&amp;res_id={test_user.partner_id.id}' data-oe-model='res.partner' data-oe-id='{test_user.partner_id.id}' class=o_mail_redirect>@Mario</a> "
+                                        f"and <a href='/mail/view?model=res.partner&amp;res_id={self.partner_employee_nomail.id}' data-oe-model='res.partner' data-oe-id='{self.partner_employee_nomail.id}' class=o_mail_redirect>@&lt;strong&gt;Evita Employee NoEmail&lt;/strong&gt;</a>."
                                         "<br><br><b>@username</b> to mention someone"
                                         "<br><b>@role</b> to notify multiple people"
                                         "<br><b>/command</b> to run a command"

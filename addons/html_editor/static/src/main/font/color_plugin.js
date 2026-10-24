@@ -265,7 +265,6 @@ export class ColorPlugin extends Plugin {
      * @param {boolean} [previewMode=false] true - apply color in preview mode
      */
     applyColor(color, mode, previewMode = false) {
-        this.dependencies.selection.selectAroundNonEditable();
         if (mode === "backgroundColor") {
             color = this.processThrough("apply_background_color_processors", color, mode);
         }
@@ -391,6 +390,11 @@ export class ColorPlugin extends Plugin {
                 // it out.
                 if (alreadyWithinFont.has(node)) {
                     return [];
+                }
+                // We apply color on icon element so the background color
+                // adapts when we resize color.
+                if (isElement(node) && node?.matches(".fa")) {
+                    return node;
                 }
                 // Background gradient cannot be applied within text gradient.
                 const shouldBreakGradient = (node) =>

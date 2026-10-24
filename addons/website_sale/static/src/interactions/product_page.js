@@ -714,7 +714,7 @@ export class ProductPage extends Interaction {
         const pricePerUom = parent.querySelector('.o_product_price_unit')
             ?.querySelector('.oe_currency_value');
         if (pricePerUom) {
-            const hasPrice = isCombinationPossible && combination.base_unit_price !== 0;
+            const hasPrice = this._hasUomPrice(combination);
             pricePerUom.closest('.o_product_price_unit').classList.toggle('d-none', !hasPrice);
             if (hasPrice) {
                 pricePerUom.textContent = this._priceToStr(combination.base_unit_price, precision);
@@ -956,6 +956,10 @@ export class ProductPage extends Interaction {
         });
     }
 
+    _hasUomPrice(combination) {
+        return !!combination.is_combination_possible && combination.base_unit_price !== 0;
+    }
+
     /**
      * Return the formatted price.
      *
@@ -1055,16 +1059,7 @@ export class ProductPage extends Interaction {
     _displayErrorMessage(message, stockNotificationEl) {
         const incorrectIconEl = stockNotificationEl.querySelector('#stock_notification_input_incorrect');
         incorrectIconEl.classList.remove('d-none');
-
-        const errorMessageEl = stockNotificationEl.querySelector('#stock_notification_error_message');
-        if (errorMessageEl) {
-            errorMessageEl.textContent = message;
-        } else {
-            const span = document.createElement('span');
-            span.id = 'stock_notification_error_message';
-            span.textContent = message;
-            incorrectIconEl.appendChild(span);
-        }
+        incorrectIconEl.textContent = message;
     }
 
     onClickWishlistStockNotificationMessage(ev) {

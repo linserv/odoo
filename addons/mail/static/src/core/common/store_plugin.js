@@ -10,9 +10,12 @@ import { isMobileOS } from "@web/core/browser/feature_detection";
 import { DebugModePlugin } from "@web/core/debug_mode_plugin";
 import { _t } from "@web/core/l10n/translation";
 import { rpc } from "@web/core/network/rpc";
+import { NotificationPlugin } from "@web/core/notifications/notification_plugin";
+import { ORM } from "@web/core/orm_plugin";
 import { PopoverPlugin } from "@web/core/popover/popover_plugin";
 import { registry } from "@web/core/registry";
 import { services } from "@web/core/services";
+import { UIPlugin } from "@web/core/ui/ui_plugin";
 import { user } from "@web/core/user";
 import { Mutex } from "@web/core/utils/concurrency";
 import { renderToElement } from "@web/core/utils/render";
@@ -71,7 +74,7 @@ export class Store extends BaseStore {
     /** @type {boolean|undefined} */
     isOdooWhiteTheme;
     odoobot = fields.One("res.partner");
-    useMobileView = this.computed(() => this.store.env.services.ui.isSmall || isMobileOS());
+    useMobileView = this.computed(() => this.store.ui.isSmall() || isMobileOS());
     /** @type {number|undefined} id of the mail.action_discuss action */
     action_discuss_id;
     /** @type {number|undefined} */
@@ -179,6 +182,12 @@ export class Store extends BaseStore {
     debugMode;
     /** @type {PopoverPlugin} */
     popover;
+    /** @type {UIPlugin} */
+    ui;
+    /** @type {NotificationPlugin} */
+    notification;
+    /** @type {ORM} */
+    orm;
 
     /** @param {Readonly<Record<string, any>>} [ancestors] @see useAncestors */
     discussDropdownMenuClass(ancestors) {
@@ -421,7 +430,7 @@ export class Store extends BaseStore {
     }
 
     handleClickOnLink(ev, thread) {
-        const link = ev.target.closest("a");
+        const link = ev.composedPath()[0].closest("a");
         if (!link) {
             return;
         }
@@ -433,7 +442,7 @@ export class Store extends BaseStore {
                 if (thread) {
                     thread.open({ focus: true });
                 } else {
-                    this.env.services.notification.add(_t("This thread is no longer available."), {
+                    this.notification.add(_t("This thread is no longer available."), {
                         type: "danger",
                     });
                 }
@@ -447,7 +456,7 @@ export class Store extends BaseStore {
             const message = this["mail.message"].get(id);
             const targetThread = message?.thread;
             const showAccessError = () =>
-                this.env.services.notification.add(_t("This conversation isn’t available."), {
+                this.notification.add(_t("This conversation isn’t available."), {
                     type: "danger",
                 });
             if (targetThread) {
@@ -477,7 +486,7 @@ export class Store extends BaseStore {
                 return true;
             }
         } else if (
-            this.env.services.ui.isSmall &&
+            this.ui.isSmall() &&
             ev.target.closest(".o-mail-ChatWindow") &&
             link.href &&
             !link.href.startsWith("#")
@@ -521,7 +530,7 @@ export class Store extends BaseStore {
         if (userId) {
             const user = await this["res.users"].getOrFetch(userId, ["partner_id"]);
             if (!user?.partner_id) {
-                this.env.services.notification.add(_t("You can only chat with existing users."), {
+                this.notification.add(_t("You can only chat with existing users."), {
                     type: "warning",
                 });
                 return;
@@ -530,7 +539,7 @@ export class Store extends BaseStore {
         } else if (partnerId) {
             partner = await this["res.partner"].getOrFetch(partnerId, ["main_user_id"]);
             if (!partner?.main_user_id) {
-                this.env.services.notification.add(
+                this.notification.add(
                     _t("You can only chat with partners that have a dedicated user."),
                     { type: "info" }
                 );
@@ -545,7 +554,7 @@ export class Store extends BaseStore {
             chat = await this.joinChat(partner.id);
         }
         if (!chat) {
-            this.env.services.notification.add(
+            this.notification.add(
                 _t("An unexpected error occurred during the creation of the chat."),
                 { type: "warning" }
             );
@@ -583,6 +592,42 @@ export class Store extends BaseStore {
         }
     }
 
+    /**
+     * Renders the links to known messages of this database with the name of their thread.
+     *
+     * @param {Iterable<HTMLAnchorElement>} linkEls
+     */
+    renderMessageLinks(linkEls) {
+        for (const linkEl of linkEls) {
+            if (!linkEl.getAttribute("href")?.startsWith(getOrigin())) {
+                continue;
+            }
+            const message = this["mail.message"].get(Number(linkEl.dataset.oeId));
+            const threadName = message?.thread?.displayName;
+            if (
+                !threadName ||
+                // up to date, as the composer renders its links on every update
+                (linkEl.classList.contains("o_message_redirect_transformed") &&
+                    linkEl.textContent.replaceAll("\uFEFF", "") === threadName)
+            ) {
+                continue;
+            }
+            linkEl.classList.add("o_message_redirect_transformed");
+            linkEl.replaceChildren(renderToElement("mail.Message.messageLink", { message }));
+        }
+    }
+
+    /**
+     * Texts that mention the given partner in a message posted on the given thread.
+     *
+     * @param {import("models").ResPartner} partner
+     * @param {import("models").Thread} [thread]
+     */
+    getPartnerMentionTexts(partner, thread) {
+        const name = (thread?.getPersonaName(partner) ?? partner.displayName)?.trim();
+        return [name && `@${name}`, partner.email && `@${partner.email}`].filter(Boolean);
+    }
+
     getMentionsFromText(body, { mentionedPartners = [], mentionedRoles = [], thread } = {}) {
         const validMentions = {};
         const segments = isMarkup(body)
@@ -592,10 +637,7 @@ export class Store extends BaseStore {
               )
             : [body];
         // Longest mention text first, so e.g. "@John" inside "@John Doe" isn't kept.
-        const mentionTexts = (partner) => {
-            const name = thread?.getPersonaName(partner) ?? partner.displayName;
-            return [name && `@${name}`, partner.email && `@${partner.email}`].filter(Boolean);
-        };
+        const mentionTexts = (partner) => this.getPartnerMentionTexts(partner, thread);
         const remaining = [...segments];
         const kept = new Set(
             [...mentionedPartners]
@@ -850,10 +892,16 @@ export class StorePlugin extends Plugin {
     env = useEnv();
     debugMode = usePlugin(DebugModePlugin);
     popover = usePlugin(PopoverPlugin);
+    ui = usePlugin(UIPlugin);
+    notification = usePlugin(NotificationPlugin);
+    orm = usePlugin(ORM);
 
     setup() {
         /** @type {import("models").Store} */
         this.store = makeStore(this.env);
+        this.store.ui = this.ui;
+        this.store.notification = this.notification;
+        this.store.orm = this.orm;
         this.store.insert(session.storeData);
         /**
          * Add a default for `self` because in livechat there could be no user and no guest yet
@@ -877,7 +925,7 @@ services.add(StorePlugin);
  * -----------------------------------------------------------------------------
  */
 export const storeService = {
-    dependencies: ["bus_service", "im_status", "ui", "discuss.upgrade"],
+    dependencies: ["bus_service", "im_status", "discuss.upgrade"],
     /**
      * @returns {import("models").Store}
      */

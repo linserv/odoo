@@ -73,12 +73,9 @@ const discussChannelPatch = {
     /** @param {string} description */
     async notifyDescriptionToServer(description) {
         this.description = description;
-        return this.store.env.services.orm.call(
-            "discuss.channel",
-            "channel_change_description",
-            [[this.id]],
-            { description }
-        );
+        return this.store.orm.call("discuss.channel", "channel_change_description", [[this.id]], {
+            description,
+        });
     },
     /**
      * @param {Object} [param0={}]
@@ -196,7 +193,7 @@ const discussChannelPatch = {
     },
     /** @override */
     _openChannel() {
-        if (this.store.discuss.isActive && !this.store.env.services.ui.isSmall) {
+        if (this.store.discuss.isActive && !this.store.ui.isSmall()) {
             this.setAsDiscussThread();
             return true;
         }

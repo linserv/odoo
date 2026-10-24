@@ -171,8 +171,7 @@ const StorePatch = {
         await this.store.fetchStoreData("remove_all_bookmarks");
     },
     async markNeedactionMessagesAsRead() {
-        const { orm, notification } = this.env.services;
-        const readMessageIds = await orm.silent.call("mail.message", "mark_all_as_read");
+        const readMessageIds = await this.orm.silent.call("mail.message", "mark_all_as_read");
         // Everything was read: any filter combination including "notification_unread" is
         // now empty and fully loaded.
         const notificationTab = this.store.messagingMenu.notificationTab;
@@ -182,7 +181,7 @@ const StorePatch = {
             }
         }
         notificationTab.loadStatusByFilterId.notification_unread = "loaded";
-        const close = notification.add(
+        const close = this.notification.add(
             readMessageIds.length === 1
                 ? _t("1 item marked as read")
                 : _t("%(amount)s items marked as read", { amount: readMessageIds.length }),
@@ -193,7 +192,9 @@ const StorePatch = {
                         name: _t("Undo"),
                         icon: "undo",
                         onClick: () => {
-                            orm.silent.call("mail.message", "mark_as_unread", [readMessageIds]);
+                            this.orm.silent.call("mail.message", "mark_as_unread", [
+                                readMessageIds,
+                            ]);
                             close();
                         },
                     },
@@ -202,10 +203,11 @@ const StorePatch = {
         );
     },
     handleClickOnLink(ev, thread) {
-        const model = ev.target.dataset.oeModel;
-        const id = Number(ev.target.dataset.oeId);
+        const target = ev.composedPath()[0];
+        const model = target.dataset.oeModel;
+        const id = Number(target.dataset.oeId);
         const isLinkHandledBySuper = super.handleClickOnLink(...arguments);
-        if (!isLinkHandledBySuper && ev.target.tagName === "A" && id && model) {
+        if (!isLinkHandledBySuper && target.tagName === "A" && id && model) {
             ev.preventDefault();
             Promise.resolve(
                 this.env.services.action.doAction({

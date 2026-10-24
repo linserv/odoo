@@ -425,6 +425,7 @@ class Website(models.CachedModel):
     @api.model
     def _handle_favicon(self, vals):
         if icon := vals.get('favicon'):
+            icon = self._fields['favicon'].convert_to_cache(icon, self)
             filename = icon.filename if isinstance(icon, BinaryValue) else ''
             vals['favicon'] = BinaryBytes(image_process(icon, size=(256, 256), crop='center', output_format='ICO'), filename)
 
@@ -493,17 +494,11 @@ class Website(models.CachedModel):
 
         if default_website.id != first_website.id:
             existing_settings = filter(lambda s: s in self._fields, self._get_settings_to_copy_onto_new_default_website())
-            transferred_settings = []
             for s in existing_settings:
                 if default_website[s] and not first_website[s]:
                     # If s is set in the old default website and not in the new
                     # default website, transfer it
                     first_website[s] = default_website[s]
-                    field_description = self.env['ir.model.fields'].search([
-                        ('name', '=', s),
-                        ('model', '=', 'website'),
-                    ], limit=1).field_description
-                    transferred_settings.append(field_description)
 
             # Mark the first website as default
             self.env['ir.model.data']._update_xmlids([{
@@ -516,26 +511,11 @@ class Website(models.CachedModel):
             self.env['ir.model.data'].invalidate_model()
 
             # Display a notification to inform the user
-            if len(transferred_settings) > 0:
-                self.env.user._bus_send("simple_notification", {
-                    'type': 'info',
-                    'title': _("Default website changed"),
-                    'message': _(
-                        'The new default website is %(default_website_name)s. '
-                        'The following default settings were copied from the old default website '
-                        'to the new one: %(transferred_settings)s. Note that these settings are still '
-                        'present on the old default website.',
-                        default_website_name=first_website.name,
-                        transferred_settings=", ".join(transferred_settings)),
-                    'sticky': True,
-                })
-            else:
-                self.env.user._bus_send("simple_notification", {
-                    'type': 'success',
-                    'title': _("Default website changed"),
-                    'message': _('The new default website is %(default_website_name)s.',
-                        default_website_name=first_website.name),
-                })
+            self.env.user._bus_send("simple_notification", {
+                'type': 'success',
+                'message': _("Default website changed to %(default_website_name)s.",
+                    default_website_name=first_website.name),
+            })
 
     @api.ondelete(at_uninstall=False)
     def _unlink_except_default_website(self):
@@ -789,6 +769,11 @@ class Website(models.CachedModel):
             r['industries'] = []
         return r
 
+    def _get_configurator_preview_urls(self):
+        """Allow-list of the non-theme previews the preview route may render,
+        filled by website_sale with the ``preview_url`` of its ``const.py``."""
+        return set()
+
     def _get_configurator_theme_preview_url(self, theme_name):
         preview_path = f"{theme_name}/static/description/preview.html"
         try:
@@ -886,6 +871,8 @@ class Website(models.CachedModel):
         self._check_configurator_access()
         website = self.env.website or self.env['website'].browse(self.env.context.get('host_id'))
         website.ensure_one()
+        if website.configurator_done:
+            return website.button_go_website()
         theme = self.env["ir.module.module"].search([("name", "=", "theme_default")])
         website.configurator_done = True
         return theme.with_context(website_id=website.id).button_choose_theme()
@@ -905,25 +892,29 @@ class Website(models.CachedModel):
             logger.warning(e.args[0])
 
     @api.model
-    def configurator_get_images(self, industry_id, theme=''):
+    def configurator_get_custom_resources(self, industry_id, theme=''):
         self._check_configurator_access()
         if not industry_id or industry_id <= 0:
             return {}
         try:
             custom_resources = self._website_api_rpc(
                 '/api/website/2/configurator/custom_resources/%s' % industry_id,
-                {'theme': theme or ''},
+                {'theme': theme or '', 'lang': self.env.context.get('lang')},
             )
         except (AccessError, RequestException) as e:
             logger.warning(
-                "Failed to fetch configurator images for industry %s: %s",
+                "Failed to fetch configurator resources for industry %s: %s",
                 industry_id,
                 e,
             )
             return {}
         if not isinstance(custom_resources, dict):
             return {}
-        return custom_resources.get('images', {})
+        return custom_resources
+
+    @api.model
+    def configurator_get_images(self, industry_id, theme=''):
+        return self.configurator_get_custom_resources(industry_id, theme).get('images', {})
 
     @api.model
     def configurator_apply(self, **kwargs):
@@ -1558,8 +1549,7 @@ class Website(models.CachedModel):
         page_model_name = 'Page'
 
         def _handle_views_and_pages(views):
-            page_views = views.filtered('page_ids')
-            views = views - page_views
+            page_views, views = views.partitioned('page_ids')
             if page_views:
                 dependencies.setdefault(page_model_name, [])
                 dependencies[page_model_name] += [{

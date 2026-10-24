@@ -26,11 +26,13 @@ import {
     signal,
     t,
     useEffect,
+    usePlugin,
     useProps,
 } from "@odoo/owl";
 
 import { isMobileOS } from "@web/core/browser/feature_detection";
 import { useHotkey } from "@web/core/hotkeys/hotkey_hook";
+import { UIPlugin } from "@web/core/ui/ui_plugin";
 import { clamp } from "@web/core/utils/numbers";
 import { useService } from "@web/core/utils/hooks";
 import { isEventHandled, markEventHandled } from "@web/core/utils/misc";
@@ -110,10 +112,9 @@ export class Call extends Component {
                 dropInset: (surfaceKey) => this.dropInset(surfaceKey),
             },
         });
-        this.notification = useService("notification");
         this.rtc = useService("discuss.rtc");
         this.isMobileOs = isMobileOS();
-        this.ui = useService("ui");
+        this.ui = usePlugin(UIPlugin);
         this.state = proxy({
             /** Tiles are cropped to fill their rect, rather than letterboxed inside it. */
             cropsTiles: false,
@@ -509,7 +510,7 @@ export class Call extends Component {
     }
 
     get isControllerFloating() {
-        return this.rtc.isFullscreen || (this.channel.activeRtcSession && !this.ui.isSmall);
+        return this.rtc.isFullscreen || (this.channel.activeRtcSession && !this.ui.isSmall());
     }
 
     onMouseleaveMain(ev) {

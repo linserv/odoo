@@ -4,6 +4,7 @@ from pprint import pformat
 
 from odoo import Command, models
 from odoo.exceptions import AccessError, LockError
+from odoo.fields import Domain
 from odoo.tests.common import TransactionCase, tagged
 from odoo.tools import SQL, lazy, mute_logger, unique
 from odoo.tools.version_tag_reset import assign_version_tag
@@ -85,7 +86,7 @@ class TestORM(TransactionCase):
 
         # read as unprivileged user
         with self.assertRaises(AccessError):
-            p1.with_user(user).read(['name'])
+            p1.with_user(user).fetch(['name'])
         # write as unprivileged user
         with self.assertRaises(AccessError):
             p1.with_user(user).write({'name': 'foo'})
@@ -97,7 +98,7 @@ class TestORM(TransactionCase):
         p2.unlink()
         # read mixed records: some deleted and some filtered
         with self.assertRaises(AccessError):
-            (p1 + p2).with_user(user).read(['name'])
+            (p1 + p2).with_user(user).fetch(['name'])
         # delete mixed records: some deleted and some filtered
         with self.assertRaises(AccessError):
             (p1 + p2).with_user(user).unlink()
@@ -807,6 +808,40 @@ class TestRecordset(TestOrmPartnerCommon, TransactionCase):
 
         with self.assertQueries([]):
             _ = partners_grouped['@host.com'].name
+
+    def test_recordset_partitioned(self):
+        partners = self.partners
+        partners[0].email = '@guest.com'
+        partners[1].email = '@host.com'
+        partners[2].email = '@guest.com'
+
+        # each record is in the partition of the first predicate it satisfies
+        guests, hosts, with_email, nobody, others = partners.partitioned(
+            lambda p: p.email == '@guest.com',
+            Domain('email', '=', '@host.com'),
+            'email',
+            lambda p: False,
+        )
+        self.assertEqual(guests, partners[0] + partners[2])
+        self.assertEqual(hosts, partners[1])
+        self.assertFalse(with_email)
+        self.assertFalse(nobody)
+        self.assertEqual(others, partners[3:])
+
+        self.assertEqual(partners.partitioned(), (partners,))
+        self.assertEqual(partners.partitioned('id'), (partners, partners.browse()))
+        # a falsy predicate matches every record, like filtered()
+        self.assertEqual(partners.partitioned(None), (partners, partners.browse()))
+
+        # partitions share the prefetch set of self
+        hosts, _others = partners.partitioned(Domain('email', '=', '@host.com'))
+        partners.invalidate_recordset(['website'])
+        with self.assertQueryCount(1):
+            hosts.website
+            partners[0].website
+
+        with self.assertRaisesRegex(TypeError, "Invalid function 42"):
+            partners.partitioned(42)
 
 
 @tagged('-at_install', 'post_install')

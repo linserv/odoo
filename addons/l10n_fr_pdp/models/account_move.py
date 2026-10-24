@@ -170,7 +170,7 @@ class AccountMove(models.Model):
             move.pdp_can_send_response = (
                 bool(move.peppol_message_uuid)
                 and move.peppol_is_sent
-                and move.partner_id.with_company(move.company_id).l10n_fr_is_pdp
+                and move.partner_id.commercial_partner_id.with_company(move.company_id).l10n_fr_is_pdp
             )
 
     @api.depends('pdp_can_send_response')
@@ -715,3 +715,11 @@ class AccountMove(models.Model):
                 # ensure RE flow exist for current move period (if move is never posted again)
                 self.env['l10n.fr.pdp.reports.flow']._get_open_flow_and_create_if_needed(move)
         return super().button_draft()
+
+    def _get_import_file_type(self, file_data):
+        """ Identify UBL files. """
+        # EXTENDS 'account'
+        if (tree := file_data['xml_tree']) is not None:
+            if tree.findtext('{*}CustomizationID') == 'urn:cen.eu:en16931:2017#conformant#urn.cpro.gouv.fr:1p0:extended-ctc-fr':
+                return 'account.edi.xml.ubl_21_fr'
+        return super()._get_import_file_type(file_data)

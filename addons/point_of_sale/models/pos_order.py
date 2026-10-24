@@ -106,6 +106,9 @@ class PosOrder(models.Model):
             if order.get('session_id') and order['session_id'] != pos_order.session_id.id:
                 pos_order.write({'session_id': order['session_id']})
 
+            # Customer account payments require the customer to be set on the order when created
+            if 'partner_id' in order:
+                pos_order.write({'partner_id': order.pop('partner_id')})
             self._update_lines(order, pos_order, ['lines', 'payment_ids'])
             del order['uuid']
             if "access_token" in order:
@@ -807,13 +810,39 @@ class PosOrder(models.Model):
         last_order = self.env['pos.order'].search([], order='id desc', limit=1)
         return last_order.order_receipt_generate_data()
 
-    def action_pos_order_receipt(self):
+    def get_receipt_print_data(self):
+        """Return what the backend needs to print the receipt of this order.
+
+        The receipts are rendered server side, as the client only has to forward
+        them to the printers it can reach: an ePOS document for the printers on
+        its local network, an image for the ones behind an IoT box. Rendering is
+        done once per format and paper size, printers sharing both share theirs.
+        The receipt html is always returned to allow the browser printing flow,
+        used when no printer is configured or when they all failed to print.
+        """
         self.ensure_one()
+        order = self.with_company(self.company_id)
+        printers = order.config_id.receipt_printer_ids.filtered(
+            lambda printer: printer._can_print_backend_receipt(),
+        )
+        receipts = {}
+        printers_data = []
+        for printer in printers:
+            key = (printer._get_backend_receipt_format(), printer.paper_size)
+            if key not in receipts:
+                receipts[key] = order._order_receipt_generate_for_format(*key)
+            if receipts[key]:
+                printers_data.append({**printer._get_backend_print_data(), 'receipt': receipts[key]})
         return {
-            "type": "ir.actions.act_url",
-            "url": f"/pos/receipt/{self.id}?company_id={self.company_id.id}",
-            "target": "new",
+            'printers': printers_data,
+            'receipt_html': order.order_receipt_generate_html(),
+            'config_id': order.config_id.id,
         }
+
+    def mark_receipt_as_printed(self):
+        """Count a print of the receipt, as the register does once it printed it."""
+        self.ensure_one()
+        self.nb_print += 1
 
     def _get_invoice_post_context(self):
         return {"skip_invoice_sync": True}
@@ -1223,18 +1252,29 @@ class PosOrder(models.Model):
         if product:
             name = product.description_sale
 
+        # Untaxed lines get no manual amounts, so the global rounding delta
+        # allocated to them must be kept in the price, or the move is unbalanced.
+        total = base_line['price_unit']
+        tax_details = base_line['tax_details']
+        if not tax_details['taxes_data']:
+            total = tax_details['total_excluded_currency'] + tax_details['delta_total_excluded_currency']
+
         if self.config_id._is_quantities_set():
             quantity = base_line['_aggregated_quantity']
-            price_unit = base_line['price_unit'] / quantity if quantity else base_line['price_unit']
+            price_unit = total / quantity if quantity else total
         else:
-            quantity, price_unit = 1.0, base_line['price_unit']
+            quantity, price_unit = 1.0, total
 
         line_vals = {
             'name': name,
             'quantity': quantity,
             'price_unit': price_unit,
             'display_type': 'product',
-            'extra_tax_data': self.env['account.tax']._export_base_line_extra_tax_data(base_line),
+            'extra_tax_data': self.env['account.tax']._export_base_line_extra_tax_data({
+                **base_line,
+                'quantity': quantity,
+                'price_unit': price_unit,
+            }),
             'account_id': base_line['account_id'].id,
             'tax_ids': [(6, 0, base_line['tax_ids'].ids)],
         }

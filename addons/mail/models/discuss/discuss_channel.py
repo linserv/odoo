@@ -247,6 +247,7 @@ class DiscussChannel(models.Model):
     # COMPUTE / INVERSE
 
     @api.depends("channel_name_member_ids", "name")
+    @api.depends_context("lang")
     def _compute_display_name(self):
         for channel in self:
             if channel.name:
@@ -478,11 +479,10 @@ class DiscussChannel(models.Model):
     @api.depends("message_ids")
     def _compute_message_count(self):
         read_group_res = self.env["mail.message"]._read_group(
-            domain=[
-                ("model", "=", "discuss.channel"),
-                ("res_id", "in", self.ids),
-                ("message_type", "not in", ["user_notification", "notification"])
-            ], groupby=["res_id"], aggregates=["__count"]
+            domain=self._get_message_domain()
+            & Domain("message_type", "not in", ("user_notification", "notification")),
+            groupby=["res_id"],
+            aggregates=["__count"],
         )
         message_count_by_channel_id = dict(read_group_res)
         for channel in self:
@@ -1396,22 +1396,31 @@ class DiscussChannel(models.Model):
             store.add(message.channel_id, ["message_count"])
         return rdata
 
+    def _notify_by_push_get_title(self, message, force_record_name=False):
+        author = message.author_id or message.author_guest_id
+        if self.channel_type == "chat":
+            # in a DM the conversation is the author
+            return author.name
+        record_name = force_record_name or message.record_name
+        if self.channel_type == "channel":
+            return f"#{record_name}"
+        return record_name or self.display_name
+
+    def _notify_by_push_get_body_prefix(self, message):
+        # in a DM the title is already the author's name
+        if self.channel_type == "chat":
+            return ""
+        return super()._notify_by_push_get_body_prefix(message)
+
+    def _notify_by_push_get_icon(self, message):
+        if self.channel_type in ["channel", "group"]:
+            return f"/web/image/discuss.channel/{self.id}/avatar_128"
+        author = message.author_id or message.author_guest_id
+        return f"/web/image/{author._name}/{author.id}/avatar_128"
+
     def _notify_by_web_push_prepare_payload(self, message, force_record_name=False):
         payload = super()._notify_by_web_push_prepare_payload(message, force_record_name=force_record_name)
         payload['options']['data']['action'] = 'mail.action_discuss'
-        record_name = force_record_name or message.record_name
-        author = message.author_id or message.author_guest_id
-        if self.channel_type == 'chat':
-            payload['title'] = author.name
-        elif self.channel_type == 'channel':
-            payload['title'] = "#%s - %s" % (record_name, author.name)
-        elif self.channel_type == 'group':
-            if not record_name:
-                member_names = self.channel_member_ids.mapped(lambda m: m.partner_id.name if m.partner_id else m.guest_id.name)
-                record_name = f"{', '.join(member_names[:-1])} and {member_names[-1]}" if len(member_names) > 1 else member_names[0] if member_names else ""
-            payload['title'] = "%s - %s" % (record_name, author.name)
-        else:
-            payload['title'] = "#%s" % (record_name)
         return payload
 
     def _notify_thread_by_web_push(self, message, recipients_data, **kwargs):
@@ -1986,6 +1995,23 @@ class DiscussChannel(models.Model):
         )
         return sub_channel
 
+    def _get_message_domain(self):
+        return Domain("model", "=", self._name) & Domain("res_id", "in", self.ids)
+
+    def _get_correlated_message_domain(self, channel_id: SQL):
+        # mail.message._search reads the plain `model` leaf to pick its access path
+        return Domain("model", "=", self._name) & Domain.custom(
+            to_sql=lambda table: SQL("%s = %s", table.res_id, channel_id),
+        )
+
+    def _get_message_sql(self, alias: SQL, channel_id: SQL):
+        return SQL(
+            "%(alias)s.model = %(model)s AND %(alias)s.res_id = %(channel_id)s",
+            alias=alias,
+            channel_id=channel_id,
+            model=self._name,
+        )
+
     def _get_last_messages(self):
         """ Return the last message for each of the given channels."""
         messages = self.env["mail.message"]
@@ -1994,9 +2020,7 @@ class DiscussChannel(models.Model):
         # Build the subquery, we know the model and must inject the same
         # security rules as in the `_search` method. The search is optimized to
         # return a query without executing anything if the model is fixed.
-        domain = Domain('model', '=', self._name) & Domain.custom(
-            to_sql=lambda table: SQL("%s = discuss_channel.id", table.res_id),
-        )
+        domain = self._get_correlated_message_domain(SQL("discuss_channel.id"))
         messages_query = messages._search(domain, order='id desc', limit=1)
         sql = SQL(
             """
@@ -2018,11 +2042,8 @@ class DiscussChannel(models.Model):
         if not self.ids:
             return messages
         domain = (
-            Domain("model", "=", self._name)
+            self._get_correlated_message_domain(SQL("discuss_channel.id"))
             & Domain("needaction", "=", True)
-            & Domain.custom(
-                to_sql=lambda table: SQL("%s = discuss_channel.id", table.res_id),
-            )
         )
         messages_query = messages._search(domain, order="id desc", limit=1)
         sql = SQL(

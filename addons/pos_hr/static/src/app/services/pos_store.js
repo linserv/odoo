@@ -67,7 +67,7 @@ patch(PosStore.prototype, {
                 // We set the cashier on that order to the currently set employee.
                 o.employee_id = employee;
             }
-            if (!this.accessRight.disablePriceButton && this.numpadMode === "price") {
+            if (this.accessRight.disablePriceButton && this.numpadMode === "price") {
                 this.numpadMode = "quantity";
             }
         }
@@ -83,6 +83,17 @@ patch(PosStore.prototype, {
         } else {
             super.checkPreviousLoggedCashier(...arguments);
         }
+    },
+    async setCashierFromBadge(employee, { needsPin = () => true, allowSameCashier = false } = {}) {
+        if (
+            employee &&
+            (allowSameCashier || employee !== this.accessRight.loggedCashier) &&
+            (!employee._pin || !needsPin(employee) || (await this.accessRight.checkPin(employee)))
+        ) {
+            this.setCashier(employee);
+            return true;
+        }
+        return false;
     },
     async selectCashier(pin = false, login = false, list = false) {
         if (!this.config.module_pos_hr) {

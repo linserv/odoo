@@ -39,7 +39,7 @@ const ScheduledMessagePatch = {
      * Cancel the scheduled message.
      */
     async cancel() {
-        await this.store.env.services.orm.unlink("mail.scheduled.message", [this.id]);
+        await this.store.orm.unlink("mail.scheduled.message", [this.id]);
         this.delete();
     },
 
@@ -50,11 +50,9 @@ const ScheduledMessagePatch = {
     async edit() {
         let action;
         try {
-            action = await this.store.env.services.orm.call(
-                "mail.scheduled.message",
-                "open_edit_form",
-                [this.id]
-            );
+            action = await this.store.orm.call("mail.scheduled.message", "open_edit_form", [
+                this.id,
+            ]);
         } catch {
             this.notifyAlreadySent();
             return;
@@ -65,7 +63,7 @@ const ScheduledMessagePatch = {
     },
 
     notifyAlreadySent() {
-        this.store.env.services.notification.add(_t("This message has already been sent."), {
+        this.store.notification.add(_t("This message has already been sent."), {
             type: "warning",
         });
     },
@@ -75,9 +73,7 @@ const ScheduledMessagePatch = {
      */
     async send() {
         try {
-            await this.store.env.services.orm.call("mail.scheduled.message", "post_message", [
-                this.id,
-            ]);
+            await this.store.orm.call("mail.scheduled.message", "post_message", [this.id]);
         } catch {
             // already sent (by someone else or by cron)
             return;

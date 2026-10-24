@@ -24,12 +24,14 @@ import {
     signal,
     t,
     useOnChange,
+    usePlugin,
     useProps,
     useScope,
 } from "@odoo/owl";
 
 import { _t } from "@web/core/l10n/translation";
 import { Transition } from "@web/core/transition";
+import { UIPlugin } from "@web/core/ui/ui_plugin";
 import { useBus, useService } from "@web/core/utils/hooks";
 import { escape } from "@web/core/utils/strings";
 
@@ -88,12 +90,11 @@ export class Thread extends Component {
             showJumpPresent: t.boolean().optional(true),
             thread: t.instanceOf(this.store["mail.thread"]),
         });
-        this.ui = useService("ui");
+        this.ui = usePlugin(UIPlugin);
         this.state = proxy({
             isReplyingTo: false,
             mountedAndLoaded: false,
             showJumpPresent: false,
-            scrollTop: null,
         });
         // before hooks depending on `mountedAndLoaded`, so they see it on mount
         onMounted(() => (this.state.mountedAndLoaded = this.props.thread.isLoaded));
@@ -105,8 +106,6 @@ export class Thread extends Component {
         this.resetCount = signal(0);
         this.incrementResetCount = incrementFn(this.resetCount);
         this.lastJumpPresent = this.props.jumpPresent;
-        this.orm = useService("orm");
-        this.ui = useService("ui");
         this.messageHighlight = useMaybePlugin(MessageHighlightPlugin);
         this.scrollingToHighlight = false;
         // from the patch rendering the highlight, or its message (e.g. after loading around it):
@@ -628,7 +627,7 @@ export class Thread extends Component {
             this.state.showJumpPresent = false;
         }
         this.props.thread.scrollTop = immediate ? "bottom" : "bottom-smooth";
-        if (!this.ui.isSmall) {
+        if (!this.ui.isSmall()) {
             this.props.thread.composer.autofocus++;
         }
     }
@@ -710,6 +709,9 @@ export class Thread extends Component {
     }
 
     saveScroll() {
+        if (this.isSmoothScrolling) {
+            return;
+        }
         const isBottom = this.isAtBottom;
         if (isBottom) {
             this.props.thread.scrollTop = "bottom";
@@ -791,10 +793,21 @@ export class Thread extends Component {
             this.isSmoothScrolling = true;
             const { promise, resolve: resolveSmoothScrolling } = Promise.withResolvers();
             this.smoothScrollingPromise = promise;
+            const thread = this.props.thread;
             const onSmoothScrollingEnd = () => {
                 resolveSmoothScrolling();
                 this.smoothScrollingPromise = undefined;
                 this.isSmoothScrolling = false;
+                const el = this.scrollableRef();
+                if (!el || thread.notEq(this.props.thread)) {
+                    return;
+                }
+                if (Math.abs(el.scrollTop - value) <= 1) {
+                    thread.scrollTop = "bottom";
+                    this.applyScroll();
+                } else {
+                    this.saveScroll();
+                }
             };
             if ("onscrollend" in window) {
                 document.addEventListener("scrollend", onSmoothScrollingEnd, {

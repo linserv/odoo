@@ -357,8 +357,7 @@ class CrmLead(models.Model):
     @api.depends('create_date', 'date_open')
     def _compute_day_open(self):
         """ Compute difference between create date and open date """
-        leads = self.filtered(lambda l: l.date_open and l.create_date)
-        others = self - leads
+        leads, others = self.partitioned(lambda l: l.date_open and l.create_date)
         others.day_open = None
         for lead in leads:
             date_create = fields.Datetime.from_string(lead.create_date).replace(microsecond=0)
@@ -368,8 +367,7 @@ class CrmLead(models.Model):
     @api.depends('create_date', 'date_closed')
     def _compute_day_close(self):
         """ Compute difference between current date and log date """
-        leads = self.filtered(lambda l: l.date_closed and l.create_date)
-        others = self - leads
+        leads, others = self.partitioned(lambda l: l.date_closed and l.create_date)
         others.day_close = None
         for lead in leads:
             date_create = fields.Datetime.from_string(lead.create_date)
@@ -803,8 +801,7 @@ class CrmLead(models.Model):
             result = super().write(vals)
         else:
             # stage change between two won stages: does not change the date_closed
-            leads_already_won = self.filtered(lambda lead: lead.stage_id.is_won)
-            remaining = self - leads_already_won
+            leads_already_won, remaining = self.partitioned(lambda lead: lead.stage_id.is_won)
             if remaining:
                 result = super(CrmLead, remaining).write(vals)
             if leads_already_won:
@@ -2286,10 +2283,11 @@ class CrmLead(models.Model):
             result[-1][field]['lost_total'] += frequency['lost_count']
 
         # Get all won, lost and total count for all records in frequencies per team_id
+        first_stage = self.env['crm.stage'].search([('team_ids', '=', False)], order='sequence, id', limit=1)
         for team_id in result:
             result[team_id]['team_won'], \
             result[team_id]['team_lost'], \
-            result[team_id]['team_total'] = self._pls_get_won_lost_total_count(result[team_id])
+            result[team_id]['team_total'] = self._pls_get_won_lost_total_count(result[team_id], first_stage)
 
         save_team_id = None
         p_won, p_lost = 1, 1
@@ -2637,19 +2635,19 @@ class CrmLead(models.Model):
 
     # Compute Automated Probability Tools
     # -----------------------------------
-    def _pls_get_won_lost_total_count(self, team_results):
+    def _pls_get_won_lost_total_count(self, team_results, first_stage):
         """ Get all won and all lost + total :
                first stage can be used to know how many lost and won there is
                as won count are equals for all stage
                and first stage is always incremented in lost_count
         :param team_results:
+        :param first_stage: first ``crm.stage`` in sequence not linked to any team
         :return: won count, lost count and total count for all records in frequencies
         """
         # TODO : check if we need to handle specific team_id stages [for lost count] (if first stage in sequence is team_specific)
-        first_stage_id = self.env['crm.stage'].search([('team_ids', '=', False)], order='sequence, id', limit=1)
-        if str(first_stage_id.id) not in team_results.get('stage_id', []):
+        if str(first_stage.id) not in team_results.get('stage_id', []):
             return 0, 0, 0
-        stage_result = team_results['stage_id'][str(first_stage_id.id)]
+        stage_result = team_results['stage_id'][str(first_stage.id)]
         return stage_result['won'], stage_result['lost'], stage_result['won'] + stage_result['lost']
 
     # PLS: Rebuild Frequency Table Tools
@@ -2660,8 +2658,8 @@ class CrmLead(models.Model):
         pls_fields = leads_pls_fields.copy()
         frequencies = dict((field, {}) for field in pls_fields)
 
-        stage_ids = self.env['crm.stage'].search_read([], ['sequence', 'name', 'id'], order='sequence, id')
-        stage_sequences = {stage['id']: stage['sequence'] for stage in stage_ids}
+        stage_ids = self.env['crm.stage'].search_fetch([], ['sequence', 'name', 'id'], order='sequence, id')
+        stage_sequences = {stage.id: stage.sequence for stage in stage_ids}
 
         # Increment won / lost frequencies by criteria (field / value couple)
         for values in lead_values:
@@ -2686,10 +2684,10 @@ class CrmLead(models.Model):
                 if value or field in ('email_state', 'phone_state'):
                     if field == 'stage_id':
                         if won_count:  # increment all stages if won
-                            stages_to_increment = [stage['id'] for stage in stage_ids]
+                            stages_to_increment = [stage.id for stage in stage_ids]
                         else:  # increment only current + previous stages if lost
                             current_stage_sequence = stage_sequences[value]
-                            stages_to_increment = [stage['id'] for stage in stage_ids if stage['sequence'] <= current_stage_sequence]
+                            stages_to_increment = [stage.id for stage in stage_ids if stage.sequence <= current_stage_sequence]
                         for stage_id in stages_to_increment:
                             frequencies = self._pls_increment_frequency_dict(frequencies, field, stage_id, won_count, lost_count)
                     else:

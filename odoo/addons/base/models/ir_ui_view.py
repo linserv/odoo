@@ -312,9 +312,9 @@ actual arch.
         for view in self:
             view.model_data_id = False
         domain = [('model', '=', 'ir.ui.view'), ('res_id', 'in', self.ids)]
-        for data in self.env['ir.model.data'].sudo().search_read(domain, ['res_id'], order='id desc'):
-            view = self.browse(data['res_id'])
-            view.model_data_id = data['id']
+        for data in self.env['ir.model.data'].sudo().search_fetch(domain, ['res_id'], order='id desc'):
+            view = self.browse(data.res_id)
+            view.model_data_id = data.id
 
     def _search_model_data_id(self, operator, value):
         if operator in Domain.NEGATIVE_OPERATORS:
@@ -411,8 +411,8 @@ actual arch.
     def _compute_xml_id(self):
         xml_ids = collections.defaultdict(list)
         domain = [('model', '=', 'ir.ui.view'), ('res_id', 'in', self.ids)]
-        for data in self.env['ir.model.data'].sudo().search_read(domain, ['module', 'name', 'res_id']):
-            xml_ids[data['res_id']].append("%s.%s" % (data['module'], data['name']))
+        for data in self.env['ir.model.data'].sudo().search_fetch(domain, ['module', 'name', 'res_id']):
+            xml_ids[data.res_id].append("%s.%s" % (data.module, data.name))
         for view in self:
             view.xml_id = xml_ids.get(view.id, [''])[0]
 
@@ -1701,7 +1701,7 @@ actual arch.
                 if isinstance(domain, str):
                     vnames = get_expression_field_names(domain)
                     name_manager.must_have_fields(node, vnames, node_info, ('domain', domain))
-            if field.type == 'properties':
+            if field.type == 'properties' and field.definition_record:
                 name_manager.must_have_fields(node, [field.definition_record], node_info, ('fieldname', field.name))
             context = node.get('context')
             if context:
@@ -1995,7 +1995,7 @@ actual arch.
                 )
                 self._raise_view_error(msg, node)
 
-            if field.type == 'properties' and node_info['view_type'] != 'search':
+            if field.type == 'properties' and field.definition_record and node_info['view_type'] != 'search':
                 name_manager.must_have_fields(node, {field._description_definition_record}, node_info, use=f"definition record of {field.name}")
 
             for child in node:

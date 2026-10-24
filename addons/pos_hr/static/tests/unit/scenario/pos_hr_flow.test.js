@@ -177,7 +177,7 @@ test("a restrictive employee gets no Price numpad button", async () => {
     await Utils.switchCashier("A Little Guy");
     await waitFor(".product-screen");
     expect(store.accessRight.loggedCashier._role).toBe("restrictive");
-    expect(store.accessRight.disablePriceButton).toBe(false);
+    expect(store.accessRight.disablePriceButton).toBe(true);
     if (!Utils.isMobile()) {
         expect('.numpad button:contains("Price")').toHaveAttribute("disabled");
     }
@@ -272,6 +272,11 @@ test("test_switch_cashier_with_badge: scanning a badge switches the cashier", as
     await Utils.enterPin("5678");
     await waitFor(".product-screen");
     expect(store.accessRight.loggedCashier.name).toBe("Employee2");
+
+    createTestProduct(store, { id: 9101, name: "Wall Shelf Unit", barcode: "0123456789" });
+    await animationFrame();
+    await Utils.scanBarcode("0123456789");
+    expect(Utils.hasOrderline({ productName: "Wall Shelf Unit" })).toBe(true);
 
     await Utils.clickDisplayedProduct("TEST");
     expect(store.getOrder().employee_id.name).toBe("Employee2");

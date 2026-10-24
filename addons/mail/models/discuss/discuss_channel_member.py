@@ -80,7 +80,7 @@ class DiscussChannelMember(models.Model):
         self.env["discuss.channel"].flush_model()
         self.env["discuss.channel.member"].flush_model()
         self.env["mail.message"].flush_model()
-        self.env.cr.execute(
+        self.env.cr.execute(SQL(
             """
             SELECT member.id
               FROM discuss_channel_member member
@@ -97,14 +97,17 @@ class DiscussChannelMember(models.Model):
                AND NOT EXISTS (
                    SELECT 1
                      FROM mail_message
-                    WHERE mail_message.res_id = channel.id
-                      AND mail_message.model = 'discuss.channel'
+                    WHERE %(is_channel_message)s
                       AND mail_message.id >= member.new_message_separator
                       AND mail_message.message_type NOT IN ('notification', 'user_notification')
                )
             """,
-            {"outdated_dt": outdated_dt},
-        )
+            is_channel_message=self.env["discuss.channel"]._get_message_sql(
+                SQL("mail_message"),
+                SQL("channel.id"),
+            ),
+            outdated_dt=outdated_dt,
+        ))
         members = self.env["discuss.channel.member"].search(
             [("id", "in", [row[0] for row in self.env.cr.fetchall()])],
         )
@@ -176,14 +179,13 @@ class DiscussChannelMember(models.Model):
         if self.ids:
             self.env['mail.message'].flush_model()
             self.flush_recordset(['channel_id', 'new_message_separator'])
-            self.env.cr.execute("""
+            self.env.cr.execute(SQL("""
                      SELECT count(mail_message.id) AS count,
                             discuss_channel_member.id
                        FROM mail_message
                  INNER JOIN discuss_channel_member
-                         ON discuss_channel_member.channel_id = mail_message.res_id
-                      WHERE mail_message.model = 'discuss.channel'
-                        AND mail_message.message_type != 'user_notification'
+                         ON %(is_channel_message)s
+                      WHERE mail_message.message_type != 'user_notification'
                         AND (
                             mail_message.message_type != 'notification'
                             OR mail_message.subtype_id = %(subtype_id)s
@@ -191,7 +193,16 @@ class DiscussChannelMember(models.Model):
                         AND mail_message.id >= discuss_channel_member.new_message_separator
                         AND discuss_channel_member.id IN %(ids)s
                    GROUP BY discuss_channel_member.id
-            """, {"ids": tuple(self.ids), "subtype_id": self.env["ir.model.data"]._xmlid_to_res_id("mail.mt_important_notification")})
+            """,
+                ids=tuple(self.ids),
+                is_channel_message=self.env["discuss.channel"]._get_message_sql(
+                    SQL("mail_message"),
+                    SQL("discuss_channel_member.channel_id"),
+                ),
+                subtype_id=self.env["ir.model.data"]._xmlid_to_res_id(
+                    "mail.mt_important_notification",
+                ),
+            ))
             unread_counter_by_member = {res['id']: res['count'] for res in self.env.cr.dictfetchall()}
             for member in self:
                 member.message_unread_counter = unread_counter_by_member.get(member.id)
@@ -208,8 +219,7 @@ class DiscussChannelMember(models.Model):
             EXISTS (
                 SELECT 1
                   FROM mail_message
-                 WHERE mail_message.model = 'discuss.channel'
-                   AND mail_message.res_id = %(channel_id)s
+                 WHERE %(is_channel_message)s
                     AND mail_message.message_type != 'user_notification'
                     AND (
                         mail_message.message_type != 'notification'
@@ -218,7 +228,10 @@ class DiscussChannelMember(models.Model):
                    AND mail_message.id >= %(separator)s
             )
             """,
-            channel_id=table.channel_id,
+            is_channel_message=self.env["discuss.channel"]._get_message_sql(
+                SQL("mail_message"),
+                table.channel_id,
+            ),
             separator=table.new_message_separator,
             subtype_id=self.env["ir.model.data"]._xmlid_to_res_id("mail.mt_important_notification"),
         )
@@ -707,20 +720,25 @@ class DiscussChannelMember(models.Model):
             )
             devices, private_key, public_key = self.channel_id._web_push_get_partners_parameters(members.partner_id.ids)
             if devices:
-                if self.channel_id.channel_type != 'chat':
+                user, guest = self.env["res.users"]._get_current_persona()
+                caller = guest or user.partner_id
+                icon = f"/web/image/{caller._name}/{caller.id}/avatar_128"
+                if self.channel_id.channel_type == "group":
                     icon = f"/web/image/discuss.channel/{self.channel_id.id}/avatar_128"
-                elif guest := self.env["mail.guest"]._get_guest_from_context():
-                    icon = f"/web/image/mail.guest/{guest.id}/avatar_128"
-                elif partner := self.env.user.partner_id:
-                    icon = f"/web/image/res.partner/{partner.id}/avatar_128"
                 languages = [partner.lang for partner in devices.partner_id]
                 payload_by_lang = {}
                 for lang in languages:
+                    if self.channel_id.channel_type == "chat":
+                        title = caller.name
+                    elif self.channel_id.channel_type == "channel":
+                        title = f"#{self.channel_id.display_name}"
+                    else:
+                        title = self.channel_id.with_context(lang=lang).display_name
                     env_lang = self.with_context(lang=lang).env
                     payload_by_lang[lang] = {
-                        "title": env_lang._("Incoming call"),
+                        "title": title,
                         "options": {
-                            "body": env_lang._("Conference: %s", self.channel_id.display_name),
+                            "body": env_lang._("Incoming call"),
                             "icon": icon,
                             "vibrate": [100, 50, 100],
                             "requireInteraction": True,
@@ -759,11 +777,7 @@ class DiscussChannelMember(models.Model):
         if self.invitation_sent_dt:
             # Reading the channel is showing up: the invitation is no longer pending.
             self.invitation_sent_dt = False
-        domain = [
-            ("model", "=", "discuss.channel"),
-            ("res_id", "=", self.channel_id.id),
-            ("id", "<=", last_message_id),
-        ]
+        domain = self.channel_id._get_message_domain() & Domain("id", "<=", last_message_id)
         last_message = self.env['mail.message'].search(domain, order="id DESC", limit=1)
         if not last_message:
             return

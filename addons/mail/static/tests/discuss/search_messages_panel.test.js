@@ -15,6 +15,7 @@ import {
     waitStoreFetch,
 } from "@mail/../tests/mail_test_helpers";
 import { animationFrame, expect, mockUserAgent, test } from "@odoo/hoot";
+import { insertTextInComposer } from "@mail/../tests/mail_test_helpers_composer";
 import { press, waitFor, waitForNone } from "@odoo/hoot-dom";
 import { tick } from "@odoo/hoot-mock";
 import { contains, serverState } from "@web/../tests/web_test_helpers";
@@ -225,6 +226,62 @@ test("Clearing message input while pending search should empty message results",
 });
 
 test.tags("desktop");
+test("Clearing message input while a search is queued should not show its results", async () => {
+    const pyEnv = await startServer();
+    const channelId = pyEnv["discuss.channel"].create({ name: "General" });
+    pyEnv["mail.message"].create({
+        author_id: serverState.partnerId,
+        body: "This is a message",
+        attachment_ids: [],
+        message_type: "comment",
+        model: "discuss.channel",
+        res_id: channelId,
+    });
+    let blockedFetchMessages = Promise.withResolvers();
+    listenStoreFetch("/discuss/channel/messages", {
+        logParams: ["/discuss/channel/messages"],
+        async onRpc(request) {
+            await blockedFetchMessages.promise;
+            blockedFetchMessages = Promise.withResolvers();
+        },
+    });
+    await start();
+    await openDiscuss(channelId);
+    blockedFetchMessages.resolve();
+    await waitFor(".o-mail-Message:count(1)");
+    await waitStoreFetch([
+        [
+            "/discuss/channel/messages",
+            { channel_id: channelId, fetch_params: { limit: 60, around: 0 } },
+        ],
+    ]);
+    await contains("button[title='Search Messages']:count(1)").click();
+    await waitFor(".o-mail-SearchMessageInput .o-mail-SearchInput input:count(1)");
+    await editInput(document.body, ".o-mail-SearchMessageInput .o-mail-SearchInput input", "This");
+    await waitFor(".o-mail-SearchMessageInput .o-mail-SearchInput.o-searching:count(1)");
+    await editInput(
+        document.body,
+        ".o-mail-SearchMessageInput .o-mail-SearchInput input",
+        "This is"
+    );
+    await animationFrame();
+    await contains("button[aria-label='Clear']:count(1)").click();
+    await mailContains(".o-mail-SearchMessageInput .o-mail-SearchInput input", { value: "" });
+    blockedFetchMessages.resolve();
+    await waitStoreFetch([
+        [
+            "/discuss/channel/messages",
+            { channel_id: channelId, fetch_params: { search_term: "This", before: false } },
+        ],
+    ]);
+    blockedFetchMessages.resolve();
+    await animationFrame();
+    expect.verifySteps([]);
+    await mailContains(".o-mail-SearchMessageInput .o-mail-SearchInput input", { value: "" });
+    await waitForNone(".o-mail-SearchMessageResult .o-mail-Message");
+});
+
+test.tags("desktop");
 test("Search should be hightlighted", async () => {
     const pyEnv = await startServer();
     const channelId = pyEnv["discuss.channel"].create({ name: "General" });
@@ -358,6 +415,7 @@ test("Close message search panel when navigating back on mobile", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "General" });
     await start();
     await openDiscuss(channelId);
+    await waitFor(".o-mail-Composer-html:focus:count(1)");
     await contains(".o-mail-ChatWindow-moreActions:count(1)").click();
     await contains("button:text('Search Messages'):count(1)").click();
     await waitFor(`${actionPanel("Search Messages")}:count(1)`);
@@ -371,7 +429,7 @@ test("Search should trigger a single store fetch", async () => {
     const channelId = pyEnv["discuss.channel"].create({ name: "General" });
     await start();
     await openDiscuss(channelId);
-    await insertText(".o-mail-Composer-input", "This is a message");
+    await insertTextInComposer(".o-mail-Composer", "This is a message");
     await contains(".o-sendMessageActive:enabled:count(1)").click();
     await waitFor(".o-mail-Message:count(1)");
     await contains("button[title='Search Messages']:count(1)").click();

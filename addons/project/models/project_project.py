@@ -176,7 +176,14 @@ class ProjectProject(models.Model):
     task_completion_percentage = fields.Float(compute="_compute_task_completion_percentage", export_string_translation=False)
 
     # Project Sharing fields
-    collaborator_ids = fields.One2many('project.collaborator', 'project_id', string='Collaborators', copy=False, export_string_translation=False)
+    collaborator_ids = fields.One2many(
+        'project.collaborator',
+        'project_id',
+        string='Collaborators',
+        copy=False,
+        export_string_translation=False,
+        search='_search_collaborator_ids',
+    )
     collaborator_count = fields.Integer('# Collaborators', compute='_compute_collaborator_count', compute_sudo=True, export_string_translation=False)
 
     # Not `required` since this is an option to enable in project settings.
@@ -216,6 +223,26 @@ class ProjectProject(models.Model):
         'check(date >= date_start)',
         "The project's start date must be before its end date.",
     )
+
+    def _search_collaborator_ids(self, operator, value):
+        """`project_task_rule_portal` OR's two sub-queries, which makes postgresql
+        seq-scan project_task instead of using its indexes. Materialize the ids of
+        each branch when there are few enough, so that it can BitmapOr them.
+        """
+        if operator not in ('any', 'any!') or self.env.user._is_internal():
+            # returning the condition unchanged makes the ORM apply its
+            # standard semantics
+            return Domain('collaborator_ids', operator, value)
+        collaborator_query = self.env['project.collaborator']._search(
+            Domain('id', operator, value), bypass_access=operator == 'any!',
+        )
+        domain = Domain('id', 'in', collaborator_query.subselect(SQL('project_id')))
+        project_ids = self._search(
+            domain, limit=self.env.cr.IN_MAX, active_test=False, bypass_access=True,
+        ).get_result_ids()
+        if len(project_ids) < self.env.cr.IN_MAX:
+            return Domain('id', 'in', project_ids)
+        return domain
 
     @api.onchange('company_id')
     def _onchange_company_id(self):
@@ -464,8 +491,7 @@ class ProjectProject(models.Model):
         """ Reset state for waiting tasks in the project if the feature is disabled
             or recompute the tasks with dependencies if the project has the feature enabled again
         """
-        project_with_task_dependencies_feature = self.filtered('allow_task_dependencies')
-        projects_without_task_dependencies_feature = self - project_with_task_dependencies_feature
+        project_with_task_dependencies_feature, projects_without_task_dependencies_feature = self.partitioned('allow_task_dependencies')
         ProjectTask = self.env['project.task']
         if (
             project_with_task_dependencies_feature
@@ -1022,12 +1048,7 @@ class ProjectProject(models.Model):
         return action
 
     def toggle_favorite(self):
-        favorite_projects = not_fav_projects = self.env['project.project'].sudo()
-        for project in self:
-            if self.env.user in project.favorite_user_ids:
-                favorite_projects |= project
-            else:
-                not_fav_projects |= project
+        favorite_projects, not_fav_projects = self.sudo().partitioned(lambda project: self.env.user in project.favorite_user_ids)
 
         # Project User has no write access for project.
         not_fav_projects.write({'favorite_user_ids': [(4, self.env.uid)]})

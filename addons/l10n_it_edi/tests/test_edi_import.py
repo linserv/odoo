@@ -574,6 +574,42 @@ class TestItEdiImport(TestItEdi, TestAccountEdiProxyUser):
         alpha_partner.invalidate_recordset(['is_company'])
         self.assertFalse(alpha_partner.is_company)
 
+    def test_receive_bill_bank_account_riba(self):
+        """ When importing a RiBa (MP12) vendor bill, our company's IBAN must not be added to the vendor's bank accounts. """
+        vendor = self.env['res.partner'].create({
+            'name': "SOCIETA' ALPHA SRL",
+            'vat': 'IT00313371213',
+            'l10n_it_codice_fiscale': '00313371213',
+            'country_id': self.env.ref('base.it').id,
+            'is_company': True,
+        })
+        vendor_bank = self.env['res.partner.bank'].create({
+            'partner_id': vendor.id,
+            'account_number': 'IT94W0333201600000001112418',
+        })
+        invoice = self._assert_import_invoice('IT01234567889_FPR03.xml', [{}], f"""
+            <xpath expr="//FatturaElettronicaBody/DatiPagamento/DettaglioPagamento/ModalitaPagamento" position="replace">
+                <ModalitaPagamento>MP12</ModalitaPagamento>
+            </xpath>
+            <xpath expr="//FatturaElettronicaBody/DatiPagamento/DettaglioPagamento" position="inside">
+                <IBAN>{self.test_bank.account_number}</IBAN>
+            </xpath>
+        """)
+        self.assertEqual(invoice.partner_id, vendor)
+        self.assertEqual(vendor.bank_ids, vendor_bank)
+        self.assertEqual(invoice.partner_bank_id, vendor_bank)
+
+    def test_receive_bill_bank_account_own_iban(self):
+        """ If the IBAN in the XML is one of our own company accounts, it must not be duplicated on the vendor. """
+        invoice = self._assert_import_invoice('IT01234567889_FPR03.xml', [{}], f"""
+            <xpath expr="//FatturaElettronicaBody/DatiPagamento/DettaglioPagamento" position="inside">
+                <IBAN>{self.test_bank.account_number}</IBAN>
+            </xpath>
+        """)
+        self.assertFalse(invoice.partner_bank_id)
+        self.assertFalse(invoice.partner_id.bank_ids)
+        self.assertEqual(self.env['res.partner.bank'].search([('account_number', '=', self.test_bank.account_number)]), self.test_bank)
+
     def test_import_due_date_on_issued_invoice(self):
         """ DataScadenzaPagamento and CodicePagamento populate
         invoice_date_due and payment_reference on out_invoice and
@@ -739,7 +775,7 @@ class TestItEdiImport(TestItEdi, TestAccountEdiProxyUser):
         """Ensure that a user having only group_account_invoice can compute field l10n_it_edi_is_self_invoice"""
         user = new_test_user(self.env, login='jag', groups='account.group_account_invoice')
         move = self.env['account.move'].create({'move_type': 'in_invoice'})
-        move.with_user(user).read(['l10n_it_edi_is_self_invoice'])  # should not raise
+        move.with_user(user).fetch(['l10n_it_edi_is_self_invoice'])  # should not raise
 
     def test_l10n_it_payment_method_correctly_imported(self):
         self._assert_import_invoice('IT01234567890_FPR01.xml', [{

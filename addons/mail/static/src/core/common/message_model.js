@@ -47,7 +47,7 @@ export class Message extends Record {
         );
     }
 
-    attachment_ids = fields.Many("ir.attachment", { inverse: "message" });
+    attachment_ids = fields.Many("ir.attachment", { inverse: "message_ids" });
     author_id = fields.One("res.partner");
     author_guest_id = fields.One("mail.guest");
     get author() {
@@ -354,6 +354,13 @@ export class Message extends Record {
 
     get hasActions() {
         return !this.is_transient;
+    }
+
+    /** Email or template-generated body, isolated from the webclient's styles. */
+    get hasEmailLikeBody() {
+        return ["email", "email_outgoing", "user_notification", "auto_comment"].includes(
+            this.message_type
+        );
     }
 
     get isNotification() {
@@ -680,7 +687,7 @@ export class Message extends Record {
             notification = _t("Message Link Copy Failed (Permission denied?)");
             type = "danger";
         }
-        this.store.env.services.notification.add(notification, { type });
+        this.store.notification.add(notification, { type });
     }
 
     get canCopyMessageText() {
@@ -692,11 +699,11 @@ export class Message extends Record {
         try {
             await window.navigator.clipboard.writeText(messageBody);
         } catch {
-            this.store.env.services.notification.add(_t("Text Copy Failed (Permission denied?)"), {
+            this.store.notification.add(_t("Text Copy Failed (Permission denied?)"), {
                 type: "danger",
             });
         }
-        this.store.env.services.notification.add(_t("Text copied"), { type: "success" });
+        this.store.notification.add(_t("Text copied"), { type: "success" });
     }
 
     /**
@@ -764,7 +771,6 @@ export class Message extends Record {
         const validRoles = Array.from(
             this.bodyEl?.querySelectorAll(".o-discuss-mention[data-oe-model='res.role']") ?? []
         ).map((el) => this.store["res.role"].get(el.dataset.oeId));
-        const text = convertBrToLineBreak(this.body);
         if (this.thread?.messageInEdition) {
             this.thread.messageInEdition.composer = undefined;
         }
@@ -775,11 +781,6 @@ export class Message extends Record {
             mentionedPartners: this.partner_ids,
             mentionedRoles: validRoles,
             restoredFromFullComposer: this.fromFullComposer,
-            selection: {
-                start: text.length,
-                end: text.length,
-                direction: "none",
-            },
         };
     }
 
@@ -830,10 +831,8 @@ export class Message extends Record {
         );
     }
     async markAsUnread() {
-        await this.store.env.services.orm.silent.call("mail.message", "mark_as_unread", [
-            [this.id],
-        ]);
-        this.store.env.services.notification.add(_t("Marked as unread"), { type: "info" });
+        await this.store.orm.silent.call("mail.message", "mark_as_unread", [[this.id]]);
+        this.store.notification.add(_t("Marked as unread"), { type: "info" });
     }
 
     async toggleTranslation() {
@@ -853,7 +852,7 @@ export class Message extends Record {
         if (!this.thread?.channel || this.thread.autoTranslateEnabled === this.showTranslation) {
             return;
         }
-        const closeNotification = this.store.env.services.notification.add(
+        const closeNotification = this.store.notification.add(
             this.showTranslation
                 ? _t("Auto-translate future messages?")
                 : _t("Cancel auto-translate?"),
@@ -918,9 +917,7 @@ export class Message extends Record {
     }
 
     async setDone() {
-        await this.store.env.services.orm.silent.call("mail.message", "set_message_done", [
-            [this.id],
-        ]);
+        await this.store.orm.silent.call("mail.message", "set_message_done", [[this.id]]);
     }
 
     /**
@@ -942,22 +939,19 @@ export class Message extends Record {
             return;
         }
         this.closeNotificationFn?.();
-        this.closeNotificationFn = this.store.env.services.notification.add(
-            _t("Bookmark removed"),
-            {
-                type: "success",
-                buttons: [
-                    {
-                        name: "Undo",
-                        icon: "undo",
-                        onClick: async () => {
-                            await this.addBookmark();
-                            this.closeNotificationFn();
-                        },
+        this.closeNotificationFn = this.store.notification.add(_t("Bookmark removed"), {
+            type: "success",
+            buttons: [
+                {
+                    name: "Undo",
+                    icon: "undo",
+                    onClick: async () => {
+                        await this.addBookmark();
+                        this.closeNotificationFn();
                     },
-                ],
-            }
-        );
+                },
+            ],
+        });
     }
 
     async unfollow() {
@@ -966,7 +960,7 @@ export class Message extends Record {
             await thread.markAllMessagesAsRead();
         }
         await thread.selfFollower.remove();
-        this.store.env.services.notification.add(
+        this.store.notification.add(
             _t('You are no longer following "%(thread_name)s".', {
                 thread_name: thread.display_name,
             }),

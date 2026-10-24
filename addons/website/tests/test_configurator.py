@@ -198,6 +198,7 @@ class TestConfiguratorPreview(odoo.tests.HttpCase):
     """The preview route renders a static theme file with request parameters."""
 
     PREVIEW_HTML = '<html><head><title>preview marker</title></head><body></body></html>'
+    LISTED_PREVIEW_URL = '/ecommerce_previews/cards.html'
 
     def setUp(self):
         super().setUp()
@@ -243,3 +244,93 @@ class TestConfiguratorPreview(odoo.tests.HttpCase):
         dropped = self._preview(color1='red;--x:y')
         self.assertNotIn('--o-color-1', dropped.text)
         self.assertNotIn('red;--x:y', dropped.text)
+
+    def test_preview_only_renders_a_listed_preview_url(self):
+        # website doesn't depend on website_sale: fake its allow-listing of
+        # the eCommerce preview pages instead of relying on the real module.
+        self.patch(
+            WebsiteModel, '_get_configurator_preview_urls',
+            lambda website: {self.LISTED_PREVIEW_URL},
+        )
+        self.authenticate('admin', 'admin')
+
+        self.assertEqual(self._preview(preview_url=self.LISTED_PREVIEW_URL).status_code, 200)
+        for preview_url in (
+            '/website/static/description/preview.html',  # not in the allow-list
+            '/ecommerce_previews/../x.html',  # traversal attempt
+        ):
+            self.assertEqual(self._preview(preview_url=preview_url).status_code, 404, repr(preview_url))
+
+    def test_preview_substitutes_catalog_texts(self):
+        catalog_html = (
+            '<html><head><title>preview marker</title></head><body>'
+            '<span industry_text_key="website.prod_sq_1.product_name">Desk</span>'
+            '<span industry_text_key="website.prod_sq_1.price">10.00</span>'
+            '<span industry_text_key="website.prod_sq_2.product_name">Chair</span>'
+            '</body></html>'
+        )
+        self.patch(WebsiteController, '_load_configurator_preview_html', lambda controller, url: catalog_html)
+        self.patch(
+            WebsiteController, '_get_configurator_preview_resources',
+            lambda controller, theme_name, industry_id: {
+                'images': {},
+                'catalog': {'website.prod_sq_1': {'product_name': '<b>Pizza</b>', 'price': 12.5}},
+            },
+        )
+        self.authenticate('admin', 'admin')
+
+        text = self._preview().text
+        self.assertIn(
+            '<span industry_text_key="website.prod_sq_1.product_name">&lt;b&gt;Pizza&lt;/b&gt;</span>',
+            text,
+        )
+        self.assertIn('<span industry_text_key="website.prod_sq_1.price">12.50</span>', text)
+        self.assertIn('<span industry_text_key="website.prod_sq_2.product_name">Chair</span>', text)
+
+    def test_preview_resources_receive_a_theme_name_only_without_a_preview_url(self):
+        received_theme_names = []
+
+        def preview_resources_mocked(controller, theme_name, industry_id):
+            received_theme_names.append(theme_name)
+            return {}
+
+        self.patch(WebsiteController, '_get_configurator_preview_resources', preview_resources_mocked)
+        self.patch(
+            WebsiteModel, '_get_configurator_preview_urls',
+            lambda website: {self.LISTED_PREVIEW_URL},
+        )
+        self.authenticate('admin', 'admin')
+
+        self._preview(preview_url=self.LISTED_PREVIEW_URL, industry_id=1)
+        self._preview(industry_id=1)
+
+        self.assertEqual(received_theme_names, ['', 'theme_default'])
+
+
+@odoo.tests.common.tagged('post_install', '-at_install')
+class TestConfiguratorDone(TestConfiguratorCommon):
+
+    def test_configurator_skip_changes_nothing(self):
+        """ Ensure that reaching the configurator once it has already been
+        completed does not modify anything (e.g. does not reset the theme).
+        """
+        website = self.env.ref('base.default_website')
+        theme = self.env['ir.module.module'].create([{
+            'name': 'fake_theme',
+            'state': 'installed',
+        }])
+        website.write({
+            'theme_id': theme.id,
+            'configurator_done': True,
+        })
+        self.env.flush_all()
+
+        # Test that the database does not change (throws otherwise)
+        with self.env.registry.cursor(readonly=True) as cr:
+            Website = self.env(cr=cr)['website'].with_context(website_id=website.id)
+            # Mimic the configurator client action, which skips the
+            # configurator if it is already done.
+            self.assertTrue(Website.configurator_init()['configurator_done'])
+            result = Website.configurator_skip()
+
+        self.assertEqual(result['params']['path'], '/')

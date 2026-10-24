@@ -524,10 +524,16 @@ class Many2one(_Relational):
                     sql = SQL("(%s IS NOT NULL AND %s IS NOT NULL AND %s)", sql_field, cotable.id, sql)
                 else:
                     sql = SQL("(%s IS NULL OR %s)", sql_field, sql)
+            elif positive and table._query._joins[cotable._alias][0]._sql_tuple[0] == 'LEFT JOIN':
+                # PERF: The field is required, but the join could not be turned
+                # into a JOIN because the left table is itself LEFT JOINed.
+                # PostgreSQL does not infer non-nullability from the foreign
+                # key, so reject NULLs on the joined primary key explicitly.
+                sql = SQL("(%s IS NOT NULL AND %s)", cotable.id, sql)
             return sql
 
         if isinstance(value, Domain):
-            value = comodel._search(value, active_test=False, bypass_access=bypass_access)
+            value = comodel._search(value, active_test=False, bypass_access=bypass_access, search_from_field=self)
         if isinstance(value, Query):
             subselect = value.subselect()
         elif isinstance(value, SQL):
@@ -556,7 +562,7 @@ class Many2one(_Relational):
         if self.compute_sudo or self.delegate or model.env.su:
             coquery = None
         else:
-            coquery = comodel.with_context(_generating_sql_for_fields=True)._search(Domain.TRUE, active_test=False)
+            coquery = comodel.with_context(_generating_sql_for_fields=True)._search(Domain.TRUE, active_test=False, search_from_field=self)
             if not coquery.where_clause:
                 coquery = None
         if coquery is None:
@@ -870,7 +876,7 @@ class _RelationalMulti(_Relational):
                     # this is usually the case for one2many
                     if inverse_field.column_type and inverse_field not in comodel.env.registry.not_null_fields:
                         domain &= Domain(inverse_field.name, '!=', False)
-                query = comodel._search(domain, bypass_access=bypass_access)
+                query = comodel._search(domain, bypass_access=bypass_access, search_from_field=self)
             assert isinstance(query, Query)
         elif isinstance(value, Query):
             domain = field_domain.optimize_full(comodel)
@@ -879,7 +885,7 @@ class _RelationalMulti(_Relational):
                 value.add_where(domain._to_sql(value.table._with_model(comodel)))
             query = value
         elif isinstance(value, SQL):
-            query = comodel._search(field_domain & Domain('id', 'any!', value), active_test=False, bypass_access=True)
+            query = comodel._search(field_domain & Domain('id', 'any!', value), active_test=False, bypass_access=True, search_from_field=self)
         else:
             assert False, f"Unimplemented condition on {self} for {type(value)}"
 
@@ -898,8 +904,8 @@ class One2many(_RelationalMulti):
 
     :param str comodel_name: name of the target model
 
-    :param str inverse_name: name of the inverse ``Many2one`` field in
-        ``comodel_name``
+    :param str inverse_name: name of the inverse ``Many2one`` or reference field
+        in ``comodel_name``
 
     :param domain: an optional domain to set on candidate values on the
         client side (domain or a python expression that will be evaluated
@@ -950,8 +956,9 @@ class One2many(_RelationalMulti):
             invf = registry[self.comodel_name]._fields[self.inverse_name]
             if isinstance(invf, (Many2one, Many2oneReference)):
                 # setting one2many fields only invalidates many2one inverses;
-                # integer inverses (res_model/res_id pairs) are not supported
                 inverses.add(self, invf)
+            else:
+                self._setup_warning(f"inverse field {invf} is not a many2one or many2one_reference")
             inverses.add(invf, self)
 
     _description_relation_field = property(attrgetter('inverse_name'))
@@ -1186,7 +1193,7 @@ class One2many(_RelationalMulti):
         model = table._model
         comodel = model.env[self.comodel_name].with_context(**self.context)
         codomain = self.get_comodel_domain(model)
-        coquery = comodel._search(codomain, bypass_access=self.bypass_search_access)
+        coquery = comodel._search(codomain, bypass_access=self.bypass_search_access, search_from_field=self)
 
         coalias = table._make_alias(self.name, comodel)
         condition = SQL(
@@ -1720,7 +1727,7 @@ class Many2many(_RelationalMulti):
         comodel = model.env[self.comodel_name].with_context(**self.context)
         rel_table, rel_id1, rel_id2 = self.relation, self.column1, self.column2
         codomain = self.get_comodel_domain(model)
-        coquery = comodel._search(codomain, bypass_access=self.bypass_search_access)
+        coquery = comodel._search(codomain, bypass_access=self.bypass_search_access, search_from_field=self)
 
         rel_alias = table._make_alias(f'{self.name}__rel')
         condition = SQL(

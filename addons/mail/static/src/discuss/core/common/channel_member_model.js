@@ -133,7 +133,6 @@ export class ChannelMember extends Record {
         },
     });
     seen_message_id = fields.One("mail.message");
-    hideUnreadBanner = false;
     message_unread_counter = 0;
     message_unread_counter_ui = 0;
     message_unread_counter_bus_id = 0;
@@ -262,7 +261,7 @@ export class ChannelMember extends Record {
 
     async resendInvitation() {
         await rpc("/discuss/channel/member/resend_invitation", { member_id: this.id });
-        this.store.env.services.notification.add(
+        this.store.notification.add(
             _t("Invitation sent again to %(member_name)s.", { member_name: this.name }),
             { type: "success" }
         );

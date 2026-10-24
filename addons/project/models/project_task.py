@@ -563,8 +563,7 @@ class ProjectTask(models.Model):
 
     @api.depends('depend_on_ids')
     def _compute_depend_on_count(self):
-        tasks_with_dependency = self.filtered('allow_task_dependencies')
-        tasks_without_dependency = self - tasks_with_dependency
+        tasks_with_dependency, tasks_without_dependency = self.partitioned('allow_task_dependencies')
         tasks_without_dependency.depend_on_count = 0
         tasks_without_dependency.closed_depend_on_count = 0
         if not any(self._ids):
@@ -715,6 +714,11 @@ class ProjectTask(models.Model):
                     task.stage_id = project._get_default_task_stage().id
             else:
                 task.stage_id = False
+
+    @api.onchange('stage_id')
+    def _onchange_stage_id(self):
+        if self.state not in CLOSED_STATES and self.state != '04_waiting_normal' and self.stage_id != self._origin.stage_id:
+            self.state = '01_in_progress'
 
     @api.depends('user_ids')
     def _compute_portal_user_names(self):
@@ -2286,8 +2290,28 @@ class ProjectTask(models.Model):
             )
             task.project_sharing_portal_user_ids = valid_collabs.mapped('partner_id.user_ids').filtered('share')
 
+    def _search_message_partner_ids(self, operator, operand):
+        """`project_task_rule_portal` OR's two sub-queries, which makes postgresql
+        seq-scan project_task instead of using its indexes. Materialize the ids of
+        each branch when there are few enough, so that it can BitmapOr them.
+        """
+        domain = super()._search_message_partner_ids(operator, operand)
+        if domain is NotImplemented or self.env.user._is_internal():
+            return domain
+        task_ids = self._search(
+            domain,
+            limit=self.env.cr.IN_MAX,
+            active_test=False,
+            bypass_access=True,
+            order=self._order,  # reason: postgresql chooses a bad plan without explicit order
+        ).get_result_ids()
+        if len(task_ids) < self.env.cr.IN_MAX:
+            domain = Domain('id', 'in', task_ids)
+        return domain
+
     def project_sharing_toggle_is_follower(self):
         self.ensure_one()
+        self.check_access('read')
         is_follower = self.message_is_follower
         if is_follower:
             self.sudo().message_unsubscribe(self.env.user.partner_id.ids)
@@ -2385,7 +2409,7 @@ class ProjectTask(models.Model):
             error_notification['params']['message'] = self.env._('Task templates cannot be shared.')
             return error_notification
         if self.project_privacy_visibility in ['followers', 'employees']:
-            error_notification['params']['message'] = self.env._('This project can’t be shared with external people.')
+            error_notification['params']['message'] = self.env._('This task can’t be shared with external people.')
             return error_notification
         return self.env['ir.actions.actions']._for_xml_id('project.portal_share_action')
 

@@ -69,7 +69,7 @@ Ask questions, get answers, no distractions
             'website_forum/static/src/interactions/**/*',
             'website_forum/static/src/js/tours/website_forum.js',
             'website_forum/static/src/scss/website_forum.scss',
-            'website_forum/static/src/scss/website_forum_wysiwyg.scss',
+            'website_forum/static/src/scss/website_forum_wysiwyg.css',
             'website_forum/static/src/xml/public_templates.xml',
             'website_forum/static/src/xml/website_forum_tags_wrapper.xml',
             'website_forum/static/src/components/**/*',
@@ -91,6 +91,9 @@ Ask questions, get answers, no distractions
         ],
         'web.assets_frontend_minimal': [
             'website_forum/static/src/interactions/loader_loading.js',
+        ],
+        'web.assets_frontend_lazy': [
+            ('remove', 'website_forum/static/src/interactions/loader_loading.js'),
         ],
     },
     'author': 'Odoo S.A.',

@@ -2,6 +2,7 @@ from math import copysign
 
 from odoo import Command, _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from odoo.fields import Domain
 from odoo.tools import BinaryBytes, file_open, float_compare
 
 
@@ -104,7 +105,7 @@ class PosPaymentMethod(models.Model):
     def get_provider_status(self):
         providers = self.get_payment_providers()
         module_names = [provider["module"] for provider in providers]
-        module_states = {m['name']: {'state': m['state'], 'id': m['id']} for m in self.env['ir.module.module'].search_read([('name', 'in', module_names)], ['name', 'state'])}
+        module_states = {m.name: {'state': m.state, 'id': m.id} for m in self.env['ir.module.module'].search_fetch([('name', 'in', module_names)], ['name', 'state'])}
         return [{**p, 'state': module_states[p['module']]['state'], 'id': module_states[p['module']]['id']} for p in providers if p['module'] in module_states]
 
     @api.model
@@ -141,6 +142,14 @@ class PosPaymentMethod(models.Model):
             'id', 'name', 'payment_provider', 'type', 'image', 'sequence', 'payment_method_type',
             'default_qr', 'currency_ids',
         ]
+
+    @api.model
+    def _load_pos_data_read(self, records, config):
+        read_records = super()._load_pos_data_read(records, config)
+        provider_names = dict(self._fields['payment_provider']._description_selection(self.env))
+        for record in read_records:
+            record['_payment_provider_name'] = provider_names.get(record.get('payment_provider'), False)
+        return read_records
 
     @api.depends('payment_method_type')
     def _compute_hide_qr_code_method(self):
@@ -309,22 +318,17 @@ class PosPaymentMethod(models.Model):
             self._force_payment_method_type_values(vals, vals['payment_method_type'])
             return super().write(vals)
 
-        pmt_terminal = self.filtered(lambda pm: pm.payment_method_type == 'terminal')
-        pmt_bank_qr = self.filtered(lambda pm: pm.payment_method_type == 'bank_qr_code')
-        pmt_external_qr = self.filtered(lambda pm: pm.payment_method_type == 'external_qr')
-        not_pmt = self - pmt_terminal - pmt_bank_qr - pmt_external_qr
+        method_types = ('terminal', 'bank_qr_code', 'external_qr')
+        *pmt_by_type, not_pmt = self.partitioned(*(
+            Domain('payment_method_type', '=', method_type) for method_type in method_types
+        ))
 
         res = True
-        forced_vals = vals.copy()
-        if pmt_terminal:
-            self._force_payment_method_type_values(forced_vals, 'terminal', True)
-            res = super(PosPaymentMethod, pmt_terminal).write(forced_vals) and res
-        if pmt_bank_qr:
-            self._force_payment_method_type_values(forced_vals, 'bank_qr_code', True)
-            res = super(PosPaymentMethod, pmt_bank_qr).write(forced_vals) and res
-        if pmt_external_qr:
-            self._force_payment_method_type_values(forced_vals, 'external_qr', True)
-            res = super().write(forced_vals) and res
+        for method_type, pmt in zip(method_types, pmt_by_type):
+            if pmt:
+                forced_vals = vals.copy()
+                self._force_payment_method_type_values(forced_vals, method_type, True)
+                res = super(PosPaymentMethod, pmt).write(forced_vals) and res
         if not_pmt:
             res = super(PosPaymentMethod, not_pmt).write(vals) and res
 

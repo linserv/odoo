@@ -1,14 +1,11 @@
 import { IrWebSocket } from "@im_livechat/../tests/mock_server/mock_models/ir_websocket";
 
-import {
-    insertText,
-    mailModels,
-    startServer,
-    triggerHotkey,
-} from "@mail/../tests/mail_test_helpers";
+import { mailModels, startServer, triggerHotkey } from "@mail/../tests/mail_test_helpers";
+import { insertTextInComposer } from "@mail/../tests/mail_test_helpers_composer";
 import { defineModels, serverState, MockServer } from "@web/../tests/web_test_helpers";
 import { patch } from "@web/core/utils/patch";
 import { ChatbotMessage } from "./mock_server/mock_models/chatbot_message";
+import { ChatbotScript } from "./mock_server/mock_models/chatbot_script";
 import { ChatbotScriptAnswer } from "./mock_server/mock_models/chatbot_script_answer";
 import { ChatbotScriptStep } from "./mock_server/mock_models/chatbot_script_step";
 import { DiscussChannel } from "./mock_server/mock_models/discuss_channel";
@@ -38,13 +35,14 @@ export function defineLivechatModels() {
  * @param {string} text
  */
 export async function postLivechatMessage(text) {
-    await insertText(".o-mail-Composer-input:enabled", text);
+    await insertTextInComposer(".o-mail-Composer", text);
     await triggerHotkey("Enter");
 }
 
 export const livechatModels = {
     ...mailModels,
     ChatbotMessage,
+    ChatbotScript,
     ChatbotScriptAnswer,
     ChatbotScriptStep,
     DiscussChannel,

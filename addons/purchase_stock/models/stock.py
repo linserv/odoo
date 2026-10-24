@@ -39,6 +39,9 @@ class StockPicking(models.Model):
             return NotImplemented
         return [('purchase_id.date_order', operator, value)]
 
+    def _get_related_account_moves(self):
+        return self.move_ids.purchase_line_id.invoice_lines.move_id or super()._get_related_account_moves()
+
     def _create_return(self):
         picking = super()._create_return()
         if len(picking.move_ids.partner_id) == 1 and picking.partner_id != picking.move_ids.partner_id:
@@ -206,8 +209,8 @@ class StockWarehouseOrderpoint(models.Model):
     @api.depends('effective_route_id')
     def _compute_show_supplier(self):
         buy_route = []
-        for res in self.env['stock.rule'].search_read([('action', '=', 'buy')], ['route_id']):
-            buy_route.append(res['route_id'][0])
+        for res in self.env['stock.rule'].search_fetch([('action', '=', 'buy')], ['route_id']):
+            buy_route.append(res.route_id.id)
         for orderpoint in self:
             orderpoint.show_supplier = orderpoint.effective_route_id.id in buy_route
 

@@ -1,6 +1,7 @@
-import { proxy } from "@odoo/owl";
+import { proxy, usePlugin } from "@odoo/owl";
 
 import { _t } from "@web/core/l10n/translation";
+import { NotificationPlugin } from "@web/core/notifications/notification_plugin";
 import { registry } from "@web/core/registry";
 
 export class DiscussCoreWeb {
@@ -11,9 +12,9 @@ export class DiscussCoreWeb {
     constructor(env, services) {
         this.env = env;
         this.busService = services.bus_service;
-        this.notificationService = services.notification;
-        this.ui = services.ui;
+        this.notificationService = usePlugin(NotificationPlugin);
         this.store = services["mail.store"];
+        this.ui = this.store.ui;
         this.multiTab = services.multi_tab;
     }
 
@@ -35,7 +36,7 @@ export class DiscussCoreWeb {
                 return;
             }
             const chat = await this.store.getChat({ partnerId });
-            if (chat && !this.ui.isSmall) {
+            if (chat && !this.ui.isSmall()) {
                 chat.openChatWindow({ focus: false });
             }
         });
@@ -43,7 +44,7 @@ export class DiscussCoreWeb {
 }
 
 export const discussCoreWeb = {
-    dependencies: ["bus_service", "mail.store", "notification", "ui", "multi_tab"],
+    dependencies: ["bus_service", "mail.store", "multi_tab"],
     /**
      * @param {import("@web/env").OdooEnv} env
      * @param {import("services").ServiceFactories} services

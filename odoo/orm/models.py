@@ -2634,7 +2634,7 @@ class BaseModel(metaclass=MetaModel):
                 **info,
             )
 
-        if isinstance(exc, psycopg2.errors.ForeignKeyViolation):
+        if isinstance(exc, (psycopg2.errors.ForeignKeyViolation, psycopg2.errors.RestrictViolation)):
             if len(columns) != 1:
                 info['field_display'] = info['constraint_name']
             return self.env._(
@@ -4934,6 +4934,7 @@ class BaseModel(metaclass=MetaModel):
         *,
         active_test: bool = True,
         bypass_access: bool = False,
+        search_from_field: Field | None = None,
     ) -> Query:
         """
         Private implementation of search() method.
@@ -4973,7 +4974,7 @@ class BaseModel(metaclass=MetaModel):
             domain = Domain(self._active_name, 'in', OrderedSet((True,))) & domain
 
         # build the query
-        domain = domain.optimize_full(self)
+        domain = domain.optimize_full(self, search_from_field=search_from_field)
         if domain.is_false():
             return self.browse()._as_query()
         query = Query(self)
@@ -4983,7 +4984,7 @@ class BaseModel(metaclass=MetaModel):
         # security access domain
         if not sec_domain.is_true():
             self_sudo = self.sudo().with_context(active_test=False)
-            sec_domain = sec_domain.optimize_full(self_sudo, search_domain=domain)
+            sec_domain = sec_domain.optimize_full(self_sudo, search_domain=domain, search_from_field=search_from_field)
             if sec_domain.is_false():
                 return self.browse()._as_query()
             if (
@@ -5465,6 +5466,7 @@ class BaseModel(metaclass=MetaModel):
     # Conversion methods
     #
 
+    @typing.final
     @api.private
     def ensure_one(self) -> Self:
         """Verify that the current recordset holds a single record.
@@ -5479,6 +5481,7 @@ class BaseModel(metaclass=MetaModel):
         except ValueError:
             raise ValueError("Expected singleton: %s" % self)
 
+    @typing.final
     @api.private
     def with_env(self, env: Environment) -> Self:
         """Return a new version of this recordset attached to the provided environment.
@@ -5488,6 +5491,7 @@ class BaseModel(metaclass=MetaModel):
         """
         return self.__class__(env, self._ids, self._prefetch_ids)
 
+    @typing.final
     @api.private
     def sudo(self, flag: bool = True) -> Self:
         """ Return a new version of this recordset with superuser mode enabled or
@@ -5554,6 +5558,7 @@ class BaseModel(metaclass=MetaModel):
 
         return self.with_context(allowed_company_ids=allowed_company_ids)
 
+    @typing.final
     @api.private
     def with_context(self, ctx: dict[str, typing.Any] | None = None, /, **overrides) -> Self:
         """ Return a new version of this recordset attached to an extended
@@ -5585,6 +5590,7 @@ class BaseModel(metaclass=MetaModel):
             context['allowed_company_ids'] = self.env.context['allowed_company_ids']
         return self.with_env(self.env(context=context))
 
+    @typing.final
     @api.private
     def with_prefetch(self, prefetch_ids: Reversible[IdType] | None = None) -> Self:
         """ Return a new version of this recordset that uses the given prefetch ids,
@@ -5594,6 +5600,7 @@ class BaseModel(metaclass=MetaModel):
             prefetch_ids = self._ids
         return self.__class__(self.env, self._ids, prefetch_ids)
 
+    @typing.final
     def _update_cache(self, values: ValuesType, validate: bool = True) -> None:
         """ Update the cache of ``self`` with ``values``.
 
@@ -5622,15 +5629,7 @@ class BaseModel(metaclass=MetaModel):
                 for invf in self.pool.field_inverses[field]:
                     invf._update_inverse(inv_recs, self)
 
-    def _convert_to_record(self, values):
-        """ Convert the ``values`` dictionary from the cache format to the
-        record format.
-        """
-        return {
-            name: self._fields[name].convert_to_record(value, self)
-            for name, value in values.items()
-        }
-
+    @typing.final
     def _convert_to_write(self, values):
         """ Convert the ``values`` dictionary into the format of :meth:`write`. """
         fields = self._fields
@@ -5655,6 +5654,7 @@ class BaseModel(metaclass=MetaModel):
     def mapped[T](self, func: Callable[[Self], T]) -> list[T] | BaseModel:
         ...
 
+    @typing.final
     @api.private
     def mapped[T](self, func: str | Callable[[Self], T]) -> list | BaseModel:
         """Apply ``func`` on all records in ``self``, and return the result as a
@@ -5727,24 +5727,61 @@ class BaseModel(metaclass=MetaModel):
         if not func:
             # align with mapped()
             return self
-
-        if callable(func):
-            # normal function
-            pass
-        elif isinstance(func, str):
-            if '.' in func:
-                seq_fnames = func
-                func = lambda record: any(record.mapped(seq_fnames))  # noqa: E731
-            else:
-                # avoid costly mapped
-                func = self._fields[func].__get__
-        elif isinstance(func, Domain):
+        if isinstance(func, Domain):
             return self.filtered_domain(func)
-        else:
-            raise TypeError(f"Invalid function {func!r} to filter on {self._name}")
 
+        func = self._get_predicate(func)
         ids = tuple(id_ for id_, rec in zip(self._ids, self) if func(rec))
         return self.__class__(self.env, ids, self._prefetch_ids)
+
+    @api.private
+    def partitioned(self, *predicates: str | Callable[[Self], bool] | Domain | None) -> tuple[Self, ...]:
+        """Split the records of ``self`` according to ``predicates``, returning
+        ``len(predicates) + 1`` recordsets. Each record is put in the recordset
+        of the first predicate it satisfies, or in the last recordset if it
+        satisfies none of them. All the resulting recordsets are guaranteed to
+        be part of the same prefetch-set.
+
+        :param predicates: anything accepted by :meth:`filtered`
+
+        .. code-block:: python3
+
+            invoices, posted, others = moves.partitioned(
+                lambda m: m.is_invoice(),
+                Domain('state', '=', 'posted'),  # posted non-invoices
+            )
+        """
+        predicates = [self._get_predicate(predicate) for predicate in predicates]
+        partitions = [[] for _ in range(len(predicates) + 1)]
+        for record in self:
+            for ids, predicate in zip(partitions, predicates):
+                if predicate(record):
+                    ids.append(record._ids[0])
+                    break
+            else:
+                partitions[-1].append(record._ids[0])
+
+        cls, env, prefetch_ids = self.__class__, self.env, self._prefetch_ids
+        return tuple(cls(env, tuple(ids), prefetch_ids) for ids in partitions)
+
+    def _get_predicate(self, func: str | Callable[[Self], bool] | Domain | None) -> Callable[[Self], bool]:
+        """Return a function mapping a single record to a ``bool`` from anything
+        accepted by :meth:`filtered`.
+        """
+        if not func:
+            # align with filtered()
+            return lambda record: True
+        if isinstance(func, Domain):
+            return func._as_predicate(self)
+        if callable(func):
+            # normal function
+            return func
+        if isinstance(func, str):
+            if '.' in func:
+                return lambda record: any(record.mapped(func))
+            # avoid costly mapped
+            return self._fields[func].__get__
+        raise TypeError(f"Invalid function {func!r} to filter on {self._name}")
 
     @typing.overload
     def grouped(self, key: str) -> dict[typing.Any, Self]:
@@ -5754,6 +5791,7 @@ class BaseModel(metaclass=MetaModel):
     def grouped[T](self, key: Callable[[Self], T]) -> dict[T, Self]:
         ...
 
+    @typing.final
     @api.private
     def grouped[T](self, key: str | Callable[[Self], T]) -> dict[typing.Any, Self]:
         """Eagerly groups the records of ``self`` by the ``key``, returning a
@@ -5876,6 +5914,7 @@ class BaseModel(metaclass=MetaModel):
         ]
         return lambda rec: tuple(fn(rec) for fn in item_makers)
 
+    @typing.final
     @api.private
     def update(self, values: ValuesType) -> None:
         """ Update the records in ``self`` with ``values``. """
@@ -6136,6 +6175,7 @@ class BaseModel(metaclass=MetaModel):
             raise TypeError(f"unsupported operand types in: {self} + {other!r}")
         return self
 
+    @typing.final
     @api.private
     def concat(self, it: Iterable[Self] = (), /, *args: Self) -> Self:
         """ Return the concatenation of ``self`` with all the arguments (in
@@ -6204,6 +6244,7 @@ class BaseModel(metaclass=MetaModel):
             raise TypeError(f"unsupported operand types in: {self} | {other!r}")
         return self
 
+    @typing.final
     @api.private
     def union(self, it: Iterable[Self] = (), /, *args: Self) -> Self:
         """ Return the union of ``self`` with all the arguments (in linear time
@@ -6401,6 +6442,7 @@ class BaseModel(metaclass=MetaModel):
                 invf._invalidate_cache(env)
         self.env.transaction.invalidate_access_cache(self._name)
 
+    @typing.final
     @api.private
     def modified(self, fnames: Collection[str], create: bool = False, before: bool = False) -> None:
         """ Notify that fields will be or have been modified on ``self``. This
@@ -6486,6 +6528,7 @@ class BaseModel(metaclass=MetaModel):
                 records = self.env[field.model_name].browse(ids)
                 self.env.add_to_compute(field, records)
 
+    @typing.final
     def _modified(self, fields: list[Field], create: bool) -> Iterable[tuple[Field, BaseModel, bool]]:
         """ Return an iterator traversing a tree of field triggers on ``self``,
         traversing backwards field dependencies along the way, and yielding
@@ -6508,6 +6551,7 @@ class BaseModel(metaclass=MetaModel):
 
         return self.sudo().with_context(active_test=False)._modified_triggers(tree, create)
 
+    @typing.final
     def _modified_triggers(self, tree: TriggerTree, create: bool = False) -> Iterable[tuple[Field, BaseModel, bool]]:
         """ Return an iterator traversing a tree of field triggers on ``self``,
         traversing backwards field dependencies along the way, and yielding
@@ -6559,8 +6603,7 @@ class BaseModel(metaclass=MetaModel):
                             records = records.browse(it and NewId(it) for it in records._ids)
                         break
             else:
-                new_records = self.filtered(lambda r: not r.id)
-                real_records = self - new_records
+                new_records, real_records = self.partitioned(lambda r: not r.id)
                 records = model.browse()
                 if real_records:
                     records = model.search([(field.name, 'in', real_records.ids)], order='id')
@@ -6647,9 +6690,6 @@ class BaseModel(metaclass=MetaModel):
                     res['warning'].get('message') or "",
                     res['warning'].get('type') or "",
                 ))
-
-    def onchange(self, values: dict, field_names: list[str], fields_spec: dict) -> dict:
-        raise NotImplementedError("onchange() is implemented in module 'web'")
 
     def _get_placeholder_filename(self, field: str) -> bool:
         """ Returns the filename of the placeholder to use,
