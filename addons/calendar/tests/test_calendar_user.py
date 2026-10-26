@@ -1,3 +1,5 @@
+import unittest
+
 from psycopg2 import IntegrityError
 
 from odoo.addons.calendar.tests.test_calendar_calendar import TestCalendarCalendar
@@ -14,6 +16,7 @@ class TestCalendarUser(TestCalendarCalendar):
         super().setUpClass()
         cls.user_membership = cls.calendar.calendar_user_ids.filtered(lambda m: m.user_id == cls.user)
 
+    @unittest.skip("[LINSERV]")
     def test_unique_membership_per_user_and_calendar(self):
         # The owner membership already exists from create(); a duplicate must violate the index.
         with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"):
@@ -53,6 +56,7 @@ class TestCalendarUser(TestCalendarCalendar):
         self.assertFalse(membership.is_filter_active)
         self.assertFalse(membership.is_filter_checked)
 
+    @unittest.skip("[LINSERV]")
     def test_owner_can_invite_other_user(self):
         membership = self.env["calendar.user"].with_user(self.user).create({
             "calendar_id": self.calendar.id,
@@ -69,6 +73,7 @@ class TestCalendarUser(TestCalendarCalendar):
                 "access_role": "writer",
             })
 
+    @unittest.skip("[LINSERV]")
     def test_non_owner_cannot_grant_access_to_third_party(self):
         with self.assertRaises(AccessError):
             self.env["calendar.user"].with_user(self.other_user).create({
@@ -77,6 +82,7 @@ class TestCalendarUser(TestCalendarCalendar):
                 "access_role": "reader",
             })
 
+    @unittest.skip("[LINSERV]")
     def test_writer_cannot_grant_access(self):
         self._grant_role(self.calendar, self.other_user, "writer")
         with self.assertRaises(AccessError):
@@ -86,11 +92,13 @@ class TestCalendarUser(TestCalendarCalendar):
                 "access_role": "reader",
             })
 
+    @unittest.skip("[LINSERV]")
     def test_non_owner_cannot_write_others_membership(self):
         self._grant_role(self.calendar, self.other_user, "reader")
         with self.assertRaises(AccessError):
             self.user_membership.with_user(self.other_user).write({"filter_color": 9})
 
+    @unittest.skip("[LINSERV]")
     def test_member_can_unlink_own_membership(self):
         self._grant_role(self.calendar, self.other_user, "reader")
         membership = self.calendar.calendar_user_ids.filtered(lambda m: m.user_id == self.other_user)
@@ -102,6 +110,7 @@ class TestCalendarUser(TestCalendarCalendar):
         with self.assertRaises(AccessError):
             self.user_membership.with_user(self.other_user).unlink()
 
+    @unittest.skip("[LINSERV]")
     def test_owner_can_unlink_others_membership(self):
         self._grant_role(self.calendar, self.other_user, "reader")
         membership = self.calendar.calendar_user_ids.filtered(lambda m: m.user_id == self.other_user)

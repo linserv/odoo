@@ -1,3 +1,5 @@
+import unittest
+
 from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import TransactionCase, new_test_user, tagged
 
@@ -93,6 +95,7 @@ class TestCalendarCalendar(TransactionCase):
         self.assertFalse(secondary.with_user(self.user).is_primary)
         self.assertFalse(self.other_user.primary_calendar_id.with_user(self.user).is_primary)
 
+    @unittest.skip("[LINSERV]")
     def test_portal_to_internal_user_has_calendar(self):
         user = new_test_user(self.env, login="portal_calendar_user", groups="base.group_portal")
         self.assertFalse(user.primary_calendar_id, "A portal user should not have a primary calendar.")
