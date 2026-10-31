@@ -1,8 +1,20 @@
-import { Component, computed, proxy, signal, types, useOnChange, usePlugin } from "@odoo/owl";
+import {
+    Component,
+    computed,
+    onPatched,
+    proxy,
+    signal,
+    types,
+    untrack,
+    useEffect,
+    useOnChange,
+    usePlugin,
+    useScope,
+} from "@odoo/owl";
 
 import { useThreadActions } from "@mail/core/common/thread_actions";
 import { AutoresizeInput } from "@mail/core/common/autoresize_input";
-import { ActionList } from "@mail/core/common/action_list";
+import { ActionList, CircleInlineAction } from "@mail/core/common/action_list";
 import { useAncestors } from "@mail/core/common/ancestor_plugin";
 import { DiscussAvatar } from "@mail/core/common/discuss_avatar";
 import { Thread } from "@mail/core/common/thread";
@@ -14,7 +26,13 @@ import { FileUploader } from "@web/views/fields/file_handler";
 import { useService } from "@web/core/utils/hooks";
 import { propSignal } from "@mail/utils/common/hooks";
 import { computedShallowEqual } from "@mail/utils/common/signal";
-import { PANEL_CONTAINER_TYPE } from "@mail/core/common/action";
+import { ACTION_GROUP_TAGS, PANEL_CONTAINER_TYPE } from "@mail/core/common/action";
+
+class DiscussContentCircleAction extends CircleInlineAction {
+    get classObj() {
+        return { ...super.classObj, "o-mail-DiscussContentCircleAction": true };
+    }
+}
 
 export class DiscussContent extends Component {
     static components = {
@@ -29,32 +47,115 @@ export class DiscussContent extends Component {
 
     setup() {
         super.setup();
-        this.ancestors = useAncestors();
+        this.ancestors = useAncestors({
+            inDiscussContent: {
+                panelWidth: () => untrack(() => this.store.discuss.panelWidth),
+                /** @param {number} width */
+                setPanelWidth: (width) => (this.store.discuss.panelWidth = width),
+            },
+        });
         this.store = useService("mail.store");
         this.channel = propSignal("channel", types.instanceOf(this.store["discuss.channel"]), {
             optional: true,
         });
         this.ui = usePlugin(UIPlugin);
         this.rootRef = signal.ref(HTMLDivElement);
+        this.panelActionsRef = signal.ref(HTMLDivElement);
+        this.sidePanelRef = signal.ref(HTMLDivElement);
         this.threadAvatarRef = signal.ref(HTMLDivElement);
         this.threadActions = useThreadActions({ rootRef: this.rootRef, thread: () => this.thread });
-        this.headerActionsList = computedShallowEqual(() => {
-            const partition = this.threadActions.partition;
-            return [partition.quick, partition.other, ...partition.group.slice().reverse()];
-        });
+        this.headerQuickActions = computedShallowEqual(() => this.threadActions.partition.quick);
+        /** Whether the action opens a side panel and is in the group of panels. */
+        const isPanelSwitcherAction = (action) =>
+            action.hasPanel &&
+            !action.definition.panel.component.menu &&
+            !this.getPanelContainer({ action }) &&
+            Boolean(
+                this.threadActions.actionGroupDescriptions
+                    .get(action.sequenceGroup)
+                    ?.tags.includes(ACTION_GROUP_TAGS.ACTION_PANELS)
+            );
+        const groupedActions = computed(() =>
+            this.threadActions.partition.group.toReversed().flat()
+        );
+        /** The non-quick actions outside the panel switcher. */
+        this.headerActionsList = computedShallowEqual(() => [
+            ...this.threadActions.partition.other,
+            ...groupedActions().filter((action) => !isPanelSwitcherAction(action)),
+        ]);
+        /** The actions of the panel switcher. */
+        this.headerPanelActions = computedShallowEqual(() =>
+            groupedActions().filter(isPanelSwitcherAction)
+        );
         this.state = proxy({ jumpThreadPresent: 0 });
         this.isDiscussContent = true;
         this.attClassObjectToString = attClassObjectToString;
-        this.selfGuestName = computed(() => this.store.self_guest?.name);
         this.threadDisplayName = computed(() => this.thread?.displayName);
         this.threadDescription = computed(() => this.thread?.description);
         useOnChange(
             () => [this.thread],
             () => this.autoOpenPanel()
         );
+        /** The panel on the side, kept while it narrows once closed. */
+        this.sidePanel = signal(undefined);
+        this.isSidePanelClosing = signal(false);
+        useOnChange(
+            () => [this.threadActions.activePanel],
+            (panel) => {
+                if (panel) {
+                    this.sidePanel.set(panel);
+                }
+                this.isSidePanelClosing.set(!panel && Boolean(this.sidePanel()));
+            }
+        );
+        this.scope = useScope();
+        onPatched(() => this.removeSidePanelOnceClosed());
         this.correspondentLocalDateTimeFormatted = computed(() =>
             this.store.localTimeIn(this.thread?.channel?.correspondent?.persona?.tz)
         );
+        // The header and the panel on the side make room for the panel actions over them.
+        useEffect(() => {
+            const actionsEl = this.panelActionsRef();
+            const rootEl = this.rootRef();
+            if (!actionsEl || !rootEl) {
+                return;
+            }
+            const observer = new ResizeObserver(() =>
+                rootEl.style.setProperty(
+                    "--o-mail-DiscussContent-panelActionsWidth",
+                    `${actionsEl.offsetWidth}px`
+                )
+            );
+            observer.observe(actionsEl);
+            return () => {
+                observer.disconnect();
+                rootEl.style.removeProperty("--o-mail-DiscussContent-panelActionsWidth");
+            };
+        });
+    }
+
+    /** Removes the closed panel on the side once it has narrowed, however long that lasts. */
+    async removeSidePanelOnceClosed() {
+        const el = this.sidePanelRef();
+        if (!this.isSidePanelClosing() || (el && el === this.closingSidePanelEl)) {
+            return;
+        }
+        if (el) {
+            this.closingSidePanelEl = el;
+            // Also through the transitions of an opening and closing again meanwhile.
+            for (let animations; (animations = el.getAnimations()).length; ) {
+                await Promise.allSettled(animations.map((animation) => animation.finished));
+            }
+            if (this.scope.isDestroyed()) {
+                return;
+            }
+            this.closingSidePanelEl = undefined;
+        }
+        // Not opened again while it narrowed.
+        if (this.isSidePanelClosing()) {
+            this.isSidePanelClosing.set(false);
+            this.sidePanel.set(undefined);
+        }
     }
 
     autoOpenPanel() {
@@ -66,6 +167,15 @@ export class DiscussContent extends Component {
 
     /** @type {import("@mail/core/common/action_list").GetActionComponent} */
     getActionComponent() {}
+
+    /**
+     * The actions outside the panel switcher are circles without a background.
+     *
+     * @type {import("@mail/core/common/action_list").GetActionComponent}
+     */
+    getHeaderActionComponent(params) {
+        return this.getActionComponent(params) ?? DiscussContentCircleAction;
+    }
 
     /**
      * The compact panels open in a popover on their button, the others beside the conversation.
@@ -127,7 +237,7 @@ export class DiscussContent extends Component {
 
     get threadNameAttClass() {
         return {
-            "o-mail-DiscussContent-threadNameBox fw-bold flex-shrink-0 py-0": true,
+            "fw-bold flex-shrink-0 py-0": true,
             "fs-5": this.hasHeaderSubline,
             "fs-4": !this.hasHeaderSubline,
         };
@@ -139,13 +249,6 @@ export class DiscussContent extends Component {
 
     async onFileUploaded(file) {
         await this.thread.channel?.notifyAvatarToServer(file.data);
-    }
-
-    async renameGuest(name) {
-        const newName = name.trim();
-        if (this.store.self_guest.name !== newName) {
-            await this.store.self_guest.updateGuestName(newName);
-        }
     }
 
     async renameThread(name) {

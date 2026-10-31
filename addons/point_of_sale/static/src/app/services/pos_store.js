@@ -1,3 +1,4 @@
+import { SoundEffectsPlugin } from "@mail/core/common/sound_effects_plugin";
 import { proxy, usePlugin } from "@odoo/owl";
 import { Mutex } from "@web/core/utils/concurrency";
 import { registry } from "@web/core/registry";
@@ -94,7 +95,6 @@ export class PosStore extends WithLazyGetterTrap {
         "dialog",
         "notification",
         "action",
-        "mail.sound_effects",
     ];
 
     constructor() {
@@ -124,7 +124,7 @@ export class PosStore extends WithLazyGetterTrap {
         this.dialog = dialog;
         this.bus = bus_service;
         this.action = action;
-        this.sound = env.services["mail.sound_effects"];
+        this.soundEffects = usePlugin(SoundEffectsPlugin);
         this.notification = notification;
         this.pushOrderMutex = new Mutex();
         this.router.popStateCallback = this.handleUrlParams.bind(this);
@@ -250,6 +250,9 @@ export class PosStore extends WithLazyGetterTrap {
          * to be able to use it in templates.
          */
         return formatCurrency(amount, currencyId, opts);
+    }
+    parseCurrency(value, currency = this.currency) {
+        return parseFloat(value, { digits: [69, currency.decimal_places] });
     }
     isValidFloat(inputValue) {
         let floatRegex;
@@ -871,10 +874,7 @@ export class PosStore extends WithLazyGetterTrap {
             ["product.template"],
             modelDomain,
             modelOffset,
-            modelLimit,
-            {
-                active_test: false,
-            }
+            modelLimit
         );
         this.productAttributesExclusion = this.computeProductAttributesExclusion(
             result["product.template.attribute.value"]
@@ -2867,6 +2867,30 @@ export class PosStore extends WithLazyGetterTrap {
         const available = this.getAvailableCategories();
         const availableIds = new Set(available.map((c) => c.id));
         return available.filter((c) => !c.parent_id || !availableIds.has(c.parent_id.id));
+    }
+
+    async ensureRefundedOrderLoaded(order) {
+        if (!order?.isRefund || order.refunded_order_id || this.data.network.offline) {
+            return order;
+        }
+
+        const refundedOrderId = order.raw.refunded_order_id;
+        if (!refundedOrderId) {
+            return order;
+        }
+
+        try {
+            await this.data.loadServerOrders([["id", "=", refundedOrderId]]);
+        } catch (error) {
+            logPosMessage(
+                "Store",
+                "ensureRefundedOrderLoaded",
+                `Could not load refunded order ${refundedOrderId}`,
+                CONSOLE_COLOR,
+                [error]
+            );
+        }
+        return order;
     }
 
     get isSelectedLineCombo() {

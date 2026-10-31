@@ -13,7 +13,7 @@ from lxml import html
 from typing import Self
 
 from odoo import _, api, fields, models, modules, tools
-from odoo.exceptions import AccessError, MissingError
+from odoo.exceptions import AccessError, MissingError, UserError
 from odoo.fields import Domain
 from odoo.tools import clean_context, groupby, SQL
 from odoo.tools.constants import IN_MAX
@@ -407,10 +407,11 @@ class MailMessage(models.Model):
     @api.depends_context("uid")
     def _compute_is_bookmarked(self):
         """ Compute if the message is bookmarked by the current user. """
-        # TDE FIXME: use SQL
+        partner = self.env.user.partner_id
         bookmarked = (
             self.sudo()
-            .filtered(lambda msg: self.env.user.partner_id in msg.bookmarked_partner_ids)
+            .with_context(active_test=False)
+            .filtered(lambda msg: partner in msg.bookmarked_partner_ids and partner.active)
             .sudo(False)
         )
         for message in self:
@@ -656,7 +657,10 @@ class MailMessage(models.Model):
             for values in self.env.cr.dictfetchall()
         }
         if len(messages_to_check) == MAX_SEARCH_LIMIT:  # avoid out of memory
-            raise ValueError(self.env._("Cannot search, too many messages"))
+            raise UserError(self.env._(
+                "Too many messages to be processed.\n"
+                "Please apply additional filters to reduce the number of potential messages."
+            ))
         accessible = self.browse(messages_to_check)
         if not messages_to_check:
             return accessible
@@ -1262,7 +1266,7 @@ class MailMessage(models.Model):
                 scheduled_dt_by_msg[scheduler.mail_message_id.id] = scheduler.scheduled_datetime
         record_by_message = self._record_by_message()
         records = record_by_message.values()
-        non_channel_records = filter(lambda record: record._name != "discuss.channel", records)
+        non_channel_records = [record for record in records if record._name != "discuss.channel"]
         target_user = res.target_user()
         follower_by_record_and_partner = defaultdict(self.env["mail.followers"].browse)
         if target_user and inbox_fields and non_channel_records:
@@ -1295,7 +1299,9 @@ class MailMessage(models.Model):
                 res.one(
                     "selfFollower",
                     ["is_active", "partner_id"],
-                    predicate=lambda t: target_user and inbox_fields and non_channel_records,
+                    predicate=lambda t: target_user
+                    and inbox_fields
+                    and t._name != "discuss.channel",
                     value=lambda t: follower_by_record_and_partner[t, target_user.partner_id],
                 ),
                 res.attr(

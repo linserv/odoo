@@ -219,7 +219,7 @@
 
         @media screen and (min-width: 768px), print and (min-width: 188mm) {
             border-style: solid;
-            border-color: $border-color;
+            border-color: var(--o-bs-border-color);
             border-width: var(--formView-sheet-border-width, 1px 0 1px 0);
             border-radius: var(--formView-sheet-border-radius, 0);
             background-color: var(--o-view-background-color);
@@ -391,7 +391,7 @@
         @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
             --inner-group-row-gap: 0;
         }
-        gap: var(--inner-group-row-gap, map-get($spacers, 2)) var(--o-horizontal-padding);
+        gap: var(--inner-group-row-gap, var(--o-bs-spacer-2)) var(--o-horizontal-padding);
         margin-bottom: var(--o-bs-spacer-2);
 
         span, .o_field_boolean, .oe_avatar, .o_form_uri {
@@ -593,7 +593,7 @@
                 }
                 /* Show "border" if tfoot has content only */
                 > tfoot > tr {
-                    box-shadow: inset 0 1px 0 $border-color;
+                    box-shadow: inset 0 1px 0 var(--o-bs-border-color);
                     > td {
                         border:none;
 
@@ -611,7 +611,7 @@
 
         &.o_field_many2many_tags_avatar {
             --fieldWidget-display: inline-flex;
-            min-height: calc(var(--Avatar-size, var(--o-avatar-size)) + var(--o-input-padding-y) * 2 + #{$input-border-width});
+            min-height: calc(var(--Avatar-size, var(--o-avatar-size)) + var(--o-input-padding-y) * 2 + var(--border-width));
         }
     }
     .o_field_widget, .btn {
@@ -655,6 +655,26 @@
     }
 
     .o_field_monetary {
+        /*rtl:ignore*/
+        direction : ltr;
+    }
+
+    /* keep monetary fields next to their label in rtl */
+    .o_rtl & .o_inner_group .o_cell {
+        > .o_field_monetary,
+        > div > .o_field_monetary {
+            justify-content: end;
+
+            > div > .o_input {
+                justify-content: end;
+                text-align: end;
+            }
+        }
+    }
+
+    .o_list_monetary {
+        /*rtl:ignore*/
+        text-align: right;
         /*rtl:ignore*/
         direction : ltr;
     }
@@ -707,7 +727,7 @@
             grid-template-columns: 1fr auto;
             width: auto;
             margin-left: auto;
-            border-top: 1px solid $border-color;
+            border-top: 1px solid var(--o-bs-border-color);
 
             .o_cell {
                 padding: 0;

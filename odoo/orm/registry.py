@@ -157,7 +157,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
             raise Exception('Registry for database %s can not be loaded recursively' % db_name)
 
         from odoo.modules import db  # noqa: PLC0415
-        from odoo.modules.loading import load_modules, reset_modules_state  # noqa: PLC0415
+        from odoo.modules.loading import MAX_REMOVED_MODULES, load_modules, reset_modules_state  # noqa: PLC0415
         from odoo.modules.module import Manifest  # noqa: PLC0415
 
         t0 = time.time()
@@ -219,6 +219,16 @@ class Registry(Mapping[str, type["BaseModel"]]):
                         # multiple workers were loading the database and try to upgrade it, only one will succeed
                         raise ConcurrencyError("Deadlock when waiting for lock to update the registry") from None
                     cr.commit()  # commit after acquiring the lock to re-start the transaction
+                    retries = 5
+                    if db.is_initialized(cr):
+                        cr.execute("""
+                            SELECT COUNT(*)
+                            FROM ir_module_module
+                            WHERE state = 'to remove'
+                        """)
+                        retries += cr.fetchone()[0] // MAX_REMOVED_MODULES
+                else:
+                    retries = 1
 
                 # now load modules
                 if new_db_demo is None:
@@ -228,7 +238,6 @@ class Registry(Mapping[str, type["BaseModel"]]):
 
                 if first_registry and not update_module:
                     exit_stack.enter_context(gc.disabling_gc())
-                retries = 5 if update_module else 1
                 for _ in range(retries):
                     # load_modules multiple times in case there are modules to be uninstalled
                     # the load happens in a new context to be independent from things such as requests
@@ -255,6 +264,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
                     models_to_check = registry._models_to_check
                     registry = object.__new__(cls)
                     registry.init(db_name, models_to_check=models_to_check)
+                    registry.setup_signaling()
                     cls.registries[db_name] = registry  # pylint: disable=unsupported-assignment-operation
                     cr.transaction.reset()  # rebind the transaction to the new registry
                     upgrade_modules = install_modules = reinit_modules = ()
@@ -315,7 +325,7 @@ class Registry(Mapping[str, type["BaseModel"]]):
         self._db: Connection = sql_db.db_connect(db_name, readonly=False)
         self._db_readonly: Connection | None = None
         self._db_readonly_failed_time: float | None = None
-        if config['db_replica_host'] or config['test_enable'] or 'replica' in config['dev_mode']:  # by default, only use readonly pool if we have a db_replica_host defined.
+        if config.has_db_replica:
             self._db_readonly = sql_db.db_connect(db_name, readonly=True)
 
         # field dependencies
@@ -1201,9 +1211,10 @@ class Registry(Mapping[str, type["BaseModel"]]):
         """ Return a new cursor for the database. The cursor itself may be used
             as a context manager to commit/rollback and close automatically.
 
-            :param readonly: Attempt to acquire a cursor on a replica database.
-                Acquire a read/write cursor on the primary database in case no
-                replica exists or that no readonly cursor could be acquired.
+            :param readonly: Attempt to acquire a read-only cursor on a
+                replica database. Acquire a read-only cursor on the
+                primary database in case no replica exists or the
+                connection failed.
         """
         if readonly and self._db_readonly is not None:
             if (
@@ -1211,14 +1222,13 @@ class Registry(Mapping[str, type["BaseModel"]]):
                 or time.monotonic() > self._db_readonly_failed_time + _REPLICA_RETRY_TIME
             ):
                 try:
-                    cr = self._db_readonly.cursor()
+                    cr = self._db_readonly.cursor(readonly=True)
                     self._db_readonly_failed_time = None
                     return cr
                 except psycopg2.OperationalError:
                     self._db_readonly_failed_time = time.monotonic()
-                    _logger.warning("Failed to open a readonly cursor, falling back to read-write cursor for %dmin %dsec", *divmod(_REPLICA_RETRY_TIME, 60))
-            threading.current_thread().cursor_mode = 'ro->rw'
-        return self._db.cursor()
+                    _logger.warning("Failed to connect on the replica database, falling back on the primary database for %dmin %dsec", *divmod(_REPLICA_RETRY_TIME, 60))
+        return self._db.cursor(readonly=readonly)
 
 
 class TriggerTree(dict['Field', 'TriggerTree']):

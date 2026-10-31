@@ -5,31 +5,34 @@ import { useBus, useService } from "@web/core/utils/hooks";
 import { isHtmlEmpty } from "@web/core/utils/html";
 import { renderToMarkup } from "@web/core/utils/render";
 import { HtmlMailField, htmlMailField } from "../html_mail_field/html_mail_field";
-import { MailFullComposerSuggestionPlugin } from "./mail_full_composer_suggestion_plugin";
+import { MailSuggestionPlugin } from "@mail/core/common/plugin/suggestion_plugin";
 import { ContentExpandablePlugin } from "./content_expandable_plugin";
 import { DisableBannerCommandsPlugin } from "./disable_banner_commands_plugin";
 import { fillEmpty } from "@html_editor/utils/dom";
 import { markup, onWillUnmount, useEffect } from "@odoo/owl";
 import { SIGNATURE_CLASS } from "@html_editor/main/user_signature_plugin";
 import { COMPOSER_TYPES } from "@mail/core/common/composer";
+import { FullComposerBusPlugin } from "@mail/core/web/full_composer_bus_plugin";
+import { useMaybePlugin } from "@mail/utils/common/hooks";
 
 export class HtmlComposerMessageField extends HtmlMailField {
     setup() {
         super.setup();
         this.mailStore = useService("mail.store");
-        if (this.env.fullComposerBus) {
-            useBus(this.env.fullComposerBus, "ACCIDENTAL_DISCARD", (ev) => {
+        this.fullComposerBus = useMaybePlugin(FullComposerBusPlugin)?.bus;
+        if (this.fullComposerBus) {
+            useBus(this.fullComposerBus, "ACCIDENTAL_DISCARD", (ev) => {
                 const elContent = this.getNoSignatureElContent();
                 ev.detail.onAccidentalDiscard(isEmpty(elContent));
             });
-            useBus(this.env.fullComposerBus, "SAVE_CONTENT", (ev) => {
+            useBus(this.fullComposerBus, "SAVE_CONTENT", (ev) => {
                 const emailAddSignature = Boolean(
                     this.editor.editable.querySelector(`.${SIGNATURE_CLASS}`)
                 );
                 const composerHtml = markup(this.getNoSignatureElContent().innerHTML);
                 ev.detail.onSaveContent({ composerHtml, emailAddSignature });
             });
-            useBus(this.env.fullComposerBus, "ATTACHMENT_REMOVED", (ev) => {
+            useBus(this.fullComposerBus, "ATTACHMENT_REMOVED", (ev) => {
                 const attachmentElements = this.editor.editable.querySelectorAll(
                     `[data-attachment-id="${ev.detail.id}"]`
                 );
@@ -76,7 +79,7 @@ export class HtmlComposerMessageField extends HtmlMailField {
         config.Plugins = [
             ...config.Plugins.filter((plugin) => !["video"].includes(plugin.id)),
             DisableBannerCommandsPlugin,
-            MailFullComposerSuggestionPlugin,
+            MailSuggestionPlugin,
         ];
         if (this.props.record.data.composition_comment_option === "reply_all") {
             config.Plugins.push(ContentExpandablePlugin);
@@ -99,7 +102,7 @@ export class HtmlComposerMessageField extends HtmlMailField {
             await this.commitChanges();
             this.props.record.data.attachment_ids.linkTo(attachment.id, attachment);
         };
-        config.thread = this.env.services["mail.store"]?.["mail.thread"].get({
+        const thread = this.env.services["mail.store"]?.["mail.thread"].get({
             model: this.props.record.data.model,
             id: JSON.parse(this.props.record.data.res_ids || "[]")[0],
         });
@@ -114,9 +117,26 @@ export class HtmlComposerMessageField extends HtmlMailField {
                 subtree: true,
             });
         };
-        config.composerType = this.props.record.data.subtype_is_log
+        const composerType = this.props.record.data.subtype_is_log
             ? COMPOSER_TYPES.NOTE
             : COMPOSER_TYPES.MESSAGE;
+        config.composerPluginDependencies = {
+            getComposerType: () => composerType,
+            getThread: () => thread,
+            // mentions are links only: the recipients are those of the form
+            onInsertSuggestion: (option) => {
+                if (option.cannedResponse) {
+                    this.fullComposerBus?.trigger("INSERT_CANNED_RESPONSE", {
+                        cannedResponse: option.cannedResponse,
+                    });
+                }
+            },
+        };
+        config.resources = {
+            ...config.resources,
+            selectors_for_feff_providers: () =>
+                "a.o_mail_redirect, a.o_channel_redirect, a.o-discuss-mention",
+        };
         return config;
     }
 

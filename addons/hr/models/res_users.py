@@ -6,7 +6,7 @@ from markupsafe import Markup
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError
-from odoo.fields import Domain
+from odoo.fields import Command, Domain
 from odoo.tools.misc import clean_context
 from odoo.addons.mail.tools.discuss import Store
 
@@ -14,14 +14,29 @@ from .hr_employee_location import DAYS
 
 
 def related_employee_field(name: str, *, field_name: str | None = None, string: str = '__default__'):
-    """Simulating a related field "employee_id.{name}".
+    """Return the field parameters simulating a related field ``employee_id.<name>`` on ``res.users``.
 
-    Current user is read and updated with `sudo()`. Otherwise, behaves as a
-    simple related field.
+    Used as ``fields.Char(**related_employee_field('work_phone'), user_writeable=True)``
+    to expose employee data on the user (e.g. in the preferences form).
+    Differences with a plain related field:
 
-    :param field_name: provide if you name your field in some other way than
-        on the employee model
-    :param string: field label override
+    - the current user always reads their own employee in sudo (other users
+      are read with the normal access rights);
+    - the current user writes their own employee in sudo only if the field is
+      declared with ``user_writeable=True``;
+    - searching uses ``employee_id`` when the user can read the employee
+      field, otherwise only matches the current user (negative operators are
+      not supported).
+
+    Label and help default to the employee field's (set in
+    ``ResUsers._post_model_setup__``).
+
+    :param str name: name of the ``hr.employee`` field
+    :param field_name: name of the field on ``res.users``, if different from ``name``
+    :type field_name: str or None
+    :param str string: label override
+    :return: keyword arguments for the field constructor
+    :rtype: dict
     """
     # simulating a related field which bypasses access only for the current user
     if field_name is None:
@@ -140,6 +155,10 @@ class ResUsers(models.Model):
     birthday = fields.Date(**related_employee_field('birthday'), user_writeable=True)
     birthday_public_display = fields.Boolean(**related_employee_field('birthday_public_display'), user_writeable=True)
 
+    current_employee_skill_ids = fields.One2many('hr.employee.skill', compute='_compute_current_employee_skill_ids',
+        readonly=False, user_writeable=True)
+    can_edit_skills = fields.Boolean(compute='_compute_can_edit_skills')
+
     create_employee = fields.Boolean(store=False, default=False, copy=False, string="Technical field, whether to create an employee")
     create_employee_id = fields.Many2one('hr.employee', store=False, copy=False, string="Technical field, bind user to this employee on create")
 
@@ -163,6 +182,21 @@ class ResUsers(models.Model):
         is_hr_user = self.env.user.has_group('hr.group_hr_user')
         self.is_hr_user = is_hr_user
 
+    @api.depends('employee_id.current_employee_skill_ids')
+    @api.depends_context('uid')
+    def _compute_current_employee_skill_ids(self):
+        for user in self:
+            # sudo: hr.employee - the current user can read their own skills
+            employee = user.sudo().employee_id if user == self.env.user else user.employee_id
+            user.current_employee_skill_ids = employee.current_employee_skill_ids
+
+    @api.depends('employee_id.company_id.hr_skills_self_edit')
+    @api.depends_context('uid')
+    def _compute_can_edit_skills(self):
+        for user in self:
+            # sudo: hr.employee - the current user can read the company of their own employee
+            user.can_edit_skills = user == self.env.user and user.sudo().employee_id.company_id.hr_skills_self_edit
+
     @api.depends('employee_ids')
     def _compute_employee_count(self):
         for user in self.with_context(active_test=False):
@@ -175,6 +209,12 @@ class ResUsers(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        """Create users, optionally creating or binding their employee.
+
+        With ``create_employee=True`` in the values, an employee is created in
+        the current company (:meth:`hr.employee._sync_user`); with
+        ``create_employee_id``, that existing employee is linked to the user.
+        """
         res = super().create(vals_list)
         employee_create_vals = []
         for user, vals in zip(res, vals_list):
@@ -193,11 +233,24 @@ class ResUsers(models.Model):
         return res
 
     def _get_employee_fields_to_sync(self):
-        """Get values to sync to the related employee when the User is changed.
+        """Return the ``res.users`` fields copied to the related employees when written on the user.
+
+        ``email`` is copied to ``work_email``; ``image_1920`` only to employees
+        without image. Only employees of the current company are updated.
+
+        :rtype: list[str]
         """
         return ['name', 'email', 'image_1920', 'tz'] + DAYS
 
     def _get_personal_info_partner_ids_to_notify(self, employee):
+        """Return who to notify when a user updates the employee data exposed on their user.
+
+        :param employee: the employee whose data is modified
+        :type employee: hr.employee
+        :return: ``(reason_message, partner_ids)``; by default the employee's HR
+            responsible, ``('', [])`` if none
+        :rtype: tuple[str, list[int]]
+        """
         if employee.version_id.hr_responsible_id:
             return (
                 _("You are receiving this message because you are the HR Responsible of this employee."),
@@ -206,11 +259,17 @@ class ResUsers(models.Model):
         return ('', [])
 
     def write(self, vals):
+        """Write on users and synchronize their employees in the current company.
+
+        Writing employee-related fields (see :func:`related_employee_field`)
+        notifies the partners given by :meth:`_get_personal_info_partner_ids_to_notify`.
+        The fields of :meth:`_get_employee_fields_to_sync` are then written (in
+        sudo) on the users' employees of the current company.
         """
-        Synchronize user and its related employee
-        and check access rights if employees are not allowed to update
-        their own data (otherwise sudo is applied for self data).
-        """
+        if skill_commands := vals.pop('current_employee_skill_ids', None):
+            self._write_employee_skills(skill_commands)
+            if not vals:
+                return True
         hr_fields = {
             field_name: field
             for field_name, field in self._fields.items()
@@ -262,6 +321,30 @@ class ResUsers(models.Model):
                     employees.write(employee_values)
         return result
 
+    def _write_employee_skills(self, commands):
+        """ Write the skill commands on the employee of the user. Users without access to
+        `hr.employee` can only edit their own skills, through the record rules on `hr.employee.skill`. """
+        self.ensure_one()
+        if not self.can_edit_skills:
+            raise AccessError(_("You are not allowed to edit the skills of this employee."))
+        employee = self.employee_id
+        if employee.has_access('write'):
+            employee.write({'current_employee_skill_ids': commands})
+            return
+        # sudo: hr.employee - the current user can read their own skills
+        previous_skills_summary = employee.sudo()._get_current_skills_summary()
+        EmployeeSkill = self.env['hr.employee.skill']
+        transformed_commands = EmployeeSkill._get_transformed_commands(commands, employee)
+        # the same skill may be expired by several commands
+        to_delete = EmployeeSkill.browse({command[1] for command in transformed_commands if command[0] == Command.DELETE})
+        to_delete.unlink()
+        for command in transformed_commands:
+            if command[0] == Command.UPDATE and command[1] not in to_delete.ids:
+                EmployeeSkill.browse(command[1]).write(command[2])
+        EmployeeSkill.create([command[2] for command in transformed_commands if command[0] == Command.CREATE])
+        # sudo: hr.employee - log the changes in the chatter of the employee of the current user
+        employee.sudo()._log_skill_changes(previous_skills_summary)
+
     @api.model
     def action_get(self):
         if self.env.user.employee_id:
@@ -280,6 +363,11 @@ class ResUsers(models.Model):
     @api.depends('employee_ids')
     @api.depends_context('company', 'uid')
     def _compute_company_employee(self):
+        """Compute ``employee_id``: the user's employee in the current company (``env.company``).
+
+        A user has at most one employee per company. For users other than the
+        current one, the employee is only set if readable by the current user.
+        """
         employee_per_user = dict(self.env['hr.employee'].sudo()._read_group(
             domain=[('user_id', 'in', self.ids), ('company_id', '=', self.env.company.id)],
             groupby=['user_id'],
@@ -313,6 +401,11 @@ class ResUsers(models.Model):
         return domain
 
     def action_create_employee(self):
+        """Create an employee for the user in the current company and return it.
+
+        :rtype: hr.employee
+        :raise AccessError: if the user is not allowed in the current company
+        """
         self.ensure_one()
         if self.env.company not in self.company_ids:
             raise AccessError(_("You are not allowed to create an employee because the user does not have access rights for %s", self.env.company.name))

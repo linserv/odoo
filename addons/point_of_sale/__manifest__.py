@@ -102,7 +102,7 @@
 
         # web assets
         'web.assets_backend': [
-            'point_of_sale/static/src/scss/pos_dashboard.scss',
+            'point_of_sale/static/src/scss/pos_dashboard.css',
             'point_of_sale/static/src/backend/tours/point_of_sale.js',
             'point_of_sale/static/src/backend/pos_kanban_view/*',
             ('remove', 'point_of_sale/static/src/backend/pos_kanban_view/*.dark.css'),
@@ -149,7 +149,7 @@
 
             'point_of_sale/static/src/customer_display/**/*',
             ('remove', 'point_of_sale/static/src/customer_display/root.js'),
-            ('remove', 'point_of_sale/static/src/customer_display/styles.scss'),
+            ('remove', 'point_of_sale/static/src/customer_display/styles.css'),
         ],
         'web.assets_unit_tests': [
             'point_of_sale/static/tests/unit/**/*',
@@ -231,6 +231,7 @@
             'point_of_sale/static/src/**/*',
             ('remove', 'point_of_sale/static/src/backend/**/*'),
             ('remove', 'point_of_sale/static/src/customer_display/**/*'),
+            ('remove', 'point_of_sale/static/src/scss/pos_dashboard.dark.css'),
             ('include', 'point_of_sale.payment_terminals'),
             # main.js boots the pos app, it is only included in the prod bundle as tests mount the app themselves
             ('remove', 'point_of_sale/static/src/app/main.js'),
@@ -273,7 +274,7 @@
             "point_of_sale/static/src/scss/css_variables.scss",
             "point_of_sale/static/src/customer_display/**/*",
             "point_of_sale/static/src/app/hooks/time_hook.js",
-            "point_of_sale/static/src/app/pos_app.scss",
+            "point_of_sale/static/src/app/pos_app.css",
             "point_of_sale/static/src/app/screens/login_screen/login_screen.scss",
             "point_of_sale/static/src/app/components/price_formatter/**/*",
             "point_of_sale/static/src/app/components/validation_animation/**/*",

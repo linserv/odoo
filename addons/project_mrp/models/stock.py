@@ -1,6 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from odoo import models
+from odoo import api, models
 
 
 class StockRule(models.Model):
@@ -18,6 +18,14 @@ class StockMove(models.Model):
 
     def _prepare_procurement_values(self):
         res = super()._prepare_procurement_values()
-        if res.get('group_id') and len(res['group_id'].mrp_production_ids) == 1:
-            res['project_id'] = res['group_id'].mrp_production_ids.project_id.id
+        project = self.production_group_id.production_ids.project_id
+        if len(project) == 1:
+            res['project_id'] = project.id
         return res
+
+    @api.depends('production_id.project_id')
+    def _compute_project_id(self):
+        super()._compute_project_id()
+        for move in self:
+            if move.production_id:
+                move.project_id = move.production_id.project_id

@@ -1499,7 +1499,7 @@ class AccountMove(models.Model):
         for move in self:
             move.show_journal = (
                 len(move.suitable_journal_ids) > 1
-                or move.journal_id and move.journal_id not in move.suitable_journal_ids
+                or move.journal_id and move.journal_id not in move.suitable_journal_ids._origin
             )
 
     @api.depends('reversal_move_ids')
@@ -5307,6 +5307,8 @@ class AccountMove(models.Model):
         else:
             cash_discount_account = company.account_journal_early_pay_discount_gain_account_id
 
+        cash_discount_account = self.fiscal_position_id.map_account(cash_discount_account)
+
         epd_analytic_distribution = self.env['account.analytic.distribution.model']._get_distribution({
             'account_prefix': cash_discount_account.code,
             'company_id': self.company_id.id,
@@ -5810,6 +5812,8 @@ class AccountMove(models.Model):
             cash_discount_account = self.company_id.account_journal_early_pay_discount_loss_account_id
         else:
             cash_discount_account = self.company_id.account_journal_early_pay_discount_gain_account_id
+
+        cash_discount_account = self.fiscal_position_id.map_account(cash_discount_account)
         return payment_term_line, cash_discount_account
 
     def _is_early_payment_discount_applied(self, payment_move, amount, payment_term_line, cash_discount_account):
@@ -6589,6 +6593,54 @@ class AccountMove(models.Model):
             'target': 'new',
         }
 
+    def _get_base_document_title(self):
+        """Return the base document title.
+
+        This method is the extension point for localizations to customize the
+        document title. Status prefixes are handled by '_get_document_title'.
+        """
+
+        self.ensure_one()
+
+        if self.is_debit_note() and self.move_type == 'out_invoice':
+            return self.env._("Debit Note")
+        if self.move_type == "out_invoice":
+            return self.env._("Invoice")
+        if self.move_type == "out_refund":
+            return self.env._("Credit Note")
+        if self.move_type == "in_invoice":
+            return (
+                self.env._("Self Billing")
+                if self.journal_id.is_self_billing
+                else self.env._("Vendor Bill")
+            )
+        if self.move_type == "in_refund":
+            return (
+                self.env._("Self Billing Credit Note")
+                if self.journal_id.is_self_billing
+                else self.env._("Vendor Credit Note")
+            )
+        return ""
+
+    def _get_document_title(self):
+        """Return the final document title for the PDF report.
+
+        The base document title is provided by '_get_base_document_title';
+        this method applies generic prefixes such as "Draft", and "Cancelled".
+        """
+
+        self.ensure_one()
+
+        doc_name = self._get_base_document_title()
+
+        if self.is_sale_document():
+            if self.state == 'draft':
+                doc_name = self.env._("Draft %(doc_name)s", doc_name=doc_name)
+            elif self.state == 'cancel':
+                doc_name = self.env._("Cancelled %(doc_name)s", doc_name=doc_name)
+
+        return doc_name
+
     # -------------------------------------------------------------------------
     # PUBLIC ACTIONS
     # -------------------------------------------------------------------------
@@ -7314,6 +7366,10 @@ class AccountMove(models.Model):
     def is_receipt(self):
         return self.move_type in ['out_receipt', 'in_receipt']
 
+    def is_debit_note(self):
+        self.ensure_one()
+        return False
+
     @api.model
     def get_sale_types(self, include_receipts=False):
         return ['out_invoice', 'out_refund'] + (include_receipts and ['out_receipt'] or [])
@@ -7756,11 +7812,15 @@ class AccountMove(models.Model):
         return res
 
     def _get_discount_allocation_account(self):
+        account = None
         if self.is_sale_document(include_receipts=True) and self.company_id.account_discount_expense_allocation_id:
-            return self.company_id.account_discount_expense_allocation_id
+            account = self.company_id.account_discount_expense_allocation_id
         if self.is_purchase_document(include_receipts=True) and self.company_id.account_discount_income_allocation_id:
-            return self.company_id.account_discount_income_allocation_id
-        return None
+            account = self.company_id.account_discount_income_allocation_id
+
+        if account and self.fiscal_position_id:
+            account = self.fiscal_position_id.map_account(account)
+        return account
 
     def _get_available_invoice_template_pdf_report_ids(self):
         """
@@ -8041,8 +8101,9 @@ class AccountMove(models.Model):
         # Dispatch the attachments into groups, and create a new invoice for each group beyond the first.
         valid_files_data = []
         extra_files_data = []
+        is_email = new_message.message_type == 'email'
         for file_data in files_data:
-            if self._should_attach_to_record(file_data['attachment']) or file_data['xml_tree'] is not None:
+            if self.with_context(from_email=is_email)._should_attach_to_record(file_data['attachment']) or file_data['xml_tree'] is not None:
                 valid_files_data.append(file_data)
             else:
                 extra_files_data.append(file_data)

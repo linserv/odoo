@@ -1061,6 +1061,17 @@ class MrpProduction(models.Model):
             if record.product_tracking == 'lot' and len(record.lot_producing_ids) > 1:
                 raise UserError(_("You cannot set more than 1 lot"))
 
+    @api.constrains('date_finished', 'date_start')
+    def _check_date_finished_not_future(self):
+        today = fields.Date.context_today(self)
+        for production in self:
+            if production.state != 'done' or not production.date_finished:
+                continue
+            if (
+                fields.Date.context_today(production, timestamp=production.date_finished) > today
+            ):
+                raise ValidationError(_("The end date cannot be set in the future."))
+
     def write(self, vals):
         if 'product_id' in vals and self.state != 'draft':
             vals.pop('product_id')
@@ -1127,7 +1138,10 @@ class MrpProduction(models.Model):
             if vals.get('date_start'):
                 production.move_raw_ids.write({'date': production.date_start, 'date_deadline': production.date_start})
             if vals.get('date_finished'):
+                if production.state == 'done' and production.date_start and production.date_finished < production.date_start:
+                    production.with_context(force_date=True).date_start = production.date_finished
                 production.move_finished_ids.write({'date': production.date_finished})
+                production.move_raw_ids.write({'date': production.date_finished, 'date_deadline': production.date_finished})
             if any(field in ['move_raw_ids', 'move_finished_ids', 'workorder_ids'] for field in vals) and production.state != 'draft':
                 production.with_context(no_procurement=True)._autoconfirm_production()
                 if production in production_to_replan:
@@ -1203,10 +1217,11 @@ class MrpProduction(models.Model):
 
     def unlink(self):
         self.action_cancel()
-        workorders_to_delete = self.workorder_ids.filtered(lambda wo: wo.state != 'done')
-        if workorders_to_delete:
-            workorders_to_delete.unlink()
-        return super(MrpProduction, self).unlink()
+        return super().unlink()
+
+    def _delete_extra(self):
+        yield from super()._delete_extra()
+        yield self.workorder_ids.filtered(lambda wo: wo.state != 'done')
 
     @api.ondelete(at_uninstall=True)
     def _unlink_if_not_done(self):
@@ -1943,7 +1958,7 @@ class MrpProduction(models.Model):
                     expected_qty = line.uom_id._compute_quantity(
                         line.product_qty * bom_factors[line.bom_id.id], move.uom_id)
                 picked_qty = sum(ml.uom_id._compute_quantity(ml.quantity, move.uom_id, round=False)
-                    for ml in move.move_line_ids)
+                    for ml in move.move_line_ids if ml.picked or not move._should_bypass_set_qty_producing())
                 if move.uom_id.compare(picked_qty, expected_qty):
                     issues.append((order, move.product_id, move.uom_id, move, picked_qty, expected_qty))
             # Once we've matched every orphaned BoM line we could match with orphaned moves, we consider
@@ -2418,7 +2433,7 @@ class MrpProduction(models.Model):
 
         self.workorder_ids.button_finish()
         for production in self.filtered(lambda p: not p.uom_id.is_zero(p.qty_producing)):
-            production.move_raw_ids.filtered(lambda m: not m.picked).picked = True
+            production.move_raw_ids.filtered(lambda m: not m.picked and not m._should_bypass_set_qty_producing()).picked = True
         productions_not_to_backorder._post_inventory(cancel_backorder=True)
         productions_to_backorder._post_inventory(cancel_backorder=True)
 

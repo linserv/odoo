@@ -8,6 +8,10 @@
     --o-border-color: #{o-color('300')};
     --o-border-color: #{fade-currentColor()};
 
+    /* Height of the nav of the mobile mega menu, whose dropdown behaves as
+       offcanvas */
+    --o-mega-menu-nav-height: 3rem;
+
     /* The theme customize modal JS will need to know the value of some scss
        variables used to render the user website, and those may have been
        customized by themes, the user or anything else (so there is no file to
@@ -211,7 +215,6 @@
 
 /* Manage custom offcanvas such as the one used for mobile mega menu nav
    where a dropdown behaves as offcanvas. */
-$o-mega-menu-nav-height: 3rem !default;
 $o-mega-menu-zindex: $zindex-offcanvas !default;
 $o-mega-menu-btn-close-zindex: $o-mega-menu-zindex + 1 !default;
 
@@ -777,7 +780,7 @@ font[class*='bg-'] {
 }
 /* Icons */
 .oi, .social_media_img {
-    $-size: map-get($spacers, 5);
+    --o-icon-shape-size: var(--o-bs-spacer-5);
 
     &.rounded-circle,
     &.rounded,
@@ -789,14 +792,14 @@ font[class*='bg-'] {
         vertical-align: middle;
         text-align: center;
         /* oi-1x is not ouput */
-        width: $-size;
-        height: $-size;
-        line-height: $-size;
+        width: var(--o-icon-shape-size);
+        height: var(--o-icon-shape-size);
+        line-height: var(--o-icon-shape-size);
         @for $i from 2 through 5 {
             &.oi-#{$i}x {
-                width: $-size + $i;
-                height: $-size + $i;
-                line-height: $-size + $i;
+                width: calc(var(--o-icon-shape-size) + #{$i}rem);
+                height: calc(var(--o-icon-shape-size) + #{$i}rem);
+                line-height: calc(var(--o-icon-shape-size) + #{$i}rem);
             }
         }
         /* Default, if no color or background-color already selected */
@@ -809,8 +812,8 @@ font[class*='bg-'] {
         padding: 0;
     }
     &.rounded-leaf {
-        border-top-left-radius: $-size;
-        border-bottom-right-radius: $-size;
+        border-top-left-radius: var(--o-icon-shape-size);
+        border-bottom-right-radius: var(--o-icon-shape-size);
     }
     &.rounded-empty-circle {
         @extend .rounded-circle;
@@ -1084,7 +1087,7 @@ font[class*='bg-'] {
 
 /* Variables shared between carousel snippets and s_image_gallery */
 $-o-carousel-indicators-dots-size: .75rem;
-$-o-carousel-controllers-size: var(--CarouselControllers-size, #{map-get($spacers, 5)});
+$-o-carousel-controllers-size: var(--CarouselControllers-size, var(--o-bs-spacer-5));
 
 %o_horizontal_controllers {
     pointer-events: none;
@@ -1316,7 +1319,7 @@ $-o-carousel-controllers-size: var(--CarouselControllers-size, #{map-get($spacer
             }
         }
 
-        $-margin-x: calc(#{map-get($spacers, 3)} * 2 + #{$-o-carousel-controllers-size});
+        $-margin-x: calc(var(--o-bs-spacer-3) * 2 + #{$-o-carousel-controllers-size});
 
         &:not(.s_carousel_arrows_hidden), &:not(.o_carousel_pause_btn_hidden) {
             .carousel-indicators {
@@ -1419,7 +1422,7 @@ $-o-carousel-controllers-size: var(--CarouselControllers-size, #{map-get($spacer
     &.s_carousel_boxed, &.s_carousel_rounded {
         .carousel-control-prev-icon, .carousel-control-next-icon {
             border-radius: var(--o-bs-border-radius);
-            border: var(--o-bs-border-width) solid $border-color;
+            border: var(--o-bs-border-width) solid var(--o-border-color);
             background-color: var(--o-bs-carousel-dark-indicator-active-bg);
             filter: var(--o-bs-carousel-dark-control-icon-filter);
         }
@@ -1754,6 +1757,9 @@ $-o-carousel-controllers-size: var(--CarouselControllers-size, #{map-get($spacer
                     margin-right: 0;
                 }
             }
+            .carousel-item-prev:not(.carousel-item-end) {
+                transform: translateX(calc(-100% - var(--o-carousel-gap)));
+            }
             .active.carousel-item-end + .carousel-item-prev.carousel-item-end,
             .carousel-item-prev.carousel-item-end ~ .carousel-item {
                 right: calc(var(--o-carousel-item-width-percentage) + var(--o-carousel-gap));
@@ -1857,7 +1863,7 @@ $-transition-duration: 200ms;
 .navbar .o_extra_menu_items > .show {
     > li {
         + li {
-            border-top: var(--o-bs-border-width) solid $border-color;
+            border-top: var(--o-bs-border-width) solid var(--o-border-color);
         }
         > a.dropdown-toggle {
             background-color: var(--tertiary-bg);
@@ -2162,7 +2168,7 @@ header {
     border-radius: 0;
     background-clip: unset; /* Remove the 1px gap introduced by BS4 */
     background-color: transparent; /* In order to allow the mega menu to be transparent */
-    border: var(--o-bs-border-width) solid $border-color; /* Prevent to see the color of the block behind. */
+    border: var(--o-bs-border-width) solid var(--o-border-color); /* Prevent to see the color of the block behind. */
 
     /* Needed to space the megamenu on this specific header */
     @if o-website-value('header-template') == 'boxed' {
@@ -2210,7 +2216,7 @@ header {
 
     .o_mega_nav {
         padding-left: calc(var(--o-bs-grid-gutter-width) * .5);
-        height: $o-mega-menu-nav-height;
+        height: var(--o-mega-menu-nav-height);
         background-color: o-color('menu-custom') or o-color('menu');
     }
 
@@ -2220,9 +2226,9 @@ header {
         inset: 0 0 0 auto !important;
         display: block;
         visibility: hidden;
-        margin-top: $o-mega-menu-nav-height !important;
+        margin-top: var(--o-mega-menu-nav-height) !important;
         border: none;
-        height: calc(100dvh - #{$o-mega-menu-nav-height});
+        height: calc(100dvh - var(--o-mega-menu-nav-height));
         max-height: 100vh;
         background-color: o-color('menu-custom') or o-color('menu');
         overflow-x: hidden;
@@ -2454,7 +2460,7 @@ header {
     @if o-website-value('header-links-style') == 'border-bottom' {
         .nav-item:not(.o_mega_menu *) {
             .nav-link:not(.o_mega_menu *, .o_mega_nav *) {
-                padding-bottom: map-get($spacers, 3) - $nav-link-padding-y !important;
+                padding-bottom: calc(var(--o-bs-spacer-3) - #{$nav-link-padding-y}) !important;
             }
         }
 
@@ -2463,7 +2469,7 @@ header {
         }
 
         .accordion-item .nav-link:not(.o_mega_menu *) {
-            padding-bottom: map-get($spacers, 2) - $nav-link-padding-y !important;
+            padding-bottom: calc(var(--o-bs-spacer-2) - #{$nav-link-padding-y}) !important;
             border-bottom: var(--o-bs-nav-link-padding-y) solid var(--header-border-bottom-links-border-color, transparent) !important;
 
             &.active {
@@ -2787,7 +2793,7 @@ $ribbon-padding: 100px;
     }
 
     .o_search_tags_highlight {
-        margin-top: var(--o-search-tags-highlight-margin-top, map-get($spacers, 1));
+        margin-top: var(--o-search-tags-highlight-margin-top, var(--o-bs-spacer-1));
     }
 
     &:not(.o_search_result_item_placeholder):hover,
@@ -2800,7 +2806,7 @@ $ribbon-padding: 100px;
         outline-offset: calc((var(--o-bs-border-width) * 2) * -1);
     }
 
-    @container search-results (min-width: #{map-get($grid-breakpoints, md)}) {
+    @container search-results (min-width: 768px) { /* media-breakpoint-up(md) */
         --o-search-result-content-flex-direction: row;
         --o-search-result-content-justify-content: space-between;
         --o-search-tags-highlight-margin-top: 0;
@@ -3730,7 +3736,7 @@ input[value*="data-oe-translation-source-sha"] {
 }
 
 .s_social_media, .s_share {
-    $-size: map-get($spacers, 5);
+    --o-icon-shape-size: var(--o-bs-spacer-5);
     a {
         .oi, .social_media_img {
             &.o_cc {
@@ -3753,8 +3759,8 @@ input[value*="data-oe-translation-source-sha"] {
         text-decoration: underline;
     }
     .small_social_icon {
-        width: $-size - 1rem;
-        height: $-size - 1rem;
+        width: calc(var(--o-icon-shape-size) - 1rem);
+        height: calc(var(--o-icon-shape-size) - 1rem);
         font-size: 0.875em;
     }
     a {
@@ -3768,9 +3774,9 @@ input[value*="data-oe-translation-source-sha"] {
             */
             @for $i from 2 through 3 {
                 &.oi-#{$i}x {
-                    width: $-size + $i;
-                    height: $-size + $i;
-                    line-height: $-size + $i;
+                    width: calc(var(--o-icon-shape-size) + #{$i}rem);
+                    height: calc(var(--o-icon-shape-size) + #{$i}rem);
+                    line-height: calc(var(--o-icon-shape-size) + #{$i}rem);
                 }
             }
         }

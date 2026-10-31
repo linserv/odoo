@@ -36,6 +36,7 @@ import { useBus, useService } from "@web/core/utils/hooks";
 import { escape } from "@web/core/utils/strings";
 
 export const PRESENT_VIEWPORT_THRESHOLD = 1;
+export const SMOOTH_SCROLLING_CHECK_DELAY = 250;
 /**
  * @typedef {Object} Props
  * @property {number} [jumpPresent=0]
@@ -145,9 +146,7 @@ export class Thread extends Component {
                     this.smoothScrollingPromise,
                 ]);
                 if (this.loadOlderState.isVisible && this.shouldTriggerLoadOnVisible) {
-                    this.props.thread.fetchMoreMessages({
-                        routeParams: this.messageFetchRouteParams,
-                    });
+                    this.props.thread.fetchMoreMessages();
                 }
             },
             { ready: false }
@@ -160,10 +159,7 @@ export class Thread extends Component {
                     this.smoothScrollingPromise,
                 ]);
                 if (this.loadNewerState.isVisible && this.shouldTriggerLoadOnVisible) {
-                    this.props.thread.fetchMoreMessages({
-                        epoch: "newer",
-                        routeParams: this.messageFetchRouteParams,
-                    });
+                    this.props.thread.fetchMoreMessages({ epoch: "newer" });
                 }
             },
             { ready: false }
@@ -529,12 +525,8 @@ export class Thread extends Component {
         thread.scrollTop = this.isAtBottom ? "bottom" : this.scrollableRef().scrollTop;
     }
 
-    get messageFetchRouteParams() {
-        return this.env.messageFetchRouteParams;
-    }
-
     fetchInitialMessages() {
-        this.props.thread.fetchInitialMessages({ routeParams: this.messageFetchRouteParams });
+        this.props.thread.fetchInitialMessages();
     }
 
     get viewportEl() {
@@ -562,7 +554,7 @@ export class Thread extends Component {
         if (this.messageHighlight?.highlightedMessageId()) {
             return;
         }
-        this.props.thread.fetchMoreMessages({ routeParams: this.messageFetchRouteParams });
+        this.props.thread.fetchMoreMessages();
     }
 
     get shouldTriggerLoadOnVisible() {
@@ -622,7 +614,7 @@ export class Thread extends Component {
     async jumpToPresent({ immediate = false } = {}) {
         this.messageHighlight?.clear();
         if (!immediate || this.props.thread.loadNewer) {
-            await this.props.thread.loadAround({ routeParams: this.messageFetchRouteParams });
+            await this.props.thread.loadAround();
             this.props.thread.loadNewer = false;
             this.state.showJumpPresent = false;
         }
@@ -816,7 +808,23 @@ export class Thread extends Component {
                 });
             } else {
                 // To remove when safari will support the "scrollend" event.
-                this.smoothScrollingTimeout = setTimeout(onSmoothScrollingEnd, 250);
+                let lastScrollTop = this.scrollableRef().scrollTop;
+                const checkSmoothScrollingEnd = () => {
+                    const el = this.scrollableRef();
+                    if (!el || el.scrollTop === lastScrollTop) {
+                        onSmoothScrollingEnd();
+                        return;
+                    }
+                    lastScrollTop = el.scrollTop;
+                    this.smoothScrollingTimeout = setTimeout(
+                        checkSmoothScrollingEnd,
+                        SMOOTH_SCROLLING_CHECK_DELAY
+                    );
+                };
+                this.smoothScrollingTimeout = setTimeout(
+                    checkSmoothScrollingEnd,
+                    SMOOTH_SCROLLING_CHECK_DELAY
+                );
             }
         }
         this.scrollableRef().scrollTo({ behavior: smooth ? "smooth" : undefined, top: value });

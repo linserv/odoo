@@ -4,7 +4,7 @@ from odoo.http import Controller, request, route
 
 
 class ProductCatalogController(Controller):
-    @route("/product/catalog/order_lines_info", auth="user", type="jsonrpc", readonly=True)
+    @route("/product/catalog/order_lines_info", auth="user", type="jsonrpc", replica=True)
     def product_catalog_get_order_lines_info(self, res_model, order_id, product_ids, **kwargs):
         """Return products information to be shown in the catalog.
 
@@ -29,7 +29,7 @@ class ProductCatalogController(Controller):
             }
         """
         order = self.env[res_model].browse(order_id)
-        return order.with_company(order.company_id)._get_product_catalog_order_line_info(
+        return order.with_company(order.sudo().company_id)._get_product_catalog_order_line_info(
             product_ids, **kwargs
         )
 

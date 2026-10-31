@@ -8,13 +8,15 @@ $o-theme-navbar-fixed-logo-height: $nav-link-height !default;
 /* Portal toolbar (filters, search bar) */
 $o-portal-mobile-toolbar: true; /* Enable/Disable custom design */
 $o-portal-mobile-toolbar-border: $border-color;
-$o-portal-mobile-toolbar-bg: $gray-200;
+:root {
+    --o-portal-mobile-toolbar-bg: var(--gray-200);
+}
 
 /* Portal Tables */
-$o-portal-table-th-pt: map-get($spacers, 1) !default;
-$o-portal-table-th-pb: map-get($spacers, 1) !default;
-$o-portal-table-td-pt: map-get($spacers, 2) !default;
-$o-portal-table-td-pb: map-get($spacers, 2) !default;
+$o-portal-table-th-pt: var(--o-bs-spacer-1) !default;
+$o-portal-table-th-pb: var(--o-bs-spacer-1) !default;
+$o-portal-table-td-pt: var(--o-bs-spacer-2) !default;
+$o-portal-table-td-pb: var(--o-bs-spacer-2) !default;
 
 /* Frontend general */
 body {
@@ -146,7 +148,7 @@ li > p {
     padding-bottom: var(--o-bs-headings-margin-bottom);
     border-bottom-width: var(--o-bs-border-width);
     border-bottom-style: solid;
-    border-bottom-color: $border-color;
+    border-bottom-color: var(--o-border-color, var(--o-bs-border-color));
 }
 .o_page_header {
     @extend %o-page-header;
@@ -305,7 +307,7 @@ img, .media_iframe_video, .o_image {
                 margin: var(--o-bs-navbar-padding-y) 0 0;
                 padding: var(--o-bs-navbar-padding-y) calc(var(--o-bs-grid-gutter-width) / 2);
                 border-top: var(--o-bs-border-width) solid $o-portal-mobile-toolbar-border;
-                background-color: $o-portal-mobile-toolbar-bg;
+                background-color: var(--o-portal-mobile-toolbar-bg);
             }
         }
     }
@@ -477,7 +479,7 @@ img, .media_iframe_video, .o_image {
 .o_portal_security_body {
     section {
         margin-top: var(--o-bs-spacer-5);
-        border-top: var(--o-bs-border-width) solid $border-color;
+        border-top: var(--o-bs-border-width) solid var(--o-border-color, var(--o-bs-border-color));
         padding-top: var(--o-bs-spacer-4);
 
         form.oe_reset_password_form {
@@ -497,7 +499,7 @@ img, .media_iframe_video, .o_image {
 
 /* Address */
 .o_portal .o_portal_addresses {
-    max-width: map-get($grid-breakpoints, xxl) / 2;
+    max-width: calc(var(--o-bs-breakpoint-xxl) / 2);
 }
 
 .o_customer_address_fill {

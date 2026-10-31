@@ -822,21 +822,23 @@ class ProjectProject(models.Model):
                 self.env['project.collaborator'].sudo().create(collaborators_to_create)
         return res
 
-    def unlink(self):
+    def _delete_extra(self):
+        yield from super()._delete_extra()
         # Delete the embedded action configs related to the deleted projects
-        self.env['res.users.settings.embedded.action'].sudo().search(
+        yield self.env['res.users.settings.embedded.action'].search(
             domain=[('res_id', 'in', self.ids), ('res_model', '=', self._name)],
-        ).unlink()
+        )
+        yield self.tasks
+
+    @api.ondelete(at_uninstall=True)
+    def _unlink_analytic_accounts(self):
         # Delete the empty related analytic account
         analytic_accounts_to_delete = self.env['account.analytic.account']
         for project in self:
             account = project.account_id
             if account and not account.line_ids and not (account.with_context(active_test=False).project_ids - self):
                 analytic_accounts_to_delete |= account
-        self.with_context(active_test=False).tasks.unlink()
-        result = super().unlink()
-        analytic_accounts_to_delete.unlink()
-        return result
+        return analytic_accounts_to_delete.unlink
 
     @api.ondelete(at_uninstall=False)
     def _check_project_group_at_removal(self):
@@ -1078,7 +1080,7 @@ class ProjectProject(models.Model):
         action['display_name'] = _("%(name)s's Rating", name=self.name)
         action_context = ast.literal_eval(action['context']) if action['context'] else {}
         action_context.update(self.env.context)
-        action_context['search_default_filter_write_date'] = 'custom_write_date_last_30_days'
+        action_context['search_default_filter_rated_on'] = 'custom_rated_on_last_30_days'
         action_context.pop('group_by', None)
         action['domain'] = [('consumed', '=', True), ('parent_res_model', '=', 'project.project'), ('parent_res_id', '=', self.id)]
         if self.rating_count == 1:

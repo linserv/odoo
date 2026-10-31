@@ -562,7 +562,11 @@ class Cursor(_CursorProtocol):
         self.postrollback.clear()
         if self._closing:
             self._close()
+        if not self.postcommit:
+            return
         self.postcommit.run()
+        if not self.closed:
+            self.rollback()
 
     def rollback(self) -> None:
         """ Rollback the current transaction. """
@@ -579,6 +583,8 @@ class Cursor(_CursorProtocol):
             self._now = None
         if self._closing:
             self._close()
+        if not self.postrollback:
+            return
         try:
             self.postrollback.run()
         except Exception:
@@ -590,6 +596,9 @@ class Cursor(_CursorProtocol):
             self.prerollback.clear()
             self.postrollback.clear()
             self.rollback()
+        else:
+            if not self.closed:
+                self.rollback()
 
     def __getattr__(self, name):
         if self._closed and name == '_obj':
@@ -787,13 +796,26 @@ class Connection:
     def dbname(self) -> str:
         return self.__dbname
 
-    def cursor(self) -> Cursor:
+    def cursor(self, *, readonly: bool | None = None) -> Cursor:
+        """
+        Open a cursor.
+
+        :param readonly: Whether to open a read/write cursor or a
+            read-only one. When not set, it uses a read/write cursor on
+            the primary database, and a read-only one on the replica.
+        :raise ValueError: When trying to acquire a read/write cursor on
+            the read-only replica database.
+        """
+        if readonly is None:
+            readonly = self.__pool.readonly
+        elif self.__pool.readonly and not readonly:
+            e = "cannot open a read/write cursor on a read-only connection"
+            raise ValueError(e)
         _logger.debug('create cursor to %r', self.dsn)
         cnx = self.__pool.borrow(self.__dsn)
         cnx.set_session(
-            # See the docstring of this class.
             isolation_level=ISOLATION_LEVEL_REPEATABLE_READ,
-            readonly=self.__pool.readonly,
+            readonly=readonly,
             autocommit=False,
         )
         return Cursor(cnx, self.__dbname)

@@ -305,10 +305,9 @@ class StockWarehouse(models.Model):
             self._check_multiwarehouse_group()
         return res
 
-    def unlink(self):
-        res = super().unlink()
-        self._check_multiwarehouse_group()
-        return res
+    @api.ondelete(at_uninstall=True)
+    def _unlink_check_multiwarehouse_group(self):
+        return self._check_multiwarehouse_group
 
     def _check_multiwarehouse_group(self):
         cnt_by_company = self.env['stock.warehouse'].sudo()._read_group([('active', '=', True)], ['company_id'], aggregates=['__count'])
@@ -1019,7 +1018,7 @@ class StockWarehouse(models.Model):
                 'sequence': max_sequence + 1,
                 'company_id': self.company_id.id,
                 'auto_show_allocation_report': True,
-                'auto_batch': self.env.user.has_group('stock.group_stock_picking_batch'),
+                'batch_creation_type': 'auto' if self.env.user.has_group('stock.group_stock_picking_batch') else 'manual',
                 'batch_group_by_partner': self.env.user.has_group('stock.group_stock_picking_batch'),
             }, 'out_type_id': {
                 'name': _('Delivery Orders'),
@@ -1028,7 +1027,7 @@ class StockWarehouse(models.Model):
                 'sequence': max_sequence + 7,
                 'print_label': True,
                 'company_id': self.company_id.id,
-                'auto_batch': self.env.user.has_group('stock.group_stock_picking_batch'),
+                'batch_creation_type': 'auto' if self.env.user.has_group('stock.group_stock_picking_batch') else 'manual',
                 'batch_group_by_partner': self.env.user.has_group('stock.group_stock_picking_batch'),
             }, 'pack_type_id': {
                 'name': _('Pack'),

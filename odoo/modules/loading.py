@@ -38,6 +38,7 @@ _logger = logging.getLogger(__name__)
 
 
 _FORCED_MODULES = ('base',)
+MAX_REMOVED_MODULES = 50
 
 
 def load_data(env: Environment, idref: IdRef, mode: LoadMode, kind: LoadKind, package: ModuleNode) -> bool:
@@ -74,7 +75,7 @@ def load_demo(env: Environment, package: ModuleNode, idref: IdRef, mode: LoadMod
     try:
         if package.manifest.get('demo'):
             _logger.info("Module %s: loading demo", package.name)
-            with env.cr.savepoint(flush=False):
+            with env.cr.savepoint(flush=False):  # flush managed in load_data
                 load_data(env(su=True, context=dict(env.context, install_demo=True)), idref, mode, kind='demo', package=package)
         return True
     except Exception:  # noqa: BLE001
@@ -99,7 +100,7 @@ def force_demo(env: Environment) -> None:
     env['ir.config_parameter'].sudo().set_int('auth_password_policy.minlength', 4)
     env.cr.execute('UPDATE ir_module_module SET demo=True')
     env.cr.execute(
-        "SELECT name FROM ir_module_module WHERE state IN ('installed', 'to upgrade', 'to remove')"
+        "SELECT name FROM ir_module_module WHERE state IN ('installed', 'to upgrade', 'to remove') AND imported IS NOT TRUE"
     )
     module_list = [name for (name,) in env.cr.fetchall()]
     graph = ModuleGraph(env.cr, mode='load')
@@ -296,7 +297,6 @@ def load_module_graph(
                 # tests may have reset the environment
                 module = env['ir.module.module'].browse(module_id)
 
-
         extra_queries = odoo.sql_db.sql_counter - module_extra_query_count - test_queries
         extras = []
         if test_queries:
@@ -441,7 +441,7 @@ def load_modules(
         if reinit_modules:
             modules = Module.search([('state', 'in', ('installed', 'to upgrade')), ('name', 'in', tuple(reinit_modules))])
             reinit_modules = modules.downstream_dependencies(exclude_states=('uninstalled', 'uninstallable', 'to remove', 'to install')) + modules
-            registry._reinit_modules.update(m for m in reinit_modules.mapped('name') if m not in graph._imported_modules)
+            registry._reinit_modules.update(reinit_modules.filtered(lambda m: not m.imported).mapped('name'))
 
         env.flush_all()
         cr.execute("update ir_module_module set state=%s where name=%s", ('installed', 'base'))
@@ -463,7 +463,7 @@ def load_modules(
             states = ('installed', 'to upgrade', 'to remove', 'to install')
         else:
             states = ('installed', 'to upgrade', 'to remove')
-        env.cr.execute("SELECT name from ir_module_module WHERE state IN %s", [states])
+        env.cr.execute("SELECT name from ir_module_module WHERE state IN %s AND imported IS NOT TRUE", [states])
         module_list = [name for (name,) in env.cr.fetchall() if name not in graph]
         if not module_list:
             break
@@ -498,7 +498,7 @@ def load_modules(
 
     # check that all installed modules have been loaded by the registry
     Module = env['ir.module.module']
-    modules = Module.search_fetch(Module._get_modules_to_load_domain(), ['name'], order='name')
+    modules = Module.search_fetch([('state', '=', 'installed'), ('imported', '=', False)], ['name'], order='name')
     missing = [name for name in modules.mapped('name') if name not in graph]
     if missing:
         _logger.error("Some modules are not loaded, some dependencies or manifest may be missing: %s", missing)
@@ -510,7 +510,7 @@ def load_modules(
             migrations.migrate_module(package, 'end')
 
     # check that new module dependencies have been properly installed after a migration/upgrade
-    cr.execute("SELECT name from ir_module_module WHERE state IN ('to install', 'to upgrade')")
+    cr.execute("SELECT name from ir_module_module WHERE state IN ('to install', 'to upgrade') AND imported IS NOT TRUE")
     module_list = [name for (name,) in cr.fetchall()]
     if module_list:
         _logger.error("Some modules have inconsistent states, some dependencies may be missing: %s", sorted(module_list))
@@ -522,7 +522,6 @@ def load_modules(
     if update_module:
         env.transaction.will_change_registry()
     if registry.updated_modules:
-
         cr.execute("SELECT model from ir_model")
         for (model,) in cr.fetchall():
             if model in registry:
@@ -538,26 +537,44 @@ def load_modules(
             # trigger after a small delay to give time for assets to regenerate
             vacuum_cron._trigger(at=datetime.datetime.now() + datetime.timedelta(minutes=1))
 
-        env.flush_all()
+        # Compute the groups as light or regular
+        # When `_apply_group_regular()` runs, thes groups already exists in the
+        # database, but the overrides of `_get_light_group_xmlids` is not yet in
+        # the registry (Modules load one by one, models first then data).  As a
+        # result, the group is categorized as regular and linked to
+        # `base.group_user_regular`, and no subsequent process runs to update
+        # it.  Redo the classification now that every module is in.
+        env['res.groups']._apply_group_regular()
 
-    # STEP 5: Uninstall modules to remove
+        # Commit once everything is installed and clean
+        env.cr.commit()
+
+    # STEP 5: Uninstall imported and non-imported 'to remove' modules
     if update_module:
         # Remove records referenced from ir_model_data for modules to be
         # removed (and removed the references from ir_model_data).
         cr.execute("SELECT name, id FROM ir_module_module WHERE state=%s", ('to remove',))
-        modules_to_remove = dict(cr.fetchall())
+        modules_to_remove = dict[str, int](cr.fetchall())
         if modules_to_remove:
-            registry.uninstalling_modules = set(modules_to_remove)
-            pkgs = reversed([p for p in graph if p.name in modules_to_remove])
-            for pkg in pkgs:
-                uninstall_hook = pkg.manifest.get('uninstall_hook')
-                if uninstall_hook:
-                    py_module = sys.modules['odoo.addons.%s' % (pkg.name,)]
-                    getattr(py_module, uninstall_hook)(env)
-                    env.flush_all()
+            static_modules, imported_modules = tools.partition(lambda m: m in graph, modules_to_remove)
+            if imported_modules:
+                # remove all imported modules (not in graph) together to avoid checking dependencies between them
+                removing_modules = imported_modules
+            else:
+                # remove at most MAX_REMOVED_MODULES in inverse order of dependencies
+                removing_modules = [p.name for p in reversed(list(graph)) if p.name in static_modules]
+                removing_modules = removing_modules[:MAX_REMOVED_MODULES]
 
-            Module = env['ir.module.module']
-            Module.browse(modules_to_remove.values()).module_uninstall()
+            registry.uninstalling_modules = set(removing_modules)
+            if not imported_modules:
+                for name in removing_modules:
+                    if (uninstall_hook := graph[name].manifest.get('uninstall_hook')):
+                        py_module = sys.modules[f'odoo.addons.{name}']
+                        getattr(py_module, uninstall_hook)(env)
+                        env.flush_all()
+            module = env['ir.module.module'].browse(map(modules_to_remove.__getitem__, removing_modules))
+            module.module_uninstall()
+
             registry.loaded = False
             _logger.info('Reloading registry once more after uninstalling modules')
             return
@@ -586,17 +603,6 @@ def load_modules(
                 View._validate_custom_views(model)
             except Exception as e:  # noqa: BLE001
                 _logger.warning('invalid custom view(s) for model %s: %s', model, e)
-
-    # STEP 7: compute the groups as light or regular
-    # When `_apply_group_regular()` runs, thes groups already exists in the
-    # database, but the overrides of `_get_light_group_xmlids` is not yet in the
-    # registry (Modules load one by one, models first then data).
-    # As a result, the group is categorized as regular and linked to
-    # `base.group_user_regular`, and no subsequent process runs to update it.
-    # Redo the classification now that every module is in.
-    if update_module:
-        env['res.groups']._apply_group_regular()
-        env.flush_all()
 
     if not registry._assertion_report or registry._assertion_report.wasSuccessful():
         _logger.info('Modules loaded.')

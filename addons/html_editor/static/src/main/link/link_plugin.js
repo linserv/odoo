@@ -1,6 +1,6 @@
 import { Plugin } from "@html_editor/plugin";
 import { closestElement, descendants, selectElements } from "@html_editor/utils/dom_traversal";
-import { mergeAdjacentTextNodes, unwrapContents } from "@html_editor/utils/dom";
+import { mergeAdjacentTextNodes, removeClass, unwrapContents } from "@html_editor/utils/dom";
 import { findInSelection, callbacksForCursorUpdate } from "@html_editor/utils/selection";
 import { _t } from "@web/core/l10n/translation";
 import { LinkPopover } from "./link_popover";
@@ -25,6 +25,13 @@ import { isBlock, closestBlock } from "@html_editor/utils/blocks";
 import { isHtmlContentSupported } from "@html_editor/core/selection_plugin";
 import { isBrowserFirefox, isBrowserSafari } from "@web/core/browser/feature_detection";
 import { session } from "@web/session";
+import { FONT_SIZE_CLASSES } from "@html_editor/utils/formatting";
+
+const FONT_SIZED_SPAN_SELECTOR = [
+    ...FONT_SIZE_CLASSES.map((className) => `span.${className}`),
+    'span[style*="font-size"]',
+].join(", ");
+const FONT_SIZED_BUTTON_CLASS = "o_btn_with_font_size";
 
 /** @typedef {import("@odoo/owl").Component} Component */
 /** @typedef {import("plugins").CSSSelector} CSSSelector */
@@ -154,7 +161,11 @@ async function fetchAttachmentMetaData(url, ormService) {
             return { name: url, type: "url" };
         }
         const attachmentId = parseInt(match[1]);
-        const [result] = await ormService.read("ir.attachment", [attachmentId], ["name", "mimetype", "type"]);
+        const [result] = await ormService.read(
+            "ir.attachment",
+            [attachmentId],
+            ["name", "mimetype", "type"]
+        );
         return result || { name: url, type: "url" };
     } catch {
         return { name: url, type: "url" };
@@ -260,6 +271,7 @@ export class LinkPlugin extends Plugin {
                 description: _t("Insert link (Ctrl + K)"),
                 groupId: "link",
                 commandId: "openLinkPopover",
+                opensUi: true,
                 isActive: isLinkActive,
                 isDisabled: (sel, nodes) =>
                     !this.isLinkAllowedOnSelection() || nodes.some((node) => !isStylable(node)),
@@ -274,6 +286,7 @@ export class LinkPlugin extends Plugin {
                 id: "link",
                 groupId: "image_link",
                 commandId: "openLinkPopover",
+                opensUi: true,
                 isActive: isLinkActive,
                 isDisabled: (sel, nodes) =>
                     !this.isLinkAllowedOnSelection() || nodes.some((node) => !isStylable(node)),
@@ -360,6 +373,7 @@ export class LinkPlugin extends Plugin {
                 return closestLink;
             }
         },
+        system_classes: [FONT_SIZED_BUTTON_CLASS],
 
         /** Handlers */
         on_beforeinput_handlers: [
@@ -376,21 +390,28 @@ export class LinkPlugin extends Plugin {
         on_will_paste_handlers: this.updateCurrentLinkSyncState.bind(this),
         on_pasted_handlers: this.onPasteNormalizeLink.bind(this),
         on_selectionchange_handlers: this.handleSelectionChange.bind(this),
-        on_inserted_handlers: this.handleAfterInsert.bind(this),
         on_will_remove_handlers: () => this.closeLinkTools(),
+        on_content_inserted_handlers: this.onContentInserted.bind(this),
 
         /** Overrides */
         split_element_block_overrides: this.handleSplitBlock.bind(this),
         insert_line_break_element_overrides: this.handleInsertLineBreak.bind(this),
         delete_image_overrides: this.deleteImageLink.bind(this),
         delete_backward_overrides: withSequence(15, this.handleDeleteBackward.bind(this)),
+        delete_forward_overrides: withSequence(15, this.handleDeleteForward.bind(this)),
         double_click_overrides: this.doubleClickLinkOverrides.bind(this),
         triple_click_overrides: this.tripleClickButtonOverrides.bind(this),
 
         /** Processors */
-        clean_for_save_processors: (root) => this.removeEmptyLinks(root),
+        clean_for_save_processors: [
+            this.removeEmptyLinks.bind(this),
+            this.clearFontSizedButtonClass.bind(this),
+        ],
         html_compatibility_processors: this.moveLinkColorToFont.bind(this),
-        normalize_processors: this.normalizeLink.bind(this),
+        normalize_processors: [
+            this.normalizeLink.bind(this),
+            this.updateFontSizedButtonClass.bind(this),
+        ],
         to_inline_code_processors: (node) => {
             this.removeEmptyLinks(node);
             for (const btn of selectElements(node, "a.btn")) {
@@ -816,10 +837,11 @@ export class LinkPlugin extends Plugin {
         const commonAncestor = closestElement(selection.commonAncestorContainer, "A");
         const isNonEditableLink = commonAncestor && !commonAncestor.isContentEditable;
         if (!this.isLinkAllowedOnSelection() && !isNonEditableLink) {
-            return this.services.notification.add(
+            this.services.notification.add(
                 _t("Unable to create a link on the current selection."),
                 { type: "danger" }
             );
+            return this.dependencies.selection.focusEditable();
         }
         const context = this.getLinkPopoverContext(linkElement, type);
         const applyCallback = this.getApplyCallbacks(context);
@@ -842,6 +864,8 @@ export class LinkPlugin extends Plugin {
                     this.newlyInsertedLinks.delete(this.linkInDocument);
                 }
             }
+        } else {
+            this.dependencies.selection.focusEditable();
         }
     }
 
@@ -1174,6 +1198,29 @@ export class LinkPlugin extends Plugin {
         this.dependencies.history.commit();
     }
 
+    updateFontSizedButtonClass(root) {
+        const buttons = selectElements(root, ".btn");
+        const parentButton = closestElement(root, ".btn");
+        if (parentButton && parentButton !== root) {
+            buttons.push(parentButton);
+        }
+        for (const button of buttons) {
+            if (button.querySelector(FONT_SIZED_SPAN_SELECTOR)) {
+                button.classList.add(FONT_SIZED_BUTTON_CLASS);
+            } else if (button.classList.contains(FONT_SIZED_BUTTON_CLASS)) {
+                removeClass(button, FONT_SIZED_BUTTON_CLASS);
+            }
+        }
+        return root;
+    }
+
+    clearFontSizedButtonClass(root) {
+        for (const button of selectElements(root, `.${FONT_SIZED_BUTTON_CLASS}`)) {
+            removeClass(button, FONT_SIZED_BUTTON_CLASS);
+        }
+        return root;
+    }
+
     removeEmptyLinks(root) {
         const remove = (node) => {
             for (const child of node.childNodes) {
@@ -1440,8 +1487,7 @@ export class LinkPlugin extends Plugin {
         }
         [targetNode, targetOffset] = edge === "start" ? leftPos(targetNode) : rightPos(targetNode);
         blockToSplit = targetNode;
-        splitOrLineBreakCallback({ ...params, targetNode, targetOffset, blockToSplit });
-        return true;
+        return splitOrLineBreakCallback({ ...params, targetNode, targetOffset, blockToSplit });
     }
 
     handleDeleteBackward({ startContainer, startOffset, endContainer, endOffset }) {
@@ -1466,7 +1512,29 @@ export class LinkPlugin extends Plugin {
         return true;
     }
 
-    handleAfterInsert(insertedNodes) {
+    handleDeleteForward({ startContainer, startOffset }) {
+        if (
+            startContainer?.nextSibling?.textContent !== "\uFEFF" ||
+            nodeSize(startContainer) !== startOffset
+        ) {
+            return;
+        }
+        const feff = startContainer.nextSibling;
+        if (!feff.nextSibling || feff.nextSibling.nodeName !== "A") {
+            return;
+        }
+        const link = feff.nextSibling;
+        if (!link?.matches(".btn")) {
+            return;
+        }
+        this.dependencies.selection.setSelection({
+            anchorNode: link.firstChild,
+            anchorOffset: 1,
+        });
+        return true;
+    }
+
+    onContentInserted(insertedNodes) {
         for (const node of insertedNodes) {
             if (node.nodeType === Node.ELEMENT_NODE) {
                 for (const link of selectElements(node, "A")) {

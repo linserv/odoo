@@ -21,7 +21,7 @@ _lt = LazyTranslate(__name__)
 
 class WebsiteForm(http.Controller):
 
-    @http.route('/website/form', type='http', auth="public", methods=['POST'], multilang=False, readonly=True)
+    @http.route('/website/form', type='http', auth="public", methods=['POST'], multilang=False, replica=True)
     def website_form_empty(self, **kwargs):
         # This is a workaround to don't add language prefix to <form action="/website/form/" ...>
         return ""
@@ -55,7 +55,7 @@ class WebsiteForm(http.Controller):
         model_record = request.env['ir.model'].sudo().search([('model', '=', model_name), ('website_form_access', '=', True)])
         if not model_record:
             return json.dumps({
-                'error': _("The form's specified model does not exist")
+                'error': _("This form cannot be submitted. Please contact the website administrator."),
             })
 
         try:

@@ -1,0 +1,15 @@
+/* = Attachment Viewer View */
+/* ============================================================================ */
+/* No CSS hacks, variables overrides only */
+
+.o-FileViewer-header {
+    --FileViewer-toolbarBgColor: var(--o-gray-200);
+}
+
+.o-FileViewer-toolbar {
+    --FileViewer-toolbarBorder: color-mix(in srgb, var(--o-gray-300), var(--o-gray-400));
+}
+
+.o-FileViewer-toolbarButton {
+    --FileViewer-toolbarBgColor: var(--o-gray-200);
+}

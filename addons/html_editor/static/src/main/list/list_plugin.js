@@ -12,6 +12,7 @@ import {
     getDeepestPosition,
     isElement,
     isEmptyBlock,
+    isHeadingRelatedElement,
     isListElement,
     isListItemElement,
     isParagraphRelatedElement,
@@ -21,6 +22,7 @@ import {
     isVisible,
     isVisibleTextNode,
     listElementSelector,
+    listItemElementSelector,
 } from "@html_editor/utils/dom_info";
 import {
     closestElement,
@@ -67,6 +69,8 @@ const listSelectorItems = [
         description: _t("Checklist (Ctrl + Shift + 9)"),
     },
 ];
+
+const isInList = (el) => (isBlock(el) ? el && isListItemElement(el) : isInList(el.parentElement));
 
 export class ListPlugin extends Plugin {
     static id = "list";
@@ -185,10 +189,9 @@ export class ListPlugin extends Plugin {
 
         /** Processors */
         normalize_processors: this.normalize.bind(this),
-        node_to_insert_processors: this.processNodeToInsert.bind(this),
         clipboard_content_processors: this.processContentForClipboard.bind(this),
-        before_insert_within_pre_processors: this.insertListWithinPre.bind(this),
-        before_insert_processors: this.handleInsert.bind(this),
+        fragment_to_insert_within_pre_processors: this.processFragmentToInsertWithinPre.bind(this),
+        fragment_to_insert_processors: this.processFragmentToInsert.bind(this),
 
         /** Overrides */
         delete_backward_overrides: this.handleDeleteBackward.bind(this),
@@ -216,14 +219,19 @@ export class ListPlugin extends Plugin {
                 }
             }
         },
-        can_contain_selection_placeholder_predicates: (container) => {
-            if (isListItemElement(container)) {
+        can_contain_selection_placeholder_predicates: (node) => {
+            if (isListItemElement(node)) {
                 return true;
             }
         },
         is_node_in_same_block_segment_predicates: (node, blockNode) => {
             const listAncestor = closestElement(node, "ul, ol");
             if (listAncestor && blockNode.contains(listAncestor)) {
+                return false;
+            }
+        },
+        can_insert_block_in_parent_predicates: (parent, block) => {
+            if (isListItemElement(parent) && isListItemElement(block)) {
                 return false;
             }
         },
@@ -236,8 +244,15 @@ export class ListPlugin extends Plugin {
             }
         },
         formattable_node_providers: (node) => {
-            const li = closestElement(node, isListItem);
-            if (li && this.dependencies.selection.areNodeContentsFullySelected(li)) {
+            const li = closestElement(
+                node,
+                (node) => isListItem(node) || isHeadingRelatedElement(node)
+            );
+            if (
+                li &&
+                isListItem(li) &&
+                this.dependencies.selection.areNodeContentsFullySelected(li)
+            ) {
                 return li;
             }
         },
@@ -407,11 +422,11 @@ export class ListPlugin extends Plugin {
             // possible.
             const callingNode = element.firstChild;
             const group = getAdjacents(callingNode, (n) => !isBlock(n));
-            list = insertListAfter(this.document, callingNode, mode, group);
+            list = insertListAfter(this.document, callingNode, mode, group, cursors);
         } else {
             const parent = element.parentNode;
             const childIndex = childNodeIndex(element);
-            list = insertListAfter(this.document, element, mode, [element]);
+            list = insertListAfter(this.document, element, mode, [element], cursors);
             cursors.update((cursor) => {
                 if (cursor.node === parent) {
                     if (cursor.offset === childIndex) {
@@ -437,7 +452,13 @@ export class ListPlugin extends Plugin {
      */
     baseContainerToList(baseContainer, mode) {
         const cursors = this.dependencies.selection.preserveSelection();
-        const list = insertListAfter(this.document, baseContainer, mode, childNodes(baseContainer));
+        const list = insertListAfter(
+            this.document,
+            baseContainer,
+            mode,
+            childNodes(baseContainer),
+            cursors
+        );
         const textAlign = baseContainer.style.getPropertyValue("text-align");
         if (textAlign) {
             // Copy text-align style from base container to li.
@@ -447,14 +468,20 @@ export class ListPlugin extends Plugin {
         this.dependencies.dom.copyAttributes(baseContainer, list);
         this.adjustListPadding(list);
         baseContainer.remove();
-        cursors.remapNode(baseContainer, list.firstChild).restore();
+        cursors.restore();
         return list;
     }
 
     blockContentsToList(block, mode) {
         const cursors = this.dependencies.selection.preserveSelection();
-        const list = insertListAfter(this.document, block.lastChild, mode, [...block.childNodes]);
-        cursors.remapNode(block, list.firstChild).restore();
+        const list = insertListAfter(
+            this.document,
+            block.lastChild,
+            mode,
+            [...block.childNodes],
+            cursors
+        );
+        cursors.restore();
         return list;
     }
 
@@ -894,24 +921,6 @@ export class ListPlugin extends Plugin {
     // Handlers of other plugins commands
     // --------------------------------------------------------------------------
 
-    processNodeToInsert(nodeToInsert, container) {
-        if (isListItemElement(container) && isParagraphRelatedElement(nodeToInsert)) {
-            nodeToInsert = this.dependencies.dom.setTagName(nodeToInsert, "LI");
-        }
-        const listEl = container && closestElement(container, listElementSelector);
-        if (!listEl) {
-            return nodeToInsert;
-        }
-        const mode = container && this.getListMode(listEl);
-        if (isListItemElement(nodeToInsert) && nodeToInsert.querySelector("ol, ul")) {
-            return this.convertList(nodeToInsert, mode);
-        }
-        if (isListElement(nodeToInsert)) {
-            return this.convertList(nodeToInsert, this.getListMode(nodeToInsert));
-        }
-        return nodeToInsert;
-    }
-
     handleTab() {
         if (
             !this.dependencies.selection
@@ -997,11 +1006,12 @@ export class ListPlugin extends Plugin {
             this.outdentLI(closestLI);
             return true;
         }
-        const [, newLI] = this.dependencies.split.splitElementBlock({
+        const splitResult = this.dependencies.split.splitElementBlock({
             ...params,
             blockToSplit: closestLI,
         });
-        if (newLI) {
+        if (splitResult.after) {
+            const newLI = splitResult.after;
             if (closestLI.classList.contains("o_checked")) {
                 removeClass(newLI, "o_checked");
             }
@@ -1009,7 +1019,7 @@ export class ListPlugin extends Plugin {
             this.dependencies.selection.setSelection({ anchorNode, anchorOffset });
             this.adjustListPadding(newLI.parentElement);
         }
-        return true;
+        return splitResult;
     }
 
     /**
@@ -1120,8 +1130,8 @@ export class ListPlugin extends Plugin {
         return clonedContents;
     }
 
-    insertListWithinPre(node) {
-        const listItems = node.querySelectorAll("li:not(.oe-nested)");
+    processFragmentToInsertWithinPre(fragment) {
+        const listItems = fragment.querySelectorAll("li:not(.oe-nested)");
         for (const li of listItems) {
             const nestingLvl = ancestors(li).filter(isListElement).length - 1;
             const list = closestElement(li, "ul, ol");
@@ -1140,7 +1150,7 @@ export class ListPlugin extends Plugin {
             const prefix = " ".repeat(nestingLvl * 4) + char;
             li.prepend(this.document.createTextNode(prefix));
         }
-        return node;
+        return fragment;
     }
 
     // --------------------------------------------------------------------------
@@ -1364,15 +1374,17 @@ export class ListPlugin extends Plugin {
         }
         if (li) {
             // Helper li to split the list
-            const [, after] = this.dependencies.split.splitElementBlock({
+            const { after } = this.dependencies.split.splitElementBlock({
                 targetNode: blockEl,
                 targetOffset: nodeSize(blockEl),
                 blockToSplit: li,
             });
-            const [anchorNode, anchorOffset] = getDeepestEditablePosition(after, 0);
-            this.dependencies.selection.setSelection({ anchorNode, anchorOffset });
-            // Fully outdent li to exit the list
-            this.liToBlocks(after);
+            if (after) {
+                const [anchorNode, anchorOffset] = getDeepestEditablePosition(after, 0);
+                this.dependencies.selection.setSelection({ anchorNode, anchorOffset });
+                // Fully outdent li to exit the list
+                this.liToBlocks(after);
+            }
         }
     }
 
@@ -1396,12 +1408,58 @@ export class ListPlugin extends Plugin {
             });
     }
 
-    handleInsert(container, block) {
+    processFragmentToInsert(fragment) {
         if (!this.config.allowChecklist) {
-            for (const list of container.querySelectorAll(".o_checklist > li")) {
+            for (const list of fragment.querySelectorAll(".o_checklist > li")) {
                 this.liToBlocks(list);
             }
         }
-        return container;
+        const hasSingleChild = nodeSize(fragment) === 1;
+        const selection = this.dependencies.selection.getEditableSelection();
+
+        // Inserting a list at the start/end of an existing list item should
+        // merge its items into the current list instead of producing invalid or
+        // surprising nested list markup.
+        if (isInList(selection.anchorNode) && isListElement(fragment.firstChild)) {
+            unwrapContents(fragment.firstChild);
+        }
+        // Similarly if the html inserted ends with a list.
+        if (isInList(selection.focusNode) && isListElement(fragment.lastChild) && !hasSingleChild) {
+            unwrapContents(fragment.lastChild);
+        }
+
+        // Content inserted from a list item should extend the current list.
+        const listRef = closestElement(selection.anchorNode, listElementSelector);
+        if (listRef) {
+            const mode = this.getListMode(listRef);
+            const firstNode = fragment.firstChild;
+            // Outdent a nested list item when inserted as first element in a
+            // non-empty list.
+            if (
+                isListItemElement(firstNode) &&
+                firstNode.querySelector(listItemElementSelector) &&
+                !isEmptyBlock(closestElement(selection.anchorNode, listItemElementSelector))
+            ) {
+                const deepestFirstLi = firstLeaf(firstNode, {
+                    stopTraverseFunction: (leaf) =>
+                        isListItemElement(leaf) && !leaf.querySelector(listItemElementSelector),
+                });
+                const result = this.dependencies.split.splitAroundUntil(deepestFirstLi, firstNode);
+                if (result) {
+                    result.after(deepestFirstLi);
+                    result.remove();
+                }
+            }
+            for (const node of childNodes(fragment)) {
+                if (isParagraphRelatedElement(node)) {
+                    this.dependencies.dom.setTagName(node, "LI", true);
+                } else if (isListItemElement(node) && node.querySelector("ol, ul")) {
+                    this.convertList(node, mode);
+                } else if (isListElement(node)) {
+                    this.convertList(node, this.getListMode(node));
+                }
+            }
+        }
+        return fragment;
     }
 }

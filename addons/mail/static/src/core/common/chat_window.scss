@@ -1,20 +1,27 @@
 .o-mail-ChatWindow {
     width: var(--o-mail-ChatWindow-width);
+    background-color: var(--o-mail-discussMainBgColor);
 
     z-index: var(--o-bs-zindex-sticky);
     &.o-mobile {
         z-index: var(--mail-ChatWindow-mobileZindex, $zindex-sticky - 2) !important;
     }
     &:not(.o-mobile) {
-        --border-opacity: var(--mail-ChatWindow-desktopBorderOpacity, .15);
         height: Min(95vh, calc(var(--o-mail-ChatWindow-width) * 15 / 9));
         border-radius: calc(var(--o-mail-Composer-chatWindowVPadding) + var(--o-mail-Composer-pillRadiusBase));
+        /* Translucent ring, visible on any host background. */
+        box-shadow: 0 0 0 1px rgba(136, 136, 136, .35), var(--box-shadow-sm);
     }
     outline: none;
 
     transition: box-shadow 2.0s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     &.o-highlighted {
         box-shadow: 0 0 1.5rem var(--o-component-active-border) !important;
+    }
+
+    /* A tinted pill on the surface. */
+    .o-mail-Composer:not(.o-editing) {
+        --mail-Composer-bg: var(--o-webclient-background-color);
     }
 }
 
@@ -45,7 +52,6 @@
 
 .o-mail-ChatWindow-header {
     --o-btn-circle-height: 0;
-    --border-opacity: var(--mail-ChatWindow-headerBorderOpacity, .15);
 
     .o-mail-ActionList-group {
         gap: var(--o-bs-spacer-3);
@@ -67,6 +73,12 @@
     button:not(.o-tag-JOIN_LEAVE_CALL) {
         --gradient: transparent;
         padding: 0;
+    }
+
+    @media screen and (max-width: 767.98px), print and (max-width: 187.98mm) {
+        .o-mail-ActionList-button {
+            --btn-font-size: var(--o-bs-h3-font-size);
+        }
     }
 }
 

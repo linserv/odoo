@@ -292,6 +292,21 @@ class TestSubcontractingDropshippingFlows(TestMrpSubcontractingCommon, TestStock
 
         self.assertEqual(po.order_line.qty_received, 1.0)
 
+    def test_po_to_subcontractor_final_location(self):
+        """
+        Create and confirm a PO with the 'Dropship Subcontractor' picking type.
+        The final location of the move should be the subcontractor location,
+        not the customer location
+        """
+        po = self.env['purchase.order'].create({
+            'partner_id': self.subcontractor_partner1.parent_id.id,
+            'picking_type_id': self.env.company.dropship_subcontractor_pick_type_id.id,
+            'dest_address_id': self.subcontractor_partner1.id,
+            'order_line': [Command.create({'product_id': self.comp1.id, 'product_qty': 1.0})],
+        })
+        po.button_confirm()
+        self.assertEqual(po.picking_ids.move_ids.forecasted_location_id, self.subcontractor_partner1.property_stock_subcontractor)
+
     def test_subcontracted_bom_routes(self):
         """
         Take two BoM having those components. One being subcontracted and the other not.
@@ -397,6 +412,12 @@ class TestSubcontractingDropshippingFlows(TestMrpSubcontractingCommon, TestStock
         ])
         route_mto = self.route_mto
         route_mto.active = True
+        self.env.user.group_ids += self.env.ref('analytic.group_analytic_accounting')
+        analytic_plan = self.env['account.analytic.plan'].create({'name': 'Test Plan'})
+        analytic_account = self.env['account.analytic.account'].create({
+            'name': 'Test AA',
+            'plan_id': analytic_plan.id,
+        })
         component = self.env['product.product'].create([{
             'name': 'Common Component',
             'is_storable': True,
@@ -428,12 +449,14 @@ class TestSubcontractingDropshippingFlows(TestMrpSubcontractingCommon, TestStock
                     'name': finished_products[0].name,
                     'product_uom_qty': 2,
                     'product_uom_id': uom_unit.id,
+                    'analytic_distribution': {analytic_account.id: 100},
                 }),
                 Command.create({
                     'product_id': finished_products[1].id,
                     'name': finished_products[1].name,
                     'product_uom_qty': 2,
                     'product_uom_id': uom_unit.id,
+                    'analytic_distribution': {analytic_account.id: 100},
                 }),
             ],
         })
@@ -446,6 +469,7 @@ class TestSubcontractingDropshippingFlows(TestMrpSubcontractingCommon, TestStock
         self.assertTrue(po_vendor)
         self.assertEqual(len(po_vendor.order_line), 1)
         self.assertEqual(sum(po_vendor.order_line.mapped('product_qty')), 4)
+        self.assertEqual(po_vendor.order_line.analytic_distribution, so.order_line[0].analytic_distribution)
         po_vendor.button_confirm()
         self.assertEqual(len(po_vendor.order_line.move_ids), 1)
         self.assertFalse(po_vendor.order_line.move_ids.production_group_id)
