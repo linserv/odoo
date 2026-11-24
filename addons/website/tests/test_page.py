@@ -1,7 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from lxml import html
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import werkzeug
 
@@ -303,6 +303,16 @@ class TestPage(common.TransactionCase):
             with self.assertRaises(werkzeug.exceptions.Forbidden):
                 empty_password_view._handle_visibility(do_raise=True)
 
+    def test_cookies_bar_on_multiple_websites(self):
+        websites = self.env.ref('website.default_website') + self.env['website'].create({'name': 'Website 2'})
+        domain = [('website_id', 'in', websites.ids), ('url', '=', '/cookie-policy')]
+        self.assertFalse(self.env['website.page'].search(domain))
+
+        websites.write({'cookies_bar': True})
+        pages = self.env['website.page'].search(domain)
+        self.assertEqual(len(pages), 2)
+        self.assertEqual(pages.website_id, websites)
+
 
 @tagged('-at_install', 'post_install')
 class WithContext(HttpCase):
@@ -384,6 +394,21 @@ class WithContext(HttpCase):
                     self.assertEqual(response.status_code, 200)
                     noindex = html.fromstring(response.content).xpath('//meta[@name="robots"]/@content')
                     self.assertEqual(noindex, ['noindex'] if host == 'preview.example.com' else [], host)
+
+    def test_page_cache_geoip_country(self):
+        """Ensure that a page cached for a visitor from one country is not
+        served to a visitor from another country."""
+        self.authenticate(None, None)
+
+        with patch('odoo.http.GeoIP.country_code', new_callable=PropertyMock, return_value='BE'):
+            r = self.url_open(self.page.url)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('"geoip_country_code": "BE"', r.text, "The page should be rendered for a visitor from Belgium")
+
+        with patch('odoo.http.GeoIP.country_code', new_callable=PropertyMock, return_value='FR'):
+            r = self.url_open(self.page.url)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('"geoip_country_code": "FR"', r.text, "The page cached for Belgium should not be served to a visitor from France")
 
     @mute_logger('odoo.addons.rpc.controllers.xmlrpc')
     def test_search(self):
